@@ -5,6 +5,10 @@
 
 import { t } from './init.js';
 import {
+  createContentItemQuiz,
+  updateContentItemQuiz,
+} from './procedures/content-item-quiz.js';
+import {
   deleteContentItem,
   deleteContentItemPermanently,
   hideContentItem,
@@ -75,8 +79,10 @@ export const appRouter = router({
     createVideoUploadUrl: createContentItemVideoUploadUrl,
     createVideo: createContentItemVideo,
     createText: createContentItemText,
+    createQuiz: createContentItemQuiz,
     updateVideo: updateContentItemVideo,
     updateText: updateContentItemText,
+    updateQuiz: updateContentItemQuiz,
     createVideoUrl: createContentItemVideoUrl,
     delete: deleteContentItem,
     publish: publishContentItem,

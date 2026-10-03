@@ -33,13 +33,13 @@ export const createContentItemEntity = async () =>
           type: 'string',
           required: true,
         },
-        // 'video' and 'text' today; leaves room for sibling content types
-        // (file, quiz) from #102. Per-type required-ness (e.g. a video
+        // 'video', 'text' and 'quiz' today; leaves room for sibling content
+        // types (file) from #102. Per-type required-ness (e.g. a video
         // needs s3Key/mimeType, a text item needs body) is enforced by the
         // zod schemas in instructor-api/core-api, not here -- ElectroDB has
         // no native discriminated-attribute support for a single entity.
         type: {
-          type: ['video', 'text'] as const,
+          type: ['video', 'text', 'quiz'] as const,
           required: true,
         },
         // 'ready' by default so synchronous types (text, and any future
@@ -98,6 +98,28 @@ export const createContentItemEntity = async () =>
         // Tiptap's JSON document, stored as a string. Only present for
         // type: 'text'.
         body: {
+          type: 'string',
+        },
+        // Quiz-only attributes (type: 'quiz'). `questions` is safe to show
+        // students; `answerKey` is held apart from it so passing a content
+        // item through to students can't leak the answers. Shapes are
+        // validated by instructor-api's zod schemas (schema/quiz.ts).
+        questions: {
+          type: 'any',
+        },
+        answerKey: {
+          type: 'any',
+        },
+        settings: {
+          type: 'any',
+        },
+        // Incremented on every save.
+        quizVersion: {
+          type: 'number',
+        },
+        // Hash of `questions` only, recomputed on every save; a student's
+        // submission carries the hash of the questions it showed.
+        questionsHash: {
           type: 'string',
         },
         // Sequencing within the lesson. Not part of any key: content item

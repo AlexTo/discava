@@ -93,6 +93,13 @@ export const ContentItemSchema = z.discriminatedUnion('type', [
     type: z.literal('text'),
     body: z.string(),
   }),
+  // Deliberately without `questions` and `answerKey`: this output is
+  // stripped to the fields below, so a quiz's key can't leak through a
+  // course read. Students get a quiz's questions from quiz.view.
+  z.object({
+    ...ContentItemBaseSchema,
+    type: z.literal('quiz'),
+  }),
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;

@@ -594,6 +594,65 @@ describe('viewCourse', () => {
       ],
     });
   });
+  it('never returns a quiz’s questions or answer key', async () => {
+    const stamps = {
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    const quiz = {
+      ...visible({
+        contentItemId: 'quiz-1',
+        lessonId: 'lesson-1',
+        moduleId: 'module-1',
+        courseId: course.courseId,
+        title: 'Check',
+        order: 1,
+        ...stamps,
+      }),
+      type: 'quiz' as const,
+      status: 'ready' as const,
+      questions: [{ questionId: 'q1' }],
+      answerKey: { q1: { correctOptionIds: ['b'] } },
+      settings: { passMarkPercent: 80 },
+      quizVersion: 1,
+      questionsHash: 'hash',
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [course],
+          module: [
+            visible({
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Module',
+              order: 1,
+              ...stamps,
+            }),
+          ],
+          lesson: [
+            visible({
+              lessonId: 'lesson-1',
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Lesson',
+              order: 1,
+              ...stamps,
+            }),
+          ],
+          contentItem: [quiz],
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    const [item] = result.modules[0].lessons[0].contentItems;
+    expect(item).toMatchObject({ contentItemId: 'quiz-1', type: 'quiz' });
+    expect(JSON.stringify(result)).not.toContain('answerKey');
+    expect(JSON.stringify(result)).not.toContain('correctOptionIds');
+    expect(item).not.toHaveProperty('questions');
+  });
 });
 
 describe('publicViewCourse', () => {

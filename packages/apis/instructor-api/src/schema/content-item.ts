@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { z } from 'zod';
+import {
+  QuizAnswerKeySchema,
+  QuizQuestionSchema,
+  QuizSettingsSchema,
+  quizDefinitionShape,
+  refineQuizDefinition,
+} from './quiz.js';
 import { CurriculumVisibilitySchema } from './visibility.js';
 
 const isValidJson = (value: string) => {
@@ -46,9 +53,20 @@ export const TextContentItemSchema = z.object({
   body: z.string(),
 });
 
+export const QuizContentItemSchema = z.object({
+  ...ContentItemBaseSchema,
+  type: z.literal('quiz'),
+  questions: z.array(QuizQuestionSchema),
+  answerKey: QuizAnswerKeySchema,
+  settings: QuizSettingsSchema,
+  quizVersion: z.number(),
+  questionsHash: z.string(),
+});
+
 export const ContentItemSchema = z.discriminatedUnion('type', [
   VideoContentItemSchema,
   TextContentItemSchema,
+  QuizContentItemSchema,
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;
@@ -164,6 +182,56 @@ export const UpdateContentItemTextOutputSchema = TextContentItemSchema;
 
 export type IUpdateContentItemTextOutput = z.output<
   typeof UpdateContentItemTextOutputSchema
+>;
+
+export const CreateContentItemQuizInputSchema = z
+  .object({
+    courseId: z.string(),
+    moduleId: z.string(),
+    lessonId: z.string(),
+    title: z.string().min(1).max(200),
+    description: z.string().optional(),
+    ...quizDefinitionShape,
+  })
+  .superRefine(refineQuizDefinition);
+
+export type ICreateContentItemQuizInput = z.output<
+  typeof CreateContentItemQuizInputSchema
+>;
+
+export const CreateContentItemQuizOutputSchema = QuizContentItemSchema;
+
+export type ICreateContentItemQuizOutput = z.output<
+  typeof CreateContentItemQuizOutputSchema
+>;
+
+// The quiz is saved as one document: questions, answer key and settings
+// always travel together, so a save can't pair a new key with old questions.
+// `quizVersion` is the version the client loaded, which the write is
+// conditioned on, so a stale editor can't overwrite a newer save.
+export const UpdateContentItemQuizInputSchema = z
+  .object({
+    courseId: z.string(),
+    moduleId: z.string(),
+    lessonId: z.string(),
+    contentItemId: z.string(),
+    // The version of the quiz the editor loaded. The save is refused with
+    // CONFLICT if the quiz has moved on since.
+    quizVersion: z.number().int().min(1),
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().optional(),
+    ...quizDefinitionShape,
+  })
+  .superRefine(refineQuizDefinition);
+
+export type IUpdateContentItemQuizInput = z.output<
+  typeof UpdateContentItemQuizInputSchema
+>;
+
+export const UpdateContentItemQuizOutputSchema = QuizContentItemSchema;
+
+export type IUpdateContentItemQuizOutput = z.output<
+  typeof UpdateContentItemQuizOutputSchema
 >;
 
 export const CreateContentItemVideoUrlInputSchema = z.object({
