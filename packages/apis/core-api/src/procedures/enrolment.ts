@@ -31,6 +31,23 @@ export const getEnrolment = async (
   (await coreTable.entities.enrolment.get({ courseId, userId }).go())
     .data as IEnrolment | null;
 
+// Only enrolled students read a course's content, including after it's
+// archived. Anyone else learns only that a published course exists, which
+// publicView shows them anyway; a draft or archived course is NOT_FOUND, so
+// its existence isn't leaked.
+export const requireEnrolment = (
+  course: { status: string },
+  enrolment: IEnrolment | null,
+) => {
+  if (!enrolment || enrolment.status === 'dropped') {
+    throw new TRPCError(
+      course.status === 'published'
+        ? { code: 'FORBIDDEN', message: 'Enrol in the course to view it' }
+        : { code: 'NOT_FOUND' },
+    );
+  }
+};
+
 // Enrols the caller in a published course. The course's status is checked in
 // the same transaction as the write, so a course archived (or deleted) while
 // this runs can't take a new enrolment. Enrolling again returns the existing

@@ -29,13 +29,14 @@ Quiz-specific `contentItem` attributes. As with video and text, which attributes
 
 ### `quizAttempt`
 
-- pk `userId`, sk `courseId / contentItemId / attemptId`.
-- Holds `answers` (`{ [questionId]: optionId[] }`), `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`.
+- pk `userId`, sk `courseId / contentItemId / attemptId`. `attemptId` is a UUIDv7, so a student's attempts at a quiz sort in submission order.
+- Holds `answers` (`{ [questionId]: optionId[] }`), `correctQuestionIds`, `scorePercent`, `passed`, `quizVersion`, `questionsHash`, `submittedAt`, plus `moduleId` and `lessonId`. `correctQuestionIds` records which questions were graded right at the time, because the key can change later.
+- Never updated once written.
 
-### Per-user quiz summary
+### Per-user quiz summary (`quizSummary`)
 
-- Holds `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`.
-- Written in the same transaction as each attempt, conditioned on `attemptsUsed < attemptsAllowed`, so the attempt limit holds even when two submissions race.
+- pk `userId`, sk `courseId / contentItemId`. Holds `attemptsUsed`, `bestScore`, `bestAttemptId`, `passedAt`, plus `moduleId` and `lessonId`.
+- Written in the same transaction as each attempt. The first attempt creates it; each later one is conditioned on the `attemptsUsed` it read, after checking that against `attemptsAllowed`. So the attempt limit holds even when two submissions race: the loser re-reads and is refused.
 - `bestScore` only increases. `passedAt` is set by the first passing attempt and never cleared.
 - Creating a student's summary increments the quiz's `studentActivityCount` (see <Link path="design/live-course-editing">Live course editing</Link>).
 
@@ -43,10 +44,26 @@ Quiz-specific `contentItem` attributes. As with video and text, which attributes
 
 - Server-side only, in core-api. The client never receives `answerKey` before submitting.
 - Each question is all-or-nothing: the selected options must exactly equal `correctOptionIds`.
-- Score is the percentage of questions correct; `passed` is `score >= passMarkPercent`.
+- Score is the percentage of questions correct, rounded down to a whole number; `passed` is `score >= passMarkPercent`. Rounding down means a student is never shown more than they scored, and the comparison is exact.
 - The **best** score across all attempts, and across quiz versions, is the one that counts.
 - A recorded pass is permanent, even if the pass mark is later raised or the quiz is edited.
 - Past attempts are never regraded automatically.
+
+## Student API
+
+core-api has three procedures, each taking the quiz's `courseId`, `moduleId`, `lessonId` and `contentItemId`. All three require an enrolment that isn't `dropped` (`FORBIDDEN` without one in a published course, `NOT_FOUND` otherwise), and a quiz that is effectively visible: the quiz, its lesson and its module visible and not archived. Otherwise they return `NOT_FOUND` "This quiz is no longer available".
+
+- `quiz.view`: the questions, settings, `quizVersion` and `questionsHash`. Never the answer key. Still works in an archived course, like the rest of the course.
+- `quiz.submitAttempt`: takes `answers` and the `questionsHash` the student answered. Grades on the server and writes the attempt and the summary in one transaction, which also checks that the course is still published, the module, lesson and quiz are still visible and not archived, the quiz is still the `quizVersion` it was graded against, and the enrolment still isn't dropped. The first attempt also increments the quiz's `studentActivityCount` there. If anything changed in between, nothing is written and the submission is read and graded again, up to three times, before `CONFLICT`. Refused with `PRECONDITION_FAILED` in an archived course or with no attempts remaining, and with `BAD_REQUEST` for an answer naming an unknown question or option, a repeated option, or more than one option to a single choice question.
+- `quiz.myAttempts`: the student's summary (or `null`) and every attempt, oldest first.
+
+Each attempt's result shows which questions were right. The correct options and explanations (`reveal`) come back from `submitAttempt` and `myAttempts` only when `revealAnswers` allows:
+
+| `revealAnswers` | When `reveal` is returned |
+|---|---|
+| `after_each_attempt` | Once the student has made an attempt |
+| `after_final_attempt` | Once no attempts remain. Never while attempts are unlimited |
+| `never` | Never |
 
 ## Quiz edited mid-attempt
 

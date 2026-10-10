@@ -11,6 +11,11 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
+import {
+  myQuizAttempts,
+  submitQuizAttempt,
+  viewQuiz,
+} from './procedures/quiz.js';
 
 export const router = t.router;
 
@@ -23,6 +28,11 @@ export const appRouter = router({
     publicList: publicListCourses,
     publicView: publicViewCourse,
     view: viewCourse,
+  }),
+  quiz: router({
+    view: viewQuiz,
+    submitAttempt: submitQuizAttempt,
+    myAttempts: myQuizAttempts,
   }),
 });
 
