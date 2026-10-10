@@ -117,14 +117,17 @@ export class CoreApi<
   private allowedOrigins: readonly string[] = ['*'];
 
   /**
-   * Creates default integrations for all operations, which implement each operation as
-   * its own individual lambda function.
+   * Creates default integrations for all operations, all served by a single
+   * shared lambda function. Each operation still gets its own integration
+   * entry, so per-operation method options (e.g. the public operations' auth)
+   * keep working.
    *
    * @param scope - The CDK construct scope
    * @returns An IntegrationBuilder with default lambda integrations
    */
   public static defaultIntegrations = (scope: Construct) => {
     const rc = RuntimeConfig.ensure(scope);
+    let handler: Function | undefined;
     return IntegrationBuilder.rest({
       pattern: 'isolated',
       operations: routerToOperations(appRouter),
@@ -144,20 +147,26 @@ export class CoreApi<
         tracing: Tracing.ACTIVE,
       } as FunctionProps,
       buildDefaultIntegration: (op, props: FunctionProps) => {
-        const handler = new Function(scope, `CoreApi${op}Handler`, props);
-        handler.addEnvironment(
-          'RUNTIME_CONFIG_APP_ID',
-          rc.appConfigApplicationId,
-        );
-        rc.grantReadAppConfig(handler);
+        // Every core-api procedure needs the same permissions, so they share
+        // one function: fewer cold starts and resources, at no cost to least
+        // privilege. The bundle is the whole tRPC router either way.
+        if (!handler) {
+          handler = new Function(scope, 'CoreApiRouterHandler', props);
+          handler.addEnvironment(
+            'RUNTIME_CONFIG_APP_ID',
+            rc.appConfigApplicationId,
+          );
+          rc.grantReadAppConfig(handler);
+        }
         return {
           handler,
           integration: new LambdaIntegration(handler, {
             responseTransferMode: ResponseTransferMode.STREAM,
-            // Skips the extra per-method Lambda::Permission for the console's
-            // test-invoke-stage, which nothing uses and counts toward the
-            // 500-resource CloudFormation limit.
-            allowTestInvoke: false,
+            // As in @aws/nx-plugin's shared pattern: one Lambda::Permission
+            // per function for the whole API, instead of one per method
+            // (each method would otherwise add its own). allowTestInvoke is
+            // ignored in this mode, so it isn't set.
+            scopePermissionToMethod: false,
           }),
           options: PUBLIC_OPERATIONS.has(op)
             ? { authorizationType: AuthorizationType.NONE }

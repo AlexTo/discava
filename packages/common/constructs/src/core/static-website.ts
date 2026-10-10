@@ -105,6 +105,15 @@ export interface StaticWebsiteProps {
    * @default true
    */
   readonly enableKeyRotation?: boolean;
+  /**
+   * Where to create the deployment that writes `runtime-config.json` into the
+   * website bucket. That file embeds values (API URLs, Cognito ids) from
+   * other stacks, so a multi-stack app should point this at a stack that can
+   * depend on all of them, instead of making the website's own stack do so.
+   *
+   * @default this construct
+   */
+  readonly runtimeConfigScope?: Construct;
 }
 
 /**
@@ -132,6 +141,7 @@ export class StaticWebsite extends Construct {
       encryption = BucketEncryption.KMS,
       encryptionKey,
       enableKeyRotation = true,
+      runtimeConfigScope,
     }: StaticWebsiteProps,
   ) {
     super(scope, id);
@@ -309,34 +319,48 @@ export class StaticWebsite extends Construct {
 
     // Deploy runtime-config.json separately so it is never cached - clients
     // must always fetch the latest configuration.
-    new BucketDeployment(this, 'RuntimeConfigDeployment', {
-      sources: [
-        Source.data(
-          DEFAULT_RUNTIME_CONFIG_FILENAME,
-          Lazy.string({
-            produce: () =>
-              Stack.of(this).toJsonString(
-                RuntimeConfig.ensure(this).get('connection'),
-              ),
-          }),
-        ),
-      ],
-      destinationBucket: this.websiteBucket,
-      distribution: this.cloudFrontDistribution,
-      cacheControl: [CacheControl.noCache()],
-      prune: false,
-      memoryLimit: 1024,
-    });
-
-    suppressRules(
-      Stack.of(this),
-      ['CKV_AWS_111'],
-      'CDK Bucket Deployment uses wildcard to deploy arbitrary assets',
-      (c) =>
-        CfnResource.isCfnResource(c) &&
-        c.cfnResourceType === 'AWS::IAM::Policy' &&
-        c.node.path.includes(`/Custom::CDKBucketDeployment`),
+    const runtimeConfigDeploymentScope = runtimeConfigScope ?? this;
+    new BucketDeployment(
+      runtimeConfigDeploymentScope,
+      runtimeConfigScope
+        ? `${websiteName}RuntimeConfigDeployment`
+        : 'RuntimeConfigDeployment',
+      {
+        sources: [
+          Source.data(
+            DEFAULT_RUNTIME_CONFIG_FILENAME,
+            Lazy.string({
+              produce: () =>
+                Stack.of(runtimeConfigDeploymentScope).toJsonString(
+                  RuntimeConfig.ensure(this).get('connection'),
+                ),
+            }),
+          ),
+        ],
+        destinationBucket: this.websiteBucket,
+        distribution: this.cloudFrontDistribution,
+        cacheControl: [CacheControl.noCache()],
+        prune: false,
+        memoryLimit: 1024,
+      },
     );
+
+    // BucketDeployment's provider is a per-stack singleton, so suppress in
+    // every stack that ends up with one.
+    for (const stack of new Set([
+      Stack.of(this),
+      Stack.of(runtimeConfigDeploymentScope),
+    ])) {
+      suppressRules(
+        stack,
+        ['CKV_AWS_111'],
+        'CDK Bucket Deployment uses wildcard to deploy arbitrary assets',
+        (c) =>
+          CfnResource.isCfnResource(c) &&
+          c.cfnResourceType === 'AWS::IAM::Policy' &&
+          c.node.path.includes(`/Custom::CDKBucketDeployment`),
+      );
+    }
 
     new CfnOutput(this, 'DistributionDomainName', {
       value: this.cloudFrontDistribution.domainName,

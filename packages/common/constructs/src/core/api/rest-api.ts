@@ -4,6 +4,7 @@
  */
 import {
   Annotations,
+  Stage as CdkStage,
   CfnOutput,
   IAspect,
   RemovalPolicy,
@@ -161,6 +162,11 @@ export class RestApi<
 
     // Create the API Gateway REST API
     this.api = new _RestApi(this, 'Api', {
+      // Without this the console shows every API by its construct id
+      // ("Api"); prefixing the stage tells stages sharing an account apart.
+      restApiName: [CdkStage.of(this)?.stageName, apiName]
+        .filter(Boolean)
+        .join('-'),
       ...props,
       domainName,
       deployOptions: {

@@ -2,13 +2,20 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { CustomResource, Duration, Names, Stack } from 'aws-cdk-lib';
+import {
+  CfnResource,
+  CustomResource,
+  Duration,
+  Names,
+  Stack,
+} from 'aws-cdk-lib';
 import { Grant, IGrantable, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { ISecret, Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import * as url from 'url';
+import { suppressRules } from '../checkov.js';
 
 /**
  * An RSA key pair, generated once and held only in Secrets Manager (as
@@ -62,9 +69,24 @@ export class RsaKeyPairSecret extends Construct {
       }),
     );
 
+    const provider = new Provider(this, 'Provider', {
+      onEventHandler: onEvent,
+    });
+    // CDK's provider framework Lambda only carries USER_ON_EVENT_FUNCTION_ARN
+    // in its environment. Checkov's secret scan also reads a __file__ key its
+    // own parser injects (the template's path), so a CDK-hashed template file
+    // name can trip CKV_AWS_45 on it.
+    suppressRules(
+      provider,
+      ['CKV_AWS_45'],
+      'Environment only holds the onEvent function ARN; checkov flags its injected template path',
+      (c) =>
+        CfnResource.isCfnResource(c) &&
+        c.cfnResourceType === 'AWS::Lambda::Function',
+    );
+
     const resource = new CustomResource(this, 'Resource', {
-      serviceToken: new Provider(this, 'Provider', { onEventHandler: onEvent })
-        .serviceToken,
+      serviceToken: provider.serviceToken,
       resourceType: 'Custom::RsaKeyPairSecret',
       properties: { SecretName: secretName },
     });

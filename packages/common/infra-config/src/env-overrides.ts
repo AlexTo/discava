@@ -9,9 +9,9 @@ type FieldKind = 'boolean' | 'string' | 'string[]';
 /**
  * Every env-var-overridable field, keyed by component then field name.
  * Kept in sync by hand with `StageComponents` in stages.types.ts (the same
- * way `ApplicationStackProps`/`ApplicationStageProps` already hand-duplicate
- * this field list) -- add a line here when a new overridable field is added
- * to a component config type.
+ * way the infra stacks' props already hand-duplicate this field list) --
+ * add a line here when a new overridable field is added to a component
+ * config type.
  *
  * `credentials` is deliberately not overridable here: unlike these fields,
  * it determines which IAM identity a deploy assumes, which is a bigger,

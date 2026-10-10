@@ -9,6 +9,7 @@ import {
   Lazy,
   RemovalPolicy,
   Stack,
+  Stage,
 } from 'aws-cdk-lib';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import {
@@ -358,8 +359,10 @@ export class UserIdentity extends Construct {
     const lazilyComputedCallbackUrls = Lazy.list({
       produce: () =>
         LOCAL_CALLBACK_URLS.concat(
-          Stack.of(this)
-            .node.findAll()
+          // The whole stage, not just this stack: the portals' distributions
+          // can live in a different stack from the user pool.
+          (Stage.of(this) ?? Stack.of(this)).node
+            .findAll()
             .filter(
               (child): child is Distribution => child instanceof Distribution,
             )

@@ -43,6 +43,36 @@ import { RuntimeConfig } from '../../core/runtime-config.js';
 type Operations = Procedures<AppRouter>;
 
 /**
+ * Operations served by a dedicated function instead of the shared router,
+ * keyed by function name. Operations in a group share that function and
+ * whatever it's granted. The infra stack grants these functions the S3,
+ * MediaConvert, scheduler and signing-key permissions their procedures need,
+ * which keeps those permissions off the router that serves every other
+ * procedure.
+ */
+export const INSTRUCTOR_API_DEDICATED_FUNCTIONS = {
+  // The only holder of the CloudFront signing key
+  VideoUrl: ['contentItem.createVideoUrl'],
+  // Writes and deletes lesson media, and submits/cancels transcode jobs
+  Media: [
+    'contentItem.createVideoUploadUrl',
+    'contentItem.createVideo',
+    'contentItem.updateVideo',
+    'contentItem.delete',
+    'contentItem.deletePermanently',
+    'lesson.delete',
+    'lesson.deletePermanently',
+    'module.delete',
+    'module.deletePermanently',
+  ],
+} as const satisfies Record<string, readonly Operations[]>;
+
+const functionNameFor = (op: Operations | '$router'): string =>
+  Object.entries(INSTRUCTOR_API_DEDICATED_FUNCTIONS).find(([, ops]) =>
+    (ops as readonly string[]).includes(op),
+  )?.[0] ?? 'Router';
+
+/**
  * Properties for creating a InstructorApi construct
  *
  * @template TIntegrations - Map of operation names to their integrations
@@ -109,14 +139,28 @@ export class InstructorApi<
   private allowedOrigins: readonly string[] = ['*'];
 
   /**
-   * Creates default integrations for all operations, which implement each operation as
-   * its own individual lambda function.
+   * Whether an operation is served by a dedicated function rather than the
+   * shared router. Infra checks this before granting an operation's handler
+   * anything beyond the baseline, so the grant can't land on the router.
+   */
+  public static hasDedicatedFunction(op: string): boolean {
+    return functionNameFor(op as Operations) !== 'Router';
+  }
+
+  /**
+   * Creates default integrations for all operations. Operations listed in
+   * INSTRUCTOR_API_DEDICATED_FUNCTIONS are served by their group's function;
+   * every other operation shares a single router function. Each operation
+   * still gets its own integration entry, so infra can grant permissions to
+   * `integrations[op].handler`. A group's function is built from the options
+   * of the first operation built in it.
    *
    * @param scope - The CDK construct scope
    * @returns An IntegrationBuilder with default lambda integrations
    */
   public static defaultIntegrations = (scope: Construct) => {
     const rc = RuntimeConfig.ensure(scope);
+    const handlers = new Map<string, Function>();
     return IntegrationBuilder.rest({
       pattern: 'isolated',
       operations: routerToOperations(appRouter),
@@ -136,20 +180,30 @@ export class InstructorApi<
         tracing: Tracing.ACTIVE,
       } as FunctionProps,
       buildDefaultIntegration: (op, props: FunctionProps) => {
-        const handler = new Function(scope, `InstructorApi${op}Handler`, props);
-        handler.addEnvironment(
-          'RUNTIME_CONFIG_APP_ID',
-          rc.appConfigApplicationId,
-        );
-        rc.grantReadAppConfig(handler);
+        const functionName = functionNameFor(op);
+        let handler = handlers.get(functionName);
+        if (!handler) {
+          handler = new Function(
+            scope,
+            `InstructorApi${functionName}Handler`,
+            props,
+          );
+          handler.addEnvironment(
+            'RUNTIME_CONFIG_APP_ID',
+            rc.appConfigApplicationId,
+          );
+          rc.grantReadAppConfig(handler);
+          handlers.set(functionName, handler);
+        }
         return {
           handler,
           integration: new LambdaIntegration(handler, {
             responseTransferMode: ResponseTransferMode.STREAM,
-            // Skips the extra per-method Lambda::Permission for the console's
-            // test-invoke-stage, which nothing uses and counts toward the
-            // 500-resource CloudFormation limit.
-            allowTestInvoke: false,
+            // As in @aws/nx-plugin's shared pattern: one Lambda::Permission
+            // per function for the whole API, instead of one per method
+            // (each method would otherwise add its own). allowTestInvoke is
+            // ignored in this mode, so it isn't set.
+            scopePermissionToMethod: false,
           }),
         };
       },

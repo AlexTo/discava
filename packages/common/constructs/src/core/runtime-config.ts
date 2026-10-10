@@ -35,11 +35,28 @@ const RuntimeConfigKey = '__RuntimeConfig__';
  * rc.set('tables', 'users', { tableName: '...', arn: '...' });
  * ```
  */
+/** Where RuntimeConfig creates its AppConfig resources. See `placeIn`. */
+export interface RuntimeConfigPlacement {
+  /**
+   * Holds the AppConfig application, environment and deployment strategy.
+   * Every consumer references the application id, so this should be a stack
+   * that every consumer's stack can depend on.
+   */
+  readonly applicationStack: Stack;
+  /**
+   * Holds the configuration profiles, versions and deployments. Their
+   * content references values from across the stage, so this should be a
+   * stack that can depend on every other stack.
+   */
+  readonly configurationStack: Stack;
+}
+
 export class RuntimeConfig extends Construct {
   private readonly _namespaces = new Map<string, Record<string, any>>();
   private _appConfigApplicationId?: string;
   private _appConfigApplicationArn?: string;
   private _aspectRegistered = false;
+  private _placement?: RuntimeConfigPlacement;
 
   static ensure(scope: Construct): RuntimeConfig {
     const parent = Stage.of(scope) ?? Stack.of(scope);
@@ -57,6 +74,15 @@ export class RuntimeConfig extends Construct {
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
+  }
+
+  /**
+   * Pins which stacks the AppConfig resources are created in. Without this,
+   * they all go into the first stack in the stage, which only works when the
+   * stage has a single stack.
+   */
+  placeIn(placement: RuntimeConfigPlacement): void {
+    this._placement = placement;
   }
 
   /** Sets a key in the given namespace. Creates the namespace if it doesn't exist. */
@@ -119,7 +145,8 @@ export class RuntimeConfig extends Construct {
         if (created || !(node instanceof Stack)) return;
         created = true;
 
-        const stack = node;
+        const stack = this._placement?.applicationStack ?? node;
+        const configStack = this._placement?.configurationStack ?? node;
         const name = Names.uniqueResourceName(this, {
           maxLength: 64,
           separator: '-',
@@ -144,7 +171,7 @@ export class RuntimeConfig extends Construct {
 
         for (const [ns, data] of this._namespaces.entries()) {
           const profile = new CfnConfigurationProfile(
-            stack,
+            configStack,
             `RcAppConfigProfile${ns}`,
             {
               applicationId: app.ref,
@@ -154,16 +181,18 @@ export class RuntimeConfig extends Construct {
             },
           );
           const version = new CfnHostedConfigurationVersion(
-            stack,
+            configStack,
             `RcAppConfigVersion${ns}`,
             {
               applicationId: app.ref,
               configurationProfileId: profile.ref,
               contentType: 'application/json',
-              content: Lazy.string({ produce: () => stack.toJsonString(data) }),
+              content: Lazy.string({
+                produce: () => configStack.toJsonString(data),
+              }),
             },
           );
-          new CfnDeployment(stack, `RcAppConfigDeploy${ns}`, {
+          new CfnDeployment(configStack, `RcAppConfigDeploy${ns}`, {
             applicationId: app.ref,
             environmentId: env.ref,
             configurationProfileId: profile.ref,
