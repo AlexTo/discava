@@ -23,8 +23,8 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import { Spinner } from '../../../../../../components/spinner';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { Spinner } from '../../../../../../../components/spinner';
+import { useInstructorApi } from '../../../../../../../hooks/useInstructorApi';
 import { QuizBuilder } from './quiz-builder';
 import type { QuizItem } from './quiz-form';
 

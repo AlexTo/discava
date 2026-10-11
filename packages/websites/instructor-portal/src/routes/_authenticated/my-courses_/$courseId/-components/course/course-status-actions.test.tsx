@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithInstructorApi,
-} from '../../../../../test/render-with-instructor-api';
+} from '../../../../../../test/render-with-instructor-api';
 import { CourseStatusActions } from './course-status-actions';
 
 const COURSE_ID = 'course-1';

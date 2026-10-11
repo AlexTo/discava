@@ -28,8 +28,8 @@ import { useSortable } from '@dnd-kit/react/sortable';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CirclePlus, Save } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../../hooks/useInstructorApi';
 import { QuestionCard, QuestionHandle } from './question-card';
 import {
   fromQuizItem,

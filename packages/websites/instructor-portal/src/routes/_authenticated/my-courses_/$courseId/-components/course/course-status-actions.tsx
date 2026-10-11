@@ -17,8 +17,8 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Send } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
 // Publish for a draft course, Restore for an archived one. A published course
 // has neither.

@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithInstructorApi,
-} from '../../../../../../test/render-with-instructor-api';
+} from '../../../../../../../test/render-with-instructor-api';
 import { QuizBuilder } from './quiz-builder';
 import type { QuizItem } from './quiz-form';
 
@@ -33,7 +33,7 @@ vi.mock('@dnd-kit/react/sortable', () => ({
 }));
 // Tiptap needs layout APIs jsdom lacks; a textarea stands in, reading and
 // writing a one-paragraph document.
-vi.mock('../rich-text-editor', () => ({
+vi.mock('../../rich-text-editor', () => ({
   RichTextEditor: ({
     value,
     onChange,

@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithInstructorApi,
-} from '../../../../../test/render-with-instructor-api';
+} from '../../../../../../test/render-with-instructor-api';
 import { LessonContentItemsRow } from './lesson-content-items-row';
 
 // Dragging needs real layout, which jsdom doesn't have (the deployed portal is

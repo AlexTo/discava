@@ -32,10 +32,10 @@ import Hls from 'hls.js';
 import { Trash2, Upload } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Alert } from '../../../../../components/alert';
-import { Spinner } from '../../../../../components/spinner';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
-import { studentActivityNote } from './student-activity';
+import { Alert } from '../../../../../../components/alert';
+import { Spinner } from '../../../../../../components/spinner';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { studentActivityNote } from '../student-activity';
 
 const ACCEPTED_VIDEO_TYPES = {
   'video/mp4': ['.mp4'],

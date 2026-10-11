@@ -19,41 +19,48 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
 const lessonFormSchema = z.object({
   title: z.string().trim().min(1, 'Lesson title is required').max(200),
   description: z.string(),
 });
 
-export function CreateLessonDialog({
+export function EditLessonDialog({
   courseId,
   moduleId,
+  lessonId,
+  title,
+  description,
   trigger,
 }: {
   courseId: string;
   moduleId: string;
+  lessonId: string;
+  title: string;
+  description?: string;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const { course, lesson } = useInstructorApi();
   const queryClient = useQueryClient();
   const {
-    mutateAsync: createLesson,
-    reset: resetCreateLesson,
+    mutateAsync: updateLesson,
+    reset: resetUpdateLesson,
     isError,
     error,
-  } = useMutation(lesson.create.mutationOptions());
+  } = useMutation(lesson.update.mutationOptions());
 
   const form = useForm({
-    defaultValues: { title: '', description: '' },
+    defaultValues: { title, description: description ?? '' },
     validators: { onChange: lessonFormSchema },
     onSubmit: async ({ value }) => {
       try {
-        await createLesson({
+        await updateLesson({
           courseId,
           moduleId,
+          lessonId,
           title: value.title.trim(),
           description: value.description,
         });
@@ -62,7 +69,6 @@ export function CreateLessonDialog({
         return;
       }
       setOpen(false);
-      form.reset();
       void queryClient.invalidateQueries({
         queryKey: course.view.queryKey({ courseId }),
       });
@@ -76,16 +82,16 @@ export function CreateLessonDialog({
         setOpen(nextOpen);
         if (!nextOpen) {
           form.reset();
-          resetCreateLesson();
+          resetUpdateLesson();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New lesson</DialogTitle>
+          <DialogTitle>Edit lesson</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Lessons hold the content students work through inside a module.
+            Update the title and description students see for this lesson.
           </p>
         </DialogHeader>
 
@@ -98,7 +104,7 @@ export function CreateLessonDialog({
           }}
         >
           {isError && (
-            <Alert type="error" header="Couldn't create the lesson">
+            <Alert type="error" header="Couldn't update the lesson">
               {error.message}
             </Alert>
           )}
@@ -157,7 +163,7 @@ export function CreateLessonDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Creating...' : 'Create lesson'}
+                  {isSubmitting ? 'Saving...' : 'Save changes'}
                 </Button>
               )}
             </form.Subscribe>
