@@ -28,10 +28,10 @@ import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
-import { RichTextEditor } from './rich-text-editor';
-import { studentActivityNote } from './student-activity';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { RichTextEditor } from '../rich-text-editor';
+import { studentActivityNote } from '../student-activity';
 
 export function EditLessonTextDialog({
   courseId,

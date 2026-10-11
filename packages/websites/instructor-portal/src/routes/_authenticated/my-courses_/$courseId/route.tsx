@@ -34,16 +34,16 @@ import {
 } from '../../../../components/course-status';
 import { Spinner } from '../../../../components/spinner';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
-import { ArchivedSection } from './-components/archived-section';
-import { CourseStatusActions } from './-components/course-status-actions';
-import { CreateLessonDialog } from './-components/create-lesson-dialog';
-import { CreateModuleDialog } from './-components/create-module-dialog';
-import { DeleteLessonDialog } from './-components/delete-lesson-dialog';
-import { DeleteModuleDialog } from './-components/delete-module-dialog';
-import { EditLessonDialog } from './-components/edit-lesson-dialog';
-import { EditModuleDialog } from './-components/edit-module-dialog';
+import { LessonContentItemsRow } from './-components/content-items/lesson-content-items-row';
+import { ArchivedSection } from './-components/course/archived-section';
+import { CourseStatusActions } from './-components/course/course-status-actions';
 import { HiddenBadge } from './-components/hidden-badge';
-import { LessonContentItemsRow } from './-components/lesson-content-items-row';
+import { CreateLessonDialog } from './-components/lesson/create-lesson-dialog';
+import { DeleteLessonDialog } from './-components/lesson/delete-lesson-dialog';
+import { EditLessonDialog } from './-components/lesson/edit-lesson-dialog';
+import { CreateModuleDialog } from './-components/module/create-module-dialog';
+import { DeleteModuleDialog } from './-components/module/delete-module-dialog';
+import { EditModuleDialog } from './-components/module/edit-module-dialog';
 import { usedItemCount } from './-components/student-activity';
 import {
   LessonVisibilityButton,

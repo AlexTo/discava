@@ -4,11 +4,11 @@
  */
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { renderWithInstructorApi } from '../../../../../../test/render-with-instructor-api';
+import { renderWithInstructorApi } from '../../../../../../../test/render-with-instructor-api';
 import { QuizBuilderDialog } from './quiz-builder-dialog';
 
 // Tiptap needs layout APIs jsdom lacks; a textarea stands in.
-vi.mock('../rich-text-editor', () => ({
+vi.mock('../../rich-text-editor', () => ({
   RichTextEditor: ({ ariaLabel }: { ariaLabel?: string }) => (
     <textarea aria-label={ariaLabel} />
   ),

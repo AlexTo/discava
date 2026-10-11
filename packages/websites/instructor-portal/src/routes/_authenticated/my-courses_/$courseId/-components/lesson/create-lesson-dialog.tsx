@@ -19,38 +19,41 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
-const moduleFormSchema = z.object({
-  title: z.string().trim().min(1, 'Module title is required').max(200),
+const lessonFormSchema = z.object({
+  title: z.string().trim().min(1, 'Lesson title is required').max(200),
   description: z.string(),
 });
 
-export function CreateModuleDialog({
+export function CreateLessonDialog({
   courseId,
+  moduleId,
   trigger,
 }: {
   courseId: string;
+  moduleId: string;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const { course, module } = useInstructorApi();
+  const { course, lesson } = useInstructorApi();
   const queryClient = useQueryClient();
   const {
-    mutateAsync: createModule,
-    reset: resetCreateModule,
+    mutateAsync: createLesson,
+    reset: resetCreateLesson,
     isError,
     error,
-  } = useMutation(module.create.mutationOptions());
+  } = useMutation(lesson.create.mutationOptions());
 
   const form = useForm({
     defaultValues: { title: '', description: '' },
-    validators: { onChange: moduleFormSchema },
+    validators: { onChange: lessonFormSchema },
     onSubmit: async ({ value }) => {
       try {
-        await createModule({
+        await createLesson({
           courseId,
+          moduleId,
           title: value.title.trim(),
           description: value.description,
         });
@@ -73,17 +76,16 @@ export function CreateModuleDialog({
         setOpen(nextOpen);
         if (!nextOpen) {
           form.reset();
-          resetCreateModule();
+          resetCreateLesson();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>New module</DialogTitle>
+          <DialogTitle>New lesson</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Modules are the top-level sections of a course. You can add lessons
-            to it afterward.
+            Lessons hold the content students work through inside a module.
           </p>
         </DialogHeader>
 
@@ -96,7 +98,7 @@ export function CreateModuleDialog({
           }}
         >
           {isError && (
-            <Alert type="error" header="Couldn't create the module">
+            <Alert type="error" header="Couldn't create the lesson">
               {error.message}
             </Alert>
           )}
@@ -106,14 +108,14 @@ export function CreateModuleDialog({
               const error = state.meta.errors[0];
               return (
                 <div className="space-y-2">
-                  <Label htmlFor={name}>Module title</Label>
+                  <Label htmlFor={name}>Lesson title</Label>
                   <Input
                     id={name}
                     name={name}
                     value={state.value}
                     onBlur={handleBlur}
                     onChange={(event) => handleChange(event.target.value)}
-                    placeholder="e.g. Introduction to the course"
+                    placeholder="e.g. Welcome and course overview"
                     aria-invalid={Boolean(error)}
                     autoFocus
                   />
@@ -135,7 +137,7 @@ export function CreateModuleDialog({
                   value={state.value}
                   onBlur={handleBlur}
                   onChange={(event) => handleChange(event.target.value)}
-                  placeholder="What this module covers"
+                  placeholder="What students will read or do in this lesson"
                   rows={6}
                 />
               </div>
@@ -155,7 +157,7 @@ export function CreateModuleDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Creating...' : 'Create module'}
+                  {isSubmitting ? 'Creating...' : 'Create lesson'}
                 </Button>
               )}
             </form.Subscribe>

@@ -22,8 +22,10 @@ import {
   Video,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { HiddenBadge } from '../hidden-badge';
+import { ContentItemVisibilityButton } from '../visibility-buttons';
 import {
   AttachLessonVideoDialog,
   RemoveLessonVideoButton,
@@ -32,9 +34,7 @@ import {
   EditLessonTextDialog,
   RemoveLessonTextButton,
 } from './edit-lesson-text-dialog';
-import { HiddenBadge } from './hidden-badge';
 import { QuizBuilderDialog } from './quiz/quiz-builder-dialog';
-import { ContentItemVisibilityButton } from './visibility-buttons';
 
 type ContentItem = {
   contentItemId: string;

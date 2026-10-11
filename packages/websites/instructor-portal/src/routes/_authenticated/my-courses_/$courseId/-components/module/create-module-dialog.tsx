@@ -19,48 +19,38 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
-const lessonFormSchema = z.object({
-  title: z.string().trim().min(1, 'Lesson title is required').max(200),
+const moduleFormSchema = z.object({
+  title: z.string().trim().min(1, 'Module title is required').max(200),
   description: z.string(),
 });
 
-export function EditLessonDialog({
+export function CreateModuleDialog({
   courseId,
-  moduleId,
-  lessonId,
-  title,
-  description,
   trigger,
 }: {
   courseId: string;
-  moduleId: string;
-  lessonId: string;
-  title: string;
-  description?: string;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const { course, lesson } = useInstructorApi();
+  const { course, module } = useInstructorApi();
   const queryClient = useQueryClient();
   const {
-    mutateAsync: updateLesson,
-    reset: resetUpdateLesson,
+    mutateAsync: createModule,
+    reset: resetCreateModule,
     isError,
     error,
-  } = useMutation(lesson.update.mutationOptions());
+  } = useMutation(module.create.mutationOptions());
 
   const form = useForm({
-    defaultValues: { title, description: description ?? '' },
-    validators: { onChange: lessonFormSchema },
+    defaultValues: { title: '', description: '' },
+    validators: { onChange: moduleFormSchema },
     onSubmit: async ({ value }) => {
       try {
-        await updateLesson({
+        await createModule({
           courseId,
-          moduleId,
-          lessonId,
           title: value.title.trim(),
           description: value.description,
         });
@@ -69,6 +59,7 @@ export function EditLessonDialog({
         return;
       }
       setOpen(false);
+      form.reset();
       void queryClient.invalidateQueries({
         queryKey: course.view.queryKey({ courseId }),
       });
@@ -82,16 +73,17 @@ export function EditLessonDialog({
         setOpen(nextOpen);
         if (!nextOpen) {
           form.reset();
-          resetUpdateLesson();
+          resetCreateModule();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit lesson</DialogTitle>
+          <DialogTitle>New module</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Update the title and description students see for this lesson.
+            Modules are the top-level sections of a course. You can add lessons
+            to it afterward.
           </p>
         </DialogHeader>
 
@@ -104,7 +96,7 @@ export function EditLessonDialog({
           }}
         >
           {isError && (
-            <Alert type="error" header="Couldn't update the lesson">
+            <Alert type="error" header="Couldn't create the module">
               {error.message}
             </Alert>
           )}
@@ -114,14 +106,14 @@ export function EditLessonDialog({
               const error = state.meta.errors[0];
               return (
                 <div className="space-y-2">
-                  <Label htmlFor={name}>Lesson title</Label>
+                  <Label htmlFor={name}>Module title</Label>
                   <Input
                     id={name}
                     name={name}
                     value={state.value}
                     onBlur={handleBlur}
                     onChange={(event) => handleChange(event.target.value)}
-                    placeholder="e.g. Welcome and course overview"
+                    placeholder="e.g. Introduction to the course"
                     aria-invalid={Boolean(error)}
                     autoFocus
                   />
@@ -143,7 +135,7 @@ export function EditLessonDialog({
                   value={state.value}
                   onBlur={handleBlur}
                   onChange={(event) => handleChange(event.target.value)}
-                  placeholder="What students will read or do in this lesson"
+                  placeholder="What this module covers"
                   rows={6}
                 />
               </div>
@@ -163,7 +155,7 @@ export function EditLessonDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save changes'}
+                  {isSubmitting ? 'Creating...' : 'Create module'}
                 </Button>
               )}
             </form.Subscribe>

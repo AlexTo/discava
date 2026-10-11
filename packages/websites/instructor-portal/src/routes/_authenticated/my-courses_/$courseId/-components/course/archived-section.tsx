@@ -17,9 +17,9 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
-import { studentActivityNote, usedItemCount } from './student-activity';
+import { Alert } from '../../../../../../components/alert';
+import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { studentActivityNote, usedItemCount } from '../student-activity';
 
 type ArchivedItem = {
   contentItemId: string;

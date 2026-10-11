@@ -5,8 +5,8 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { renderWithInstructorApi } from '../../../../../test/render-with-instructor-api';
-import { DeleteModuleDialog } from './delete-module-dialog';
-import { RemoveLessonTextButton } from './edit-lesson-text-dialog';
+import { RemoveLessonTextButton } from './content-items/edit-lesson-text-dialog';
+import { DeleteModuleDialog } from './module/delete-module-dialog';
 
 // Archiving something students have used warns how much they have used it.
 describe('student activity warnings on archive', () => {
