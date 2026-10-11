@@ -18,6 +18,12 @@
         "path": "src/media/transcode-complete.ts",
         "name": "transcode-complete",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/progress/progress-recalculation.ts",
+        "name": "progress-recalculation",
+        "iac": "cdk"
       }
     ]
   },

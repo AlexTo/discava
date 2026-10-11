@@ -2,7 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { AttributeType, ProjectionType } from 'aws-cdk-lib/aws-dynamodb';
+import {
+  AttributeType,
+  ProjectionType,
+  StreamViewType,
+} from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -34,6 +38,10 @@ export type CoreTableProps = Omit<DynamoDBTableProps, 'runtimeConfigKey'>;
 export class CoreTable extends DynamoDBTable {
   constructor(scope: Construct, id: string, props?: CoreTableProps) {
     super(scope, id, {
+      // The progress recalculation reads the stream. It needs both images:
+      // the old one for a removed record, and both to tell whether what
+      // students see (visibility, archivedAt) changed.
+      stream: StreamViewType.NEW_AND_OLD_IMAGES,
       ...props,
       runtimeConfigKey,
     });
