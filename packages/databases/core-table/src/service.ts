@@ -12,6 +12,8 @@ import {
   createLessonEntity,
   createModuleEntity,
   createProgressEntity,
+  createQuizAttemptEntity,
+  createQuizSummaryEntity,
   createSubmissionEntity,
   createUserEntity,
 } from './entities/index.js';
@@ -33,6 +35,8 @@ export const createCoreTableService = async () => {
     assignment,
     submission,
     progress,
+    quizAttempt,
+    quizSummary,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -44,6 +48,8 @@ export const createCoreTableService = async () => {
     createAssignmentEntity(),
     createSubmissionEntity(),
     createProgressEntity(),
+    createQuizAttemptEntity(),
+    createQuizSummaryEntity(),
   ]);
 
   return new Service({
@@ -57,5 +63,7 @@ export const createCoreTableService = async () => {
     assignment,
     submission,
     progress,
+    quizAttempt,
+    quizSummary,
   });
 };

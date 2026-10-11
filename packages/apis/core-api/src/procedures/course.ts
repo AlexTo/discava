@@ -17,7 +17,7 @@ import {
   ViewCourseInputSchema,
   ViewCourseOutputSchema,
 } from '../schema/index.js';
-import { getEnrolment } from './enrolment.js';
+import { getEnrolment, requireEnrolment } from './enrolment.js';
 
 export const listCoursesByInstructor = courseProcedure
   .input(ListCoursesByInstructorInputSchema)
@@ -158,17 +158,7 @@ export const viewCourse = courseProcedure
     if (!course) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
-    // Only enrolled students read a course's content, including after it's
-    // archived. Anyone else learns only that a published course exists, which
-    // publicView shows them anyway; a draft or archived course is NOT_FOUND,
-    // so its existence isn't leaked.
-    if (!enrolment || enrolment.status === 'dropped') {
-      throw new TRPCError(
-        course.status === 'published'
-          ? { code: 'FORBIDDEN', message: 'Enrol in the course to view it' }
-          : { code: 'NOT_FOUND' },
-      );
-    }
+    requireEnrolment(course, enrolment);
     // Students only see a module, lesson or content item that is visible, not
     // archived, and not under a hidden or archived ancestor. Instructors edit
     // the full curriculum through instructor-api's course.view instead.
