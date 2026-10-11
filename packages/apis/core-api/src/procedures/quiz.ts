@@ -59,6 +59,7 @@ const loadQuiz = async (
     { data: item },
     enrolment,
     { data: summary },
+    { data: completion },
   ] = await Promise.all([
     coreTable.entities.course.get({ courseId }).go(),
     coreTable.entities.module.get({ courseId, moduleId }).go(),
@@ -67,6 +68,9 @@ const loadQuiz = async (
     getEnrolment(coreTable, courseId, userId),
     coreTable.entities.quizSummary
       .get({ userId, courseId, contentItemId })
+      .go(),
+    coreTable.entities.itemCompletion
+      .get({ userId, courseId, lessonId, contentItemId })
       .go(),
   ]);
   if (!course) {
@@ -95,10 +99,10 @@ const loadQuiz = async (
     quizVersion: item.quizVersion as number,
     questionsHash: item.questionsHash as string,
   };
-  return { course, quiz, summary };
+  return { course, quiz, summary, completion };
 };
 
-const attemptsRemain = (settings: IQuizSettings, attemptsUsed: number) =>
+export const attemptsRemain = (settings: IQuizSettings, attemptsUsed: number) =>
   settings.attemptsAllowed === null || attemptsUsed < settings.attemptsAllowed;
 
 // The correct options and explanations, once the quiz's revealAnswers setting
@@ -230,6 +234,9 @@ export const viewQuiz = courseProcedure
 // The first attempt creates the summary and increments the quiz's
 // studentActivityCount in the same transaction, so each student is counted
 // once.
+// The attempt that makes the quiz complete for the student (it passes, or it
+// uses the last attempt) also records the item's completion, unless there
+// already is one. That doesn't count activity again: the first attempt did.
 export const submitQuizAttempt = courseProcedure
   .input(SubmitQuizAttemptInputSchema)
   .output(SubmitQuizAttemptOutputSchema)
@@ -239,7 +246,7 @@ export const submitQuizAttempt = courseProcedure
     const { courseId, moduleId, lessonId, contentItemId, answers } = input;
 
     for (let tries = 0; tries < MAX_SUBMIT_TRIES; tries++) {
-      const { course, quiz, summary } = await loadQuiz(
+      const { course, quiz, summary, completion } = await loadQuiz(
         coreTable,
         input,
         userId,
@@ -297,6 +304,11 @@ export const submitQuizAttempt = courseProcedure
         passedAt: summary?.passedAt ?? (passed ? submittedAt : undefined),
       };
 
+      const completes =
+        !completion &&
+        (Boolean(nextSummary.passedAt) ||
+          !attemptsRemain(quiz.settings, nextSummary.attemptsUsed));
+
       const itemKey = { courseId, moduleId, lessonId, contentItemId };
       const summaryKey = { userId, courseId, contentItemId };
       const { canceled, data } = await coreTable.transaction
@@ -309,6 +321,7 @@ export const submitQuizAttempt = courseProcedure
             enrolment,
             quizSummary,
             quizAttempt,
+            itemCompletion,
           }) => [
             course
               .check({ courseId })
@@ -384,6 +397,20 @@ export const submitQuizAttempt = courseProcedure
                 ...attempt,
               })
               .commit(),
+            ...(completes
+              ? [
+                  itemCompletion
+                    .create({
+                      userId,
+                      courseId,
+                      moduleId,
+                      lessonId,
+                      contentItemId,
+                      completedAt: submittedAt,
+                    })
+                    .commit(),
+                ]
+              : []),
           ],
         )
         .go();
@@ -396,7 +423,8 @@ export const submitQuizAttempt = courseProcedure
         };
       }
       // Something changed after it was read: the course, the quiz or its
-      // ancestors, the enrolment, or another attempt landed first. Nothing
+      // ancestors, the enrolment, or another attempt (or completion) landed
+      // first. Nothing
       // was written; read again, which gives the precise error if the
       // submission is no longer allowed, or grades it against what's there
       // now.

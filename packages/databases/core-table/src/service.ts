@@ -9,6 +9,7 @@ import {
   createCourseEntity,
   createCourseInstructorEntity,
   createEnrolmentEntity,
+  createItemCompletionEntity,
   createLessonEntity,
   createModuleEntity,
   createProgressEntity,
@@ -37,6 +38,7 @@ export const createCoreTableService = async () => {
     progress,
     quizAttempt,
     quizSummary,
+    itemCompletion,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -50,6 +52,7 @@ export const createCoreTableService = async () => {
     createProgressEntity(),
     createQuizAttemptEntity(),
     createQuizSummaryEntity(),
+    createItemCompletionEntity(),
   ]);
 
   return new Service({
@@ -65,5 +68,6 @@ export const createCoreTableService = async () => {
     progress,
     quizAttempt,
     quizSummary,
+    itemCompletion,
   });
 };

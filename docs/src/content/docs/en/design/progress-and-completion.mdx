@@ -31,6 +31,15 @@ core-api writes `itemCompletion` records and quiz attempts. It never writes `pro
 | Video | Watched to near the end |
 | Quiz | Passed, or all attempts used |
 
+### Recording a completion
+
+- **Text and video:** the browser decides when the item is done and calls core-api's `contentItem.complete`; core-api decides whether it counts. One transaction checks that the course is published, that the item, its lesson and its module are visible and not archived, and that the student is enrolled (not `dropped`). It then creates the `itemCompletion` only if there isn't one.
+  - The completion is the student's first record of the item, so the same transaction increments the item's `studentActivityCount`. Each student is counted once (see <Link path="design/live-course-editing">Live course editing</Link>).
+  - Completing again returns the existing completion. An archived course is read-only, so nothing in it can be completed.
+- **Quiz:** completes itself. The attempt that passes, or that uses the last attempt, records the completion in the same transaction as the attempt (see <Link path="design/quizzes">Quizzes</Link>). It doesn't count the student again: their first attempt did.
+  - `contentItem.complete` also accepts a quiz, but only once it's passed or no attempts remain. That covers an attempt limit lowered below what a student has already used, where no further submission is possible.
+- **Reading completions:** `course.myCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
+
 ## Lesson and course completion
 
 - A lesson is `completed` when every **effectively visible** item in it has an `itemCompletion`.

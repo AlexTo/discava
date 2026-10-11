@@ -39,6 +39,7 @@ Quiz-specific `contentItem` attributes. As with video and text, which attributes
 - Written in the same transaction as each attempt. The first attempt creates it; each later one is conditioned on the `attemptsUsed` it read, after checking that against `attemptsAllowed`. So the attempt limit holds even when two submissions race: the loser re-reads and is refused.
 - `bestScore` only increases. `passedAt` is set by the first passing attempt and never cleared.
 - Creating a student's summary increments the quiz's `studentActivityCount` (see <Link path="design/live-course-editing">Live course editing</Link>).
+- The attempt that passes, or that uses the last attempt, also records the quiz's `itemCompletion` in the same transaction, unless there already is one (see <Link path="design/progress-and-completion">Progress and completion</Link>).
 
 ## Grading
 
