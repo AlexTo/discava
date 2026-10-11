@@ -15,10 +15,14 @@ import {
   RestApiProps as _RestApiProps,
   AccessLogFormat,
   AuthorizationType,
+  CfnRestApi,
   Cors,
+  EndpointAccessMode,
+  EndpointType,
   IResource,
   LogGroupLogDestination,
   Resource,
+  SecurityPolicy,
   Stage,
   ThrottleSettings,
 } from 'aws-cdk-lib/aws-apigateway';
@@ -160,6 +164,22 @@ export class RestApi<
       removalPolicy,
     });
 
+    // Require TLS 1.3 on whichever endpoint clients reach the API through.
+    // With a custom domain that's the domain alone (the execute-api endpoint
+    // is disabled so it can't be used to bypass it); otherwise it's the
+    // execute-api endpoint. Enhanced (SecurityPolicy_*) policies are
+    // endpoint-type specific, and STRICT access mode rejects requests whose
+    // SNI/Host don't match the endpoint rather than falling back to a weaker
+    // policy.
+    const endpointType =
+      props.endpointConfiguration?.types[0] ??
+      props.endpointTypes?.[0] ??
+      EndpointType.EDGE;
+    const tls13Policy = (type: EndpointType) =>
+      type === EndpointType.EDGE
+        ? SecurityPolicy.TLS13_2025_EDGE
+        : SecurityPolicy.TLS13_1_3_2025_09;
+
     // Create the API Gateway REST API
     this.api = new _RestApi(this, 'Api', {
       // Without this the console shows every API by its construct id
@@ -168,7 +188,15 @@ export class RestApi<
         .filter(Boolean)
         .join('-'),
       ...props,
-      domainName,
+      domainName: domainName && {
+        securityPolicy: tls13Policy(
+          domainName.endpointType ?? EndpointType.REGIONAL,
+        ),
+        endpointAccessMode: EndpointAccessMode.STRICT,
+        ...domainName,
+      },
+      disableExecuteApiEndpoint:
+        props.disableExecuteApiEndpoint ?? domainName !== undefined,
       deployOptions: {
         accessLogDestination: new LogGroupLogDestination(accessLogs),
         accessLogFormat: AccessLogFormat.jsonWithStandardFields(),
@@ -184,6 +212,12 @@ export class RestApi<
         },
       },
     });
+    // RestApi doesn't expose the security policy, so set it on the L1 directly
+    if (!domainName) {
+      const cfnApi = this.api.node.defaultChild as CfnRestApi;
+      cfnApi.securityPolicy = tls13Policy(endpointType);
+      cfnApi.endpointAccessMode = EndpointAccessMode.STRICT;
+    }
     // Ensure the account-level role is configured before the stage is created
     this.api.deploymentStage.node.addDependency(account.resource);
 

@@ -81,6 +81,52 @@ describe('RestApi', { timeout: 30_000 }, () => {
     );
   });
 
+  it('requires TLS 1.3 on the edge-optimized execute-api endpoint', () => {
+    const { stack } = buildApi();
+
+    Template.fromStack(stack).hasResourceProperties(
+      'AWS::ApiGateway::RestApi',
+      {
+        SecurityPolicy: 'SecurityPolicy_TLS13_2025_EDGE',
+        EndpointAccessMode: 'STRICT',
+      },
+    );
+  });
+
+  it('requires TLS 1.3 on the custom domain when configured', () => {
+    const { stack } = buildApi('api.example.com');
+
+    Template.fromStack(stack).hasResourceProperties(
+      'AWS::ApiGateway::DomainName',
+      {
+        SecurityPolicy: 'SecurityPolicy_TLS13_1_3_2025_09',
+        EndpointAccessMode: 'STRICT',
+      },
+    );
+  });
+
+  it('disables the execute-api endpoint when a custom domain is configured', () => {
+    const { stack } = buildApi('api.example.com');
+
+    Template.fromStack(stack).hasResourceProperties(
+      'AWS::ApiGateway::RestApi',
+      {
+        DisableExecuteApiEndpoint: true,
+      },
+    );
+  });
+
+  it('keeps the execute-api endpoint when no custom domain is configured', () => {
+    const { stack } = buildApi();
+
+    Template.fromStack(stack).hasResourceProperties(
+      'AWS::ApiGateway::RestApi',
+      {
+        DisableExecuteApiEndpoint: false,
+      },
+    );
+  });
+
   it('outputs no alias target when no custom domain is configured', () => {
     const { stack } = buildApi();
 
