@@ -68,6 +68,7 @@ const entities = {
   contentItem: stored('contentItem'),
   enrolment: stored('enrolment'),
   quizSummary: stored('quizSummary'),
+  itemCompletion: stored('itemCompletion'),
   quizAttempt: { query: { primary: attemptQuery } },
 };
 
@@ -90,6 +91,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
               'enrolment',
               'quizSummary',
               'quizAttempt',
+              'itemCompletion',
             ].map((name) => [name, transactionEntity(name)]),
           ),
         );
@@ -341,6 +343,8 @@ describe('submitAttempt', () => {
       'enrolment.check',
       'quizSummary.create',
       'quizAttempt.create',
+      // It passes, so it also completes the quiz.
+      'itemCompletion.create',
     ]);
     expect(itemOf(transaction, 'course').condition).toBe('status = published');
     expect(itemOf(transaction, 'module').condition).toBe(
@@ -810,6 +814,103 @@ describe('submitAttempt', () => {
       expect(JSON.stringify(result)).not.toContain(SECRET_EXPLANATION);
       // Which questions were right is still shown.
       expect(result.attempt.correctQuestionIds).toEqual([]);
+    });
+  });
+
+  describe('completing the quiz', () => {
+    const completionIn = (transaction: TransactionItem[]) =>
+      transaction.find((item) => item.entity === 'itemCompletion');
+
+    // Invariant: a quiz is complete once passed, or once all attempts are used.
+    it('records the completion with a passing attempt', async () => {
+      existingSummary({ attemptsUsed: 1, bestScore: 0 });
+
+      const result = await submit(allCorrect);
+
+      const [transaction] = transactions;
+      expect(completionIn(transaction)).toMatchObject({
+        op: 'create',
+        data: {
+          userId: USER_SUB,
+          ...ref,
+          completedAt: result.attempt.submittedAt,
+        },
+      });
+      // Its activity was counted by the first attempt, not again here.
+      expect(itemOf(transaction, 'contentItem').op).toBe('check');
+    });
+
+    it('records the completion with the last attempt, even when it fails', async () => {
+      existingSummary({ attemptsUsed: 2, bestScore: 0 });
+
+      const result = await submit({});
+
+      expect(result.attempt.passed).toBe(false);
+      expect(completionIn(transactions[0])).toMatchObject({ op: 'create' });
+    });
+
+    it('doesn’t complete the quiz on a failed attempt with attempts left', async () => {
+      existingSummary({ attemptsUsed: 1, bestScore: 0 });
+
+      await submit({});
+
+      expect(completionIn(transactions[0])).toBeUndefined();
+    });
+
+    it('never completes a quiz with unlimited attempts until it’s passed', async () => {
+      withSettings({ attemptsAllowed: null });
+      existingSummary({ attemptsUsed: 40, bestScore: 0 });
+
+      await submit({});
+
+      expect(completionIn(transactions[0])).toBeUndefined();
+    });
+
+    // Invariant: at most one completion per student and item.
+    it('doesn’t record a second completion', async () => {
+      existingSummary({
+        attemptsUsed: 1,
+        passedAt: '2024-01-03T00:00:00.000Z',
+      });
+      db.itemCompletion = {
+        userId: USER_SUB,
+        ...ref,
+        completedAt: '2024-01-03T00:00:00.000Z',
+      };
+
+      await submit(allCorrect);
+
+      expect(completionIn(transactions[0])).toBeUndefined();
+    });
+
+    it('rereads after a completion lands at the same moment, and doesn’t write another', async () => {
+      existingSummary({ attemptsUsed: 1, bestScore: 0 });
+      transactionGo
+        .mockImplementationOnce(async () => {
+          // completed through contentItem.complete in between
+          db.itemCompletion = {
+            userId: USER_SUB,
+            ...ref,
+            completedAt: '2024-01-03T00:00:00.000Z',
+          };
+          return cancelledWith([
+            'None',
+            'None',
+            'None',
+            'None',
+            'None',
+            'None',
+            'None',
+            'ConditionalCheckFailed',
+          ]);
+        })
+        .mockResolvedValueOnce({ canceled: false, data: [] });
+
+      await submit(allCorrect);
+
+      expect(transactions).toHaveLength(2);
+      expect(completionIn(transactions[0])).toBeDefined();
+      expect(completionIn(transactions[1])).toBeUndefined();
     });
   });
 });

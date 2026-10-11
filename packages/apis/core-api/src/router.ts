@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { t } from './init.js';
+import { completeContentItem, myCompletions } from './procedures/completion.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -22,12 +23,16 @@ export const router = t.router;
 export const appRouter = router({
   course: router({
     enrol,
+    myCompletions,
     myEnrolment,
     listByInstructor: listCoursesByInstructor,
     listInstructors: listInstructorsForCourse,
     publicList: publicListCourses,
     publicView: publicViewCourse,
     view: viewCourse,
+  }),
+  contentItem: router({
+    complete: completeContentItem,
   }),
   quiz: router({
     view: viewQuiz,
