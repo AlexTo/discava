@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { z } from 'zod';
+import {
+  createPaginatedQueryOutputSchema,
+  QueryInputSchema,
+} from './common.js';
 
 // Where a quiz sits in the curriculum: a content item's full key.
 export const QuizRefSchema = z.object({
@@ -129,15 +133,18 @@ export type ISubmitQuizAttemptOutput = z.output<
   typeof SubmitQuizAttemptOutputSchema
 >;
 
-export const MyQuizAttemptsInputSchema = QuizRefSchema;
+// A page of attempts at a time (cursor and limit, at most 100).
+export const MyQuizAttemptsInputSchema = QuizRefSchema.extend(
+  QueryInputSchema.shape,
+);
 
 export type IMyQuizAttemptsInput = z.output<typeof MyQuizAttemptsInputSchema>;
 
 export const MyQuizAttemptsOutputSchema = z.object({
   // null until the first attempt.
   summary: QuizSummarySchema.nullable(),
-  // Oldest first.
-  attempts: z.array(QuizAttemptSchema),
+  // Latest first; `cursor` is null on the last page.
+  attempts: createPaginatedQueryOutputSchema(QuizAttemptSchema),
   reveal: QuizRevealSchema.nullable(),
 });
 

@@ -55,7 +55,7 @@ core-api has three procedures, each taking the quiz's `courseId`, `moduleId`, `l
 
 - `quiz.view`: the questions, settings, `quizVersion` and `questionsHash`. Never the answer key. Still works in an archived course, like the rest of the course.
 - `quiz.submitAttempt`: takes `answers` and the `questionsHash` the student answered. Grades on the server and writes the attempt and the summary in one transaction, which also checks that the course is still published, the module, lesson and quiz are still visible and not archived, the quiz is still the `quizVersion` it was graded against, and the enrolment still isn't dropped. The first attempt also increments the quiz's `studentActivityCount` there. If anything changed in between, nothing is written and the submission is read and graded again, up to three times, before `CONFLICT`. Refused with `PRECONDITION_FAILED` in an archived course or with no attempts remaining, and with `BAD_REQUEST` for an answer naming an unknown question or option, a repeated option, or more than one option to a single choice question.
-- `quiz.myAttempts`: the student's summary (or `null`) and every attempt, oldest first.
+- `quiz.myAttempts`: the student's summary (or `null`) and their attempts, latest first, a page at a time (`cursor` and `limit`, 10 by default and at most 100). The history is paged because with unlimited attempts it has no bound.
 
 Each attempt's result shows which questions were right. The correct options and explanations (`reveal`) come back from `submitAttempt` and `myAttempts` only when `revealAnswers` allows:
 

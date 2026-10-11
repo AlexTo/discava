@@ -240,7 +240,7 @@ beforeEach(() => {
   };
   transactionGo.mockResolvedValue({ canceled: false, data: [] });
   attemptQuery.mockReturnValue({
-    go: vi.fn().mockResolvedValue({ data: [] }),
+    go: vi.fn().mockResolvedValue({ data: [], cursor: null }),
   });
 });
 
@@ -831,7 +831,9 @@ describe('myAttempts', () => {
   it('returns the caller’s summary and attempts, with the answers once revealed', async () => {
     existingSummary({ passedAt: '2024-02-01T00:00:00.000Z' });
     attemptQuery.mockReturnValue({
-      go: vi.fn().mockResolvedValue({ data: [storedAttempt] }),
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: [storedAttempt], cursor: 'next-page' }),
     });
 
     const result = await callAsUser().myAttempts(ref);
@@ -849,18 +851,21 @@ describe('myAttempts', () => {
         bestAttemptId: 'attempt-0',
         passedAt: '2024-02-01T00:00:00.000Z',
       },
-      attempts: [
-        {
-          attemptId: 'attempt-0',
-          answers: { q1: ['b'] },
-          correctQuestionIds: ['q1'],
-          scorePercent: 50,
-          passed: true,
-          quizVersion: 4,
-          questionsHash: 'hash-4',
-          submittedAt: '2024-02-01T00:00:00.000Z',
-        },
-      ],
+      attempts: {
+        items: [
+          {
+            attemptId: 'attempt-0',
+            answers: { q1: ['b'] },
+            correctQuestionIds: ['q1'],
+            scorePercent: 50,
+            passed: true,
+            quizVersion: 4,
+            questionsHash: 'hash-4',
+            submittedAt: '2024-02-01T00:00:00.000Z',
+          },
+        ],
+        cursor: 'next-page',
+      },
       reveal: {
         q1: { correctOptionIds: ['b'], explanation: SECRET_EXPLANATION },
         q2: { correctOptionIds: ['a', 'c'] },
@@ -871,9 +876,38 @@ describe('myAttempts', () => {
   it('returns no summary, attempts or reveal before the first attempt', async () => {
     await expect(callAsUser().myAttempts(ref)).resolves.toEqual({
       summary: null,
-      attempts: [],
+      attempts: { items: [], cursor: null },
       reveal: null,
     });
+  });
+
+  // Invariant: the history is read a page at a time, since with unlimited
+  // attempts it has no bound.
+  it('reads one page of attempts, latest first, 10 by default', async () => {
+    await callAsUser().myAttempts(ref);
+
+    expect(attemptQuery.mock.results[0].value.go).toHaveBeenCalledWith({
+      cursor: undefined,
+      limit: 10,
+      order: 'desc',
+    });
+  });
+
+  it('reads the page the cursor names, with the limit asked for', async () => {
+    await callAsUser().myAttempts({ ...ref, cursor: 'page-2', limit: 25 });
+
+    expect(attemptQuery.mock.results[0].value.go).toHaveBeenCalledWith({
+      cursor: 'page-2',
+      limit: 25,
+      order: 'desc',
+    });
+  });
+
+  it('is a BAD_REQUEST for a page of more than 100 attempts', async () => {
+    await expect(
+      callAsUser().myAttempts({ ...ref, limit: 101 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(attemptQuery).not.toHaveBeenCalled();
   });
 
   it('doesn’t reveal the answers the settings hold back', async () => {

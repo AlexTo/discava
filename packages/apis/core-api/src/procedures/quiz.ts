@@ -414,8 +414,8 @@ export const submitQuizAttempt = courseProcedure
     throw transactionConflict();
   });
 
-// The caller's summary and attempts for a quiz, oldest first, with the
-// answers revealed once the quiz's settings allow.
+// The caller's summary for a quiz and a page of their attempts, latest first,
+// with the answers revealed once the quiz's settings allow.
 export const myQuizAttempts = courseProcedure
   .input(MyQuizAttemptsInputSchema)
   .output(MyQuizAttemptsOutputSchema)
@@ -424,27 +424,33 @@ export const myQuizAttempts = courseProcedure
     const userId = ctx.user.sub;
     const { quiz, summary } = await loadQuiz(coreTable, input, userId);
 
-    // attemptIds are UUIDv7, so the sort key orders attempts by submission.
-    const { data: attempts } = await coreTable.entities.quizAttempt.query
-      .primary({
-        userId,
-        courseId: input.courseId,
-        contentItemId: input.contentItemId,
-      })
-      .go({ pages: 'all' });
+    // One page at a time: with unlimited attempts the history has no bound.
+    // attemptIds are UUIDv7, so the sort key orders attempts by submission;
+    // order: 'desc' puts the latest first.
+    const { data: attempts, cursor } =
+      await coreTable.entities.quizAttempt.query
+        .primary({
+          userId,
+          courseId: input.courseId,
+          contentItemId: input.contentItemId,
+        })
+        .go({ cursor: input.cursor, limit: input.limit, order: 'desc' });
 
     return {
       summary: summary ? asSummary(summary, quiz.settings) : null,
-      attempts: attempts.map((attempt) => ({
-        attemptId: attempt.attemptId,
-        answers: attempt.answers as IQuizAnswers,
-        correctQuestionIds: attempt.correctQuestionIds,
-        scorePercent: attempt.scorePercent,
-        passed: attempt.passed,
-        quizVersion: attempt.quizVersion,
-        questionsHash: attempt.questionsHash,
-        submittedAt: attempt.submittedAt,
-      })),
+      attempts: {
+        items: attempts.map((attempt) => ({
+          attemptId: attempt.attemptId,
+          answers: attempt.answers as IQuizAnswers,
+          correctQuestionIds: attempt.correctQuestionIds,
+          scorePercent: attempt.scorePercent,
+          passed: attempt.passed,
+          quizVersion: attempt.quizVersion,
+          questionsHash: attempt.questionsHash,
+          submittedAt: attempt.submittedAt,
+        })),
+        cursor,
+      },
       reveal: revealFor(quiz, summary?.attemptsUsed ?? 0),
     };
   });
