@@ -9,5 +9,5 @@ export {
   isShown,
 } from './curriculum.js';
 export * from './entities/index.js';
-export { isConditionalCheckFailed } from './errors.js';
 export { createCoreTableService } from './service.js';
+export { isConditionalCheckFailed } from './utils.js';
