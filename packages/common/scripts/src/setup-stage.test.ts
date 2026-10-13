@@ -65,7 +65,7 @@ case "$1 $2" in
   "iam get-open-id-connect-provider"|"iam get-role"|"iam get-policy") exit 1;;
 esac
 for arg in "$@"; do
-  case "$arg" in file://*) cp "\${arg#file://}" "$OUT/$(basename "\${arg#file://}" | sed 's/\\.[A-Za-z0-9]\\{6\\}\\.json$/.json/')";; esac
+  case "$arg" in file://*) cp "\${arg#file://}" "$OUT/";; esac
 done
 `;
 
@@ -85,6 +85,13 @@ fi
 exit 0
 `;
 };
+
+const EXECUTION_POLICY_FILES = [
+  'cfn-execution-discava-development.policy.json',
+  'cfn-execution-discava-development-data.json',
+  'cfn-execution-discava-development-edge.json',
+  'cfn-execution-discava-development-compute.json',
+];
 
 const tempDirs: string[] = [];
 afterEach(() => {
@@ -124,13 +131,11 @@ const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
     ? JSON.parse(readFileSync(trustFile, 'utf8')).Statement[0].Condition
         .StringEquals['token.actions.githubusercontent.com:sub']
     : undefined;
-  const executionPolicyFile = join(
-    out,
-    'cfn-execution-discava-development.policy.json',
-  );
-  const executionPolicy = existsSync(executionPolicyFile)
-    ? JSON.parse(readFileSync(executionPolicyFile, 'utf8'))
-    : undefined;
+  // The execution role's inline policy, then the managed policies attached
+  // to it.
+  const executionPolicies = EXECUTION_POLICY_FILES.filter((name) =>
+    existsSync(join(out, name)),
+  ).map((name) => JSON.parse(readFileSync(join(out, name), 'utf8')));
   return {
     status: result.status,
     // Whitespace-collapsed, since messages are wrapped to the terminal width.
@@ -138,7 +143,11 @@ const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
     iamCalls: calls.filter((call) => call.startsWith('aws iam ')),
     ghVariableCalls: calls.filter((call) => call.startsWith('gh variable ')),
     trustedSubject,
-    executionPolicy,
+    executionPolicies,
+    /** Every statement the execution role is granted, across its policies. */
+    executionStatements: executionPolicies.flatMap(
+      (policy) => policy.Statement,
+    ),
     /** A policy document the script handed to AWS, by its file name. */
     policyDocument: (name: string) =>
       JSON.parse(readFileSync(join(out, name), 'utf8')),
@@ -213,13 +222,13 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
   it('allows tagging MediaConvert job templates as they are created', () => {
     // Tag-on-create is authorized against jobTemplates/*, not the template's
     // own ARN, so the stage-prefixed job template statement doesn't cover it.
-    const { status, executionPolicy } = runSetup({
+    const { status, executionStatements } = runSetup({
       kind: 'response',
       useDefault: true,
     });
 
     expect(status).toBe(0);
-    expect(executionPolicy.Statement).toContainEqual(
+    expect(executionStatements).toContainEqual(
       expect.objectContaining({
         Effect: 'Allow',
         Action: 'mediaconvert:TagResource',
@@ -232,13 +241,13 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
   it("allows vended log delivery from the stage's buckets", () => {
     // S3 server access logs reach CloudWatch Logs through a delivery source
     // on the bucket, which needs this on the bucket itself.
-    const { status, executionPolicy } = runSetup({
+    const { status, executionStatements } = runSetup({
       kind: 'response',
       useDefault: true,
     });
 
     expect(status).toBe(0);
-    expect(executionPolicy.Statement).toContainEqual(
+    expect(executionStatements).toContainEqual(
       expect.objectContaining({
         Effect: 'Allow',
         Action: expect.arrayContaining([
@@ -252,18 +261,129 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
   it("allows deleting the schedules left in the stage's schedule groups", () => {
     // Deleting a schedule group deletes its schedules first, each authorized
     // on the schedule itself rather than the group.
-    const { status, executionPolicy } = runSetup({
+    const { status, executionStatements } = runSetup({
       kind: 'response',
       useDefault: true,
     });
 
     expect(status).toBe(0);
-    expect(executionPolicy.Statement).toContainEqual(
+    expect(executionStatements).toContainEqual(
       expect.objectContaining({
         Effect: 'Allow',
         Action: 'scheduler:DeleteSchedule',
         Resource:
           'arn:aws:scheduler:ap-southeast-2:111122223333:schedule/discavadevelopment*/*',
+      }),
+    );
+  });
+
+  it("allows the stage's queues and its functions' event source mappings", () => {
+    // The progress recalculation reads the core table's stream through an
+    // event source mapping, whose ARN is a UUID, so it's scoped by the
+    // function it invokes instead.
+    const { status, executionStatements } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining(['sqs:CreateQueue', 'sqs:DeleteQueue']),
+        Resource:
+          'arn:aws:sqs:ap-southeast-2:111122223333:discava-development-*',
+      }),
+    );
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'lambda:*EventSourceMapping',
+        Resource: '*',
+        Condition: {
+          ArnLike: {
+            'lambda:FunctionArn':
+              'arn:aws:lambda:ap-southeast-2:111122223333:function:discava-development-*',
+          },
+        },
+      }),
+    );
+  });
+
+  it('fits each of its policies within the size IAM allows', () => {
+    // Whitespace excluded, IAM allows 10,240 characters across a role's
+    // inline policies and 6,144 per managed policy. The test account ID and
+    // region are as long as real ones; discava-production's names are 1
+    // character longer per stage-prefixed ARN, so leave room for that too.
+    const { status, executionPolicies } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const [inline, ...managed] = executionPolicies.map(
+      (policy) => JSON.stringify(policy).length,
+    );
+
+    expect(status).toBe(0);
+    expect(managed).toHaveLength(3);
+    expect(inline).toBeLessThanOrEqual(10_240 - 100);
+    for (const size of managed) {
+      expect(size).toBeLessThanOrEqual(6_144 - 100);
+    }
+  });
+
+  it('attaches its managed policies to the execution role', () => {
+    const { status, iamCalls } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    for (const group of ['data', 'edge', 'compute']) {
+      expect(iamCalls).toContainEqual(
+        expect.stringContaining(
+          `aws iam attach-role-policy --role-name cfn-execution-discava-development --policy-arn arn:aws:iam::111122223333:policy/cfn-execution-discava-development-${group}`,
+        ),
+      );
+    }
+  });
+});
+
+describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
+  it("lets the stage's functions read table streams and send to its queues", () => {
+    const { status, policyDocument } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining([
+          'dynamodb:DescribeStream',
+          'dynamodb:GetRecords',
+          'dynamodb:GetShardIterator',
+        ]),
+        Resource:
+          'arn:aws:dynamodb:ap-southeast-2:111122223333:table/discava-development-*',
+      }),
+    );
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'dynamodb:ListStreams',
+        Resource: '*',
+      }),
+    );
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining(['sqs:SendMessage']),
+        Resource:
+          'arn:aws:sqs:ap-southeast-2:111122223333:discava-development-*',
       }),
     );
   });
