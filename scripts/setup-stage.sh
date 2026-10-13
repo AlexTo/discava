@@ -6,6 +6,27 @@
 #
 set -euo pipefail
 
+# Written for bash 3.2, the /bin/bash macOS ships: no mapfile, associative
+# arrays or ${var,,}, and an empty array is expanded as ${a[@]+"${a[@]}"},
+# since bash before 4.4 treats "${a[@]}" of an empty array as unset under
+# set -u.
+
+# lower <text>: prints text lowercased.
+lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+# map_set <map> <key> <value> / map_get <map> <key>: a map from identifier
+# keys (component names such as coreApi) to values, kept as one variable per
+# key (<map>__<key>). map_get prints nothing for a key never set.
+map_set() {
+  printf -v "$1__$2" '%s' "$3"
+}
+map_get() {
+  local name="$1__$2"
+  printf '%s' "${!name:-}"
+}
+
 # Guided deployment setup for a Discava stage.
 #
 # Run this once per deployment stage (as defined in
@@ -16,7 +37,7 @@ set -euo pipefail
 # - creates the GitHub OIDC provider (shared by every stage in the account)
 # - creates or updates the GitHub deploy role assumed by the workflow
 # - creates or updates the CloudFormation execution role passed to
-#   `cdk deploy --role-arn`
+#   `cdk deploy --role-arn`, and the managed policies attached to it
 # - creates or updates the repository's Docker login role (shared by every
 #   stage), which CI assumes only to authenticate image pulls from Amazon ECR
 #   Public, whose anonymous pulls shared GitHub runner IPs can rate-limit
@@ -250,7 +271,9 @@ github_environment_variable() {
 # with those subject alternative names is valid for the domain. A wildcard
 # covers exactly one label.
 certificate_covers() {
-  local names=",${1,,}," domain="${2,,}"
+  local names domain
+  names=",$(lower "$1"),"
+  domain="$(lower "$2")"
   [[ "$names" == *",$domain,"* ]] && return 0
   [[ "${domain#*.}" == *.* && "$names" == *",*.${domain#*.},"* ]]
 }
@@ -265,12 +288,12 @@ common_domain_suffix() {
   local ai=$((${#a_labels[@]} - 1)) bi=$((${#b_labels[@]} - 1))
   local -a common=()
   while [[ $ai -ge 0 && $bi -ge 0 && "${a_labels[$ai]}" == "${b_labels[$bi]}" ]]; do
-    common=("${a_labels[$ai]}" "${common[@]}")
-    ((ai--))
-    ((bi--))
+    common=("${a_labels[$ai]}" ${common[@]+"${common[@]}"})
+    ai=$((ai - 1))
+    bi=$((bi - 1))
   done
   local result="" label
-  for label in "${common[@]}"; do
+  for label in ${common[@]+"${common[@]}"}; do
     result="${result:+$result.}$label"
   done
   echo "$result"
@@ -283,7 +306,7 @@ root_domain_names() {
   local root="$2" label result=""
   local -a labels
   IFS=',' read -r -a labels <<<"$1"
-  for label in "${labels[@]}"; do
+  for label in ${labels[@]+"${labels[@]}"}; do
     if [[ "$label" == @ ]]; then
       label="$root"
     else
@@ -299,7 +322,7 @@ certificate_covers_all() {
   local names="$1" domain
   local -a domains
   IFS=',' read -r -a domains <<<"$2"
-  for domain in "${domains[@]}"; do
+  for domain in ${domains[@]+"${domains[@]}"}; do
     certificate_covers "$names" "$domain" || return 1
   done
 }
@@ -370,7 +393,10 @@ echo "Stage Deployment Setup"
 echo "============================================"
 
 section "Stage"
-mapfile -t CONFIGURED_STAGES < <(read_stages_config "$INFRA_PROJECT_PATH")
+CONFIGURED_STAGES=()
+while IFS= read -r configured_stage; do
+  CONFIGURED_STAGES+=("$configured_stage")
+done < <(read_stages_config "$INFRA_PROJECT_PATH")
 readonly CONFIGURED_STAGES
 if [[ ${#CONFIGURED_STAGES[@]} -eq 0 ]]; then
   echo "No stages found in packages/common/infra-config/src/stages.config.ts." >&2
@@ -400,17 +426,17 @@ STAGE_ACCOUNT=""
 STAGE_PROFILE=""
 STAGE_CLOUDFRONT_WAF=""
 STAGE_COOKIE_DOMAIN=""
-# Keyed by component name, e.g. coreApi. Already include any
-# <STAGE>_INFRA_<COMPONENT>_* overrides set in this shell (resolveStage applies them).
-declare -A STAGE_DOMAINS=() STAGE_CERTIFICATES=()
+# The STAGE_DOMAINS and STAGE_CERTIFICATES maps (see map_set) are keyed by
+# component name, e.g. coreApi. Already include any <STAGE>_INFRA_<COMPONENT>_*
+# overrides set in this shell (resolveStage applies them).
 while IFS='=' read -r key value; do
   case "$key" in
     region) STAGE_REGION="$value" ;;
     account) STAGE_ACCOUNT="$value" ;;
     profile) STAGE_PROFILE="$value" ;;
     cloudFrontWaf) STAGE_CLOUDFRONT_WAF="$value" ;;
-    domains.*) STAGE_DOMAINS["${key#domains.}"]="$value" ;;
-    certificate.*) STAGE_CERTIFICATES["${key#certificate.}"]="$value" ;;
+    domains.*) map_set STAGE_DOMAINS "${key#domains.}" "$value" ;;
+    certificate.*) map_set STAGE_CERTIFICATES "${key#certificate.}" "$value" ;;
     cookieDomain) STAGE_COOKIE_DOMAIN="$value" ;;
   esac
 done < <(read_stages_config "$INFRA_PROJECT_PATH" "$TARGET_STAGE")
@@ -476,7 +502,8 @@ readonly AWS_REGION
 # `<stage>-*`, so this prefix scopes most permissions to one stage.
 readonly RESOURCE_PREFIX="$TARGET_STAGE-"
 # Generated bucket names are the lowercased equivalent.
-readonly BUCKET_PREFIX="${RESOURCE_PREFIX,,}"
+BUCKET_PREFIX="$(lower "$RESOURCE_PREFIX")"
+readonly BUCKET_PREFIX
 # CDK-generated names for some resources (MediaConvert job templates, Scheduler
 # groups) drop the hyphens from the stack path.
 readonly COMPACT_PREFIX="${TARGET_STAGE//-/}"
@@ -492,6 +519,12 @@ readonly DOCKER_LOGIN_ROLE_NAME="${DOCKER_LOGIN_ROLE_NAME:-github-docker-login-$
 # grant through them. Must match stagePermissionsBoundaryName() in
 # packages/common/constructs/src/core/stage-isolation.ts.
 readonly BOUNDARY_POLICY_NAME="permissions-boundary-$TARGET_STAGE"
+# Managed policies holding the rest of the execution role's permissions (see
+# attach_execution_policy). Like the boundary, named apart from
+# RESOURCE_PREFIX, and the execution role can't modify managed policies.
+readonly EXECUTION_DATA_POLICY_NAME="$EXECUTION_ROLE_NAME-data"
+readonly EXECUTION_EDGE_POLICY_NAME="$EXECUTION_ROLE_NAME-edge"
+readonly EXECUTION_COMPUTE_POLICY_NAME="$EXECUTION_ROLE_NAME-compute"
 readonly BOUNDARY_POLICY_ARN="arn:$AWS_PARTITION:iam::$ACCOUNT_ID:policy/$BOUNDARY_POLICY_NAME"
 # Each stage publishes its assets under its own prefix in the shared bootstrap
 # buckets (see StageIsolationSynthesizer), so access is scoped to that prefix.
@@ -549,9 +582,9 @@ fi
 # NAME=value pairs to set, and names to remove, on the GitHub environment.
 DOMAIN_VARIABLES=()
 DOMAIN_VARIABLES_TO_DELETE=()
-# Keyed by component name; the domain(s) actually entered below, so the
-# cookie-domain prompt after the loop can default off of them.
-declare -A RESOLVED_DOMAINS=()
+# The RESOLVED_DOMAINS map (see map_set), keyed by component name: the
+# domain(s) actually entered below, so the cookie-domain prompt after the loop
+# can default off of them.
 paragraph "Each component can be served from a custom domain instead of its generated *.execute-api.amazonaws.com / *.cloudfront.net hostname (leave blank for none). API certificates must be in $AWS_REGION; portal and media certificates, served by CloudFront, in $GLOBAL_REGION. DNS records aren't created for you."
 echo ""
 paragraph "A root domain suggests a subdomain of it for each component not already configured, e.g. core-api.example.com for example.com."
@@ -559,7 +592,7 @@ root_domain_variable="${STAGE_ENV_PREFIX}ROOT_DOMAIN"
 while true; do
   ask_optional ROOT_DOMAIN "Root domain" "${!root_domain_variable:-}"
   ROOT_DOMAIN="${ROOT_DOMAIN// /}"
-  ROOT_DOMAIN="${ROOT_DOMAIN,,}"
+  ROOT_DOMAIN="$(lower "$ROOT_DOMAIN")"
   [[ -n "$ROOT_DOMAIN" && ! "$ROOT_DOMAIN" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || break
   echo "Not a valid domain name: $ROOT_DOMAIN" >&2
   [[ "$ASSUME_YES" == false ]] || exit 1
@@ -600,15 +633,16 @@ for spec in \
   [[ -z "$ROOT_DOMAIN" ]] || root_domains="$(root_domain_names "$root_labels" "$ROOT_DOMAIN")"
 
   while true; do
-    ask_optional domains "$domain_question" "${STAGE_DOMAINS[$component]:-${current_domains:-$root_domains}}"
+    stage_domains="$(map_get STAGE_DOMAINS "$component")"
+    ask_optional domains "$domain_question" "${stage_domains:-${current_domains:-$root_domains}}"
     domains="${domains// /}"
-    domains="${domains,,}"
+    domains="$(lower "$domains")"
     domain_error=""
     if [[ "$kind" == api && "$domains" == *,* ]]; then
       domain_error="$label takes a single domain, got: $domains"
     else
       IFS=',' read -r -a domain_list <<<"$domains"
-      for domain in "${domain_list[@]}"; do
+      for domain in ${domain_list[@]+"${domain_list[@]}"}; do
         if [[ ! "$domain" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]]; then
           domain_error="Not a valid domain name: $domain"
           break
@@ -619,7 +653,7 @@ for spec in \
     echo "$domain_error" >&2
     [[ "$ASSUME_YES" == false ]] || exit 1
   done
-  RESOLVED_DOMAINS["$component"]="$domains"
+  map_set RESOLVED_DOMAINS "$component" "$domains"
 
   if [[ -z "$domains" ]]; then
     [[ -z "$current_domains" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$domain_variable")
@@ -627,7 +661,8 @@ for spec in \
     continue
   fi
 
-  certificate_default="${STAGE_CERTIFICATES[$component]:-$current_certificate}"
+  certificate_default="$(map_get STAGE_CERTIFICATES "$component")"
+  certificate_default="${certificate_default:-$current_certificate}"
   if [[ -z "$certificate_default" ]]; then
     certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types")"
     if [[ -n "$certificate_default" ]]; then
@@ -676,24 +711,26 @@ done
 # domain shared between Instructor API (which issues them) and Lesson media
 # (which serves the video) -- only meaningful once Lesson media itself has a
 # custom domain configured above.
-if [[ -n "${RESOLVED_DOMAINS[lessonMedia]:-}" ]]; then
+lesson_media_domains="$(map_get RESOLVED_DOMAINS lessonMedia)"
+instructor_api_domain="$(map_get RESOLVED_DOMAINS instructorApi)"
+if [[ -n "$lesson_media_domains" ]]; then
   cookie_domain_variable="${STAGE_INFRA_ENV_PREFIX}LESSON_MEDIA_COOKIE_DOMAIN"
   current_cookie_domain=""
   if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
     current_cookie_domain="$(github_environment_variable "$cookie_domain_variable")"
   fi
   cookie_domain_default="${STAGE_COOKIE_DOMAIN:-$current_cookie_domain}"
-  if [[ -z "$cookie_domain_default" && -n "${RESOLVED_DOMAINS[instructorApi]:-}" ]]; then
+  if [[ -z "$cookie_domain_default" && -n "$instructor_api_domain" ]]; then
     cookie_domain_default="$(common_domain_suffix \
-      "${RESOLVED_DOMAINS[instructorApi]}" \
-      "${RESOLVED_DOMAINS[lessonMedia]%%,*}")"
+      "$instructor_api_domain" \
+      "${lesson_media_domains%%,*}")"
   fi
 
   echo ""
   paragraph "HLS playback needs a domain shared by Instructor API and Lesson media (e.g. example.com for instructor-api.example.com and lesson-media.example.com) -- a cookie can only be set for the issuing domain or one of its parents."
   while true; do
     ask_optional cookie_domain "Shared cookie domain for HLS playback" "$cookie_domain_default"
-    cookie_domain="${cookie_domain,,}"
+    cookie_domain="$(lower "$cookie_domain")"
     cookie_domain_error=""
     if [[ -n "$cookie_domain" && ! "$cookie_domain" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]]; then
       cookie_domain_error="Not a valid domain name: $cookie_domain"
@@ -710,14 +747,13 @@ if [[ -n "${RESOLVED_DOMAINS[lessonMedia]:-}" ]]; then
   fi
 fi
 
+# Policy documents are written to fixed names in one private directory:
+# mktemp -t takes a template on GNU but a prefix on BSD/macOS, so it can't
+# name the files consistently.
+POLICY_DIR="$(mktemp -d)"
+readonly POLICY_DIR
 cleanup() {
-  rm -f "${DEPLOY_TRUST_POLICY_FILE:-}" \
-    "${DEPLOY_POLICY_FILE:-}" \
-    "${EXECUTION_TRUST_POLICY_FILE:-}" \
-    "${EXECUTION_POLICY_FILE:-}" \
-    "${BOUNDARY_POLICY_FILE:-}" \
-    "${DOCKER_LOGIN_TRUST_POLICY_FILE:-}" \
-    "${DOCKER_LOGIN_POLICY_FILE:-}"
+  rm -rf "$POLICY_DIR"
 }
 
 trap cleanup EXIT
@@ -733,7 +769,7 @@ confirm() {
   echo "This will create or update:"
   echo "  - OIDC provider: $OIDC_PROVIDER_HOST"
   echo "  - Deploy role:   $DEPLOY_ROLE_NAME"
-  echo "  - Exec role:     $EXECUTION_ROLE_NAME"
+  echo "  - Exec role:     $EXECUTION_ROLE_NAME (+ policies $EXECUTION_DATA_POLICY_NAME, $EXECUTION_EDGE_POLICY_NAME, $EXECUTION_COMPUTE_POLICY_NAME)"
   echo "  - Boundary:      $BOUNDARY_POLICY_NAME"
   echo "  - Docker login:  $DOCKER_LOGIN_ROLE_NAME (shared by every stage)"
   if [[ ${#BOOTSTRAP_REGIONS[@]} -gt 0 ]]; then
@@ -748,10 +784,10 @@ confirm() {
   if [[ "$CONFIGURE_GITHUB" == true ]]; then
     echo "  - GitHub var:    AWS_DOCKER_LOGIN_ROLE_ARN (repository)"
     local variable
-    for variable in "${DOMAIN_VARIABLES[@]}"; do
+    for variable in ${DOMAIN_VARIABLES[@]+"${DOMAIN_VARIABLES[@]}"}; do
       echo "  - GitHub var:    $variable"
     done
-    for variable in "${DOMAIN_VARIABLES_TO_DELETE[@]}"; do
+    for variable in ${DOMAIN_VARIABLES_TO_DELETE[@]+"${DOMAIN_VARIABLES_TO_DELETE[@]}"}; do
       echo "  - Remove var:    $variable"
     done
   fi
@@ -778,9 +814,9 @@ ensure_oidc_provider() {
 }
 
 create_policy_files() {
-  DEPLOY_TRUST_POLICY_FILE="$(mktemp -t "${DEPLOY_ROLE_NAME}.trust.XXXXXX.json")"
-  DEPLOY_POLICY_FILE="$(mktemp -t "${DEPLOY_ROLE_NAME}.policy.XXXXXX.json")"
-  EXECUTION_TRUST_POLICY_FILE="$(mktemp -t "${EXECUTION_ROLE_NAME}.trust.XXXXXX.json")"
+  DEPLOY_TRUST_POLICY_FILE="$POLICY_DIR/${DEPLOY_ROLE_NAME}.trust.json"
+  DEPLOY_POLICY_FILE="$POLICY_DIR/${DEPLOY_ROLE_NAME}.policy.json"
+  EXECUTION_TRUST_POLICY_FILE="$POLICY_DIR/${EXECUTION_ROLE_NAME}.trust.json"
 
   cat >"$DEPLOY_TRUST_POLICY_FILE" <<EOF
 {
@@ -938,8 +974,8 @@ attach_inline_policy() {
 }
 
 create_docker_login_policy_files() {
-  DOCKER_LOGIN_TRUST_POLICY_FILE="$(mktemp -t "${DOCKER_LOGIN_ROLE_NAME}.trust.XXXXXX.json")"
-  DOCKER_LOGIN_POLICY_FILE="$(mktemp -t "${DOCKER_LOGIN_ROLE_NAME}.policy.XXXXXX.json")"
+  DOCKER_LOGIN_TRUST_POLICY_FILE="$POLICY_DIR/${DOCKER_LOGIN_ROLE_NAME}.trust.json"
+  DOCKER_LOGIN_POLICY_FILE="$POLICY_DIR/${DOCKER_LOGIN_ROLE_NAME}.policy.json"
 
   # Any workflow in the repository may assume it: all it grants is a pull
   # token for public images.
@@ -999,16 +1035,60 @@ attach_docker_login_policy() {
     --policy-document "file://$DOCKER_LOGIN_POLICY_FILE"
 }
 
-attach_execution_policy() {
-  EXECUTION_POLICY_FILE="$(mktemp -t "${EXECUTION_ROLE_NAME}.policy.XXXXXX.json")"
+# upsert_managed_policy <name> <document file> <description>: creates the
+# customer managed policy, or makes the document its new default version.
+upsert_managed_policy() {
+  local name="$1" file="$2" description="$3"
+  local arn="arn:$AWS_PARTITION:iam::$ACCOUNT_ID:policy/$name"
+  if aws iam get-policy --policy-arn "$arn" >/dev/null 2>&1; then
+    # A managed policy keeps at most five versions; make room for the new one.
+    local non_default_versions
+    non_default_versions="$(aws iam list-policy-versions \
+      --policy-arn "$arn" \
+      --query 'sort_by(Versions[?!IsDefaultVersion], &CreateDate)[].VersionId' \
+      --output text)"
+    if [[ $(wc -w <<<"$non_default_versions") -ge 4 ]]; then
+      aws iam delete-policy-version \
+        --policy-arn "$arn" \
+        --version-id "${non_default_versions%%[[:space:]]*}"
+    fi
+    echo "Updating managed policy: $name"
+    aws iam create-policy-version \
+      --policy-arn "$arn" \
+      --policy-document "file://$file" \
+      --set-as-default >/dev/null
+  else
+    echo "Creating managed policy: $name"
+    aws iam create-policy \
+      --policy-name "$name" \
+      --policy-document "file://$file" \
+      --description "$description" \
+      --tags \
+        Key=Project,Value=discava \
+        Key=ManagedBy,Value=setup-stage.sh \
+        Key=Stage,Value="$TARGET_STAGE" >/dev/null
+  fi
+}
 
-  # SchedulesInScheduleGroups: deleting a schedule group first deletes every
-  # schedule left in it, which is authorized per schedule, not by the group.
-  #
-  # MediaConvertTagOnCreate: tagging a job template as it's created (stack tags
-  # propagate to it) is authorized against jobTemplates/*, not the template's
-  # own ARN, so it can't be scoped to COMPACT_PREFIX like the other job
-  # template actions.
+# The execution role's permissions: what CloudFormation may do while it
+# deploys the stage. IAM caps a role's inline policies at 10,240 characters in
+# all and each managed policy at 6,144 (whitespace excluded), more than one
+# policy holds, so they're split by what they cover:
+# - inline: the IAM guardrails (roles it creates must carry the stage's
+#   boundary; only stage roles are passed to services) and reading CDK's
+#   bootstrap version and assets, kept on the role itself so they're reviewed
+#   together
+# - <role>-data: S3, DynamoDB, KMS and CloudWatch Logs
+# - <role>-edge: CloudFront, WAF, API Gateway and Cognito
+# - <role>-compute: Lambda and its event sources, SQS, EventBridge, Scheduler,
+#   MediaConvert and AppConfig
+# A new permission goes in the group it belongs to; the tests check each
+# policy still fits.
+create_execution_policy_files() {
+  EXECUTION_POLICY_FILE="$POLICY_DIR/${EXECUTION_ROLE_NAME}.policy.json"
+  EXECUTION_DATA_POLICY_FILE="$POLICY_DIR/${EXECUTION_DATA_POLICY_NAME}.json"
+  EXECUTION_EDGE_POLICY_FILE="$POLICY_DIR/${EXECUTION_EDGE_POLICY_NAME}.json"
+  EXECUTION_COMPUTE_POLICY_FILE="$POLICY_DIR/${EXECUTION_COMPUTE_POLICY_NAME}.json"
 
   cat >"$EXECUTION_POLICY_FILE" <<EOF
 {
@@ -1028,6 +1108,68 @@ attach_execution_policy() {
         "arn:$AWS_PARTITION:ssm:$GLOBAL_REGION:$ACCOUNT_ID:parameter/cdk/exports/$RESOURCE_PREFIX*"
       ]
     },
+    {
+      "Sid": "ReadCdkAssets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": [
+        "arn:$AWS_PARTITION:s3:::$ASSETS_BUCKET_PRIMARY/$ASSETS_PREFIX*",
+        "arn:$AWS_PARTITION:s3:::$ASSETS_BUCKET_GLOBAL/$ASSETS_PREFIX*"
+      ]
+    },
+    {
+      "Sid": "ManageDiscavaRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
+    },
+    {
+      "Sid": "GrantOnlyWithinStageBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "$BOUNDARY_POLICY_ARN"
+        }
+      }
+    },
+    {
+      "Sid": "PassOnlyDiscavaRolesToServices",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
+      ]
+    }
+  ]
+}
+EOF
+
+  cat >"$EXECUTION_DATA_POLICY_FILE" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
     {
       "Sid": "S3BucketsForDiscava",
       "Effect": "Allow",
@@ -1069,51 +1211,6 @@ attach_execution_policy() {
       ],
       "Resource": [
         "arn:$AWS_PARTITION:s3:::$BUCKET_PREFIX*/*"
-      ]
-    },
-    {
-      "Sid": "ReadCdkAssets",
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:GetObjectVersion"
-      ],
-      "Resource": [
-        "arn:$AWS_PARTITION:s3:::$ASSETS_BUCKET_PRIMARY/$ASSETS_PREFIX*",
-        "arn:$AWS_PARTITION:s3:::$ASSETS_BUCKET_GLOBAL/$ASSETS_PREFIX*"
-      ]
-    },
-    {
-      "Sid": "LambdaForDiscava",
-      "Effect": "Allow",
-      "Action": [
-        "lambda:CreateFunction",
-        "lambda:DeleteFunction",
-        "lambda:GetFunction",
-        "lambda:GetFunctionConfiguration",
-        "lambda:GetFunctionCodeSigningConfig",
-        "lambda:GetFunctionRecursionConfig",
-        "lambda:GetRuntimeManagementConfig",
-        "lambda:GetPolicy",
-        "lambda:UpdateFunctionCode",
-        "lambda:UpdateFunctionConfiguration",
-        "lambda:InvokeFunction",
-        "lambda:PublishVersion",
-        "lambda:AddPermission",
-        "lambda:RemovePermission",
-        "lambda:ListVersionsByFunction",
-        "lambda:ListTags",
-        "lambda:TagResource",
-        "lambda:UntagResource",
-        "lambda:PublishLayerVersion",
-        "lambda:GetLayerVersion",
-        "lambda:DeleteLayerVersion"
-      ],
-      "Resource": [
-        "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*",
-        "arn:$AWS_PARTITION:lambda:$GLOBAL_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*",
-        "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:layer:*",
-        "arn:$AWS_PARTITION:lambda:$GLOBAL_REGION:$ACCOUNT_ID:layer:*"
       ]
     },
     {
@@ -1180,7 +1277,15 @@ attach_execution_policy() {
         "logs:*ResourcePolic*"
       ],
       "Resource": "*"
-    },
+    }
+  ]
+}
+EOF
+
+  cat >"$EXECUTION_EDGE_POLICY_FILE" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
     {
       "Sid": "CloudFrontForDiscava",
       "Effect": "Allow",
@@ -1205,20 +1310,6 @@ attach_execution_policy() {
       "Resource": "*"
     },
     {
-      "Sid": "ApiGatewayForDiscava",
-      "Effect": "Allow",
-      "Action": [
-        "apigateway:POST",
-        "apigateway:GET",
-        "apigateway:PUT",
-        "apigateway:PATCH",
-        "apigateway:DELETE",
-        "apigateway:SetWebACL",
-        "apigateway:UpdateRestApiPolicy"
-      ],
-      "Resource": "*"
-    },
-    {
       "Sid": "WafV2ForDiscava",
       "Effect": "Allow",
       "Action": [
@@ -1238,6 +1329,144 @@ attach_execution_policy() {
         "wafv2:UntagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "ApiGatewayForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:POST",
+        "apigateway:GET",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE",
+        "apigateway:SetWebACL",
+        "apigateway:UpdateRestApiPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CognitoUserPools",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-idp:CreateUserPool",
+        "cognito-idp:DescribeUserPool",
+        "cognito-idp:UpdateUserPool",
+        "cognito-idp:DeleteUserPool",
+        "cognito-idp:SetUserPoolMfaConfig",
+        "cognito-idp:GetUserPoolMfaConfig",
+        "cognito-idp:CreateGroup",
+        "cognito-idp:GetGroup",
+        "cognito-idp:UpdateGroup",
+        "cognito-idp:DeleteGroup",
+        "cognito-idp:CreateUserPoolClient",
+        "cognito-idp:DescribeUserPoolClient",
+        "cognito-idp:UpdateUserPoolClient",
+        "cognito-idp:DeleteUserPoolClient",
+        "cognito-idp:CreateUserPoolDomain",
+        "cognito-idp:DescribeUserPoolDomain",
+        "cognito-idp:UpdateUserPoolDomain",
+        "cognito-idp:DeleteUserPoolDomain",
+        "cognito-idp:CreateManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBranding",
+        "cognito-idp:DescribeManagedLoginBrandingByClient",
+        "cognito-idp:UpdateManagedLoginBranding",
+        "cognito-idp:DeleteManagedLoginBranding",
+        "cognito-idp:AssociateWebACL",
+        "cognito-idp:DisassociateWebACL",
+        "cognito-idp:GetWebACLForResource",
+        "cognito-idp:ListResourcesForWebACL",
+        "cognito-idp:TagResource",
+        "cognito-idp:UntagResource",
+        "cognito-idp:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CognitoIdentityPools",
+      "Effect": "Allow",
+      "Action": [
+        "cognito-identity:CreateIdentityPool",
+        "cognito-identity:DescribeIdentityPool",
+        "cognito-identity:UpdateIdentityPool",
+        "cognito-identity:DeleteIdentityPool",
+        "cognito-identity:GetIdentityPoolRoles",
+        "cognito-identity:SetIdentityPoolRoles",
+        "cognito-identity:TagResource",
+        "cognito-identity:UntagResource",
+        "cognito-identity:ListTagsForResource"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
+
+  # SchedulesInScheduleGroups: deleting a schedule group first deletes every
+  # schedule left in it, which is authorized per schedule, not by the group.
+  #
+  # MediaConvertTagOnCreate: tagging a job template as it's created (stack tags
+  # propagate to it) is authorized against jobTemplates/*, not the template's
+  # own ARN, so it can't be scoped to COMPACT_PREFIX like the other job
+  # template actions.
+  cat >"$EXECUTION_COMPUTE_POLICY_FILE" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "LambdaForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetFunctionRecursionConfig",
+        "lambda:GetRuntimeManagementConfig",
+        "lambda:GetPolicy",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:InvokeFunction",
+        "lambda:PublishVersion",
+        "lambda:AddPermission",
+        "lambda:RemovePermission",
+        "lambda:ListVersionsByFunction",
+        "lambda:ListTags",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:PublishLayerVersion",
+        "lambda:GetLayerVersion",
+        "lambda:DeleteLayerVersion"
+      ],
+      "Resource": [
+        "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*",
+        "arn:$AWS_PARTITION:lambda:$GLOBAL_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*",
+        "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:layer:*",
+        "arn:$AWS_PARTITION:lambda:$GLOBAL_REGION:$ACCOUNT_ID:layer:*"
+      ]
+    },
+    {
+      "Sid": "EventSourceMappingsForDiscava",
+      "Effect": "Allow",
+      "Action": "lambda:*EventSourceMapping",
+      "Resource": "*",
+      "Condition": {
+        "ArnLike": {
+          "lambda:FunctionArn": "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*"
+        }
+      }
+    },
+    {
+      "Sid": "SqsQueuesForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue",
+        "sqs:DeleteQueue",
+        "sqs:*QueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ListQueueTags"
+      ],
+      "Resource": "arn:$AWS_PARTITION:sqs:$AWS_REGION:$ACCOUNT_ID:$RESOURCE_PREFIX*"
     },
     {
       "Sid": "EventBridgeRulesForDiscava",
@@ -1278,9 +1507,10 @@ attach_execution_policy() {
       "Resource": "arn:$AWS_PARTITION:scheduler:$AWS_REGION:$ACCOUNT_ID:schedule/$COMPACT_PREFIX*/*"
     },
     {
-      "Sid": "MediaConvertAccountLevel",
+      "Sid": "AccountLevelActions",
       "Effect": "Allow",
       "Action": [
+        "lambda:ListEventSourceMappings",
         "mediaconvert:DescribeEndpoints",
         "mediaconvert:CreateJobTemplate"
       ],
@@ -1338,105 +1568,27 @@ attach_execution_policy() {
         "appconfig:ListTagsForResource"
       ],
       "Resource": "arn:$AWS_PARTITION:appconfig:$AWS_REGION:$ACCOUNT_ID:*"
-    },
-    {
-      "Sid": "ManageDiscavaRoles",
-      "Effect": "Allow",
-      "Action": [
-        "iam:DeleteRole",
-        "iam:GetRole",
-        "iam:TagRole",
-        "iam:UntagRole",
-        "iam:UpdateRole",
-        "iam:UpdateAssumeRolePolicy",
-        "iam:GetRolePolicy",
-        "iam:ListRolePolicies",
-        "iam:ListAttachedRolePolicies"
-      ],
-      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
-    },
-    {
-      "Sid": "GrantOnlyWithinStageBoundary",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:PutRolePolicy",
-        "iam:DeleteRolePolicy",
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy",
-        "iam:PutRolePermissionsBoundary"
-      ],
-      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*",
-      "Condition": {
-        "StringEquals": {
-          "iam:PermissionsBoundary": "$BOUNDARY_POLICY_ARN"
-        }
-      }
-    },
-    {
-      "Sid": "CognitoUserPools",
-      "Effect": "Allow",
-      "Action": [
-        "cognito-idp:CreateUserPool",
-        "cognito-idp:DescribeUserPool",
-        "cognito-idp:UpdateUserPool",
-        "cognito-idp:DeleteUserPool",
-        "cognito-idp:SetUserPoolMfaConfig",
-        "cognito-idp:GetUserPoolMfaConfig",
-        "cognito-idp:CreateGroup",
-        "cognito-idp:GetGroup",
-        "cognito-idp:UpdateGroup",
-        "cognito-idp:DeleteGroup",
-        "cognito-idp:CreateUserPoolClient",
-        "cognito-idp:DescribeUserPoolClient",
-        "cognito-idp:UpdateUserPoolClient",
-        "cognito-idp:DeleteUserPoolClient",
-        "cognito-idp:CreateUserPoolDomain",
-        "cognito-idp:DescribeUserPoolDomain",
-        "cognito-idp:UpdateUserPoolDomain",
-        "cognito-idp:DeleteUserPoolDomain",
-        "cognito-idp:CreateManagedLoginBranding",
-        "cognito-idp:DescribeManagedLoginBranding",
-        "cognito-idp:DescribeManagedLoginBrandingByClient",
-        "cognito-idp:UpdateManagedLoginBranding",
-        "cognito-idp:DeleteManagedLoginBranding",
-        "cognito-idp:AssociateWebACL",
-        "cognito-idp:DisassociateWebACL",
-        "cognito-idp:GetWebACLForResource",
-        "cognito-idp:ListResourcesForWebACL",
-        "cognito-idp:TagResource",
-        "cognito-idp:UntagResource",
-        "cognito-idp:ListTagsForResource"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "CognitoIdentityPools",
-      "Effect": "Allow",
-      "Action": [
-        "cognito-identity:CreateIdentityPool",
-        "cognito-identity:DescribeIdentityPool",
-        "cognito-identity:UpdateIdentityPool",
-        "cognito-identity:DeleteIdentityPool",
-        "cognito-identity:GetIdentityPoolRoles",
-        "cognito-identity:SetIdentityPoolRoles",
-        "cognito-identity:TagResource",
-        "cognito-identity:UntagResource",
-        "cognito-identity:ListTagsForResource"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Sid": "PassOnlyDiscavaRolesToServices",
-      "Effect": "Allow",
-      "Action": "iam:PassRole",
-      "Resource": [
-        "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
-      ]
     }
   ]
 }
 EOF
+}
+
+attach_execution_policy() {
+  create_execution_policy_files
+
+  # Attached before the inline policy is replaced, so a stage set up before
+  # the split never loses a permission in between.
+  local name file
+  for name in "$EXECUTION_DATA_POLICY_NAME" "$EXECUTION_EDGE_POLICY_NAME" "$EXECUTION_COMPUTE_POLICY_NAME"; do
+    file="$POLICY_DIR/$name.json"
+    upsert_managed_policy "$name" "$file" \
+      "CloudFormation execution permissions for $TARGET_STAGE"
+    echo "Attaching $name to: $EXECUTION_ROLE_NAME"
+    aws iam attach-role-policy \
+      --role-name "$EXECUTION_ROLE_NAME" \
+      --policy-arn "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:policy/$name"
+  done
 
   echo "Attaching execution policy to: $EXECUTION_ROLE_NAME"
   aws iam put-role-policy \
@@ -1456,7 +1608,7 @@ EOF
 # provider is granted s3:PutBucketPolicy by each auto-deleted bucket's policy,
 # and uses it to deny new uploads before emptying the bucket.
 upsert_boundary_policy() {
-  BOUNDARY_POLICY_FILE="$(mktemp -t "${BOUNDARY_POLICY_NAME}.XXXXXX.json")"
+  BOUNDARY_POLICY_FILE="$POLICY_DIR/${BOUNDARY_POLICY_NAME}.json"
 
   cat >"$BOUNDARY_POLICY_FILE" <<EOF
 {
@@ -1486,6 +1638,7 @@ upsert_boundary_policy() {
         "dynamodb:BatchWriteItem",
         "dynamodb:ConditionCheckItem",
         "dynamodb:DeleteItem",
+        "dynamodb:DescribeStream",
         "dynamodb:DescribeTable",
         "dynamodb:GetItem",
         "dynamodb:GetRecords",
@@ -1496,6 +1649,22 @@ upsert_boundary_policy() {
         "dynamodb:UpdateItem"
       ],
       "Resource": "arn:$AWS_PARTITION:dynamodb:$AWS_REGION:$ACCOUNT_ID:table/$RESOURCE_PREFIX*"
+    },
+    {
+      "Sid": "ListTableStreams",
+      "Effect": "Allow",
+      "Action": "dynamodb:ListStreams",
+      "Resource": "*"
+    },
+    {
+      "Sid": "StageQueues",
+      "Effect": "Allow",
+      "Action": [
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:SendMessage"
+      ],
+      "Resource": "arn:$AWS_PARTITION:sqs:$AWS_REGION:$ACCOUNT_ID:$RESOURCE_PREFIX*"
     },
     {
       "Sid": "StageBuckets",
@@ -1622,39 +1791,13 @@ upsert_boundary_policy() {
 }
 EOF
 
-  if aws iam get-policy --policy-arn "$BOUNDARY_POLICY_ARN" >/dev/null 2>&1; then
-    # A managed policy keeps at most five versions; make room for the new one.
-    local non_default_versions
-    non_default_versions="$(aws iam list-policy-versions \
-      --policy-arn "$BOUNDARY_POLICY_ARN" \
-      --query 'sort_by(Versions[?!IsDefaultVersion], &CreateDate)[].VersionId' \
-      --output text)"
-    if [[ $(wc -w <<<"$non_default_versions") -ge 4 ]]; then
-      aws iam delete-policy-version \
-        --policy-arn "$BOUNDARY_POLICY_ARN" \
-        --version-id "${non_default_versions%%[[:space:]]*}"
-    fi
-    echo "Updating permissions boundary: $BOUNDARY_POLICY_NAME"
-    aws iam create-policy-version \
-      --policy-arn "$BOUNDARY_POLICY_ARN" \
-      --policy-document "file://$BOUNDARY_POLICY_FILE" \
-      --set-as-default >/dev/null
-  else
-    echo "Creating permissions boundary: $BOUNDARY_POLICY_NAME"
-    aws iam create-policy \
-      --policy-name "$BOUNDARY_POLICY_NAME" \
-      --policy-document "file://$BOUNDARY_POLICY_FILE" \
-      --description "Permissions boundary for $TARGET_STAGE's IAM roles" \
-      --tags \
-        Key=Project,Value=discava \
-        Key=ManagedBy,Value=setup-stage.sh \
-        Key=Stage,Value="$TARGET_STAGE" >/dev/null
-  fi
+  upsert_managed_policy "$BOUNDARY_POLICY_NAME" "$BOUNDARY_POLICY_FILE" \
+    "Permissions boundary for $TARGET_STAGE's IAM roles"
 }
 
 bootstrap_cdk() {
   local region
-  for region in "${BOOTSTRAP_REGIONS[@]}"; do
+  for region in ${BOOTSTRAP_REGIONS[@]+"${BOOTSTRAP_REGIONS[@]}"}; do
     echo "Bootstrapping CDK in $region"
     (cd "$REPO_ROOT" && pnpm exec cdk bootstrap "aws://$ACCOUNT_ID/$region" --qualifier "$CDK_QUALIFIER")
   done
@@ -1680,10 +1823,10 @@ configure_github_environment() {
   gh variable set AWS_DOCKER_LOGIN_ROLE_ARN --repo "$GITHUB_REPOSITORY" --body "$DOCKER_LOGIN_ROLE_ARN"
 
   local variable
-  for variable in "${DOMAIN_VARIABLES[@]}"; do
+  for variable in ${DOMAIN_VARIABLES[@]+"${DOMAIN_VARIABLES[@]}"}; do
     gh variable set "${variable%%=*}" --repo "$GITHUB_REPOSITORY" --env "$TARGET_STAGE" --body "${variable#*=}"
   done
-  for variable in "${DOMAIN_VARIABLES_TO_DELETE[@]}"; do
+  for variable in ${DOMAIN_VARIABLES_TO_DELETE[@]+"${DOMAIN_VARIABLES_TO_DELETE[@]}"}; do
     gh variable delete "$variable" --repo "$GITHUB_REPOSITORY" --env "$TARGET_STAGE"
   done
 }
@@ -1697,10 +1840,10 @@ print_next_steps() {
     echo "  Variable:   AWS_DEPLOY_ROLE_ARN=$DEPLOY_ROLE_ARN"
     echo "  Variable:   AWS_EXECUTION_ROLE_ARN=$EXECUTION_ROLE_ARN"
     local variable
-    for variable in "${DOMAIN_VARIABLES[@]}"; do
+    for variable in ${DOMAIN_VARIABLES[@]+"${DOMAIN_VARIABLES[@]}"}; do
       echo "  Variable:   $variable"
     done
-    for variable in "${DOMAIN_VARIABLES_TO_DELETE[@]}"; do
+    for variable in ${DOMAIN_VARIABLES_TO_DELETE[@]+"${DOMAIN_VARIABLES_TO_DELETE[@]}"}; do
       echo "  Remove:     $variable"
     done
     echo "and the repository variable:"
