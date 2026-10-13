@@ -10,7 +10,10 @@ import { parser } from '@aws-lambda-powertools/parser/middleware';
 import { DynamoDBStreamSchema } from '@aws-lambda-powertools/parser/schemas';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
-import { createCoreTableService } from '@discava/core-table';
+import {
+  CURRICULUM_ENTITIES,
+  createCoreTableService,
+} from '@discava/core-table';
 import middy from '@middy/core';
 import { z } from 'zod';
 import {
@@ -38,10 +41,11 @@ const getCoreTable = () => {
 // How many students are recalculated at once.
 const CONCURRENCY = 10;
 
-// The entities whose changes the event source mapping lets through: see
-// ProgressStack for the filters. ElectroDB stores each record's entity name
-// in `__edb_e__`.
-const CURRICULUM_ENTITIES = new Set(['module', 'lesson', 'contentItem']);
+// The curriculum entities whose changes the event source mapping lets
+// through, alongside new item completions: see
+// CoreApiStack.createProgressRecalculationLambda for the filters. ElectroDB
+// stores each record's entity name in `__edb_e__`.
+const curriculumEntities = new Set<string>(CURRICULUM_ENTITIES);
 
 type StreamRecord = z.infer<typeof DynamoDBStreamSchema>['Records'][number];
 type Image = Record<string, unknown> | undefined;
@@ -86,7 +90,7 @@ export const studentsToRecalculate = async (
       add(String(image?.courseId), [String(image?.userId)]);
     } else if (
       typeof entity === 'string' &&
-      CURRICULUM_ENTITIES.has(entity) &&
+      curriculumEntities.has(entity) &&
       changesWhatStudentsSee(record)
     ) {
       changedCourses.add(String(image?.courseId));

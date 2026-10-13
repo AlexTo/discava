@@ -21,7 +21,8 @@ const {
   scheduleTranscodeCleanupOrThrow: vi.fn(),
 }));
 
-vi.mock('@discava/core-table', () => ({
+vi.mock('@discava/core-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@discava/core-table')>()),
   createCoreTableService: vi.fn(async () => ({
     entities: {
       contentItem: {

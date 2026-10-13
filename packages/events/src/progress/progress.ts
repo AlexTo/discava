@@ -2,9 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { filterEffectivelyVisible } from '@discava/core-table';
+import {
+  type createProgressEntity,
+  filterEffectivelyVisible,
+} from '@discava/core-table';
+import type { EntityItem } from 'electrodb';
 
-export type LessonStatus = 'not_started' | 'in_progress' | 'completed';
+export type LessonStatus = NonNullable<
+  EntityItem<Awaited<ReturnType<typeof createProgressEntity>>>['status']
+>;
 
 interface CurriculumRecord {
   visibility: 'visible' | 'hidden';

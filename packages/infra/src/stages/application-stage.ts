@@ -10,7 +10,6 @@ import { CoreApiStack } from '../stacks/core-api-stack.js';
 import { DataStack } from '../stacks/data-stack.js';
 import { InstructorApiStack } from '../stacks/instructor-api-stack.js';
 import { MediaPipelineStack } from '../stacks/media-pipeline-stack.js';
-import { ProgressStack } from '../stacks/progress-stack.js';
 import { WebsitesStack } from '../stacks/websites-stack.js';
 
 /** Per-component settings (all default to fully hardened) plus the stage's env. */
@@ -78,11 +77,6 @@ export class ApplicationStage extends Stage {
       coreTable: data.coreTable,
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
-    });
-
-    new ProgressStack(this, 'Progress', {
-      ...stackProps,
-      coreTable: data.coreTable,
     });
 
     new CoreApiStack(this, 'CoreApi', {

@@ -9,7 +9,7 @@
     "components": [
       {
         "generator": "ts#lambda-function",
-        "path": "src/cognito/post-confirmation.ts",
+        "path": "src/identity/post-confirmation.ts",
         "name": "post-confirmation",
         "iac": "cdk"
       },
@@ -17,6 +17,12 @@
         "generator": "ts#lambda-function",
         "path": "src/media/transcode-complete.ts",
         "name": "transcode-complete",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/media/transcode-cleanup.ts",
+        "name": "transcode-cleanup",
         "iac": "cdk"
       },
       {

@@ -2,18 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { createCoreTableService } from '@discava/core-table';
+import {
+  type createCoreTableService,
+  isConditionalCheckFailed,
+} from '@discava/core-table';
 import { type Curriculum, computeProgress } from './progress.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
-
-// A DynamoDB conditional write whose condition didn't hold, as opposed to
-// any other failure.
-const isConditionalCheckFailed = (error: unknown): boolean =>
-  error instanceof Error &&
-  'cause' in error &&
-  error.cause instanceof Error &&
-  error.cause.name === 'ConditionalCheckFailedException';
 
 // A write that may lose to a completion recorded at the same moment by
 // another run: that run's result stands, since completion is permanent.

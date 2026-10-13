@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// The entity names (ElectroDB's `__edb_e__`) of the records that make up a
+// course's curriculum, for code that sees raw items rather than entities,
+// such as the core table's stream filters and handlers.
+export const CURRICULUM_ENTITIES = ['module', 'lesson', 'contentItem'] as const;
+
 interface CurriculumRecordState {
   visibility: 'hidden' | 'visible';
   archivedAt?: string;

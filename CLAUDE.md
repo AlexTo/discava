@@ -60,7 +60,7 @@ Everything else (`compile`, `bundle`, `synth`, `checkov`, `dev`, `serve`) is a p
 - `packages/common/scripts`: deploy/destroy and local-DynamoDB (Docker) tooling invoked by Nx targets
 - `packages/events`: standalone Lambda handlers for AWS-triggered events (e.g. Cognito), separate from the API
 - `packages/websites/student-portal`, `packages/websites/instructor-portal`, `packages/websites/admin-portal`: React + Vite + TanStack Router frontends
-- `packages/common/constructs`: all CDK constructs; `packages/infra` composes them into stacks and has no infra logic of its own
+- `packages/common/constructs`: all CDK constructs. A construct owns one component's own resources (e.g. an API with its handlers and WAF) and exposes `grant*`/`restrictCorsTo`-style helpers; `lambda-functions/` holds the generator-owned bare `Function` wrappers. `packages/infra` composes them into stacks, translating per-stage config into construct props and wiring components together (cross-component grants, CORS, event triggers such as EventBridge rules or DynamoDB stream sources).
 - `packages/common/infra-config`: per-stage deployment config (credentials, region, which security features are on)
 - `packages/common/shadcn`: shared shadcn/ui components used by all three portals
 - `docs`: Astro/Starlight docs site, deployed to GitHub Pages on push to `main`

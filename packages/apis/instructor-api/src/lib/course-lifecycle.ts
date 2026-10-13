@@ -169,14 +169,6 @@ export const courseNoLongerDraft = () =>
       'The course was published while this was being deleted; nothing was deleted. Retry to archive it instead',
   });
 
-// A DynamoDB conditional write whose condition didn't hold, as opposed to
-// any other failure.
-export const isConditionalCheckFailed = (error: unknown): boolean =>
-  error instanceof Error &&
-  'cause' in error &&
-  error.cause instanceof Error &&
-  error.cause.name === 'ConditionalCheckFailedException';
-
 type TransactionWrite = CoreTable['transaction']['write'];
 export type TransactionEntities = Parameters<
   Parameters<TransactionWrite>[0]

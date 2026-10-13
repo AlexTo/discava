@@ -4,6 +4,7 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
+import { isConditionalCheckFailed } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -11,7 +12,6 @@ import {
   draftCourseCheck,
   firstPublishedAt,
   getCourseOrThrow,
-  isConditionalCheckFailed,
   isDraftCourse,
   MAX_TRANSACTION_ITEMS,
   nextOrder,

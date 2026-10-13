@@ -12,7 +12,10 @@ import { EventBridgeSchema } from '@aws-lambda-powertools/parser/schemas';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { createCoreTableService } from '@discava/core-table';
+import {
+  createCoreTableService,
+  isConditionalCheckFailed,
+} from '@discava/core-table';
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import { z } from 'zod';
@@ -40,19 +43,6 @@ const getCoreTable = () => {
   }
   return coreTablePromise;
 };
-
-// True specifically for a DynamoDB conditional write that lost its race --
-// as opposed to a transient error where the record might still be this
-// exact submission's own. Only the former means this job's own nonce-
-// scoped output is genuinely orphaned (the record was deleted, or a
-// replacement superseded it); treating a transient error the same way
-// would silently drop a real completion event instead of letting
-// EventBridge retry it.
-const isConditionalCheckFailed = (error: unknown): boolean =>
-  error instanceof Error &&
-  'cause' in error &&
-  error.cause instanceof Error &&
-  error.cause.name === 'ConditionalCheckFailedException';
 
 const MediaConvertJobStateChangeDetailSchema = z.object({
   jobId: z.string(),
