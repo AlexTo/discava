@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { isConditionalCheckFailed } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -54,18 +55,6 @@ const ALLOWED_VIDEO_TYPES: Record<string, string> = {
 };
 
 const UPLOAD_URL_EXPIRY_SECONDS = 15 * 60;
-
-// True specifically for a DynamoDB conditional write that lost its race --
-// as opposed to a transient error where the write's target might still be
-// this same submission attempt's to own. Only the former means the job
-// this attempt just created is actually orphaned and needs cleaning up;
-// treating the latter the same way would cancel a job a retry could have
-// otherwise safely reconnected to.
-const isConditionalCheckFailed = (error: unknown): boolean =>
-  error instanceof Error &&
-  'cause' in error &&
-  error.cause instanceof Error &&
-  error.cause.name === 'ConditionalCheckFailedException';
 
 export const createContentItemVideoUploadUrl = courseProcedure
   .input(CreateContentItemVideoUploadUrlInputSchema)

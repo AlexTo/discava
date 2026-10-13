@@ -18,6 +18,9 @@
     },
     {
       "path": "../common/constructs/tsconfig.lib.json"
+    },
+    {
+      "path": "../databases/core-table/tsconfig.lib.json"
     }
   ],
   "exclude": [

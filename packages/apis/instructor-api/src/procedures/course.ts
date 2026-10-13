@@ -2,14 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { filterEffectivelyVisible } from '@discava/core-table';
+import {
+  filterEffectivelyVisible,
+  isConditionalCheckFailed,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   hasTransactionConflict,
-  isConditionalCheckFailed,
   requireCourseInstructor,
   transactionConflict,
 } from '../lib/course-lifecycle.js';

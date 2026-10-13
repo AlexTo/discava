@@ -9,7 +9,8 @@
     "source-map-support": "catalog:",
     "tslib": "^2.3.0",
     "@discava/common-constructs": "workspace:*",
-    "@discava/common-infra-config": "workspace:*"
+    "@discava/common-infra-config": "workspace:*",
+    "@discava/core-table": "workspace:*"
   },
   "devDependencies": {},
   "license": "Apache-2.0"

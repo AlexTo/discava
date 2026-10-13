@@ -9,6 +9,8 @@ export const EnrolmentSchema = z.object({
   userId: z.string(),
   status: z.enum(['active', 'completed', 'dropped']),
   progressPercent: z.number(),
+  // When the student completed the course; set with status 'completed'.
+  completedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

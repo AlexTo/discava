@@ -28,10 +28,16 @@ export const createEnrolmentEntity = async () =>
           default: 'active',
         },
         // Denormalized so a student's course list can render progress
-        // without a second read; kept in sync from Progress writes.
+        // without a second read. Written only by the progress
+        // recalculation, from the course's effectively visible items.
         progressPercent: {
           type: 'number',
           default: 0,
+        },
+        // When the student first completed every effectively visible item,
+        // set with status 'completed'. Like the status, never cleared.
+        completedAt: {
+          type: 'string',
         },
         createdAt: {
           type: 'string',

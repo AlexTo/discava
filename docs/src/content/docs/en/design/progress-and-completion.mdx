@@ -55,27 +55,39 @@ A Lambda in `packages/events` is the single writer of lesson `progress` and of t
 
 ### Trigger
 
-DynamoDB Streams on the core table, with event-source filters so the Lambda only runs for:
+DynamoDB Streams on the core table (new and old images), with event-source filters on the entity name ElectroDB stores in each record (`__edb_e__`), so the Lambda only runs for:
 
 | Stream event | Recalculates |
 |---|---|
 | `itemCompletion` inserted | That one student, in that course |
-| Module, lesson or content item: `visibility` or `archivedAt` changed, or record removed | Every enrolled student in the course |
+| Module, lesson or content item: `visibility` or `archivedAt` changed, or record removed | Every enrolled student in the course who hasn't dropped out |
+
+A filter can't compare a record's old and new images, so every change to a module, lesson or content item reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were: a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
 
 ### What it does
 
 For each affected (student, course):
 
 1. Load the course curriculum once (the `curriculum` collection, every page) and keep the effectively visible items with `filterEffectivelyVisible` from `@discava/core-table`, the same rule core-api's course views use.
-2. Read the student's `itemCompletion` records for the course (pk `userId`, sk prefix `courseId`).
-3. Write each lesson's `progress`. `completed` is only ever set, never cleared.
-4. Write the enrolment's `progressPercent`. At 100%, set `status: 'completed'` and `completedAt`, conditioned on the enrolment not already being `completed`.
+2. Read the student's `itemCompletion` records and lesson `progress` for the course (pk `userId`, sk prefix `courseId`). A student who isn't enrolled, or has dropped out, is left alone.
+3. Write each lesson's `progress`, but only where it changed:
+   - A lesson is `completed` when all its effectively visible items are, `in_progress` when some are, and `not_started` otherwise.
+   - A lesson with no effectively visible items has no progress.
+   - No record means not started, so an untouched lesson isn't written.
+   - `completed` is only ever set, never cleared: the write is conditioned on the record not already being `completed`.
+4. Write the enrolment's `progressPercent` (rounded down, so it's 100 only when everything is done) if it changed. At 100%, set `status: 'completed'` and `completedAt`, conditioned on the enrolment still being `active`. A course with nothing visible is never completed.
+
+Students are recalculated a few at a time, and each course's curriculum is loaded once per batch.
+
+### Failures
+
+A batch that fails is retried. A batch still failing after its retries is split in half until the failing records are isolated, and those records' stream positions go to a dead-letter queue instead of blocking the stream. Since every run recomputes from scratch, the next change for the same students also repairs anything a failed batch missed.
 
 Enrolments share the course's partition key, so listing the students to recalculate is one query. A curriculum change costs one query per enrolled student.
 
 ### Idempotency
 
-Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. Records in a stream batch are grouped so each course (or student) is recalculated once per batch.
+Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. The event source waits up to five seconds to gather a batch, and records in a batch are grouped so each student in each course is recalculated once per batch, however many records name them. Two runs for the same student at the same moment (a completion and a curriculum change land on different stream shards) both recompute from what they read. Neither can undo the other's completion, because completing writes are conditioned on not being completed already.
 
 ### Consequences
 

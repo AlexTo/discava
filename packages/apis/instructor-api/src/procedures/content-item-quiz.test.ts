@@ -38,7 +38,8 @@ const {
   contentItemPatchWhere: vi.fn(),
 }));
 
-vi.mock('@discava/core-table', () => ({
+vi.mock('@discava/core-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@discava/core-table')>()),
   createCoreTableService: vi.fn(async () => ({
     entities: {
       course: { get: courseGet },
