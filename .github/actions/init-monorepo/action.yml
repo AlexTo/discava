@@ -42,17 +42,17 @@ runs:
         AWS_SESSION_TOKEN: ${{ steps.docker-login-credentials.outputs.aws-session-token }}
       run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
     - name: Use PNPM
-      uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
       with:
         install: 'false'
     # Node 24 matches the Lambda runtime (nodejs24.x).
     - name: Use Node.js 24.x
-      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version: 24
     - name: Install the latest version of uv
       if: ${{ inputs.setup-uv == 'true' }}
-      uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       with:
         version: 'latest'
     - name: Get pnpm store directory
