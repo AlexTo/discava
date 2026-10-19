@@ -8,8 +8,8 @@ import {
   ApiError,
   type Handler,
   renderWithCoreApi,
-} from '../../test/render-with-core-api';
-import { CoursePreview } from './index';
+} from '../../../../test/render-with-core-api';
+import { CoursePage } from './course-page';
 
 const course = {
   courseId: 'course-1',
@@ -41,17 +41,10 @@ const renderPreview = (
   handlers: Record<string, Handler> = {},
   { signedIn = true } = {},
 ) =>
-  renderWithCoreApi(
-    <CoursePreview
-      courseCode="course-1"
-      backTo="/"
-      backLabel="Back to Explore"
-    />,
-    {
-      signedIn,
-      handlers: { 'course.publicView': () => course, ...handlers },
-    },
-  );
+  renderWithCoreApi(<CoursePage courseId="course-1" />, {
+    signedIn,
+    handlers: { 'course.publicView': () => course, ...handlers },
+  });
 
 const enrolButton = () => screen.findByRole('button', { name: 'Enrol now' });
 
@@ -83,7 +76,7 @@ describe('EnrolmentActions', () => {
     });
     expect(
       within(dialog).getByRole('link', { name: 'Start learning' }),
-    ).toHaveAttribute('href', '/course/course-1');
+    ).toHaveAttribute('href', '/learn/course-1/home');
     expect(calls).toContainEqual({
       path: 'course.enrol',
       input: { courseId: 'course-1' },
@@ -96,7 +89,7 @@ describe('EnrolmentActions', () => {
     expect(screen.getByText('0% complete')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Start learning' }),
-    ).toHaveAttribute('href', '/course/course-1');
+    ).toHaveAttribute('href', '/learn/course-1/home');
     expect(screen.queryByRole('button', { name: 'Enrol now' })).toBeNull();
   });
 
@@ -107,7 +100,7 @@ describe('EnrolmentActions', () => {
 
     expect(
       await screen.findByRole('link', { name: 'Continue learning' }),
-    ).toHaveAttribute('href', '/course/course-1');
+    ).toHaveAttribute('href', '/learn/course-1/home');
     expect(screen.getByText('40% complete')).toBeInTheDocument();
     expect(
       screen.getByRole('progressbar', { name: 'Course progress' }),
@@ -128,7 +121,7 @@ describe('EnrolmentActions', () => {
 
     expect(
       await screen.findByRole('link', { name: 'Review course' }),
-    ).toHaveAttribute('href', '/course/course-1');
+    ).toHaveAttribute('href', '/learn/course-1/home');
     expect(screen.getByText(/Completed on/)).toBeInTheDocument();
   });
 

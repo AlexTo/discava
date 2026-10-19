@@ -6,9 +6,9 @@ import { safeReturnTo } from '@discava/common-shadcn/lib/return-to';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Spinner } from '../../components/spinner';
+import { Spinner } from '../components/spinner';
 
-export const Route = createFileRoute('/_public/signin')({
+export const Route = createFileRoute('/signin')({
   // `redirect`: the page to come back to, e.g. the course a visitor wanted to
   // enrol in, or a deep link opened while signed out.
   validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
@@ -32,7 +32,7 @@ function RouteComponent() {
       if (returnTo) {
         navigate({ href: returnTo, replace: true });
       } else {
-        navigate({ to: '/dashboard', replace: true });
+        navigate({ to: '/', replace: true });
       }
       return;
     }

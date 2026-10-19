@@ -37,7 +37,7 @@ window.matchMedia ??= (query: string) =>
     dispatchEvent: () => false,
   }) as MediaQueryList;
 
-// jsdom has no IntersectionObserver either (the dashboard's carousel uses
+// jsdom has no IntersectionObserver either (the signed-in home's carousel uses
 // it); nothing ever scrolls into view in jsdom, so it never reports.
 class IntersectionObserverStub {
   readonly root = null;

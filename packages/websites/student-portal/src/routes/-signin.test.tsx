@@ -4,8 +4,8 @@
  */
 import { waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { routeTree } from '../../routeTree.gen';
-import { renderWithCoreApi } from '../../test/render-with-core-api';
+import { routeTree } from '../routeTree.gen';
+import { renderWithCoreApi } from '../test/render-with-core-api';
 
 const course = {
   courseId: 'course-1',
@@ -37,11 +37,11 @@ const openSignIn = (
 
 describe('/signin', () => {
   it('sends the page to come back to through sign-in', async () => {
-    const { signinRedirect } = openSignIn('?redirect=%2Fcourses%2Fcourse-1');
+    const { signinRedirect } = openSignIn('?redirect=%2Flearn%2Fcourse-1');
 
     await waitFor(() =>
       expect(signinRedirect).toHaveBeenCalledWith({
-        state: { returnTo: '/courses/course-1' },
+        state: { returnTo: '/learn/course-1' },
       }),
     );
     expect(signinRedirect).toHaveBeenCalledTimes(1);
@@ -61,21 +61,19 @@ describe('/signin', () => {
 
   it('takes someone already signed in straight to the page', async () => {
     const { router, signinRedirect } = openSignIn(
-      '?redirect=%2Fcourses%2Fcourse-1',
+      '?redirect=%2Flearn%2Fcourse-1',
       { signedIn: true },
     );
 
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/courses/course-1'),
+      expect(router.state.location.pathname).toBe('/learn/course-1'),
     );
     expect(signinRedirect).not.toHaveBeenCalled();
   });
 
-  it('takes someone already signed in to the dashboard by default', async () => {
+  it('takes someone already signed in home by default', async () => {
     const { router } = openSignIn('', { signedIn: true });
 
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe('/dashboard'),
-    );
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
 });

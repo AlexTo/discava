@@ -31,7 +31,7 @@ import {
   TooltipTrigger,
 } from '@discava/common-shadcn/components/ui/tooltip';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
   AlertCircle,
   ArrowRight,
@@ -50,15 +50,11 @@ import {
 } from 'lucide-react';
 import { Fragment, useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../components/alert';
-import { Spinner } from '../../../components/spinner';
-import { getUserIdentity } from '../../../components/UserMenu/user-profile';
-import { useCoreApi } from '../../../hooks/useCoreApi';
-import { categories, toDisplayCourse } from '../../../lib/course-display';
-
-export const Route = createFileRoute('/_authenticated/dashboard')({
-  component: RouteComponent,
-});
+import { Alert } from '../../components/alert';
+import { Spinner } from '../../components/spinner';
+import { getUserIdentity } from '../../components/UserMenu/user-profile';
+import { useCoreApi } from '../../hooks/useCoreApi';
+import { categories, toDisplayCourse } from '../../lib/course-display';
 
 const courses = [
   {
@@ -164,7 +160,9 @@ const todayTasks = [
   },
 ];
 
-function RouteComponent() {
+// What `/` shows a signed-in student. Still mostly mock data: #194 step 2
+// replaces it with their real enrolments and next items.
+export function SignedInHome() {
   const { user } = useAuth();
   const { displayName } = getUserIdentity(user?.profile);
   const firstName = displayName.split(' ')[0] || 'Alex';
@@ -194,7 +192,7 @@ function RouteComponent() {
       : exploreCourses.filter((course) => course.category === courseCategory);
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <main className="mx-auto w-full max-w-7xl space-y-6 px-6 pt-6 pb-8 lg:px-8">
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 px-6 py-5 text-primary-foreground shadow-sm sm:px-8 sm:py-6">
         <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full border-[40px] border-white/10" />
         <div className="pointer-events-none absolute -bottom-20 right-36 size-48 rounded-full bg-white/5" />
@@ -442,8 +440,8 @@ function RouteComponent() {
                           asChild
                         >
                           <Link
-                            to="/course/$courseCode"
-                            params={{ courseCode: course.code }}
+                            to="/learn/$courseId/home"
+                            params={{ courseId: course.code }}
                           >
                             <span>Continue</span>
                             <ArrowRight className="shrink-0" />
@@ -700,8 +698,8 @@ function RouteComponent() {
                       asChild
                     >
                       <Link
-                        to="/preview/$courseCode"
-                        params={{ courseCode: course.courseId }}
+                        to="/learn/$courseId"
+                        params={{ courseId: course.courseId }}
                       >
                         Preview <ArrowRight />
                       </Link>

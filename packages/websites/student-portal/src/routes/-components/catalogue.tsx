@@ -11,9 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
-import { Input } from '@discava/common-shadcn/components/ui/input';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
   BarChart3,
   CalendarCheck,
@@ -28,10 +27,6 @@ import { Alert } from '../../components/alert';
 import { Spinner } from '../../components/spinner';
 import { useCoreApi } from '../../hooks/useCoreApi';
 import { categories, toDisplayCourse } from '../../lib/course-display';
-
-export const Route = createFileRoute('/_public/')({
-  component: RouteComponent,
-});
 
 const features = [
   {
@@ -72,10 +67,10 @@ const steps = [
   },
 ];
 
-function RouteComponent() {
-  const [query, setQuery] = useState('');
+// What `/` shows signed-out visitors: the course catalogue and what
+// Discava is. Signed-in students see SignedInHome instead.
+export function Catalogue() {
   const [category, setCategory] = useState<(typeof categories)[number]>('All');
-  const normalisedQuery = query.trim().toLowerCase();
 
   const trpc = useCoreApi();
   const coursesQuery = useQuery(
@@ -83,17 +78,13 @@ function RouteComponent() {
   );
   const courses = (coursesQuery.data?.items ?? []).map(toDisplayCourse);
 
+  // Searching is the top bar's job (/search); this only narrows by category.
   const visibleCourses = courses.filter(
-    (course) =>
-      (category === 'All' || course.category === category) &&
-      (!normalisedQuery ||
-        `${course.title} ${course.description} ${course.category}`
-          .toLowerCase()
-          .includes(normalisedQuery)),
+    (course) => category === 'All' || course.category === category,
   );
 
   return (
-    <div className="w-full overflow-hidden text-left">
+    <main className="w-full overflow-hidden text-left">
       <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <div className="max-w-2xl">
@@ -101,22 +92,12 @@ function RouteComponent() {
               Browse courses for every goal.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Search by topic or choose a category to find your next learning
-              opportunity.
+              Choose a category, or search for a topic above, to find your next
+              learning opportunity.
             </p>
           </div>
 
           <div className="mt-8 flex flex-col gap-4 rounded-2xl border bg-muted/30 p-4 sm:p-5">
-            <div className="relative">
-              <Search className="absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Filter course catalogue"
-                className="h-11 bg-background pl-10"
-                placeholder="Search by course name or topic"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </div>
             <div
               className="flex flex-wrap gap-2"
               aria-label="Course categories"
@@ -142,17 +123,14 @@ function RouteComponent() {
                 {visibleCourses.length === 1 ? 'course' : 'courses'}
                 {category !== 'All' ? ` in ${category}` : ''}
               </p>
-              {(query || category !== 'All') && (
+              {category !== 'All' && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setQuery('');
-                    setCategory('All');
-                  }}
+                  onClick={() => setCategory('All')}
                 >
-                  Clear filters
+                  Show all
                 </Button>
               )}
             </div>
@@ -206,8 +184,8 @@ function RouteComponent() {
                       </span>
                       <Button variant="ghost" size="sm" asChild>
                         <Link
-                          to="/courses/$courseCode"
-                          params={{ courseCode: course.courseId }}
+                          to="/learn/$courseId"
+                          params={{ courseId: course.courseId }}
                           aria-label={`Preview ${course.title}`}
                         >
                           Learn more
@@ -221,24 +199,21 @@ function RouteComponent() {
                 <div className="mt-10 rounded-2xl border border-dashed px-6 py-14 text-center">
                   <Search className="mx-auto size-8 text-muted-foreground" />
                   <h3 className="mt-4 font-semibold">
-                    {query || category !== 'All'
+                    {category !== 'All'
                       ? 'No matching courses'
                       : 'No courses available yet'}
                   </h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {query || category !== 'All'
-                      ? 'Try another keyword or clear your filters to browse all courses.'
+                    {category !== 'All'
+                      ? 'Try another category, or show all courses.'
                       : 'Check back soon for new courses.'}
                   </p>
-                  {(query || category !== 'All') && (
+                  {category !== 'All' && (
                     <Button
                       className="mt-5"
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setQuery('');
-                        setCategory('All');
-                      }}
+                      onClick={() => setCategory('All')}
                     >
                       Show all courses
                     </Button>
@@ -357,6 +332,6 @@ function RouteComponent() {
           </nav>
         </div>
       </footer>
-    </div>
+    </main>
   );
 }
