@@ -136,6 +136,9 @@
         "cwd": "{projectRoot}",
         "command": "cdk synth"
       }
+    },
+    "test": {
+      "dependsOn": ["^assemble"]
     }
   }
 }
