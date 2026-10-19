@@ -17,6 +17,7 @@
     "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@discava/core-table": "workspace:*",
     "@tiptap/core": "catalog:",
     "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
@@ -27,8 +28,7 @@
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
     "uuid": "catalog:",
-    "zod": "catalog:",
-    "@discava/core-table": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",

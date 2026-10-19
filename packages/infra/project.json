@@ -36,7 +36,7 @@
       "outputs": ["{workspaceRoot}/dist/{projectRoot}/checkov"],
       "dependsOn": ["synth"],
       "options": {
-        "command": "uvx --from checkov==3.3.22 checkov --config-file {projectRoot}/checkov.yml --directory dist/{projectRoot}/cdk.out --framework cloudformation"
+        "command": "uvx --from checkov==3.3.29 checkov --config-file {projectRoot}/checkov.yml --directory dist/{projectRoot}/cdk.out --framework cloudformation"
       }
     },
     "compile": {

@@ -14,11 +14,11 @@
     "@aws-sdk/client-dynamodb": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
+    "@discava/core-table": "workspace:*",
     "@middy/core": "catalog:",
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
-    "zod": "catalog:",
-    "@discava/core-table": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:"
