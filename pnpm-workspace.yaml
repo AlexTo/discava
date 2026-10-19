@@ -21,17 +21,17 @@ onlyBuiltDependencies:
   - sharp
 catalogMode: strict
 catalog:
-  '@aws/nx-plugin': 1.0.6
-  nx: 23.2.1
-  '@nx/js': 23.2.1
-  '@nx/workspace': 23.2.1
+  '@aws/nx-plugin': 1.0.11
+  nx: 23.3.0
+  '@nx/js': 23.3.0
+  '@nx/workspace': 23.3.0
   typescript: ~6.0.3
   '@biomejs/biome': 2.5.15
   '@aws/nx-plugin-mcp': ^1.0.0-rc.73
   husky: 9.1.7
   vite: 8.3.2
-  vitest: 4.1.11
-  '@vitest/coverage-v8': 4.1.11
+  vitest: 5.0.5
+  '@vitest/coverage-v8': 5.0.5
   '@aws-sdk/client-dynamodb': 3.1146.0
   '@aws-sdk/client-s3': 3.1126.0
   '@aws-sdk/s3-request-presigner': 3.1126.0
@@ -71,8 +71,8 @@ catalog:
   radix-ui: 1.6.7
   tailwindcss: 4.3.3
   '@tanstack/react-router': 1.170.41
-  '@nx/react': 23.2.1
-  '@vitest/ui': 4.1.11
+  '@nx/react': 23.3.0
+  '@vitest/ui': 5.0.5
   '@tailwindcss/vite': 4.3.3
   '@tanstack/router-plugin': 1.168.42
   '@tanstack/router-generator': 1.167.40
