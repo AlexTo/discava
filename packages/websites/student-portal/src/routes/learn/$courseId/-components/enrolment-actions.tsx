@@ -20,8 +20,8 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../components/alert';
-import { useCoreApi } from '../../hooks/useCoreApi';
+import { Alert } from '../../../../components/alert';
+import { useCoreApi } from '../../../../hooks/useCoreApi';
 
 const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code;
@@ -46,13 +46,9 @@ const formatDate = (iso: string) =>
 export function EnrolmentActions({
   courseId,
   courseTitle,
-  backTo,
-  backLabel,
 }: {
   courseId: string;
   courseTitle: string;
-  backTo: string;
-  backLabel: string;
 }) {
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
@@ -83,7 +79,7 @@ export function EnrolmentActions({
   const enrolment = enrolmentQuery.data;
   const learnLink = (label: string) => (
     <Button className="w-full" size="lg" asChild>
-      <Link to="/course/$courseCode" params={{ courseCode: courseId }}>
+      <Link to="/learn/$courseId/home" params={{ courseId }}>
         {label}
       </Link>
     </Button>
@@ -173,9 +169,6 @@ export function EnrolmentActions({
           {enrolErrorMessage(enrol.error)}
         </Alert>
       ) : null}
-      <Button className="w-full" variant="outline" asChild>
-        <Link to={backTo}>{backLabel}</Link>
-      </Button>
 
       <Dialog open={enrolledOpen} onOpenChange={setEnrolledOpen}>
         <DialogContent>
@@ -193,7 +186,7 @@ export function EnrolmentActions({
               <Button variant="outline">Keep browsing</Button>
             </DialogClose>
             <Button asChild>
-              <Link to="/course/$courseCode" params={{ courseCode: courseId }}>
+              <Link to="/learn/$courseId/home" params={{ courseId }}>
                 Start learning
               </Link>
             </Button>

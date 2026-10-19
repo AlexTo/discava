@@ -41,7 +41,7 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
     response_type: 'code',
     scope: 'email openid profile',
     // Back to the page sign-in started from (the OIDC state signin.tsx
-    // sends), or the dashboard. Also clears the code from the URL.
+    // sends), or home. Also clears the code from the URL.
     onSigninCallback: (user) => {
       const returnTo = safeReturnTo(
         (user as { state?: { returnTo?: unknown } } | void)?.state?.returnTo,
@@ -49,7 +49,7 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
       if (returnTo) {
         router.navigate({ href: returnTo, replace: true });
       } else {
-        router.navigate({ to: '/dashboard', replace: true });
+        router.navigate({ to: '/', replace: true });
       }
     },
   };

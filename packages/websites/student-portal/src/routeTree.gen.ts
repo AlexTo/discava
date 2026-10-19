@@ -9,212 +9,222 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as PublicRouteImport } from './routes/_public'
-import { Route as AuthenticatedDashboardRouteRouteImport } from './routes/_authenticated/dashboard/route'
-import { Route as PublicIndexRouteImport } from './routes/_public/index'
-import { Route as PublicSigninRouteImport } from './routes/_public/signin'
-import { Route as AuthenticatedCourseCourseCodeRouteImport } from './routes/_authenticated/course/$courseCode'
-import { Route as AuthenticatedPreviewCourseCodeRouteImport } from './routes/_authenticated/preview/$courseCode'
-import { Route as PublicCoursesCourseCodeRouteImport } from './routes/_public/courses/$courseCode'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as CourseCourseIdRouteImport } from './routes/course/$courseId'
+import { Route as CoursesCourseIdRouteImport } from './routes/courses/$courseId'
+import { Route as PreviewCourseIdRouteImport } from './routes/preview/$courseId'
+import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
+import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
 
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PublicRoute = PublicRouteImport.update({
-  id: '/_public',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedDashboardRouteRoute =
-  AuthenticatedDashboardRouteRouteImport.update({
-    id: '/dashboard',
-    path: '/dashboard',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const PublicIndexRoute = PublicIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => PublicRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PublicSigninRoute = PublicSigninRouteImport.update({
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
-  getParentRoute: () => PublicRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedCourseCourseCodeRoute =
-  AuthenticatedCourseCourseCodeRouteImport.update({
-    id: '/course/$courseCode',
-    path: '/course/$courseCode',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedPreviewCourseCodeRoute =
-  AuthenticatedPreviewCourseCodeRouteImport.update({
-    id: '/preview/$courseCode',
-    path: '/preview/$courseCode',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const PublicCoursesCourseCodeRoute = PublicCoursesCourseCodeRouteImport.update({
-  id: '/courses/$courseCode',
-  path: '/courses/$courseCode',
-  getParentRoute: () => PublicRoute,
+const CourseCourseIdRoute = CourseCourseIdRouteImport.update({
+  id: '/course/$courseId',
+  path: '/course/$courseId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesCourseIdRoute = CoursesCourseIdRouteImport.update({
+  id: '/courses/$courseId',
+  path: '/courses/$courseId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PreviewCourseIdRoute = PreviewCourseIdRouteImport.update({
+  id: '/preview/$courseId',
+  path: '/preview/$courseId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnCourseIdIndexRoute = LearnCourseIdIndexRouteImport.update({
+  id: '/learn/$courseId/',
+  path: '/learn/$courseId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnCourseIdHomeRoute = LearnCourseIdHomeRouteImport.update({
+  id: '/learn/$courseId/home',
+  path: '/learn/$courseId/home',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof PublicIndexRoute
-  '/dashboard': typeof AuthenticatedDashboardRouteRoute
-  '/signin': typeof PublicSigninRoute
-  '/course/$courseCode': typeof AuthenticatedCourseCourseCodeRoute
-  '/preview/$courseCode': typeof AuthenticatedPreviewCourseCodeRoute
-  '/courses/$courseCode': typeof PublicCoursesCourseCodeRoute
+  '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/search': typeof SearchRoute
+  '/signin': typeof SigninRoute
+  '/course/$courseId': typeof CourseCourseIdRoute
+  '/courses/$courseId': typeof CoursesCourseIdRoute
+  '/preview/$courseId': typeof PreviewCourseIdRoute
+  '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId/': typeof LearnCourseIdIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof PublicIndexRoute
-  '/dashboard': typeof AuthenticatedDashboardRouteRoute
-  '/signin': typeof PublicSigninRoute
-  '/course/$courseCode': typeof AuthenticatedCourseCourseCodeRoute
-  '/preview/$courseCode': typeof AuthenticatedPreviewCourseCodeRoute
-  '/courses/$courseCode': typeof PublicCoursesCourseCodeRoute
+  '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/search': typeof SearchRoute
+  '/signin': typeof SigninRoute
+  '/course/$courseId': typeof CourseCourseIdRoute
+  '/courses/$courseId': typeof CoursesCourseIdRoute
+  '/preview/$courseId': typeof PreviewCourseIdRoute
+  '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId': typeof LearnCourseIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/_public': typeof PublicRouteWithChildren
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteRoute
-  '/_public/signin': typeof PublicSigninRoute
-  '/_public/': typeof PublicIndexRoute
-  '/_authenticated/course/$courseCode': typeof AuthenticatedCourseCourseCodeRoute
-  '/_authenticated/preview/$courseCode': typeof AuthenticatedPreviewCourseCodeRoute
-  '/_public/courses/$courseCode': typeof PublicCoursesCourseCodeRoute
+  '/': typeof IndexRoute
+  '/dashboard': typeof DashboardRoute
+  '/search': typeof SearchRoute
+  '/signin': typeof SigninRoute
+  '/course/$courseId': typeof CourseCourseIdRoute
+  '/courses/$courseId': typeof CoursesCourseIdRoute
+  '/preview/$courseId': typeof PreviewCourseIdRoute
+  '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId/': typeof LearnCourseIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/search'
     | '/signin'
-    | '/course/$courseCode'
-    | '/preview/$courseCode'
-    | '/courses/$courseCode'
+    | '/course/$courseId'
+    | '/courses/$courseId'
+    | '/preview/$courseId'
+    | '/learn/$courseId/home'
+    | '/learn/$courseId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard'
+    | '/search'
     | '/signin'
-    | '/course/$courseCode'
-    | '/preview/$courseCode'
-    | '/courses/$courseCode'
+    | '/course/$courseId'
+    | '/courses/$courseId'
+    | '/preview/$courseId'
+    | '/learn/$courseId/home'
+    | '/learn/$courseId'
   id:
     | '__root__'
-    | '/_authenticated'
-    | '/_public'
-    | '/_authenticated/dashboard'
-    | '/_public/signin'
-    | '/_public/'
-    | '/_authenticated/course/$courseCode'
-    | '/_authenticated/preview/$courseCode'
-    | '/_public/courses/$courseCode'
+    | '/'
+    | '/dashboard'
+    | '/search'
+    | '/signin'
+    | '/course/$courseId'
+    | '/courses/$courseId'
+    | '/preview/$courseId'
+    | '/learn/$courseId/home'
+    | '/learn/$courseId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  PublicRoute: typeof PublicRouteWithChildren
+  IndexRoute: typeof IndexRoute
+  DashboardRoute: typeof DashboardRoute
+  SearchRoute: typeof SearchRoute
+  SigninRoute: typeof SigninRoute
+  CourseCourseIdRoute: typeof CourseCourseIdRoute
+  CoursesCourseIdRoute: typeof CoursesCourseIdRoute
+  PreviewCourseIdRoute: typeof PreviewCourseIdRoute
+  LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
+  LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_public': {
-      id: '/_public'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof PublicRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_public/': {
-      id: '/_public/'
+    '/': {
+      id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof PublicIndexRouteImport
-      parentRoute: typeof PublicRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_public/signin': {
-      id: '/_public/signin'
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
       path: '/signin'
       fullPath: '/signin'
-      preLoaderRoute: typeof PublicSigninRouteImport
-      parentRoute: typeof PublicRoute
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/course/$courseCode': {
-      id: '/_authenticated/course/$courseCode'
-      path: '/course/$courseCode'
-      fullPath: '/course/$courseCode'
-      preLoaderRoute: typeof AuthenticatedCourseCourseCodeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/course/$courseId': {
+      id: '/course/$courseId'
+      path: '/course/$courseId'
+      fullPath: '/course/$courseId'
+      preLoaderRoute: typeof CourseCourseIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/preview/$courseCode': {
-      id: '/_authenticated/preview/$courseCode'
-      path: '/preview/$courseCode'
-      fullPath: '/preview/$courseCode'
-      preLoaderRoute: typeof AuthenticatedPreviewCourseCodeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/courses/$courseId': {
+      id: '/courses/$courseId'
+      path: '/courses/$courseId'
+      fullPath: '/courses/$courseId'
+      preLoaderRoute: typeof CoursesCourseIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_public/courses/$courseCode': {
-      id: '/_public/courses/$courseCode'
-      path: '/courses/$courseCode'
-      fullPath: '/courses/$courseCode'
-      preLoaderRoute: typeof PublicCoursesCourseCodeRouteImport
-      parentRoute: typeof PublicRoute
+    '/preview/$courseId': {
+      id: '/preview/$courseId'
+      path: '/preview/$courseId'
+      fullPath: '/preview/$courseId'
+      preLoaderRoute: typeof PreviewCourseIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn/$courseId/': {
+      id: '/learn/$courseId/'
+      path: '/learn/$courseId'
+      fullPath: '/learn/$courseId/'
+      preLoaderRoute: typeof LearnCourseIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn/$courseId/home': {
+      id: '/learn/$courseId/home'
+      path: '/learn/$courseId/home'
+      fullPath: '/learn/$courseId/home'
+      preLoaderRoute: typeof LearnCourseIdHomeRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
 
-interface AuthenticatedRouteRouteChildren {
-  AuthenticatedDashboardRouteRoute: typeof AuthenticatedDashboardRouteRoute
-  AuthenticatedCourseCourseCodeRoute: typeof AuthenticatedCourseCourseCodeRoute
-  AuthenticatedPreviewCourseCodeRoute: typeof AuthenticatedPreviewCourseCodeRoute
-}
-
-const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedDashboardRouteRoute: AuthenticatedDashboardRouteRoute,
-  AuthenticatedCourseCourseCodeRoute: AuthenticatedCourseCourseCodeRoute,
-  AuthenticatedPreviewCourseCodeRoute: AuthenticatedPreviewCourseCodeRoute,
-}
-
-const AuthenticatedRouteRouteWithChildren =
-  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
-
-interface PublicRouteChildren {
-  PublicSigninRoute: typeof PublicSigninRoute
-  PublicIndexRoute: typeof PublicIndexRoute
-  PublicCoursesCourseCodeRoute: typeof PublicCoursesCourseCodeRoute
-}
-
-const PublicRouteChildren: PublicRouteChildren = {
-  PublicSigninRoute: PublicSigninRoute,
-  PublicIndexRoute: PublicIndexRoute,
-  PublicCoursesCourseCodeRoute: PublicCoursesCourseCodeRoute,
-}
-
-const PublicRouteWithChildren =
-  PublicRoute._addFileChildren(PublicRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
-  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  PublicRoute: PublicRouteWithChildren,
+  IndexRoute: IndexRoute,
+  DashboardRoute: DashboardRoute,
+  SearchRoute: SearchRoute,
+  SigninRoute: SigninRoute,
+  CourseCourseIdRoute: CourseCourseIdRoute,
+  CoursesCourseIdRoute: CoursesCourseIdRoute,
+  PreviewCourseIdRoute: PreviewCourseIdRoute,
+  LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
+  LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

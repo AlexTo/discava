@@ -38,8 +38,8 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useCoreApi } from '../../hooks/useCoreApi';
-import { toDisplayCourse } from '../../lib/course-display';
+import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { toDisplayCourse } from '../../../../lib/course-display';
 
 interface Attachment {
   name: string;
@@ -249,7 +249,7 @@ const allLessons = modules.flatMap((module) =>
   module.lessons.map((lesson) => ({ ...lesson, moduleId: module.moduleId })),
 );
 
-// Mirrors the enrolled-course titles in the dashboard's "Continue learning"
+// Mirrors the enrolled-course titles in the signed-in home's "Continue learning"
 // mock list, keyed by course code, so this page shows a real course title
 // rather than the code when navigated to from there.
 const MOCK_COURSE_TITLES: Record<string, string> = {
@@ -481,9 +481,9 @@ function LessonBody({
 }
 
 export function CourseContent({ courseCode }: { courseCode: string }) {
-  // A real course (reached from its preview's Continue button) shows its own
+  // A real course (reached from its page's Continue button) shows its own
   // title over the mock lessons until the player uses real content (#148
-  // item 7); the dashboard's mock courses keep their mock titles.
+  // item 7); the signed-in home's mock courses keep their mock titles.
   const trpc = useCoreApi();
   const mockTitle = MOCK_COURSE_TITLES[courseCode];
   const realCourse = useQuery(
@@ -593,7 +593,7 @@ export function CourseContent({ courseCode }: { courseCode: string }) {
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
       <Link
-        to="/dashboard"
+        to="/"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-4" /> Back to Home
