@@ -43,10 +43,15 @@ export default defineConfig(() => ({
   test: {
     passWithNoTests: true,
     name: '@discava/student-portal',
+    setupFiles: ['src/test/setup.ts'],
     watch: false,
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // Component tests render through jsdom, and CI on main runs every
+    // project's tests at once on one runner, where 5s (vitest's default) has
+    // proved too tight (see the instructor portal's config).
+    testTimeout: 15_000,
     reporters: ['default'],
     coverage: {
       reportsDirectory:
