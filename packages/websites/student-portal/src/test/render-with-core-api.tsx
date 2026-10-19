@@ -5,6 +5,7 @@
 import type { AppRouter } from '@discava/core-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  type AnyRoute,
   createMemoryHistory,
   createRootRoute,
   createRouter,
@@ -118,14 +119,28 @@ const authState = (signedIn: boolean): AuthContextProps =>
 // their hrefs can be checked), inside a fresh React Query client, the
 // signed-in state `signedIn` asks for, and a core-api whose procedures are
 // answered by `handlers` (keyed by path, e.g. 'course.enrol'). Returns every
-// call the component made, the query client, and a user-event instance.
-// The router renders asynchronously, so look elements up with findBy*.
+// call the component made, the query client, the router and a user-event
+// instance. The router renders asynchronously, so look elements up with
+// findBy*.
+//
+// To test routes themselves, pass the app's `routeTree` and the `path` to
+// start at instead of `ui`; `auth` overrides parts of the signed-in state,
+// e.g. a spy for signinRedirect.
 export const renderWithCoreApi = (
-  ui: ReactElement,
+  ui: ReactElement | null,
   {
     handlers = {},
     signedIn = true,
-  }: { handlers?: Record<string, Handler>; signedIn?: boolean } = {},
+    auth = {},
+    routeTree,
+    path = '/',
+  }: {
+    handlers?: Record<string, Handler>;
+    signedIn?: boolean;
+    auth?: Partial<AuthContextProps>;
+    routeTree?: AnyRoute;
+    path?: string;
+  } = {},
 ) => {
   const calls: ApiCall[] = [];
   const queryClient = new QueryClient({
@@ -138,13 +153,17 @@ export const renderWithCoreApi = (
     client,
     queryClient,
   });
+  const authContext = { ...authState(signedIn), ...auth };
   const router = createRouter({
-    routeTree: createRootRoute({ component: () => ui }),
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    routeTree: routeTree ?? createRootRoute({ component: () => ui }),
+    history: createMemoryHistory({ initialEntries: [path] }),
+    // As main.tsx provides. No runtimeConfig, so _authenticated's sign-in
+    // check is skipped as in local dev.
+    context: { runtimeConfig: undefined, auth: authContext },
   });
   const user = userEvent.setup();
   const result = render(
-    <AuthContext.Provider value={authState(signedIn)}>
+    <AuthContext.Provider value={authContext}>
       <QueryClientProvider client={queryClient}>
         <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>
           <RouterProvider router={router} />
@@ -152,5 +171,5 @@ export const renderWithCoreApi = (
       </QueryClientProvider>
     </AuthContext.Provider>,
   );
-  return { ...result, calls, queryClient, optionsProxy, user };
+  return { ...result, calls, queryClient, optionsProxy, router, user };
 };

@@ -2,6 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import {
+  currentPath,
+  safeReturnTo,
+} from '@discava/common-shadcn/lib/return-to';
 import React, { PropsWithChildren, useEffect } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
@@ -37,6 +42,15 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',
+    // Back to the page sign-in started from (the OIDC state sent below), or
+    // home, which also clears the code from the URL. The router isn't
+    // created until signed in (see main.tsx), so it starts on that page.
+    onSigninCallback: (user) => {
+      const returnTo = safeReturnTo(
+        (user as { state?: { returnTo?: unknown } } | void)?.state?.returnTo,
+      );
+      window.history.replaceState(null, '', returnTo ?? '/');
+    },
   };
 
   return (
@@ -51,7 +65,8 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
 
   useEffect(() => {
     if (!auth.isAuthenticated && !auth.isLoading) {
-      auth.signinRedirect();
+      // Cognito hands the state back to onSigninCallback above.
+      auth.signinRedirect({ state: { returnTo: currentPath() } });
     }
   }, [auth]);
 

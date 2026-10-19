@@ -16,7 +16,7 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
@@ -59,6 +59,8 @@ export function EnrolmentActions({
   const { isAuthenticated } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
   const [enrolledOpen, setEnrolledOpen] = useState(false);
+  // Signing in from here comes back to this course, to finish enrolling.
+  const here = useLocation().href;
 
   const enrolmentQuery = useQuery(
     trpc.course.myEnrolment.queryOptions(
@@ -215,7 +217,9 @@ export function EnrolmentActions({
               <Button variant="outline">Cancel</Button>
             </DialogClose>
             <Button asChild>
-              <Link to="/signin">Continue to sign in</Link>
+              <Link to="/signin" search={{ redirect: here }}>
+                Continue to sign in
+              </Link>
             </Button>
           </DialogFooter>
         </DialogContent>
