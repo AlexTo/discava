@@ -10,6 +10,7 @@
     "astro-contributors": "catalog:",
     "astro-d2": "catalog:",
     "commander": "catalog:",
+    "express": "catalog:",
     "fast-glob": "catalog:",
     "fs-extra": "catalog:",
     "simple-git": "catalog:",
