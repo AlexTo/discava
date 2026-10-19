@@ -6,7 +6,7 @@
       "{projectRoot}/**/*",
       "sharedGlobals",
       {
-        "dependentTasksOutputFiles": "!{reports,coverage}/**",
+        "dependentTasksOutputFiles": "!{reports/**,coverage/**,dist/**/checkov/checkov_report.json,dist/**/test-output/vitest/coverage/**}",
         "transitive": true
       }
     ],
