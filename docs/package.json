@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@astrojs/starlight": "catalog:",
+    "@modelcontextprotocol/client": "catalog:",
     "@strands-agents/sdk": "catalog:",
     "astro": "catalog:",
     "astro-contributors": "catalog:",
