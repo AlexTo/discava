@@ -47,6 +47,11 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // Component tests drive Tiptap editors and large dialogs through jsdom:
+    // under a second each locally, but CI on main runs every project's tests
+    // at once on one runner, where the quiz builder's took over 5s (vitest's
+    // default) and failed. A test that hangs still fails, just later.
+    testTimeout: 15_000,
     reporters: ['default'],
     coverage: {
       reportsDirectory:
