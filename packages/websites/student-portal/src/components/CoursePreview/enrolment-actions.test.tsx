@@ -56,7 +56,7 @@ const renderPreview = (
 const enrolButton = () => screen.findByRole('button', { name: 'Enrol now' });
 
 describe('EnrolmentActions', () => {
-  it('asks a signed-out visitor to sign in, without calling the API', async () => {
+  it('asks a signed-out visitor to sign in and come back, without calling the API', async () => {
     const { user, calls } = renderPreview({}, { signedIn: false });
 
     await user.click(await enrolButton());
@@ -66,7 +66,7 @@ describe('EnrolmentActions', () => {
     });
     expect(
       within(dialog).getByRole('link', { name: 'Continue to sign in' }),
-    ).toHaveAttribute('href', '/signin');
+    ).toHaveAttribute('href', `/signin?redirect=${encodeURIComponent('/')}`);
     expect(calls.map(({ path }) => path)).toEqual(['course.publicView']);
   });
 

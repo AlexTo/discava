@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { safeReturnTo } from '@discava/common-shadcn/lib/return-to';
 import React, { PropsWithChildren } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
@@ -38,8 +40,17 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',
-    onSigninCallback: () => {
-      router.navigate({ to: '/dashboard', replace: true });
+    // Back to the page sign-in started from (the OIDC state signin.tsx
+    // sends), or the dashboard. Also clears the code from the URL.
+    onSigninCallback: (user) => {
+      const returnTo = safeReturnTo(
+        (user as { state?: { returnTo?: unknown } } | void)?.state?.returnTo,
+      );
+      if (returnTo) {
+        router.navigate({ href: returnTo, replace: true });
+      } else {
+        router.navigate({ to: '/dashboard', replace: true });
+      }
     },
   };
 

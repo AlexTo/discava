@@ -6,11 +6,12 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import AuthenticatedLayout from '../../components/AuthenticatedLayout';
 
 export const Route = createFileRoute('/_authenticated')({
-  beforeLoad: ({ context }) => {
+  beforeLoad: ({ context, location }) => {
     // Auth is bypassed in local-dev mode (no cognitoProps configured), matching
     // the same bypass CognitoAuth applies before the router ever mounts.
     if (context.runtimeConfig?.cognitoProps && !context.auth?.isAuthenticated) {
-      throw redirect({ to: '/signin' });
+      // Back to the requested page once signed in (see signin.tsx).
+      throw redirect({ to: '/signin', search: { redirect: location.href } });
     }
   },
   component: () => (
