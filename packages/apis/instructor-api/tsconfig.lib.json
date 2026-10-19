@@ -14,6 +14,9 @@
   ],
   "references": [
     {
+      "path": "../../common/tiptap/tsconfig.lib.json"
+    },
+    {
       "path": "../../databases/core-table/tsconfig.lib.json"
     }
   ],

@@ -40,6 +40,12 @@ import {
 // delete lifecycle. The draft-course hard-delete cascades themselves are
 // covered in module.test.ts, lesson.test.ts and content-item-shared.test.ts.
 
+// The smallest text body the API accepts: a document with one empty
+// paragraph, as an empty editor produces.
+const TEXT_BODY = JSON.stringify({
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
+});
 const {
   courseInstructorGet,
   courseGet,
@@ -196,7 +202,7 @@ const textItem = (
   type: 'text' as const,
   status: 'ready' as const,
   title: contentItemId,
-  body: '{}',
+  body: TEXT_BODY,
   order: 1,
   visibility: 'visible' as const,
   studentActivityCount: 0,
@@ -447,7 +453,7 @@ describe('visibility of new records', () => {
       await callAs().createContentItemText({
         ...lessonKey,
         title: 'New text',
-        body: '{}',
+        body: TEXT_BODY,
       });
 
       // What was written, not what was read back.
@@ -474,7 +480,7 @@ describe('visibility of new records', () => {
       callAs().createContentItemText({
         ...lessonKey,
         title: 'New text',
-        body: '{}',
+        body: TEXT_BODY,
       }),
     ).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
@@ -500,7 +506,7 @@ describe('visibility of new records', () => {
       callAs().createContentItemText({
         ...lessonKey,
         title: 'New text',
-        body: '{}',
+        body: TEXT_BODY,
       }),
     ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     expect(contentItemCreate).not.toHaveBeenCalled();
@@ -1516,7 +1522,10 @@ describe('missing records', () => {
   it.each([
     ['createModule', { courseId: COURSE_ID, title: 'New module' }],
     ['createLesson', { ...moduleKey, title: 'New lesson' }],
-    ['createContentItemText', { ...lessonKey, title: 'New text', body: '{}' }],
+    [
+      'createContentItemText',
+      { ...lessonKey, title: 'New text', body: TEXT_BODY },
+    ],
   ] as const)(
     '%s throws NOT_FOUND when the course does not exist',
     async (procedure, input) => {
@@ -1870,7 +1879,10 @@ describe('under an archived module or lesson', () => {
     ['updateLesson', { ...lessonKey, title: 'New title' }],
     ['publishLesson', lessonKey],
     ['hideLesson', lessonKey],
-    ['createContentItemText', { ...lessonKey, title: 'New text', body: '{}' }],
+    [
+      'createContentItemText',
+      { ...lessonKey, title: 'New text', body: TEXT_BODY },
+    ],
     ['updateContentItemText', { ...itemKey('item-1'), title: 'New title' }],
     ['publishContentItem', itemKey('item-1')],
     ['hideContentItem', itemKey('item-1')],
@@ -2262,7 +2274,10 @@ describe('parent archived between the checks and the write', () => {
     ['publishLesson', lessonKey],
     ['hideLesson', lessonKey],
     ['restoreLesson', lessonKey],
-    ['createContentItemText', { ...lessonKey, title: 'New text', body: '{}' }],
+    [
+      'createContentItemText',
+      { ...lessonKey, title: 'New text', body: TEXT_BODY },
+    ],
     ['updateContentItemText', { ...itemKey('item-1'), title: 'New title' }],
     ['publishContentItem', itemKey('item-1')],
     ['hideContentItem', itemKey('item-1')],
@@ -2312,7 +2327,10 @@ describe('parent archived between the checks and the write', () => {
   );
 
   it.each([
-    ['createContentItemText', { ...lessonKey, title: 'New text', body: '{}' }],
+    [
+      'createContentItemText',
+      { ...lessonKey, title: 'New text', body: TEXT_BODY },
+    ],
     ['updateContentItemText', { ...itemKey('item-1'), title: 'New title' }],
     ['publishContentItem', itemKey('item-1')],
     ['hideContentItem', itemKey('item-1')],
@@ -2540,7 +2558,10 @@ describe('course archived between the checks and the write', () => {
     ['createLesson', { ...moduleKey, title: 'New lesson' }],
     ['updateLesson', { ...lessonKey, title: 'New title' }],
     ['deleteLesson', lessonKey],
-    ['createContentItemText', { ...lessonKey, title: 'New text', body: '{}' }],
+    [
+      'createContentItemText',
+      { ...lessonKey, title: 'New text', body: TEXT_BODY },
+    ],
     ['updateContentItemText', { ...itemKey('item-1'), title: 'New title' }],
     ['deleteContentItem', itemKey('item-1')],
   ] as const)(
@@ -2730,7 +2751,7 @@ describe('publishing leaves content hidden on purpose alone', () => {
       await callAs().createContentItemText({
         ...lessonKey,
         title: 'New text',
-        body: '{}',
+        body: TEXT_BODY,
       });
 
       for (const entity of ['module', 'lesson', 'contentItem']) {

@@ -1,0 +1,18 @@
+{
+  "name": "@discava/common-tiptap",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tiptap/core": "catalog:",
+    "@tiptap/extension-mathematics": "catalog:",
+    "@tiptap/pm": "catalog:",
+    "@tiptap/starter-kit": "catalog:",
+    "katex": "catalog:",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  },
+  "license": "Apache-2.0"
+}

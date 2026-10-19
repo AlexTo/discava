@@ -58,6 +58,9 @@
       ],
       "@discava/instructor-api": [
         "./packages/apis/instructor-api/src/index.ts"
+      ],
+      "@discava/common-tiptap": [
+        "./packages/common/tiptap/src/index.ts"
       ]
     }
   }

@@ -18,9 +18,6 @@
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/core-table": "workspace:*",
-    "@tiptap/core": "catalog:",
-    "@tiptap/pm": "catalog:",
-    "@tiptap/starter-kit": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "aws-xray-sdk-core": "catalog:",
@@ -28,7 +25,8 @@
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
     "uuid": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@discava/common-tiptap": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",

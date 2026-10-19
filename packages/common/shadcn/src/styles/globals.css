@@ -127,3 +127,25 @@ SPDX-License-Identifier: Apache-2.0
     @apply bg-background text-foreground;
   }
 }
+
+/*
+Formulas in rich text (@discava/common-tiptap's Mathematics extension), in
+the editor and when shown read-only. KaTeX's own stylesheet
+(katex/dist/katex.min.css) is imported by each portal that renders maths.
+*/
+@layer components {
+  [data-type='block-math'] {
+    @apply my-3 block overflow-x-auto text-center;
+  }
+  .tiptap-mathematics-render--editable {
+    @apply cursor-pointer rounded-sm px-0.5 transition-colors hover:bg-muted;
+  }
+  .ProseMirror-selectednode .tiptap-mathematics-render,
+  .ProseMirror-selectednode.tiptap-mathematics-render {
+    @apply bg-muted ring-2 ring-ring/50;
+  }
+  .inline-math-error,
+  .block-math-error {
+    @apply rounded-sm bg-destructive/10 px-1 font-mono text-destructive;
+  }
+}
