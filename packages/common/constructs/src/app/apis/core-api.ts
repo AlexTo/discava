@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { AppRouter, appRouter } from '@discava/core-api';
+import { AppRouter, appRouter, PUBLIC_OPERATIONS } from '@discava/core-api';
 import { Aspects, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import {
   AuthorizationType,
@@ -41,14 +41,10 @@ import { RuntimeConfig } from '../../core/runtime-config.js';
 // String union type for all API operation names
 type Operations = Procedures<AppRouter>;
 
-// Operations built on publicProcedure/publicCourseProcedure (see
-// packages/apis/core-api/src/init.ts) rather than protectedProcedure -
-// callable without a Cognito token. Listed explicitly so a new public
-// procedure doesn't silently inherit Cognito auth at the API Gateway layer
-// just because this list wasn't updated alongside it.
-const PUBLIC_OPERATIONS: ReadonlySet<Operations> = new Set([
-  'course.publicList',
-]);
+// Operations callable without a Cognito token: the method skips the API's
+// Cognito authorizer. core-api declares them next to its router, where a test
+// checks the list against how each procedure treats an anonymous caller.
+const PUBLIC: ReadonlySet<Operations> = new Set<Operations>(PUBLIC_OPERATIONS);
 
 /**
  * Properties for creating a CoreApi construct
@@ -168,7 +164,7 @@ export class CoreApi<
             // ignored in this mode, so it isn't set.
             scopePermissionToMethod: false,
           }),
-          options: PUBLIC_OPERATIONS.has(op)
+          options: PUBLIC.has(op)
             ? { authorizationType: AuthorizationType.NONE }
             : undefined,
         };
