@@ -1,11 +1,71 @@
 {
   "migrations": [
     {
-      "version": "1.0.6",
+      "version": "1.0.9",
+      "description": "Bind the py#dynamodb BaseModel Meta that 1.0.8 declared as a nested MetaProtocol subclass with the inherited MetaProtocol type, so the generated project type checks with ty 0.0.87",
+      "implementation": "./src/migrations/latest/py-dynamodb-bind-base-model-meta/migration",
+      "package": "@aws/nx-plugin",
+      "name": "latest-py-dynamodb-bind-base-model-meta"
+    },
+    {
+      "version": "1.0.10",
+      "description": "Declare @modelcontextprotocol/client in every project that declares @strands-agents/sdk without it so the required peer resolves to the vended pin",
+      "implementation": "./src/migrations/latest/pin-strands-mcp-client-peer/migration",
+      "package": "@aws/nx-plugin",
+      "name": "latest-pin-strands-mcp-client-peer"
+    },
+    {
+      "version": "1.0.7",
+      "description": "Declare express in every project that declares @strands-agents/sdk without it so @strands-agents/sdk resolves to a single peer-suffixed instance",
+      "implementation": "./src/migrations/v1.0.7/0001-pin-strands-express-peer/migration",
+      "package": "@aws/nx-plugin",
+      "name": "v1.0.7-0001-pin-strands-express-peer"
+    },
+    {
+      "version": "1.0.7",
+      "description": "Remove the Lambda Runtime Interface Emulator from vended ts#rdb and py#rdb Dockerfiles so its known HIGH vulnerabilities are not present in the image",
+      "implementation": "./src/migrations/v1.0.7/0002-rdb-drop-lambda-rie/migration",
+      "package": "@aws/nx-plugin",
+      "name": "v1.0.7-0002-rdb-drop-lambda-rie"
+    },
+    {
+      "version": "1.0.8",
+      "description": "Run CDK infrastructure tests against the artifacts their stacks deploy rather than every upstream build, in a per-run temp directory with CDK asset bundling skipped",
+      "implementation": "./src/migrations/v1.0.8/0001-infra-test-loop/migration",
+      "package": "@aws/nx-plugin",
+      "name": "v1.0.8-0001-infra-test-loop"
+    },
+    {
+      "version": "1.0.8",
+      "description": "Declare the py#dynamodb BaseModel Meta as a subclass of pynamodb's MetaProtocol bound with the inherited MetaProtocol type, so the generated project type checks with ty 0.0.86 and 0.0.87",
+      "implementation": "./src/migrations/v1.0.8/0002-py-dynamodb-type-base-model-meta/migration",
+      "package": "@aws/nx-plugin",
+      "name": "v1.0.8-0002-py-dynamodb-type-base-model-meta"
+    },
+    {
+      "version": "1.0.8",
+      "description": "Keep checkov reports and vitest coverage out of downstream task hashes, declare Smithy build inputs, cache ts#rdb Prisma client generation and stop caching Terraform output",
+      "implementation": "./src/migrations/v1.0.8/0003-cache-inputs-outputs/migration",
+      "package": "@aws/nx-plugin",
+      "name": "v1.0.8-0003-cache-inputs-outputs"
+    },
+    {
+      "version": "1.0.11",
       "description": "Sync vended dependency versions and the tracked plugin version to those vended by this release",
       "implementation": "./src/utils/version-upgrade-migration/migration",
       "package": "@aws/nx-plugin",
       "name": "sync-vended-versions"
+    },
+    {
+      "version": "23.3.0-beta.8",
+      "requires": {
+        "vitest": ">=5.0.0"
+      },
+      "description": "Migrate workspaces past breaking changes for Vitest 5.",
+      "implementation": "./dist/src/migrations/update-23-3-0/migrate-to-vitest-5",
+      "prompt": "tools/ai-migrations/@nx/vitest/1.0.11/ai-instructions-for-vitest-5.md",
+      "package": "@nx/vitest",
+      "name": "migrate-to-vitest-5"
     }
   ]
 }

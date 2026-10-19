@@ -8,6 +8,7 @@ export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/common/constructs',
   test: {
+    globalSetup: ['./tests/global-setup.ts'],
     passWithNoTests: true,
     name: '@discava/common-constructs',
     watch: false,
