@@ -23,6 +23,9 @@ function Progress({
         'relative h-2 w-full overflow-hidden rounded-full bg-primary/20',
         className,
       )}
+      // Radix sets aria-valuenow from it; without it screen readers can't
+      // tell how far along the bar is.
+      value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator

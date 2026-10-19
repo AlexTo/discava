@@ -16,6 +16,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '@discava/common-shadcn/components/ui/radio-group';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
   AlertCircle,
@@ -37,6 +38,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useCoreApi } from '../../hooks/useCoreApi';
 import { toDisplayCourse } from '../../lib/course-display';
 
 interface Attachment {
@@ -479,9 +481,20 @@ function LessonBody({
 }
 
 export function CourseContent({ courseCode }: { courseCode: string }) {
+  // A real course (reached from its preview's Continue button) shows its own
+  // title over the mock lessons until the player uses real content (#148
+  // item 7); the dashboard's mock courses keep their mock titles.
+  const trpc = useCoreApi();
+  const mockTitle = MOCK_COURSE_TITLES[courseCode];
+  const realCourse = useQuery(
+    trpc.course.publicView.queryOptions(
+      { courseId: courseCode },
+      { enabled: !mockTitle },
+    ),
+  );
   const course = toDisplayCourse({
     courseId: courseCode,
-    title: MOCK_COURSE_TITLES[courseCode] ?? courseCode,
+    title: mockTitle ?? realCourse.data?.title ?? '',
   });
   const [activeLessonId, setActiveLessonId] = useState(allLessons[0].lessonId);
   const [expandedModuleIds, setExpandedModuleIds] = useState<Set<string>>(

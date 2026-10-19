@@ -16,15 +16,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@discava/common-shadcn/components/ui/collapsible';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@discava/common-shadcn/components/ui/dialog';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -32,18 +23,16 @@ import {
   BarChart3,
   BookOpen,
   ChevronDown,
-  CircleCheck,
   Clock3,
   FileText,
   Search,
-  Sparkles,
 } from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from 'react-oidc-context';
 import { Alert } from '../../components/alert';
 import { Spinner } from '../../components/spinner';
 import { useCoreApi } from '../../hooks/useCoreApi';
 import { toDisplayCourse } from '../../lib/course-display';
+import { EnrolmentActions } from './enrolment-actions';
 
 export function CoursePreview({
   courseCode,
@@ -58,9 +47,7 @@ export function CoursePreview({
   const courseQuery = useQuery(
     trpc.course.publicView.queryOptions({ courseId: courseCode }),
   );
-  const { isAuthenticated } = useAuth();
   const [expandedModuleId, setExpandedModuleId] = useState<string>();
-  const [enrolOpen, setEnrolOpen] = useState(false);
 
   if (courseQuery.isLoading) {
     return (
@@ -240,79 +227,16 @@ export function CoursePreview({
                   </dd>
                 </div>
               </dl>
-              {isAuthenticated ? (
-                <Badge
-                  variant="secondary"
-                  className="w-full justify-center py-1.5 text-xs font-medium"
-                >
-                  Not yet enrolled
-                </Badge>
-              ) : null}
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => setEnrolOpen(true)}
-              >
-                Enrol now
-              </Button>
-              <Button className="w-full" variant="outline" asChild>
-                <Link to={backTo}>{backLabel}</Link>
-              </Button>
+              <EnrolmentActions
+                courseId={courseCode}
+                courseTitle={course.title}
+                backTo={backTo}
+                backLabel={backLabel}
+              />
             </CardContent>
           </Card>
         </aside>
       </div>
-
-      <Dialog open={enrolOpen} onOpenChange={setEnrolOpen}>
-        <DialogContent>
-          {isAuthenticated ? (
-            <>
-              <DialogHeader>
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <CircleCheck className="size-6" />
-                </div>
-                <DialogTitle className="text-center">
-                  You're enrolled!
-                </DialogTitle>
-                <DialogDescription className="text-center">
-                  You've been added to {course.title}. This is a prototype — no
-                  enrolment was actually saved.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="sm:justify-center">
-                <DialogClose asChild>
-                  <Button variant="outline">Keep browsing</Button>
-                </DialogClose>
-                <Button asChild>
-                  <Link to="/dashboard">Go to your dashboard</Link>
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            <>
-              <DialogHeader>
-                <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Sparkles className="size-6" />
-                </div>
-                <DialogTitle className="text-center">
-                  Sign in to enrol
-                </DialogTitle>
-                <DialogDescription className="text-center">
-                  Create or sign in to your account to enrol in {course.title}.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="sm:justify-center">
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button asChild>
-                  <Link to="/signin">Continue to sign in</Link>
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }
