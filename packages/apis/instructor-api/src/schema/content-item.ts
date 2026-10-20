@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { isValidTiptapDocument } from '@discava/common-tiptap';
 import { z } from 'zod';
 import {
   QuizAnswerKeySchema,
@@ -11,15 +12,6 @@ import {
   refineQuizDefinition,
 } from './quiz.js';
 import { CurriculumVisibilitySchema } from './visibility.js';
-
-const isValidJson = (value: string) => {
-  try {
-    JSON.parse(value);
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 export const ContentItemStatusSchema = z.enum(['pending', 'ready', 'failed']);
 
@@ -126,7 +118,10 @@ export const CreateContentItemTextInputSchema = z.object({
   lessonId: z.string(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
-  body: z.string().min(1).refine(isValidJson, 'body must be valid JSON'),
+  body: z
+    .string()
+    .min(1)
+    .refine(isValidTiptapDocument, 'body must be a valid Tiptap JSON document'),
 });
 
 export type ICreateContentItemTextInput = z.output<
@@ -171,7 +166,7 @@ export const UpdateContentItemTextInputSchema = z.object({
   body: z
     .string()
     .min(1)
-    .refine(isValidJson, 'body must be valid JSON')
+    .refine(isValidTiptapDocument, 'body must be a valid Tiptap JSON document')
     .optional(),
 });
 

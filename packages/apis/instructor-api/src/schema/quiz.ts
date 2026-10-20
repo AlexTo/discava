@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { isValidTiptapDocument } from '@discava/common-tiptap';
 import { z } from 'zod';
-import { isValidTiptapDocument } from '../lib/tiptap-document.js';
 
 export const MAX_QUIZ_QUESTIONS = 50;
 export const MIN_QUESTION_OPTIONS = 2;
@@ -14,7 +15,7 @@ export const MAX_QUESTION_OPTIONS = 10;
 export const MAX_QUIZ_CONTENT_BYTES = 300 * 1024;
 
 // A Tiptap document, stored as a JSON string like a text item's body, that
-// conforms to the editor's schema.
+// conforms to the editor's schema (@discava/common-tiptap), maths included.
 const TiptapJsonSchema = z
   .string()
   .max(20_000)

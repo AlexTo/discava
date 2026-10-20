@@ -264,6 +264,34 @@ describe('createContentItemQuiz', () => {
     expect(contentItemCreate).not.toHaveBeenCalled();
   });
 
+  it('accepts maths in prompts and explanations', async () => {
+    const withMaths = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'What is ' },
+            { type: 'inlineMath', attrs: { latex: '\\frac{6}{3}' } },
+            { type: 'text', text: '?' },
+          ],
+        },
+      ],
+    });
+    const [first, ...rest] = quiz.questions;
+
+    await callAs().createContentItemQuiz({
+      ...input,
+      questions: [{ ...first, prompt: withMaths }, ...rest],
+      answerKey: {
+        ...quiz.answerKey,
+        q1: { ...quiz.answerKey.q1, explanation: withMaths },
+      },
+    });
+
+    expect(contentItemCreate).toHaveBeenCalled();
+  });
+
   it('refuses to add a quiz under an archived lesson', async () => {
     lessonGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({

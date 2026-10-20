@@ -213,6 +213,42 @@ describe('createContentItemText', () => {
     expect(contentItemCreate).not.toHaveBeenCalled();
   });
 
+  it('accepts a body with inline and block maths', async () => {
+    const body = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Solve ' },
+            { type: 'inlineMath', attrs: { latex: 'Ax = b' } },
+          ],
+        },
+        { type: 'blockMath', attrs: { latex: '\\frac{a}{b}' } },
+      ],
+    });
+
+    await callAs().createContentItemText({ ...validTextInput, body });
+
+    expect(contentItemCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ body }),
+    );
+  });
+
+  it.each([
+    ['JSON that is not a document', '{}'],
+    [
+      'a node the editor has no extension for',
+      JSON.stringify({ type: 'doc', content: [{ type: 'image' }] }),
+    ],
+    ['text that is not JSON', 'not json'],
+  ])('rejects a body of %s, writing nothing', async (_, body) => {
+    await expect(
+      callAs().createContentItemText({ ...validTextInput, body }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(contentItemCreate).not.toHaveBeenCalled();
+  });
+
   it('generates a contentItemId and persists the body without touching S3', async () => {
     const result = await callAs().createContentItemText(validTextInput);
 

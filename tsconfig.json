@@ -38,6 +38,9 @@
     },
     {
       "path": "./packages/apis/instructor-api"
+    },
+    {
+      "path": "./packages/common/tiptap"
     }
   ]
 }

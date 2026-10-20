@@ -3,28 +3,40 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Button } from '@discava/common-shadcn/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@discava/common-shadcn/components/ui/dropdown-menu';
 import { Toggle } from '@discava/common-shadcn/components/ui/toggle';
 import { cn } from '@discava/common-shadcn/lib/utils';
-import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Bold, Heading2, Italic, List, ListOrdered } from 'lucide-react';
-import type { ReactNode } from 'react';
+import {
+  createContentExtensions,
+  parseTiptapDocument,
+} from '@discava/common-tiptap';
+import { type Editor, EditorContent, useEditor } from '@tiptap/react';
+import { Bold, Heading2, Italic, List, ListOrdered, Sigma } from 'lucide-react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { MathPopover } from './math-popover';
 
-const parseContent = (body: string | undefined) => {
-  if (!body) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(body);
-  } catch {
-    return undefined;
-  }
-};
+// The formula being written or edited in the maths popover: a new one at the
+// cursor, or the one at `pos`.
+interface MathEdit {
+  display: boolean;
+  latex?: string;
+  pos?: number;
+  anchor: () => DOMRect;
+}
 
 /**
  * A minimal Tiptap-based rich text editor for authoring a text content
  * item's body. Controlled by `value` (Tiptap's JSON document, stringified --
- * see #111), emitting the same shape via `onChange`.
+ * see #111), emitting the same shape via `onChange`. Its extensions are
+ * @discava/common-tiptap's, which instructor-api validates against, so
+ * whatever it produces can be saved: formatting, lists and LaTeX formulas
+ * (the Maths button, `$$…$$` inline or `$$$…$$$` on a line of its own).
  */
 export function RichTextEditor({
   value,
@@ -38,9 +50,33 @@ export function RichTextEditor({
   ariaLabel?: string;
   minHeightClass?: string;
 }) {
+  const [mathEdit, setMathEdit] = useState<MathEdit>();
+  const mathButtonRef = useRef<HTMLButtonElement>(null);
+  // Which kind of formula was picked from the Maths menu, until it closes.
+  const pendingFormula = useRef<boolean>(undefined);
+  const editorRef = useRef<Editor | null>(null);
+  // Clicking a formula opens the popover on it, to edit or delete it.
+  const extensions = useMemo(
+    () =>
+      createContentExtensions({
+        onMathClick: (node, pos) => {
+          const dom = editorRef.current?.view.nodeDOM(pos);
+          setMathEdit({
+            display: node.type.name === 'blockMath',
+            latex: node.attrs.latex,
+            pos,
+            anchor: () =>
+              dom instanceof HTMLElement
+                ? dom.getBoundingClientRect()
+                : new DOMRect(),
+          });
+        },
+      }),
+    [],
+  );
   const editor = useEditor({
-    extensions: [StarterKit],
-    content: parseContent(value),
+    extensions,
+    content: parseTiptapDocument(value),
     onUpdate: ({ editor }) => {
       onChange(JSON.stringify(editor.getJSON()));
     },
@@ -54,6 +90,47 @@ export function RichTextEditor({
       },
     },
   });
+  editorRef.current = editor;
+
+  const newFormula = (display: boolean) =>
+    setMathEdit({
+      display,
+      anchor: () =>
+        mathButtonRef.current?.getBoundingClientRect() ?? new DOMRect(),
+    });
+
+  const confirmFormula = (latex: string) => {
+    if (!editor || !mathEdit) {
+      return;
+    }
+    const { display, pos } = mathEdit;
+    const chain = editor.chain().focus();
+    if (pos === undefined) {
+      (display
+        ? chain.insertBlockMath({ latex })
+        : chain.insertInlineMath({ latex })
+      ).run();
+    } else {
+      (display
+        ? chain.updateBlockMath({ latex, pos })
+        : chain.updateInlineMath({ latex, pos })
+      ).run();
+    }
+    setMathEdit(undefined);
+  };
+
+  const deleteFormula = () => {
+    if (!editor || mathEdit?.pos === undefined) {
+      return;
+    }
+    const { display, pos } = mathEdit;
+    const chain = editor.chain().focus();
+    (display
+      ? chain.deleteBlockMath({ pos })
+      : chain.deleteInlineMath({ pos })
+    ).run();
+    setMathEdit(undefined);
+  };
 
   return (
     <div className="rounded-lg border">
@@ -95,8 +172,61 @@ export function RichTextEditor({
         >
           <ListOrdered />
         </ToolbarButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              ref={mathButtonRef}
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Maths"
+            >
+              <Sigma />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            // The popover opens once the menu has fully closed: opened while
+            // the menu is still closing, the menu's focus handling dismisses
+            // it at once. Focus then goes to the popover, not back here.
+            onCloseAutoFocus={(event) => {
+              const display = pendingFormula.current;
+              pendingFormula.current = undefined;
+              if (display !== undefined) {
+                event.preventDefault();
+                newFormula(display);
+              }
+            }}
+          >
+            <DropdownMenuItem
+              onSelect={() => {
+                pendingFormula.current = false;
+              }}
+            >
+              Inline formula
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                pendingFormula.current = true;
+              }}
+            >
+              Block formula
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <EditorContent editor={editor} />
+      {mathEdit ? (
+        <MathPopover
+          key={mathEdit.pos ?? 'new'}
+          anchor={mathEdit.anchor}
+          display={mathEdit.display}
+          latex={mathEdit.latex}
+          onConfirm={confirmFormula}
+          onDelete={mathEdit.pos === undefined ? undefined : deleteFormula}
+          onClose={() => setMathEdit(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

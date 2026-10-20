@@ -16,6 +16,9 @@ export default defineConfig(() => ({
       '@discava/core-table': fileURLToPath(
         new URL('../../databases/core-table/src/index.ts', import.meta.url),
       ),
+      '@discava/common-tiptap': fileURLToPath(
+        new URL('../../common/tiptap/src/index.ts', import.meta.url),
+      ),
     },
   },
   test: {
