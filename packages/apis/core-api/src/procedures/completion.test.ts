@@ -5,7 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { completeContentItem, myCompletions } from './completion.js';
+import { completeContentItem, myItemCompletions } from './completion.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
 const { db, transactionGo, completionQuery } = vi.hoisted(() => ({
@@ -99,7 +99,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
 
 const router = t.router({
   complete: completeContentItem,
-  myCompletions,
+  myItemCompletions,
 });
 const caller = t.createCallerFactory(router);
 
@@ -411,13 +411,15 @@ describe('complete', () => {
   });
 });
 
-describe('myCompletions', () => {
+describe('myItemCompletions', () => {
   it('returns every completion the caller has in the course', async () => {
     completionQuery.mockReturnValue({
       go: vi.fn().mockResolvedValue({ data: [existingCompletion] }),
     });
 
-    const result = await callAsUser().myCompletions({ courseId: 'course-1' });
+    const result = await callAsUser().myItemCompletions({
+      courseId: 'course-1',
+    });
 
     expect(completionQuery).toHaveBeenCalledWith({
       userId: USER_SUB,
@@ -436,7 +438,7 @@ describe('myCompletions', () => {
     delete db.enrolment;
 
     await expect(
-      callAsUser().myCompletions({ courseId: 'course-1' }),
+      callAsUser().myItemCompletions({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(completionQuery).not.toHaveBeenCalled();
   });
@@ -445,13 +447,13 @@ describe('myCompletions', () => {
     delete db.course;
 
     await expect(
-      callAsUser().myCompletions({ courseId: 'course-1' }),
+      callAsUser().myItemCompletions({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('rejects unauthenticated callers', async () => {
     await expect(
-      callAnonymously().myCompletions({ courseId: 'course-1' }),
+      callAnonymously().myItemCompletions({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });

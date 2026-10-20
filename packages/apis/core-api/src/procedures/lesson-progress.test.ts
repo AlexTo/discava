@@ -5,7 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { myProgress } from './progress.js';
+import { myLessonProgress } from './lesson-progress.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
 const { db, progressQuery } = vi.hoisted(() => ({
@@ -30,7 +30,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-const caller = t.createCallerFactory(t.router({ myProgress }));
+const caller = t.createCallerFactory(t.router({ myLessonProgress }));
 
 const USER_SUB = 'student-1';
 
@@ -72,10 +72,10 @@ beforeEach(() => {
   });
 });
 
-describe('course.myProgress', () => {
+describe('course.myLessonProgress', () => {
   it("returns the caller's progress in each lesson of the course", async () => {
     await expect(
-      callAsUser().myProgress({ courseId: 'course-1' }),
+      callAsUser().myLessonProgress({ courseId: 'course-1' }),
     ).resolves.toEqual({
       lessons: [
         {
@@ -103,7 +103,7 @@ describe('course.myProgress', () => {
     arrange();
 
     await expect(
-      callAsUser().myProgress({ courseId: 'course-1' }),
+      callAsUser().myLessonProgress({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(progressQuery).not.toHaveBeenCalled();
   });
@@ -112,7 +112,7 @@ describe('course.myProgress', () => {
     delete db.course;
 
     await expect(
-      callAsUser().myProgress({ courseId: 'course-1' }),
+      callAsUser().myLessonProgress({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
@@ -124,7 +124,7 @@ describe('course.myProgress', () => {
     });
 
     await expect(
-      anonymous.myProgress({ courseId: 'course-1' }),
+      anonymous.myLessonProgress({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });

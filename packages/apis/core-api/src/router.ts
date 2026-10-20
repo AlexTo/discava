@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { t } from './init.js';
-import { completeContentItem, myCompletions } from './procedures/completion.js';
+import {
+  completeContentItem,
+  myItemCompletions,
+} from './procedures/completion.js';
 import { videoUrl } from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
@@ -13,7 +16,7 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
-import { myProgress } from './procedures/progress.js';
+import { myLessonProgress } from './procedures/lesson-progress.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -25,9 +28,9 @@ export const router = t.router;
 export const appRouter = router({
   course: router({
     enrol,
-    myCompletions,
+    myItemCompletions,
     myEnrolment,
-    myProgress,
+    myLessonProgress,
     listByInstructor: listCoursesByInstructor,
     listInstructors: listInstructorsForCourse,
     publicList: publicListCourses,

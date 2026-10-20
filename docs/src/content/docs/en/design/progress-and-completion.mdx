@@ -38,8 +38,8 @@ core-api writes `itemCompletion` records and quiz attempts. It never writes `pro
   - Completing again returns the existing completion. An archived course is read-only, so nothing in it can be completed.
 - **Quiz:** completes itself. The attempt that passes, or that uses the last attempt, records the completion in the same transaction as the attempt (see <Link path="design/quizzes">Quizzes</Link>). It doesn't count the student again: their first attempt did.
   - `contentItem.complete` also accepts a quiz, but only once it's passed or no attempts remain. That covers an attempt limit lowered below what a student has already used, where no further submission is possible.
-- **Reading completions:** `course.myCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
-- **Reading progress:** `course.myProgress` returns a student's lesson progress records in a course, as progress recalculation last wrote them; a lesson without one hasn't been started. The course-level rollup comes with the enrolment (`course.myEnrolment`).
+- **Reading completions:** `course.myItemCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
+- **Reading progress:** `course.myLessonProgress` returns a student's lesson progress records in a course, as progress recalculation last wrote them; a lesson without one hasn't been started. The course-level rollup comes with the enrolment (`course.myEnrolment`).
 
 ## Lesson and course completion
 

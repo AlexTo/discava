@@ -5,18 +5,18 @@
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
-  MyProgressInputSchema,
-  MyProgressOutputSchema,
+  MyLessonProgressInputSchema,
+  MyLessonProgressOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
 
 // The caller's progress in each lesson of a course, for the lesson player's
 // outline and "N new items" (#148 7c, 7f). Progress recalculation is its only
 // writer, so this lags a completion by the stream's batching window; the
-// player combines it with course.myCompletions for what it shows right away.
-export const myProgress = courseProcedure
-  .input(MyProgressInputSchema)
-  .output(MyProgressOutputSchema)
+// player combines it with course.myItemCompletions for what it shows right away.
+export const myLessonProgress = courseProcedure
+  .input(MyLessonProgressInputSchema)
+  .output(MyLessonProgressOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const userId = ctx.user.sub;

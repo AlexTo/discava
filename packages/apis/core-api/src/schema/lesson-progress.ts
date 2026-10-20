@@ -4,11 +4,13 @@
  */
 import { z } from 'zod';
 
-export const MyProgressInputSchema = z.object({
+export const MyLessonProgressInputSchema = z.object({
   courseId: z.string(),
 });
 
-export type IMyProgressInput = z.output<typeof MyProgressInputSchema>;
+export type IMyLessonProgressInput = z.output<
+  typeof MyLessonProgressInputSchema
+>;
 
 export const LessonProgressSchema = z.object({
   lessonId: z.string(),
@@ -21,8 +23,10 @@ export type ILessonProgress = z.output<typeof LessonProgressSchema>;
 // The caller's progress in each lesson that has any, as progress
 // recalculation last wrote it. A lesson without a record hasn't been started.
 // The course-level rollup is on the enrolment (course.myEnrolment).
-export const MyProgressOutputSchema = z.object({
+export const MyLessonProgressOutputSchema = z.object({
   lessons: z.array(LessonProgressSchema),
 });
 
-export type IMyProgressOutput = z.output<typeof MyProgressOutputSchema>;
+export type IMyLessonProgressOutput = z.output<
+  typeof MyLessonProgressOutputSchema
+>;
