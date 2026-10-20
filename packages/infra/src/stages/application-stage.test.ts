@@ -143,9 +143,9 @@ describe("discava-development's limits", () => {
     }
   });
 
-  it('lets people sign themselves up', () => {
+  it('only lets an admin create users', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
-      AdminCreateUserConfig: { AllowAdminCreateUserOnly: false },
+      AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
     });
   });
 });

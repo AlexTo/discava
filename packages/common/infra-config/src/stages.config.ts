@@ -47,6 +47,8 @@ export default {
           //   function, and a page fires several queries at once, so not
           //   lower than 10.
           // - The table's maximum throughput caps DynamoDB.
+          // - Self sign-up is off, so a bot can't create an account to reach
+          //   the signed-in methods; add testers in the Cognito console.
           infra: {
             identity: {
               enableWaf: false,
