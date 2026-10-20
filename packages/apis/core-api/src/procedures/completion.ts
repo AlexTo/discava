@@ -34,9 +34,9 @@ const asCompletion = (record: IItemCompletion): IItemCompletion => ({
   completedAt: record.completedAt,
 });
 
-// Records that the caller has completed a content item, once. The client
-// decides when a text or video item is done (scrolled past, watched to near
-// the end); core-api decides whether it counts. One transaction checks that:
+// Records that the caller has completed a content item, once. A text or video
+// item is done when the student presses Mark as done in the lesson player;
+// core-api decides whether it counts. One transaction checks that:
 // - the course is still published (an archived course is read-only),
 // - the module, lesson and item are still visible and not archived,
 // - the student is still enrolled,

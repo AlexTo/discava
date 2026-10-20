@@ -4,10 +4,10 @@
  */
 import { createFileRoute } from '@tanstack/react-router';
 import { requireSignIn } from '../../../lib/require-sign-in';
-import { CourseContent } from './-components/course-content';
+import { CourseHome } from './-components/course-home';
 
-// A course's own home, where its lessons are. Still the mock player until the
-// lesson player uses real content (#148 item 7c).
+// A course's own home for an enrolled student: its outline, and where to
+// pick up.
 export const Route = createFileRoute('/learn/$courseId/home')({
   beforeLoad: requireSignIn,
   component: RouteComponent,
@@ -15,5 +15,5 @@ export const Route = createFileRoute('/learn/$courseId/home')({
 
 function RouteComponent() {
   const { courseId } = Route.useParams();
-  return <CourseContent courseCode={courseId} />;
+  return <CourseHome courseId={courseId} />;
 }

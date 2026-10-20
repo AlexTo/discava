@@ -753,6 +753,9 @@ importers:
       embla-carousel-react:
         specifier: 'catalog:'
         version: 8.6.0(react@19.3.0)
+      hls.js:
+        specifier: 'catalog:'
+        version: 1.7.3
       katex:
         specifier: 'catalog:'
         version: 0.18.10
@@ -1019,9 +1022,6 @@ importers:
       event-source-polyfill:
         specifier: 'catalog:'
         version: 1.0.31
-      hls.js:
-        specifier: 'catalog:'
-        version: 1.7.3
       katex:
         specifier: 'catalog:'
         version: 0.18.10

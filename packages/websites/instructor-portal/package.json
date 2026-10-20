@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@discava/common-shadcn": "workspace:*",
+    "@discava/common-tiptap": "workspace:*",
     "@discava/core-api": "workspace:*",
     "@discava/instructor-api": "workspace:*",
     "@dnd-kit/dom": "catalog:",
@@ -19,7 +20,6 @@
     "@trpc/client": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "event-source-polyfill": "catalog:",
-    "hls.js": "catalog:",
     "katex": "catalog:",
     "lucide-react": "catalog:",
     "oidc-client-ts": "catalog:",
@@ -29,8 +29,7 @@
     "react-oidc-context": "catalog:",
     "recharts": "catalog:",
     "tailwindcss": "catalog:",
-    "zod": "catalog:",
-    "@discava/common-tiptap": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",

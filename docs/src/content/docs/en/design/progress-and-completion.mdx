@@ -27,13 +27,15 @@ core-api writes `itemCompletion` records and quiz attempts. It never writes `pro
 
 | Item type | Complete when |
 |---|---|
-| Text | Scrolled past, or marked done |
-| Video | Watched to near the end |
+| Text | The student presses **Mark as done** |
+| Video | The student presses **Mark as done** |
 | Quiz | Passed, or all attempts used |
+
+Text and video never complete on their own: there is no scroll or watch-time tracking. The student decides when they're done with an item, as on most learning platforms.
 
 ### Recording a completion
 
-- **Text and video:** the browser decides when the item is done and calls core-api's `contentItem.complete`; core-api decides whether it counts. One transaction checks that the course is published, that the item, its lesson and its module are visible and not archived, and that the student is enrolled (not `dropped`). It then creates the `itemCompletion` only if there isn't one.
+- **Text and video:** **Mark as done** in the lesson player calls core-api's `contentItem.complete`; core-api decides whether it counts. One transaction checks that the course is published, that the item, its lesson and its module are visible and not archived, and that the student is enrolled (not `dropped`). It then creates the `itemCompletion` only if there isn't one.
   - The completion is the student's first record of the item, so the same transaction increments the item's `studentActivityCount`. Each student is counted once (see <Link path="design/live-course-editing">Live course editing</Link>).
   - Completing again returns the existing completion. An archived course is read-only, so nothing in it can be completed.
 - **Quiz:** completes itself. The attempt that passes, or that uses the last attempt, records the completion in the same transaction as the attempt (see <Link path="design/quizzes">Quizzes</Link>). It doesn't count the student again: their first attempt did.
