@@ -17,10 +17,20 @@ export * from './logger.js';
 export * from './metrics.js';
 export * from './tracer.js';
 
+export interface IResponseCookiesContext {
+  /**
+   * Set-Cookie values a procedure wants on the response, emitted by the
+   * handler's responseMeta. Kept out of procedure output so values meant to
+   * be HttpOnly never reach the client's JS.
+   */
+  responseCookies?: string[];
+}
+
 export type IMiddlewareContext =
   CreateAWSLambdaContextOptions<APIGatewayProxyEvent> &
     IAuthContext &
     ICoreTableContext &
     ILoggerContext &
     IMetricsContext &
-    ITracerContext;
+    ITracerContext &
+    IResponseCookiesContext;

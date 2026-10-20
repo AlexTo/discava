@@ -10,6 +10,8 @@
     "@aws-lambda-powertools/tracer": "catalog:",
     "@aws-sdk/client-appconfigdata": "catalog:",
     "@aws-sdk/client-dynamodb": "catalog:",
+    "@aws-sdk/client-secrets-manager": "catalog:",
+    "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/credential-providers": "catalog:",
     "@discava/core-table": "workspace:*",
     "@trpc/client": "catalog:",

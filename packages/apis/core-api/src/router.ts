@@ -4,6 +4,7 @@
  */
 import { t } from './init.js';
 import { completeContentItem, myCompletions } from './procedures/completion.js';
+import { videoUrl } from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -12,6 +13,7 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
+import { myProgress } from './procedures/progress.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -25,6 +27,7 @@ export const appRouter = router({
     enrol,
     myCompletions,
     myEnrolment,
+    myProgress,
     listByInstructor: listCoursesByInstructor,
     listInstructors: listInstructorsForCourse,
     publicList: publicListCourses,
@@ -33,6 +36,7 @@ export const appRouter = router({
   }),
   contentItem: router({
     complete: completeContentItem,
+    videoUrl,
   }),
   quiz: router({
     view: viewQuiz,

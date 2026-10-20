@@ -41,7 +41,7 @@ const methodSettings = (template: Template) =>
   );
 
 const API_FUNCTIONS = {
-  CoreApi: ['CoreApiRouterHandler'],
+  CoreApi: ['CoreApiRouterHandler', 'CoreApiVideoUrlHandler'],
   InstructorApi: [
     'InstructorApiRouterHandler',
     'InstructorApiVideoUrlHandler',
@@ -147,6 +147,32 @@ describe("discava-development's limits", () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
     });
+  });
+});
+
+describe("core-api's functions", () => {
+  const template = synth({})('CoreApi');
+
+  it('give only the video URL function the CloudFront signing key', () => {
+    const roles = Object.values(
+      template.findResources('AWS::IAM::Policy'),
+    ).flatMap((resource) => {
+      const { PolicyDocument, Roles } = (
+        resource as {
+          Properties: {
+            PolicyDocument: { Statement: { Action: string | string[] }[] };
+            Roles: { Ref: string }[];
+          };
+        }
+      ).Properties;
+      const readsSecrets = PolicyDocument.Statement.some((statement) =>
+        [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
+      );
+      return readsSecrets ? Roles.map((role) => role.Ref) : [];
+    });
+
+    expect(roles).toHaveLength(1);
+    expect(roles[0]).toMatch(/^CoreApiVideoUrlHandlerServiceRole/);
   });
 });
 

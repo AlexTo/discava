@@ -54,7 +54,7 @@ Everything else (`compile`, `bundle`, `synth`, `checkov`, `dev`, `serve`) is a p
 
 ## Architecture
 
-- `packages/apis/core-api`: tRPC API (`@discava/core-api`), one Lambda behind API Gateway, for procedures any authenticated user can call
+- `packages/apis/core-api`: tRPC API (`@discava/core-api`) behind API Gateway, for procedures any authenticated user can call: one shared router Lambda, plus dedicated functions for procedures needing more than the table (`CORE_API_DEDICATED_FUNCTIONS`, e.g. `contentItem.videoUrl` holding the CloudFront signing key)
 - `packages/apis/instructor-api`: separate tRPC API (`@discava/instructor-api`), separate Lambda/API Gateway, for procedures only instructors may call (e.g. creating/archiving courses); same Cognito user pool as `core-api`
 - `packages/databases/core-table`: single-table DynamoDB access via ElectroDB; `client.ts` resolves table/client so entities work identically against local (Docker) and deployed DynamoDB
 - `packages/common/scripts`: deploy/destroy and local-DynamoDB (Docker) tooling invoked by Nx targets
