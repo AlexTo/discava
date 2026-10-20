@@ -13,8 +13,6 @@
     "@aws-sdk/client-mediaconvert": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
-    "@aws-sdk/client-secrets-manager": "catalog:",
-    "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/core-table": "workspace:*",
@@ -26,7 +24,8 @@
     "tslib": "^2.3.0",
     "uuid": "catalog:",
     "zod": "catalog:",
-    "@discava/common-tiptap": "workspace:*"
+    "@discava/common-tiptap": "workspace:*",
+    "@discava/common-server-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",

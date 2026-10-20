@@ -84,6 +84,7 @@ export class ApplicationStage extends Stage {
       coreApi,
       identity: data.identity,
       coreTable: data.coreTable,
+      lessonMediaBucket: data.lessonMediaBucket,
       portals: [
         websites.studentPortal,
         websites.instructorPortal,

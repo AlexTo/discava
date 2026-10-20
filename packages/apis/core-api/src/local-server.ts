@@ -13,7 +13,7 @@ const PORT = 2022;
 
 createHTTPServer({
   router: appRouter,
-  middleware: cors(),
+  middleware: cors({ origin: true, credentials: true }),
   createContext({ req }: CreateHTTPContextOptions) {
     return {
       event: {
@@ -21,8 +21,15 @@ createHTTPServer({
       } as any,
       context: {} as any,
       info: {} as any,
+      responseCookies: [] as string[],
     };
   },
+  // Browsers reject these cookies' Domain from a localhost response, so video
+  // playback doesn't work against this server (see #137).
+  responseMeta: ({ ctx }) =>
+    ctx?.responseCookies?.length
+      ? { headers: { 'set-cookie': ctx.responseCookies } }
+      : {},
 }).listen(PORT);
 
 console.log(`Local TRPC server listening on port ${PORT}`);

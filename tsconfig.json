@@ -41,6 +41,9 @@
     },
     {
       "path": "./packages/common/tiptap"
+    },
+    {
+      "path": "./packages/common/server-utils"
     }
   ]
 }

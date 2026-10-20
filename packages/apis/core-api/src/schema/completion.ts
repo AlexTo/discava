@@ -28,16 +28,20 @@ export type ICompleteContentItemInput = z.output<
 
 export const CompleteContentItemOutputSchema = ItemCompletionSchema;
 
-export const MyCompletionsInputSchema = z.object({
+export const MyItemCompletionsInputSchema = z.object({
   courseId: z.string(),
 });
 
-export type IMyCompletionsInput = z.output<typeof MyCompletionsInputSchema>;
+export type IMyItemCompletionsInput = z.output<
+  typeof MyItemCompletionsInputSchema
+>;
 
 // Every item the caller has completed in the course, including ones since
 // hidden or archived: which still count is decided from the curriculum.
-export const MyCompletionsOutputSchema = z.object({
+export const MyItemCompletionsOutputSchema = z.object({
   items: z.array(ItemCompletionSchema),
 });
 
-export type IMyCompletionsOutput = z.output<typeof MyCompletionsOutputSchema>;
+export type IMyItemCompletionsOutput = z.output<
+  typeof MyItemCompletionsOutputSchema
+>;

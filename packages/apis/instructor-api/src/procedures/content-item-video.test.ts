@@ -124,10 +124,10 @@ vi.mock('../lib/s3-client.js', () => ({
 }));
 
 // getSignedCloudFrontCookies/getCloudFrontVideoUrl's own config-resolution/
-// signing behavior is covered directly in lib/cloudfront-client.test.ts;
+// signing behavior is covered directly in @discava/common-server-utils's lesson-media.test.ts;
 // here they're just mocks so these tests can assert createContentItemVideoUrl
 // calls them correctly.
-vi.mock('../lib/cloudfront-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getSignedCloudFrontCookies,
   getCloudFrontVideoUrl,
 }));

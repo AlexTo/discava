@@ -60,6 +60,33 @@
   "overrides": [
     {
       "includes": [
+        "packages/websites/**",
+        "packages/common/shadcn/**",
+        "packages/common/tiptap/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@discava/common-server-utils",
+                      "@discava/common-server-utils/*"
+                    ],
+                    "message": "Server-only: it runs in the backend Lambdas, not in the browser."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
         "**/*.config.{ts,mts,cts,js,mjs,cjs}",
         "**/*.{spec,test}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
         "**/*.stories.{ts,tsx}"

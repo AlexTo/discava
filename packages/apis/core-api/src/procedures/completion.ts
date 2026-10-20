@@ -15,8 +15,8 @@ import {
   CompleteContentItemOutputSchema,
   type IItemCompletion,
   type IQuizSettings,
-  MyCompletionsInputSchema,
-  MyCompletionsOutputSchema,
+  MyItemCompletionsInputSchema,
+  MyItemCompletionsOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
 import { attemptsRemain } from './quiz.js';
@@ -204,9 +204,9 @@ export const completeContentItem = courseProcedure
 // Every item the caller has completed in a course, so the lesson player can
 // mark them done. Completions of items since hidden or archived are included;
 // the player shows only what course.view lists.
-export const myCompletions = courseProcedure
-  .input(MyCompletionsInputSchema)
-  .output(MyCompletionsOutputSchema)
+export const myItemCompletions = courseProcedure
+  .input(MyItemCompletionsInputSchema)
+  .output(MyItemCompletionsOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const userId = ctx.user.sub;

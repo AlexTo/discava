@@ -8,6 +8,7 @@ import {
   CoreTable,
   EventsProgressRecalculation,
   InstructorPortal,
+  LessonMediaBucket,
   RuntimeConfig,
   StudentPortal,
   suppressRules,
@@ -36,11 +37,17 @@ import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { apiLimits, publicThrottle } from './api-limits.js';
 
+type CoreApiIntegrations = ReturnType<
+  ReturnType<typeof CoreApi.defaultIntegrations>['build']
+>;
+
 export interface CoreApiStackProps extends StackProps {
   /** Settings for the core API construct. @default all enabled */
   readonly coreApi?: CoreApiComponentConfig;
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
+  /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
+  readonly lessonMediaBucket: LessonMediaBucket;
   /** Every portal calls core-api, so all three are allowed CORS origins. */
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
@@ -51,9 +58,7 @@ export interface CoreApiStackProps extends StackProps {
  * enrolment progress.
  */
 export class CoreApiStack extends Stack {
-  public readonly coreApi: CoreApi<
-    ReturnType<ReturnType<typeof CoreApi.defaultIntegrations>['build']>
-  >;
+  public readonly coreApi: CoreApi<CoreApiIntegrations>;
 
   constructor(
     scope: Construct,
@@ -62,6 +67,7 @@ export class CoreApiStack extends Stack {
       coreApi: coreApiConfig,
       identity,
       coreTable,
+      lessonMediaBucket,
       portals,
       ...props
     }: CoreApiStackProps,
@@ -113,6 +119,9 @@ export class CoreApiStack extends Stack {
     Object.values(integrations).forEach(({ handler }) =>
       coreTable.grantReadWriteData(handler),
     );
+    lessonMediaBucket.grantReadSigningKey(
+      this.privilegedHandler(integrations, 'contentItem.videoUrl'),
+    );
 
     this.coreApi.restrictCorsTo(
       ...portals,
@@ -125,6 +134,22 @@ export class CoreApiStack extends Stack {
     );
 
     this.createProgressRecalculationLambda(coreTable);
+  }
+
+  // Every grant beyond the baseline (table + AppConfig) goes through this,
+  // so a procedure missing from CORE_API_DEDICATED_FUNCTIONS fails synth
+  // instead of silently handing its permissions to the shared router function
+  // that serves every other core-api procedure.
+  private privilegedHandler(
+    integrations: CoreApiIntegrations,
+    op: keyof CoreApiIntegrations,
+  ) {
+    if (!CoreApi.hasDedicatedFunction(op)) {
+      throw new Error(
+        `core-api operation '${op}' is served by the shared router; add it to CORE_API_DEDICATED_FUNCTIONS before granting it extra permissions`,
+      );
+    }
+    return integrations[op].handler;
   }
 
   // The single writer of lesson progress and of the enrolment's

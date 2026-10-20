@@ -52,6 +52,22 @@ type Operations = Procedures<AppRouter>;
 const PUBLIC: ReadonlySet<Operations> = new Set<Operations>(PUBLIC_OPERATIONS);
 
 /**
+ * Operations served by a dedicated function instead of the shared router,
+ * keyed by function name. The infra stack grants these functions the
+ * permissions their procedures need beyond the table, which keeps those
+ * permissions off the router that serves every other procedure.
+ */
+export const CORE_API_DEDICATED_FUNCTIONS = {
+  // Core-api's only holder of the CloudFront signing key
+  VideoUrl: ['contentItem.videoUrl'],
+} as const satisfies Record<string, readonly Operations[]>;
+
+const functionNameFor = (op: Operations | '$router'): string =>
+  Object.entries(CORE_API_DEDICATED_FUNCTIONS).find(([, ops]) =>
+    (ops as readonly string[]).includes(op),
+  )?.[0] ?? 'Router';
+
+/**
  * Properties for creating a CoreApi construct
  *
  * @template TIntegrations - Map of operation names to their integrations
@@ -140,10 +156,19 @@ export class CoreApi<
   private allowedOrigins: readonly string[] = ['*'];
 
   /**
-   * Creates default integrations for all operations, all served by a single
-   * shared lambda function. Each operation still gets its own integration
-   * entry, so per-operation method options (e.g. the public operations' auth)
-   * keep working.
+   * Whether `op` is served by a function of its own (see
+   * CORE_API_DEDICATED_FUNCTIONS) rather than the shared router function.
+   */
+  public static hasDedicatedFunction(op: string): boolean {
+    return functionNameFor(op as Operations) !== 'Router';
+  }
+
+  /**
+   * Creates default integrations for all operations. Operations listed in
+   * CORE_API_DEDICATED_FUNCTIONS are served by their group's function; every
+   * other operation shares a single router function. Each operation still
+   * gets its own integration entry, so per-operation method options (e.g. the
+   * public operations' auth) and grants keep working.
    *
    * @param scope - The CDK construct scope
    * @param functionOptions - The stage's timeout, reserved concurrency, log
@@ -155,7 +180,7 @@ export class CoreApi<
     functionOptions?: ApiFunctionOptions,
   ) => {
     const rc = RuntimeConfig.ensure(scope);
-    let handler: Function | undefined;
+    const handlers = new Map<string, Function>();
     return IntegrationBuilder.rest({
       pattern: 'isolated',
       operations: routerToOperations(appRouter),
@@ -176,16 +201,19 @@ export class CoreApi<
         ...apiFunctionProps(functionOptions),
       } as FunctionProps,
       buildDefaultIntegration: (op, props: FunctionProps) => {
-        // Every core-api procedure needs the same permissions, so they share
-        // one function: fewer cold starts and resources, at no cost to least
-        // privilege. The bundle is the whole tRPC router either way.
+        // Procedures needing only the table share one function: fewer cold
+        // starts and resources, at no cost to least privilege. The bundle is
+        // the whole tRPC router either way.
+        const functionName = functionNameFor(op);
+        let handler = handlers.get(functionName);
         if (!handler) {
-          handler = new Function(scope, 'CoreApiRouterHandler', props);
+          handler = new Function(scope, `CoreApi${functionName}Handler`, props);
           handler.addEnvironment(
             'RUNTIME_CONFIG_APP_ID',
             rc.appConfigApplicationId,
           );
           rc.grantReadAppConfig(handler);
+          handlers.set(functionName, handler);
         }
         return {
           handler,

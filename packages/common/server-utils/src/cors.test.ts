@@ -16,7 +16,7 @@ describe('getAllowedOrigin', () => {
 
   it('returns a matching allowlisted origin exactly', () => {
     process.env.ALLOWED_ORIGINS =
-      'https://instructor.example.com,https://d123.cloudfront.net';
+      'https://portal.example.com,https://d123.cloudfront.net';
 
     expect(getAllowedOrigin(eventFrom('https://d123.cloudfront.net'))).toBe(
       'https://d123.cloudfront.net',
@@ -24,10 +24,10 @@ describe('getAllowedOrigin', () => {
   });
 
   it('falls back to the first allowlisted origin for an unlisted one', () => {
-    process.env.ALLOWED_ORIGINS = 'https://instructor.example.com';
+    process.env.ALLOWED_ORIGINS = 'https://portal.example.com';
 
     expect(getAllowedOrigin(eventFrom('https://evil.example.net'))).toBe(
-      'https://instructor.example.com',
+      'https://portal.example.com',
     );
   });
 
@@ -35,7 +35,7 @@ describe('getAllowedOrigin', () => {
   it.each(['http://localhost:4200', 'http://127.0.0.1:4300'])(
     'returns a localhost origin (%s) exactly',
     (origin) => {
-      process.env.ALLOWED_ORIGINS = 'https://instructor.example.com';
+      process.env.ALLOWED_ORIGINS = 'https://portal.example.com';
 
       expect(getAllowedOrigin(eventFrom(origin))).toBe(origin);
     },
@@ -44,7 +44,7 @@ describe('getAllowedOrigin', () => {
   it.each(['null', 'not a url', '://missing-scheme'])(
     'grants nothing for an opaque or malformed origin (%s) instead of throwing',
     (origin) => {
-      process.env.ALLOWED_ORIGINS = 'https://instructor.example.com';
+      process.env.ALLOWED_ORIGINS = 'https://portal.example.com';
 
       expect(getAllowedOrigin(eventFrom(origin))).toBeUndefined();
     },
@@ -52,7 +52,7 @@ describe('getAllowedOrigin', () => {
 
   it('never returns a wildcard when no allowlist is configured', () => {
     expect(
-      getAllowedOrigin(eventFrom('https://instructor.example.com')),
+      getAllowedOrigin(eventFrom('https://portal.example.com')),
     ).toBeUndefined();
     expect(getAllowedOrigin(eventFrom())).toBeUndefined();
   });
