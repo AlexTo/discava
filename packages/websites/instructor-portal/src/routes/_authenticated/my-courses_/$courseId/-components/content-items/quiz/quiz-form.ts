@@ -103,14 +103,22 @@ export const newQuiz = (): QuizState => ({
   questions: [newQuestion()],
 });
 
-// The plain text in a Tiptap document, to tell an empty one from one with words.
+// The plain text in a Tiptap document, to tell an empty one from one with
+// words, and to summarise it. A formula (inlineMath/blockMath) has no text
+// node: its LaTeX source, in `attrs.latex`, stands in for it, so a prompt or
+// explanation that's only a formula still counts as written.
 export const plainText = (doc: string): string => {
   const walk = (node: unknown): string => {
     if (!node || typeof node !== 'object') {
       return '';
     }
-    const { text, content } = node as { text?: string; content?: unknown[] };
-    return (text ?? '') + (content ?? []).map(walk).join(' ');
+    const { text, attrs, content } = node as {
+      text?: string;
+      attrs?: { latex?: unknown };
+      content?: unknown[];
+    };
+    const latex = typeof attrs?.latex === 'string' ? attrs.latex : '';
+    return `${text ?? ''}${latex} ${(content ?? []).map(walk).join(' ')}`;
   };
   try {
     return walk(JSON.parse(doc)).replace(/\s+/g, ' ').trim();

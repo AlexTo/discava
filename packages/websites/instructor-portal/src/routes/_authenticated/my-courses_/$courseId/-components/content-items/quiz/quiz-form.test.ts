@@ -223,4 +223,49 @@ describe('plainText', () => {
     expect(plainText(EMPTY_DOC)).toBe('');
     expect(plainText('not json')).toBe('');
   });
+
+  it('reads formulas as their LaTeX, in place', () => {
+    expect(
+      plainText(
+        JSON.stringify({
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'Solve' },
+                { type: 'inlineMath', attrs: { latex: '2x + 3 = 7' } },
+                { type: 'text', text: 'for x.' },
+              ],
+            },
+            { type: 'blockMath', attrs: { latex: 'x = 2' } },
+          ],
+        }),
+      ),
+    ).toBe('Solve 2x + 3 = 7 for x. x = 2');
+  });
+});
+
+describe('a prompt or explanation that is only a formula', () => {
+  const formula = (latex: string) =>
+    JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'blockMath', attrs: { latex } }],
+    });
+
+  it('counts as a written question', () => {
+    expect(
+      validateQuiz(
+        quiz({ questions: [question({ prompt: formula('2 + 2') })] }),
+      ).questions,
+    ).toEqual({});
+  });
+
+  it('keeps its explanation when saved', () => {
+    const explanation = formula('2 + 2 = 4');
+    expect(
+      toQuizInput(quiz({ questions: [question({ explanation })] })).answerKey
+        .q1,
+    ).toEqual({ correctOptionIds: ['b'], explanation });
+  });
 });
