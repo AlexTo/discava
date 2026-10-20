@@ -12,8 +12,11 @@ import { useEffect, useRef } from 'react';
  * core-api's contentItem.videoUrl), so every request for the manifest,
  * renditions and segments sends credentials.
  *
- * controlsList and onContextMenu only deter casual downloading through the
- * browser's own UI, not a determined user (see #107).
+ * `nodownload` and the blocked context menu only deter casual downloading
+ * through the browser's own UI, not a determined user. `noremoteplayback`
+ * hides casting (Chromecast, AirPlay): the receiving device would fetch the
+ * stream itself, without the viewer's signed cookies, and fail.
+ * Picture-in-picture stays available, for watching while taking notes.
  */
 export function HlsVideo({
   url,
@@ -62,7 +65,6 @@ export function HlsVideo({
       data-slot="hls-video"
       controls
       controlsList="nodownload noremoteplayback"
-      disablePictureInPicture
       onContextMenu={(event) => event.preventDefault()}
       aria-label={title}
       className={className}
