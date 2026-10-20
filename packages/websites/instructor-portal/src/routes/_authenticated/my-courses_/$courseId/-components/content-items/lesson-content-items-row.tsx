@@ -4,27 +4,12 @@
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
-import { Accessibility, defaultPreset } from '@dnd-kit/dom';
-import { move } from '@dnd-kit/helpers';
-import {
-  DragDropProvider,
-  type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
-} from '@dnd-kit/react';
-import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  FileText,
-  GripVertical,
-  ListChecks,
-  PencilLine,
-  Video,
-} from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
+import { FileText, ListChecks, PencilLine, Video } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 import { HiddenBadge } from '../hidden-badge';
+import { DragHandle, SortableList } from '../sortable-list';
 import { ContentItemVisibilityButton } from '../visibility-buttons';
 import {
   AttachLessonVideoDialog,
@@ -36,7 +21,7 @@ import {
 } from './edit-lesson-text-dialog';
 import { QuizBuilderDialog } from './quiz/quiz-builder-dialog';
 
-type ContentItem = {
+export type ContentItem = {
   contentItemId: string;
   type: string;
   title: string;
@@ -51,49 +36,6 @@ type ContentItem = {
 
 const ROW_CLASS =
   'group/resource flex items-center gap-2 border-l px-3 py-2 transition-colors hover:bg-muted/50';
-
-// One draggable row. The grip is the handle, so the row's own buttons keep
-// working; it can also be picked up with the keyboard (Space or Enter, then the
-// arrow keys, then Space or Enter to drop, Escape to cancel).
-function SortableContentItem({
-  id,
-  index,
-  title,
-  disabled,
-  children,
-}: {
-  id: string;
-  index: number;
-  title: string;
-  disabled: boolean;
-  children: (handle: ReactNode) => ReactNode;
-}) {
-  const { ref, handleRef, isDragging } = useSortable({ id, index, disabled });
-
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        ROW_CLASS,
-        isDragging && 'relative z-10 bg-background shadow-md',
-      )}
-    >
-      {children(
-        <Button
-          ref={handleRef}
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Reorder ${title}`}
-          disabled={disabled}
-          className="-ml-1 cursor-grab touch-none text-muted-foreground hover:bg-transparent hover:text-foreground active:cursor-grabbing"
-        >
-          <GripVertical className="size-3.5" />
-        </Button>,
-      )}
-    </div>
-  );
-}
 
 export function LessonContentItemsRow({
   courseId,
@@ -118,94 +60,11 @@ export function LessonContentItemsRow({
   const { course, contentItem } = useInstructorApi();
   const queryClient = useQueryClient();
   const reorder = useMutation(contentItem.reorder.mutationOptions());
-  const [reorderError, setReorderError] = useState<string>();
-  // dnd-kit moves the rows' DOM nodes itself while an item is dragged, so
-  // when a save fails, putting the old order back in state isn't enough:
-  // React still believes the nodes are where it last put them. Bumping this
-  // key rebuilds the list from state instead.
-  const [listKey, setListKey] = useState(0);
-
-  // The order shown, which moves as soon as an item is dropped and follows the
-  // course view whenever that changes.
-  const ids = contentItems.map(({ contentItemId }) => contentItemId);
-  const idsKey = ids.join(',');
-  const [order, setOrder] = useState(ids);
-  useEffect(() => setOrder(ids), [idsKey]);
-  const byId = useMemo(
-    () => new Map(contentItems.map((item) => [item.contentItemId, item])),
-    [contentItems],
-  );
-  const items = order.flatMap((id) => byId.get(id) ?? []);
-
-  // The announcements read the latest titles and order through a ref, so the
-  // plugin list below can stay the same object across renders: the provider
-  // reconfigures its plugins whenever that list changes, which would rebuild
-  // the screen reader plugin mid-drag.
-  const latest = useRef({ order, byId });
-  latest.current = { order, byId };
-  const plugins = useMemo(() => {
-    type Source = DragStartEvent['operation']['source'];
-    const titleOf = (source: Source) =>
-      latest.current.byId.get(String(source?.id))?.title ?? 'item';
-    const count = () => latest.current.order.length;
-    // Where the dragged item sits (1-based), now or when the drag started.
-    const positionOf = (source: Source, initial = false) =>
-      isSortable(source)
-        ? (initial ? source.initialIndex : source.index) + 1
-        : undefined;
-    // What a screen reader hears, using titles rather than ids.
-    return [
-      ...defaultPreset.plugins.filter((plugin) => plugin !== Accessibility),
-      Accessibility.configure({
-        announcements: {
-          dragstart: ({ operation: { source } }: DragStartEvent) =>
-            `Picked up ${titleOf(source)}, position ${positionOf(source)} of ${count()}.`,
-          dragover: ({ operation: { source } }: DragOverEvent) =>
-            `${titleOf(source)} moved to position ${positionOf(source)} of ${count()}.`,
-          dragend: ({ operation: { source }, canceled }: DragEndEvent) =>
-            canceled
-              ? `Moving ${titleOf(source)} was cancelled. It is back at position ${positionOf(source, true)} of ${count()}.`
-              : `${titleOf(source)} dropped at position ${positionOf(source)} of ${count()}.`,
-        },
-      }),
-    ];
-  }, []);
 
   const refreshCourse = () =>
     queryClient.invalidateQueries({
       queryKey: course.view.queryKey({ courseId }),
     });
-
-  // Saves the whole new order in one call. On failure the order snaps back and
-  // the course reloads; a CONFLICT means the lesson changed under the editor.
-  const onDragEnd = (event: DragEndEvent) => {
-    if (event.canceled) {
-      return;
-    }
-    const previous = order;
-    const next = move(order, event);
-    if (next.join(',') === previous.join(',')) {
-      return;
-    }
-    setOrder(next);
-    reorder.mutate(
-      { courseId, moduleId, lessonId, contentItemIds: next },
-      {
-        onError: (error) => {
-          setOrder(previous);
-          setListKey((key) => key + 1);
-          setReorderError(
-            error.data?.code === 'CONFLICT'
-              ? 'This lesson changed while you were reordering it. It has been reloaded, so try again.'
-              : error.message,
-          );
-        },
-        onSettled: () => {
-          void refreshCourse();
-        },
-      },
-    );
-  };
 
   // The row's own content, beside its drag handle.
   const renderItem = (item: ContentItem, handle: ReactNode) =>
@@ -380,39 +239,43 @@ export function LessonContentItemsRow({
 
   return (
     <div className="bg-muted/15 pb-3 pl-12 pr-4 sm:pl-24 sm:pr-5">
-      {readOnly || items.length < 2 ? (
-        items.map((item) => (
-          <div key={item.contentItemId} className={ROW_CLASS}>
-            {renderItem(item, null)}
+      <SortableList
+        items={contentItems}
+        getId={(item) => item.contentItemId}
+        getTitle={(item) => item.title}
+        sortable={!readOnly}
+        // The course reloads either way; a CONFLICT means the lesson changed
+        // under the editor.
+        save={(contentItemIds) =>
+          reorder
+            .mutateAsync({ courseId, moduleId, lessonId, contentItemIds })
+            .finally(() => void refreshCourse())
+        }
+        errorHeader="Couldn't reorder the content"
+        conflictMessage="This lesson changed while you were reordering it. It has been reloaded, so try again."
+        errorClassName="border-l px-3 pt-2"
+        renderItem={(item, _index, row) => (
+          <div
+            ref={row?.ref}
+            className={cn(
+              ROW_CLASS,
+              row?.isDragging && 'relative z-10 bg-background shadow-md',
+            )}
+          >
+            {renderItem(
+              item,
+              row && (
+                <DragHandle
+                  row={row}
+                  title={item.title}
+                  size="xs"
+                  className="-ml-1"
+                />
+              ),
+            )}
           </div>
-        ))
-      ) : (
-        <DragDropProvider
-          key={listKey}
-          plugins={plugins}
-          onDragStart={() => setReorderError(undefined)}
-          onDragEnd={onDragEnd}
-        >
-          {items.map((item, index) => (
-            <SortableContentItem
-              key={item.contentItemId}
-              id={item.contentItemId}
-              index={index}
-              title={item.title}
-              disabled={reorder.isPending}
-            >
-              {(handle) => renderItem(item, handle)}
-            </SortableContentItem>
-          ))}
-        </DragDropProvider>
-      )}
-      {reorderError && (
-        <div className="border-l px-3 pt-2">
-          <Alert type="error" header="Couldn't reorder the content">
-            {reorderError}
-          </Alert>
-        </div>
-      )}
+        )}
+      />
       {!readOnly && (
         <div className="flex flex-wrap gap-2 border-l px-3 pt-2">
           <AttachLessonVideoDialog

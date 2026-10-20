@@ -37,7 +37,6 @@ export const UpdateModuleInputSchema = z.object({
   moduleId: z.string(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
-  order: z.number().optional(),
 });
 
 export type IUpdateModuleInput = z.output<typeof UpdateModuleInputSchema>;
@@ -97,3 +96,15 @@ export const DeleteModulePermanentlyOutputSchema = ModuleSchema;
 export type IDeleteModulePermanentlyOutput = z.output<
   typeof DeleteModulePermanentlyOutputSchema
 >;
+
+export const ReorderModulesInputSchema = z.object({
+  courseId: z.string(),
+  moduleIds: z.array(z.string()).min(1),
+});
+
+export type IReorderModulesInput = z.output<typeof ReorderModulesInputSchema>;
+
+// The course's modules that aren't archived, in their new order.
+export const ReorderModulesOutputSchema = z.array(ModuleSchema);
+
+export type IReorderModulesOutput = z.output<typeof ReorderModulesOutputSchema>;
