@@ -8,6 +8,7 @@ import {
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
+  StudentPortal,
   suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
@@ -30,8 +31,10 @@ export interface DataStackProps extends StackProps {
   readonly coreTable?: CoreTableComponentConfig;
   /** Settings for the lesson media S3 bucket construct. @default all enabled */
   readonly lessonMedia?: LessonMediaComponentConfig;
-  /** The only origin (besides local dev) allowed to call the lesson media buckets. */
+  /** Uploads and previews lesson media: allowed by both media buckets' CORS. */
   readonly instructorPortal: InstructorPortal;
+  /** Plays lesson videos: allowed by the lesson media bucket's CORS only. */
+  readonly studentPortal: StudentPortal;
 }
 
 /**
@@ -53,6 +56,7 @@ export class DataStack extends Stack {
       coreTable: coreTableConfig,
       lessonMedia: lessonMediaConfig,
       instructorPortal,
+      studentPortal,
       ...props
     }: DataStackProps,
   ) {
@@ -64,16 +68,23 @@ export class DataStack extends Stack {
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
 
-    for (const bucket of [
-      this.lessonMediaBucket,
-      this.lessonMediaUploadBucket,
-    ]) {
-      bucket.restrictCorsTo(
-        instructorPortal,
-        'http://localhost:4200',
-        'http://localhost:4300',
-      );
-    }
+    // hls.js fetches a video's manifest, renditions and segments with
+    // cross-origin requests, so both portals that play lesson videos must be
+    // allowed. Only instructors upload, so the upload bucket allows them
+    // alone.
+    this.lessonMediaBucket.restrictCorsTo(
+      instructorPortal,
+      studentPortal,
+      'http://localhost:4200',
+      'http://localhost:4300',
+      'http://localhost:4201',
+      'http://localhost:4301',
+    );
+    this.lessonMediaUploadBucket.restrictCorsTo(
+      instructorPortal,
+      'http://localhost:4200',
+      'http://localhost:4300',
+    );
   }
 
   private createIdentity(identityConfig?: IdentityComponentConfig) {
