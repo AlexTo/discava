@@ -49,15 +49,15 @@ vi.mock('@dnd-kit/react/sortable', async () => {
 });
 
 // The event dnd-kit sends when `id` is dropped at position `to` (0-based),
-// over the row that was there.
-const drop = (id: string, from: number, to: number, overId: string) =>
+// over the row that was there, or over nothing (released past the last row).
+const drop = (id: string, from: number, to: number, overId: string | null) =>
   act(() => {
     dnd.onDragEndById.get(id)?.({
       canceled: false,
       operation: {
         canceled: false,
         source: { id, initialIndex: from, index: to },
-        target: { id: overId },
+        target: overId === null ? null : { id: overId },
       },
     });
   });
@@ -174,6 +174,25 @@ describe('CourseModules', () => {
       }),
     );
     expect(calls.some(({ path }) => path === 'module.reorder')).toBe(false);
+  });
+
+  // dnd-kit has already moved the row on screen; the drop still counts.
+  it('saves a drop released over no row, where dnd-kit sorted it to', async () => {
+    const { calls } = renderModules({}, { 'lesson.reorder': () => [] });
+
+    await drop('l1', 0, 2, null);
+
+    expect(lessonTitles()).toEqual(['Lesson A2', 'Lesson A3', 'Lesson A1']);
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        path: 'lesson.reorder',
+        input: {
+          courseId: COURSE_ID,
+          moduleId: 'm1',
+          lessonIds: ['l2', 'l3', 'l1'],
+        },
+      }),
+    );
   });
 
   it('on CONFLICT reordering modules, puts the order back, says the course changed and reloads it', async () => {

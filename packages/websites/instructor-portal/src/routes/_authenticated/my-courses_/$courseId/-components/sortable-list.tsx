@@ -81,6 +81,21 @@ export function DragHandle({
   );
 }
 
+// The order once a row is dropped: the dragged row at the position it was
+// sorted to. dnd-kit has already moved it there on screen while dragging, and
+// the drop can end with no target (released just past the last row, say), in
+// which case move() would leave the order as it was and nothing would be saved.
+export const droppedOrder = (order: string[], event: DragEndEvent) => {
+  const { source } = event.operation;
+  if (!isSortable(source)) {
+    return move(order, event);
+  }
+  const id = String(source.id);
+  const next = order.filter((other) => other !== id);
+  next.splice(source.index, 0, id);
+  return next;
+};
+
 const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | undefined)?.data?.code;
 
@@ -171,7 +186,7 @@ export function SortableList<T>({
       return;
     }
     const previous = order;
-    const next = move(order, event);
+    const next = droppedOrder(order, event);
     if (next.join(',') === previous.join(',')) {
       return;
     }
