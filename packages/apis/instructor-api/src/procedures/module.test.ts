@@ -351,19 +351,17 @@ describe('updateModule', () => {
     expect(modulePatchSet).toHaveBeenCalledWith({ title: 'Updated title' });
   });
 
-  it('patches title, description, and order together when all are provided', async () => {
+  it('patches title and description together when both are provided', async () => {
     await callAs().updateModule({
       courseId: COURSE_ID,
       moduleId: module.moduleId,
       title: 'Updated title',
       description: 'Updated description',
-      order: 2,
     });
 
     expect(modulePatchSet).toHaveBeenCalledWith({
       title: 'Updated title',
       description: 'Updated description',
-      order: 2,
     });
   });
 

@@ -153,10 +153,10 @@ Instructors edit through instructor-api's `course.view`, which returns the whole
 |---|---|---|---|
 | **Add module** | Nothing until published. Publishing also publishes its hidden lessons and items, so it appears all at once | Once published, `progressPercent` drops for everyone. Completed lessons and courses stay completed | All enrolled students, on publish |
 | **Remove module** | Archived: gone from the outline on next load. A student on one of its pages gets "This lesson has been removed by your instructor" | Kept (completions, attempts, best scores), no longer counted. A student who had finished everything else becomes `completed`. Restorable, and then it all counts again | All enrolled students |
-| **Edit module** (title, description, order) | Applies immediately | No effect | No one |
+| **Edit module** (title, description) | Applies immediately | No effect | No one |
 | **Add lesson** | Nothing until published (together with its hidden items) | As for adding a module | All enrolled students, on publish |
 | **Remove lesson** | As for removing a module | As for removing a module | All enrolled students |
-| **Edit lesson** (title, description, order) | Applies immediately | No effect | No one |
+| **Edit lesson** (title, description) | Applies immediately | No effect | No one |
 | **Add content item** | Nothing until published, and only once its lesson and module are published too | Once published, `progressPercent` drops. If its lesson was already completed, the lesson stays completed and the item shows as **New** | All enrolled students, on publish |
 | **Remove content item** | Archived: disappears on next load. Submitting a quiz in it or marking it complete is rejected with "no longer available" | Kept, not counted. If it was a student's only unfinished item, the lesson (and possibly the course) becomes completed. Restorable | All enrolled students |
 | **Edit content item**: title, description, text body | Applies immediately | Completion kept | No one |
@@ -177,19 +177,29 @@ The one case this can't tell apart is a record hidden before it was ever publish
 
 Hiding is not cascaded: it changes only the record itself, and its children keep their own `visibility`. Students stop seeing the children anyway, since a record is only shown under visible ancestors.
 
-## Reordering content items
+## Reordering
 
-A lesson's content items are sorted by their `order`. Reordering is an edit like any other, so it follows the archive rules: it's refused in an archived course, module or lesson ("Restore the course (module, lesson) first"). It applies to every content item type alike, a quiz as much as a video or text item.
+Modules are sorted within their course, lessons within their module and content items within their lesson, each by its `order`. Each level has one way to change it, `module.reorder`, `lesson.reorder` and `contentItem.reorder`; `module.update` and `lesson.update` don't take an `order`. In the instructor portal, each row's grip is a drag handle (mouse, touch or keyboard); there are no handles in an archived course, or where there's only one record to order.
 
-`contentItem.reorder` takes the ids of **every content item in the lesson that isn't archived**, in the order they should appear, and writes every `order` (1, 2, 3, ...) in one transaction, so a single drag is one atomic change.
+Reordering is an edit like any other, so it follows the archive rules: it's refused in an archived course, and under an archived module or lesson ("Restore the course (module, lesson) first"). It applies to every content item type alike, a quiz as much as a video or text item. Moving a lesson to another module, or a content item to another lesson, isn't supported: their keys include their parent's id.
 
-- The list has to match the lesson exactly. If it misses an item, includes one that was archived or removed, or includes an unknown id, the request returns `CONFLICT` and writes nothing: the editor was working from an out-of-date list, so it reloads and tries again. An id that appears twice is a `BAD_REQUEST`.
-- Each item is conditioned on still not being archived, in the same transaction as the checks on the course, module and lesson, so an item archived while the request runs cancels the whole reorder.
-- Archived items aren't part of the list. They keep the `order` they had.
-- Repeating an order the lesson already has writes nothing.
-- The transaction holds at most 100 records and three of them are the checks, so a lesson of more than 97 content items is refused with `PRECONDITION_FAILED`, as with the other lesson-wide operations.
-- A content item added at the same moment as a reorder lands after the reordered ones, and the editor shows it once it reloads.
-- A restored item goes to the end of its lesson (see [Restoring](#restoring)), so it never shares an `order` with another item.
+Each procedure takes the ids of **every record in the parent that isn't archived**, in the order they should appear, and writes every `order` (1, 2, 3, ...) in one transaction, so a single drag is one atomic change.
+
+- The list has to match the parent exactly. If it misses a record, includes one that was archived or removed, or includes an unknown id, the request returns `CONFLICT` and writes nothing: the editor was working from an out-of-date list, so it reloads and tries again. An id that appears twice is a `BAD_REQUEST`.
+- Each record is conditioned on still not being archived, in the same transaction as the checks on its ancestors, so a record archived while the request runs cancels the whole reorder, as does an ancestor archived at that moment.
+- Archived records aren't part of the list. They keep the `order` they had.
+- Repeating an order the parent already has writes nothing.
+- The transaction holds at most 100 records, including the checks on the ancestors, so the limits are:
+
+  | Procedure | Checks | Most records |
+  |---|---|---|
+  | `module.reorder` | course | 99 modules in a course |
+  | `lesson.reorder` | course, module | 98 lessons in a module |
+  | `contentItem.reorder` | course, module, lesson | 97 content items in a lesson |
+
+  A larger parent is refused with `PRECONDITION_FAILED`, as with the other parent-wide operations.
+- A record added at the same moment as a reorder lands after the reordered ones, and the editor shows it once it reloads.
+- A restored record goes to the end of its parent (see [Restoring](#restoring)), so it never shares an `order` with another record.
 
 ## Removing (archiving)
 

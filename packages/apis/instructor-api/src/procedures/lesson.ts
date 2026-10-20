@@ -39,6 +39,8 @@ import {
   HideLessonOutputSchema,
   PublishLessonInputSchema,
   PublishLessonOutputSchema,
+  ReorderLessonsInputSchema,
+  ReorderLessonsOutputSchema,
   RestoreLessonInputSchema,
   RestoreLessonOutputSchema,
   UpdateLessonInputSchema,
@@ -268,7 +270,7 @@ export const updateLesson = courseProcedure
   .output(UpdateLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
-    const { courseId, moduleId, lessonId, title, description, order } = input;
+    const { courseId, moduleId, lessonId, title, description } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, {
@@ -292,7 +294,6 @@ export const updateLesson = courseProcedure
           .set({
             ...(title !== undefined && { title }),
             ...(description !== undefined && { description }),
-            ...(order !== undefined && { order }),
           })
           .where((attr, op) => op.notExists(attr.archivedAt))
           .commit(),
@@ -584,4 +585,91 @@ export const deleteLessonPermanently = courseProcedure
     );
 
     return existing;
+  });
+
+const moduleLessonsChanged = () =>
+  new TRPCError({
+    code: 'CONFLICT',
+    message:
+      "The module's lessons changed while you were reordering them; reload and try again",
+  });
+
+// Puts the module's lessons in the given order, writing every `order` in one
+// transaction behind the checks on the course and module, so it follows the
+// same archive rules as any other edit: nothing is reordered in an archived
+// course or module. Archived lessons keep the `order` they had and aren't part
+// of the list. Lessons stay in their module: moving one to another module
+// isn't supported.
+//
+// The list has to be exactly the module's lessons that aren't archived, so a
+// client that missed a lesson added, archived or removed in the meantime gets
+// `CONFLICT` and reloads rather than overwriting what it never saw. Repeating
+// an order the module already has writes nothing.
+export const reorderLessons = courseProcedure
+  .input(ReorderLessonsInputSchema)
+  .output(ReorderLessonsOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable!;
+    const { courseId, moduleId, lessonIds } = input;
+
+    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+    await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
+
+    if (new Set(lessonIds).size !== lessonIds.length) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'A lesson can only appear once in the new order',
+      });
+    }
+
+    // Every page, so no lesson is missed.
+    const readLessons = async () => {
+      const { data } = await coreTable.entities.lesson.query
+        .primary({ courseId, moduleId })
+        .go({ pages: 'all' });
+      return data.filter((lesson) => !lesson.archivedAt);
+    };
+    const lessons = await readLessons();
+    const byId = new Map(lessons.map((lesson) => [lesson.lessonId, lesson]));
+    if (
+      byId.size !== lessonIds.length ||
+      lessonIds.some((id) => !byId.has(id))
+    ) {
+      throw moduleLessonsChanged();
+    }
+
+    // The transaction also carries the checks on the course and module.
+    if (2 + lessonIds.length > MAX_TRANSACTION_ITEMS) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: `This module has too many lessons to reorder in one operation (the limit is ${MAX_TRANSACTION_ITEMS - 2}).`,
+      });
+    }
+
+    const unchanged = lessonIds.every(
+      (id, index) => byId.get(id)?.order === index + 1,
+    );
+    if (!unchanged) {
+      // Each lesson is conditioned on still not being archived, so one
+      // archived after the read above is never moved: the whole reorder is
+      // refused.
+      await writeUnderActiveAncestors(
+        coreTable,
+        { courseId, moduleId },
+        (entities) =>
+          lessonIds.map((lessonId, index) =>
+            entities.lesson
+              .patch({ courseId, moduleId, lessonId })
+              .set({ order: index + 1 })
+              .where((attr, op) => op.notExists(attr.archivedAt))
+              .commit(),
+          ),
+        () => {
+          throw moduleLessonsChanged();
+        },
+      );
+    }
+
+    // Transactions don't return the written attributes.
+    return (await readLessons()).sort((a, b) => a.order - b.order);
   });
