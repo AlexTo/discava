@@ -7,6 +7,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/packages/infra',
+  // Workspace packages have no package.json `main`/`exports`; resolve them
+  // through the tsconfig path aliases, as tsx does for `cdk synth`.
+  resolve: { tsconfigPaths: true },
   test: {
     globalSetup: ['./tests/global-setup.ts'],
     passWithNoTests: true,

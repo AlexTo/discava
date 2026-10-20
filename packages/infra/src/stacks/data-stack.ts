@@ -81,6 +81,7 @@ export class DataStack extends Stack {
       enableWaf: identityConfig?.enableWaf ?? true,
       mfa: (identityConfig?.enableMfa ?? true) ? Mfa.REQUIRED : Mfa.OFF,
       deletionProtection: identityConfig?.enableDeletionProtection ?? true,
+      selfSignUpEnabled: identityConfig?.enableSelfSignUp ?? true,
       removalPolicy:
         (identityConfig?.retainOnDelete ?? true)
           ? RemovalPolicy.RETAIN
@@ -124,6 +125,8 @@ export class DataStack extends Stack {
         : TableEncryption.DEFAULT,
       enableKeyRotation: coreTableConfig?.enableKeyRotation ?? true,
       deletionProtection: coreTableConfig?.enableDeletionProtection ?? true,
+      maxReadRequestUnits: coreTableConfig?.maxReadRequestUnits,
+      maxWriteRequestUnits: coreTableConfig?.maxWriteRequestUnits,
       removalPolicy:
         (coreTableConfig?.retainOnDelete ?? true)
           ? RemovalPolicy.RETAIN

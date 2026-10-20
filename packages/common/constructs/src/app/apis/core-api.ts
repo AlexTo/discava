@@ -9,6 +9,7 @@ import {
   CognitoUserPoolsAuthorizer,
   LambdaIntegration,
   ResponseTransferMode,
+  type ThrottleSettings,
 } from 'aws-cdk-lib/aws-apigateway';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
@@ -28,6 +29,10 @@ import {
 } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as url from 'url';
+import {
+  type ApiFunctionOptions,
+  apiFunctionProps,
+} from '../../core/api/function-options.js';
 import { AddCorsPreflightAspect, RestApi } from '../../core/api/rest-api.js';
 import { Procedures, routerToOperations } from '../../core/api/trpc-utils.js';
 import {
@@ -100,6 +105,28 @@ export interface CoreApiProps<
    * ACM certificate for the custom domain name. Must be in the same region as the API.
    */
   certificate?: ICertificate;
+  /**
+   * Requests per second (and burst) API Gateway lets through to each method
+   * (it throttles every method separately); above it callers get 429 before
+   * any Lambda runs.
+   *
+   * @default RestApi's default
+   */
+  throttle?: ThrottleSettings;
+  /**
+   * Trace requests through the API Gateway stage with AWS X-Ray.
+   *
+   * @default true
+   */
+  enableTracing?: boolean;
+  /**
+   * Requests per second (and burst) API Gateway lets through to each
+   * operation callable without signing in (PUBLIC_OPERATIONS), tighter than
+   * `throttle` since they're the only ones open to anyone.
+   *
+   * @default `throttle`
+   */
+  publicThrottle?: ThrottleSettings;
 }
 
 /**
@@ -119,9 +146,14 @@ export class CoreApi<
    * keep working.
    *
    * @param scope - The CDK construct scope
+   * @param functionOptions - The stage's timeout, reserved concurrency, log
+   *   level and tracing for the API's functions
    * @returns An IntegrationBuilder with default lambda integrations
    */
-  public static defaultIntegrations = (scope: Construct) => {
+  public static defaultIntegrations = (
+    scope: Construct,
+    functionOptions?: ApiFunctionOptions,
+  ) => {
     const rc = RuntimeConfig.ensure(scope);
     let handler: Function | undefined;
     return IntegrationBuilder.rest({
@@ -141,6 +173,7 @@ export class CoreApi<
         memorySize: 256,
         timeout: Duration.seconds(30),
         tracing: Tracing.ACTIVE,
+        ...apiFunctionProps(functionOptions),
       } as FunctionProps,
       buildDefaultIntegration: (op, props: FunctionProps) => {
         // Every core-api procedure needs the same permissions, so they share
@@ -175,8 +208,15 @@ export class CoreApi<
   constructor(
     scope: Construct,
     id: string,
-    { domainName, certificate, ...props }: CoreApiProps<TIntegrations>,
+    {
+      domainName,
+      certificate,
+      enableTracing = true,
+      publicThrottle,
+      ...props
+    }: CoreApiProps<TIntegrations>,
   ) {
+    const operations = routerToOperations(appRouter);
     super(scope, id, {
       apiName: 'CoreApi',
       ...(domainName && certificate
@@ -192,7 +232,20 @@ export class CoreApi<
         authorizationScopes: ['openid', 'aws.cognito.signin.user.admin'],
       },
       deployOptions: {
-        tracingEnabled: true,
+        tracingEnabled: enableTracing,
+        // Stage method settings for the public operations, on top of the
+        // default (/*/*) that RestApi sets from `throttle`.
+        ...(publicThrottle && {
+          methodOptions: Object.fromEntries(
+            [...PUBLIC].map((op) => [
+              `/${op}/${operations[op].method}`,
+              {
+                throttlingRateLimit: publicThrottle.rateLimit,
+                throttlingBurstLimit: publicThrottle.burstLimit,
+              },
+            ]),
+          ),
+        }),
       },
       policy: new PolicyDocument({
         statements: [
@@ -205,7 +258,7 @@ export class CoreApi<
           }),
         ],
       }),
-      operations: routerToOperations(appRouter),
+      operations,
       ...props,
     });
     Aspects.of(this).add(new AddCorsPreflightAspect(() => this.allowedOrigins));

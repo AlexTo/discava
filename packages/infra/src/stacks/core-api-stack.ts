@@ -34,6 +34,7 @@ import {
 } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import { apiLimits, publicThrottle } from './api-limits.js';
 
 export interface CoreApiStackProps extends StackProps {
   /** Settings for the core API construct. @default all enabled */
@@ -68,7 +69,11 @@ export class CoreApiStack extends Stack {
     super(scope, id, props);
 
     const coreApiKmsEnabled = coreApiConfig?.enableKmsEncryption ?? true;
-    const integrations = CoreApi.defaultIntegrations(this).build();
+    const limits = apiLimits(coreApiConfig);
+    const integrations = CoreApi.defaultIntegrations(
+      this,
+      limits.functionOptions,
+    ).build();
     const coreApiCertificate = coreApiConfig?.certificateArn
       ? Certificate.fromCertificateArn(
           this,
@@ -81,6 +86,9 @@ export class CoreApiStack extends Stack {
       integrations,
       identity,
       enableWaf: coreApiConfig?.enableWaf ?? true,
+      throttle: limits.throttle,
+      publicThrottle: publicThrottle(coreApiConfig),
+      enableTracing: limits.enableTracing,
       enableKmsEncryption: coreApiKmsEnabled,
       enableKeyRotation: coreApiConfig?.enableKeyRotation ?? true,
       removalPolicy:

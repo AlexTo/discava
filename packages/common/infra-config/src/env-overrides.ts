@@ -4,7 +4,9 @@
  */
 import type { StageComponents, StageConfig } from './stages.types.js';
 
-type FieldKind = 'boolean' | 'string' | 'string[]';
+type FieldKind = 'boolean' | 'string' | 'string[]' | 'number' | 'logLevel';
+
+const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
 
 /**
  * Every env-var-overridable field, keyed by component then field name.
@@ -27,6 +29,7 @@ const COMPONENT_FIELDS: Record<
     enableMfa: 'boolean',
     enableDeletionProtection: 'boolean',
     retainOnDelete: 'boolean',
+    enableSelfSignUp: 'boolean',
   },
   coreApi: {
     enableWaf: 'boolean',
@@ -35,6 +38,14 @@ const COMPONENT_FIELDS: Record<
     domainName: 'string',
     certificateArn: 'string',
     retainOnDelete: 'boolean',
+    throttleRateLimit: 'number',
+    throttleBurstLimit: 'number',
+    reservedConcurrency: 'number',
+    timeoutSeconds: 'number',
+    logLevel: 'logLevel',
+    enableTracing: 'boolean',
+    publicThrottleRateLimit: 'number',
+    publicThrottleBurstLimit: 'number',
   },
   instructorApi: {
     enableWaf: 'boolean',
@@ -43,12 +54,20 @@ const COMPONENT_FIELDS: Record<
     domainName: 'string',
     certificateArn: 'string',
     retainOnDelete: 'boolean',
+    throttleRateLimit: 'number',
+    throttleBurstLimit: 'number',
+    reservedConcurrency: 'number',
+    timeoutSeconds: 'number',
+    logLevel: 'logLevel',
+    enableTracing: 'boolean',
   },
   coreTable: {
     enableKmsEncryption: 'boolean',
     enableKeyRotation: 'boolean',
     enableDeletionProtection: 'boolean',
     retainOnDelete: 'boolean',
+    maxReadRequestUnits: 'number',
+    maxWriteRequestUnits: 'number',
   },
   studentPortal: {
     enableWaf: 'boolean',
@@ -104,7 +123,7 @@ function parseEnvValue(
   raw: string,
   kind: FieldKind,
   envKey: string,
-): boolean | string | string[] {
+): boolean | string | string[] | number {
   switch (kind) {
     case 'boolean':
       if (raw !== 'true' && raw !== 'false') {
@@ -120,6 +139,23 @@ function parseEnvValue(
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
+    case 'number': {
+      // A whole, non-negative number: every numeric setting is a count or a
+      // rate, so anything else is a typo that should fail the deploy.
+      if (!/^\d+$/.test(raw.trim())) {
+        throw new Error(
+          `Invalid value for ${envKey}: expected a whole number, got "${raw}"`,
+        );
+      }
+      return Number(raw.trim());
+    }
+    case 'logLevel':
+      if (!LOG_LEVELS.includes(raw)) {
+        throw new Error(
+          `Invalid value for ${envKey}: expected one of ${LOG_LEVELS.join(', ')}, got "${raw}"`,
+        );
+      }
+      return raw;
   }
 }
 
@@ -149,11 +185,13 @@ export function applyEnvOverrides(
   // at the end instead.
   const components: Record<
     string,
-    Record<string, boolean | string | string[]>
+    Record<string, boolean | string | string[] | number>
   > = { ...base.infra };
   for (const [component, fields] of Object.entries(COMPONENT_FIELDS)) {
     const componentSegment = toEnvSegment(component);
-    let overrides: Record<string, boolean | string | string[]> | undefined;
+    let overrides:
+      | Record<string, boolean | string | string[] | number>
+      | undefined;
     for (const [field, kind] of Object.entries(fields)) {
       const envKey = `${stageSegment}_${INFRA_SEGMENT}_${componentSegment}_${toEnvSegment(field)}`;
       const raw = process.env[envKey];

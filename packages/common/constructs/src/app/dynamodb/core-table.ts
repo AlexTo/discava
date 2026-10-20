@@ -54,6 +54,14 @@ export class CoreTable extends DynamoDBTable {
           sortKey: { name: gsi.sortKey, type: AttributeType.STRING },
         }),
         projectionType: ProjectionType.ALL,
+        // The table's on-demand maximums apply to each index too, so a
+        // capped table can't be read without limit through an index.
+        ...(props?.maxReadRequestUnits !== undefined && {
+          maxReadRequestUnits: props.maxReadRequestUnits,
+        }),
+        ...(props?.maxWriteRequestUnits !== undefined && {
+          maxWriteRequestUnits: props.maxWriteRequestUnits,
+        }),
       });
     }
   }

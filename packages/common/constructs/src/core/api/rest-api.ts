@@ -305,6 +305,14 @@ export class RestApi<
       'Caching not required for this use case',
       (c) => c instanceof Stage,
     );
+    if (props.deployOptions?.tracingEnabled === false) {
+      suppressRules(
+        this.api,
+        ['CKV_AWS_73'],
+        "X-Ray tracing turned off by this stage's config",
+        (c) => c instanceof Stage,
+      );
+    }
 
     // Resolve the integration for a given operation.
     // If the operation has a dedicated integration, use it; otherwise fall back to $router.
