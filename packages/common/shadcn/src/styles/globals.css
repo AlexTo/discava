@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 @source '../**/*.{ts,tsx}';
 
 @import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -131,7 +132,8 @@ SPDX-License-Identifier: Apache-2.0
 /*
 Formulas in rich text (@discava/common-tiptap's Mathematics extension), in
 the editor and when shown read-only. KaTeX's own stylesheet
-(katex/dist/katex.min.css) is imported by each portal that renders maths.
+(katex/dist/katex.min.css) is imported by the components that render maths:
+RichTextView and the editor's maths popover.
 */
 @layer components {
   [data-type='block-math'] {

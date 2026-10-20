@@ -105,6 +105,9 @@ catalogs:
     '@strands-agents/sdk':
       specifier: 1.20.0
       version: 1.20.0
+    '@tailwindcss/typography':
+      specifier: 0.5.20
+      version: 0.5.20
     '@tailwindcss/vite':
       specifier: 4.3.3
       version: 4.3.3
@@ -157,6 +160,9 @@ catalogs:
       specifier: 3.31.3
       version: 3.31.3
     '@tiptap/starter-kit':
+      specifier: 3.31.3
+      version: 3.31.3
+    '@tiptap/static-renderer':
       specifier: 3.31.3
       version: 3.31.3
     '@trpc/client':
@@ -695,6 +701,21 @@ importers:
 
   packages/common/shadcn:
     dependencies:
+      '@discava/common-tiptap':
+        specifier: workspace:*
+        version: link:../tiptap
+      '@tailwindcss/typography':
+        specifier: 'catalog:'
+        version: 0.5.20
+      '@tiptap/core':
+        specifier: 'catalog:'
+        version: 3.31.3(@tiptap/pm@3.31.3)
+      '@tiptap/pm':
+        specifier: 'catalog:'
+        version: 3.31.3
+      '@tiptap/static-renderer':
+        specifier: 'catalog:'
+        version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.0.5(vitest@5.0.5)
@@ -707,6 +728,9 @@ importers:
       embla-carousel-react:
         specifier: 'catalog:'
         version: 8.6.0(react@19.3.0)
+      katex:
+        specifier: 'catalog:'
+        version: 0.18.10
       lucide-react:
         specifier: 'catalog:'
         version: 1.56.0(@types/react@19.3.0)(react@19.3.0)
@@ -734,6 +758,13 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.4)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(jsdom@29.1.1)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.4.2)(tsx@4.23.15)(yaml@2.9.1))
+    devDependencies:
+      '@testing-library/dom':
+        specifier: 'catalog:'
+        version: 10.4.2
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
 
   packages/common/tiptap:
     dependencies:
@@ -4512,6 +4543,11 @@ packages:
     resolution: {integrity: sha512-krXjAikiaFSPaK/FkAQT5UTx3VormQaiZ5hBFlJZ9UFQGB/rwg1MZIhHAG9smMQRTdyJxP6Qt5MwMtdyU5FWrA==}
     engines: {node: '>= 20'}
 
+  '@tailwindcss/typography@0.5.20':
+    resolution: {integrity: sha512-hwbzQuNUfcPvbegQFatVPl/MY/tcM9KLl963hQ5laJKPh81TEZ1+dNG9PirGvcaDBkp+BCshExAyKVPW91dozw==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0 || >=4.0.0 || insiders'
+
   '@tailwindcss/vite@4.3.3':
     resolution: {integrity: sha512-yYU8cogLeSh/ms2jh8Fj7jaba/EWa7Ja6GoUqYZaraEuCI5YS6ms6ObZgjjedm+jm6XZjdNRWBpPP6Z86oOxcw==}
     peerDependencies:
@@ -4827,6 +4863,14 @@ packages:
 
   '@tiptap/starter-kit@3.31.3':
     resolution: {integrity: sha512-WKof9RewdmGHvWJ1wn0/HVNG2mV+HOgVRyJkKekuM9fgr6BZAAH/xZsWE1eon+94JnQ+KtK2ThydXQM/qc6b2A==}
+
+  '@tiptap/static-renderer@3.31.3':
+    resolution: {integrity: sha512-TzbN/aSTQBhGZL94aaEnfbwZw/gIiQd8/q3TucTYuzdbsrsZNfBMg7CCA9W9dOg4vlKxCTLRVas21ivsrUm7og==}
+    peerDependencies:
+      '@tiptap/core': 3.31.3
+      '@tiptap/pm': 3.31.3
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^17.0.0 || ^18.0.0 || ^19.0.0
 
   '@trpc/client@11.19.0':
     resolution: {integrity: sha512-0MKkPq6MejsKB5Opca1Rl22KVIaqo2+A1EiXyZ8EGUsl9TLrPdpGn+Usux20TZKFwnSC2+wI/WilqNJaP4ODfw==}
@@ -7680,6 +7724,10 @@ packages:
     engines: {node: '>=12.0'}
     peerDependencies:
       postcss: ^8.2.14
+
+  postcss-selector-parser@6.0.10:
+    resolution: {integrity: sha512-IQ7TZdoaqbT+LCpShg46jnZVlhWD2w6iQYAcYXfHARZ7X1t/UGhhceQDs5X0cGqKvYlHNOuv7Oa1xmb0oQuA3w==}
+    engines: {node: '>=4'}
 
   postcss-selector-parser@6.1.4:
     resolution: {integrity: sha512-bIoJLOmjCO1S9XdY/DcnR5hJxvrDir1PbGChrzXG3vw0/FOliy/fA3dmdhQ441kah4gKv+TwckGzex6wNS5cnQ==}
@@ -13048,6 +13096,10 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
+  '@tailwindcss/typography@0.5.20':
+    dependencies:
+      postcss-selector-parser: 6.0.10
+
   '@tailwindcss/vite@4.3.3(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.4.2)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@tailwindcss/node': 4.3.3
@@ -13421,6 +13473,13 @@ snapshots:
       '@tiptap/extension-underline': 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))
       '@tiptap/extensions': 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
       '@tiptap/pm': 3.31.3
+
+  '@tiptap/static-renderer@3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+    dependencies:
+      '@tiptap/core': 3.31.3(@tiptap/pm@3.31.3)
+      '@tiptap/pm': 3.31.3
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
 
   '@trpc/client@11.19.0(@trpc/server@11.19.0(typescript@6.0.3))(typescript@6.0.3)':
     dependencies:
@@ -16826,6 +16885,11 @@ snapshots:
     dependencies:
       postcss: 8.5.30
       postcss-selector-parser: 6.1.4
+
+  postcss-selector-parser@6.0.10:
+    dependencies:
+      cssesc: 3.0.0
+      util-deprecate: 1.0.2
 
   postcss-selector-parser@6.1.4:
     dependencies:

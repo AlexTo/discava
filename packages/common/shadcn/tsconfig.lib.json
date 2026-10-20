@@ -6,7 +6,8 @@
     "tsBuildInfoFile": "../../../dist/packages/common/shadcn/tsc/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
     "jsx": "react-jsx",
     "module": "preserve",
@@ -19,7 +20,11 @@
     "src/**/*.ts",
     "src/**/*.tsx"
   ],
-  "references": [],
+  "references": [
+    {
+      "path": "../tiptap/tsconfig.lib.json"
+    }
+  ],
   "exclude": [
     "vite.config.ts",
     "vite.config.mts",

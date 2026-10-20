@@ -4,10 +4,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@discava/common-tiptap": "workspace:*",
+    "@tailwindcss/typography": "catalog:",
+    "@tiptap/core": "catalog:",
+    "@tiptap/pm": "catalog:",
+    "@tiptap/static-renderer": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "class-variance-authority": "catalog:",
     "cn": "catalog:",
     "embla-carousel-react": "catalog:",
+    "katex": "catalog:",
     "lucide-react": "catalog:",
     "radix-ui": "catalog:",
     "react": "catalog:",
@@ -31,5 +37,8 @@
     "./lib/*": "./src/lib/*.ts",
     "./hooks/*": "./src/hooks/*.ts"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@testing-library/dom": "catalog:",
+    "@testing-library/react": "catalog:"
+  }
 }
