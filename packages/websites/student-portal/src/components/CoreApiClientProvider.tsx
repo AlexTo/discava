@@ -55,6 +55,12 @@ export const CoreApiClientProvider: FC<PropsWithChildren> = ({ children }) => {
             headers: {
               Authorization: `Bearer ${user?.access_token}`,
             },
+            // contentItem.videoUrl sets CloudFront signed cookies on the
+            // API's parent domain for HLS playback; without `credentials:
+            // 'include'` the browser ignores a cross-origin response's
+            // Set-Cookie.
+            fetch: (url, options) =>
+              fetch(url, { ...options, credentials: 'include' }),
           }),
         }),
       ],

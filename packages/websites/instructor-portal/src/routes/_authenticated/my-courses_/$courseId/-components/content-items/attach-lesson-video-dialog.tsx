@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -28,9 +29,8 @@ import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Hls from 'hls.js';
 import { Trash2, Upload } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Alert } from '../../../../../../components/alert';
 import { Spinner } from '../../../../../../components/spinner';
@@ -75,58 +75,6 @@ const putFileWithProgress = (
     xhr.onerror = () => reject(new Error('Failed to upload the video file'));
     xhr.send(file);
   });
-
-// controlsList/onContextMenu only deter casual downloading via the
-// browser's built-in UI, not a determined user (see #107).
-function HlsVideoPlayer({
-  url,
-  className,
-}: {
-  url: string;
-  className?: string;
-}) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
-    // Only 'probably' reliably means native HLS support -- Chromium
-    // returns 'maybe' here too despite not being able to play it.
-    if (video.canPlayType('application/vnd.apple.mpegurl') === 'probably') {
-      video.src = url;
-      return;
-    }
-
-    if (!Hls.isSupported()) {
-      return;
-    }
-
-    // Auth is via CloudFront signed cookies (set on instructor-api's own
-    // domain), so hls.js's own cross-origin requests need to send them too.
-    const hls = new Hls({
-      xhrSetup: (xhr) => {
-        xhr.withCredentials = true;
-      },
-    });
-    hls.loadSource(url);
-    hls.attachMedia(video);
-    return () => hls.destroy();
-  }, [url]);
-
-  return (
-    <video
-      ref={videoRef}
-      controls
-      controlsList="nodownload noremoteplayback"
-      disablePictureInPicture
-      onContextMenu={(event) => event.preventDefault()}
-      className={className}
-    />
-  );
-}
 
 export function AttachLessonVideoDialog({
   courseId,
@@ -370,10 +318,7 @@ export function AttachLessonVideoDialog({
             </div>
           ) : (
             video && (
-              <HlsVideoPlayer
-                url={video.url}
-                className="w-full rounded-lg border"
-              />
+              <HlsVideo url={video.url} className="w-full rounded-lg border" />
             )
           ))}
 
