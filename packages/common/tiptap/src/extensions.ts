@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Extensions } from '@tiptap/core';
-import Mathematics from '@tiptap/extension-mathematics';
+import { BlockMath, InlineMath } from '@tiptap/extension-mathematics';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 
@@ -18,15 +18,18 @@ export interface ContentExtensionsOptions {
 // student portal's renderer and instructor-api's validation all build on it,
 // so what can be written is exactly what can be stored and shown.
 //
-// Mathematics adds two nodes holding LaTeX, rendered with KaTeX:
+// The Mathematics extension's two nodes hold LaTeX, rendered with KaTeX:
 // `inlineMath` inside text and `blockMath` on its own line, each with a
-// `latex` attribute. Invalid LaTeX is shown as its source, not thrown.
+// `latex` attribute. Invalid LaTeX is shown as its source, not thrown. They're
+// configured one by one rather than through Mathematics, whose single
+// katexOptions would render block formulas in KaTeX's inline style.
 export const createContentExtensions = ({
   onMathClick,
 }: ContentExtensionsOptions = {}): Extensions => [
   StarterKit,
-  Mathematics.configure({
-    inlineOptions: onMathClick ? { onClick: onMathClick } : {},
-    blockOptions: onMathClick ? { onClick: onMathClick } : {},
+  BlockMath.configure({
+    katexOptions: { displayMode: true },
+    ...(onMathClick && { onClick: onMathClick }),
   }),
+  InlineMath.configure({ ...(onMathClick && { onClick: onMathClick }) }),
 ];
