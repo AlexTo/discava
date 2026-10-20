@@ -2,12 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   awsLambdaStreamingRequestHandler,
   CreateAWSLambdaContextOptions,
 } from '@trpc/server/adapters/aws-lambda';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { getAllowedOrigin } from './lib/cors.js';
 import { appRouter } from './router.js';
 
 export const handler = awslambda.streamifyResponse(

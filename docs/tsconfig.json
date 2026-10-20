@@ -57,6 +57,9 @@
       ],
       "@discava/common-tiptap": [
         "../packages/common/tiptap/src/index.ts"
+      ],
+      "@discava/common-server-utils/*": [
+        "../packages/common/server-utils/src/*.ts"
       ]
     }
   }

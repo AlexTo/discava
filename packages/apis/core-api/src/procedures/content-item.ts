@@ -2,13 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { isShown } from '@discava/core-table';
-import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
+
 import {
   getCloudFrontVideoUrl,
   getSignedCloudFrontCookies,
-} from '../lib/cloudfront-client.js';
+} from '@discava/common-server-utils/lesson-media';
+import { isShown } from '@discava/core-table';
+import { TRPCError } from '@trpc/server';
+import { courseProcedure } from '../init.js';
 import { VideoUrlInputSchema, VideoUrlOutputSchema } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
 

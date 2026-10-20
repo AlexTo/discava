@@ -37,7 +37,7 @@ const PRIVATE_KEY_PEM =
 // the first successful resolution into later tests.
 const importFreshModule = async () => {
   vi.resetModules();
-  return import('./cloudfront-client.js');
+  return import('./lesson-media.js');
 };
 
 const PREFIX_KEY =

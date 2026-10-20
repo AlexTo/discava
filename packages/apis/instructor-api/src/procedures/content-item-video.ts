@@ -6,14 +6,14 @@ import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import {
+  getCloudFrontVideoUrl,
+  getSignedCloudFrontCookies,
+} from '@discava/common-server-utils/lesson-media';
 import { isConditionalCheckFailed } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
-import {
-  getCloudFrontVideoUrl,
-  getSignedCloudFrontCookies,
-} from '../lib/cloudfront-client.js';
 import {
   getCourseOrThrow,
   initialVisibilityFields,

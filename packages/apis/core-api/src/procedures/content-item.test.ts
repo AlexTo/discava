@@ -31,7 +31,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-vi.mock('../lib/cloudfront-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getCloudFrontVideoUrl: vi.fn(
     async (key: string) => `https://media.example.com/${key}`,
   ),

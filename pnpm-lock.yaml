@@ -517,15 +517,12 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1151.0
-      '@aws-sdk/client-secrets-manager':
-        specifier: 'catalog:'
-        version: 3.1151.0
-      '@aws-sdk/cloudfront-signer':
-        specifier: 'catalog:'
-        version: 3.1149.0
       '@aws-sdk/credential-providers':
         specifier: 'catalog:'
         version: 3.1151.0
+      '@discava/common-server-utils':
+        specifier: workspace:*
+        version: link:../../common/server-utils
       '@discava/core-table':
         specifier: workspace:*
         version: link:../../databases/core-table
@@ -593,18 +590,15 @@ importers:
       '@aws-sdk/client-scheduler':
         specifier: 'catalog:'
         version: 3.1151.0
-      '@aws-sdk/client-secrets-manager':
-        specifier: 'catalog:'
-        version: 3.1151.0
-      '@aws-sdk/cloudfront-signer':
-        specifier: 'catalog:'
-        version: 3.1149.0
       '@aws-sdk/credential-providers':
         specifier: 'catalog:'
         version: 3.1151.0
       '@aws-sdk/s3-request-presigner':
         specifier: 'catalog:'
         version: 3.1151.0
+      '@discava/common-server-utils':
+        specifier: workspace:*
+        version: link:../../common/server-utils
       '@discava/common-tiptap':
         specifier: workspace:*
         version: link:../../common/tiptap
@@ -704,6 +698,31 @@ importers:
       '@aws-sdk/credential-providers':
         specifier: 'catalog:'
         version: 3.1151.0
+
+  packages/common/server-utils:
+    dependencies:
+      '@aws-lambda-powertools/parameters':
+        specifier: 'catalog:'
+        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1151.0)(@aws-sdk/client-dynamodb@3.1151.0)(@aws-sdk/client-secrets-manager@3.1151.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1151.0))(@middy/core@7.9.2)
+      '@aws-sdk/client-appconfigdata':
+        specifier: 'catalog:'
+        version: 3.1151.0
+      '@aws-sdk/client-secrets-manager':
+        specifier: 'catalog:'
+        version: 3.1151.0
+      '@aws-sdk/cloudfront-signer':
+        specifier: 'catalog:'
+        version: 3.1149.0
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: 'catalog:'
+        version: 8.10.164
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
 
   packages/common/shadcn:
     dependencies:
