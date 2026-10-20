@@ -40,7 +40,6 @@ export const UpdateLessonInputSchema = z.object({
   lessonId: z.string(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional(),
-  order: z.number().optional(),
 });
 
 export type IUpdateLessonInput = z.output<typeof UpdateLessonInputSchema>;
@@ -102,3 +101,16 @@ export const DeleteLessonPermanentlyOutputSchema = LessonSchema;
 export type IDeleteLessonPermanentlyOutput = z.output<
   typeof DeleteLessonPermanentlyOutputSchema
 >;
+
+export const ReorderLessonsInputSchema = z.object({
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonIds: z.array(z.string()).min(1),
+});
+
+export type IReorderLessonsInput = z.output<typeof ReorderLessonsInputSchema>;
+
+// The module's lessons that aren't archived, in their new order.
+export const ReorderLessonsOutputSchema = z.array(LessonSchema);
+
+export type IReorderLessonsOutput = z.output<typeof ReorderLessonsOutputSchema>;

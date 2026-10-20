@@ -39,6 +39,7 @@ import {
   deleteLessonPermanently,
   hideLesson,
   publishLesson,
+  reorderLessons,
   restoreLesson,
   updateLesson,
 } from './procedures/lesson.js';
@@ -48,6 +49,7 @@ import {
   deleteModulePermanently,
   hideModule,
   publishModule,
+  reorderModules,
   restoreModule,
   updateModule,
 } from './procedures/module.js';
@@ -68,6 +70,7 @@ export const appRouter = router({
     delete: deleteModule,
     publish: publishModule,
     hide: hideModule,
+    reorder: reorderModules,
     restore: restoreModule,
     deletePermanently: deleteModulePermanently,
   }),
@@ -77,6 +80,7 @@ export const appRouter = router({
     delete: deleteLesson,
     publish: publishLesson,
     hide: hideLesson,
+    reorder: reorderLessons,
     restore: restoreLesson,
     deletePermanently: deleteLessonPermanently,
   }),
