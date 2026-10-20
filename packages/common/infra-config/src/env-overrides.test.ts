@@ -21,6 +21,11 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_ADMIN_PORTAL_CERTIFICATE_ARN',
   'DISCAVA_TEST_STAGE_INFRA_LESSON_MEDIA_DOMAIN_NAMES',
   'DISCAVA_TEST_STAGE_INFRA_UNKNOWN_FIELD',
+  'DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT',
+  'DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL',
+  'DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY',
+  'DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS',
+  'DISCAVA_TEST_STAGE_INFRA_IDENTITY_ENABLE_SELF_SIGN_UP',
 ];
 
 afterEach(() => {
@@ -61,6 +66,60 @@ describe('applyEnvOverrides', () => {
     expect(() => applyEnvOverrides(STAGE, {})).toThrow(
       /DISCAVA_TEST_STAGE_INFRA_CORE_API_ENABLE_WAF/,
     );
+  });
+
+  it('overrides the limit settings: numbers, log levels and self sign-up', () => {
+    process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT = ' 25 ';
+    process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL = 'WARN';
+    process.env.DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY =
+      '5';
+    process.env.DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS =
+      '100';
+    process.env.DISCAVA_TEST_STAGE_INFRA_IDENTITY_ENABLE_SELF_SIGN_UP = 'false';
+
+    expect(
+      applyEnvOverrides(STAGE, {
+        infra: { coreApi: { throttleRateLimit: 100, enableTracing: false } },
+      }),
+    ).toEqual({
+      infra: {
+        coreApi: {
+          throttleRateLimit: 25,
+          logLevel: 'WARN',
+          enableTracing: false,
+        },
+        instructorApi: { reservedConcurrency: 5 },
+        coreTable: { maxReadRequestUnits: 100 },
+        identity: { enableSelfSignUp: false },
+      },
+    });
+  });
+
+  it.each([
+    [
+      'a negative number',
+      'DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT',
+      '-5',
+    ],
+    [
+      'a fraction',
+      'DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT',
+      '2.5',
+    ],
+    [
+      'not a number',
+      'DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS',
+      'lots',
+    ],
+    [
+      'an unknown log level',
+      'DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL',
+      'verbose',
+    ],
+  ])('throws a clear error for %s', (_, key, value) => {
+    process.env[key] = value;
+
+    expect(() => applyEnvOverrides(STAGE, {})).toThrow(new RegExp(key));
   });
 
   it('overrides a string[] field as a comma-separated, trimmed list', () => {

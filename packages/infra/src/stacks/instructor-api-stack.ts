@@ -15,6 +15,7 @@ import type { InstructorApiComponentConfig } from '@discava/common-infra-config'
 import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
+import { apiLimits } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
 
 type InstructorApiIntegrations = ReturnType<
@@ -79,7 +80,11 @@ export class InstructorApiStack extends Stack {
 
     const instructorApiKmsEnabled =
       instructorApiConfig?.enableKmsEncryption ?? true;
-    this.integrations = InstructorApi.defaultIntegrations(this).build();
+    const limits = apiLimits(instructorApiConfig);
+    this.integrations = InstructorApi.defaultIntegrations(
+      this,
+      limits.functionOptions,
+    ).build();
     const instructorApiCertificate = instructorApiConfig?.certificateArn
       ? Certificate.fromCertificateArn(
           this,
@@ -92,6 +97,8 @@ export class InstructorApiStack extends Stack {
       integrations: this.integrations,
       identity,
       enableWaf: instructorApiConfig?.enableWaf ?? true,
+      throttle: limits.throttle,
+      enableTracing: limits.enableTracing,
       enableKmsEncryption: instructorApiKmsEnabled,
       enableKeyRotation: instructorApiConfig?.enableKeyRotation ?? true,
       removalPolicy:

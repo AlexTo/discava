@@ -29,6 +29,9 @@ export type AssumeRoleCredentials = {
  */
 export type StageCredentials = ProfileCredentials | AssumeRoleCredentials;
 
+/** The lowest level a function logs at, as AWS Lambda Powertools reads it. */
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
 /**
  * Per-stage settings for the Cognito user pool / identity construct.
  */
@@ -46,6 +49,14 @@ export type IdentityComponentConfig = {
    * @default true
    */
   retainOnDelete?: boolean;
+  /**
+   * Let anyone create an account from the sign-in page. When off, only an
+   * administrator can create users, so bots can't sign themselves up (Cognito
+   * charges per monthly active user above its free tier).
+   *
+   * @default true
+   */
+  enableSelfSignUp?: boolean;
 };
 
 /**
@@ -69,6 +80,67 @@ export type CoreApiComponentConfig = {
    * @default true
    */
   retainOnDelete?: boolean;
+  /**
+   * Requests per second API Gateway lets through on average to each method
+   * (API Gateway throttles every method separately, so the API's ceiling is
+   * this times its number of methods). Above it callers get 429 Too Many
+   * Requests, before any Lambda runs, which bounds what a flood can cost.
+   *
+   * @default 100
+   */
+  throttleRateLimit?: number;
+  /**
+   * Requests API Gateway lets through at once to each method, in a burst
+   * above `throttleRateLimit`.
+   *
+   * @default 200
+   */
+  throttleBurstLimit?: number;
+  /**
+   * How many requests each of the API's Lambda functions handles at once
+   * (reserved concurrency). Requests beyond it are rejected instead of
+   * scaling out, which caps the Lambda, DynamoDB and logging cost of a flood.
+   * Reserved from the account's concurrency, which must keep 100 unreserved.
+   *
+   * @default no reservation: the function scales with the account's limit
+   */
+  reservedConcurrency?: number;
+  /**
+   * How long a request may run before Lambda stops it, in seconds.
+   *
+   * @default 30
+   */
+  timeoutSeconds?: number;
+  /**
+   * The lowest log level the API's functions write (POWERTOOLS_LOG_LEVEL).
+   * CloudWatch Logs charges per GB ingested, so WARN keeps a busy stage's
+   * logs, and a flood's, small.
+   *
+   * @default 'INFO'
+   */
+  logLevel?: LogLevel;
+  /**
+   * Trace requests with AWS X-Ray, on the API Gateway stage and the
+   * functions. X-Ray charges per trace recorded.
+   *
+   * @default true
+   */
+  enableTracing?: boolean;
+  /**
+   * Requests per second API Gateway lets through to each operation anyone
+   * may call without signing in (course.publicList, course.publicView):
+   * the only ones a bot can reach without an account.
+   *
+   * @default 20
+   */
+  publicThrottleRateLimit?: number;
+  /**
+   * Requests API Gateway lets through at once in a burst above
+   * `publicThrottleRateLimit`, per public operation.
+   *
+   * @default 40
+   */
+  publicThrottleBurstLimit?: number;
 };
 
 /**
@@ -92,6 +164,52 @@ export type InstructorApiComponentConfig = {
    * @default true
    */
   retainOnDelete?: boolean;
+  /**
+   * Requests per second API Gateway lets through on average to each method
+   * (API Gateway throttles every method separately, so the API's ceiling is
+   * this times its number of methods). Above it callers get 429 Too Many
+   * Requests, before any Lambda runs, which bounds what a flood can cost.
+   *
+   * @default 100
+   */
+  throttleRateLimit?: number;
+  /**
+   * Requests API Gateway lets through at once to each method, in a burst
+   * above `throttleRateLimit`.
+   *
+   * @default 200
+   */
+  throttleBurstLimit?: number;
+  /**
+   * How many requests each of the API's Lambda functions handles at once
+   * (reserved concurrency). Requests beyond it are rejected instead of
+   * scaling out, which caps the Lambda, DynamoDB and logging cost of a flood.
+   * Reserved from the account's concurrency, which must keep 100 unreserved.
+   *
+   * @default no reservation: the function scales with the account's limit
+   */
+  reservedConcurrency?: number;
+  /**
+   * How long a request may run before Lambda stops it, in seconds.
+   *
+   * @default 30
+   */
+  timeoutSeconds?: number;
+  /**
+   * The lowest log level the API's functions write (POWERTOOLS_LOG_LEVEL).
+   * CloudWatch Logs charges per GB ingested, so WARN keeps a busy stage's
+   * logs, and a flood's, small.
+   *
+   * @default 'INFO'
+   */
+  logLevel?: LogLevel;
+  /**
+   * Trace requests with AWS X-Ray, on the API Gateway stage and the
+   * functions. X-Ray charges per trace recorded.
+   *
+   * @default true
+   */
+  enableTracing?: boolean;
 };
 
 /**
@@ -111,6 +229,22 @@ export type CoreTableComponentConfig = {
    * @default true
    */
   retainOnDelete?: boolean;
+  /**
+   * The most read request units per second the table (and each of its
+   * indexes) serves on demand. Reads beyond it are throttled, which puts a
+   * ceiling on what reads can cost. Too low also throttles legitimate
+   * traffic, including the progress recalculation's reads.
+   *
+   * @default no maximum
+   */
+  maxReadRequestUnits?: number;
+  /**
+   * The most write request units per second the table (and each of its
+   * indexes) serves on demand; beyond it writes are throttled.
+   *
+   * @default no maximum
+   */
+  maxWriteRequestUnits?: number;
 };
 
 /**

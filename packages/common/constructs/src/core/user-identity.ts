@@ -102,6 +102,13 @@ export interface UserIdentityProps {
    *
    * @default true
    */
+  /**
+   * Let anyone create an account from the sign-in page. When false, only an
+   * administrator can create users.
+   *
+   * @default true
+   */
+  readonly selfSignUpEnabled?: boolean;
   readonly deletionProtection?: boolean;
 }
 
@@ -128,6 +135,7 @@ export class UserIdentity extends Construct {
       mfaSecondFactor = { sms: true, otp: true },
       removalPolicy = RemovalPolicy.RETAIN,
       deletionProtection = true,
+      selfSignUpEnabled = true,
     }: UserIdentityProps = {},
   ) {
     super(scope, id);
@@ -138,6 +146,7 @@ export class UserIdentity extends Construct {
       mfaSecondFactor,
       removalPolicy,
       deletionProtection,
+      selfSignUpEnabled,
     );
     this.userPoolGroups = this.createUserPoolGroups(this.userPool);
 
@@ -192,6 +201,7 @@ export class UserIdentity extends Construct {
     mfaSecondFactor: MfaSecondFactor,
     removalPolicy: RemovalPolicy,
     deletionProtection: boolean,
+    selfSignUpEnabled: boolean,
   ) => {
     const userPool = new UserPool(this, 'UserPool', {
       removalPolicy,
@@ -212,7 +222,7 @@ export class UserIdentity extends Construct {
       signInCaseSensitive: false,
       signInAliases: { username: false, email: true },
       accountRecovery: AccountRecovery.EMAIL_ONLY,
-      selfSignUpEnabled: true,
+      selfSignUpEnabled,
       standardAttributes: {
         phoneNumber: { required: false },
         email: { required: true },
