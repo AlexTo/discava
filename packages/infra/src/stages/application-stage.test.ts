@@ -176,6 +176,48 @@ describe("core-api's functions", () => {
   });
 });
 
+describe('lesson media CORS', () => {
+  const data = synth({})('Data');
+  const origins = (value: unknown) => JSON.stringify(value);
+
+  it('lets both portals stream lesson videos', () => {
+    const [policy] = Object.values(
+      data.findResources('AWS::CloudFront::ResponseHeadersPolicy'),
+    ) as {
+      Properties: {
+        ResponseHeadersPolicyConfig: {
+          CorsConfig: { AccessControlAllowOrigins: { Items: unknown[] } };
+        };
+      };
+    }[];
+    const allowed = origins(
+      policy.Properties.ResponseHeadersPolicyConfig.CorsConfig
+        .AccessControlAllowOrigins.Items,
+    );
+
+    // Each portal's CloudFront domain, and its local dev server.
+    expect(allowed).toMatch(/StudentPortal/);
+    expect(allowed).toMatch(/InstructorPortal/);
+    expect(allowed).toContain('http://localhost:4201');
+    expect(allowed).toContain('http://localhost:4200');
+  });
+
+  it('lets only the instructor portal upload', () => {
+    const buckets = Object.entries(data.findResources('AWS::S3::Bucket'));
+    const [, upload] = buckets.find(([id]) =>
+      id.startsWith('LessonMediaUploadBucket'),
+    )!;
+    const allowed = origins(
+      (upload as { Properties: { CorsConfiguration: unknown } }).Properties
+        .CorsConfiguration,
+    );
+
+    expect(allowed).toMatch(/InstructorPortal/);
+    expect(allowed).not.toMatch(/StudentPortal/);
+    expect(allowed).not.toContain('localhost:4201');
+  });
+});
+
 describe('limits a stage leaves out', () => {
   const stack = synth({});
 
