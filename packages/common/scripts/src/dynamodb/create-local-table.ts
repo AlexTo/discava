@@ -13,6 +13,7 @@ import {
   ProjectionType,
   ResourceInUseException,
   ScalarAttributeType,
+  StreamViewType,
   TableStatus,
   UpdateTableCommand,
 } from '@aws-sdk/client-dynamodb';
@@ -33,6 +34,13 @@ const {
 };
 
 const timeoutSignal = () => AbortSignal.timeout(10000);
+
+// As the deployed table's: local dev's event runner (packages/events) reads it
+// and hands changes to the same Lambda handlers (#137).
+const STREAM_SPECIFICATION = {
+  StreamEnabled: true,
+  StreamViewType: StreamViewType.NEW_AND_OLD_IMAGES,
+};
 
 const client = new DynamoDBClient({
   endpoint: `http://localhost:${port}`,
@@ -102,6 +110,7 @@ const ensureTable = async (
             { AttributeName: 'sk', KeyType: KeyType.RANGE },
           ],
           BillingMode: BillingMode.PAY_PER_REQUEST,
+          StreamSpecification: STREAM_SPECIFICATION,
           ...(globalSecondaryIndexes.length > 0 && {
             GlobalSecondaryIndexes: globalSecondaryIndexes,
           }),
@@ -120,6 +129,19 @@ const ensureTable = async (
           new DescribeTableCommand({ TableName: tblName }),
           { abortSignal: timeoutSignal() },
         );
+        // A table from before local dev had a stream (#137): add it, so the
+        // event runner sees changes without the table being recreated.
+        if (!Table?.StreamSpecification?.StreamEnabled) {
+          await tblClient.send(
+            new UpdateTableCommand({
+              TableName: tblName,
+              StreamSpecification: STREAM_SPECIFICATION,
+            }),
+            { abortSignal: timeoutSignal() },
+          );
+          console.log(`Enabled stream on table: ${tblName}`);
+          await waitForTableActive(tblClient, tblName);
+        }
         const existingGSIs = Table?.GlobalSecondaryIndexes ?? [];
         const existingNames = new Set(
           existingGSIs.map(

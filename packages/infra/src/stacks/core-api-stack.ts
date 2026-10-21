@@ -15,7 +15,7 @@ import {
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
-import { CURRICULUM_ENTITIES } from '@discava/core-table';
+import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
 import {
   CfnResource,
   Duration,
@@ -181,17 +181,8 @@ export class CoreApiStack extends Stack {
       retentionPeriod: Duration.days(14),
     });
 
-    // Only the records that can change progress invoke the Lambda. ElectroDB
-    // stores each record's entity name in `__edb_e__`. A filter can't compare
-    // the old and new images, so for curriculum records the Lambda itself
-    // checks that visibility or archivedAt changed. Its own writes (progress,
-    // enrolment) match none of these, so it never triggers itself.
-    const entity = (
-      image: 'NewImage' | 'OldImage',
-      names: readonly string[],
-    ) => ({
-      dynamodb: { [image]: { __edb_e__: { S: FilterRule.or(...names) } } },
-    });
+    // Only the records that can change progress invoke the Lambda (see
+    // PROGRESS_STREAM_FILTERS, which local dev's event runner applies too).
     recalculation.addEventSource(
       new DynamoEventSource(coreTable.table, {
         startingPosition: StartingPosition.LATEST,
@@ -202,20 +193,14 @@ export class CoreApiStack extends Stack {
         retryAttempts: 5,
         bisectBatchOnError: true,
         onFailure: new SqsDlq(failures),
-        filters: [
+        filters: PROGRESS_STREAM_FILTERS.map(({ eventName, image, entities }) =>
           FilterCriteria.filter({
-            eventName: FilterRule.isEqual('INSERT'),
-            ...entity('NewImage', ['itemCompletion']),
+            eventName: FilterRule.isEqual(eventName),
+            dynamodb: {
+              [image]: { __edb_e__: { S: FilterRule.or(...entities) } },
+            },
           }),
-          FilterCriteria.filter({
-            eventName: FilterRule.isEqual('MODIFY'),
-            ...entity('NewImage', CURRICULUM_ENTITIES),
-          }),
-          FilterCriteria.filter({
-            eventName: FilterRule.isEqual('REMOVE'),
-            ...entity('OldImage', CURRICULUM_ENTITIES),
-          }),
-        ],
+        ),
       }),
     );
 
