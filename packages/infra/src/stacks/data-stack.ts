@@ -21,7 +21,7 @@ import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export interface DataStackProps extends StackProps {
@@ -104,22 +104,18 @@ export class DataStack extends Stack {
       this,
       'PostConfirmation',
     );
-    // Scoped to any pool in this account/region rather than this specific
-    // pool's ARN: referencing the pool here would create a circular
-    // CloudFormation dependency, since the pool's LambdaConfig already
-    // depends on this function
-    postConfirmation.addToRolePolicy(
-      new PolicyStatement({
-        actions: ['cognito-idp:AdminAddUserToGroup'],
-        resources: [
-          Stack.of(this).formatArn({
-            service: 'cognito-idp',
-            resource: 'userpool',
-            resourceName: '*',
-          }),
-        ],
-      }),
-    );
+    // Its own policy rather than addToRolePolicy, which would make the
+    // function wait for it: the pool waits for the function (its trigger) and
+    // this policy for the pool (its ARN), so that would be circular (#29).
+    new Policy(this, 'PostConfirmationAddToGroup', {
+      roles: [postConfirmation.role!],
+      statements: [
+        new PolicyStatement({
+          actions: ['cognito-idp:AdminAddUserToGroup'],
+          resources: [identity.userPool.userPoolArn],
+        }),
+      ],
+    });
     identity.userPool.addTrigger(
       UserPoolOperation.POST_CONFIRMATION,
       postConfirmation,
