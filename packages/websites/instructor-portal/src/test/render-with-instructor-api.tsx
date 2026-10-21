@@ -11,8 +11,11 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { InstructorApiTRPCContext } from '../components/InstructorApiClientProvider';
+import { RuntimeConfigContext } from '../components/RuntimeConfig';
 
 const API_URL = 'http://instructor-api.test/';
+// Where public media (course images) is served from in tests.
+export const PUBLIC_MEDIA_URL = 'https://media.test/';
 
 // What a handler throws to make a procedure fail, as the API would with
 // TRPCError({ code, message }).
@@ -117,11 +120,15 @@ export const renderWithInstructorApi = (
   });
   const user = userEvent.setup();
   const result = render(
-    <QueryClientProvider client={queryClient}>
-      <InstructorApiTRPCContext.Provider value={{ client, optionsProxy }}>
-        {ui}
-      </InstructorApiTRPCContext.Provider>
-    </QueryClientProvider>,
+    <RuntimeConfigContext.Provider
+      value={{ media: { PublicMediaBucket: PUBLIC_MEDIA_URL } }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <InstructorApiTRPCContext.Provider value={{ client, optionsProxy }}>
+          {ui}
+        </InstructorApiTRPCContext.Provider>
+      </QueryClientProvider>
+    </RuntimeConfigContext.Provider>,
   );
   return { ...result, calls, queryClient, optionsProxy, user };
 };

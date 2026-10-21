@@ -23,6 +23,27 @@ export const requireCourseInstructor = async (
   }
 };
 
+// byInstructor's sort key is courseUpdatedAt#courseId, so every course
+// update has to refresh that denormalized timestamp on every
+// CourseInstructor row for the course, not just the caller's own.
+export const refreshInstructorCourseUpdatedAt = async (
+  coreTable: CoreTable,
+  courseId: string,
+  courseUpdatedAt: string,
+) => {
+  const { data: instructors } = await coreTable.entities.courseInstructor.query
+    .primary({ courseId })
+    .go();
+  await Promise.all(
+    instructors.map(({ instructorId }) =>
+      coreTable.entities.courseInstructor
+        .patch({ courseId, instructorId })
+        .set({ courseUpdatedAt })
+        .go(),
+    ),
+  );
+};
+
 export const getCourseOrThrow = async (
   coreTable: CoreTable,
   courseId: string,

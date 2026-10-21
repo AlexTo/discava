@@ -19,7 +19,8 @@ import type { StagesConfig } from './stages.types.js';
 //     DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES     example.com,www.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES  instructor.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_DOMAIN_NAMES       admin.example.com
-//     DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_DOMAIN_NAMES       media.example.com
+//     DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_DOMAIN_NAMES       lesson-media.example.com
+//     DISCAVA_DEVELOPMENT_INFRA_PUBLIC_MEDIA_DOMAIN_NAMES       media.example.com
 //
 // A domain is only applied when its certificate ARN is also set. Portal
 // domains are picked up automatically as API CORS origins and Cognito
@@ -95,6 +96,11 @@ export default {
               enableKmsEncryption: false,
               retainOnDelete: false,
             },
+            publicMedia: {
+              enableWaf: false,
+              enableKmsEncryption: false,
+              retainOnDelete: false,
+            },
           },
         },
         'discava-production': {
@@ -160,6 +166,12 @@ export default {
               enableKeyRotation: true,
             },
             lessonMedia: {
+              enableWaf: true,
+              enableKmsEncryption: true,
+              enableKeyRotation: true,
+              retainOnDelete: true,
+            },
+            publicMedia: {
               enableWaf: true,
               enableKmsEncryption: true,
               enableKeyRotation: true,

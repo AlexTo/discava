@@ -54,6 +54,7 @@ export const MyEnrolmentSchema = z.object({
   courseId: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  imageKey: z.string().optional(),
   // An archived course stays readable to its students.
   courseStatus: z.enum(['published', 'archived']),
   status: z.enum(['active', 'completed']),

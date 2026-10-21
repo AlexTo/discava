@@ -36,6 +36,11 @@ export const createCourseEntity = async () =>
           required: true,
           default: 'draft',
         },
+        // The course's display image in the public media bucket (#76), a
+        // 16:9 JPEG cropped in the browser. Absent until one's uploaded.
+        imageKey: {
+          type: 'string',
+        },
         // Set when the course is first published and never cleared. A course
         // with this set has been open to students, so archiving and
         // restoring it can't send it back to draft, where deletes are

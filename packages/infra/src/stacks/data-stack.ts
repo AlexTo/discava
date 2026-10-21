@@ -8,6 +8,7 @@ import {
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
+  PublicMediaBucket,
   StudentPortal,
   suppressRules,
   UserIdentity,
@@ -16,6 +17,7 @@ import type {
   CoreTableComponentConfig,
   IdentityComponentConfig,
   LessonMediaComponentConfig,
+  PublicMediaComponentConfig,
 } from '@discava/common-infra-config';
 import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
@@ -31,6 +33,8 @@ export interface DataStackProps extends StackProps {
   readonly coreTable?: CoreTableComponentConfig;
   /** Settings for the lesson media S3 bucket construct. @default all enabled */
   readonly lessonMedia?: LessonMediaComponentConfig;
+  /** Settings for the public media bucket construct. @default all enabled */
+  readonly publicMedia?: PublicMediaComponentConfig;
   /** Uploads and previews lesson media: allowed by both media buckets' CORS. */
   readonly instructorPortal: InstructorPortal;
   /** Plays lesson videos: allowed by the lesson media bucket's CORS only. */
@@ -38,7 +42,7 @@ export interface DataStackProps extends StackProps {
 }
 
 /**
- * Stateful resources: users, the core table and lesson media. Kept apart
+ * Stateful resources: users, the core table, lesson media and public media. Kept apart
  * from the stacks that change on most deploys, and depended on by every API
  * and event handler stack.
  */
@@ -47,6 +51,7 @@ export class DataStack extends Stack {
   public readonly coreTable: CoreTable;
   public readonly lessonMediaBucket: LessonMediaBucket;
   public readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
+  public readonly publicMediaBucket: PublicMediaBucket;
 
   constructor(
     scope: Construct,
@@ -55,6 +60,7 @@ export class DataStack extends Stack {
       identity: identityConfig,
       coreTable: coreTableConfig,
       lessonMedia: lessonMediaConfig,
+      publicMedia: publicMediaConfig,
       instructorPortal,
       studentPortal,
       ...props
@@ -67,6 +73,7 @@ export class DataStack extends Stack {
     this.lessonMediaBucket = this.createLessonMediaBucket(lessonMediaConfig);
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
+    this.publicMediaBucket = this.createPublicMediaBucket(publicMediaConfig);
 
     // hls.js fetches a video's manifest, renditions and segments with
     // cross-origin requests, so both portals that play lesson videos must be
@@ -81,6 +88,13 @@ export class DataStack extends Stack {
       'http://localhost:4301',
     );
     this.lessonMediaUploadBucket.restrictCorsTo(
+      instructorPortal,
+      'http://localhost:4200',
+      'http://localhost:4300',
+    );
+    // Images are shown with plain <img> tags, which need no CORS; only the
+    // instructor portal's uploads do.
+    this.publicMediaBucket.restrictCorsTo(
       instructorPortal,
       'http://localhost:4200',
       'http://localhost:4300',
@@ -218,5 +232,44 @@ export class DataStack extends Stack {
       );
     }
     return lessonMediaUploadBucket;
+  }
+
+  private createPublicMediaBucket(
+    publicMediaConfig: PublicMediaComponentConfig | undefined,
+  ) {
+    const kmsEnabled = publicMediaConfig?.enableKmsEncryption ?? true;
+    const wafEnabled = publicMediaConfig?.enableWaf ?? true;
+    const certificate = publicMediaConfig?.certificateArn
+      ? Certificate.fromCertificateArn(
+          this,
+          'PublicMediaCertificate',
+          publicMediaConfig.certificateArn,
+        )
+      : undefined;
+    const publicMediaBucket = new PublicMediaBucket(this, 'PublicMediaBucket', {
+      enableWaf: wafEnabled,
+      enableKmsEncryption: kmsEnabled,
+      enableKeyRotation: publicMediaConfig?.enableKeyRotation ?? true,
+      removalPolicy: publicMediaConfig?.retainOnDelete
+        ? RemovalPolicy.RETAIN
+        : RemovalPolicy.DESTROY,
+      domainNames: publicMediaConfig?.domainNames,
+      certificate,
+    });
+    if (!kmsEnabled) {
+      suppressRules(
+        publicMediaBucket.bucket,
+        ['CKV_AWS_145'],
+        'KMS CMK encryption disabled for this stage',
+      );
+    }
+    if (!wafEnabled) {
+      suppressRules(
+        publicMediaBucket.cloudFrontDistribution,
+        ['CKV_AWS_68'],
+        'WAF disabled for this stage',
+      );
+    }
+    return publicMediaBucket;
   }
 }

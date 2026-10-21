@@ -21,6 +21,7 @@ import {
 import { Spinner } from '../../../../components/spinner';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { ArchivedSection } from './-components/course/archived-section';
+import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
 import { CourseStatusActions } from './-components/course/course-status-actions';
 
@@ -113,7 +114,12 @@ function RouteComponent() {
       <section>
         <Card className="gap-0 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
+            <CourseImage
+              courseId={course.courseId}
+              imageKey={course.imageKey}
+              readOnly={readOnly}
+            />
+            <div className="min-w-0 flex-1">
               <Badge className={courseStatusStyles[status]}>{status}</Badge>
               <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
                 {course.title}

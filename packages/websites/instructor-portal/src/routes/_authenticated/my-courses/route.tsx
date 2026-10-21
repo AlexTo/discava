@@ -38,6 +38,7 @@ import {
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
 import { Spinner } from '../../../components/spinner';
 import { useCoreApi } from '../../../hooks/useCoreApi';
+import { usePublicMediaUrl } from '../../../hooks/usePublicMediaUrl';
 
 export const Route = createFileRoute('/_authenticated/my-courses')({
   component: RouteComponent,
@@ -73,6 +74,7 @@ function RouteComponent() {
   const auth = useAuth();
   const instructorId = auth.user?.profile.sub;
   const trpc = useCoreApi();
+  const publicMediaUrl = usePublicMediaUrl();
   const coursesQuery = useQuery(
     trpc.course.listByInstructor.queryOptions(
       { instructorId: instructorId ?? '', limit: 100 },
@@ -84,6 +86,7 @@ function RouteComponent() {
     courseId: course.courseId,
     title: course.title,
     description: course.description,
+    imageUrl: publicMediaUrl(course.imageKey),
     status: courseStatusLabels[course.status] ?? 'Draft',
     ...mockCourseDetails,
   }));
@@ -212,13 +215,21 @@ function RouteComponent() {
                 key={course.courseId}
                 className="h-full gap-4 overflow-hidden py-0 transition-shadow hover:shadow-md"
               >
-                <div
-                  className={`flex h-24 items-end bg-gradient-to-br p-5 ${course.surface}`}
-                >
-                  <div className="flex size-11 items-center justify-center rounded-xl bg-background/85 shadow-sm backdrop-blur-sm">
-                    <BookOpen className="size-5" />
+                {course.imageUrl ? (
+                  <img
+                    src={course.imageUrl}
+                    alt=""
+                    className="aspect-video w-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className={`flex aspect-video items-end bg-gradient-to-br p-5 ${course.surface}`}
+                  >
+                    <div className="flex size-11 items-center justify-center rounded-xl bg-background/85 shadow-sm backdrop-blur-sm">
+                      <BookOpen className="size-5" />
+                    </div>
                   </div>
-                </div>
+                )}
                 <CardHeader className="gap-3 px-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">

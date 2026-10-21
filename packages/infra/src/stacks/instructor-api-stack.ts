@@ -8,6 +8,7 @@ import {
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
+  PublicMediaBucket,
   suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
@@ -49,6 +50,7 @@ export interface InstructorApiStackProps extends StackProps {
   readonly coreTable: CoreTable;
   readonly lessonMediaBucket: LessonMediaBucket;
   readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
+  readonly publicMediaBucket: PublicMediaBucket;
   readonly mediaPipeline: MediaPipelineStack;
   /** The only portal that calls instructor-api. */
   readonly instructorPortal: InstructorPortal;
@@ -71,6 +73,7 @@ export class InstructorApiStack extends Stack {
       coreTable,
       lessonMediaBucket,
       lessonMediaUploadBucket,
+      publicMediaBucket,
       mediaPipeline,
       instructorPortal,
       ...props
@@ -126,6 +129,12 @@ export class InstructorApiStack extends Stack {
 
     this.grantLessonMediaAccess(lessonMediaBucket);
     this.grantLessonMediaUploadAccess(lessonMediaUploadBucket);
+    for (const op of [
+      'course.createImageUploadUrl',
+      'course.updateImage',
+    ] as const) {
+      publicMediaBucket.grantManageObjects(this.privilegedHandler(op));
+    }
     for (const op of [
       'contentItem.createVideo',
       'contentItem.updateVideo',

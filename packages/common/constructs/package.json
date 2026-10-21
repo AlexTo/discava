@@ -7,6 +7,7 @@
     "@aws-sdk/client-api-gateway": "catalog:",
     "@aws-sdk/client-iam": "catalog:",
     "@aws-sdk/client-secrets-manager": "catalog:",
+    "@discava/common-server-utils": "workspace:*",
     "@discava/core-api": "workspace:*",
     "@discava/instructor-api": "workspace:*",
     "@trpc/server": "catalog:",

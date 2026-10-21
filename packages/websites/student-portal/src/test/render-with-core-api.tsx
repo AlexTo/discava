@@ -18,8 +18,11 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { AuthContext, type AuthContextProps } from 'react-oidc-context';
 import { CoreApiTRPCContext } from '../components/CoreApiClientProvider';
+import { RuntimeConfigContext } from '../components/RuntimeConfig';
 
 const API_URL = 'http://core-api.test/';
+// Where public media (course images) is served from in tests.
+export const PUBLIC_MEDIA_URL = 'https://media.test/';
 
 // What a handler throws to make a procedure fail, as the API would with
 // TRPCError({ code, message }).
@@ -169,13 +172,17 @@ export const renderWithCoreApi = (
   });
   const user = userEvent.setup();
   const result = render(
-    <AuthContext.Provider value={authContext}>
-      <QueryClientProvider client={queryClient}>
-        <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>
-          <RouterProvider router={router} />
-        </CoreApiTRPCContext.Provider>
-      </QueryClientProvider>
-    </AuthContext.Provider>,
+    <RuntimeConfigContext.Provider
+      value={{ media: { PublicMediaBucket: PUBLIC_MEDIA_URL } }}
+    >
+      <AuthContext.Provider value={authContext}>
+        <QueryClientProvider client={queryClient}>
+          <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>
+            <RouterProvider router={router} />
+          </CoreApiTRPCContext.Provider>
+        </QueryClientProvider>
+      </AuthContext.Provider>
+    </RuntimeConfigContext.Provider>,
   );
   return { ...result, calls, queryClient, optionsProxy, router, user };
 };

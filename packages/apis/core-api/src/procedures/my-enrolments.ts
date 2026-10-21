@@ -137,6 +137,7 @@ export const myEnrolments = courseProcedure
             courseId,
             title: course.title,
             ...(course.description && { description: course.description }),
+            ...(course.imageKey && { imageKey: course.imageKey }),
             courseStatus: course.status,
             status: enrolment.status === 'completed' ? 'completed' : 'active',
             progressPercent: enrolment.progressPercent ?? 0,

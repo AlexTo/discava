@@ -42,6 +42,7 @@ export class ApplicationStage extends Stage {
       instructorPortal,
       adminPortal,
       lessonMedia,
+      publicMedia,
       ...props
     }: ApplicationStageProps,
   ) {
@@ -69,6 +70,7 @@ export class ApplicationStage extends Stage {
       identity,
       coreTable,
       lessonMedia,
+      publicMedia,
       instructorPortal: websites.instructorPortal,
       studentPortal: websites.studentPortal,
     });
@@ -100,6 +102,7 @@ export class ApplicationStage extends Stage {
       coreTable: data.coreTable,
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
+      publicMediaBucket: data.publicMediaBucket,
       mediaPipeline,
       instructorPortal: websites.instructorPortal,
     });

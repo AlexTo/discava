@@ -18,6 +18,9 @@
     },
     {
       "path": "../../apis/core-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../server-utils/tsconfig.lib.json"
     }
   ],
   "exclude": [
