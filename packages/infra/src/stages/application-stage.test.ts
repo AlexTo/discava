@@ -253,6 +253,39 @@ describe('Lambda functions', () => {
   });
 });
 
+describe('the sign-up trigger (#29)', () => {
+  const stack = synth({});
+
+  it('may add users to groups in its own user pool only', () => {
+    const data = stack('Data');
+    const [userPool] = Object.keys(
+      data.findResources('AWS::Cognito::UserPool'),
+    );
+    const grants = Object.values(data.findResources('AWS::IAM::Policy'))
+      .flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                PolicyDocument: {
+                  Statement: { Action: unknown; Resource: unknown }[];
+                };
+              };
+            }
+          ).Properties.PolicyDocument.Statement,
+      )
+      .filter(({ Action }) =>
+        [Action].flat().includes('cognito-idp:AdminAddUserToGroup'),
+      );
+
+    expect(grants).toEqual([
+      expect.objectContaining({
+        Resource: { 'Fn::GetAtt': [userPool, 'Arn'] },
+      }),
+    ]);
+  });
+});
+
 describe('the media pipeline’s safety nets (#125, #185)', () => {
   const media = synth({})('MediaPipeline');
   const functionIdOf = (prefix: string) =>
