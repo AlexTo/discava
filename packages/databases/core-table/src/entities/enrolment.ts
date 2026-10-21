@@ -39,6 +39,13 @@ export const createEnrolmentEntity = async () =>
         completedAt: {
           type: 'string',
         },
+        // When the student last did something in the course: completed an
+        // item or submitted a quiz attempt. Orders "Continue where you left
+        // off"; absent until their first activity. Written by core-api in the
+        // same transaction as the activity.
+        lastActivityAt: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,

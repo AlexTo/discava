@@ -17,6 +17,7 @@ import {
 } from './procedures/course.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
+import { myEnrolments } from './procedures/my-enrolments.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -30,6 +31,7 @@ export const appRouter = router({
     enrol,
     myItemCompletions,
     myEnrolment,
+    myEnrolments,
     myLessonProgress,
     listByInstructor: listCoursesByInstructor,
     listInstructors: listInstructorsForCourse,

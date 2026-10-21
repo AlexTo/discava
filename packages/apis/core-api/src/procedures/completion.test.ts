@@ -18,9 +18,10 @@ const { db, transactionGo, completionQuery } = vi.hoisted(() => ({
 // as a string, e.g. "visibility = visible AND notExists(archivedAt)".
 interface TransactionItem {
   entity: string;
-  op: 'check' | 'update' | 'create';
+  op: 'check' | 'update' | 'patch' | 'create';
   key?: Record<string, unknown>;
   data?: Record<string, unknown>;
+  set?: Record<string, unknown>;
   add?: Record<string, unknown>;
   condition?: string;
 }
@@ -35,6 +36,7 @@ const ops = {
 
 const transactionEntity = (entity: string) => {
   const chain = (item: TransactionItem) => ({
+    set: (set: Record<string, unknown>) => chain({ ...item, set }),
     add: (add: Record<string, unknown>) => chain({ ...item, add }),
     where: (build: (a: unknown, o: typeof ops) => string) =>
       chain({ ...item, condition: build(attr, ops) }),
@@ -45,6 +47,8 @@ const transactionEntity = (entity: string) => {
       chain({ entity, op: 'check', key }),
     update: (key: Record<string, unknown>) =>
       chain({ entity, op: 'update', key }),
+    patch: (key: Record<string, unknown>) =>
+      chain({ entity, op: 'patch', key }),
     create: (data: Record<string, unknown>) =>
       chain({ entity, op: 'create', data }),
   };
@@ -220,7 +224,7 @@ describe('complete', () => {
       'module.check',
       'lesson.check',
       'contentItem.update',
-      'enrolment.check',
+      'enrolment.patch',
       'itemCompletion.create',
     ]);
     expect(itemOf(transaction, 'course').condition).toBe('status = published');
@@ -235,8 +239,11 @@ describe('complete', () => {
       add: { studentActivityCount: 1 },
       condition: 'visibility = visible AND notExists(archivedAt)',
     });
+    // Still enrolled, and the completion is their latest activity.
     expect(itemOf(transaction, 'enrolment')).toMatchObject({
+      op: 'patch',
       key: { courseId: 'course-1', userId: USER_SUB },
+      set: { lastActivityAt: result.completedAt },
       condition: 'exists(userId) AND status <> dropped',
     });
     // For the caller, never for a user named in the input.

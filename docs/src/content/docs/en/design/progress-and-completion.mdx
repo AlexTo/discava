@@ -42,6 +42,8 @@ Text and video never complete on their own: there is no scroll or watch-time tra
   - `contentItem.complete` also accepts a quiz, but only once it's passed or no attempts remain. That covers an attempt limit lowered below what a student has already used, where no further submission is possible.
 - **Reading completions:** `course.myItemCompletions` returns a student's completions in a course, including ones for items since hidden or archived. Which of them still count is decided from the current curriculum.
 - **Reading progress:** `course.myLessonProgress` returns a student's lesson progress records in a course, as progress recalculation last wrote them; a lesson without one hasn't been started. The course-level rollup comes with the enrolment (`course.myEnrolment`).
+- **Last activity:** completing an item, or submitting a quiz attempt, sets the enrolment's `lastActivityAt` in the same transaction. It orders the student's courses, most recently active first, so the signed-in home can offer to continue where they left off. Progress recalculation doesn't touch it: an instructor's change isn't the student's activity.
+- **Across courses:** `course.myEnrolments` lists a student's enrolments that aren't dropped, most recently active first, each with its progress, the next lesson (the first effectively visible lesson whose progress isn't `completed`) and how many items are new. It powers the signed-in home and My Learning.
 
 ## Lesson and course completion
 

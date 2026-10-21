@@ -340,7 +340,7 @@ describe('submitAttempt', () => {
       'module.check',
       'lesson.check',
       'contentItem.update',
-      'enrolment.check',
+      'enrolment.patch',
       'quizSummary.create',
       'quizAttempt.create',
       // It passes, so it also completes the quiz.
@@ -359,8 +359,11 @@ describe('submitAttempt', () => {
       condition:
         'visibility = visible AND notExists(archivedAt) AND quizVersion = 4',
     });
+    // Still enrolled, and the attempt is their latest activity.
     expect(itemOf(transaction, 'enrolment')).toMatchObject({
+      op: 'patch',
       key: { courseId: 'course-1', userId: USER_SUB },
+      set: { lastActivityAt: result.attempt.submittedAt },
       condition: 'exists(userId) AND status <> dropped',
     });
     const attemptId = result.attempt.attemptId;

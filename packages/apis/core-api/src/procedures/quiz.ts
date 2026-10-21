@@ -357,8 +357,10 @@ export const submitQuizAttempt = courseProcedure
                       `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)} AND ${op.eq(attr.quizVersion, quiz.quizVersion)}`,
                   )
                   .commit(),
+            // Still enrolled, and this is now their latest activity.
             enrolment
-              .check({ courseId, userId })
+              .patch({ courseId, userId })
+              .set({ lastActivityAt: submittedAt })
               .where(
                 (attr, op) =>
                   `${op.exists(attr.userId)} AND ${op.ne(attr.status, 'dropped')}`,
