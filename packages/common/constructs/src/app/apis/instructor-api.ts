@@ -22,6 +22,7 @@ import {
   PolicyStatement,
 } from 'aws-cdk-lib/aws-iam';
 import {
+  Architecture,
   Code,
   Function,
   FunctionProps,
@@ -190,6 +191,7 @@ export class InstructorApi<
       operations: routerToOperations(appRouter),
       defaultIntegrationOptions: {
         runtime: Runtime.NODEJS_24_X,
+        architecture: Architecture.ARM_64,
         handler: 'index.handler',
         code: Code.fromAsset(
           url.fileURLToPath(

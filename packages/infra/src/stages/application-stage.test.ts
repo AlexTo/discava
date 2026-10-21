@@ -218,6 +218,41 @@ describe('lesson media CORS', () => {
   });
 });
 
+const CDK_INTERNAL =
+  /^(Custom(S3AutoDeleteObjects|CrossRegionExportReader)CustomResourceProvider|.*Providerframework)/;
+
+describe('Lambda functions', () => {
+  const stack = synth({});
+
+  it.each([
+    'Websites',
+    'Data',
+    'MediaPipeline',
+    'CoreApi',
+    'InstructorApi',
+    'RuntimeConfig',
+  ])('all run on ARM in %s', (name) => {
+    const functions = Object.entries(
+      stack(name).findResources('AWS::Lambda::Function'),
+    )
+      // Functions CDK creates itself, which take no architecture: custom
+      // resource provider frameworks, S3 auto-delete and the cross-region
+      // export reader. They run only during deploys.
+      .filter(([id]) => !CDK_INTERNAL.test(id))
+      .map(([id, resource]) => ({
+        id,
+        architectures: (
+          resource as { Properties: { Architectures?: string[] } }
+        ).Properties.Architectures,
+      }));
+
+    expect(functions.length).toBeGreaterThan(0);
+    for (const fn of functions) {
+      expect(fn).toEqual({ id: fn.id, architectures: ['arm64'] });
+    }
+  });
+});
+
 describe('limits a stage leaves out', () => {
   const stack = synth({});
 
