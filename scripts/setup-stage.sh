@@ -1429,6 +1429,10 @@ EOF
         "lambda:GetFunctionConcurrency",
         "lambda:PutFunctionConcurrency",
         "lambda:DeleteFunctionConcurrency",
+        "lambda:GetFunctionEventInvokeConfig",
+        "lambda:PutFunctionEventInvokeConfig",
+        "lambda:UpdateFunctionEventInvokeConfig",
+        "lambda:DeleteFunctionEventInvokeConfig",
         "lambda:InvokeFunction",
         "lambda:PublishVersion",
         "lambda:AddPermission",
@@ -1786,6 +1790,7 @@ upsert_boundary_policy() {
         "kms:ReEncrypt*",
         "mediaconvert:CancelJob",
         "mediaconvert:CreateJob",
+        "mediaconvert:GetJob",
         "sns:Publish"
       ],
       "Resource": "*"

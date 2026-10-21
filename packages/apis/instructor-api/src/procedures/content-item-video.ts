@@ -10,7 +10,11 @@ import {
   getCloudFrontVideoUrl,
   getSignedCloudFrontCookies,
 } from '@discava/common-server-utils/lesson-media';
-import { isConditionalCheckFailed } from '@discava/core-table';
+import {
+  isConditionalCheckFailed,
+  TRANSCODE_PENDING_ATTRIBUTES,
+  transcodePendingFrom,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -246,6 +250,8 @@ export const createContentItemVideo = courseProcedure
           order,
           ...initialVisibilityFields(course),
           submissionNonce,
+          // Watched by the transcode reconciler until it's ready or failed.
+          ...transcodePendingFrom(new Date()),
         })
         .commit(),
     ]);
@@ -536,6 +542,9 @@ export const updateContentItemVideo = courseProcedure
               s3Key: objectKey,
               status: 'pending',
               submissionNonce,
+              // Watched by the transcode reconciler until it's ready or
+              // failed; restarts the clock for a replacement of one pending.
+              ...transcodePendingFrom(new Date()),
               // Students keep playing the version being replaced until this
               // one is ready (#209): a ready video becomes the previous
               // version. Replacing a replacement still in flight keeps the
@@ -662,6 +671,7 @@ export const updateContentItemVideo = courseProcedure
         await coreTable.entities.contentItem
           .patch({ courseId, moduleId, lessonId, contentItemId })
           .set({ status: 'failed' })
+          .remove([...TRANSCODE_PENDING_ATTRIBUTES])
           .where((attr, op) => op.eq(attr.submissionNonce, submissionNonce!))
           .go()
           .catch((patchError: unknown) => {

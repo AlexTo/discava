@@ -783,7 +783,14 @@ describe('createContentItemVideo', () => {
     await callAs().createContentItemVideo(validInput);
 
     expect(contentItemCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'video', status: 'pending', order: 1 }),
+      expect.objectContaining({
+        type: 'video',
+        status: 'pending',
+        order: 1,
+        // Watched by the transcode reconciler until ready or failed (#125).
+        transcodePending: 'pending',
+        transcodePendingSince: expect.any(String),
+      }),
     );
   });
 
@@ -1547,6 +1554,9 @@ describe('updateContentItemVideo', () => {
       status: 'pending',
       submissionNonce: expect.any(String),
       previousS3Key: contentItem.s3Key,
+      // Watched by the transcode reconciler until ready or failed (#125).
+      transcodePending: 'pending',
+      transcodePendingSince: expect.any(String),
       mimeType: 'video/webm',
     });
     // Retired by transcode-complete once the replacement is ready.
@@ -1746,6 +1756,7 @@ describe('updateContentItemVideo', () => {
     const markFailedWhere = vi.fn().mockReturnValue({
       go: vi.fn().mockResolvedValue({ data: contentItem }),
     });
+    const markFailedRemove = vi.fn();
     contentItemPatchSet
       .mockReturnValueOnce({
         remove: () => ({
@@ -1754,7 +1765,12 @@ describe('updateContentItemVideo', () => {
           }),
         }),
       })
-      .mockReturnValueOnce({ where: markFailedWhere });
+      .mockReturnValueOnce({
+        remove: (attributes: string[]) => {
+          markFailedRemove(attributes);
+          return { where: markFailedWhere };
+        },
+      });
 
     await expect(
       callAs().updateContentItemVideo({ ...input, objectKey: newObjectKey }),
@@ -1773,6 +1789,11 @@ describe('updateContentItemVideo', () => {
       firstPatchArgs.submissionNonce,
     );
     expect(result).toBe(`submissionNonce = ${firstPatchArgs.submissionNonce}`);
+    // Failed, so no longer waiting for a transcode (#125).
+    expect(markFailedRemove).toHaveBeenCalledWith([
+      'transcodePending',
+      'transcodePendingSince',
+    ]);
   });
 
   it('still surfaces the original submission error even if marking it failed also fails', async () => {
@@ -1789,8 +1810,10 @@ describe('updateContentItemVideo', () => {
         }),
       })
       .mockReturnValueOnce({
-        where: () => ({
-          go: vi.fn().mockRejectedValue(new Error('DynamoDB is unavailable')),
+        remove: () => ({
+          where: () => ({
+            go: vi.fn().mockRejectedValue(new Error('DynamoDB is unavailable')),
+          }),
         }),
       });
 

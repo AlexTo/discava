@@ -12,14 +12,15 @@
     "@aws-sdk/client-appconfigdata": "catalog:",
     "@aws-sdk/client-cognito-identity-provider": "catalog:",
     "@aws-sdk/client-dynamodb": "catalog:",
+    "@aws-sdk/client-mediaconvert": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
+    "@discava/common-server-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@middy/core": "catalog:",
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
-    "zod": "catalog:",
-    "@discava/common-server-utils": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:"

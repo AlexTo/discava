@@ -6,14 +6,21 @@ import {
   CoreTable,
   EventsTranscodeCleanup,
   EventsTranscodeComplete,
+  EventsTranscodeReconciler,
   LessonMediaBucket,
   LessonMediaUploadBucket,
   RuntimeConfig,
   suppressRules,
   VideoTranscodePipeline,
 } from '@discava/common-constructs';
-import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
-import { Rule } from 'aws-cdk-lib/aws-events';
+import {
+  CfnResource,
+  Duration,
+  RemovalPolicy,
+  Stack,
+  StackProps,
+} from 'aws-cdk-lib';
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import {
   IGrantable,
@@ -22,7 +29,9 @@ import {
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
 import { Function as LambdaFunctionHandler } from 'aws-cdk-lib/aws-lambda';
+import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 
 export interface MediaPipelineStackProps extends StackProps {
@@ -69,6 +78,90 @@ export class MediaPipelineStack extends Stack {
     this.schedulerRole = schedulerRole;
 
     this.createTranscodeCompleteLambda(lessonMediaUploadBucket, coreTable);
+    this.createTranscodeReconcilerLambda(lessonMediaUploadBucket, coreTable);
+  }
+
+  // Where an event a handler kept failing on is kept, instead of being
+  // dropped once Lambda's retries run out (#185): the original event, the
+  // error and how many attempts were made, for 14 days. SQS-managed
+  // encryption, because EventBridge can't send to a queue encrypted with the
+  // AWS managed KMS key; the messages hold IDs and S3 keys, nothing personal.
+  private failureQueue(id: string) {
+    const queue = new Queue(this, id, {
+      encryption: QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      retentionPeriod: Duration.days(14),
+    });
+    suppressRules(
+      queue,
+      ['CKV_AWS_27'],
+      'Encrypted with SQS-managed SSE, which this check does not recognise; KMS would need a customer managed key for EventBridge to send to it',
+    );
+    return queue;
+  }
+
+  // What applying a finished transcode needs (see the events package's
+  // applyTranscodeOutcome), shared by transcode-complete and the reconciler:
+  // the table, deleting the raw upload, and scheduling a retired version's
+  // or superseded job's output for cleanup.
+  private grantApplyTranscodeOutcome(
+    handler: LambdaFunctionHandler,
+    lessonMediaUploadBucket: LessonMediaUploadBucket,
+    coreTable: CoreTable,
+  ) {
+    // The upload bucket's name is resolved at runtime via RuntimeConfig/
+    // AppConfig, granted below alongside the DynamoDB table name lookup
+    // @discava/core-table already needs.
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    handler.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(handler);
+    coreTable.grantReadWriteData(handler);
+    lessonMediaUploadBucket.grantDelete(handler);
+    // A submission whose mediaConvertJobId was never stamped can't be
+    // canceled/scheduled early by whatever delete/replace call retired it
+    // (see mediaconvert-client.ts's bestEffortCancelTranscodeJobs) --
+    // applying its outcome schedules that cleanup itself, so it needs the
+    // same grants every other scheduler of that cleanup already has.
+    this.grantScheduleCleanupWrite(handler);
+  }
+
+  // Settles lesson videos stuck waiting for a transcode (#125): a completion
+  // event that never arrived or kept failing, or a video that never got a
+  // job. Every 30 minutes; a run with nothing stuck is one empty query.
+  private createTranscodeReconcilerLambda(
+    lessonMediaUploadBucket: LessonMediaUploadBucket,
+    coreTable: CoreTable,
+  ) {
+    const reconciler = new EventsTranscodeReconciler(
+      this,
+      'TranscodeReconciler',
+    );
+    this.grantApplyTranscodeOutcome(
+      reconciler,
+      lessonMediaUploadBucket,
+      coreTable,
+    );
+    // Asks MediaConvert how a stuck video's job ended.
+    reconciler.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['mediaconvert:GetJob'],
+        resources: [
+          this.formatArn({
+            service: 'mediaconvert',
+            resource: 'jobs',
+            resourceName: '*',
+          }),
+        ],
+      }),
+    );
+    new Rule(this, 'TranscodeReconcilerSchedule', {
+      schedule: Schedule.rate(Duration.minutes(30)),
+      targets: [new LambdaFunction(reconciler)],
+    });
+    return reconciler;
   }
 
   // createContentItemVideo/updateContentItemVideo submit the MediaConvert
@@ -157,31 +250,36 @@ export class MediaPipelineStack extends Stack {
       this,
       'TranscodeComplete',
     );
-    // The upload bucket's name is resolved at runtime via RuntimeConfig/
-    // AppConfig, granted below alongside the DynamoDB table name lookup
-    // @discava/core-table already needs.
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    transcodeComplete.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
+    this.grantApplyTranscodeOutcome(
+      transcodeComplete,
+      lessonMediaUploadBucket,
+      coreTable,
     );
-    runtimeConfig.grantReadAppConfig(transcodeComplete);
-    coreTable.grantReadWriteData(transcodeComplete);
-    lessonMediaUploadBucket.grantDelete(transcodeComplete);
-    // A submission whose mediaConvertJobId was never stamped can't be
-    // canceled/scheduled early by whatever delete/replace call retired it
-    // (see mediaconvert-client.ts's bestEffortCancelTranscodeJobs) --
-    // transcode-complete.ts schedules that cleanup itself once this job's
-    // own completion event arrives, so it needs the same grants every
-    // other scheduler of that cleanup already has.
-    this.grantScheduleCleanupWrite(transcodeComplete);
+
+    // EventBridge invokes it asynchronously: once it has accepted an event,
+    // Lambda's own retries apply, then the event is kept in the failure
+    // queue rather than dropped (#185). The reconciler settles the video
+    // meanwhile; the queue keeps what went wrong.
+    const failures = this.failureQueue('TranscodeCompleteFailures');
+    transcodeComplete.configureAsyncInvoke({
+      retryAttempts: 2,
+      maxEventAge: Duration.hours(6),
+      onFailure: new SqsDestination(failures),
+    });
     new Rule(this, 'TranscodeCompleteRule', {
       eventPattern: {
         source: ['aws.mediaconvert'],
         detailType: ['MediaConvert Job State Change'],
         detail: { status: ['COMPLETE', 'ERROR'] },
       },
-      targets: [new LambdaFunction(transcodeComplete)],
+      // Events EventBridge couldn't deliver at all go to the same queue.
+      targets: [
+        new LambdaFunction(transcodeComplete, {
+          deadLetterQueue: failures,
+          retryAttempts: 8,
+          maxEventAge: Duration.hours(6),
+        }),
+      ],
     });
 
     return transcodeComplete;
@@ -225,6 +323,16 @@ export class MediaPipelineStack extends Stack {
       assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
     });
     transcodeCleanup.grantInvoke(schedulerRole);
+    // Invoked asynchronously by each schedule: a cleanup that keeps failing
+    // is kept, not dropped (#185). Only leaves files behind if it's never
+    // replayed; deleting an already-deleted prefix is a no-op.
+    transcodeCleanup.configureAsyncInvoke({
+      retryAttempts: 2,
+      maxEventAge: Duration.hours(6),
+      onFailure: new SqsDestination(
+        this.failureQueue('TranscodeCleanupFailures'),
+      ),
+    });
 
     runtimeConfig.set('mediaConvert', 'TranscodeCleanup', {
       lambdaArn: transcodeCleanup.functionArn,

@@ -46,7 +46,7 @@ export const createLessonEntity = async () =>
         // procedures choose it from the course's status (visible in a draft
         // course, hidden until explicitly published otherwise). Students only
         // see a record that is *effectively* visible: it and every ancestor
-        // visible and not archived (see ../curriculum.ts).
+        // visible and not archived (see ../helpers/curriculum.ts).
         visibility: {
           type: ['hidden', 'visible'] as const,
           required: true,

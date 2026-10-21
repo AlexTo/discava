@@ -49,4 +49,15 @@ export default defineConfig([
     platform: 'node',
     external: [/@aws-sdk\/.*/],
   },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/media/transcode-reconciler.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/transcode-reconciler/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
 ]);
