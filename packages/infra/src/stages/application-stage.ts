@@ -70,6 +70,7 @@ export class ApplicationStage extends Stage {
       coreTable,
       lessonMedia,
       instructorPortal: websites.instructorPortal,
+      studentPortal: websites.studentPortal,
     });
 
     const mediaPipeline = new MediaPipelineStack(this, 'MediaPipeline', {
