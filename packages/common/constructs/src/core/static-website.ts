@@ -52,14 +52,17 @@ const DEFAULT_RUNTIME_CONFIG_FILENAME = 'runtime-config.json';
 // Content-Security-Policy enforced on all responses. Restricts scripts and
 // framing to mitigate XSS and clickjacking, while permitting HTTPS calls
 // (connect-src, media-src) to AWS service endpoints such as API Gateway,
-// Cognito, Bedrock AgentCore, and presigned S3/CloudFront media URLs, which
-// are only known at deploy time. Edit this to tighten connect-src/media-src
-// to your specific origins once they are known.
+// Cognito, Bedrock AgentCore, and presigned S3/CloudFront media URLs, and
+// HTTPS images (img-src) such as course images from the public media
+// distribution, which are only known at deploy time: that distribution is in
+// a stack deployed after the portals'. Edit this to tighten
+// connect-src/media-src/img-src to your specific origins once they are known.
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // blob: is the instructor portal's crop preview of a picked image (#76).
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https: wss:",
   // blob: is required for hls.js/MediaSource-based HLS playback.

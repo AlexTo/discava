@@ -344,6 +344,41 @@ describe('course images (#76)', () => {
     );
   });
 
+  it.each(['StudentPortal', 'InstructorPortal'])(
+    'lets the %s show them, and the crop preview',
+    (portal) => {
+      const policies = Object.entries(
+        stack('Websites').findResources(
+          'AWS::CloudFront::ResponseHeadersPolicy',
+        ),
+      )
+        .filter(([id]) => id.startsWith(portal))
+        .map(
+          ([, policy]) =>
+            (
+              policy as {
+                Properties: {
+                  ResponseHeadersPolicyConfig: {
+                    SecurityHeadersConfig: {
+                      ContentSecurityPolicy: { ContentSecurityPolicy: string };
+                    };
+                  };
+                };
+              }
+            ).Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig
+              .ContentSecurityPolicy.ContentSecurityPolicy,
+        );
+
+      expect(policies).toHaveLength(1);
+      const directives = Object.fromEntries(
+        policies[0].split('; ').map((d) => [d.split(' ')[0], d]),
+      );
+      expect(directives['img-src']).toBe("img-src 'self' data: blob: https:");
+      // Scripts stay limited to the portal itself.
+      expect(directives['script-src']).toBe("script-src 'self'");
+    },
+  );
+
   it('serves images without signing', () => {
     const distributions = Object.entries(
       stack('Data').findResources('AWS::CloudFront::Distribution'),
