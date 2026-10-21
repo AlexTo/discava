@@ -6,12 +6,12 @@ import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
 import { CircleCheck, FileText, ListChecks, Play } from 'lucide-react';
 import { Alert } from '../../../../components/alert';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { QuizItem } from './quiz-item';
 import {
   errorCode,
   type PlayerItem,
@@ -81,7 +81,7 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
 }
 
 // Text and video items are done when the student says so, never on their
-// own. A quiz completes itself once passed or out of attempts (7d).
+// own. A quiz completes itself once passed or out of attempts.
 function MarkAsDone({
   item,
   done,
@@ -171,11 +171,7 @@ export function ContentItem({
       ) : null}
       {item.type === 'video' ? <VideoPlayer item={item} /> : null}
       {item.type === 'quiz' ? (
-        <Card className="border-dashed">
-          <CardContent className="py-6 text-center text-sm text-muted-foreground">
-            Quizzes open here soon.
-          </CardContent>
-        </Card>
+        <QuizItem item={item} readOnly={readOnly} />
       ) : null}
 
       {item.type === 'quiz' ? null : (

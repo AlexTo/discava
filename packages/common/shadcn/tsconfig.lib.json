@@ -26,6 +26,7 @@
     }
   ],
   "exclude": [
+    "src/test/**",
     "vite.config.ts",
     "vite.config.mts",
     "vitest.config.ts",

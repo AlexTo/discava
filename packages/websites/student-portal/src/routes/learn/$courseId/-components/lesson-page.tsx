@@ -5,14 +5,66 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, CircleCheck, FileX } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CircleCheck,
+  FileX,
+} from 'lucide-react';
 import { Fragment } from 'react';
 import { ContentItem, ITEM_TYPES, itemAnchor } from './content-item';
 import { type CoursePlayer, CoursePlayerLayout } from './course-player';
+import { useQuizFailed } from './quiz-item';
 import type { PlayerItem } from './use-course-player';
 
-// The lesson's items as steps, each ticked once done. A step scrolls to its
-// item on this page.
+// One item as a step: ✓ done, ⚠ a quiz finished without passing, or the
+// item's type. It scrolls to the item on this page.
+function Step({
+  item,
+  index,
+  done,
+}: {
+  item: PlayerItem;
+  index: number;
+  done: boolean;
+}) {
+  const failed = useQuizFailed(item) && done;
+  const Icon = failed
+    ? AlertTriangle
+    : done
+      ? CircleCheck
+      : ITEM_TYPES[item.type].icon;
+  return (
+    <li>
+      <a
+        href={`#${itemAnchor(item.contentItemId)}`}
+        onClick={(event) => {
+          event.preventDefault();
+          document
+            .getElementById(itemAnchor(item.contentItemId))
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+        className={cn(
+          'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/60',
+          failed
+            ? 'border-amber-500/50 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+            : done &&
+                'border-emerald-500/50 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
+        )}
+      >
+        <Icon className="size-3.5" aria-hidden="true" />
+        <span className="sr-only">
+          Step {index + 1}
+          {failed ? ', finished but not passed' : done ? ', done' : ''}:{' '}
+        </span>
+        <span className="max-w-40 truncate">{item.title}</span>
+      </a>
+    </li>
+  );
+}
+
+// The lesson's items as steps. A failed quiz never blocks moving on.
 function StepBar({
   items,
   completedItemIds,
@@ -23,35 +75,14 @@ function StepBar({
   return (
     <nav aria-label="Lesson steps">
       <ol className="flex flex-wrap gap-2">
-        {items.map((item, index) => {
-          const done = completedItemIds.has(item.contentItemId);
-          const Icon = done ? CircleCheck : ITEM_TYPES[item.type].icon;
-          return (
-            <li key={item.contentItemId}>
-              <a
-                href={`#${itemAnchor(item.contentItemId)}`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  document
-                    .getElementById(itemAnchor(item.contentItemId))
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/60',
-                  done &&
-                    'border-emerald-500/50 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300',
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden="true" />
-                <span className="sr-only">
-                  Step {index + 1}
-                  {done ? ', done' : ''}:{' '}
-                </span>
-                <span className="max-w-40 truncate">{item.title}</span>
-              </a>
-            </li>
-          );
-        })}
+        {items.map((item, index) => (
+          <Step
+            key={item.contentItemId}
+            item={item}
+            index={index}
+            done={completedItemIds.has(item.contentItemId)}
+          />
+        ))}
       </ol>
     </nav>
   );

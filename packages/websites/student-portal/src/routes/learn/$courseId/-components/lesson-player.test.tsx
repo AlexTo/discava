@@ -57,6 +57,55 @@ const quizItem = {
   order: 3,
 };
 
+const quizView = (overrides: Record<string, unknown> = {}) => ({
+  ...quizItem,
+  questions: [
+    {
+      questionId: 'q1',
+      kind: 'single',
+      prompt: doc('Is a matrix a vector?'),
+      options: [
+        { optionId: 'yes', text: 'Yes' },
+        { optionId: 'no', text: 'No' },
+      ],
+    },
+  ],
+  settings: {
+    passMarkPercent: 100,
+    attemptsAllowed: 2,
+    shuffleOptions: false,
+    revealAnswers: 'after_each_attempt',
+  },
+  quizVersion: 1,
+  questionsHash: 'hash-1',
+  ...overrides,
+});
+
+const noAttempts = {
+  summary: null,
+  attempts: { items: [], cursor: null },
+  reveal: null,
+};
+
+const quizAttempt = (passed: boolean) => ({
+  attemptId: 'attempt-1',
+  answers: { q1: [passed ? 'yes' : 'no'] },
+  correctQuestionIds: passed ? ['q1'] : [],
+  scorePercent: passed ? 100 : 0,
+  passed,
+  quizVersion: 1,
+  questionsHash: 'hash-1',
+  submittedAt: AT,
+});
+
+const quizSummary = (passed: boolean, attemptsUsed = 1) => ({
+  attemptsUsed,
+  attemptsAllowed: 2,
+  bestScore: passed ? 100 : 0,
+  bestAttemptId: 'attempt-1',
+  ...(passed && { passedAt: AT }),
+});
+
 const course = (overrides: Record<string, unknown> = {}) => ({
   courseId: 'course-1',
   title: 'Linear Algebra',
@@ -120,6 +169,8 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
   }),
+  'quiz.view': () => quizView(),
+  'quiz.myAttempts': () => noAttempts,
   ...overrides,
 });
 
@@ -239,7 +290,7 @@ describe('LessonPage', () => {
     ).toBeInTheDocument();
     expect(
       within(
-        screen.getByRole('navigation', { name: 'Lesson steps' }),
+        await screen.findByRole('navigation', { name: 'Lesson steps' }),
       ).getAllByRole('link'),
     ).toHaveLength(3);
     expect(
@@ -318,7 +369,7 @@ describe('LessonPage', () => {
     });
     expect(
       within(
-        screen.getByRole('navigation', { name: 'Lesson steps' }),
+        await screen.findByRole('navigation', { name: 'Lesson steps' }),
       ).getByRole('link', { name: /Step 1, done/ }),
     ).toBeInTheDocument();
   });
@@ -341,14 +392,132 @@ describe('LessonPage', () => {
     );
   });
 
-  it('completes quizzes elsewhere, not with Mark as done', async () => {
+  it('offers a quiz to take, without Mark as done', async () => {
     openLesson('lesson-1');
 
     const quiz = await item('Check yourself');
     expect(
-      within(quiz).getByText('Quizzes open here soon.'),
+      await within(quiz).findByRole('button', { name: 'Start quiz' }),
     ).toBeInTheDocument();
-    expect(within(quiz).queryByRole('button')).toBeNull();
+    expect(
+      within(quiz).queryByRole('button', { name: 'Mark as done' }),
+    ).toBeNull();
+  });
+
+  it('grades a quiz attempt on core-api and completes it once passed', async () => {
+    let completed = false;
+    const { user, calls } = openLesson('lesson-1', {
+      'quiz.submitAttempt': () => {
+        completed = true;
+        return {
+          attempt: quizAttempt(true),
+          summary: quizSummary(true),
+          reveal: { q1: { correctOptionIds: ['yes'] } },
+        };
+      },
+      'course.myItemCompletions': () => ({
+        items: completed ? [completion('quiz-1')] : [],
+      }),
+    });
+    const quiz = await item('Check yourself');
+
+    await user.click(
+      await within(quiz).findByRole('button', { name: 'Start quiz' }),
+    );
+    await user.click(within(quiz).getByRole('radio', { name: 'Yes' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: /Review answers/ }),
+    );
+    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+
+    expect(
+      await within(quiz).findByText(/This attempt: 100%/),
+    ).toBeInTheDocument();
+    expect(
+      calls.find((call) => call.path === 'quiz.submitAttempt')?.input,
+    ).toEqual({
+      courseId: 'course-1',
+      moduleId: 'module-1',
+      lessonId: 'lesson-1',
+      contentItemId: 'quiz-1',
+      answers: { q1: ['yes'] },
+      questionsHash: 'hash-1',
+    });
+    // The server completed the quiz: the step is ticked once refetched.
+    expect(
+      await within(
+        await screen.findByRole('navigation', { name: 'Lesson steps' }),
+      ).findByRole('link', { name: /Step 3, done/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('reloads an edited quiz instead of grading stale answers', async () => {
+    let version = 1;
+    const { user, calls } = openLesson('lesson-1', {
+      'quiz.view': () =>
+        version === 1
+          ? quizView()
+          : quizView({
+              questionsHash: 'hash-2',
+              questions: [
+                {
+                  ...quizView().questions[0],
+                  prompt: doc('Is every matrix a vector?'),
+                },
+              ],
+            }),
+      'quiz.submitAttempt': () => {
+        version = 2;
+        throw new ApiError('CONFLICT', 'This quiz was updated');
+      },
+    });
+    const quiz = await item('Check yourself');
+
+    await user.click(
+      await within(quiz).findByRole('button', { name: 'Start quiz' }),
+    );
+    await user.click(within(quiz).getByRole('radio', { name: 'Yes' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: /Review answers/ }),
+    );
+    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+
+    expect(
+      await within(quiz).findByText('This quiz was updated'),
+    ).toBeInTheDocument();
+    expect(within(quiz).getByText('Updated')).toBeInTheDocument();
+    expect(
+      calls.filter((call) => call.path === 'quiz.view').length,
+    ).toBeGreaterThan(1);
+  });
+
+  it('marks a quiz finished without passing in the step bar', async () => {
+    openLesson('lesson-1', {
+      'course.myItemCompletions': () => ({ items: [completion('quiz-1')] }),
+      'quiz.myAttempts': () => ({
+        summary: quizSummary(false, 2),
+        attempts: { items: [quizAttempt(false)], cursor: null },
+        reveal: null,
+      }),
+    });
+
+    expect(
+      await within(
+        await screen.findByRole('navigation', { name: 'Lesson steps' }),
+      ).findByRole('link', { name: /Step 3, finished but not passed/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('closes quizzes in an archived course', async () => {
+    openLesson('lesson-1', {
+      'course.view': () => course({ status: 'archived' }),
+    });
+
+    expect(
+      await within(await item('Check yourself')).findByText(
+        'This course is archived, so its quizzes are closed.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('can’t complete anything in an archived course', async () => {
