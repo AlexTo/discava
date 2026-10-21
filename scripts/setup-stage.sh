@@ -330,19 +330,47 @@ certificate_covers_all() {
   done
 }
 
+# Why an API's certificate must be its own (#224): when one certificate covers
+# both APIs' domains and they resolve to the same API Gateway address (the
+# addresses are shared and rotate), browsers reuse a single HTTP/2 connection
+# for both, and API Gateway rejects the requests sent down the other API's
+# connection with a 403 and no CORS headers.
+readonly API_CERTIFICATE_REASON="An API needs a certificate of its own, naming exactly its domain: when one certificate also covers the other API's domain, browsers can reuse a single connection for both APIs, and API Gateway rejects the requests that reach the wrong one (see #224)."
+
+# api_certificate_error <comma-separated names> <domain> [other API's domain]:
+# prints why a certificate with those subject alternative names can't serve
+# an API custom domain, or nothing if it can. It must name the domain exactly,
+# with no wildcard over it, and not cover the other API's domain.
+api_certificate_error() {
+  local names domain other="${3:-}"
+  names=",$(lower "$1"),"
+  domain="$(lower "$2")"
+  if [[ "$names" != *",$domain,"* ]]; then
+    echo "it covers $domain only through a wildcard"
+  elif [[ "${domain#*.}" == *.* && "$names" == *",*.${domain#*.},"* ]]; then
+    echo "it also covers *.${domain#*.}"
+  elif [[ -n "$other" ]] && certificate_covers "$1" "$other"; then
+    echo "it also covers $other"
+  fi
+}
+
 # find_certificate <region> <comma-separated domains> <comma-separated key
-# types>: prints the ARN of the first issued ACM certificate in the region
-# with one of the key types and covering every domain. The key types are
-# passed explicitly because ACM otherwise only lists RSA_1024/RSA_2048
+# types> [api [other API's domain]]: prints the ARN of the first issued ACM
+# certificate in the region with one of the key types and covering every
+# domain; for an API, only one api_certificate_error accepts. The key types
+# are passed explicitly because ACM otherwise only lists RSA_1024/RSA_2048
 # certificates, silently skipping ECDSA and larger RSA ones.
 find_certificate() {
-  local region="$1" domains="$2" key_types="$3" arn names
+  local region="$1" domains="$2" key_types="$3" kind="${4:-}" other="${5:-}"
+  local arn names
   while IFS=$'\t' read -r arn names; do
     [[ -n "$arn" ]] || continue
-    if certificate_covers_all "$names" "$domains"; then
-      echo "$arn"
-      return
+    certificate_covers_all "$names" "$domains" || continue
+    if [[ "$kind" == api && -n "$(api_certificate_error "$names" "$domains" "$other")" ]]; then
+      continue
     fi
+    echo "$arn"
+    return
   done < <(aws acm list-certificates \
     --region "$region" \
     --certificate-statuses ISSUED \
@@ -608,6 +636,11 @@ while true; do
   [[ "$ASSUME_YES" == false ]] || exit 1
 done
 readonly ROOT_DOMAIN
+# The API whose domain was resolved before this one, so the second API's
+# certificate can be checked against the first's (see api_certificate_error).
+previous_api_label=""
+previous_api_domain=""
+previous_api_certificate_names=""
 # component|env segment|label|kind|subdomain labels under the root domain
 for spec in \
   "coreApi|CORE_API|Core API|api|core-api" \
@@ -674,10 +707,30 @@ for spec in \
 
   certificate_default="$(map_get STAGE_CERTIFICATES "$component")"
   certificate_default="${certificate_default:-$current_certificate}"
+  # An API's configured certificate that's shared with the other API (e.g. a
+  # wildcard set up before #224) isn't offered again.
+  if [[ "$kind" == api && -n "$certificate_default" ]]; then
+    default_names="$(aws acm describe-certificate \
+      --certificate-arn "$certificate_default" \
+      --region "$certificate_region" \
+      --query 'Certificate.[Status, KeyAlgorithm, join(`,`, SubjectAlternativeNames)]' \
+      --output text 2>/dev/null | cut -f3 || true)"
+    default_error="$(api_certificate_error "$default_names" "$domains" "$previous_api_domain")"
+    if [[ -n "$default_names" && -n "$default_error" ]]; then
+      paragraph "$label's current certificate $certificate_default can't stay: $default_error. $API_CERTIFICATE_REASON"
+      certificate_default=""
+    fi
+  fi
   if [[ -z "$certificate_default" ]]; then
-    certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types")"
+    if [[ "$kind" == api ]]; then
+      certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types" api "$previous_api_domain")"
+    else
+      certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types")"
+    fi
     if [[ -n "$certificate_default" ]]; then
       echo "Found an issued certificate in $certificate_region covering $domains."
+    elif [[ "$kind" == api ]]; then
+      echo "No issued certificate in $certificate_region is for exactly $domains; request one for exactly $domains in ACM first (a wildcard won't do, see #224)." >&2
     else
       echo "No issued certificate in $certificate_region covers $domains; request one in ACM first." >&2
     fi
@@ -708,14 +761,28 @@ for spec in \
         certificate_error="$label doesn't support $certificate's $certificate_key_algorithm key; use one of $certificate_key_types."
       elif ! certificate_covers_all "$certificate_names" "$domains"; then
         certificate_error="$certificate ($certificate_names) doesn't cover all of $domains."
+      elif [[ "$kind" == api ]]; then
+        api_error="$(api_certificate_error "$certificate_names" "$domains" "$previous_api_domain")"
+        if [[ -n "$api_error" ]]; then
+          certificate_error="$label can't use $certificate ($certificate_names): $api_error. $API_CERTIFICATE_REASON"
+        elif [[ -n "$previous_api_domain" ]] && certificate_covers "$previous_api_certificate_names" "$domains"; then
+          # Choosing another certificate here can't fix this one.
+          paragraph "$previous_api_label's certificate ($previous_api_certificate_names) also covers $domains. $API_CERTIFICATE_REASON Re-run and give $previous_api_label a certificate for exactly its own domain." >&2
+          exit 1
+        fi
       fi
     fi
     [[ -n "$certificate_error" ]] || break
-    echo "$certificate_error" >&2
+    paragraph "$certificate_error" >&2
     [[ "$ASSUME_YES" == false ]] || exit 1
   done
 
   DOMAIN_VARIABLES+=("$domain_variable=$domains" "$certificate_variable=$certificate")
+  if [[ "$kind" == api ]]; then
+    previous_api_label="$label"
+    previous_api_domain="$domains"
+    previous_api_certificate_names="$certificate_names"
+  fi
 done
 
 # HLS video playback authorizes via CloudFront signed cookies, which need a

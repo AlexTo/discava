@@ -11,7 +11,10 @@ import type { StagesConfig } from './stages.types.js';
 // them and sets them there. For discava-development, each component
 // takes a DISCAVA_DEVELOPMENT_INFRA_<COMPONENT>_CERTIFICATE_ARN plus:
 //
-//   APIs (API Gateway; certificate in the stage's region), one domain each:
+//   APIs (API Gateway; certificate in the stage's region), one domain each,
+//   each with a certificate of its own naming exactly that domain -- not a
+//   wildcard or one shared with the other API, or browsers can reuse one
+//   connection for both APIs and get 403s from the wrong one (#224):
 //     DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME            api.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME      instructor-api.example.com
 //
