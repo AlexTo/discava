@@ -2,9 +2,18 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { mkdir, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
+import { S3Client } from '@aws-sdk/client-s3';
+import {
+  LOCAL_EVENT_RUNNER,
+  localBucketName,
+  s3ClientConfig,
+} from '@discava/common-server-utils/local-dev';
 import {
   dynamoDBClientConfig,
   getDynamoDBClient,
@@ -12,8 +21,15 @@ import {
   resolveTableName,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
+import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
+import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { createBatcher, pollStream } from './dynamodb-stream.js';
+import {
+  startMediaJobsServer,
+  transcodeCompletionEvent,
+} from './media-jobs.js';
+import { createTranscoder, type Docker } from './transcoder.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
 // when deployed, done locally, so local changes reach the same handlers. Each
@@ -25,6 +41,11 @@ import { createBatcher, pollStream } from './dynamodb-stream.js';
 // - the core table's stream -> progress-recalculation, filtered and batched
 //   like its event source mapping (PROGRESS_STREAM_FILTERS, 100 records or
 //   5 s)
+// - a local transcode finishing -> transcode-complete, with the EventBridge
+//   event MediaConvert would emit (the transcoder stands in for MediaConvert;
+//   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
+// - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
+//   payload, LOCAL_EVENT_RUNNER.cleanupDelaySeconds after it's scheduled
 
 if (process.env.LOCAL_DEV !== 'true') {
   throw new Error('The event runner is for local dev only (LOCAL_DEV=true)');
@@ -74,10 +95,85 @@ const progressBatches = createBatcher<DynamoDBRecord>({
   },
 });
 
+// The ffmpeg image (#137 has the comparison): /ffmpeg is its entrypoint,
+// /ffprobe beside it. Pinned, at least 2 weeks old when chosen.
+const FFMPEG_IMAGE = 'mwader/static-ffmpeg:9.0.2';
+// Jobs' files, in the repo's git-ignored tmp/ so Docker can always mount it
+// and a failed job's files can be looked at. Cleared on start.
+const transcodeDir = fileURLToPath(
+  new URL('../../../../tmp/local-dev/transcode', import.meta.url),
+);
+
+const docker: Docker = (args) =>
+  new Promise((resolve) => {
+    const child = spawn('docker', args);
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('close', (code) => resolve({ code: code ?? 1, stdout, stderr }));
+    child.on('error', (error) =>
+      resolve({ code: 1, stdout, stderr: `${stderr}${error.message}` }),
+    );
+  });
+
+await rm(transcodeDir, { recursive: true, force: true });
+await mkdir(transcodeDir, { recursive: true });
+// Pulled now, so the first job doesn't wait for it.
+spawn('docker', ['pull', '--quiet', FFMPEG_IMAGE], { stdio: 'ignore' });
+
+const transcoder = createTranscoder({
+  docker,
+  killContainer: (name) =>
+    spawnSync('docker', ['kill', name], { stdio: 'ignore' }),
+  s3: new S3Client(s3ClientConfig()),
+  image: FFMPEG_IMAGE,
+  workDir: transcodeDir,
+  inputBucket: localBucketName('LessonMediaUploadBucket'),
+  outputBucket: localBucketName('LessonMediaBucket'),
+  only: (process.env.LOCAL_TRANSCODE_RENDITIONS ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean),
+  onFinished: (jobId, status, { userMetadata }) =>
+    invoke(
+      'transcode-complete',
+      transcodeComplete,
+      transcodeCompletionEvent(jobId, status, userMetadata),
+    ),
+  log,
+});
+
+const server = startMediaJobsServer({
+  port: LOCAL_EVENT_RUNNER.port,
+  submit: (request) => transcoder.submit(request),
+  cancel: (jobId) => transcoder.cancel(jobId),
+  schedule: ({ payload }) => {
+    log(
+      `transcode-cleanup scheduled in ${LOCAL_EVENT_RUNNER.cleanupDelaySeconds}s for ${payload.contentItemId}/${payload.submissionNonce}`,
+    );
+    setTimeout(
+      () => void invoke('transcode-cleanup', transcodeCleanup, payload),
+      LOCAL_EVENT_RUNNER.cleanupDelaySeconds * 1000,
+    ).unref();
+  },
+  log,
+});
+log(
+  `transcode jobs and schedules on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
+);
+
 const tableName = await resolveTableName();
 const abort = new AbortController();
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => abort.abort());
+  process.on(signal, () => {
+    abort.abort();
+    server.close();
+  });
 }
 
 // DynamoDB local can take a moment to start alongside this, and the table to

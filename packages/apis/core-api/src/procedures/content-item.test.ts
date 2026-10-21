@@ -85,11 +85,21 @@ beforeEach(() => {
 });
 
 describe('contentItem.videoUrl', () => {
+  it('has the player send no credentials when no cookies were set (local dev, #137)', async () => {
+    getSignedCloudFrontCookies.mockResolvedValue([]);
+
+    await expect(call().videoUrl(ref)).resolves.toEqual({
+      url: `https://media.example.com/${MANIFEST}`,
+      withCredentials: false,
+    });
+  });
+
   it("returns an enrolled student the video's manifest and sets cookies for its directory", async () => {
     const responseCookies: string[] = [];
 
     await expect(call(responseCookies).videoUrl(ref)).resolves.toEqual({
       url: `https://media.example.com/${MANIFEST}`,
+      withCredentials: true,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/nonce-1/',
@@ -162,6 +172,7 @@ describe('contentItem.videoUrl', () => {
 
     await expect(call().videoUrl(ref)).resolves.toEqual({
       url: `https://media.example.com/${previous}`,
+      withCredentials: true,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/',

@@ -14,6 +14,7 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { s3ClientConfig } from '@discava/common-server-utils/local-dev';
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import { z } from 'zod';
@@ -27,7 +28,8 @@ process.env.POWERTOOLS_SERVICE_NAME = 'TranscodeCleanup';
 const tracer = new Tracer();
 const logger = new Logger();
 const metrics = new Metrics();
-const s3Client = new S3Client({});
+// S3Mock in local dev (#137).
+const s3Client = new S3Client(s3ClientConfig());
 
 // Same page size DeleteObjects itself caps out at.
 const S3_PAGE_SIZE = 1000;

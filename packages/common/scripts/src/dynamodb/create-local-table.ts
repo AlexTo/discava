@@ -43,7 +43,8 @@ const STREAM_SPECIFICATION = {
 };
 
 const client = new DynamoDBClient({
-  endpoint: `http://localhost:${port}`,
+  // IPv4 explicitly, as common-server-utils' LOCAL_HOST explains.
+  endpoint: `http://127.0.0.1:${port}`,
   region: 'us-east-1',
   credentials: { accessKeyId: 'UNUSED', secretAccessKey: 'UNUSED' },
 });

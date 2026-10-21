@@ -42,7 +42,9 @@ describe('HlsVideo', () => {
       'probably',
     );
 
-    const { container } = render(<HlsVideo url={URL} title="Lecture 1" />);
+    const { container } = render(
+      <HlsVideo url={URL} withCredentials title="Lecture 1" />,
+    );
 
     expect(video(container).src).toBe(URL);
     expect(video(container).getAttribute('aria-label')).toBe('Lecture 1');
@@ -52,7 +54,7 @@ describe('HlsVideo', () => {
   it('plays through hls.js elsewhere, sending the signed cookies', () => {
     vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
 
-    const { container } = render(<HlsVideo url={URL} />);
+    const { container } = render(<HlsVideo url={URL} withCredentials />);
 
     const [instance] = hls.instances;
     expect(instance.loadSource).toHaveBeenCalledWith(URL);
@@ -60,5 +62,16 @@ describe('HlsVideo', () => {
     const xhr = { withCredentials: false };
     instance.config.xhrSetup(xhr);
     expect(xhr.withCredentials).toBe(true);
+  });
+
+  it('sends no credentials for an unsigned URL (local dev, #137)', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+
+    render(<HlsVideo url={URL} withCredentials={false} />);
+
+    const [instance] = hls.instances;
+    const xhr = { withCredentials: true };
+    instance.config.xhrSetup(xhr);
+    expect(xhr.withCredentials).toBe(false);
   });
 });

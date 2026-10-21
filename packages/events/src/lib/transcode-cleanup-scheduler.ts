@@ -8,6 +8,11 @@ import {
   CreateScheduleCommand,
   SchedulerClient,
 } from '@aws-sdk/client-scheduler';
+import {
+  callLocalEventRunner,
+  isLocalDev,
+  type LocalScheduleRequest,
+} from '@discava/common-server-utils/local-dev';
 import { resolveTranscodeCleanupConfig } from './runtime-config.js';
 
 let _schedulerClient: SchedulerClient | undefined;
@@ -49,6 +54,13 @@ export const scheduleTranscodeCleanupOrThrow = async (
   // writing; longer for a retired version students may still be streaming.
   delayMinutes = TRANSCODE_CLEANUP_DELAY_MINUTES,
 ): Promise<void> => {
+  // Local dev's event runner runs it after a short delay instead (#137).
+  if (isLocalDev()) {
+    await callLocalEventRunner('POST', '/schedules/transcode-cleanup', {
+      payload: params,
+    } satisfies LocalScheduleRequest);
+    return;
+  }
   const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
     await resolveTranscodeCleanupConfig();
 

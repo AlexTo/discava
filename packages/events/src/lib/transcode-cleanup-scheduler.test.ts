@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduleTranscodeCleanupOrThrow } from './transcode-cleanup-scheduler.js';
 
 const { schedulerSend, resolveTranscodeCleanupConfig, FakeConflictException } =
@@ -119,6 +119,51 @@ describe('scheduleTranscodeCleanupOrThrow', () => {
 
     await expect(scheduleTranscodeCleanupOrThrow(params)).rejects.toThrow(
       'Access denied',
+    );
+  });
+});
+
+describe('in local dev (#137)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const params = {
+    courseId: COURSE_ID,
+    moduleId: MODULE_ID,
+    lessonId: LESSON_ID,
+    contentItemId: CONTENT_ITEM_ID,
+    submissionNonce: SUBMISSION_NONCE,
+  };
+
+  it('has the event runner run the cleanup instead of Scheduler', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+
+    await scheduleTranscodeCleanupOrThrow(params);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:2024/schedules/transcode-cleanup',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ payload: params }),
+      }),
+    );
+    expect(schedulerSend).not.toHaveBeenCalled();
+  });
+
+  it('throws when the event runner refuses, as for Scheduler', async () => {
+    fetchMock.mockResolvedValue(new Response('down', { status: 500 }));
+
+    await expect(scheduleTranscodeCleanupOrThrow(params)).rejects.toThrow(
+      'refused POST /schedules/transcode-cleanup',
     );
   });
 });

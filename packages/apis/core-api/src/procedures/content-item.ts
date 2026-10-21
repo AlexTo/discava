@@ -74,5 +74,5 @@ export const videoUrl = courseProcedure
       getSignedCloudFrontCookies(prefixKey),
     ]);
     ctx.responseCookies?.push(...cookies);
-    return { url };
+    return { url, withCredentials: cookies.length > 0 };
   });

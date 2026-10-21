@@ -5,6 +5,7 @@
 import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { getSignedCookies } from '@aws-sdk/cloudfront-signer';
+import { isLocalDev, localObjectUrl } from './local-dev.js';
 import { SIGNED_COOKIE_LIFETIME_SECONDS } from './media-keys.js';
 
 const runtimeConfigKey = 'LessonMediaBucket';
@@ -93,6 +94,10 @@ const COOKIE_EXPIRY_SECONDS = SIGNED_COOKIE_LIFETIME_SECONDS;
 export const getSignedCloudFrontCookies = async (
   prefixKey: string,
 ): Promise<string[]> => {
+  // Local dev serves lesson media straight from S3Mock, unsigned (#137).
+  if (isLocalDev()) {
+    return [];
+  }
   const {
     cloudFrontDomainName,
     cloudFrontKeyPairId,
@@ -128,6 +133,10 @@ export const getSignedCloudFrontCookies = async (
 export const getCloudFrontVideoUrl = async (
   objectKey: string,
 ): Promise<string> => {
+  // S3Mock's own URL in local dev, with no cookies to go with it (#137).
+  if (isLocalDev()) {
+    return localObjectUrl(runtimeConfigKey, objectKey);
+  }
   const { cloudFrontDomainName } = await resolveCloudFrontConfig();
   return `https://${cloudFrontDomainName}/${objectKey}`;
 };

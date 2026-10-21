@@ -8,6 +8,11 @@ import {
   CreateScheduleCommand,
   SchedulerClient,
 } from '@aws-sdk/client-scheduler';
+import {
+  callLocalEventRunner,
+  isLocalDev,
+  type LocalScheduleRequest,
+} from '@discava/common-server-utils/local-dev';
 import { resolveAppConfigValue } from './runtime-config.js';
 
 // Shared by mediaconvert-client.ts (a canceled job's own output) and
@@ -72,6 +77,13 @@ export const scheduleTranscodeCleanup = async (
   delayMinutes = TRANSCODE_CLEANUP_DELAY_MINUTES,
 ): Promise<void> => {
   try {
+    // Local dev's event runner runs it after a short delay instead (#137).
+    if (isLocalDev()) {
+      await callLocalEventRunner('POST', '/schedules/transcode-cleanup', {
+        payload: params,
+      } satisfies LocalScheduleRequest);
+      return;
+    }
     const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
       await resolveTranscodeCleanupConfig();
 
