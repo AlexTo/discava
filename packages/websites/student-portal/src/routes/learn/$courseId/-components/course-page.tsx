@@ -16,6 +16,7 @@ import { Link } from '@tanstack/react-router';
 import { ChevronDown, FileText, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
+import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
 import { EnrolmentActions } from './enrolment-actions';
@@ -89,11 +90,19 @@ export function CoursePage({ courseId }: { courseId: string }) {
     <main className="w-full">
       <section className="border-b bg-muted/40">
         <div className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            {course.title}
-          </h1>
-          <div className="mt-6 max-w-sm space-y-3">
-            <EnrolmentActions courseId={courseId} courseTitle={course.title} />
+          <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_20rem] md:items-start">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+                {course.title}
+              </h1>
+              <div className="mt-6 max-w-sm space-y-3">
+                <EnrolmentActions
+                  courseId={courseId}
+                  courseTitle={course.title}
+                />
+              </div>
+            </div>
+            <CourseThumbnail course={course} className="rounded-xl shadow-sm" />
           </div>
           <Card className="mt-8 py-0 shadow-sm">
             <CardContent className="grid divide-y p-0 sm:grid-cols-2 sm:divide-x sm:divide-y-0">

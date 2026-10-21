@@ -11,6 +11,7 @@ import { cn } from '@discava/common-shadcn/lib/utils';
 import type { IMyEnrolment } from '@discava/core-api';
 import { Link } from '@tanstack/react-router';
 import { CircleCheck } from 'lucide-react';
+import { CourseThumbnail } from './course-thumbnail';
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
@@ -114,8 +115,9 @@ export function CourseProgressCard({
   className?: string;
 }) {
   return (
-    <Card className={cn('h-full gap-4 py-5', className)}>
-      <CardContent className="flex h-full flex-col gap-4 px-5">
+    <Card className={cn('h-full gap-4 overflow-hidden pt-0 pb-5', className)}>
+      <CourseThumbnail course={course} iconClassName="text-4xl" />
+      <CardContent className="flex flex-1 flex-col gap-4 px-5">
         <div className="space-y-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base font-semibold leading-5">

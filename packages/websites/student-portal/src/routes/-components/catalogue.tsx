@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../components/alert';
+import { CourseThumbnail } from '../../components/course-thumbnail';
 import { Spinner } from '../../components/spinner';
 import { useCoreApi } from '../../hooks/useCoreApi';
 import { categories, toDisplayCourse } from '../../lib/course-display';
@@ -154,16 +155,10 @@ export function Catalogue() {
                     key={course.courseId}
                     className="group overflow-hidden pt-0 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
                   >
-                    <div
-                      className={`flex h-36 items-center justify-center bg-gradient-to-br ${course.surface}`}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="text-5xl font-semibold text-foreground/80 transition-transform group-hover:scale-110"
-                      >
-                        {course.icon}
-                      </span>
-                    </div>
+                    <CourseThumbnail
+                      course={course}
+                      iconClassName="transition-transform group-hover:scale-110"
+                    />
                     <CardHeader>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs font-medium text-primary">

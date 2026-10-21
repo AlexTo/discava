@@ -7,6 +7,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/common/constructs',
+  // Workspace packages without package exports (e.g.
+  // @discava/common-server-utils/*) resolve through tsconfig paths, as for tsc.
+  resolve: { tsconfigPaths: true },
   test: {
     globalSetup: ['./tests/global-setup.ts'],
     passWithNoTests: true,

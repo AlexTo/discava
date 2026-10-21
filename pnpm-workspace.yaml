@@ -107,6 +107,7 @@ catalog:
   astro-d2: 0.14.0
   embla-carousel-react: ^8.6.0
   react-dropzone: 20.1.1
+  react-easy-crop: 6.2.4
   hls.js: 1.7.3
   cn: 0.4.0
   recharts: 3.10.1

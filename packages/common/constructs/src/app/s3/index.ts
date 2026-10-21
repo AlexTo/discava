@@ -4,3 +4,4 @@
  */
 export * from './lesson-media-bucket.js';
 export * from './lesson-media-upload-bucket.js';
+export * from './public-media-bucket.js';

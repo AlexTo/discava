@@ -215,13 +215,13 @@ read_stages_config() {
         const config = m.resolveStage(project, stage) ?? {};
         const c = config.infra ?? {};
         // Component security settings default to on unless a stage relaxes them.
-        const cloudFrontWaf = [c.studentPortal, c.instructorPortal, c.adminPortal, c.lessonMedia]
+        const cloudFrontWaf = [c.studentPortal, c.instructorPortal, c.adminPortal, c.lessonMedia, c.publicMedia]
           .some((component) => component?.enableWaf !== false);
         console.log('region=' + (config.region ?? ''));
         console.log('account=' + (config.account ?? ''));
         console.log('profile=' + (config.credentials?.type === 'profile' ? config.credentials.profile : ''));
         console.log('cloudFrontWaf=' + cloudFrontWaf);
-        for (const name of ['coreApi', 'instructorApi', 'studentPortal', 'instructorPortal', 'adminPortal', 'lessonMedia']) {
+        for (const name of ['coreApi', 'instructorApi', 'studentPortal', 'instructorPortal', 'adminPortal', 'lessonMedia', 'publicMedia']) {
           const component = c[name] ?? {};
           console.log('domains.' + name + '=' + [component.domainName ?? component.domainNames ?? []].flat().join(','));
           console.log('certificate.' + name + '=' + (component.certificateArn ?? ''));
@@ -605,7 +605,8 @@ for spec in \
   "studentPortal|STUDENT_PORTAL|Student portal|cloudfront|@,www" \
   "instructorPortal|INSTRUCTOR_PORTAL|Instructor portal|cloudfront|instructor" \
   "adminPortal|ADMIN_PORTAL|Admin portal|cloudfront|admin" \
-  "lessonMedia|LESSON_MEDIA|Lesson media|cloudfront|lesson-media"; do
+  "lessonMedia|LESSON_MEDIA|Lesson media|cloudfront|lesson-media" \
+  "publicMedia|PUBLIC_MEDIA|Public media|cloudfront|media"; do
   IFS='|' read -r component segment label kind root_labels <<<"$spec"
   if [[ "$kind" == api ]]; then
     # API Gateway custom domains take a single name.

@@ -34,6 +34,10 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import {
+  createCourseImageUploadUrl,
+  updateCourseImage,
+} from './procedures/course-image.js';
+import {
   createLesson,
   deleteLesson,
   deleteLessonPermanently,
@@ -63,6 +67,8 @@ export const appRouter = router({
     publish: publishCourse,
     restore: restoreCourse,
     view: viewCourse,
+    createImageUploadUrl: createCourseImageUploadUrl,
+    updateImage: updateCourseImage,
   }),
   module: router({
     create: createModule,

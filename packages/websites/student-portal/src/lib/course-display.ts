@@ -58,12 +58,15 @@ export interface DisplayCourse {
   duration: string;
   icon: string;
   surface: string;
+  // Its display image (#76); the icon and surface stand in until it has one.
+  imageKey?: string;
 }
 
 export function toDisplayCourse(course: {
   courseId: string;
   title: string;
   description?: string;
+  imageKey?: string;
 }): DisplayCourse {
   const seed = hashString(course.courseId);
   const category = pick(MOCK_CATEGORIES, seed, 0);
@@ -76,5 +79,6 @@ export function toDisplayCourse(course: {
     duration: pick(MOCK_DURATIONS, seed, 2),
     icon: pick(MOCK_ICONS, seed, 3),
     surface: pick(MOCK_SURFACES, seed, 4),
+    imageKey: course.imageKey,
   };
 }
