@@ -15,7 +15,8 @@ function NextUp({
   courseId: string;
   player: CoursePlayer;
 }) {
-  const { lessons, nextLesson, isLessonComplete, enrolment } = player;
+  const { lessons, nextLesson, isLessonComplete, enrolment, newItemIds } =
+    player;
 
   if (!nextLesson) {
     return (
@@ -34,19 +35,38 @@ function NextUp({
   const allDone = lessons.every(({ lesson }) => isLessonComplete(lesson));
   const started =
     allDone || lessons.some(({ lesson }) => isLessonComplete(lesson));
+  // Everything done, but content was added since: pick up there.
+  const hasNew = allDone && newItemIds.size > 0;
   const { module, moduleIndex, lesson } = nextLesson;
   return (
     <Card className="border-primary/20">
       <CardContent className="space-y-4">
         {allDone || enrolment?.status === 'completed' ? (
-          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-            <CircleCheck className="size-4" /> You've completed this course
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-300">
+              <CircleCheck className="size-4" /> You've completed this course
+            </span>
+            {newItemIds.size > 0 ? (
+              <span className="text-muted-foreground">
+                ·{' '}
+                {newItemIds.size === 1
+                  ? '1 new item'
+                  : `${newItemIds.size} new items`}{' '}
+                added since
+              </span>
+            ) : null}
           </p>
         ) : null}
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {allDone ? 'Review' : started ? 'Up next' : 'Start here'} · Module{' '}
-            {moduleIndex + 1}: {module.title}
+            {hasNew
+              ? 'New content'
+              : allDone
+                ? 'Review'
+                : started
+                  ? 'Up next'
+                  : 'Start here'}{' '}
+            · Module {moduleIndex + 1}: {module.title}
           </p>
           <h2 className="mt-1 text-xl font-semibold">{lesson.title}</h2>
           {lesson.description ? (
@@ -60,7 +80,13 @@ function NextUp({
             to="/learn/$courseId/lesson/$lessonId"
             params={{ courseId, lessonId: lesson.lessonId }}
           >
-            {allDone ? 'Review' : started ? 'Continue' : 'Start'}{' '}
+            {hasNew
+              ? 'See what’s new'
+              : allDone
+                ? 'Review'
+                : started
+                  ? 'Continue'
+                  : 'Start'}{' '}
             <ArrowRight className="size-4" />
           </Link>
         </Button>

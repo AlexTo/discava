@@ -230,6 +230,29 @@ describe('CourseHome', () => {
     expect(
       await screen.findByText("You've completed this course"),
     ).toBeInTheDocument();
+    // Its items have no completions: they were added since, so they're new.
+    expect(
+      screen.getByRole('link', { name: /See what’s new/ }),
+    ).toHaveAttribute('href', '/learn/course-1/lesson/lesson-1');
+  });
+
+  it('offers a review once everything is done', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({
+        'course.myItemCompletions': () => ({
+          items: [
+            completion('text-1'),
+            completion('video-1'),
+            completion('quiz-1'),
+            completion('text-2', 'lesson-2'),
+          ],
+        }),
+      }),
+    });
+
+    expect(
+      await screen.findByText("You've completed this course"),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^Review/ })).toHaveAttribute(
       'href',
       '/learn/course-1/lesson/lesson-1',
@@ -574,5 +597,68 @@ describe('LessonPage', () => {
       await screen.findByRole('link', { name: /Next lesson/ }),
     ).toHaveAttribute('href', '/learn/course-1/lesson/lesson-2');
     expect(screen.queryByRole('link', { name: /Previous lesson/ })).toBeNull();
+  });
+});
+
+// Both lessons completed by recalculation, then a video and a quiz added to
+// Lecture 1: only its text and Lecture 2's text have completions.
+const withNewItems = (overrides: Record<string, Handler> = {}) => ({
+  'course.myLessonProgress': () => ({
+    lessons: [
+      { lessonId: 'lesson-1', status: 'completed', completedAt: AT },
+      { lessonId: 'lesson-2', status: 'completed', completedAt: AT },
+    ],
+  }),
+  'course.myItemCompletions': () => ({
+    items: [completion('text-1'), completion('text-2', 'lesson-2')],
+  }),
+  'course.myEnrolment': () => ({
+    ...enrolment,
+    status: 'completed',
+    progressPercent: 50,
+    completedAt: AT,
+  }),
+  ...overrides,
+});
+
+describe('items added after completing', () => {
+  it('keeps the course completed and counts what’s new', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(withNewItems()),
+    });
+
+    expect(await screen.findByText('· 2 new items')).toBeInTheDocument();
+    expect(screen.getByText(/2 new items\s+added since/)).toBeInTheDocument();
+    expect(await outlineLink('Lecture 1')).toHaveTextContent('2 new');
+    expect(
+      within(await outlineLink('Lecture 1')).getByLabelText('Complete'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /See what’s new/ }),
+    ).toHaveAttribute('href', '/learn/course-1/lesson/lesson-1');
+  });
+
+  it('marks the new items in the lesson', async () => {
+    openLesson('lesson-1', withNewItems());
+
+    expect(
+      await within(await item('Lecture video')).findByText('New'),
+    ).toBeInTheDocument();
+    expect(within(await item('Notes')).queryByText('New')).toBeNull();
+    expect(
+      within(
+        await screen.findByRole('navigation', { name: 'Lesson steps' }),
+      ).getByRole('link', { name: /Step 2, new/ }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('· 2 new items').length).toBeGreaterThan(0);
+  });
+
+  it('calls nothing new in a lesson not yet completed', async () => {
+    openLesson('lesson-1', {
+      'course.myItemCompletions': () => ({ items: [completion('text-1')] }),
+    });
+
+    await item('Lecture video');
+    expect(screen.queryByText('New')).toBeNull();
   });
 });

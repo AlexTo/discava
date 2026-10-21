@@ -40,6 +40,10 @@ export interface CoursePlayer {
   lessons: CourseLesson[];
   completedItemIds: Set<string>;
   isLessonComplete: (lesson: PlayerLesson) => boolean;
+  // Items added to a lesson after the student completed it: visible, not
+  // completed, in a lesson progress recalculation has marked completed.
+  newItemIds: Set<string>;
+  newItemCount: (lesson: PlayerLesson) => number;
   nextLesson: CourseLesson | undefined;
 }
 
@@ -95,11 +99,33 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
         lesson.contentItems.every((item) =>
           completedItemIds.has(item.contentItemId),
         ));
-    // Where "Continue" goes: the first lesson not yet complete, or the first
-    // lesson once everything is.
+    // A completed lesson stays complete when content is added to it; what was
+    // added is new to the student (see the Progress and completion design
+    // doc).
+    const newItemIds = new Set(
+      lessons
+        .filter(({ lesson }) => recalculatedComplete.has(lesson.lessonId))
+        .flatMap(({ lesson }) => lesson.contentItems)
+        .filter((item) => !completedItemIds.has(item.contentItemId))
+        .map((item) => item.contentItemId),
+    );
+    const newItemCount = (lesson: PlayerLesson) =>
+      lesson.contentItems.filter((item) => newItemIds.has(item.contentItemId))
+        .length;
+    // Where "Continue" goes: the first lesson not yet complete, then the
+    // first with new items, then the first lesson once everything is done.
     const nextLesson =
-      lessons.find(({ lesson }) => !isLessonComplete(lesson)) ?? lessons[0];
-    return { lessons, completedItemIds, isLessonComplete, nextLesson };
+      lessons.find(({ lesson }) => !isLessonComplete(lesson)) ??
+      lessons.find(({ lesson }) => newItemCount(lesson) > 0) ??
+      lessons[0];
+    return {
+      lessons,
+      completedItemIds,
+      isLessonComplete,
+      newItemIds,
+      newItemCount,
+      nextLesson,
+    };
   }, [course, completionsQuery.data, progressQuery.data]);
 
   return {

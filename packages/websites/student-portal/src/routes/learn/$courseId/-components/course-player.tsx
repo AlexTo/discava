@@ -86,6 +86,22 @@ function Unavailable({
   );
 }
 
+/**
+ * "Completed ✓", with how many items were added since, e.g. "Completed ✓ ·
+ * 2 new items". Completion is permanent, so new content is shown as new rather
+ * than undoing it.
+ */
+export function CompletedWithNew({ count: n }: { count: number }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+        Completed <CircleCheck className="size-3.5" aria-hidden="true" />
+      </span>
+      {n > 0 ? <span>· {count(n, 'new item', 'new items')}</span> : null}
+    </span>
+  );
+}
+
 // The course's modules and lessons, each lesson ticked once complete. Every
 // module starts open; the current lesson is highlighted.
 function CourseOutline({
@@ -93,11 +109,13 @@ function CourseOutline({
   modules,
   activeLessonId,
   isLessonComplete,
+  newItemCount,
 }: {
   courseId: string;
   modules: PlayerModule[];
   activeLessonId?: string;
   isLessonComplete: CoursePlayer['isLessonComplete'];
+  newItemCount: CoursePlayer['newItemCount'];
 }) {
   const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
     new Set(),
@@ -186,9 +204,15 @@ function CourseOutline({
                         >
                           {lesson.title}
                         </span>
-                        <span className="shrink-0 text-xs text-muted-foreground">
-                          {count(lesson.contentItems.length, 'item', 'items')}
-                        </span>
+                        {newItemCount(lesson) > 0 ? (
+                          <span className="shrink-0 text-xs font-medium text-primary">
+                            {newItemCount(lesson)} new
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {count(lesson.contentItems.length, 'item', 'items')}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}
@@ -250,7 +274,11 @@ export function CoursePlayerLayout({
         {enrolment ? (
           <div className="w-full max-w-56 space-y-1.5">
             <p className="text-right text-xs text-muted-foreground">
-              {enrolment.progressPercent}% complete
+              {enrolment.status === 'completed' ? (
+                <CompletedWithNew count={player.newItemIds.size} />
+              ) : (
+                `${enrolment.progressPercent}% complete`
+              )}
             </p>
             <Progress
               value={enrolment.progressPercent}
@@ -275,6 +303,7 @@ export function CoursePlayerLayout({
             modules={course.modules}
             activeLessonId={activeLessonId}
             isLessonComplete={player.isLessonComplete}
+            newItemCount={player.newItemCount}
           />
         </aside>
         <section className="min-w-0">{children(player)}</section>
