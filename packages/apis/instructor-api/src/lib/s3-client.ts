@@ -11,6 +11,11 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import {
+  isLocalDev,
+  localBucketName,
+  s3ClientConfig,
+} from '@discava/common-server-utils/local-dev';
+import {
   manifestNonce,
   RETIRED_VERSION_DELAY_MINUTES,
 } from '@discava/common-server-utils/media-keys';
@@ -21,7 +26,8 @@ let _client: S3Client | undefined;
 
 export const getS3Client = (): S3Client => {
   if (!_client) {
-    _client = new S3Client({});
+    // S3Mock in local dev (#137).
+    _client = new S3Client(s3ClientConfig());
   }
   return _client;
 };
@@ -30,8 +36,16 @@ type S3Config = {
   bucketName: string;
 };
 
-const resolveBucketName = async (runtimeConfigKey: string): Promise<string> =>
-  (await resolveAppConfigValue<S3Config>('s3', runtimeConfigKey)).bucketName;
+// A bucket's name, from its runtime config key: the stack's bucket from
+// AppConfig when deployed, or the S3Mock bucket standing in for it in local
+// dev (#137).
+export const resolveBucketName = async (
+  runtimeConfigKey: string,
+): Promise<string> =>
+  isLocalDev()
+    ? localBucketName(runtimeConfigKey)
+    : (await resolveAppConfigValue<S3Config>('s3', runtimeConfigKey))
+        .bucketName;
 
 export const resolveLessonMediaBucketName = (): Promise<string> =>
   resolveBucketName('LessonMediaBucket');

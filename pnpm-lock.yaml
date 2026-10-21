@@ -694,6 +694,9 @@ importers:
       '@discava/common-infra-config':
         specifier: workspace:*
         version: link:../infra-config
+      '@discava/common-server-utils':
+        specifier: workspace:*
+        version: link:../server-utils
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
