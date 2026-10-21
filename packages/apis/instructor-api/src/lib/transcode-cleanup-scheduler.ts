@@ -67,6 +67,9 @@ export const scheduleTranscodeCleanup = async (
     contentItemId: string;
     submissionNonce: string;
   },
+  // By default long enough for a canceled job to stop writing; longer for a
+  // retired version students may still be streaming.
+  delayMinutes = TRANSCODE_CLEANUP_DELAY_MINUTES,
 ): Promise<void> => {
   try {
     const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
@@ -83,9 +86,7 @@ export const scheduleTranscodeCleanup = async (
 
     // EventBridge Scheduler's at() expression takes a literal local
     // timestamp with no timezone suffix or fractional seconds.
-    const runAt = new Date(
-      Date.now() + TRANSCODE_CLEANUP_DELAY_MINUTES * 60_000,
-    )
+    const runAt = new Date(Date.now() + delayMinutes * 60_000)
       .toISOString()
       .slice(0, 19);
 

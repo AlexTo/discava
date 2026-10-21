@@ -5,6 +5,7 @@
 import { filterEffectivelyVisible } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
+import { asStudentContentItem } from '../lib/playback.js';
 import {
   type IViewCourseOutput,
   ListCoursesByInstructorInputSchema,
@@ -202,7 +203,8 @@ export const viewCourse = courseProcedure
               ...lesson,
               contentItems: (contentItemsByLessonId.get(lesson.lessonId) ?? [])
                 .slice()
-                .sort((a, b) => a.order - b.order),
+                .sort((a, b) => a.order - b.order)
+                .map(asStudentContentItem),
             })),
         })),
     } as IViewCourseOutput;

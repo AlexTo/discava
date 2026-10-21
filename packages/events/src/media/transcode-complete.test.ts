@@ -8,6 +8,7 @@ import { transcodeComplete } from './transcode-complete.js';
 const {
   contentItemPatch,
   contentItemPatchSet,
+  contentItemPatchRemove,
   contentItemPatchWhere,
   s3Send,
   resolveLessonMediaUploadBucketName,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   contentItemPatch: vi.fn(),
   contentItemPatchSet: vi.fn(),
+  contentItemPatchRemove: vi.fn(),
   contentItemPatchWhere: vi.fn(),
   s3Send: vi.fn(),
   resolveLessonMediaUploadBucketName: vi.fn(),
@@ -103,7 +105,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   resolveLessonMediaUploadBucketName.mockResolvedValue(UPLOAD_BUCKET_NAME);
   contentItemPatch.mockReturnValue({ set: contentItemPatchSet });
-  contentItemPatchSet.mockReturnValue({ where: contentItemPatchWhere });
+  contentItemPatchSet.mockReturnValue({
+    where: contentItemPatchWhere,
+    remove: contentItemPatchRemove,
+  });
+  contentItemPatchRemove.mockReturnValue({ where: contentItemPatchWhere });
   contentItemPatchWhere.mockReturnValue({
     go: vi.fn().mockResolvedValue({}),
   });
@@ -363,4 +369,77 @@ describe('transcodeComplete leaves archive state and visibility alone', () => {
       expect(scheduleTranscodeCleanupOrThrow).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('a completed replacement (#209)', () => {
+  const PREVIOUS = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/old-nonce/master.m3u8`;
+
+  const replacing = (previousS3Key?: string) => {
+    const go = vi.fn().mockResolvedValue({
+      data: previousS3Key ? { previousS3Key } : {},
+    });
+    contentItemPatchWhere.mockReturnValue({ go });
+    return go;
+  };
+
+  it('takes over from the previous version, and deletes it once its cookies have expired', async () => {
+    const go = replacing(PREVIOUS);
+
+    await transcodeComplete(buildEvent('COMPLETE') as any);
+
+    expect(contentItemPatchRemove).toHaveBeenCalledWith(['previousS3Key']);
+    expect(go).toHaveBeenCalledWith({ response: 'all_old' });
+    expect(scheduleTranscodeCleanupOrThrow).toHaveBeenCalledWith(
+      {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: CONTENT_ITEM_ID,
+        submissionNonce: 'old-nonce',
+      },
+      // Four hours of cookies, and a margin.
+      255,
+    );
+  });
+
+  it('has nothing to retire for a first upload', async () => {
+    replacing();
+
+    await transcodeComplete(buildEvent('COMPLETE') as any);
+
+    expect(scheduleTranscodeCleanupOrThrow).not.toHaveBeenCalled();
+  });
+
+  it('leaves a previous version from before nonces, which shares the item’s folder', async () => {
+    replacing(
+      `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/master.m3u8`,
+    );
+
+    await transcodeComplete(buildEvent('COMPLETE') as any);
+
+    expect(scheduleTranscodeCleanupOrThrow).not.toHaveBeenCalled();
+  });
+
+  it('still finishes when the previous version can’t be scheduled for deletion', async () => {
+    replacing(PREVIOUS);
+    scheduleTranscodeCleanupOrThrow.mockRejectedValueOnce(
+      new Error('Scheduler is unavailable'),
+    );
+
+    await expect(
+      transcodeComplete(buildEvent('COMPLETE') as any),
+    ).resolves.toBeUndefined();
+    // The swap happened, so the raw upload is still cleaned up.
+    expect(s3Send).toHaveBeenCalledWith(
+      expect.objectContaining({ Key: RAW_OBJECT_KEY }),
+    );
+  });
+
+  it('keeps the previous version playing when the replacement fails', async () => {
+    await transcodeComplete(buildEvent('ERROR') as any);
+
+    expect(contentItemPatchSet).toHaveBeenCalledWith({ status: 'failed' });
+    expect(contentItemPatchRemove).not.toHaveBeenCalled();
+    expect(scheduleTranscodeCleanupOrThrow).not.toHaveBeenCalled();
+  });
 });

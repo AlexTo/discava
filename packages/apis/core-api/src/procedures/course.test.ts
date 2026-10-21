@@ -431,6 +431,63 @@ describe('viewCourse', () => {
     });
   });
 
+  it('shows students a video being replaced as ready, with its previous version (#209)', async () => {
+    const previous =
+      'courses/course-1/modules/module-1/lessons/lesson-1/content-items/content-item-1/old-nonce/master.m3u8';
+    const replacing = {
+      contentItemId: 'content-item-1',
+      lessonId: 'lesson-1',
+      moduleId: 'module-1',
+      courseId: course.courseId,
+      type: 'video' as const,
+      status: 'pending' as const,
+      title: 'Lecture',
+      s3Key:
+        'courses/course-1/modules/module-1/lessons/lesson-1/content-items/content-item-1.mp4',
+      previousS3Key: previous,
+      mimeType: 'video/mp4',
+      order: 1,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [course],
+          module: [
+            {
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Module',
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ].map(visible),
+          lesson: [
+            {
+              lessonId: 'lesson-1',
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Lesson',
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ].map(visible),
+          contentItem: [replacing].map(visible),
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    const [item] = result.modules[0].lessons[0].contentItems;
+    expect(item).toMatchObject({ status: 'ready', s3Key: previous });
+    // Students aren't told about the replacement.
+    expect(item).not.toHaveProperty('previousS3Key');
+  });
+
   it('nests each module’s lessons, sorted by order', async () => {
     const module1 = {
       moduleId: 'module-2',

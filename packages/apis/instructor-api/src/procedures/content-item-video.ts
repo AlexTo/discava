@@ -536,6 +536,12 @@ export const updateContentItemVideo = courseProcedure
               s3Key: objectKey,
               status: 'pending',
               submissionNonce,
+              // Students keep playing the version being replaced until this
+              // one is ready (#209): a ready video becomes the previous
+              // version. Replacing a replacement still in flight keeps the
+              // previous version it already had.
+              ...(existing.status === 'ready' &&
+                existing.s3Key && { previousS3Key: existing.s3Key }),
               ...(mimeType !== undefined && { mimeType }),
               ...(durationSeconds !== undefined && { durationSeconds }),
             })
@@ -615,10 +621,17 @@ export const updateContentItemVideo = courseProcedure
       // the record's own current, legitimate content.
       await bestEffortCancelTranscodeJobs(ctx.logger, [existing]);
 
-      // Best-effort: the patch above already orphaned the old S3 object,
-      // regardless of whether the new transcode job below ever
-      // successfully starts, so this doesn't wait on that outcome.
-      if (objectKey !== existing.s3Key && existing.s3Key) {
+      // Best-effort: the patch above already orphaned the old raw upload of
+      // a replacement still in flight (or failed), regardless of whether the
+      // new transcode job below ever successfully starts, so this doesn't
+      // wait on that outcome. A ready video isn't deleted: it's now the
+      // previous version students play, retired by transcode-complete once
+      // this replacement is ready.
+      if (
+        existing.status !== 'ready' &&
+        objectKey !== existing.s3Key &&
+        existing.s3Key
+      ) {
         await bestEffortDeleteContentItemVideos(ctx.logger, [existing]);
       }
 

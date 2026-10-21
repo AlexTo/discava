@@ -28,6 +28,8 @@ export type ContentItem = {
   description?: string;
   body?: string;
   status: string;
+  // A video's version students keep playing while it's replaced (#209).
+  previousS3Key?: string;
   visibility: 'hidden' | 'visible';
   studentActivityCount?: number;
   // A quiz's questions, to show how many it has.
@@ -156,6 +158,7 @@ export function LessonContentItemsRow({
               title={item.title}
               description={item.description}
               status={item.status}
+              hasPreviousVersion={Boolean(item.previousS3Key)}
               trigger={
                 <Button
                   variant="ghost"

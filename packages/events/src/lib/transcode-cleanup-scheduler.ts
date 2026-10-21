@@ -37,13 +37,18 @@ const TRANSCODE_CLEANUP_DELAY_MINUTES = 10;
  * duplicate COMPLETE/ERROR event for the same job computes this same
  * deterministic name, which is a no-op here, not a failure.
  */
-export const scheduleTranscodeCleanupOrThrow = async (params: {
-  courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
-  submissionNonce: string;
-}): Promise<void> => {
+export const scheduleTranscodeCleanupOrThrow = async (
+  params: {
+    courseId: string;
+    moduleId: string;
+    lessonId: string;
+    contentItemId: string;
+    submissionNonce: string;
+  },
+  // How long to wait: by default long enough for a canceled job to stop
+  // writing; longer for a retired version students may still be streaming.
+  delayMinutes = TRANSCODE_CLEANUP_DELAY_MINUTES,
+): Promise<void> => {
   const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
     await resolveTranscodeCleanupConfig();
 
@@ -59,7 +64,7 @@ export const scheduleTranscodeCleanupOrThrow = async (params: {
 
   // EventBridge Scheduler's at() expression takes a literal local
   // timestamp with no timezone suffix or fractional seconds.
-  const runAt = new Date(Date.now() + TRANSCODE_CLEANUP_DELAY_MINUTES * 60_000)
+  const runAt = new Date(Date.now() + delayMinutes * 60_000)
     .toISOString()
     .slice(0, 19);
 

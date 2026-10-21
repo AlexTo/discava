@@ -18,7 +18,8 @@
     "@middy/core": "catalog:",
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@discava/common-server-utils": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:"

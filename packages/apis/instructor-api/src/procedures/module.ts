@@ -25,7 +25,10 @@ import {
   writeInActiveCourse,
 } from '../lib/course-lifecycle.js';
 import { bestEffortCancelTranscodeJobs } from '../lib/mediaconvert-client.js';
-import { bestEffortDeleteContentItemVideos } from '../lib/s3-client.js';
+import {
+  bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions,
+} from '../lib/s3-client.js';
 import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateModuleInputSchema,
@@ -236,6 +239,7 @@ const hardDeleteModule = async (
   );
   await bestEffortCancelTranscodeJobs(logger, videoContentItems);
   await bestEffortDeleteContentItemVideos(logger, videoContentItems);
+  await bestEffortRetirePreviousVersions(logger, videoContentItems);
 };
 
 export const createModule = courseProcedure

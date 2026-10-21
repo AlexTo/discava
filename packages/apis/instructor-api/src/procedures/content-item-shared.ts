@@ -29,6 +29,7 @@ import {
 } from '../lib/mediaconvert-client.js';
 import {
   bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions,
   type IDeletableVideoContentItem,
 } from '../lib/s3-client.js';
 import type { ICoreTableContext } from '../middleware/core-table.js';
@@ -140,6 +141,7 @@ const cleanUpDeletedContentItem = async (
     if (contentItem.s3Key) {
       await bestEffortDeleteContentItemVideos(logger, [contentItem]);
     }
+    await bestEffortRetirePreviousVersions(logger, [contentItem]);
   }
 };
 

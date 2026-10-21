@@ -276,4 +276,40 @@ describe('LessonContentItemsRow', () => {
 
     expect(screen.queryByRole('button', { name: 'Quiz' })).toBeNull();
   });
+
+  describe('a video being replaced (#209)', () => {
+    const video = (status: string) => ({
+      contentItemId: 'v',
+      type: 'video',
+      title: 'Lecture',
+      status,
+      previousS3Key: 'courses/c/content-items/v/old-nonce/master.m3u8',
+      visibility: 'visible' as const,
+    });
+
+    it('says students still see the previous version while it processes', async () => {
+      const { user } = renderRow(
+        { contentItems: [video('pending')] },
+        { 'course.view': () => ({ modules: [] }) },
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Edit Lecture' }));
+
+      expect(
+        await screen.findByText(
+          'Students still see the previous version until this one is ready.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('says so when the replacement failed', async () => {
+      const { user } = renderRow({ contentItems: [video('failed')] });
+
+      await user.click(screen.getByRole('button', { name: 'Edit Lecture' }));
+
+      expect(
+        await screen.findByText(/Students still see the previous version\./),
+      ).toBeInTheDocument();
+    });
+  });
 });

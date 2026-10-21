@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions,
   getVideoUploadETag,
 } from './s3-client.js';
 
@@ -130,6 +131,25 @@ describe('bestEffortDeleteContentItemVideos', () => {
         ([command]: any[]) => command.Bucket === MEDIA_BUCKET_NAME,
       ),
     ).toBe(false);
+  });
+
+  // The replace path calls this to drop an abandoned replacement's upload
+  // while the item still plays its previous version (#209).
+  it('leaves a replacement’s previous version alone', async () => {
+    await bestEffortDeleteContentItemVideos(undefined, [
+      {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: 'content-item-1',
+        status: 'pending',
+        s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1.mp4`,
+        submissionNonce: 'replacement-nonce',
+        previousS3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1/old-nonce/master.m3u8`,
+      },
+    ]);
+
+    expect(scheduleTranscodeCleanup).not.toHaveBeenCalled();
   });
 
   it('falls back to deleting the whole content-item prefix inline for a ready item with no submissionNonce', async () => {
@@ -455,5 +475,50 @@ describe('getVideoUploadETag', () => {
     await expect(getVideoUploadETag('some-key.mp4')).rejects.toThrow(
       'S3 is unavailable',
     );
+  });
+});
+
+describe('bestEffortRetirePreviousVersions', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const item = (previousS3Key?: string) => ({
+    courseId: COURSE_ID,
+    moduleId: MODULE_ID,
+    lessonId: LESSON_ID,
+    contentItemId: 'content-item-1',
+    status: 'pending',
+    previousS3Key,
+  });
+
+  it('schedules a deleted item’s previous version once its cookies have expired', async () => {
+    await bestEffortRetirePreviousVersions(undefined, [
+      item(
+        `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1/old-nonce/master.m3u8`,
+      ),
+    ]);
+
+    expect(scheduleTranscodeCleanup).toHaveBeenCalledWith(
+      undefined,
+      {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: 'content-item-1',
+        submissionNonce: 'old-nonce',
+      },
+      // Four hours of cookies, and a margin.
+      255,
+    );
+  });
+
+  it('skips items without one, and one from before nonces', async () => {
+    await bestEffortRetirePreviousVersions(undefined, [
+      item(),
+      item(
+        `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1/master.m3u8`,
+      ),
+    ]);
+
+    expect(scheduleTranscodeCleanup).not.toHaveBeenCalled();
   });
 });

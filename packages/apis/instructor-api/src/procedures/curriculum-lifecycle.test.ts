@@ -5,6 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
+import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import {
   deleteContentItem,
   deleteContentItemPermanently,
@@ -118,7 +119,10 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-vi.mock('../lib/s3-client.js', () => ({ bestEffortDeleteContentItemVideos }));
+vi.mock('../lib/s3-client.js', () => ({
+  bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions: vi.fn(async () => {}),
+}));
 vi.mock('../lib/mediaconvert-client.js', () => ({
   bestEffortCancelTranscodeJobs,
 }));

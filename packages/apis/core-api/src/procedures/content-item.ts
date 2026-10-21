@@ -10,6 +10,7 @@ import {
 import { isShown } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
+import { playableManifest } from '../lib/playback.js';
 import { VideoUrlInputSchema, VideoUrlOutputSchema } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
 
@@ -54,8 +55,7 @@ export const videoUrl = courseProcedure
       !isShown(lesson) ||
       !isShown(item) ||
       item.type !== 'video' ||
-      item.status !== 'ready' ||
-      !item.s3Key
+      !playableManifest(item)
     ) {
       throw new TRPCError({
         code: 'NOT_FOUND',
@@ -63,11 +63,14 @@ export const videoUrl = courseProcedure
       });
     }
 
+    // Its own transcode once ready, else the version kept playable while it's
+    // replaced (#209).
+    const manifest = playableManifest(item)!;
     // The directory holding this transcode's manifest, renditions and
     // segments: everything up to the slash before master.m3u8.
-    const prefixKey = item.s3Key.slice(0, item.s3Key.lastIndexOf('/') + 1);
+    const prefixKey = manifest.slice(0, manifest.lastIndexOf('/') + 1);
     const [url, cookies] = await Promise.all([
-      getCloudFrontVideoUrl(item.s3Key),
+      getCloudFrontVideoUrl(manifest),
       getSignedCloudFrontCookies(prefixKey),
     ]);
     ctx.responseCookies?.push(...cookies);

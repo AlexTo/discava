@@ -146,6 +146,28 @@ describe('contentItem.videoUrl', () => {
     expect(getSignedCloudFrontCookies).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['being replaced', 'pending'],
+    ['whose replacement failed', 'failed'],
+  ])('plays the previous version of a video %s (#209)', async (_, status) => {
+    const previous =
+      'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/master.m3u8';
+    db.contentItem = {
+      ...db.contentItem,
+      status,
+      s3Key:
+        'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1.mp4',
+      previousS3Key: previous,
+    };
+
+    await expect(call().videoUrl(ref)).resolves.toEqual({
+      url: `https://media.example.com/${previous}`,
+    });
+    expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
+      'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/',
+    );
+  });
+
   it('rejects unauthenticated callers', async () => {
     const anonymous = caller({
       event: { requestContext: {} } as unknown as APIGatewayProxyEvent,

@@ -5,6 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
+import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import { createLesson, deleteLesson, updateLesson } from './lesson.js';
 
 const {
@@ -76,7 +77,10 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-vi.mock('../lib/s3-client.js', () => ({ bestEffortDeleteContentItemVideos }));
+vi.mock('../lib/s3-client.js', () => ({
+  bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions: vi.fn(async () => {}),
+}));
 
 // bestEffortCancelTranscodeJobs's own status/job-id filtering is covered
 // directly in lib/mediaconvert-client.test.ts; here it's just a mock so
@@ -602,6 +606,10 @@ describe('deleteLesson', () => {
       contentItemId: contentItem2.contentItemId,
     });
     expect(bestEffortDeleteContentItemVideos).toHaveBeenCalledWith(
+      expect.anything(),
+      [contentItem, contentItem2],
+    );
+    expect(bestEffortRetirePreviousVersions).toHaveBeenCalledWith(
       expect.anything(),
       [contentItem, contentItem2],
     );
