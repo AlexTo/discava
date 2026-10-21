@@ -5,6 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
+import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import { deleteContentItem } from './content-item-shared.js';
 
 const {
@@ -53,6 +54,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
 // mock so these tests can assert content-item-shared.ts calls it correctly.
 vi.mock('../lib/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions: vi.fn(async () => {}),
 }));
 
 // bestEffortCancelTranscodeJobs's own status/job-id filtering is covered
@@ -181,6 +183,11 @@ describe('deleteContentItem', () => {
     expect(contentItemDelete).toHaveBeenCalledWith(input);
     expect(courseCheck).toHaveBeenCalledWith({ courseId: COURSE_ID });
     expect(bestEffortDeleteContentItemVideos).toHaveBeenCalledWith(
+      expect.anything(),
+      [videoContentItem],
+    );
+    // And the version it was keeping playable while being replaced (#209).
+    expect(bestEffortRetirePreviousVersions).toHaveBeenCalledWith(
       expect.anything(),
       [videoContentItem],
     );

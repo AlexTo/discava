@@ -882,6 +882,9 @@ importers:
       '@aws-sdk/client-scheduler':
         specifier: 'catalog:'
         version: 3.1151.0
+      '@discava/common-server-utils':
+        specifier: workspace:*
+        version: link:../common/server-utils
       '@discava/core-table':
         specifier: workspace:*
         version: link:../databases/core-table

@@ -5,6 +5,7 @@
 import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { getSignedCookies } from '@aws-sdk/cloudfront-signer';
+import { SIGNED_COOKIE_LIFETIME_SECONDS } from './media-keys.js';
 
 const runtimeConfigKey = 'LessonMediaBucket';
 
@@ -78,7 +79,7 @@ const resolvePrivateKey = async (secretArn: string): Promise<string> => {
 // With cookies, the same expiry gates every request for the rest of the
 // viewing session (manifest, renditions, every segment), so this needs to
 // comfortably outlast one sitting rather than one request.
-const COOKIE_EXPIRY_SECONDS = 4 * 60 * 60;
+const COOKIE_EXPIRY_SECONDS = SIGNED_COOKIE_LIFETIME_SECONDS;
 
 /**
  * Signs CloudFront cookies via a custom policy whose wildcard resource

@@ -22,4 +22,5 @@ A module does no work when imported: configuration and secrets are read on first
 ## Modules
 
 - `cors`: the `Access-Control-Allow-Origin` an API answers a request with, allowing credentials.
+- `media-keys`: what a lesson video's S3 keys encode, e.g. which transcode a manifest belongs to.
 - `lesson-media`: lesson video URLs and the signed CloudFront cookies that let a viewer stream one video's directory.

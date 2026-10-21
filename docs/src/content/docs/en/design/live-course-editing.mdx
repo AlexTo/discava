@@ -160,7 +160,7 @@ Instructors edit through instructor-api's `course.view`, which returns the whole
 | **Add content item** | Nothing until published, and only once its lesson and module are published too | Once published, `progressPercent` drops. If its lesson was already completed, the lesson stays completed and the item shows as **New** | All enrolled students, on publish |
 | **Remove content item** | Archived: disappears on next load. Submitting a quiz in it or marking it complete is rejected with "no longer available" | Kept, not counted. If it was a student's only unfinished item, the lesson (and possibly the course) becomes completed. Restorable | All enrolled students |
 | **Edit content item**: title, description, text body | Applies immediately | Completion kept | No one |
-| **Edit content item**: replace video | Goes through the video replace and re-transcode flow | Completion kept | No one |
+| **Edit content item**: replace video | Goes through the video replace and re-transcode flow. Students keep playing the previous version until the new one is ready, and still if its transcode fails; the previous version's files are deleted once the new one has been ready for longer than a viewer's signed cookies last | Completion kept | No one |
 | **Edit content item**: quiz | See <Link path="design/quizzes">Quizzes</Link>: answer-key-only edits are invisible; question edits make an in-progress submit return `CONFLICT` | Attempts, best scores and passes kept, never regraded | No one |
 | **Hide** (any level) | Disappears like a removal, but isn't in the Archived view | Kept, not counted; counts again when shown | All enrolled students |
 | **Reorder** (any level) | Applies immediately | No effect | No one |

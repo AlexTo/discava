@@ -13,6 +13,10 @@ import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import {
+  manifestNonce,
+  RETIRED_VERSION_DELAY_MINUTES,
+} from '@discava/common-server-utils/media-keys';
+import {
   createCoreTableService,
   isConditionalCheckFailed,
 } from '@discava/core-table';
@@ -57,6 +61,48 @@ const MediaConvertJobStateChangeDetailSchema = z.object({
   }),
 });
 
+// Deletes the version a completed replacement took over from, once nobody can
+// still be streaming it: students may hold its signed cookies for up to their
+// lifetime. The swap has already happened, so a failure here only leaves
+// that output behind; it's logged for cleanup rather than retried, since a
+// retry would find previousS3Key already gone.
+const retirePreviousVersion = async (
+  previousS3Key: string | undefined,
+  item: {
+    jobId: string;
+    courseId: string;
+    moduleId: string;
+    lessonId: string;
+    contentItemId: string;
+  },
+): Promise<void> => {
+  if (!previousS3Key) {
+    return;
+  }
+  const { jobId, ...ref } = item;
+  const nonce = manifestNonce(previousS3Key);
+  if (!nonce) {
+    // From before nonces: it shares the item's folder with the new version.
+    logger.warn('Left a replaced video from before nonces in place', {
+      jobId,
+      previousS3Key,
+    });
+    return;
+  }
+  try {
+    await scheduleTranscodeCleanupOrThrow(
+      { ...ref, submissionNonce: nonce },
+      RETIRED_VERSION_DELAY_MINUTES,
+    );
+  } catch (error) {
+    logger.error('Failed to schedule a replaced video for deletion', {
+      error,
+      jobId,
+      previousS3Key,
+    });
+  }
+};
+
 export const transcodeComplete = async (
   event: z.infer<typeof EventBridgeSchema>,
 ): Promise<void> => {
@@ -79,16 +125,21 @@ export const transcodeComplete = async (
     // Must match submitTranscodeJob's Destination exactly -- see its
     // docstring for why submissionNonce, not jobId, scopes this path.
     const manifestKey = `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/master.m3u8`;
+    let replaced: { previousS3Key?: string } | null = null;
     try {
-      await coreTable.entities.contentItem
+      const { data } = await coreTable.entities.contentItem
         .patch({ courseId, moduleId, lessonId, contentItemId })
         .set({ status: 'ready', s3Key: manifestKey })
+        // This version replaces the one students kept playing meanwhile
+        // (#209); the old attributes, returned below, say which.
+        .remove(['previousS3Key'])
         // submissionNonce is persisted durably before submitTranscodeJob is
         // ever called, and gets overwritten as soon as a replacement
         // supersedes this job -- so a completion event only patches the
         // record while it's still genuinely this exact submission's own.
         .where((attr, op) => op.eq(attr.submissionNonce, submissionNonce))
-        .go();
+        .go({ response: 'all_old' });
+      replaced = data;
     } catch (error) {
       if (!isConditionalCheckFailed(error)) {
         // Transient failure -- the record might still be this exact
@@ -129,6 +180,14 @@ export const transcodeComplete = async (
       });
       return;
     }
+
+    await retirePreviousVersion(replaced?.previousS3Key, {
+      jobId,
+      courseId,
+      moduleId,
+      lessonId,
+      contentItemId,
+    });
 
     const uploadBucketName = await resolveLessonMediaUploadBucketName();
     try {

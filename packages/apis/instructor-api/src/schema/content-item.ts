@@ -36,6 +36,9 @@ export const VideoContentItemSchema = z.object({
   ...ContentItemBaseSchema,
   type: z.literal('video'),
   s3Key: z.string(),
+  // The version students keep playing while a replacement transcodes, or
+  // after it failed (#209).
+  previousS3Key: z.string().optional(),
   mimeType: z.string(),
   durationSeconds: z.number().optional(),
 });
