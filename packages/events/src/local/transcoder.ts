@@ -134,6 +134,9 @@ export interface TranscoderOptions {
 const contentType = (file: string) =>
   file.endsWith('.m3u8') ? 'application/vnd.apple.mpegurl' : 'video/MP2T';
 
+// ffprobe's container for a job; ffmpeg's is named after the job itself.
+const probeContainer = (jobId: string) => `${jobId}-probe`;
+
 interface Job {
   jobId: string;
   request: LocalTranscodeJobRequest;
@@ -157,19 +160,31 @@ export const createTranscoder = (options: TranscoderOptions) => {
   let running: Job | undefined;
   let idle = Promise.resolve();
 
+  // Every object under `prefix`, a page (at most 1,000, the most
+  // DeleteObjects takes too) at a time: a long lecture's HLS is thousands.
   const removeOutput = async (prefix: string) => {
-    const { Contents } = await s3.send(
-      new ListObjectsV2Command({ Bucket: outputBucket, Prefix: prefix }),
-    );
-    const keys = (Contents ?? []).flatMap(({ Key }) => (Key ? [{ Key }] : []));
-    if (keys.length > 0) {
-      await s3.send(
-        new DeleteObjectsCommand({
+    let continuationToken: string | undefined;
+    do {
+      const { Contents, IsTruncated, NextContinuationToken } = await s3.send(
+        new ListObjectsV2Command({
           Bucket: outputBucket,
-          Delete: { Objects: keys },
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
         }),
       );
-    }
+      const keys = (Contents ?? []).flatMap(({ Key }) =>
+        Key ? [{ Key }] : [],
+      );
+      if (keys.length > 0) {
+        await s3.send(
+          new DeleteObjectsCommand({
+            Bucket: outputBucket,
+            Delete: { Objects: keys },
+          }),
+        );
+      }
+      continuationToken = IsTruncated ? NextContinuationToken : undefined;
+    } while (continuationToken);
   };
 
   const run = async (job: Job): Promise<'COMPLETE' | 'ERROR' | 'CANCELED'> => {
@@ -190,12 +205,15 @@ export const createTranscoder = (options: TranscoderOptions) => {
     await pipeline(Body as Readable, createWriteStream(join(dir, input)));
     if (job.canceled) return 'CANCELED';
 
+    // Named, like ffmpeg's container, so a cancel can stop it.
     const probe = await docker([
-      ...['run', '--rm', '-v', `${dir}:/work`, '--entrypoint', '/ffprobe'],
+      ...['run', '--rm', '--name', probeContainer(jobId)],
+      ...['-v', `${dir}:/work`, '--entrypoint', '/ffprobe'],
       image,
       ...['-v', 'error', '-show_entries', 'stream=codec_type,height'],
       ...['-of', 'json', `/work/${input}`],
     ]);
+    if (job.canceled) return 'CANCELED';
     if (probe.code !== 0) return failed('ffprobe', probe.stderr);
     const streams: { codec_type?: string; height?: number }[] =
       JSON.parse(probe.stdout).streams ?? [];
@@ -282,6 +300,8 @@ export const createTranscoder = (options: TranscoderOptions) => {
       }
       if (running?.jobId === jobId) {
         running.canceled = true;
+        // Whichever is running; stopping one that isn't does nothing.
+        options.killContainer(probeContainer(jobId));
         options.killContainer(jobId);
         return true;
       }

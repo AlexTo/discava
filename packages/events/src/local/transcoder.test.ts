@@ -87,6 +87,8 @@ describe('createTranscoder', () => {
   let workDir: string;
   let uploaded: { Key: string; ContentType: string }[];
   let deleted: string[];
+  // Output already in the bucket under the job's prefix.
+  let existing: string[];
   let s3: { send: ReturnType<typeof vi.fn> };
 
   // ffprobe answers with a 720p video and an audio stream; ffmpeg writes a
@@ -106,6 +108,7 @@ describe('createTranscoder', () => {
     workDir = await mkdtemp(join(tmpdir(), 'transcoder-'));
     uploaded = [];
     deleted = [];
+    existing = [];
     s3 = {
       send: vi.fn(
         async (command: {
@@ -121,8 +124,17 @@ describe('createTranscoder', () => {
                 ContentType: command.input.ContentType as string,
               });
               return {};
-            case 'ListObjectsV2Command':
-              return { Contents: uploaded.map(({ Key }) => ({ Key })) };
+            case 'ListObjectsV2Command': {
+              // Pages of 1,000, as S3 returns them.
+              const keys = [...existing, ...uploaded.map(({ Key }) => Key)];
+              const start = Number(command.input.ContinuationToken ?? 0);
+              const end = start + 1000;
+              return {
+                Contents: keys.slice(start, end).map((Key) => ({ Key })),
+                IsTruncated: end < keys.length,
+                NextContinuationToken: String(end),
+              };
+            }
             case 'DeleteObjectsCommand':
               deleted.push(
                 ...(
@@ -278,5 +290,58 @@ describe('createTranscoder', () => {
     expect(onFinished).not.toHaveBeenCalled();
     expect(existsSync(join(workDir, jobId))).toBe(false);
     expect(instance.cancel(jobId)).toBe(false);
+  });
+
+  it('removes all of a long video’s output, page by page, when it fails', async () => {
+    existing = Array.from(
+      { length: 2500 },
+      (_, n) => `${REQUEST.outputPrefix}master_1080p_${n}.ts`,
+    );
+    const { instance } = transcoder(
+      probeThenEncode(async () => ({ code: 1, stderr: 'disk full' })),
+    );
+
+    instance.submit(REQUEST);
+    await instance.idle();
+
+    expect(new Set(deleted)).toEqual(new Set(existing));
+    const deleteBatches = s3.send.mock.calls
+      .map(([command]) => command)
+      .filter((command) => command.constructor.name === 'DeleteObjectsCommand')
+      .map((command) => command.input.Delete.Objects.length);
+    expect(deleteBatches).toEqual([1000, 1000, 500]);
+  });
+
+  it('stops a job canceled while ffprobe runs, never starting ffmpeg', async () => {
+    let finishProbe: () => void = () => {};
+    const ran: string[] = [];
+    const killContainer = vi.fn();
+    const { instance, onFinished } = transcoder(async (args) => {
+      if (args.includes('/ffprobe')) {
+        ran.push('ffprobe');
+        await new Promise<void>((resolve) => {
+          finishProbe = resolve;
+        });
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            streams: [{ codec_type: 'video', height: 720 }],
+          }),
+          stderr: '',
+        };
+      }
+      ran.push('ffmpeg');
+      return { code: 0, stdout: '', stderr: '' };
+    }, killContainer);
+
+    const jobId = instance.submit(REQUEST);
+    await vi.waitFor(() => expect(ran).toEqual(['ffprobe']));
+    instance.cancel(jobId);
+    finishProbe();
+    await instance.idle();
+
+    expect(killContainer).toHaveBeenCalledWith(`${jobId}-probe`);
+    expect(ran).toEqual(['ffprobe']);
+    expect(onFinished).not.toHaveBeenCalled();
   });
 });
