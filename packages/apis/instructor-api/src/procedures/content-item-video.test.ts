@@ -5,6 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
+import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import {
   createContentItemVideo,
   createContentItemVideoUploadUrl,
@@ -120,6 +121,7 @@ vi.mock('../lib/s3-client.js', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaUploadBucketName,
   bestEffortDeleteContentItemVideos,
+  bestEffortRetirePreviousVersions: vi.fn(async () => {}),
   getVideoUploadETag,
 }));
 
@@ -1582,6 +1584,8 @@ describe('updateContentItemVideo', () => {
         expect.anything(),
         [replacing],
       );
+      // The previous version is still what students play.
+      expect(bestEffortRetirePreviousVersions).not.toHaveBeenCalled();
     },
   );
 

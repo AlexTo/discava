@@ -10,7 +10,10 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { manifestNonce } from '@discava/common-server-utils/media-keys';
+import {
+  manifestNonce,
+  RETIRED_VERSION_DELAY_MINUTES,
+} from '@discava/common-server-utils/media-keys';
 import { resolveAppConfigValue } from './runtime-config.js';
 import { scheduleTranscodeCleanup } from './transcode-cleanup-scheduler.js';
 
@@ -194,16 +197,8 @@ export const bestEffortDeleteContentItemVideos = async (
     .filter((item) => item.status !== 'ready' && item.s3Key)
     .map((item) => item.s3Key!);
 
-  // A replaced video's previous version, kept playable while its
-  // replacement transcoded, goes too. One from before nonces shares its
-  // folder with every other version, so it's left rather than risk them.
-  const previousVersions = contentItems.flatMap((item) => {
-    const nonce = item.previousS3Key && manifestNonce(item.previousS3Key);
-    return nonce ? [{ ...item, submissionNonce: nonce }] : [];
-  });
-
   await Promise.all(
-    [...readyItemsWithNonce, ...previousVersions].map((item) =>
+    readyItemsWithNonce.map((item) =>
       scheduleTranscodeCleanup(logger, {
         courseId: item.courseId,
         moduleId: item.moduleId,
@@ -233,4 +228,39 @@ export const bestEffortDeleteContentItemVideos = async (
     const bucket = await resolveLessonMediaUploadBucketName();
     await deleteObjectsInBatches(logger, bucket, rawKeys);
   }
+};
+
+/**
+ * Schedules deletion of the previous version a video item was keeping
+ * playable while it's replaced (#209), for when the item itself is deleted.
+ * Kept apart from bestEffortDeleteContentItemVideos, which also cleans up an
+ * abandoned replacement's upload while the item still plays its previous
+ * version. Waits RETIRED_VERSION_DELAY_MINUTES, so anyone still streaming it
+ * isn't cut off. One from before nonces shares its folder with every other
+ * version, so it's left rather than risk them.
+ */
+export const bestEffortRetirePreviousVersions = async (
+  logger: Logger | undefined,
+  contentItems: readonly IDeletableVideoContentItem[],
+): Promise<void> => {
+  await Promise.all(
+    contentItems.flatMap((item) => {
+      const nonce = item.previousS3Key && manifestNonce(item.previousS3Key);
+      return nonce
+        ? [
+            scheduleTranscodeCleanup(
+              logger,
+              {
+                courseId: item.courseId,
+                moduleId: item.moduleId,
+                lessonId: item.lessonId,
+                contentItemId: item.contentItemId,
+                submissionNonce: nonce,
+              },
+              RETIRED_VERSION_DELAY_MINUTES,
+            ),
+          ]
+        : [];
+    }),
+  );
 };

@@ -14,7 +14,7 @@ import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import {
   manifestNonce,
-  SIGNED_COOKIE_LIFETIME_SECONDS,
+  RETIRED_VERSION_DELAY_MINUTES,
 } from '@discava/common-server-utils/media-keys';
 import {
   createCoreTableService,
@@ -35,9 +35,6 @@ const tracer = new Tracer();
 const logger = new Logger();
 const metrics = new Metrics();
 const s3Client = new S3Client({});
-
-// Extra time after the last cookie for a retired version could expire.
-const RETIRE_MARGIN_MINUTES = 15;
 
 // Memoized across invocations on a warm Lambda, same as the tRPC APIs'
 // core-table plugin -- the DynamoDB client and resolved table name it
@@ -95,7 +92,7 @@ const retirePreviousVersion = async (
   try {
     await scheduleTranscodeCleanupOrThrow(
       { ...ref, submissionNonce: nonce },
-      SIGNED_COOKIE_LIFETIME_SECONDS / 60 + RETIRE_MARGIN_MINUTES,
+      RETIRED_VERSION_DELAY_MINUTES,
     );
   } catch (error) {
     logger.error('Failed to schedule a replaced video for deletion', {

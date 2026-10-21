@@ -20,3 +20,10 @@ export const manifestNonce = (manifestKey: string): string | undefined =>
  * a retired version's output is kept at least this long.
  */
 export const SIGNED_COOKIE_LIFETIME_SECONDS = 4 * 60 * 60;
+
+/**
+ * How long to keep a retired version of a video before deleting it: past the
+ * last moment anyone could still hold cookies for it, with a margin.
+ */
+export const RETIRED_VERSION_DELAY_MINUTES =
+  SIGNED_COOKIE_LIFETIME_SECONDS / 60 + 15;
