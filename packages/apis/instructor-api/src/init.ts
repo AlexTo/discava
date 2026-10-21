@@ -18,7 +18,10 @@ process.env.POWERTOOLS_METRICS_NAMESPACE = 'InstructorApi';
 
 export type Context = IMiddlewareContext;
 
-export const t = initTRPC.context<Context>().create();
+// Never in development: without this, tRPC decides from NODE_ENV, which the
+// Lambdas don't set, and sends each error's server stack trace to the caller
+// in `data.stack` (#153). Errors are still logged in full, stack included.
+export const t = initTRPC.context<Context>().create({ isDev: false });
 
 export const publicProcedure = t.procedure
   .concat(createLoggerPlugin())
