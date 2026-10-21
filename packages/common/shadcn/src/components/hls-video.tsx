@@ -9,8 +9,9 @@ import { useEffect, useRef } from 'react';
  * Plays a lesson video's HLS stream (master.m3u8) from the lesson media
  * CloudFront distribution. Access is through the signed cookies the API set
  * when it returned `url` (instructor-api's contentItem.createVideoUrl,
- * core-api's contentItem.videoUrl), so every request for the manifest,
- * renditions and segments sends credentials.
+ * core-api's contentItem.videoUrl), so with `withCredentials`, as the API
+ * says, every request for the manifest, renditions and segments sends them.
+ * Local dev's unsigned S3Mock URLs come without (#137).
  *
  * `nodownload` and the blocked context menu only deter casual downloading
  * through the browser's own UI, not a determined user. `noremoteplayback`
@@ -20,10 +21,13 @@ import { useEffect, useRef } from 'react';
  */
 export function HlsVideo({
   url,
+  withCredentials,
   title,
   className,
 }: {
   url: string;
+  // The API's `withCredentials` for this `url`.
+  withCredentials: boolean;
   // What the player is called to assistive technology.
   title?: string;
   className?: string;
@@ -51,13 +55,13 @@ export function HlsVideo({
     // cross-origin requests need to send them.
     const hls = new Hls({
       xhrSetup: (xhr) => {
-        xhr.withCredentials = true;
+        xhr.withCredentials = withCredentials;
       },
     });
     hls.loadSource(url);
     hls.attachMedia(video);
     return () => hls.destroy();
-  }, [url]);
+  }, [url, withCredentials]);
 
   return (
     <video

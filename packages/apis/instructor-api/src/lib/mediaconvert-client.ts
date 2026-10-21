@@ -9,6 +9,11 @@ import {
   CreateJobCommand,
   MediaConvertClient,
 } from '@aws-sdk/client-mediaconvert';
+import {
+  callLocalEventRunner,
+  isLocalDev,
+  type LocalTranscodeJobRequest,
+} from '@discava/common-server-utils/local-dev';
 import { resolveAppConfigValue } from './runtime-config.js';
 import {
   resolveLessonMediaBucketName,
@@ -81,6 +86,31 @@ export const submitTranscodeJob = async ({
   objectKey: string;
   submissionNonce: string;
 }): Promise<string> => {
+  // Local dev transcodes with ffmpeg in the event runner instead (#137): same
+  // output path and metadata, and it reports back as MediaConvert would.
+  if (isLocalDev()) {
+    const response = await callLocalEventRunner<{ jobId: string }>(
+      'POST',
+      '/transcode-jobs',
+      {
+        inputKey: objectKey,
+        outputPrefix: `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/`,
+        userMetadata: {
+          courseId,
+          moduleId,
+          lessonId,
+          contentItemId,
+          rawObjectKey: objectKey,
+          submissionNonce,
+        },
+      } satisfies LocalTranscodeJobRequest,
+    );
+    if (!response?.jobId) {
+      throw new Error('The local event runner returned no job ID');
+    }
+    return response.jobId;
+  }
+
   const [{ roleArn, jobTemplateArn }, uploadBucketName, mediaBucketName] =
     await Promise.all([
       resolveVideoTranscodePipelineConfig(),
@@ -198,7 +228,16 @@ export const bestEffortCancelTranscodeJob = async (
   job: ICancelableTranscodeJob,
 ): Promise<void> => {
   try {
-    await getMediaConvertClient().send(new CancelJobCommand({ Id: job.jobId }));
+    if (isLocalDev()) {
+      await callLocalEventRunner(
+        'DELETE',
+        `/transcode-jobs/${encodeURIComponent(job.jobId)}`,
+      );
+    } else {
+      await getMediaConvertClient().send(
+        new CancelJobCommand({ Id: job.jobId }),
+      );
+    }
   } catch (error) {
     logger?.error('Failed to cancel transcode job', {
       error,

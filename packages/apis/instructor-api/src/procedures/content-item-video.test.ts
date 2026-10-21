@@ -1037,7 +1037,10 @@ describe('createContentItemVideoUrl', () => {
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(expectedPrefix);
     expect(getCloudFrontVideoUrl).toHaveBeenCalledWith(contentItem.s3Key);
     // The cookies are HttpOnly: they must never appear in the JSON body.
-    expect(result).toEqual({ url: 'https://example.cloudfront.net/plain-url' });
+    expect(result).toEqual({
+      url: 'https://example.cloudfront.net/plain-url',
+      withCredentials: true,
+    });
     expect(responseCookies).toEqual([
       'CloudFront-Policy=fake; Domain=example.com',
     ]);

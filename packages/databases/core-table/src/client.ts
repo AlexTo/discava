@@ -23,7 +23,8 @@ export const dynamoDBClientConfig = () => {
   if (process.env.LOCAL_DEV === 'true') {
     const { port } = localDev();
     return {
-      endpoint: `http://localhost:${port}`,
+      // IPv4 explicitly, as common-server-utils' LOCAL_HOST explains.
+      endpoint: `http://127.0.0.1:${port}`,
       region: 'us-east-1',
       credentials: { accessKeyId: 'UNUSED', secretAccessKey: 'UNUSED' },
     };

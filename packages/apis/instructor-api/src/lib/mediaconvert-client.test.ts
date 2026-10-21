@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   bestEffortCancelTranscodeJob,
   bestEffortCancelTranscodeJobs,
@@ -449,5 +449,101 @@ describe('bestEffortCancelTranscodeJobs', () => {
 
     expect(mediaConvertSend).not.toHaveBeenCalled();
     expect(schedulerSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('in local dev (#137)', () => {
+  const fetchMock = vi.fn();
+  const body = (call: number) =>
+    JSON.parse((fetchMock.mock.calls[call][1] as RequestInit).body as string);
+
+  beforeEach(() => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('has the event runner transcode, writing where MediaConvert would', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ jobId: 'local-job-1' }), { status: 201 }),
+    );
+
+    await expect(
+      submitTranscodeJob({
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: CONTENT_ITEM_ID,
+        objectKey: OBJECT_KEY,
+        submissionNonce: 'nonce-1',
+      }),
+    ).resolves.toBe('local-job-1');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://127.0.0.1:2024/transcode-jobs',
+    );
+    expect(body(0)).toEqual({
+      inputKey: OBJECT_KEY,
+      outputPrefix: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/nonce-1/`,
+      userMetadata: {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: CONTENT_ITEM_ID,
+        rawObjectKey: OBJECT_KEY,
+        submissionNonce: 'nonce-1',
+      },
+    });
+    expect(mediaConvertSend).not.toHaveBeenCalled();
+  });
+
+  it('cancels through the event runner, and schedules the cleanup there', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await bestEffortCancelTranscodeJob(undefined, {
+      jobId: 'local-job-1',
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      submissionNonce: 'nonce-1',
+    });
+
+    expect(
+      fetchMock.mock.calls.map(([url, init]) => [url, init.method]),
+    ).toEqual([
+      ['http://127.0.0.1:2024/transcode-jobs/local-job-1', 'DELETE'],
+      ['http://127.0.0.1:2024/schedules/transcode-cleanup', 'POST'],
+    ]);
+    expect(body(1)).toEqual({
+      payload: {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: CONTENT_ITEM_ID,
+        submissionNonce: 'nonce-1',
+      },
+    });
+    expect(mediaConvertSend).not.toHaveBeenCalled();
+    expect(schedulerSend).not.toHaveBeenCalled();
+  });
+
+  it('says to start the event runner when it isn’t running', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+    await expect(
+      submitTranscodeJob({
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: CONTENT_ITEM_ID,
+        objectKey: OBJECT_KEY,
+        submissionNonce: 'nonce-1',
+      }),
+    ).rejects.toThrow('is @discava/events:dev running?');
   });
 });

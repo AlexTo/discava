@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { getAppConfig, getSecret, getSignedCookies } = vi.hoisted(() => ({
   getAppConfig: vi.fn(),
@@ -194,5 +194,28 @@ describe('getCloudFrontVideoUrl', () => {
     const result = await getCloudFrontVideoUrl(MANIFEST_KEY);
 
     expect(result).toBe(`https://${DOMAIN_NAME}/${MANIFEST_KEY}`);
+  });
+});
+
+describe('in local dev (#137)', () => {
+  beforeEach(() => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('serves the video straight from S3Mock, with no cookies', async () => {
+    const { getCloudFrontVideoUrl, getSignedCloudFrontCookies } =
+      await importFreshModule();
+
+    await expect(
+      getCloudFrontVideoUrl('courses/c/nonce-1/master.m3u8'),
+    ).resolves.toBe(
+      'http://localhost:9090/discava-lesson-media/courses/c/nonce-1/master.m3u8',
+    );
+    await expect(
+      getSignedCloudFrontCookies('courses/c/nonce-1/'),
+    ).resolves.toEqual([]);
   });
 });

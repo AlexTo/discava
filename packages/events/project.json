@@ -46,6 +46,10 @@
         {
           "projects": ["@discava/core-table"],
           "target": "dev"
+        },
+        {
+          "projects": ["@discava/common-scripts"],
+          "target": "s3mock"
         }
       ],
       "continuous": true,

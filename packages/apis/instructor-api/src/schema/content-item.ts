@@ -246,6 +246,10 @@ export type ICreateContentItemVideoUrlInput = z.output<
 
 export const CreateContentItemVideoUrlOutputSchema = z.object({
   url: z.string(),
+  // Whether the player must send credentials for it: the signed CloudFront
+  // cookies set alongside. Not in local dev, where S3Mock serves the video
+  // unsigned and refuses credentialed cross-origin requests (#137).
+  withCredentials: z.boolean(),
 });
 
 export type ICreateContentItemVideoUrlOutput = z.output<

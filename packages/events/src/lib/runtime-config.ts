@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
+import {
+  isLocalDev,
+  localBucketName,
+} from '@discava/common-server-utils/local-dev';
 
 type S3Config = {
   bucketName: string;
@@ -39,12 +43,19 @@ const resolveAppConfigValue = (() => {
   };
 })();
 
-export const resolveLessonMediaUploadBucketName = async (): Promise<string> =>
-  (await resolveAppConfigValue<S3Config>('s3', 'LessonMediaUploadBucket'))
-    .bucketName;
+// A bucket's name: the stack's from AppConfig when deployed, or the S3Mock
+// bucket standing in for it in local dev (#137).
+const resolveBucketName = async (runtimeConfigKey: string): Promise<string> =>
+  isLocalDev()
+    ? localBucketName(runtimeConfigKey)
+    : (await resolveAppConfigValue<S3Config>('s3', runtimeConfigKey))
+        .bucketName;
 
-export const resolveLessonMediaBucketName = async (): Promise<string> =>
-  (await resolveAppConfigValue<S3Config>('s3', 'LessonMediaBucket')).bucketName;
+export const resolveLessonMediaUploadBucketName = (): Promise<string> =>
+  resolveBucketName('LessonMediaUploadBucket');
+
+export const resolveLessonMediaBucketName = (): Promise<string> =>
+  resolveBucketName('LessonMediaBucket');
 
 type TranscodeCleanupConfig = {
   lambdaArn: string;

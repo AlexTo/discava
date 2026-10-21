@@ -790,5 +790,5 @@ export const createContentItemVideoUrl = courseProcedure
     ]);
     ctx.responseCookies?.push(...cookies);
 
-    return { url };
+    return { url, withCredentials: cookies.length > 0 };
   });

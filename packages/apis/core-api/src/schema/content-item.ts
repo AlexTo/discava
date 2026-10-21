@@ -14,6 +14,10 @@ export type IVideoUrlInput = z.output<typeof VideoUrlInputSchema>;
 // the output, so they stay HttpOnly.
 export const VideoUrlOutputSchema = z.object({
   url: z.string(),
+  // Whether the player must send credentials for it: the signed CloudFront
+  // cookies set alongside. Not in local dev, where S3Mock serves the video
+  // unsigned and refuses credentialed cross-origin requests (#137).
+  withCredentials: z.boolean(),
 });
 
 export type IVideoUrlOutput = z.output<typeof VideoUrlOutputSchema>;

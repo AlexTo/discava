@@ -4,6 +4,7 @@
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { s3ClientConfig } from '@discava/common-server-utils/local-dev';
 import {
   manifestNonce,
   RETIRED_VERSION_DELAY_MINUTES,
@@ -16,7 +17,8 @@ import {
 import { resolveLessonMediaUploadBucketName } from '../lib/runtime-config.js';
 import { scheduleTranscodeCleanupOrThrow } from '../lib/transcode-cleanup-scheduler.js';
 
-const s3Client = new S3Client({});
+// S3Mock in local dev (#137).
+const s3Client = new S3Client(s3ClientConfig());
 
 // Memoized across invocations on a warm Lambda, same as the tRPC APIs'
 // core-table plugin -- the DynamoDB client and resolved table name it

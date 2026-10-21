@@ -74,6 +74,7 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
   return (
     <HlsVideo
       url={videoQuery.data.url}
+      withCredentials={videoQuery.data.withCredentials}
       title={item.title}
       className="aspect-video w-full rounded-xl bg-black"
     />
