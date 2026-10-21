@@ -78,9 +78,7 @@ function Unavailable({
         </div>
       )}
       <Button className="mt-6" asChild>
-        <Link to="/">
-          <ArrowLeft className="size-4" /> Browse courses
-        </Link>
+        <Link to="/">Browse courses</Link>
       </Button>
     </main>
   );

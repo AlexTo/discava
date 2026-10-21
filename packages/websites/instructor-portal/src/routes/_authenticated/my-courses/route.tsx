@@ -20,7 +20,6 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
-  ArrowRight,
   BookOpen,
   CalendarDays,
   CirclePlus,
@@ -279,7 +278,7 @@ function RouteComponent() {
                       to="/my-courses/$courseId"
                       params={{ courseId: course.courseId }}
                     >
-                      Open course <ArrowRight />
+                      Open course
                     </Link>
                   </Button>
                 </CardContent>

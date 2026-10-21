@@ -15,7 +15,6 @@ import {
 import { Separator } from '@discava/common-shadcn/components/ui/separator';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
-  ArrowRight,
   BookOpen,
   CalendarDays,
   CheckCircle2,
@@ -229,7 +228,7 @@ function RouteComponent() {
                 </CardDescription>
               </div>
               <Button variant="outline" size="sm" type="button">
-                View grading queue <ArrowRight />
+                View grading queue
               </Button>
             </div>
           </CardHeader>
@@ -273,7 +272,7 @@ function RouteComponent() {
                     </p>
                   </div>
                   <Button size="sm" type="button">
-                    Grade <ArrowRight />
+                    Grade
                   </Button>
                 </div>
               </article>
@@ -296,9 +295,7 @@ function RouteComponent() {
             </p>
           </div>
           <Button variant="outline" size="sm" asChild>
-            <Link to="/my-courses">
-              View all courses <ArrowRight />
-            </Link>
+            <Link to="/my-courses">View all courses</Link>
           </Button>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -351,7 +348,7 @@ function RouteComponent() {
                     to="/my-courses/$courseId"
                     params={{ courseId: course.code }}
                   >
-                    Open course <ArrowRight />
+                    Open course
                   </Link>
                 </Button>
               </CardContent>

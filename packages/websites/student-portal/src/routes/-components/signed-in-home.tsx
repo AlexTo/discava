@@ -8,7 +8,7 @@ import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import type { IMyEnrolment } from '@discava/core-api';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArrowRight, BookOpen, Sparkles } from 'lucide-react';
+import { BookOpen, Sparkles } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
 import { Alert } from '../../components/alert';
 import {
@@ -61,7 +61,7 @@ function ResumeHero({
         ) : (
           <Button variant="secondary" size="lg" asChild>
             <Link to="/search" search={{}}>
-              Browse courses <ArrowRight />
+              Browse courses
             </Link>
           </Button>
         )}
@@ -188,7 +188,7 @@ export function SignedInHome() {
                         params={{ courseId: course.courseId }}
                         aria-label={`View ${course.title}`}
                       >
-                        View course <ArrowRight />
+                        View course
                       </Link>
                     </Button>
                   </div>
