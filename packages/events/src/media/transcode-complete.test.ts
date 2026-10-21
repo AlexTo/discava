@@ -387,7 +387,12 @@ describe('a completed replacement (#209)', () => {
 
     await transcodeComplete(buildEvent('COMPLETE') as any);
 
-    expect(contentItemPatchRemove).toHaveBeenCalledWith(['previousS3Key']);
+    // ...and it's no longer waiting for a transcode (#125).
+    expect(contentItemPatchRemove).toHaveBeenCalledWith([
+      'previousS3Key',
+      'transcodePending',
+      'transcodePendingSince',
+    ]);
     expect(go).toHaveBeenCalledWith({ response: 'all_old' });
     expect(scheduleTranscodeCleanupOrThrow).toHaveBeenCalledWith(
       {
@@ -439,7 +444,11 @@ describe('a completed replacement (#209)', () => {
     await transcodeComplete(buildEvent('ERROR') as any);
 
     expect(contentItemPatchSet).toHaveBeenCalledWith({ status: 'failed' });
-    expect(contentItemPatchRemove).not.toHaveBeenCalled();
+    // No longer waiting for a transcode, but previousS3Key stays.
+    expect(contentItemPatchRemove).toHaveBeenCalledWith([
+      'transcodePending',
+      'transcodePendingSince',
+    ]);
     expect(scheduleTranscodeCleanupOrThrow).not.toHaveBeenCalled();
   });
 });

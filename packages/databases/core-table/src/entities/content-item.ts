@@ -61,6 +61,18 @@ export const createContentItemEntity = async () =>
         s3Key: {
           type: 'string',
         },
+        // Set, together with transcodePendingSince, while a video is waiting
+        // for its transcode, and removed with it once the video is ready or
+        // failed: that pair is what puts it in byTranscodePending (#125).
+        // Every write that makes a video pending sets both; every write that
+        // ends it removes both.
+        transcodePending: {
+          type: ['pending'] as const,
+        },
+        // When the video started waiting for its transcode (ISO timestamp).
+        transcodePendingSince: {
+          type: 'string',
+        },
         // A video's last ready version (its master.m3u8), kept playable for
         // students while a replacement transcodes, or after the replacement
         // failed (#209). Set when a ready video is replaced; removed when
@@ -140,7 +152,7 @@ export const createContentItemEntity = async () =>
         // procedures choose it from the course's status (visible in a draft
         // course, hidden until explicitly published otherwise). Students only
         // see a record that is *effectively* visible: it and every ancestor
-        // visible and not archived (see ../curriculum.ts).
+        // visible and not archived (see ../helpers/curriculum.ts).
         visibility: {
           type: ['hidden', 'visible'] as const,
           required: true,
@@ -192,6 +204,24 @@ export const createContentItemEntity = async () =>
           sk: {
             field: 'sk',
             composite: ['moduleId', 'lessonId', 'contentItemId'],
+          },
+        },
+        // Videos waiting for their transcode, oldest first, across every
+        // course: what the transcode reconciler checks for ones stuck there
+        // (#125). Sparse: only items with both attributes are indexed, so
+        // nothing else costs a write here.
+        byTranscodePending: {
+          index: 'gsi1pk-gsi1sk-index',
+          condition: (attr) =>
+            attr.transcodePending !== undefined &&
+            attr.transcodePendingSince !== undefined,
+          pk: {
+            field: 'gsi1pk',
+            composite: ['transcodePending'],
+          },
+          sk: {
+            field: 'gsi1sk',
+            composite: ['transcodePendingSince'],
           },
         },
       },

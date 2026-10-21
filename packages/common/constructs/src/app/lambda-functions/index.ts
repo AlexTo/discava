@@ -7,3 +7,4 @@ export * from './events-post-confirmation.js';
 export * from './events-progress-recalculation.js';
 export * from './events-transcode-cleanup.js';
 export * from './events-transcode-complete.js';
+export * from './events-transcode-reconciler.js';

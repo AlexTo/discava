@@ -253,6 +253,72 @@ describe('Lambda functions', () => {
   });
 });
 
+describe('the media pipeline’s safety nets (#125, #185)', () => {
+  const media = synth({})('MediaPipeline');
+  const functionIdOf = (prefix: string) =>
+    Object.keys(media.findResources('AWS::Lambda::Function')).find((id) =>
+      id.startsWith(prefix),
+    )!;
+
+  it.each(['TranscodeComplete', 'TranscodeCleanup'])(
+    'keeps events %s keeps failing in a queue',
+    (name) => {
+      media.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+        FunctionName: { Ref: functionIdOf(name) },
+        MaximumRetryAttempts: 2,
+        DestinationConfig: {
+          OnFailure: {
+            Destination: {
+              'Fn::GetAtt': [Match.stringLikeRegexp(`^${name}Failures`), 'Arn'],
+            },
+          },
+        },
+      });
+    },
+  );
+
+  it('keeps MediaConvert events EventBridge couldn’t deliver', () => {
+    media.hasResourceProperties('AWS::Events::Rule', {
+      EventPattern: Match.objectLike({ source: ['aws.mediaconvert'] }),
+      Targets: [
+        Match.objectLike({
+          DeadLetterConfig: {
+            Arn: {
+              'Fn::GetAtt': [
+                Match.stringLikeRegexp('^TranscodeCompleteFailures'),
+                'Arn',
+              ],
+            },
+          },
+        }),
+      ],
+    });
+  });
+
+  it('reconciles stuck videos every 30 minutes, asking MediaConvert about their jobs', () => {
+    media.hasResourceProperties('AWS::Events::Rule', {
+      ScheduleExpression: 'rate(30 minutes)',
+      Targets: [
+        Match.objectLike({
+          Arn: {
+            'Fn::GetAtt': [functionIdOf('TranscodeReconciler'), 'Arn'],
+          },
+        }),
+      ],
+    });
+    media.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Action: 'mediaconvert:GetJob' }),
+        ]),
+      },
+      Roles: [
+        { Ref: Match.stringLikeRegexp('^TranscodeReconcilerServiceRole') },
+      ],
+    });
+  });
+});
+
 describe('limits a stage leaves out', () => {
   const stack = synth({});
 
