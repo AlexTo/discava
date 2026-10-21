@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { attemptsRemain, type QuizQuestion, reconcile, shuffled } from './quiz';
+import {
+  attemptsRemain,
+  gradeQuiz,
+  type QuizQuestion,
+  reconcile,
+  shuffled,
+} from './quiz';
 
 const question = (
   questionId: string,
@@ -120,6 +126,41 @@ describe('reconcile', () => {
 
     expect(reconcile([question('q1')], [after], {}).markers).toEqual({
       q1: 'updated',
+    });
+  });
+});
+
+describe('gradeQuiz', () => {
+  const questions = [
+    question('q1'),
+    question('q2', { kind: 'multiple' }),
+    question('q3'),
+  ];
+  const key = {
+    q1: { correctOptionIds: ['a'] },
+    q2: { correctOptionIds: ['a', 'c'] },
+    q3: { correctOptionIds: ['b'] },
+  };
+
+  it('counts a question right only with exactly the correct options', () => {
+    expect(
+      gradeQuiz(questions, key, 50, {
+        q1: ['a'],
+        q2: ['c', 'a'],
+        q3: ['b', 'c'],
+      }),
+    ).toEqual({
+      correctQuestionIds: ['q1', 'q2'],
+      scorePercent: 66,
+      passed: true,
+    });
+  });
+
+  it('rounds the score down and marks unanswered questions wrong', () => {
+    expect(gradeQuiz(questions, key, 34, { q1: ['a'] })).toEqual({
+      correctQuestionIds: ['q1'],
+      scorePercent: 33,
+      passed: false,
     });
   });
 });

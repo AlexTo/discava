@@ -176,7 +176,7 @@ landed -> done: no
   - A card per question: Tiptap prompt (the editor is mounted only for the expanded card), Single/Multiple toggle, option rows with a correct marker (radio for single, checkbox for multiple), add/remove/reorder options, optional explanation.
   - Drag to reorder questions.
   - A contents panel beside the questions lists them by number with the start of each prompt, marking any that need fixing; clicking one opens it and scrolls to it.
-  - **Preview as student**, using the real student component.
+  - **Preview as student**, using the real student component (`QuizCard`) on the quiz as it stands in the builder, saved or not. It's graded in the browser with the same rules as core-api, nothing is sent or saved, and the correct answers and explanations are always shown. Its attempts count only while it's open.
   - The whole quiz saves as one document: `contentItem.updateQuiz` replaces questions, key and settings together, against the `quizVersion` the builder loaded. On `CONFLICT` the builder offers to reload the latest version.
   - Read-only, with the reason, while the quiz or anything above it is archived.
 - Validation, in the form and in zod (the API enforces all of it, whatever the form does):

@@ -513,3 +513,66 @@ describe('QuizBuilder', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('Preview as student', () => {
+  it('shows the quiz in the student card, graded here, without calling the API', async () => {
+    const { user, calls } = renderExisting({
+      'contentItem.updateQuiz': () => {
+        throw new Error('the preview must not save');
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Preview as student' }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Preview as student: Module check',
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Start quiz' }),
+    );
+    expect(within(dialog).getByText('First?')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: 'Yes' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Next' }));
+    await user.click(within(dialog).getByRole('radio', { name: 'Yes' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: /Review answers/ }),
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Submit' }));
+
+    // q1 right, q2 wrong: 50%, under the 70% pass mark.
+    expect(
+      await within(dialog).findByText(/This attempt: 50%/),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText('· Not passed')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('(correct answer)')).toHaveLength(2);
+    expect(calls).toEqual([]);
+  });
+
+  it('previews unsaved changes', async () => {
+    const { user } = renderExisting();
+
+    await user.clear(await screen.findByLabelText('Title'));
+    await user.type(screen.getByLabelText('Title'), 'Renamed check');
+    await user.click(
+      screen.getByRole('button', { name: 'Preview as student' }),
+    );
+
+    expect(
+      await screen.findByRole('dialog', {
+        name: 'Preview as student: Renamed check',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows what needs fixing instead of previewing an incomplete quiz', async () => {
+    const { user } = renderBuilder();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Preview as student' }),
+    );
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('Give the quiz a title.')).toBeInTheDocument();
+  });
+});

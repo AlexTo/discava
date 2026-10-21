@@ -154,3 +154,36 @@ export const reconcile = (
   }
   return { answers: nextAnswers, markers };
 };
+
+/**
+ * Grades answers the way core-api's quiz.submitAttempt does, for a preview
+ * that never reaches the server: all or nothing per question (exactly the
+ * correct options chosen), the score rounded down, and passed when it reaches
+ * the pass mark. Keep in step with core-api's gradeAttempt.
+ */
+export const gradeQuiz = (
+  questions: QuizQuestion[],
+  reveal: QuizReveal,
+  passMarkPercent: number,
+  answers: QuizAnswers,
+): Pick<QuizAttempt, 'correctQuestionIds' | 'scorePercent' | 'passed'> => {
+  const correctQuestionIds = questions
+    .filter(({ questionId }) => {
+      const selected = answers[questionId] ?? [];
+      const correct = new Set(reveal[questionId]?.correctOptionIds ?? []);
+      return (
+        selected.length === correct.size &&
+        selected.every((optionId) => correct.has(optionId))
+      );
+    })
+    .map(({ questionId }) => questionId);
+  const scorePercent =
+    questions.length === 0
+      ? 0
+      : Math.floor((correctQuestionIds.length * 100) / questions.length);
+  return {
+    correctQuestionIds,
+    scorePercent,
+    passed: scorePercent >= passMarkPercent,
+  };
+};
