@@ -68,8 +68,9 @@ map_get() {
 #   --yes   accept every default without prompting (for scripted runs)
 #
 # Defaults can be preset with environment variables:
-#   GITHUB_REPOSITORY    owner/repo trusted by the deploy role (otherwise
-#                        parsed from the `origin` remote)
+#   GITHUB_REPOSITORY    owner/repo trusted by the deploy role, e.g. a fork
+#                        you deploy from (otherwise taken from the `origin`
+#                        remote, and only asked for if that isn't on GitHub)
 #   GITHUB_OIDC_SUBJECT_PREFIX
 #                        the repo's OIDC subject before ':environment:'
 #                        (otherwise read from GitHub via gh, falling back to
@@ -232,11 +233,13 @@ read_stages_config() {
   )
 }
 
+# owner/repo of the `origin` remote, if it's on GitHub: an HTTPS or SSH URL,
+# including an SSH host alias such as git@github.com-work:owner/repo.git.
 detect_github_repository() {
   local remote_url
   remote_url="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
-  if [[ "$remote_url" =~ github\.com[:/]([^/]+)/([^/]+)$ ]]; then
-    echo "${BASH_REMATCH[1]}/${BASH_REMATCH[2]%.git}"
+  if [[ "$remote_url" =~ [@/.]github\.com(-[A-Za-z0-9_.-]+)?[:/]([^/]+)/([^/]+)$ ]]; then
+    echo "${BASH_REMATCH[2]}/${BASH_REMATCH[3]%.git}"
   fi
 }
 
@@ -442,15 +445,22 @@ while IFS='=' read -r key value; do
 done < <(read_stages_config "$INFRA_PROJECT_PATH" "$TARGET_STAGE")
 
 section "GitHub"
-while true; do
-  ask GITHUB_REPOSITORY "Repository that runs the deploy workflow (owner/repo)" \
-    "${GITHUB_REPOSITORY:-$(detect_github_repository)}"
-  [[ "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] && break
-  echo "Expected owner/repo, got: $GITHUB_REPOSITORY" >&2
+# The repository whose deploy workflow the deploy role trusts. Taken from the
+# `origin` remote without asking (it's in the summary before anything is
+# created); asked for only when that isn't a GitHub repository. Set
+# GITHUB_REPOSITORY to deploy from somewhere else, e.g. a fork.
+GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(detect_github_repository)}"
+while [[ ! "$GITHUB_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; do
+  if [[ -n "$GITHUB_REPOSITORY" ]]; then
+    echo "Expected owner/repo, got: $GITHUB_REPOSITORY" >&2
+  elif [[ "$ASSUME_YES" == true ]]; then
+    echo "The origin remote isn't a GitHub repository; set GITHUB_REPOSITORY=owner/repo." >&2
+  fi
   [[ "$ASSUME_YES" == false ]] || exit 1
-  GITHUB_REPOSITORY=""
+  ask GITHUB_REPOSITORY "Repository that runs the deploy workflow (owner/repo)"
 done
 readonly GITHUB_REPOSITORY
+echo "Deploying from $GITHUB_REPOSITORY (set GITHUB_REPOSITORY=owner/repo to use another)."
 if ! OIDC_SUBJECT_PREFIX="$(resolve_oidc_subject_prefix)"; then
   exit 1
 fi
