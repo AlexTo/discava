@@ -86,6 +86,19 @@ exit 0
 `;
 };
 
+// Answers `git remote get-url origin` with ORIGIN_URL when that's set, and
+// passes everything else to the real git.
+const REAL_GIT = spawnSync('bash', ['-c', 'command -v git'], {
+  encoding: 'utf8',
+}).stdout.trim();
+const GIT_STUB = `#!/usr/bin/env bash
+if [[ -n "\${ORIGIN_URL+set}" && "$*" == *"remote get-url origin"* ]]; then
+  [[ -n "$ORIGIN_URL" ]] && echo "$ORIGIN_URL"
+  exit 0
+fi
+exec "${REAL_GIT}" "$@"
+`;
+
 const EXECUTION_POLICY_FILES = [
   'cfn-execution-discava-development.policy.json',
   'cfn-execution-discava-development-data.json',
@@ -107,8 +120,8 @@ const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
   mkdirSync(out);
   writeFileSync(join(bin, 'aws'), AWS_STUB);
   writeFileSync(join(bin, 'gh'), ghStub(settings));
-  chmodSync(join(bin, 'aws'), 0o755);
-  chmodSync(join(bin, 'gh'), 0o755);
+  writeFileSync(join(bin, 'git'), GIT_STUB);
+  for (const stub of ['aws', 'gh', 'git']) chmodSync(join(bin, stub), 0o755);
 
   const result = spawnSync('bash', [SCRIPT, '--yes', 'discava-development'], {
     cwd: REPO_ROOT,
@@ -215,6 +228,52 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
     expect(trustedSubject).toBe(
       'repo:someone/fork:environment:discava-development',
     );
+  });
+});
+
+describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
+  const DEFAULT_OIDC: OidcSettings = { kind: 'response', useDefault: true };
+
+  it.each([
+    ['an HTTPS URL', 'https://github.com/AlexTo/discava.git'],
+    ['an SSH URL', 'git@github.com:AlexTo/discava.git'],
+    ['an SSH host alias', 'git@github.com-work:AlexTo/discava.git'],
+  ])('trusts the origin remote’s repository, from %s', (_, url) => {
+    const { trustedSubject, output } = runSetup(DEFAULT_OIDC, {
+      GITHUB_REPOSITORY: '',
+      ORIGIN_URL: url,
+    });
+
+    expect(trustedSubject).toBe(
+      'repo:AlexTo/discava:environment:discava-development',
+    );
+    expect(output).toContain('Deploying from AlexTo/discava');
+  });
+
+  it('trusts GITHUB_REPOSITORY over the origin remote, e.g. for a fork', () => {
+    const { trustedSubject } = runSetup(DEFAULT_OIDC, {
+      GITHUB_REPOSITORY: 'someone/discava-fork',
+      ORIGIN_URL: 'https://github.com/AlexTo/discava.git',
+    });
+
+    expect(trustedSubject).toBe(
+      'repo:someone/discava-fork:environment:discava-development',
+    );
+  });
+
+  it.each([
+    ['isn’t on GitHub', 'https://gitlab.com/AlexTo/discava.git'],
+    ['only looks like GitHub', 'https://notgithub.com/AlexTo/discava.git'],
+    ['is missing', ''],
+  ])('stops before touching IAM when origin %s', (_, url) => {
+    const { status, output, iamCalls } = runSetup(DEFAULT_OIDC, {
+      GITHUB_REPOSITORY: '',
+      ORIGIN_URL: url,
+    });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain('set GITHUB_REPOSITORY=owner/repo');
+    expect(iamCalls).toEqual([]);
   });
 });
 
