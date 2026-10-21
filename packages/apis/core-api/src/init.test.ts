@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { protectedProcedure, t } from './init.js';
@@ -35,5 +37,25 @@ describe('protectedProcedure', () => {
   it('resolves ctx.user when the caller has valid Cognito claims', async () => {
     const user = await callWhoAmI({ sub: 'user-1' });
     expect(user).toMatchObject({ sub: 'user-1' });
+  });
+});
+
+describe('error responses', () => {
+  it('never include the server’s stack trace', async () => {
+    const response = await fetchRequestHandler({
+      endpoint: '',
+      req: new Request('http://api.test/whoAmI'),
+      router,
+      createContext: () => ({
+        event: buildEvent(undefined),
+        context: {} as any,
+        info: {} as any,
+      }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body.error.data.code).toBe('UNAUTHORIZED');
+    expect(body.error.data).not.toHaveProperty('stack');
   });
 });
