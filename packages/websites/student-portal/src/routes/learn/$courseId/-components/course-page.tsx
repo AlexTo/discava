@@ -13,7 +13,7 @@ import {
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ChevronDown, FileText, Search } from 'lucide-react';
+import { ChevronDown, FileText, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { Spinner } from '../../../../components/spinner';
@@ -72,9 +72,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </div>
         )}
         <Button className="mt-6" asChild>
-          <Link to="/">
-            <ArrowLeft className="size-4" /> Browse courses
-          </Link>
+          <Link to="/">Browse courses</Link>
         </Button>
       </main>
     );

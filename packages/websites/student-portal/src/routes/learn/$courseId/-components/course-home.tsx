@@ -5,7 +5,7 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Link } from '@tanstack/react-router';
-import { ArrowRight, BookOpen, CircleCheck } from 'lucide-react';
+import { BookOpen, CircleCheck } from 'lucide-react';
 import { type CoursePlayer, CoursePlayerLayout } from './course-player';
 
 function NextUp({
@@ -86,8 +86,7 @@ function NextUp({
                 ? 'Review'
                 : started
                   ? 'Continue'
-                  : 'Start'}{' '}
-            <ArrowRight className="size-4" />
+                  : 'Start'}
           </Link>
         </Button>
       </CardContent>

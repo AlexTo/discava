@@ -10,7 +10,7 @@ import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import type { IMyEnrolment } from '@discava/core-api';
 import { Link } from '@tanstack/react-router';
-import { ArrowRight, CircleCheck } from 'lucide-react';
+import { CircleCheck } from 'lucide-react';
 
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
@@ -43,7 +43,7 @@ export function ContinueLink({
           params={{ courseId, lessonId: nextLesson.lessonId }}
           aria-label={`${label}: ${course.title}`}
         >
-          {label} <ArrowRight />
+          {label}
         </Link>
       ) : (
         <Link
@@ -51,7 +51,7 @@ export function ContinueLink({
           params={{ courseId }}
           aria-label={`${label}: ${course.title}`}
         >
-          {label} <ArrowRight />
+          {label}
         </Link>
       )}
     </Button>

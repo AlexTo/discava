@@ -5,13 +5,7 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  CircleCheck,
-  FileX,
-} from 'lucide-react';
+import { AlertTriangle, CircleCheck, FileX } from 'lucide-react';
 import { Fragment } from 'react';
 import { ContentItem, ITEM_TYPES, itemAnchor } from './content-item';
 import {
@@ -200,7 +194,7 @@ function Lesson({
               to="/learn/$courseId/lesson/$lessonId"
               params={{ courseId, lessonId: previous.lesson.lessonId }}
             >
-              <ArrowLeft className="size-4" /> Previous lesson
+              Previous lesson
             </Link>
           </Button>
         ) : (
@@ -212,7 +206,7 @@ function Lesson({
               to="/learn/$courseId/lesson/$lessonId"
               params={{ courseId, lessonId: next.lesson.lessonId }}
             >
-              Next lesson <ArrowRight className="size-4" />
+              Next lesson
             </Link>
           </Button>
         ) : (

@@ -3,14 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { cn } from 'cn';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  CircleCheck,
-  CircleX,
-  RotateCcw,
-} from 'lucide-react';
+import { AlertTriangle, CircleCheck, CircleX, RotateCcw } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
   attemptsRemain,
@@ -476,17 +469,15 @@ export function QuizCard({
             disabled={index === 0}
             onClick={() => setPhase({ name: 'question', index: index - 1 })}
           >
-            <ArrowLeft className="size-4" /> Back
+            Back
           </Button>
           {last ? (
-            <Button onClick={openReview}>
-              Review answers <ArrowRight className="size-4" />
-            </Button>
+            <Button onClick={openReview}>Review answers</Button>
           ) : (
             <Button
               onClick={() => setPhase({ name: 'question', index: index + 1 })}
             >
-              Next <ArrowRight className="size-4" />
+              Next
             </Button>
           )}
         </div>
@@ -547,7 +538,7 @@ export function QuizCard({
               setPhase({ name: 'question', index: questions.length - 1 })
             }
           >
-            <ArrowLeft className="size-4" /> Back
+            Back
           </Button>
           <Button disabled={submitting} onClick={submit}>
             {submitting ? 'Submitting…' : 'Submit'}
