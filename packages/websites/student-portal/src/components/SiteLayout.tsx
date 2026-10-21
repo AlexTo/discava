@@ -13,7 +13,7 @@ import { SiteSearch } from './SiteSearch';
 import { UserMenu } from './UserMenu';
 
 // The one layout every page uses, signed in or not: a top bar with the
-// course search, then the page.
+// course search and, once signed in, My Learning, then the page.
 // There's no app-wide sidebar; a course's own pages bring their outline.
 const SiteLayout = ({ children }: { children: ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -36,7 +36,20 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
             <SiteSearch />
           </div>
           {isAuthenticated ? (
-            <UserMenu />
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="ghost" asChild>
+                <Link
+                  to="/my-learning"
+                  activeProps={{
+                    'aria-current': 'page',
+                    className: 'bg-accent',
+                  }}
+                >
+                  My Learning
+                </Link>
+              </Button>
+              <UserMenu />
+            </div>
           ) : (
             <Button className="shrink-0" asChild>
               <Link to="/signin">Sign in</Link>

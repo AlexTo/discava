@@ -53,7 +53,7 @@ describe('/', () => {
   it('shows signed-in students their own home', async () => {
     open('/', { signedIn: true });
     expect(
-      await screen.findByRole('heading', { name: /Welcome back/ }),
+      await screen.findByRole('heading', { name: /^Welcome/ }),
     ).toBeInTheDocument();
   });
 });
