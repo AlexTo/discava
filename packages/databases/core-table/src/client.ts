@@ -16,20 +16,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const localDev = () =>
   JSON.parse(readFileSync(join(__dirname, '../config.json'), 'utf-8')).localDev;
 
+// DynamoDB local in local dev, the Lambda's own defaults otherwise. Shared
+// with clients for the same table's other APIs, such as local dev's stream
+// reader (#137).
+export const dynamoDBClientConfig = () => {
+  if (process.env.LOCAL_DEV === 'true') {
+    const { port } = localDev();
+    return {
+      endpoint: `http://localhost:${port}`,
+      region: 'us-east-1',
+      credentials: { accessKeyId: 'UNUSED', secretAccessKey: 'UNUSED' },
+    };
+  }
+  return {};
+};
+
 let _client: DynamoDBClient | undefined;
 
 export const getDynamoDBClient = (): DynamoDBClient => {
   if (!_client) {
-    if (process.env.LOCAL_DEV === 'true') {
-      const { port } = localDev();
-      _client = new DynamoDBClient({
-        endpoint: `http://localhost:${port}`,
-        region: 'us-east-1',
-        credentials: { accessKeyId: 'UNUSED', secretAccessKey: 'UNUSED' },
-      });
-    } else {
-      _client = new DynamoDBClient({});
-    }
+    _client = new DynamoDBClient(dynamoDBClientConfig());
   }
   return _client;
 };

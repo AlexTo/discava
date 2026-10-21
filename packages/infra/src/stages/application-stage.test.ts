@@ -7,6 +7,7 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
+import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
 import { App, type Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
@@ -284,6 +285,33 @@ describe('the sign-up trigger (#29)', () => {
         Resource: { 'Fn::GetAtt': [userPool, 'Arn'] },
       }),
     ]);
+  });
+});
+
+describe('progress recalculation', () => {
+  const stack = synth({});
+
+  // Local dev's event runner filters the stream with the same definition
+  // (#137), so what triggers a recalculation can't differ between the two.
+  it('is triggered by exactly the shared progress stream filters', () => {
+    const mappings = Object.values(
+      stack('CoreApi').findResources('AWS::Lambda::EventSourceMapping'),
+    ) as {
+      Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
+    }[];
+    const patterns = mappings.flatMap(
+      ({ Properties }) =>
+        Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
+          JSON.parse(Pattern),
+        ) ?? [],
+    );
+
+    expect(patterns).toEqual(
+      PROGRESS_STREAM_FILTERS.map(({ eventName, image, entities }) => ({
+        eventName: [eventName],
+        dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
+      })),
+    );
   });
 });
 

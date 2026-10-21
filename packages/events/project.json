@@ -40,6 +40,26 @@
     ]
   },
   "targets": {
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@discava/core-table"],
+          "target": "dev"
+        }
+      ],
+      "continuous": true,
+      "options": {
+        "commands": ["tsx --watch src/local/event-runner.ts"],
+        "cwd": "{projectRoot}",
+        "env": {
+          "LOCAL_DEV": "true",
+          "POWERTOOLS_DEV": "true",
+          "POWERTOOLS_TRACE_ENABLED": "false",
+          "POWERTOOLS_METRICS_DISABLED": "true"
+        }
+      }
+    },
     "assemble": {
       "dependsOn": ["compile", "bundle"]
     },
