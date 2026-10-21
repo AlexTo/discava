@@ -2,9 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Arm64Functions, RuntimeConfig } from '@discava/common-constructs';
+import { RuntimeConfig } from '@discava/common-constructs';
 import type { StageComponents } from '@discava/common-infra-config';
-import { Aspects, Stack, Stage, StageProps } from 'aws-cdk-lib';
+import { Stack, Stage, StageProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { CoreApiStack } from '../stacks/core-api-stack.js';
 import { DataStack } from '../stacks/data-stack.js';
@@ -46,8 +46,6 @@ export class ApplicationStage extends Stage {
     }: ApplicationStageProps,
   ) {
     super(scope, id, props);
-    // Every Lambda function in the stage runs on ARM (see Arm64Functions).
-    Aspects.of(this).add(new Arm64Functions());
 
     // Lets a stack reference the portals' and lesson media's us-east-1 WAF
     // stacks, and anything else outside its own region.

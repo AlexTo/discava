@@ -16,7 +16,7 @@ import {
   Role,
   ServicePrincipal,
 } from 'aws-cdk-lib/aws-iam';
-import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import * as url from 'url';
@@ -61,6 +61,7 @@ export class ApiGatewayAccount extends Construct {
 
     const onEvent = new Function(this, 'OnEvent', {
       runtime: Runtime.NODEJS_24_X,
+      architecture: Architecture.ARM_64,
       handler: 'index.handler',
       timeout: Duration.minutes(2),
       code: Code.fromAsset(

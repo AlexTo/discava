@@ -218,6 +218,9 @@ describe('lesson media CORS', () => {
   });
 });
 
+const CDK_INTERNAL =
+  /^(Custom(S3AutoDeleteObjects|CrossRegionExportReader)CustomResourceProvider|.*Providerframework)/;
+
 describe('Lambda functions', () => {
   const stack = synth({});
 
@@ -232,10 +235,10 @@ describe('Lambda functions', () => {
     const functions = Object.entries(
       stack(name).findResources('AWS::Lambda::Function'),
     )
-      // CDK adds its cross-region export reader while synthesizing, after
-      // aspects have run, so Arm64Functions can't reach it. It runs only
-      // during deploys, a few times each, so x86 there costs nothing.
-      .filter(([id]) => !id.startsWith('CustomCrossRegionExportReader'))
+      // Functions CDK creates itself, which take no architecture: custom
+      // resource provider frameworks, S3 auto-delete and the cross-region
+      // export reader. They run only during deploys.
+      .filter(([id]) => !CDK_INTERNAL.test(id))
       .map(([id, resource]) => ({
         id,
         architectures: (

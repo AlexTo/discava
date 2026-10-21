@@ -10,7 +10,7 @@ import {
   Stack,
 } from 'aws-cdk-lib';
 import { Grant, IGrantable, PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Architecture, Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { ISecret, Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
@@ -43,6 +43,7 @@ export class RsaKeyPairSecret extends Construct {
 
     const onEvent = new Function(this, 'OnEvent', {
       runtime: Runtime.NODEJS_24_X,
+      architecture: Architecture.ARM_64,
       handler: 'handler.handler',
       timeout: Duration.minutes(2),
       // This construct's own source lives alongside handler.js, so the
