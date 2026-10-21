@@ -218,6 +218,38 @@ describe('lesson media CORS', () => {
   });
 });
 
+describe('Lambda functions', () => {
+  const stack = synth({});
+
+  it.each([
+    'Websites',
+    'Data',
+    'MediaPipeline',
+    'CoreApi',
+    'InstructorApi',
+    'RuntimeConfig',
+  ])('all run on ARM in %s', (name) => {
+    const functions = Object.entries(
+      stack(name).findResources('AWS::Lambda::Function'),
+    )
+      // CDK adds its cross-region export reader while synthesizing, after
+      // aspects have run, so Arm64Functions can't reach it. It runs only
+      // during deploys, a few times each, so x86 there costs nothing.
+      .filter(([id]) => !id.startsWith('CustomCrossRegionExportReader'))
+      .map(([id, resource]) => ({
+        id,
+        architectures: (
+          resource as { Properties: { Architectures?: string[] } }
+        ).Properties.Architectures,
+      }));
+
+    expect(functions.length).toBeGreaterThan(0);
+    for (const fn of functions) {
+      expect(fn).toEqual({ id: fn.id, architectures: ['arm64'] });
+    }
+  });
+});
+
 describe('limits a stage leaves out', () => {
   const stack = synth({});
 

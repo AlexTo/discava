@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 export * from './app.js';
+export * from './arm64.js';
 export * from './checkov.js';
 export * from './cloudfront.js';
 export * from './dynamodb.js';
