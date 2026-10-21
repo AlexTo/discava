@@ -14,7 +14,11 @@ import {
 } from 'lucide-react';
 import { Fragment } from 'react';
 import { ContentItem, ITEM_TYPES, itemAnchor } from './content-item';
-import { type CoursePlayer, CoursePlayerLayout } from './course-player';
+import {
+  CompletedWithNew,
+  type CoursePlayer,
+  CoursePlayerLayout,
+} from './course-player';
 import { useQuizFailed } from './quiz-item';
 import type { PlayerItem } from './use-course-player';
 
@@ -24,10 +28,12 @@ function Step({
   item,
   index,
   done,
+  isNew,
 }: {
   item: PlayerItem;
   index: number;
   done: boolean;
+  isNew: boolean;
 }) {
   const failed = useQuizFailed(item) && done;
   const Icon = failed
@@ -56,9 +62,15 @@ function Step({
         <Icon className="size-3.5" aria-hidden="true" />
         <span className="sr-only">
           Step {index + 1}
-          {failed ? ', finished but not passed' : done ? ', done' : ''}:{' '}
+          {failed ? ', finished but not passed' : done ? ', done' : ''}
+          {isNew ? ', new' : ''}:{' '}
         </span>
         <span className="max-w-40 truncate">{item.title}</span>
+        {isNew ? (
+          <span aria-hidden="true" className="font-semibold text-primary">
+            New
+          </span>
+        ) : null}
       </a>
     </li>
   );
@@ -68,9 +80,11 @@ function Step({
 function StepBar({
   items,
   completedItemIds,
+  newItemIds,
 }: {
   items: PlayerItem[];
   completedItemIds: Set<string>;
+  newItemIds: Set<string>;
 }) {
   return (
     <nav aria-label="Lesson steps">
@@ -81,6 +95,7 @@ function StepBar({
             item={item}
             index={index}
             done={completedItemIds.has(item.contentItemId)}
+            isNew={newItemIds.has(item.contentItemId)}
           />
         ))}
       </ol>
@@ -97,7 +112,14 @@ function Lesson({
   lessonId: string;
   player: CoursePlayer;
 }) {
-  const { lessons, completedItemIds, readOnly } = player;
+  const {
+    lessons,
+    completedItemIds,
+    newItemIds,
+    isLessonComplete,
+    newItemCount,
+    readOnly,
+  } = player;
   const index = lessons.findIndex(({ lesson }) => lesson.lessonId === lessonId);
 
   // Hidden, archived or deleted by the instructor (or never in this course):
@@ -133,11 +155,20 @@ function Lesson({
           Module {moduleIndex + 1}: {module.title}
         </p>
         <h2 className="text-2xl font-semibold">{lesson.title}</h2>
+        {isLessonComplete(lesson) && newItemCount(lesson) > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <CompletedWithNew count={newItemCount(lesson)} />
+          </p>
+        ) : null}
         {lesson.description ? (
           <p className="text-muted-foreground">{lesson.description}</p>
         ) : null}
         {items.length > 1 ? (
-          <StepBar items={items} completedItemIds={completedItemIds} />
+          <StepBar
+            items={items}
+            completedItemIds={completedItemIds}
+            newItemIds={newItemIds}
+          />
         ) : null}
       </div>
 
@@ -152,6 +183,7 @@ function Lesson({
             <ContentItem
               item={item}
               done={completedItemIds.has(item.contentItemId)}
+              isNew={newItemIds.has(item.contentItemId)}
               readOnly={readOnly}
             />
           </Fragment>

@@ -136,10 +136,13 @@ function MarkAsDone({
 export function ContentItem({
   item,
   done,
+  isNew = false,
   readOnly,
 }: {
   item: PlayerItem;
   done: boolean;
+  // Added since the student completed its lesson.
+  isNew?: boolean;
   readOnly: boolean;
 }) {
   const { label, icon: Icon } = ITEM_TYPES[item.type];
@@ -152,6 +155,7 @@ export function ContentItem({
       <header>
         <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <Icon className="size-3.5" /> {label}
+          {isNew ? <Badge className="ml-1">New</Badge> : null}
         </p>
         <h3
           id={`${itemAnchor(item.contentItemId)}-title`}
