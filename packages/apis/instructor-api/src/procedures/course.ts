@@ -12,10 +12,10 @@ import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   hasTransactionConflict,
+  refreshInstructorCourseUpdatedAt,
   requireCourseInstructor,
   transactionConflict,
 } from '../lib/course-lifecycle.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   ArchiveCourseInputSchema,
   ArchiveCourseOutputSchema,
@@ -29,29 +29,6 @@ import {
   ViewCourseInputSchema,
   ViewCourseOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
-
-// byInstructor's sort key is courseUpdatedAt#courseId, so every course
-// update has to refresh that denormalized timestamp on every
-// CourseInstructor row for the course, not just the caller's own.
-const refreshInstructorCourseUpdatedAt = async (
-  coreTable: CoreTable,
-  courseId: string,
-  courseUpdatedAt: string,
-) => {
-  const { data: instructors } = await coreTable.entities.courseInstructor.query
-    .primary({ courseId })
-    .go();
-  await Promise.all(
-    instructors.map(({ instructorId }) =>
-      coreTable.entities.courseInstructor
-        .patch({ courseId, instructorId })
-        .set({ courseUpdatedAt })
-        .go(),
-    ),
-  );
-};
 
 export const createCourse = courseProcedure
   .input(CreateCourseInputSchema)

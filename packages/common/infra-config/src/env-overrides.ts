@@ -99,6 +99,14 @@ const COMPONENT_FIELDS: Record<
     certificateArn: 'string',
     cookieDomain: 'string',
   },
+  publicMedia: {
+    enableWaf: 'boolean',
+    enableKmsEncryption: 'boolean',
+    enableKeyRotation: 'boolean',
+    retainOnDelete: 'boolean',
+    domainNames: 'string[]',
+    certificateArn: 'string',
+  },
 };
 
 /**

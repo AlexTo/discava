@@ -15,6 +15,9 @@ export const CourseSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   status: CourseStatusSchema,
+  // Key of its display image in the public media bucket (#76); portals put
+  // it after runtime-config's media.PublicMediaBucket base URL.
+  imageKey: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

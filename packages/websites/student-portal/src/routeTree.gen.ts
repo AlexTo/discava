@@ -10,13 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as MyLearningRouteImport } from './routes/my-learning'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SigninRouteImport } from './routes/signin'
-import { Route as CourseCourseIdRouteImport } from './routes/course/$courseId'
-import { Route as CoursesCourseIdRouteImport } from './routes/courses/$courseId'
-import { Route as PreviewCourseIdRouteImport } from './routes/preview/$courseId'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
 import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
@@ -24,11 +20,6 @@ import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MyLearningRoute = MyLearningRouteImport.update({
@@ -44,21 +35,6 @@ const SearchRoute = SearchRouteImport.update({
 const SigninRoute = SigninRouteImport.update({
   id: '/signin',
   path: '/signin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CourseCourseIdRoute = CourseCourseIdRouteImport.update({
-  id: '/course/$courseId',
-  path: '/course/$courseId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CoursesCourseIdRoute = CoursesCourseIdRouteImport.update({
-  id: '/courses/$courseId',
-  path: '/courses/$courseId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PreviewCourseIdRoute = PreviewCourseIdRouteImport.update({
-  id: '/preview/$courseId',
-  path: '/preview/$courseId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LearnCourseIdIndexRoute = LearnCourseIdIndexRouteImport.update({
@@ -80,26 +56,18 @@ const LearnCourseIdLessonLessonIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
   '/my-learning': typeof MyLearningRoute
   '/search': typeof SearchRoute
   '/signin': typeof SigninRoute
-  '/course/$courseId': typeof CourseCourseIdRoute
-  '/courses/$courseId': typeof CoursesCourseIdRoute
-  '/preview/$courseId': typeof PreviewCourseIdRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
   '/my-learning': typeof MyLearningRoute
   '/search': typeof SearchRoute
   '/signin': typeof SigninRoute
-  '/course/$courseId': typeof CourseCourseIdRoute
-  '/courses/$courseId': typeof CoursesCourseIdRoute
-  '/preview/$courseId': typeof PreviewCourseIdRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -107,13 +75,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRoute
   '/my-learning': typeof MyLearningRoute
   '/search': typeof SearchRoute
   '/signin': typeof SigninRoute
-  '/course/$courseId': typeof CourseCourseIdRoute
-  '/courses/$courseId': typeof CoursesCourseIdRoute
-  '/preview/$courseId': typeof PreviewCourseIdRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -122,39 +86,27 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/dashboard'
     | '/my-learning'
     | '/search'
     | '/signin'
-    | '/course/$courseId'
-    | '/courses/$courseId'
-    | '/preview/$courseId'
     | '/learn/$courseId/home'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/dashboard'
     | '/my-learning'
     | '/search'
     | '/signin'
-    | '/course/$courseId'
-    | '/courses/$courseId'
-    | '/preview/$courseId'
     | '/learn/$courseId/home'
     | '/learn/$courseId'
     | '/learn/$courseId/lesson/$lessonId'
   id:
     | '__root__'
     | '/'
-    | '/dashboard'
     | '/my-learning'
     | '/search'
     | '/signin'
-    | '/course/$courseId'
-    | '/courses/$courseId'
-    | '/preview/$courseId'
     | '/learn/$courseId/home'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
@@ -162,13 +114,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DashboardRoute: typeof DashboardRoute
   MyLearningRoute: typeof MyLearningRoute
   SearchRoute: typeof SearchRoute
   SigninRoute: typeof SigninRoute
-  CourseCourseIdRoute: typeof CourseCourseIdRoute
-  CoursesCourseIdRoute: typeof CoursesCourseIdRoute
-  PreviewCourseIdRoute: typeof PreviewCourseIdRoute
   LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
   LearnCourseIdLessonLessonIdRoute: typeof LearnCourseIdLessonLessonIdRoute
@@ -181,13 +129,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/my-learning': {
@@ -209,27 +150,6 @@ declare module '@tanstack/react-router' {
       path: '/signin'
       fullPath: '/signin'
       preLoaderRoute: typeof SigninRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/course/$courseId': {
-      id: '/course/$courseId'
-      path: '/course/$courseId'
-      fullPath: '/course/$courseId'
-      preLoaderRoute: typeof CourseCourseIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/courses/$courseId': {
-      id: '/courses/$courseId'
-      path: '/courses/$courseId'
-      fullPath: '/courses/$courseId'
-      preLoaderRoute: typeof CoursesCourseIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/preview/$courseId': {
-      id: '/preview/$courseId'
-      path: '/preview/$courseId'
-      fullPath: '/preview/$courseId'
-      preLoaderRoute: typeof PreviewCourseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/learn/$courseId/': {
@@ -258,13 +178,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DashboardRoute: DashboardRoute,
   MyLearningRoute: MyLearningRoute,
   SearchRoute: SearchRoute,
   SigninRoute: SigninRoute,
-  CourseCourseIdRoute: CourseCourseIdRoute,
-  CoursesCourseIdRoute: CoursesCourseIdRoute,
-  PreviewCourseIdRoute: PreviewCourseIdRoute,
   LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
   LearnCourseIdLessonLessonIdRoute: LearnCourseIdLessonLessonIdRoute,

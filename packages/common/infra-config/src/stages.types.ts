@@ -342,6 +342,30 @@ export type LessonMediaComponentConfig = {
 };
 
 /**
+ * Per-stage settings for the public media bucket: media anyone may see, such
+ * as course display images, served through CloudFront without signing.
+ */
+export type PublicMediaComponentConfig = {
+  /** Protect the CloudFront distribution in front of the bucket with AWS WAF */
+  enableWaf?: boolean;
+  /** Use customer-managed KMS encryption instead of the cheaper S3-managed default */
+  enableKmsEncryption?: boolean;
+  /** Enable automatic key rotation on the bucket's KMS key. Only used when `enableKmsEncryption` is true */
+  enableKeyRotation?: boolean;
+  /**
+   * Retain the bucket when the stack is deleted, instead of destroying it
+   * (and auto-deleting its contents) along with the stack.
+   *
+   * @default false
+   */
+  retainOnDelete?: boolean;
+  /** Custom domain names for the CloudFront distribution. Requires `certificateArn`. */
+  domainNames?: string[];
+  /** ACM certificate ARN for the custom domain names. Must be in us-east-1. */
+  certificateArn?: string;
+};
+
+/**
  * Component-level settings consuming apps use to configure their constructs
  * per stage, keyed by component name. Omitted components/flags fall back to
  * whatever default the app itself chooses.
@@ -355,6 +379,7 @@ export type StageComponents = {
   instructorPortal?: InstructorPortalComponentConfig;
   adminPortal?: AdminPortalComponentConfig;
   lessonMedia?: LessonMediaComponentConfig;
+  publicMedia?: PublicMediaComponentConfig;
 };
 
 /**

@@ -17,6 +17,7 @@ import {
   CourseProgressCard,
   UpNext,
 } from '../../components/course-progress-card';
+import { CourseThumbnail } from '../../components/course-thumbnail';
 import { Spinner } from '../../components/spinner';
 import { getUserIdentity } from '../../components/UserMenu/user-profile';
 import { useCoreApi } from '../../hooks/useCoreApi';
@@ -50,6 +51,11 @@ function ResumeHero({
         </div>
         {course ? (
           <div className="w-full space-y-3 rounded-xl bg-background p-5 text-foreground shadow-sm md:max-w-md">
+            <CourseThumbnail
+              course={course}
+              className="rounded-lg"
+              iconClassName="text-4xl"
+            />
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Continue learning
             </p>
@@ -163,13 +169,7 @@ export function SignedInHome() {
                 key={course.courseId}
                 className="group gap-4 overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
               >
-                <div
-                  className={`flex h-20 items-end bg-gradient-to-br p-5 ${course.surface}`}
-                >
-                  <div className="flex size-10 items-center justify-center rounded-xl bg-background/80 text-lg shadow-sm backdrop-blur-sm">
-                    <span aria-hidden="true">{course.icon}</span>
-                  </div>
-                </div>
+                <CourseThumbnail course={course} iconClassName="text-4xl" />
                 <CardContent className="flex flex-1 flex-col gap-3 px-5 pb-5">
                   <div>
                     <h3 className="text-base font-semibold leading-5">

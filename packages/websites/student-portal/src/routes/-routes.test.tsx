@@ -58,18 +58,6 @@ describe('/', () => {
   });
 });
 
-describe('old links', () => {
-  it.each([
-    ['/dashboard', '/'],
-    ['/courses/course-1', '/learn/course-1'],
-    ['/preview/course-1', '/learn/course-1'],
-    ['/course/course-1', '/learn/course-1/home'],
-  ])('send %s to %s', async (from, to) => {
-    const { router } = open(from, { signedIn: true });
-    expect((await pathAfterLoad(router)).pathname).toBe(to);
-  });
-});
-
 describe('/learn/<courseId>/home', () => {
   it('asks signed-out visitors to sign in, then come back', async () => {
     const { router } = open('/learn/course-1/home', { cognito: true });
