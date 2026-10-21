@@ -28,6 +28,12 @@ const applyOverrides = (runtimeConfig: IRuntimeConfig) => {
   if (import.meta.env.MODE === 'local-dev') {
     runtimeConfig.apis.InstructorApi = 'http://localhost:2023/';
     runtimeConfig.apis.CoreApi = 'http://localhost:2022/';
+    // Course images come from S3Mock, which stands in for S3 in local dev
+    // (#137; port and bucket from common-server-utils' LOCAL_S3).
+    runtimeConfig.media = {
+      ...runtimeConfig.media,
+      PublicMediaBucket: 'http://localhost:9090/discava-public-media/',
+    };
   }
   return runtimeConfig;
 };

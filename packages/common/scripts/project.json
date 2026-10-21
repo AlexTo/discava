@@ -8,6 +8,14 @@
     "generator": "ts#project"
   },
   "targets": {
+    "s3mock": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx src/s3mock/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "assemble": {
       "dependsOn": ["compile"]
     },

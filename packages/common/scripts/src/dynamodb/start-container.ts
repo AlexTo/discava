@@ -2,75 +2,30 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { spawn, spawnSync } from 'child_process';
 import { readFileSync } from 'fs';
+import { runLocalContainer } from '../local-container.js';
 
 const { containerEngine, containerName, image, port } = JSON.parse(
   readFileSync('config.json', 'utf-8'),
 ).localDev;
 
-const containerExists = (): boolean =>
-  spawnSync(containerEngine, ['container', 'inspect', containerName], {
-    stdio: 'ignore',
-  }).status === 0;
-
-const isRunning = (): boolean => {
-  const result = spawnSync(
-    containerEngine,
-    ['container', 'inspect', '-f', '{{.State.Running}}', containerName],
-    { encoding: 'utf-8' },
-  );
-  return result.status === 0 && result.stdout.trim() === 'true';
-};
-
-// Ensure the image is available locally before starting the container.
-const ensureImage = (): void => {
-  const inspect = spawnSync(containerEngine, ['image', 'inspect', image], {
-    stdio: 'ignore',
-  });
-  if (inspect.status !== 0) {
-    const pull = spawnSync(containerEngine, ['pull', image], {
-      stdio: 'inherit',
-    });
-    if (pull.status !== 0) process.exit(pull.status ?? 1);
-  }
-};
-
 // Multiple dynamo table packages run dev in parallel sharing the same
-// container. All processes stream logs, but only the one that created the
-// container stops it on exit — others just detach.
-let created = false;
-let runRetries = 0;
-
-ensureImage();
-
-for (;;) {
-  if (containerExists()) {
-    if (!isRunning()) {
-      // Another process may have started it between our inspect and start — container engine start
-      // exits 0 even if the container is already running, so no special-casing needed.
-      const start = spawnSync(containerEngine, ['start', containerName], {
-        stdio: 'inherit',
-      });
-      if (start.status !== 0) process.exit(start.status ?? 1);
-    }
-    break;
-  }
-  const runArgs = [
-    'run',
-    ...(containerEngine === 'docker' ? ['--rm'] : []),
-    '--name',
-    containerName,
+// container (see runLocalContainer).
+runLocalContainer({
+  containerEngine,
+  containerName,
+  image,
+  options: [
     '-u',
     'root',
     '-w',
     '/home/dynamodblocal',
-    `-p`,
+    '-p',
     `${port}:${port}`,
     '-v',
     `${containerName}-data:/home/dynamodblocal/data`,
-    '-d',
-    image,
+  ],
+  command: [
     '-jar',
     'DynamoDBLocal.jar',
     '-sharedDb',
@@ -78,42 +33,5 @@ for (;;) {
     './data',
     '-port',
     `${port}`,
-  ];
-  const create = spawnSync(containerEngine, runArgs, { stdio: 'pipe' });
-  if (create.status === 0) {
-    created = true;
-    break;
-  }
-  if (!containerExists() && ++runRetries > 3) {
-    process.stderr.write(create.stderr);
-    process.exit(create.status ?? 1);
-  }
-}
-
-const logs = spawn(containerEngine, ['logs', '-f', containerName], {
-  stdio: ['ignore', 'inherit', 'inherit'],
+  ],
 });
-
-let exiting = false;
-
-const cleanup = () => {
-  if (exiting) return;
-  exiting = true;
-  if (created) {
-    if (containerEngine === 'docker') {
-      spawnSync(containerEngine, ['stop', containerName], { stdio: 'ignore' });
-    } else {
-      spawnSync(containerEngine, ['rm', '-f', containerName], {
-        stdio: 'ignore',
-      });
-    }
-  }
-  logs.kill();
-  process.exit(0);
-};
-
-process.on('SIGTERM', cleanup);
-process.on('SIGINT', cleanup);
-process.on('SIGHUP', cleanup);
-
-logs.on('exit', cleanup);

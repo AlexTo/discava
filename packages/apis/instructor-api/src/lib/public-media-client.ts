@@ -14,18 +14,12 @@ import {
   UNATTACHED_TAG,
   UNATTACHED_TAGGING,
 } from '@discava/common-server-utils/public-media';
-import { resolveAppConfigValue } from './runtime-config.js';
-import { getS3Client } from './s3-client.js';
+import { getS3Client, resolveBucketName } from './s3-client.js';
 
 const UPLOAD_URL_EXPIRY_SECONDS = 15 * 60;
 
-const resolvePublicMediaBucketName = async (): Promise<string> =>
-  (
-    await resolveAppConfigValue<{ bucketName: string }>(
-      's3',
-      'PublicMediaBucket',
-    )
-  ).bucketName;
+const resolvePublicMediaBucketName = (): Promise<string> =>
+  resolveBucketName('PublicMediaBucket');
 
 /**
  * A presigned PUT for a JPEG of exactly `contentLength` bytes at `key`,
