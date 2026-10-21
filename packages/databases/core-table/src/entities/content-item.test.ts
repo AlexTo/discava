@@ -7,7 +7,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
-} from '../helpers/transcode-pending.js';
+} from '../helpers/content-item.js';
 import { createContentItemEntity } from './content-item.js';
 
 // The requests ElectroDB would send, checked without a table: what keeps
