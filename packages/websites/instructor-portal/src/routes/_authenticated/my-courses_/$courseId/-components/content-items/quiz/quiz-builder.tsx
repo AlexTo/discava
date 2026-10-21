@@ -26,7 +26,7 @@ import { move } from '@dnd-kit/helpers';
 import { DragDropProvider, type DragEndEvent } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CirclePlus, Save } from 'lucide-react';
+import { CirclePlus, Eye, Save } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Alert } from '../../../../../../../components/alert';
 import { useInstructorApi } from '../../../../../../../hooks/useInstructorApi';
@@ -45,6 +45,7 @@ import {
   toQuizInput,
   validateQuiz,
 } from './quiz-form';
+import { QuizPreviewDialog } from './quiz-preview-dialog';
 
 const REVEAL_LABELS: Record<RevealAnswers, string> = {
   after_each_attempt: 'After each attempt',
@@ -106,6 +107,7 @@ export function QuizBuilder({
   // The question (or 'settings') to scroll to once it has rendered open.
   const [scrollTarget, setScrollTarget] = useState<string>();
   const [justSaved, setJustSaved] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const createQuiz = useMutation(contentItem.createQuiz.mutationOptions());
   const updateQuiz = useMutation(contentItem.updateQuiz.mutationOptions());
   const saving = createQuiz.isPending || updateQuiz.isPending;
@@ -161,17 +163,31 @@ export function QuizBuilder({
       ),
     });
 
+  // Shows what needs fixing first, as saving does: a preview of an
+  // incomplete quiz (no correct option, an empty prompt) can't be answered.
+  const showProblemsFirst = () => {
+    setShowProblems(true);
+    const firstWithProblems = quiz.questions.find(
+      ({ questionId }) => errors.questions[questionId],
+    );
+    if (firstWithProblems) {
+      setExpanded(firstWithProblems.questionId);
+    }
+  };
+
+  const preview = () => {
+    if (hasErrors(errors)) {
+      showProblemsFirst();
+      return;
+    }
+    setPreviewOpen(true);
+  };
+
   const save = async () => {
     createQuiz.reset();
     updateQuiz.reset();
     if (hasErrors(errors)) {
-      setShowProblems(true);
-      const firstWithProblems = quiz.questions.find(
-        ({ questionId }) => errors.questions[questionId],
-      );
-      if (firstWithProblems) {
-        setExpanded(firstWithProblems.questionId);
-      }
+      showProblemsFirst();
       return;
     }
     const input = toQuizInput(quiz);
@@ -559,6 +575,9 @@ export function QuizBuilder({
             <span className="text-sm text-muted-foreground" role="status">
               {justSaved ? 'Saved' : dirty ? 'Unsaved changes' : ''}
             </span>
+            <Button type="button" variant="outline" onClick={preview}>
+              <Eye /> Preview as student
+            </Button>
             {onClose && (
               <Button type="button" variant="outline" onClick={onClose}>
                 Close
@@ -572,6 +591,11 @@ export function QuizBuilder({
           </div>
         </div>
       )}
+      <QuizPreviewDialog
+        quiz={quiz}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
     </div>
   );
 }
