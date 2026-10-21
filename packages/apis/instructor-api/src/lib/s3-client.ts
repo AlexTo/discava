@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import type { Logger } from '@aws-lambda-powertools/logger';
 import {
   DeleteObjectsCommand,
@@ -9,6 +10,7 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { manifestNonce } from '@discava/common-server-utils/media-keys';
 import { resolveAppConfigValue } from './runtime-config.js';
 import { scheduleTranscodeCleanup } from './transcode-cleanup-scheduler.js';
 
@@ -76,6 +78,8 @@ export type IDeletableVideoContentItem = {
   lessonId: string;
   contentItemId: string;
   submissionNonce?: string;
+  // The version students still play while a replacement transcodes (#209).
+  previousS3Key?: string;
 };
 
 // S3 hard caps: ListObjectsV2 returns at most 1,000 keys per page, and
@@ -190,8 +194,16 @@ export const bestEffortDeleteContentItemVideos = async (
     .filter((item) => item.status !== 'ready' && item.s3Key)
     .map((item) => item.s3Key!);
 
+  // A replaced video's previous version, kept playable while its
+  // replacement transcoded, goes too. One from before nonces shares its
+  // folder with every other version, so it's left rather than risk them.
+  const previousVersions = contentItems.flatMap((item) => {
+    const nonce = item.previousS3Key && manifestNonce(item.previousS3Key);
+    return nonce ? [{ ...item, submissionNonce: nonce }] : [];
+  });
+
   await Promise.all(
-    readyItemsWithNonce.map((item) =>
+    [...readyItemsWithNonce, ...previousVersions].map((item) =>
       scheduleTranscodeCleanup(logger, {
         courseId: item.courseId,
         moduleId: item.moduleId,

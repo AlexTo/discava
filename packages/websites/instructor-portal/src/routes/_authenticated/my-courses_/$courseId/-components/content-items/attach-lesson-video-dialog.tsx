@@ -84,6 +84,7 @@ export function AttachLessonVideoDialog({
   title,
   description,
   status,
+  hasPreviousVersion = false,
   trigger,
 }: {
   courseId: string;
@@ -95,6 +96,11 @@ export function AttachLessonVideoDialog({
   description?: string;
   /** The video's transcode status, if this is an existing video. */
   status?: string;
+  /**
+   * Whether students still have the version being replaced to play while
+   * this one is processing, or after it failed (#209).
+   */
+  hasPreviousVersion?: boolean;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -306,11 +312,20 @@ export function AttachLessonVideoDialog({
               <p className="text-sm text-muted-foreground">
                 Processing video&hellip;
               </p>
+              {hasPreviousVersion ? (
+                <p className="px-4 text-center text-xs text-muted-foreground">
+                  Students still see the previous version until this one is
+                  ready.
+                </p>
+              ) : null}
             </div>
           ) : isFailedTranscode ? (
             <Alert type="error" header="Video processing failed">
-              Something went wrong processing this video. Drop a new file below
-              to retry.
+              Something went wrong processing this video.{' '}
+              {hasPreviousVersion
+                ? 'Students still see the previous version. '
+                : ''}
+              Drop a new file below to retry.
             </Alert>
           ) : isLoadingVideo ? (
             <div className="flex justify-center py-6">

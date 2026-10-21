@@ -1531,7 +1531,7 @@ describe('updateContentItemVideo', () => {
   // the key when told it's a replacement (see its own tests above), this
   // procedure doesn't require that -- an objectKey scoped to the lesson but
   // carrying an unrelated id must still be accepted and cleaned up.
-  it('deletes the old S3 object and resets status to pending when the video file is replaced with an unrelated object id', async () => {
+  it('keeps a ready video playing as the previous version while its replacement transcodes (#209)', async () => {
     const newObjectKey = `${OBJECT_KEY_PREFIX}some-other-fresh-id.mp4`;
 
     await callAs().updateContentItemVideo({
@@ -1544,13 +1544,46 @@ describe('updateContentItemVideo', () => {
       s3Key: newObjectKey,
       status: 'pending',
       submissionNonce: expect.any(String),
+      previousS3Key: contentItem.s3Key,
       mimeType: 'video/webm',
     });
-    expect(bestEffortDeleteContentItemVideos).toHaveBeenCalledWith(
-      expect.anything(),
-      [contentItem],
-    );
+    // Retired by transcode-complete once the replacement is ready.
+    expect(bestEffortDeleteContentItemVideos).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['pending', 'still transcoding'],
+    ['failed', 'failed'],
+  ] as const)(
+    'replacing a replacement that is %s deletes its upload and keeps the previous version',
+    async (status) => {
+      const previousS3Key = `${OBJECT_KEY_PREFIX}${CONTENT_ITEM_ID}/old-nonce/master.m3u8`;
+      const replacing = {
+        ...contentItem,
+        status,
+        s3Key: `${OBJECT_KEY_PREFIX}first-replacement.mp4`,
+        submissionNonce: 'first-nonce',
+        previousS3Key,
+      };
+      contentItemGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({ data: replacing }),
+      });
+
+      await callAs().updateContentItemVideo({
+        ...input,
+        objectKey: `${OBJECT_KEY_PREFIX}second-replacement.mp4`,
+      });
+
+      // previousS3Key is neither set again nor removed: it stays.
+      expect(contentItemPatchSet.mock.calls[0][0]).not.toHaveProperty(
+        'previousS3Key',
+      );
+      expect(bestEffortDeleteContentItemVideos).toHaveBeenCalledWith(
+        expect.anything(),
+        [replacing],
+      );
+    },
+  );
 
   // Invariant: same as createContentItemVideo -- submitting the job only
   // after the DynamoDB patch has landed means a fast transcode can't race

@@ -132,6 +132,29 @@ describe('bestEffortDeleteContentItemVideos', () => {
     ).toBe(false);
   });
 
+  it('also schedules the previous version a replacement was keeping playable (#209)', async () => {
+    await bestEffortDeleteContentItemVideos(undefined, [
+      {
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        contentItemId: 'content-item-1',
+        status: 'pending',
+        s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1.mp4`,
+        submissionNonce: 'replacement-nonce',
+        previousS3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1/old-nonce/master.m3u8`,
+      },
+    ]);
+
+    expect(scheduleTranscodeCleanup).toHaveBeenCalledWith(undefined, {
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: 'content-item-1',
+      submissionNonce: 'old-nonce',
+    });
+  });
+
   it('falls back to deleting the whole content-item prefix inline for a ready item with no submissionNonce', async () => {
     await bestEffortDeleteContentItemVideos(undefined, [
       readyItemWithoutNonce('content-item-1'),

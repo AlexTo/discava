@@ -61,6 +61,14 @@ export const createContentItemEntity = async () =>
         s3Key: {
           type: 'string',
         },
+        // A video's last ready version (its master.m3u8), kept playable for
+        // students while a replacement transcodes, or after the replacement
+        // failed (#209). Set when a ready video is replaced; removed when
+        // the replacement's transcode completes, which schedules the old
+        // version's output for deletion.
+        previousS3Key: {
+          type: 'string',
+        },
         mimeType: {
           type: 'string',
         },
