@@ -70,9 +70,10 @@ test.describe('access', () => {
       page.getByRole('button', { name: 'Create course' }),
     ).toHaveCount(0);
 
-    // Signing out (e.g. to sign in as someone else) goes back to sign-in.
+    // Signing out (e.g. to sign in as someone else) ends up back at sign-in:
+    // the sign-in server's logout returns to the portal, which, with no one
+    // signed in, sends the browser to sign in.
     await page.getByRole('button', { name: 'Sign out' }).click();
-    await page.goto(`${PORTALS.instructor}/my-courses`);
     await page.waitForURL(/localhost:9400\/discava\/authorize/);
   });
 

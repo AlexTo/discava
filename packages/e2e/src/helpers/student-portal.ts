@@ -38,15 +38,12 @@ export const enrol = async (page: Page, user?: User) => {
 
 // Waits for the course home to say the student has completed the course.
 // Progress recalculation runs a few seconds after their last completion, and
-// the page shows its result the next time it fetches their enrolment, so this
-// reloads until it does.
+// the page keeps checking until it lands (#237), so this waits without
+// reloading: if the page stopped catching up, this would fail.
 export const expectCourseCompleted = async (page: Page) => {
-  await expect(async () => {
-    await page.reload();
-    await expect(page.getByText("You've completed this course")).toBeVisible({
-      timeout: 5_000,
-    });
-  }).toPass({ timeout: 45_000 });
+  await expect(page.getByText("You've completed this course")).toBeVisible({
+    timeout: 30_000,
+  });
 };
 
 // Opens the course's first lesson from the course home.

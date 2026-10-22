@@ -397,6 +397,35 @@ describe('LessonPage', () => {
     ).toBeInTheDocument();
   });
 
+  it("catches up with the course's progress once recalculation has run, then stops asking (#237)", async () => {
+    // Recalculation runs a few seconds after the completion: the enrolment
+    // only shows it from the third fetch after (the immediate refetch and the
+    // first poll still answer 25%).
+    let enrolmentFetches = 0;
+    const { user } = openLesson('lesson-1', {
+      'contentItem.complete': () => completion('text-1'),
+      'course.myEnrolment': () => {
+        enrolmentFetches += 1;
+        return enrolmentFetches < 4
+          ? enrolment
+          : { ...enrolment, progressPercent: 50 };
+      },
+    });
+    expect(await screen.findByText('25% complete')).toBeInTheDocument();
+
+    await user.click(
+      within(await item('Notes')).getByRole('button', { name: 'Mark as done' }),
+    );
+
+    expect(
+      await screen.findByText('50% complete', {}, { timeout: 8_000 }),
+    ).toBeInTheDocument();
+    const fetchesOnceCaughtUp = enrolmentFetches;
+    await new Promise((resolve) => setTimeout(resolve, 2_500));
+    // At most the one last refetch after seeing the change.
+    expect(enrolmentFetches - fetchesOnceCaughtUp).toBeLessThanOrEqual(1);
+  }, 15_000);
+
   it('ticks the lesson in the outline once its last item is done', async () => {
     const { user } = openLesson('lesson-2', {
       'contentItem.complete': () => completion('text-2', 'lesson-2'),
