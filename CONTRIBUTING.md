@@ -33,6 +33,38 @@ To send us a pull request, please:
 
 GitHub provides additional documentation on [forking a repository](https://help.github.com/articles/fork-a-repo/) and [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
 
+### Running Discava Locally
+
+Local dev needs **Docker** running, and no AWS account or deployed stage:
+
+```sh
+pnpm i
+pnpm dev
+```
+
+`pnpm dev` starts the APIs, the three portals, and local stand-ins for the AWS services they use:
+
+| Service | Port | Stands in for |
+| --- | --- | --- |
+| Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
+| core-api / instructor-api | 2022 / 2023 | API Gateway and Lambda |
+| DynamoDB local | 8001 | DynamoDB |
+| S3Mock | 9090 | S3 (uploads, lesson media, course images) |
+| Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler and the table's stream |
+| Local OIDC server | 9400 | Cognito |
+
+**Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.
+
+**Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Course progress updates a few seconds after a change, as when deployed.
+
+**Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run:
+
+```sh
+pnpm nx run @discava/common-scripts:reset-local-data
+```
+
+**What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, and the stuck-video reconciler. Check changes to those after deploying.
+
 ### Adding a New Project or Component
 
 Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) generators over hand-scaffolding. That's how every existing package in this repo (`core-api`, `core-table`, the portals, `infra`) was created, and it keeps generated projects consistent and eligible for future `nx migrate` upgrades. If you have the `nx-plugin-for-aws` MCP server available, use `list-generators` / `generator-guide` to find the right one; otherwise check the [generator docs](https://awslabs.github.io/nx-plugin-for-aws/en/guides/).

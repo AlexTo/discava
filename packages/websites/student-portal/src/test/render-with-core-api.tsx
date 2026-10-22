@@ -128,8 +128,7 @@ const authState = (signedIn: boolean): AuthContextProps =>
 //
 // To test routes themselves, pass the app's `routeTree` and the `path` to
 // start at instead of `ui`; `auth` overrides parts of the signed-in state,
-// e.g. a spy for signinRedirect, and `cognito: true` makes routes that need
-// sign-in check for it (without it they let everyone in, as in local dev).
+// e.g. a spy for signinRedirect.
 export const renderWithCoreApi = (
   ui: ReactElement | null,
   {
@@ -138,14 +137,12 @@ export const renderWithCoreApi = (
     auth = {},
     routeTree,
     path = '/',
-    cognito = false,
   }: {
     handlers?: Record<string, Handler>;
     signedIn?: boolean;
     auth?: Partial<AuthContextProps>;
     routeTree?: AnyRoute;
     path?: string;
-    cognito?: boolean;
   } = {},
 ) => {
   const calls: ApiCall[] = [];
@@ -163,12 +160,8 @@ export const renderWithCoreApi = (
   const router = createRouter({
     routeTree: routeTree ?? createRootRoute({ component: () => ui }),
     history: createMemoryHistory({ initialEntries: [path] }),
-    // As main.tsx provides. requireSignIn only checks for sign-in when
-    // Cognito is configured.
-    context: {
-      runtimeConfig: cognito ? { cognitoProps: {} } : undefined,
-      auth: authContext,
-    },
+    // As main.tsx provides.
+    context: { runtimeConfig: undefined, auth: authContext },
   });
   const user = userEvent.setup();
   const result = render(

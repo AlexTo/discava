@@ -8,6 +8,21 @@
     "generator": "ts#project"
   },
   "targets": {
+    "reset-local-data": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/local-data/reset.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "local-oidc": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx src/local-oidc/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "s3mock": {
       "executor": "nx:run-commands",
       "continuous": true,

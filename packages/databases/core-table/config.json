@@ -1,7 +1,7 @@
 {
   "runtimeConfigKey": "CoreTable",
   "localDev": {
-    "port": 8000,
+    "port": 8001,
     "tableName": "discava-core-table",
     "image": "public.ecr.aws/aws-dynamodb-local/aws-dynamodb-local:latest",
     "containerName": "discava-dynamodb",

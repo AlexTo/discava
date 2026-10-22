@@ -24,8 +24,9 @@ createHTTPServer({
       responseCookies: [] as string[],
     };
   },
-  // Browsers reject these cookies' Domain from a localhost response, so video
-  // playback doesn't work against this server (see #137).
+  // Deployed, video playback's signed CloudFront cookies go out this way.
+  // Locally there are none: lesson media is served unsigned from S3Mock
+  // (#137), so this passes on whatever a procedure sets.
   responseMeta: ({ ctx }) =>
     ctx?.responseCookies?.length
       ? { headers: { 'set-cookie': ctx.responseCookies } }

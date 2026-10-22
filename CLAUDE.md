@@ -38,14 +38,17 @@ Update vitest snapshots for one project:
 pnpm nx run @discava/core-api:test -u
 ```
 
-Local dev, deploy once, pull runtime config, then run dev servers:
+Local dev: Docker running, then the dev servers. No AWS account or deployed stage is needed; everything AWS runs locally (see CONTRIBUTING.md's "Running Discava Locally" and `common-server-utils/local-dev`):
+
+```sh
+pnpm dev                                              # portals, APIs, DynamoDB local, S3Mock, event runner, local OIDC
+pnpm nx run @discava/common-scripts:reset-local-data  # wipe local data (stop pnpm dev first)
+```
+
+Sign in locally as Alice (instructor, student), Bob or Dan (students) or Carol (admin) on the local OIDC page; Cognito itself is only exercised on a deployed stage:
 
 ```sh
 pnpm nx deploy @discava/infra "discava-development/*"
-pnpm nx load-runtime-config @discava/student-portal
-pnpm nx load-runtime-config @discava/instructor-portal
-pnpm nx load-runtime-config @discava/admin-portal
-pnpm dev
 ```
 
 Deploy the hardened production stage instead of `discava-development`: `pnpm nx deploy @discava/infra "discava-production/*"`.
@@ -57,7 +60,7 @@ Everything else (`compile`, `bundle`, `synth`, `checkov`, `dev`, `serve`) is a p
 - `packages/apis/core-api`: tRPC API (`@discava/core-api`) behind API Gateway, for procedures any authenticated user can call: one shared router Lambda, plus dedicated functions for procedures needing more than the table (`CORE_API_DEDICATED_FUNCTIONS`, e.g. `contentItem.videoUrl` holding the CloudFront signing key)
 - `packages/apis/instructor-api`: separate tRPC API (`@discava/instructor-api`), separate Lambda/API Gateway, for procedures only instructors may call (e.g. creating/archiving courses); same Cognito user pool as `core-api`
 - `packages/databases/core-table`: single-table DynamoDB access via ElectroDB; `client.ts` resolves table/client so entities work identically against local (Docker) and deployed DynamoDB
-- `packages/common/scripts`: deploy/destroy tooling, and the Docker services local dev runs instead of AWS (DynamoDB local, and S3Mock for S3: `@discava/common-scripts:s3mock`, started by instructor-api's `dev`), invoked by Nx targets. Their settings for the APIs are in `common-server-utils/local-dev` (S3 endpoint, local bucket names); see #137 for what still runs only on dev
+- `packages/common/scripts`: deploy/destroy tooling, and the Docker services local dev runs instead of AWS (DynamoDB local; S3Mock for S3, `@discava/common-scripts:s3mock`; the local OIDC server for Cognito, `@discava/common-scripts:local-oidc`, with its sign-in page in `src/local-oidc/login.html`; and `reset-local-data`), invoked by Nx targets. Their settings for the APIs are in `common-server-utils/local-dev` (S3 endpoint, local bucket names); see #137 for what still runs only on dev
 - `packages/events`: standalone Lambda handlers for AWS-triggered events (e.g. Cognito), separate from the API. In local dev, its `dev` target runs the event runner (`src/local/event-runner.ts`), which triggers those handlers locally the way AWS does when deployed: the core table's stream → progress recalculation (filtered by core-table's `PROGRESS_STREAM_FILTERS`, which the deployed event source mapping also uses), and, standing in for MediaConvert and EventBridge Scheduler on port 2024, ffmpeg transcodes in Docker (`src/local/transcoder.ts`, working in the git-ignored `tmp/local-dev/transcode/`; `LOCAL_TRANSCODE_RENDITIONS=360p` for speed) → transcode-complete, and delayed cleanups → transcode-cleanup. Backend code switches to these and S3Mock when `LOCAL_DEV=true` (see `common-server-utils/local-dev`); #137 lists what still runs only on dev
 - `packages/websites/student-portal`, `packages/websites/instructor-portal`, `packages/websites/admin-portal`: React + Vite + TanStack Router frontends
 - `packages/common/constructs`: all CDK constructs. A construct owns one component's own resources (e.g. an API with its handlers and WAF) and exposes `grant*`/`restrictCorsTo`-style helpers; `lambda-functions/` holds the generator-owned bare `Function` wrappers. `packages/infra` composes them into stacks, translating per-stage config into construct props and wiring components together (cross-component grants, CORS, event triggers such as EventBridge rules or DynamoDB stream sources).

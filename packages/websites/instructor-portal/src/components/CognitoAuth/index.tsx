@@ -12,19 +12,14 @@ import { Alert } from '../alert';
 import { Spinner } from '../spinner';
 
 /**
- * Sets up the Cognito auth.
- *
- * This assumes a runtime-config.json file is present at '/'. In order for Auth to be set up automatically,
- * the runtime-config.json must have the cognitoProps set.
+ * Sets up sign-in: with Cognito, from runtime-config.json's cognitoProps, or
+ * in local-dev mode with the local OIDC server the runtime config override
+ * sets as `localOidc` (#226).
  */
 const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
-  const { cognitoProps } = useRuntimeConfig();
+  const { cognitoProps, localOidc } = useRuntimeConfig();
 
-  if (!cognitoProps) {
-    if (import.meta.env.MODE === 'local-dev') {
-      // In local-dev mode with no cognitoProps available, we skip login
-      return <AuthProvider>{children}</AuthProvider>;
-    }
+  if (!cognitoProps && !localOidc) {
     return (
       <Alert type="error" header="Runtime config configuration error">
         <p>
@@ -35,8 +30,11 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
   }
 
   const cognitoAuthConfig: AuthProviderProps = {
-    authority: `https://cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`,
-    client_id: cognitoProps.userPoolWebClientId,
+    // Local dev's OIDC server when it's configured (#226), else Cognito.
+    authority:
+      localOidc?.authority ??
+      `https://cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`,
+    client_id: localOidc?.clientId ?? cognitoProps.userPoolWebClientId,
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',
@@ -69,10 +67,10 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
 
   if (auth.error) {
     return (
-      <Alert type="error" header="Configuration error">
+      <Alert type="error" header="Couldn't sign you in">
         <p>
-          Error contacting Cognito. Please check your runtime-config.json is
-          configured with the correct endpoints.
+          We couldn't reach the sign-in service. Please refresh the page or try
+          again later.
         </p>
       </Alert>
     );

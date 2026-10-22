@@ -15,11 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@discava/common-shadcn/components/ui/dropdown-menu';
 import { useAuth } from 'react-oidc-context';
+import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { getUserIdentity } from './user-profile';
 
 export const UserMenu = () => {
   const auth = useAuth();
   const { user, removeUser } = auth;
+  const { localOidc } = useRuntimeConfig();
   const { displayName, initials } = getUserIdentity(user?.profile);
 
   // Cognito's `end_session_endpoint` doesn't honour the OIDC-standard
@@ -39,7 +41,11 @@ export const UserMenu = () => {
     if (endSessionEndpoint) {
       const logoutUrl = new URL(endSessionEndpoint);
       logoutUrl.searchParams.set('client_id', auth.settings.client_id);
-      logoutUrl.searchParams.set('logout_uri', window.location.origin);
+      // Local dev's OIDC server takes the standard parameter (#226).
+      logoutUrl.searchParams.set(
+        localOidc ? 'post_logout_redirect_uri' : 'logout_uri',
+        window.location.origin,
+      );
       window.location.href = logoutUrl.toString();
     } else {
       window.location.href = window.location.origin;
