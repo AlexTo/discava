@@ -1,0 +1,14 @@
+{
+  "name": "@discava/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:"
+  },
+  "license": "Apache-2.0"
+}

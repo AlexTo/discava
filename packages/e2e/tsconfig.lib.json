@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../dist/packages/e2e/tsc",
+    "tsBuildInfoFile": "../../dist/packages/e2e/tsc/tsconfig.lib.tsbuildinfo",
+    "emitDeclarationOnly": false,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "playwright.config.ts"
+  ],
+  "references": [],
+  "exclude": []
+}
