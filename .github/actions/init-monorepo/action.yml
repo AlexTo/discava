@@ -41,7 +41,34 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ steps.docker-login-credentials.outputs.aws-secret-access-key }}
         AWS_SESSION_TOKEN: ${{ steps.docker-login-credentials.outputs.aws-session-token }}
       run: aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+    # pnpm/setup downloads pnpm from the npm registry, which now and then
+    # times out from GitHub's runners ("Could not reach
+    # https://registry.npmjs.org/@pnpm/...: timed out after 30s"), failing
+    # the whole job before it starts. Steps can't retry themselves, so it gets
+    # up to three tries, a little apart; only the last one fails the job.
     - name: Use PNPM
+      id: pnpm-setup-1
+      continue-on-error: true
+      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      with:
+        install: 'false'
+    - name: Wait before trying PNPM again
+      if: ${{ steps.pnpm-setup-1.outcome == 'failure' }}
+      shell: bash
+      run: sleep 15
+    - name: Use PNPM (second try)
+      id: pnpm-setup-2
+      if: ${{ steps.pnpm-setup-1.outcome == 'failure' }}
+      continue-on-error: true
+      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      with:
+        install: 'false'
+    - name: Wait before trying PNPM a last time
+      if: ${{ steps.pnpm-setup-2.outcome == 'failure' }}
+      shell: bash
+      run: sleep 45
+    - name: Use PNPM (last try)
+      if: ${{ steps.pnpm-setup-2.outcome == 'failure' }}
       uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
       with:
         install: 'false'
