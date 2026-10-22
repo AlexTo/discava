@@ -13,7 +13,11 @@ import { useAuth } from 'react-oidc-context';
 import { Alert } from '../../../../components/alert';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
-import { errorCode, type PlayerItem } from './use-course-player';
+import {
+  awaitProgressRecalculation,
+  errorCode,
+  type PlayerItem,
+} from './use-course-player';
 
 const refOf = ({
   courseId,
@@ -85,14 +89,19 @@ export function QuizItem({
           reveal: result.reveal,
         },
       );
-      // A passing or final attempt also completed the quiz.
+      // A passing or final attempt also completed the quiz; progress follows
+      // once recalculation has run, which the player waits for (#237).
       invalidate(
         trpc.course.myItemCompletions.queryKey({ courseId: item.courseId }),
       );
-      invalidate(
-        trpc.course.myLessonProgress.queryKey({ courseId: item.courseId }),
-      );
-      invalidate(trpc.course.myEnrolment.queryKey({ courseId: item.courseId }));
+      const { summary } = result;
+      if (
+        result.attempt.passed ||
+        (summary.attemptsAllowed !== null &&
+          summary.attemptsUsed >= summary.attemptsAllowed)
+      ) {
+        awaitProgressRecalculation(queryClient, trpc, item.courseId);
+      }
       return { status: 'submitted', ...result };
     } catch (error) {
       const message = (error as Error).message;

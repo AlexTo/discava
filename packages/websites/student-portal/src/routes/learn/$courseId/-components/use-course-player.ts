@@ -7,7 +7,12 @@ import type {
   IEnrolment,
   IViewCourseOutput,
 } from '@discava/core-api';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
 
@@ -54,6 +59,95 @@ export interface CompleteItem {
   error: { message: string } | null;
 }
 
+// Progress recalculation runs from the core table's stream a few seconds after
+// a completion (#237). Until it has, the player refetches the student's lesson
+// progress and enrolment every couple of seconds, so the course's progress
+// catches up without a reload, then stops, or gives up after a while.
+const RECALCULATION_POLL_MS = 2_000;
+const RECALCULATION_WAIT_MS = 20_000;
+
+type CoreApi = ReturnType<typeof useCoreApi>;
+
+interface AwaitedRecalculation {
+  until: number;
+  // The enrolment's progress when the completion was made.
+  before: string;
+}
+
+const awaitedKey = (courseId: string) =>
+  ['progressRecalculation', courseId] as const;
+
+const enrolmentProgress = (
+  queryClient: QueryClient,
+  trpc: CoreApi,
+  courseId: string,
+) => {
+  const enrolment = queryClient.getQueryData(
+    trpc.course.myEnrolment.queryKey({ courseId }),
+  );
+  return {
+    key: JSON.stringify([enrolment?.status, enrolment?.progressPercent]),
+    // Recalculation writes the percentage and then, separately, the
+    // completion; until both are in, 100% isn't the end of it.
+    settled:
+      enrolment?.progressPercent !== 100 || enrolment.status === 'completed',
+  };
+};
+
+const refetchProgress = (
+  queryClient: QueryClient,
+  trpc: CoreApi,
+  courseId: string,
+) => {
+  void queryClient.invalidateQueries({
+    queryKey: trpc.course.myLessonProgress.queryKey({ courseId }),
+  });
+  void queryClient.invalidateQueries({
+    queryKey: trpc.course.myEnrolment.queryKey({ courseId }),
+  });
+};
+
+// Starts waiting for the recalculation a completion causes.
+export const awaitProgressRecalculation = (
+  queryClient: QueryClient,
+  trpc: CoreApi,
+  courseId: string,
+) => {
+  queryClient.setQueryData<AwaitedRecalculation>(awaitedKey(courseId), {
+    until: Date.now() + RECALCULATION_WAIT_MS,
+    before: enrolmentProgress(queryClient, trpc, courseId).key,
+  });
+  refetchProgress(queryClient, trpc, courseId);
+};
+
+// The progress queries' refetchInterval: poll while a recalculation is
+// awaited. Recalculation writes lesson progress before the enrolment, so a
+// changed enrolment means it has landed; one last refetch of both then picks
+// up whatever the poll last missed.
+const pollWhileRecalculating =
+  (queryClient: QueryClient, trpc: CoreApi, courseId: string) =>
+  (): number | false => {
+    const awaited = queryClient.getQueryData<AwaitedRecalculation>(
+      awaitedKey(courseId),
+    );
+    if (!awaited) {
+      return false;
+    }
+    const now = enrolmentProgress(queryClient, trpc, courseId);
+    if (
+      Date.now() >= awaited.until ||
+      (now.key !== awaited.before && now.settled)
+    ) {
+      queryClient.removeQueries({
+        queryKey: awaitedKey(courseId),
+        exact: true,
+      });
+      refetchProgress(queryClient, trpc, courseId);
+      return false;
+    }
+    return RECALCULATION_POLL_MS;
+  };
+
 // Everything the course home and lesson pages show about the caller's place
 // in a course: its curriculum as they may see it (course.view), the items
 // they've completed (myItemCompletions) and each lesson's state
@@ -72,11 +166,19 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
   const completionsQuery = useQuery(
     trpc.course.myItemCompletions.queryOptions({ courseId }, { enabled }),
   );
+  const queryClient = useQueryClient();
+  const refetchInterval = pollWhileRecalculating(queryClient, trpc, courseId);
   const progressQuery = useQuery(
-    trpc.course.myLessonProgress.queryOptions({ courseId }, { enabled }),
+    trpc.course.myLessonProgress.queryOptions(
+      { courseId },
+      { enabled, refetchInterval },
+    ),
   );
   const enrolmentQuery = useQuery(
-    trpc.course.myEnrolment.queryOptions({ courseId }, { enabled }),
+    trpc.course.myEnrolment.queryOptions(
+      { courseId },
+      { enabled, refetchInterval },
+    ),
   );
 
   const course = courseQuery.data;
@@ -141,7 +243,7 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
 
 // Marks a text or video item done (contentItem.complete). The completion
 // shows at once; lesson progress and the enrolment's percentage follow once
-// progress recalculation has run, the next time they're fetched.
+// progress recalculation has run, which the player waits for.
 export function useCompleteItem(courseId: string): CompleteItem {
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
@@ -157,12 +259,7 @@ export function useCompleteItem(courseId: string): CompleteItem {
               ? current
               : { items: [...(current?.items ?? []), completion] },
         );
-        void queryClient.invalidateQueries({
-          queryKey: trpc.course.myLessonProgress.queryKey({ courseId }),
-        });
-        void queryClient.invalidateQueries({
-          queryKey: trpc.course.myEnrolment.queryKey({ courseId }),
-        });
+        awaitProgressRecalculation(queryClient, trpc, courseId);
       },
       onError: (error) => {
         // The item, its lesson or module was hidden or removed meanwhile:

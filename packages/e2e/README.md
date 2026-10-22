@@ -58,4 +58,4 @@ Locally, each run leaves its users and courses behind. `pnpm nx run @discava/com
 
 ## Background work
 
-Some results arrive a few seconds after the action that caused them. For example, course progress comes from the core table's stream, through the event runner's progress recalculation. Wait for the result itself, reloading if the page only fetches it once (see `expectCourseCompleted`), rather than sleeping for a fixed time.
+Some results arrive a few seconds after the action that caused them. For example, course progress comes from the core table's stream, through the event runner's progress recalculation. Wait for the result itself, with a timeout long enough for the background work (see `expectCourseCompleted`), rather than sleeping for a fixed time. Don't reload to make it appear: the portals are meant to pick it up by themselves, and the test should fail if they stop.
