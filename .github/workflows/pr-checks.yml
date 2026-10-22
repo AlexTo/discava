@@ -72,8 +72,9 @@ jobs:
       - name: Install Chromium for Playwright
         run: pnpm --filter @discava/e2e exec playwright install --with-deps chromium
 
+      # Static output, so the job log lists each test even when they all pass.
       - name: Run e2e
-        run: pnpm nx affected --target e2e
+        run: pnpm nx affected --target e2e --output-style=static
 
       - name: Upload traces, screenshots and the report
         if: failure()
