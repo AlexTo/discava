@@ -61,13 +61,19 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
 };
 
 /**
- * Serves:
+ * Starts the event runner's HTTP server on `port`, which local dev calls
+ * instead of AWS (see callLocalEventRunner). Each endpoint hands the request
+ * to the matching callback, which the event runner wires to the transcoder or
+ * the real handler:
  * - `POST /transcode-jobs` (LocalTranscodeJobRequest) -> `{ jobId }`, as
  *   MediaConvert's CreateJob
  * - `DELETE /transcode-jobs/<jobId>`, as CancelJob (404 if there's no such
  *   job left to finish)
  * - `POST /schedules/transcode-cleanup` (LocalScheduleRequest), as a one-off
  *   Scheduler schedule targeting transcode-cleanup
+ * - `POST /triggers/pre-token-generation` (LocalSignInRequest), as Cognito
+ *   running its pre token generation trigger at sign-in; answers 204 once
+ *   the handler has run (400 without `userName` and `userAttributes.sub`)
  */
 export const startEventRunnerServer = ({
   port,
