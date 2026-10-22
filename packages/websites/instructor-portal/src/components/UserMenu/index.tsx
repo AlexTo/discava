@@ -21,7 +21,7 @@ import { getUserIdentity } from './user-profile';
 export const UserMenu = () => {
   const auth = useAuth();
   const { user, removeUser } = auth;
-  const { oidc } = useRuntimeConfig();
+  const { localOidc } = useRuntimeConfig();
   const { displayName, initials } = getUserIdentity(user?.profile);
 
   // Cognito's `end_session_endpoint` doesn't honour the OIDC-standard
@@ -43,7 +43,7 @@ export const UserMenu = () => {
       logoutUrl.searchParams.set('client_id', auth.settings.client_id);
       // Local dev's OIDC server takes the standard parameter (#226).
       logoutUrl.searchParams.set(
-        oidc ? 'post_logout_redirect_uri' : 'logout_uri',
+        localOidc ? 'post_logout_redirect_uri' : 'logout_uri',
         window.location.origin,
       );
       window.location.href = logoutUrl.toString();

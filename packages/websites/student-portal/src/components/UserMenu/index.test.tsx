@@ -69,7 +69,7 @@ describe('UserMenu sign-out', () => {
   it('uses the standard post_logout_redirect_uri with local dev’s OIDC server (#226)', async () => {
     const url = await signOut(
       {
-        oidc: {
+        localOidc: {
           authority: 'http://localhost:9400/discava',
           clientId: 'local',
         },

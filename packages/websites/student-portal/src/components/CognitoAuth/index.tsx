@@ -14,12 +14,12 @@ import { Spinner } from '../spinner';
 /**
  * Sets up sign-in: with Cognito, from runtime-config.json's cognitoProps, or
  * in local-dev mode with the local OIDC server the runtime config override
- * sets as `oidc` (#226).
+ * sets as `localOidc` (#226).
  */
 const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
-  const { cognitoProps, oidc } = useRuntimeConfig();
+  const { cognitoProps, localOidc } = useRuntimeConfig();
 
-  if (!cognitoProps && !oidc) {
+  if (!cognitoProps && !localOidc) {
     return (
       <Alert type="error" header="Runtime config configuration error">
         <p>
@@ -32,9 +32,9 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
   const cognitoAuthConfig: AuthProviderProps = {
     // Local dev's OIDC server when it's configured (#226), else Cognito.
     authority:
-      oidc?.authority ??
+      localOidc?.authority ??
       `https://cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`,
-    client_id: oidc?.clientId ?? cognitoProps.userPoolWebClientId,
+    client_id: localOidc?.clientId ?? cognitoProps.userPoolWebClientId,
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',

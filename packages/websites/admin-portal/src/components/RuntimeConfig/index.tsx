@@ -29,7 +29,7 @@ const applyOverrides = (runtimeConfig: IRuntimeConfig) => {
   if (import.meta.env.MODE === 'local-dev') {
     // Sign in with the local OIDC server instead of Cognito (#226; port,
     // issuer and client from common-server-utils' LOCAL_OIDC).
-    runtimeConfig.oidc = {
+    runtimeConfig.localOidc = {
       authority: 'http://localhost:9400/discava',
       clientId: 'local',
     };
