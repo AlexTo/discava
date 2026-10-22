@@ -48,7 +48,7 @@ pnpm dev
 | --- | --- | --- |
 | Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
 | core-api / instructor-api | 2022 / 2023 | API Gateway and Lambda |
-| DynamoDB local | 8000 | DynamoDB |
+| DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler and the table's stream |
 | Local OIDC server | 9400 | Cognito |
