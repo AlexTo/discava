@@ -62,7 +62,8 @@
       "includes": [
         "packages/websites/**",
         "packages/common/shadcn/**",
-        "packages/common/tiptap/**"
+        "packages/common/tiptap/**",
+        "packages/common/portal-utils/**"
       ],
       "linter": {
         "rules": {

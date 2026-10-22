@@ -47,6 +47,9 @@
     },
     {
       "path": "./packages/e2e"
+    },
+    {
+      "path": "./packages/common/portal-utils"
     }
   ]
 }

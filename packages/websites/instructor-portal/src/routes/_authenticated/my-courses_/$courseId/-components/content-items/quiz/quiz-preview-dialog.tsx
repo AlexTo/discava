@@ -2,6 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import {
+  gradeQuiz,
+  type QuizAnswers,
+  type QuizSummary,
+} from '@discava/common-portal-utils/quiz';
 import { QuizCard } from '@discava/common-shadcn/components/quiz-card';
 import {
   Dialog,
@@ -10,11 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
-import {
-  gradeQuiz,
-  type QuizAnswers,
-  type QuizSummary,
-} from '@discava/common-shadcn/lib/quiz';
 import { useMemo, useState } from 'react';
 import { type QuizState, toQuizInput } from './quiz-form';
 

@@ -2,9 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { cn } from 'cn';
-import { AlertTriangle, CircleCheck, CircleX, RotateCcw } from 'lucide-react';
-import { useEffect, useId, useMemo, useState } from 'react';
+
 import {
   attemptsRemain,
   isAnswered,
@@ -17,7 +15,10 @@ import {
   type QuizSummary,
   reconcile,
   shuffled,
-} from '#lib/quiz';
+} from '@discava/common-portal-utils/quiz';
+import { cn } from 'cn';
+import { AlertTriangle, CircleCheck, CircleX, RotateCcw } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { RichTextView } from './rich-text-view';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Badge } from './ui/badge';
@@ -300,7 +301,7 @@ function ResultQuestions({
  *
  * If the questions change while the student is answering (a new `quiz` with
  * a different `questionsHash`, or `onSubmit` reporting `updated`), their
- * answers are carried over (see reconcile in #lib/quiz), changed questions
+ * answers are carried over (see reconcile in @discava/common-portal-utils/quiz), changed questions
  * are marked New or Updated, and the review screen says so.
  */
 export function QuizCard({

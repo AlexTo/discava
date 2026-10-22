@@ -6,7 +6,7 @@
 import {
   currentPath,
   safeReturnTo,
-} from '@discava/common-shadcn/lib/return-to';
+} from '@discava/common-portal-utils/return-to';
 import React, { PropsWithChildren, useEffect } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
