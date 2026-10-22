@@ -32,6 +32,12 @@ pnpm nx run @discava/core-api:test -- --run auth.test.ts   # single file, run on
 pnpm nx affected --target test
 ```
 
+End-to-end tests (Playwright, `packages/e2e`) against the local stack, reusing a running `pnpm dev` or starting one; needs Docker and, once, `pnpm --filter @discava/e2e exec playwright install chromium`:
+
+```sh
+pnpm nx e2e @discava/e2e
+```
+
 Update vitest snapshots for one project:
 
 ```sh
@@ -67,6 +73,7 @@ Everything else (`compile`, `bundle`, `synth`, `checkov`, `dev`, `serve`) is a p
 - `packages/common/infra-config`: per-stage deployment config (credentials, region, which security features are on)
 - `packages/common/shadcn`: shared shadcn/ui components used by all three portals
 - `packages/common/server-utils`: runtime code shared by two or more backend Lambdas (CORS, lesson media signing), imported per module (`@discava/common-server-utils/cors`); server-only, and a Biome rule stops the portals importing it. Code only one Lambda uses stays next to it
+- `packages/e2e`: Playwright end-to-end tests (#3), one `src/scenarios/*.e2e.ts` per user flow, built from `src/helpers/`, against the local stack; each scenario makes its own users (the local OIDC page's "Someone else" form) and uniquely named data, and never resets local data
 - `docs`: Astro/Starlight docs site, deployed to GitHub Pages on push to `main`
 
 Stack composition (`packages/infra/src/stages/application-stage.ts`) splits the app into stacks under `packages/infra/src/stacks/` (`Websites`, `Data`, `MediaPipeline`, `CoreApi`, `InstructorApi`, `RuntimeConfig`) to stay under CloudFormation's 500-resource limit; the stage's doc comment has the dependency order. Stateful resources (user pool, table, media buckets) live in `Data`; AppConfig content and each portal's `runtime-config.json` live in `RuntimeConfig`, which deploys last because it reads from every other stack. The stacks wire the constructs together and read per-component config (`enableWaf`, `enableKmsEncryption`, etc.) that defaults to fully-hardened and is only relaxed per stage. Stages themselves are defined in `packages/common/infra-config/src/stages.config.ts`, not in `packages/infra`; adding a stage means editing that file only. `discava-development` relaxes security for cheap iteration; `discava-production` is the hardened baseline.

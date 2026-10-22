@@ -44,6 +44,9 @@
     },
     {
       "path": "./packages/common/server-utils"
+    },
+    {
+      "path": "./packages/e2e"
     }
   ]
 }

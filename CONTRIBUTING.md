@@ -100,6 +100,17 @@ await waitFor(() =>
 - Find elements by role and accessible name, as a user or screen reader would, rather than by class or test id.
 - jsdom has no layout, so drag and drop can't be driven by the pointer or keyboard in these tests. Simulate the drop event instead (see `lesson-content-items-row.test.tsx`), and check real dragging in a browser.
 
+### End-to-End Tests
+
+`packages/e2e` drives the portals in Chromium with [Playwright](https://playwright.dev), against the whole local stack from `pnpm dev`. PR checks run it whenever the portals, APIs or event handlers change. To run it yourself, with Docker running (it reuses a running `pnpm dev`, or starts one):
+
+```sh
+pnpm --filter @discava/e2e exec playwright install chromium   # once
+pnpm nx e2e @discava/e2e
+```
+
+A change to a main user flow should come with an end-to-end scenario, or an extended one. The flows are signing in, building and publishing a course, enrolling, and learning. See [`packages/e2e/README.md`](./packages/e2e/README.md) for the helpers and the rules on test data.
+
 ### Writing Documentation
 
 Docs live in `docs/` (Astro + Starlight, deployed to GitHub Pages). Please only author English content, under `docs/src/content/docs/en/`; other locales are generated from it, not hand-written.

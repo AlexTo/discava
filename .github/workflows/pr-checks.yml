@@ -43,3 +43,36 @@ jobs:
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # End-to-end tests (#3): Playwright drives the portals in Chromium against
+  # the whole local stack, which it starts with `pnpm dev` (DynamoDB local,
+  # S3Mock and the local OIDC server in Docker; no AWS). Only when something
+  # the e2e project depends on changed.
+  e2e:
+    name: E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: "false"
+
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @discava/e2e exec playwright install --with-deps chromium
+
+      - name: Run e2e
+        run: pnpm nx affected --target e2e
+
+      - name: Upload traces, screenshots and the report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-results
+          path: |
+            dist/packages/e2e/test-results
+            dist/packages/e2e/report
+          retention-days: 14
