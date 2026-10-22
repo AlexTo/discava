@@ -35,7 +35,11 @@ for (const container of [
   LOCAL_S3.containerName,
   LOCAL_OIDC.containerName,
 ]) {
-  if (docker(['rm', '--force', container]).status === 0) {
+  // `rm --force` succeeds even for a container that isn't there, so check.
+  if (
+    docker(['container', 'inspect', container]).status === 0 &&
+    docker(['rm', '--force', container]).status === 0
+  ) {
     console.log(`Removed container ${container}`);
   }
 }
