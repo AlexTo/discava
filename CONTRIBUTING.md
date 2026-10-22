@@ -53,7 +53,7 @@ pnpm dev
 | Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler and the table's stream |
 | Local OIDC server | 9400 | Cognito |
 
-**Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. To sign in through the deployed dev Cognito instead, pull its config with `pnpm nx load-runtime-config @discava/<portal>` and run `VITE_LOCAL_AUTH=cognito pnpm dev`.
+**Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.
 
 **Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Course progress updates a few seconds after a change, as when deployed.
 

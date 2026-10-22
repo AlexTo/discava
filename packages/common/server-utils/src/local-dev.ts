@@ -139,7 +139,7 @@ export const callLocalEventRunner = async <T = unknown>(
  * navikt/mock-oauth2-server, with a login page offering the local test users
  * (common/scripts/src/oidc/login.html). The portals' local-dev runtime config
  * points `oidc` at `http://localhost:<port>/<issuer>` with `clientId`, to
- * match. Set VITE_LOCAL_AUTH=cognito to sign in through dev Cognito instead.
+ * match. Cognito itself is only exercised on a deployed stage.
  */
 export const LOCAL_OIDC = {
   port: 9400,

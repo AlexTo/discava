@@ -45,12 +45,10 @@ pnpm dev                                              # portals, APIs, DynamoDB 
 pnpm nx run @discava/common-scripts:reset-local-data  # wipe local data (stop pnpm dev first)
 ```
 
-Sign in locally as Alice (instructor, student), Bob or Dan (students) or Carol (admin) on the local OIDC page. To use the deployed dev stage's Cognito instead, deploy and pull runtime config first:
+Sign in locally as Alice (instructor, student), Bob or Dan (students) or Carol (admin) on the local OIDC page; Cognito itself is only exercised on a deployed stage:
 
 ```sh
 pnpm nx deploy @discava/infra "discava-development/*"
-pnpm nx load-runtime-config @discava/student-portal   # likewise instructor-portal, admin-portal
-VITE_LOCAL_AUTH=cognito pnpm dev
 ```
 
 Deploy the hardened production stage instead of `discava-development`: `pnpm nx deploy @discava/infra "discava-production/*"`.

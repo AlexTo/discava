@@ -14,19 +14,14 @@ import { Alert } from '../alert';
 import { Spinner } from '../spinner';
 
 /**
- * Sets up the Cognito auth.
- *
- * This assumes a runtime-config.json file is present at '/'. In order for Auth to be set up automatically,
- * the runtime-config.json must have the cognitoProps set.
+ * Sets up sign-in: with Cognito, from runtime-config.json's cognitoProps, or
+ * in local-dev mode with the local OIDC server the runtime config override
+ * sets as `oidc` (#226).
  */
 const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
   const { cognitoProps, oidc } = useRuntimeConfig();
 
   if (!cognitoProps && !oidc) {
-    if (import.meta.env.MODE === 'local-dev') {
-      // In local-dev mode with no cognitoProps available, we skip login
-      return <AuthProvider>{children}</AuthProvider>;
-    }
     return (
       <Alert type="error" header="Runtime config configuration error">
         <p>

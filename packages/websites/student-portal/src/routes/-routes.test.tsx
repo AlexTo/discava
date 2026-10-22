@@ -23,16 +23,12 @@ const handlers = {
   'course.myEnrolment': () => null,
 };
 
-const open = (
-  path: string,
-  options: { signedIn?: boolean; cognito?: boolean } = {},
-) =>
+const open = (path: string, options: { signedIn?: boolean } = {}) =>
   renderWithCoreApi(null, {
     routeTree,
     path,
     handlers,
     signedIn: options.signedIn ?? false,
-    cognito: options.cognito,
   });
 
 const pathAfterLoad = async (router: ReturnType<typeof open>['router']) => {
@@ -60,7 +56,7 @@ describe('/', () => {
 
 describe('/learn/<courseId>/home', () => {
   it('asks signed-out visitors to sign in, then come back', async () => {
-    const { router } = open('/learn/course-1/home', { cognito: true });
+    const { router } = open('/learn/course-1/home');
 
     const location = await pathAfterLoad(router);
     expect(location.pathname).toBe('/signin');
@@ -68,15 +64,7 @@ describe('/learn/<courseId>/home', () => {
   });
 
   it('lets signed-in students in', async () => {
-    const { router } = open('/learn/course-1/home', {
-      signedIn: true,
-      cognito: true,
-    });
-    expect((await pathAfterLoad(router)).pathname).toBe('/learn/course-1/home');
-  });
-
-  it('is open to everyone without Cognito, as in local dev', async () => {
-    const { router } = open('/learn/course-1/home');
+    const { router } = open('/learn/course-1/home', { signedIn: true });
     expect((await pathAfterLoad(router)).pathname).toBe('/learn/course-1/home');
   });
 });
