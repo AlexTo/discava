@@ -33,9 +33,17 @@ When a test fails, its trace, screenshots and video are kept in `dist/packages/e
 One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it from the helpers in `src/helpers/`:
 
 - `users.ts`: `signIn`; `newUser` for a fresh user through the local OIDC page's "Someone else" form; `testUser` for Alice, Bob, Dan or Carol; `uniqueName` for course titles and the like.
-- `instructor-portal.ts`: `createCourse`, `addModule`, `addLesson`, `addTextItem`, `publishCourse`.
-- `student-portal.ts`: `openCourse`, `enrol`, `expectCourseCompleted`.
+- `instructor-portal.ts`:
+  - building: `createCourse`, `addModule`, `addLesson`, `addTextItem`, `addVideoItem`, `addQuiz`;
+  - checking and publishing: `expectVideoPreviewToPlay`, `publishCourse`.
+- `student-portal.ts`:
+  - getting in: `openCourse`, `enrol`, `startFirstLesson`;
+  - in a lesson: `lessonItem`, `lessonVideo`, `markItemDone`, `takeQuiz`;
+  - the result: `expectCourseCompleted`.
+- `video.ts`: `expectToPlay`, which checks a `<video>` really plays, and `THREE_SECOND_VIDEO`, the test video.
 - `portals.ts`: where everything runs.
+
+Fixtures go in `src/files/`. `three-seconds.mp4` is a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, made with ffmpeg (the command is in `src/helpers/video.ts`). Keep fixtures synthetic and small, never real course material.
 
 Add a helper when a step will be reused, and keep each one waiting for what it did to show, so the next step starts from a settled page. Find elements by role and accessible name, as a user would (`getByRole('button', { name: 'Publish' })`), rather than by CSS. If something has no accessible name, that's worth fixing in the portal too.
 

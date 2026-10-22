@@ -48,3 +48,41 @@ export const expectCourseCompleted = async (page: Page) => {
     });
   }).toPass({ timeout: 45_000 });
 };
+
+// Opens the course's first lesson from the course home.
+export const startFirstLesson = async (page: Page) => {
+  await page.getByRole('link', { name: 'Start', exact: true }).click();
+  await page.waitForURL(/\/learn\/[0-9a-f-]+\/lesson\/[0-9a-f-]+$/);
+};
+
+// One item in the open lesson, found by its title.
+export const lessonItem = (page: Page, title: string) =>
+  page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+
+// The lesson's video player for the video item `title`, which is labelled with
+// its title.
+export const lessonVideo = (page: Page, title: string) =>
+  page.locator('video').and(page.getByLabel(title, { exact: true }));
+
+// Marks a text or video item done, and waits for the item to say so (its
+// button gives way to a "Done" label).
+export const markItemDone = async (page: Page, title: string) => {
+  const item = lessonItem(page, title);
+  await item.getByRole('button', { name: 'Mark as done' }).click();
+  await expect(item.getByText('Done', { exact: true })).toBeVisible();
+};
+
+// Takes (or retakes) a one-question quiz, choosing `answer`, and submits it.
+// Returns the quiz's item, which then shows the attempt's result.
+export const takeQuiz = async (page: Page, title: string, answer: string) => {
+  const quiz = lessonItem(page, title);
+  await quiz
+    .getByRole('button', { name: /^(Start quiz|Retake quiz)$/ })
+    .click();
+  await quiz.getByRole('radio', { name: answer, exact: true }).check();
+  await quiz.getByRole('button', { name: 'Review answers' }).click();
+  await quiz.getByRole('button', { name: 'Submit' }).click();
+  return quiz;
+};
