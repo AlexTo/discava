@@ -10,6 +10,7 @@ import { safeReturnTo } from '@discava/common-web-utils/return-to';
 
 ## What's here
 
+- `query-retry.ts`: the portals' retry rule for queries, which doesn't retry answers that can't change, like not found or forbidden (#236).
 - `quiz.ts`: quiz types, and the logic both portals share for showing and answering a quiz.
 - `return-to.ts`: the page to return to after signing in, kept to the portal's own paths.
 

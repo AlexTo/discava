@@ -160,7 +160,11 @@ export function EditLessonTextDialog({
 
         <div className="space-y-2">
           <span className="text-sm font-medium leading-none">Body</span>
-          <RichTextEditor value={bodyValue} onChange={setBodyValue} />
+          <RichTextEditor
+            value={bodyValue}
+            onChange={setBodyValue}
+            ariaLabel="Body"
+          />
         </div>
 
         <DialogFooter>
