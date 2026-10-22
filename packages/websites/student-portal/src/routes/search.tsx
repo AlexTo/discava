@@ -2,7 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
@@ -64,7 +66,7 @@ function RouteComponent() {
           ) : coursesQuery.isError ? (
             <div className="mt-6">
               <Alert type="error" header="Couldn't search courses">
-                {coursesQuery.error.message}
+                {apiErrorMessage(coursesQuery.error)}
               </Alert>
             </div>
           ) : results.length === 0 ? (

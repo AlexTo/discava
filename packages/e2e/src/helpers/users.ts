@@ -75,7 +75,9 @@ export const signIn = async (page: Page, user: User) => {
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   }
   await page.waitForURL(/localhost:420[0-2]/);
+  // Signed in: the portal's user menu, or, for someone without the portal's
+  // role, its restricted page's "Sign out" (#235).
   await expect(
-    page.getByRole('button', { name: 'Open user menu' }),
+    page.getByRole('button', { name: /^(Open user menu|Sign out)$/ }),
   ).toBeVisible();
 };

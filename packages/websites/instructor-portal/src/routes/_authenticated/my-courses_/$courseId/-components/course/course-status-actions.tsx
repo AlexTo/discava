@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Send } from 'lucide-react';
 import { useState } from 'react';
@@ -85,7 +86,7 @@ function PublishCourseDialog({
 
         {isError && (
           <Alert type="error" header="Couldn't publish the course">
-            {error.message}
+            {apiErrorMessage(error)}
           </Alert>
         )}
 
@@ -147,7 +148,7 @@ function RestoreCourseButton({ courseId }: { courseId: string }) {
       </Button>
       {isError && (
         <Alert type="error" header="Couldn't restore the course">
-          {error.message}
+          {apiErrorMessage(error)}
         </Alert>
       )}
     </div>

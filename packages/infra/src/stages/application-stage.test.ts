@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
+
+import { RuntimeConfig } from '@discava/common-constructs';
 import {
   resolveStage,
   type StageComponents,
@@ -320,6 +322,31 @@ describe('the user record trigger (#230)', () => {
         ]),
       },
     });
+  });
+});
+
+describe("the portals' addresses (#235)", () => {
+  it("gives every portal every portal's address, by its custom domain when it has one", () => {
+    const stage = new ApplicationStage(new App(), 'discava-test', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+      studentPortal: {
+        domainNames: ['learn.example.com'],
+        certificateArn:
+          'arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+    });
+    const portals = RuntimeConfig.of(stage.node.findChild('Websites'))?.get(
+      'connection',
+    ).portals;
+
+    expect(Object.keys(portals).sort()).toEqual([
+      'AdminPortal',
+      'InstructorPortal',
+      'StudentPortal',
+    ]);
+    expect(portals.StudentPortal).toBe('https://learn.example.com');
+    // Without a custom domain, its CloudFront domain (a token until deploy).
+    expect(portals.InstructorPortal).toMatch(/^https:\/\/\$\{Token\[/);
   });
 });
 

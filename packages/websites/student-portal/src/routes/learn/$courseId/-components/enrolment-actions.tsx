@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
@@ -160,7 +161,7 @@ export function EnrolmentActions({
     <>
       {isAuthenticated && enrolmentQuery.isError ? (
         <Alert type="error" header="Couldn't check your enrolment">
-          {enrolmentQuery.error.message}
+          {apiErrorMessage(enrolmentQuery.error)}
         </Alert>
       ) : null}
       {action}

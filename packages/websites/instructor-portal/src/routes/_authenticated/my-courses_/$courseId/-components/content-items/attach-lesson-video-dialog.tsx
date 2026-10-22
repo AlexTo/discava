@@ -28,6 +28,7 @@ import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Upload } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -182,9 +183,7 @@ export function AttachLessonVideoDialog({
         mimeType: file.type,
       });
     } catch (error) {
-      setUploadError(
-        error instanceof Error ? error.message : 'Failed to upload the video',
-      );
+      setUploadError(apiErrorMessage(error, 'Failed to upload the video'));
     } finally {
       setUploadProgress(undefined);
     }
@@ -238,9 +237,7 @@ export function AttachLessonVideoDialog({
       await invalidateCourse();
       setOpen(false);
     } catch (error) {
-      setUploadError(
-        error instanceof Error ? error.message : "Couldn't save the video",
-      );
+      setUploadError(apiErrorMessage(error, "Couldn't save the video"));
     }
   };
 
@@ -483,7 +480,7 @@ export function RemoveLessonVideoButton({
                 : "Couldn't remove the video"
             }
           >
-            {error.message}
+            {apiErrorMessage(error)}
           </Alert>
         )}
 

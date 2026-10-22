@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -270,13 +271,15 @@ function ArchivedRow({
           onConfirm={() => run('delete')}
           isPending={remove.isPending}
           isError={remove.isError}
-          errorMessage={remove.error?.message}
+          errorMessage={
+            remove.error ? apiErrorMessage(remove.error) : undefined
+          }
           reset={remove.reset}
         />
       </div>
       {restore.isError && (
         <Alert type="error" header={`Couldn't restore the ${entry.noun}`}>
-          {restore.error.message}
+          {apiErrorMessage(restore.error)}
         </Alert>
       )}
     </li>

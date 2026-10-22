@@ -15,6 +15,7 @@ import {
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
@@ -203,7 +204,9 @@ export function ModuleVisibilityButton({
       }}
       isPending={mutation.isPending}
       isError={mutation.isError}
-      errorMessage={mutation.error?.message}
+      errorMessage={
+        mutation.error ? apiErrorMessage(mutation.error) : undefined
+      }
       reset={mutation.reset}
     />
   );
@@ -245,7 +248,9 @@ export function LessonVisibilityButton({
       }}
       isPending={mutation.isPending}
       isError={mutation.isError}
-      errorMessage={mutation.error?.message}
+      errorMessage={
+        mutation.error ? apiErrorMessage(mutation.error) : undefined
+      }
       reset={mutation.reset}
     />
   );
@@ -300,7 +305,9 @@ export function ContentItemVisibilityButton({
       }}
       isPending={mutation.isPending}
       isError={mutation.isError}
-      errorMessage={mutation.error?.message}
+      errorMessage={
+        mutation.error ? apiErrorMessage(mutation.error) : undefined
+      }
       reset={mutation.reset}
     />
   );

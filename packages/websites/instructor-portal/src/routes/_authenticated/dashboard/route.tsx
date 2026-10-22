@@ -18,6 +18,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@discava/common-shadcn/components/ui/chart';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import {
@@ -196,7 +197,7 @@ function RouteComponent() {
         </div>
       ) : coursesQuery.isError ? (
         <Alert type="error" header="Couldn't load your courses">
-          {coursesQuery.error.message}
+          {apiErrorMessage(coursesQuery.error)}
         </Alert>
       ) : (
         <>

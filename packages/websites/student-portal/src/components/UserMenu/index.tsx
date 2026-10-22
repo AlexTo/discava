@@ -14,43 +14,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@discava/common-shadcn/components/ui/dropdown-menu';
+import { signOut } from '@discava/common-web-utils/sign-out';
 import { useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { getUserIdentity } from './user-profile';
 
 export const UserMenu = () => {
   const auth = useAuth();
-  const { user, removeUser } = auth;
+  const { user } = auth;
   const { localOidc } = useRuntimeConfig();
   const { displayName, initials } = getUserIdentity(user?.profile);
 
-  // Cognito's `end_session_endpoint` doesn't honour the OIDC-standard
-  // `post_logout_redirect_uri` param that `signoutRedirect()` sends - it
-  // requires its own `logout_uri` param instead, so we build the redirect
-  // manually from the discovered endpoint.
-  const handleSignOut = async () => {
-    let endSessionEndpoint: string | undefined;
-    try {
-      const metadataUrl = `${auth.settings.authority}/.well-known/openid-configuration`;
-      const metadata = await (await fetch(metadataUrl)).json();
-      endSessionEndpoint = metadata.end_session_endpoint;
-    } catch {
-      // fall through to a local-only sign out below
-    }
-    await removeUser();
-    if (endSessionEndpoint) {
-      const logoutUrl = new URL(endSessionEndpoint);
-      logoutUrl.searchParams.set('client_id', auth.settings.client_id);
-      // Local dev's OIDC server takes the standard parameter (#226).
-      logoutUrl.searchParams.set(
-        localOidc ? 'post_logout_redirect_uri' : 'logout_uri',
-        window.location.origin,
-      );
-      window.location.href = logoutUrl.toString();
-    } else {
-      window.location.href = window.location.origin;
-    }
-  };
+  const handleSignOut = () => signOut(auth, { localOidc });
 
   return (
     <DropdownMenu>

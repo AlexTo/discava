@@ -22,6 +22,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -95,7 +96,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
         >
           {createCourse.isError && (
             <Alert type="error" header="Couldn't create the course">
-              {createCourse.error.message}
+              {apiErrorMessage(createCourse.error)}
             </Alert>
           )}
 
