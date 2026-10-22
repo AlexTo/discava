@@ -36,34 +36,16 @@
         "path": "src/media/transcode-reconciler.ts",
         "name": "transcode-reconciler",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/identity/pre-token-generation.ts",
+        "name": "pre-token-generation",
+        "iac": "cdk"
       }
     ]
   },
   "targets": {
-    "dev": {
-      "executor": "nx:run-commands",
-      "dependsOn": [
-        {
-          "projects": ["@discava/core-table"],
-          "target": "dev"
-        },
-        {
-          "projects": ["@discava/common-scripts"],
-          "target": "s3mock"
-        }
-      ],
-      "continuous": true,
-      "options": {
-        "commands": ["tsx --watch src/local/event-runner.ts"],
-        "cwd": "{projectRoot}",
-        "env": {
-          "LOCAL_DEV": "true",
-          "POWERTOOLS_DEV": "true",
-          "POWERTOOLS_TRACE_ENABLED": "false",
-          "POWERTOOLS_METRICS_DISABLED": "true"
-        }
-      }
-    },
     "assemble": {
       "dependsOn": ["compile", "bundle"]
     },
@@ -87,6 +69,30 @@
       "options": {
         "command": "tsc --build tsconfig.lib.json",
         "cwd": "{projectRoot}"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@discava/core-table"],
+          "target": "dev"
+        },
+        {
+          "projects": ["@discava/common-scripts"],
+          "target": "s3mock"
+        }
+      ],
+      "continuous": true,
+      "options": {
+        "commands": ["tsx --watch src/local/event-runner.ts"],
+        "cwd": "{projectRoot}",
+        "env": {
+          "LOCAL_DEV": "true",
+          "POWERTOOLS_DEV": "true",
+          "POWERTOOLS_TRACE_ENABLED": "false",
+          "POWERTOOLS_METRICS_DISABLED": "true"
+        }
       }
     },
     "format": {

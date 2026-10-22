@@ -23,4 +23,10 @@ export {
   PROGRESS_STREAM_FILTERS,
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
+export {
+  type IUserProfile,
+  profileChanged,
+  syncUserProfile,
+  userProfileFrom,
+} from './helpers/user.js';
 export { createCoreTableService } from './service.js';

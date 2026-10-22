@@ -7,9 +7,10 @@ import { EventBridgeSchema } from '@aws-lambda-powertools/parser/schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { transcodeComplete } from '../media/transcode-complete.js';
 import {
-  startMediaJobsServer,
+  preTokenGenerationEvent,
+  startEventRunnerServer,
   transcodeCompletionEvent,
-} from './media-jobs.js';
+} from './endpoints.js';
 
 const applyTranscodeOutcome = vi.hoisted(() => vi.fn());
 vi.mock('../media/transcode-outcome.js', () => ({ applyTranscodeOutcome }));
@@ -39,8 +40,23 @@ describe('transcodeCompletionEvent', () => {
   });
 });
 
-describe('startMediaJobsServer', () => {
-  let server: ReturnType<typeof startMediaJobsServer> | undefined;
+describe('preTokenGenerationEvent', () => {
+  it('is what Cognito sends the trigger on a sign-in', () => {
+    const userAttributes = { sub: 'user-1', email: 'erin@example.com' };
+
+    expect(
+      preTokenGenerationEvent({ userName: 'erin', userAttributes }),
+    ).toMatchObject({
+      version: '1',
+      triggerSource: 'TokenGeneration_HostedAuth',
+      userName: 'erin',
+      request: { userAttributes },
+    });
+  });
+});
+
+describe('startEventRunnerServer', () => {
+  let server: ReturnType<typeof startEventRunnerServer> | undefined;
   afterEach(() => {
     server?.close();
   });
@@ -50,8 +66,9 @@ describe('startMediaJobsServer', () => {
       submit: vi.fn(() => 'local-job-1'),
       cancel: vi.fn((jobId: string) => jobId === 'local-job-1'),
       schedule: vi.fn(),
+      signIn: vi.fn(async () => {}),
     };
-    server = startMediaJobsServer({ port: 0, ...handlers, log: () => {} });
+    server = startEventRunnerServer({ port: 0, ...handlers, log: () => {} });
     const url = (path: string) =>
       `http://localhost:${(server!.address() as AddressInfo).port}${path}`;
     return { handlers, url };
@@ -119,5 +136,35 @@ describe('startMediaJobsServer', () => {
 
     expect(response.status).toBe(202);
     expect(handlers.schedule).toHaveBeenCalledWith({ payload });
+  });
+
+  it('runs the pre token generation trigger for a sign-in, answering once it has', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+    const signIn = {
+      userName: 'erin',
+      userAttributes: { sub: 'user-1', given_name: 'Erin' },
+    };
+
+    const response = await fetch(url('/triggers/pre-token-generation'), {
+      method: 'POST',
+      ...json(signIn),
+    });
+
+    expect(response.status).toBe(204);
+    expect(handlers.signIn).toHaveBeenCalledWith(signIn);
+  });
+
+  it('refuses a sign-in without the user’s sub', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/triggers/pre-token-generation'), {
+      method: 'POST',
+      ...json({ userName: 'erin', userAttributes: {} }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(handlers.signIn).not.toHaveBeenCalled();
   });
 });

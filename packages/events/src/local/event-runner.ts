@@ -21,14 +21,16 @@ import {
   resolveTableName,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
+import { handler as preTokenGeneration } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { createBatcher, pollStream } from './dynamodb-stream.js';
 import {
-  startMediaJobsServer,
+  preTokenGenerationEvent,
+  startEventRunnerServer,
   transcodeCompletionEvent,
-} from './media-jobs.js';
+} from './endpoints.js';
 import { createTranscoder, type Docker } from './transcoder.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
@@ -46,6 +48,8 @@ import { createTranscoder, type Docker } from './transcoder.js';
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
 // - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
 //   payload, LOCAL_EVENT_RUNNER.cleanupDelaySeconds after it's scheduled
+// - a user first seen by an API's local server -> pre-token-generation, with
+//   the event Cognito sends on sign-in (#230; see syncLocalUser)
 
 if (process.env.LOCAL_DEV !== 'true') {
   throw new Error('The event runner is for local dev only (LOCAL_DEV=true)');
@@ -148,7 +152,7 @@ const transcoder = createTranscoder({
   log,
 });
 
-const server = startMediaJobsServer({
+const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   submit: (request) => transcoder.submit(request),
   cancel: (jobId) => transcoder.cancel(jobId),
@@ -161,10 +165,18 @@ const server = startMediaJobsServer({
       LOCAL_EVENT_RUNNER.cleanupDelaySeconds * 1000,
     ).unref();
   },
+  signIn: async (request) => {
+    log(`pre-token-generation <- ${request.userName}`);
+    await invoke(
+      'pre-token-generation',
+      preTokenGeneration,
+      preTokenGenerationEvent(request),
+    );
+  },
   log,
 });
 log(
-  `transcode jobs and schedules on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
+  `transcode jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
 );
 
 const tableName = await resolveTableName();
