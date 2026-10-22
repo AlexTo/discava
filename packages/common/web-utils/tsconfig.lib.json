@@ -2,8 +2,8 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../../../dist/packages/common/portal-utils/tsc",
-    "tsBuildInfoFile": "../../../dist/packages/common/portal-utils/tsc/tsconfig.lib.tsbuildinfo",
+    "outDir": "../../../dist/packages/common/web-utils/tsc",
+    "tsBuildInfoFile": "../../../dist/packages/common/web-utils/tsc/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "types": [
       "node"

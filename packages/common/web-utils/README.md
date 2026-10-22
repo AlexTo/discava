@@ -1,11 +1,11 @@
-# @discava/common-portal-utils
+# @discava/common-web-utils
 
 Non-UI code shared by two or more of the portals (student, instructor, admin): types, pure logic and browser helpers. It's the frontend counterpart of `@discava/common-server-utils`.
 
 Import each module on its own, as with `common-server-utils`:
 
 ```ts
-import { safeReturnTo } from '@discava/common-portal-utils/return-to';
+import { safeReturnTo } from '@discava/common-web-utils/return-to';
 ```
 
 ## What's here

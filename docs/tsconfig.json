@@ -61,8 +61,8 @@
       "@discava/common-server-utils/*": [
         "../packages/common/server-utils/src/*.ts"
       ],
-      "@discava/common-portal-utils/*": [
-        "../packages/common/portal-utils/src/*.ts"
+      "@discava/common-web-utils/*": [
+        "../packages/common/web-utils/src/*.ts"
       ]
     }
   }

@@ -63,7 +63,7 @@
         "packages/websites/**",
         "packages/common/shadcn/**",
         "packages/common/tiptap/**",
-        "packages/common/portal-utils/**"
+        "packages/common/web-utils/**"
       ],
       "linter": {
         "rules": {

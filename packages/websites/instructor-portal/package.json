@@ -31,7 +31,7 @@
     "recharts": "catalog:",
     "tailwindcss": "catalog:",
     "zod": "catalog:",
-    "@discava/common-portal-utils": "workspace:*"
+    "@discava/common-web-utils": "workspace:*"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",

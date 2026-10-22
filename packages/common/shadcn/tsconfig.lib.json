@@ -22,7 +22,7 @@
   ],
   "references": [
     {
-      "path": "../portal-utils/tsconfig.lib.json"
+      "path": "../web-utils/tsconfig.lib.json"
     },
     {
       "path": "../tiptap/tsconfig.lib.json"

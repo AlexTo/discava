@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { safeReturnTo } from '@discava/common-portal-utils/return-to';
+import { safeReturnTo } from '@discava/common-web-utils/return-to';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';

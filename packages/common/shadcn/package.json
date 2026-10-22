@@ -24,7 +24,7 @@
     "tw-animate-css": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@discava/common-portal-utils": "workspace:*"
+    "@discava/common-web-utils": "workspace:*"
   },
   "license": "Apache-2.0",
   "imports": {

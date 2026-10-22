@@ -1,5 +1,5 @@
 {
-  "name": "@discava/common-portal-utils",
+  "name": "@discava/common-web-utils",
   "version": "0.0.1",
   "private": true,
   "type": "module",

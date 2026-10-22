@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { safeReturnTo } from '@discava/common-portal-utils/return-to';
+import { safeReturnTo } from '@discava/common-web-utils/return-to';
 import React, { PropsWithChildren } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';

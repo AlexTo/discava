@@ -6,10 +6,10 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
-  cacheDir: '../../../node_modules/.vite/packages/common/portal-utils',
+  cacheDir: '../../../node_modules/.vite/packages/common/web-utils',
   test: {
     passWithNoTests: true,
-    name: '@discava/common-portal-utils',
+    name: '@discava/common-web-utils',
     watch: false,
     globals: true,
     environment: 'jsdom',
@@ -17,7 +17,7 @@ export default defineConfig(() => ({
     reporters: ['default'],
     coverage: {
       reportsDirectory:
-        '../../../dist/packages/common/portal-utils/test-output/vitest/coverage',
+        '../../../dist/packages/common/web-utils/test-output/vitest/coverage',
       provider: 'v8' as const,
     },
   },

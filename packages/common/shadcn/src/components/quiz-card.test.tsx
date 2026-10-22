@@ -7,7 +7,7 @@ import type {
   Quiz,
   QuizAttempt,
   QuizSummary,
-} from '@discava/common-portal-utils/quiz';
+} from '@discava/common-web-utils/quiz';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

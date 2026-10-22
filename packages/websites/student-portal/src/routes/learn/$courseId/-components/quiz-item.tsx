@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { QuizAnswers } from '@discava/common-portal-utils/quiz';
 import {
   QuizCard,
   type QuizSubmitResult,
 } from '@discava/common-shadcn/components/quiz-card';
+import type { QuizAnswers } from '@discava/common-web-utils/quiz';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
 import { Alert } from '../../../../components/alert';

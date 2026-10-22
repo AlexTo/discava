@@ -1,7 +1,7 @@
 {
-  "name": "@discava/common-portal-utils",
+  "name": "@discava/common-web-utils",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/common/portal-utils/src",
+  "sourceRoot": "packages/common/web-utils/src",
   "projectType": "library",
   "tags": [],
   "metadata": {

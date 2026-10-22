@@ -42,7 +42,7 @@
   ],
   "references": [
     {
-      "path": "../../common/portal-utils/tsconfig.lib.json"
+      "path": "../../common/web-utils/tsconfig.lib.json"
     },
     {
       "path": "../../apis/core-api/tsconfig.lib.json"
