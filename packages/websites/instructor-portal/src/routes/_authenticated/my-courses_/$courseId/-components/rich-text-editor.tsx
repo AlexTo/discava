@@ -47,7 +47,8 @@ export function RichTextEditor({
   value: string | undefined;
   onChange: (body: string) => void;
   // What the editing area is called to assistive technology, e.g. "Question 2".
-  ariaLabel?: string;
+  // Required: an unnamed editor is announced as just "editable" (#238).
+  ariaLabel: string;
   minHeightClass?: string;
 }) {
   const [mathEdit, setMathEdit] = useState<MathEdit>();
@@ -86,7 +87,7 @@ export function RichTextEditor({
           'prose prose-sm dark:prose-invert max-w-none px-3 py-2 focus:outline-none',
           minHeightClass,
         ),
-        ...(ariaLabel && { 'aria-label': ariaLabel }),
+        'aria-label': ariaLabel,
       },
     },
   });

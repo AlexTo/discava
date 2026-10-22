@@ -55,8 +55,7 @@ export const addTextItem = async (
   await page.getByRole('button', { name: 'Text', exact: true }).last().click();
   const dialog = page.getByRole('dialog', { name: 'Add text' });
   await dialog.getByLabel('Title').fill(title);
-  // The rich text editor has no accessible name of its own yet.
-  await dialog.locator('[contenteditable="true"]').fill(body);
+  await dialog.getByLabel('Body', { exact: true }).fill(body);
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(
     page.getByRole('button', { name: `Hide text ${title}` }),

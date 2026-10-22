@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { retryQuery } from '@discava/common-web-utils/query-retry';
 import {
   QueryClient,
   QueryClientProvider as QueryClientProviderInner,
@@ -17,7 +19,11 @@ type QueryClientProviderProps = PropsWithChildren & {
 
 export const QueryClientProvider: FC<QueryClientProviderProps> = ({
   children,
-  client = new QueryClient(),
+  // Answers that won't change, like not found or forbidden, show at once
+  // rather than after three retries (#236).
+  client = new QueryClient({
+    defaultOptions: { queries: { retry: retryQuery } },
+  }),
   disableDevtools = false,
   devtoolsOptions,
 }) => {
