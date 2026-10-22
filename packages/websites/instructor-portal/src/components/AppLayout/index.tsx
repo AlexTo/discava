@@ -11,6 +11,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@discava/common-shadcn/components/ui/breadcrumb';
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Separator } from '@discava/common-shadcn/components/ui/separator';
 import {
   SidebarInset,
@@ -20,6 +21,7 @@ import {
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import * as React from 'react';
 import Config from '../../config';
+import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
 import { UserMenu } from '../UserMenu';
 import { BreadcrumbOverrideContext } from './breadcrumb-label';
@@ -65,6 +67,13 @@ export const getBreadcrumbs = (
 };
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const { portals } = useRuntimeConfig();
+  // Back to the student portal (#67), at My Learning rather than its public
+  // home: a page that needs signing in, which the Cognito session then does
+  // without asking. Everyone here is an instructor (#235), so it always shows.
+  const studentPortal = portals?.StudentPortal
+    ? `${portals.StudentPortal}/my-learning`
+    : undefined;
   const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
     { href: string; text: string }[]
   >([{ text: '/', href: '/' }]);
@@ -122,6 +131,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               </div>
             </div>
             <div className="ml-auto flex items-center gap-3">
+              {studentPortal ? (
+                <Button variant="ghost" asChild>
+                  <a href={studentPortal}>Student</a>
+                </Button>
+              ) : null}
               <UserMenu />
             </div>
           </header>
