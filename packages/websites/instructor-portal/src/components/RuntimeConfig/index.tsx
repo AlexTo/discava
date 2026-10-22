@@ -21,48 +21,45 @@ export const RuntimeConfigContext = createContext<IRuntimeConfig | undefined>(
 );
 
 /**
- * Apply any overrides to point to local servers/resources here
- * for the dev target
+ * Local dev's whole runtime config: everything runs locally (#137), so there's
+ * no deployed stack's runtime-config.json to fetch.
  */
-const applyOverrides = (runtimeConfig: IRuntimeConfig) => {
-  if (import.meta.env.MODE === 'local-dev') {
-    // Sign in with the local OIDC server instead of Cognito (#226; port,
-    // issuer and client from common-server-utils' LOCAL_OIDC).
-    runtimeConfig.localOidc = {
-      authority: 'http://localhost:9400/discava',
-      clientId: 'local',
-    };
-    runtimeConfig.apis.InstructorApi = 'http://localhost:2023/';
-    runtimeConfig.apis.CoreApi = 'http://localhost:2022/';
-    // Course images come from S3Mock, which stands in for S3 in local dev
-    // (#137; port and bucket from common-server-utils' LOCAL_S3).
-    runtimeConfig.media = {
-      ...runtimeConfig.media,
-      PublicMediaBucket: 'http://localhost:9090/discava-public-media/',
-    };
-  }
-  return runtimeConfig;
+const LOCAL_DEV_CONFIG: IRuntimeConfig = {
+  // Sign in with the local OIDC server instead of Cognito (#226; port, issuer
+  // and client from common-server-utils' LOCAL_OIDC).
+  localOidc: {
+    authority: 'http://localhost:9400/discava',
+    clientId: 'local',
+  },
+  apis: {
+    CoreApi: 'http://localhost:2022/',
+    InstructorApi: 'http://localhost:2023/',
+  },
+  // Course images come from S3Mock, which stands in for S3 in local dev
+  // (#137; port and bucket from common-server-utils' LOCAL_S3).
+  media: {
+    PublicMediaBucket: 'http://localhost:9090/discava-public-media/',
+  },
 };
 
 /**
- * Sets up the runtimeConfig.
- *
- * This assumes a runtime-config.json file is present at '/'.
+ * Sets up the runtimeConfig: in local-dev mode LOCAL_DEV_CONFIG, otherwise the
+ * runtime-config.json the deployed stack serves at '/'.
  */
 const RuntimeConfigProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [runtimeConfig, setRuntimeConfig] = useState<
     IRuntimeConfig | undefined
   >();
   useEffect(() => {
+    if (import.meta.env.MODE === 'local-dev') {
+      setRuntimeConfig(LOCAL_DEV_CONFIG);
+      return;
+    }
     (async () => {
       try {
-        setRuntimeConfig(
-          applyOverrides(await (await fetch('/runtime-config.json')).json()),
-        );
+        setRuntimeConfig(await (await fetch('/runtime-config.json')).json());
       } catch {
-        setRuntimeConfig(
-          applyOverrides({ apis: {}, agentRuntimes: {} } as any),
-        );
+        setRuntimeConfig({ apis: {}, agentRuntimes: {} } as any);
       }
     })();
   }, [setRuntimeConfig]);

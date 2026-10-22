@@ -104,15 +104,6 @@
           "command": "node -e \"\""
         }
       }
-    },
-    "load-runtime-config": {
-      "executor": "nx:run-commands",
-      "metadata": {
-        "description": "Load runtime config from your deployed stack for dev purposes. You must set your AWS CLI credentials whilst calling 'pnpm nx load-runtime-config @discava/admin-portal'"
-      },
-      "options": {
-        "command": "aws s3 cp s3://`aws cloudformation describe-stacks --query \"Stacks[?starts_with(StackName, 'discava-')][].Outputs[] | [?contains(OutputKey, 'AdminPortalWebsiteBucketName')].OutputValue\" --output text`/runtime-config.json \"{projectRoot}/public/runtime-config.json\""
-      }
     }
   }
 }

@@ -31,14 +31,7 @@ You can also automatically fix some lint errors by running the following command
 
 ### Runtime config
 
-In order to integrate with cognito or trpc backends, you need to have a `runtime-config.json` file in your `/public` website directory. You can fetch this is follows:
-
-`pnpm nx load-runtime-config @discava/student-portal`
-
-> [!IMPORTANT]
-> Ensure you have AWS CLI and curl installed
-> You have deployed your CDK infrastructure into the appropriate account
-> You have assumed a role in the AWS account with sufficient permissions to call describe-stacks from cloudformation
+Deployed, the portal reads `/runtime-config.json`, which the `RuntimeConfig` stack writes to its bucket. In local dev (`pnpm dev`, Vite's `local-dev` mode) it uses `LOCAL_DEV_CONFIG` in `src/components/RuntimeConfig` instead, pointing at the local APIs, S3Mock and OIDC server; no file is needed.
 
 ## Useful links
 
