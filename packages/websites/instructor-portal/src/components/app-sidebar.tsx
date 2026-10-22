@@ -16,8 +16,6 @@ import {
 import { Link } from '@tanstack/react-router';
 import { BarChart3, BookOpen, Home } from 'lucide-react';
 
-import Config from '../config';
-
 export function AppSidebar() {
   // Menu items.
   const navItems = [
@@ -41,7 +39,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>{Config.applicationName}</SidebarGroupLabel>
+          <SidebarGroupLabel>Instructor</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
