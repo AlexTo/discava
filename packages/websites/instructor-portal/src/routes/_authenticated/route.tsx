@@ -7,9 +7,11 @@ import AppLayout from '../../components/AppLayout';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ context, location }) => {
-    // Auth is bypassed in local-dev mode (no cognitoProps configured), matching
-    // the same bypass CognitoAuth applies before the router ever mounts.
-    if (context.runtimeConfig?.cognitoProps && !context.auth?.isAuthenticated) {
+    // Sign-in is required whenever there's somewhere to sign in: Cognito, or
+    // local dev's OIDC server (#226). Only with neither (local-dev mode with
+    // no runtime config) is it bypassed, as CognitoAuth does too.
+    const { cognitoProps, oidc } = context.runtimeConfig ?? {};
+    if ((cognitoProps || oidc) && !context.auth?.isAuthenticated) {
       // Back to the requested page once signed in (see signin.tsx).
       throw redirect({ to: '/signin', search: { redirect: location.href } });
     }

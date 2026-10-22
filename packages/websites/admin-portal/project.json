@@ -52,6 +52,10 @@
       "executor": "nx:run-commands",
       "dependsOn": [
         {
+          "projects": ["@discava/common-scripts"],
+          "target": "oidc"
+        },
+        {
           "projects": ["@discava/core-api"],
           "target": "dev"
         }

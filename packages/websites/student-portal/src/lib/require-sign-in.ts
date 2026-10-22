@@ -6,9 +6,10 @@ import { type ParsedLocation, redirect } from '@tanstack/react-router';
 import type { RouterProviderContext } from '../router';
 
 // A route's beforeLoad for pages only signed-in students see: sends anyone
-// else to sign in, coming back here afterwards (see routes/signin.tsx). Auth
-// is bypassed in local-dev mode (no cognitoProps configured), matching the
-// bypass CognitoAuth applies before the router mounts.
+// else to sign in, coming back here afterwards (see routes/signin.tsx).
+// Required whenever there's somewhere to sign in: Cognito, or local dev's
+// OIDC server (#226). Only with neither (local-dev mode with no runtime
+// config) is it bypassed, as CognitoAuth does too.
 export const requireSignIn = ({
   context,
   location,
@@ -16,7 +17,8 @@ export const requireSignIn = ({
   context: RouterProviderContext;
   location: ParsedLocation;
 }) => {
-  if (context.runtimeConfig?.cognitoProps && !context.auth?.isAuthenticated) {
+  const { cognitoProps, oidc } = context.runtimeConfig ?? {};
+  if ((cognitoProps || oidc) && !context.auth?.isAuthenticated) {
     throw redirect({ to: '/signin', search: { redirect: location.href } });
   }
 };

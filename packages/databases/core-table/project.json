@@ -6,7 +6,7 @@
   "tags": [],
   "metadata": {
     "generator": "ts#dynamodb",
-    "ports": [8000],
+    "ports": [8001],
     "iac": "cdk"
   },
   "targets": {

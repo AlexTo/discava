@@ -27,6 +27,15 @@ export const RuntimeConfigContext = createContext<IRuntimeConfig | undefined>(
  */
 const applyOverrides = (runtimeConfig: IRuntimeConfig) => {
   if (import.meta.env.MODE === 'local-dev') {
+    // Sign in with the local OIDC server instead of dev Cognito (#226; port,
+    // issuer and client from common-server-utils' LOCAL_OIDC), unless
+    // VITE_LOCAL_AUTH=cognito.
+    if (import.meta.env.VITE_LOCAL_AUTH !== 'cognito') {
+      runtimeConfig.oidc = {
+        authority: 'http://localhost:9400/discava',
+        clientId: 'local',
+      };
+    }
     runtimeConfig.apis.CoreApi = 'http://localhost:2022/';
   }
   return runtimeConfig;

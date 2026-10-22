@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  Copyright Discava Contributors. All Rights Reserved.
+  SPDX-License-Identifier: Apache-2.0
+
+  Local dev's sign-in page (#226), served by the local OIDC server
+  (navikt/mock-oauth2-server, `loginPagePath`). Each button signs in as one
+  test user: the server issues tokens with exactly the claims posted, the ones
+  the APIs read from a Cognito access token. Each `sub` is fixed, so local data
+  stays tied to the same person across sign-ins. The forms have no action, so
+  they post back to the authorize URL they were served at.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Discava local sign-in</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #f6f6f7;
+        color: #18181b;
+        display: flex;
+        justify-content: center;
+        margin: 0;
+        padding: 48px 16px;
+      }
+      main {
+        width: 100%;
+        max-width: 420px;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 4px;
+      }
+      p {
+        color: #52525b;
+        margin: 0 0 24px;
+        font-size: 0.9rem;
+      }
+      form {
+        margin: 0 0 10px;
+      }
+      button {
+        width: 100%;
+        text-align: left;
+        padding: 14px 16px;
+        border: 1px solid #d4d4d8;
+        border-radius: 10px;
+        background: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: #18181b;
+      }
+      button strong {
+        display: block;
+      }
+      button span {
+        color: #52525b;
+        font-size: 0.85rem;
+      }
+      details {
+        margin-top: 24px;
+        font-size: 0.9rem;
+      }
+      details input,
+      details textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin: 6px 0 10px;
+        padding: 8px;
+        font: 0.85rem ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in to local Discava</h1>
+      <p>Local dev only: pick who to be. No password, no AWS.</p>
+
+      <form method="post">
+        <input type="hidden" name="username" value="alice" />
+        <input
+          type="hidden"
+          name="claims"
+          value='{"sub":"00000000-0000-4000-8000-000000000001","username":"alice","email":"alice@example.com","email_verified":true,"given_name":"Alice","family_name":"Instructor","name":"Alice Instructor","cognito:groups":["instructor","student"]}'
+        />
+        <button><strong>Alice</strong><span>instructor, student</span></button>
+      </form>
+
+      <form method="post">
+        <input type="hidden" name="username" value="bob" />
+        <input
+          type="hidden"
+          name="claims"
+          value='{"sub":"00000000-0000-4000-8000-000000000002","username":"bob","email":"bob@example.com","email_verified":true,"given_name":"Bob","family_name":"Student","name":"Bob Student","cognito:groups":["student"]}'
+        />
+        <button><strong>Bob</strong><span>student</span></button>
+      </form>
+
+      <form method="post">
+        <input type="hidden" name="username" value="dan" />
+        <input
+          type="hidden"
+          name="claims"
+          value='{"sub":"00000000-0000-4000-8000-000000000003","username":"dan","email":"dan@example.com","email_verified":true,"given_name":"Dan","family_name":"Student","name":"Dan Student","cognito:groups":["student"]}'
+        />
+        <button><strong>Dan</strong><span>student (a second one, e.g. not enrolled)</span></button>
+      </form>
+
+      <form method="post">
+        <input type="hidden" name="username" value="carol" />
+        <input
+          type="hidden"
+          name="claims"
+          value='{"sub":"00000000-0000-4000-8000-000000000004","username":"carol","email":"carol@example.com","email_verified":true,"given_name":"Carol","family_name":"Admin","name":"Carol Admin","cognito:groups":["admin"]}'
+        />
+        <button><strong>Carol</strong><span>admin</span></button>
+      </form>
+
+      <details>
+        <summary>Someone else</summary>
+        <form method="post">
+          <label>Username <input name="username" required /></label>
+          <label
+            >Claims (JSON)
+            <textarea name="claims" rows="5">
+{"sub":"00000000-0000-4000-8000-000000000099","username":"someone","email":"someone@example.com","cognito:groups":["student"]}</textarea
+            >
+          </label>
+          <button><strong>Sign in</strong><span>with these claims</span></button>
+        </form>
+      </details>
+    </main>
+  </body>
+</html>

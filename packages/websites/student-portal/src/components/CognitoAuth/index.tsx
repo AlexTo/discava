@@ -18,9 +18,9 @@ import { Spinner } from '../spinner';
  * the runtime-config.json must have the cognitoProps set.
  */
 const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
-  const { cognitoProps } = useRuntimeConfig();
+  const { cognitoProps, oidc } = useRuntimeConfig();
 
-  if (!cognitoProps) {
+  if (!cognitoProps && !oidc) {
     if (import.meta.env.MODE === 'local-dev') {
       // In local-dev mode with no cognitoProps available, we skip login
       return <AuthProvider>{children}</AuthProvider>;
@@ -35,8 +35,11 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
   }
 
   const cognitoAuthConfig: AuthProviderProps = {
-    authority: `https://cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`,
-    client_id: cognitoProps.userPoolWebClientId,
+    // Local dev's OIDC server when it's configured (#226), else Cognito.
+    authority:
+      oidc?.authority ??
+      `https://cognito-idp.${cognitoProps.region}.amazonaws.com/${cognitoProps.userPoolId}`,
+    client_id: oidc?.clientId ?? cognitoProps.userPoolWebClientId,
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',

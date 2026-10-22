@@ -133,3 +133,19 @@ export const callLocalEventRunner = async <T = unknown>(
   const text = await response.text();
   return text ? (JSON.parse(text) as T) : undefined;
 };
+
+/**
+ * The OIDC server local dev signs in with instead of Cognito (#226):
+ * navikt/mock-oauth2-server, with a login page offering the local test users
+ * (common/scripts/src/oidc/login.html). The portals' local-dev runtime config
+ * points `oidc` at `http://localhost:<port>/<issuer>` with `clientId`, to
+ * match. Set VITE_LOCAL_AUTH=cognito to sign in through dev Cognito instead.
+ */
+export const LOCAL_OIDC = {
+  port: 9400,
+  // Pinned, at least 2 weeks old when chosen (see #226 for why this one).
+  image: 'ghcr.io/navikt/mock-oauth2-server:6.0.4',
+  containerName: 'discava-oidc',
+  issuer: 'discava',
+  clientId: 'local',
+};
