@@ -10,6 +10,7 @@ import { RuntimeConfigContext } from '../RuntimeConfig';
 import { UserMenu } from './index';
 
 const removeUser = vi.fn(async () => {});
+const removeStoredUser = vi.fn(async () => null);
 let navigatedTo: string | undefined;
 
 const signOut = async (runtimeConfig: object, authority: string) => {
@@ -21,7 +22,11 @@ const signOut = async (runtimeConfig: object, authority: string) => {
   );
   const auth = {
     user: { profile: { sub: 'student-1', given_name: 'Bob' } },
-    settings: { authority, client_id: 'client-1' },
+    settings: {
+      authority,
+      client_id: 'client-1',
+      userStore: { remove: removeStoredUser },
+    },
     removeUser,
   } as unknown as AuthContextProps;
   const user = userEvent.setup();
@@ -61,7 +66,11 @@ describe('UserMenu sign-out', () => {
       'https://cognito-idp.ap-southeast-2.amazonaws.com/pool',
     );
 
-    expect(removeUser).toHaveBeenCalled();
+    // Forgotten from storage, not via removeUser (see signOut).
+    expect(removeStoredUser).toHaveBeenCalledWith(
+      'user:https://cognito-idp.ap-southeast-2.amazonaws.com/pool:client-1',
+    );
+    expect(removeUser).not.toHaveBeenCalled();
     expect(url.searchParams.get('logout_uri')).toBe('http://localhost:4201');
     expect(url.searchParams.get('client_id')).toBe('client-1');
   });

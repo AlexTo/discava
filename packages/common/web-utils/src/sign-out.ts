@@ -24,7 +24,6 @@ export const signOut = async (
   } catch {
     // fall through to a local-only sign out below
   }
-  await auth.removeUser();
   if (endSessionEndpoint) {
     const logoutUrl = new URL(endSessionEndpoint);
     logoutUrl.searchParams.set('client_id', auth.settings.client_id);
@@ -32,8 +31,23 @@ export const signOut = async (
       localOidc ? 'post_logout_redirect_uri' : 'logout_uri',
       window.location.origin,
     );
+    // Forget the user without telling the app, rather than removeUser(): that
+    // re-renders the portal as signed out, and one that signs people in at
+    // once (the admin portal) starts a sign-in that cancels this navigation
+    // while the sign-in server's session is still alive, signing them straight
+    // back in. Found on dev (#242). The key is oidc-client-ts's own; its
+    // settings always have a store, though the type leaves it optional.
+    const { userStore } = auth.settings;
+    if (userStore) {
+      await userStore.remove(
+        `user:${auth.settings.authority}:${auth.settings.client_id}`,
+      );
+    } else {
+      await auth.removeUser();
+    }
     window.location.href = logoutUrl.toString();
   } else {
+    await auth.removeUser();
     window.location.href = window.location.origin;
   }
 };
