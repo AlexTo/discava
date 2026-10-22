@@ -2,11 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import {
   QuizCard,
   type QuizSubmitResult,
 } from '@discava/common-shadcn/components/quiz-card';
-import type { QuizAnswers } from '@discava/common-shadcn/lib/quiz';
+import type { QuizAnswers } from '@discava/common-web-utils/quiz';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
 import { Alert } from '../../../../components/alert';

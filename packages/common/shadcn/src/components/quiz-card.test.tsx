@@ -2,10 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type {
+  Quiz,
+  QuizAttempt,
+  QuizSummary,
+} from '@discava/common-web-utils/quiz';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Quiz, QuizAttempt, QuizSummary } from '../lib/quiz';
 import { QuizCard, type QuizCardProps } from './quiz-card';
 
 const doc = (text: string) =>

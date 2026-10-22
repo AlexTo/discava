@@ -42,13 +42,16 @@
   ],
   "references": [
     {
-      "path": "../../common/tiptap/tsconfig.lib.json"
+      "path": "../../common/web-utils/tsconfig.lib.json"
     },
     {
       "path": "../../apis/instructor-api/tsconfig.lib.json"
     },
     {
       "path": "../../apis/core-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../../common/tiptap/tsconfig.lib.json"
     },
     {
       "path": "../../common/shadcn/tsconfig.lib.json"

@@ -30,7 +30,8 @@
     "react-oidc-context": "catalog:",
     "recharts": "catalog:",
     "tailwindcss": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@discava/common-web-utils": "workspace:*"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",
