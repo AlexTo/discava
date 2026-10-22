@@ -74,10 +74,10 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
 
   if (auth.error) {
     return (
-      <Alert type="error" header="Configuration error">
+      <Alert type="error" header="Couldn't sign you in">
         <p>
-          Error contacting Cognito. Please check your runtime-config.json is
-          configured with the correct endpoints.
+          We couldn't reach the sign-in service. Please refresh the page or try
+          again later.
         </p>
       </Alert>
     );
