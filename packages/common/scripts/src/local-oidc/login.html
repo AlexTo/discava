@@ -4,11 +4,13 @@
   SPDX-License-Identifier: Apache-2.0
 
   Local dev's sign-in page (#226), served by the local OIDC server
-  (navikt/mock-oauth2-server, `loginPagePath`). Each button signs in as one
-  test user: the server issues tokens with exactly the claims posted, the ones
+  (navikt/mock-oauth2-server, `loginPagePath`). Each test user's button signs
+  in as them: the server issues tokens with exactly the claims posted, the ones
   the APIs read from a Cognito access token. Each `sub` is fixed, so local data
-  stays tied to the same person across sign-ins. The forms have no action, so
-  they post back to the authorize URL they were served at.
+  stays tied to the same person across sign-ins. "Someone else" builds the same
+  claims from its fields, deriving `sub` from the username so it's stable too.
+  The forms have no action, so they post back to the authorize URL they were
+  served at.
 -->
 <html lang="en">
   <head>
@@ -16,32 +18,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Discava local sign-in</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
         font-family: system-ui, sans-serif;
         background: #f6f6f7;
         color: #18181b;
-        display: flex;
-        justify-content: center;
         margin: 0;
         padding: 48px 16px;
       }
       main {
-        width: 100%;
-        max-width: 420px;
+        max-width: 880px;
+        margin: 0 auto;
       }
       h1 {
         font-size: 1.4rem;
         margin: 0 0 4px;
       }
-      p {
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 12px;
+      }
+      .intro {
         color: #52525b;
-        margin: 0 0 24px;
+        margin: 0 0 28px;
         font-size: 0.9rem;
       }
-      form {
+      .columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+        align-items: start;
+      }
+      @media (max-width: 720px) {
+        .columns {
+          grid-template-columns: 1fr;
+        }
+      }
+      .users form {
         margin: 0 0 10px;
       }
-      button {
+      .user {
         width: 100%;
         text-align: left;
         padding: 14px 16px;
@@ -51,88 +69,265 @@
         font: inherit;
         cursor: pointer;
       }
-      button:hover {
+      .user:hover {
         border-color: #18181b;
       }
-      button strong {
+      .user strong {
         display: block;
       }
-      button span {
+      .user span {
         color: #52525b;
         font-size: 0.85rem;
       }
-      details {
-        margin-top: 24px;
+      .someone-else {
+        background: #fff;
+        border: 1px solid #d4d4d8;
+        border-radius: 10px;
+        padding: 20px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .field {
+        margin: 0 0 14px;
+      }
+      .field label,
+      fieldset legend {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .field input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #d4d4d8;
+        border-radius: 8px;
+        font: inherit;
+      }
+      .field input:focus {
+        outline: 2px solid #18181b;
+        outline-offset: -1px;
+      }
+      .field.invalid input,
+      fieldset.invalid {
+        border-color: #dc2626;
+      }
+      fieldset {
+        border: 1px solid #d4d4d8;
+        border-radius: 8px;
+        padding: 8px 12px 10px;
+        margin: 0 0 14px;
+      }
+      fieldset legend {
+        padding: 0 4px;
+      }
+      fieldset label {
+        margin-right: 16px;
         font-size: 0.9rem;
       }
-      details input,
-      details textarea {
+      .error {
+        display: none;
+        color: #dc2626;
+        font-size: 0.8rem;
+        margin-top: 4px;
+      }
+      .invalid .error,
+      .invalid + .error {
+        display: block;
+      }
+      fieldset + .error {
+        margin: -8px 0 14px;
+      }
+      .hint {
+        color: #71717a;
+        font-size: 0.8rem;
+        margin: 0 0 14px;
+      }
+      .submit {
         width: 100%;
-        box-sizing: border-box;
-        margin: 6px 0 10px;
-        padding: 8px;
-        font: 0.85rem ui-monospace, monospace;
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: #18181b;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
       }
     </style>
   </head>
   <body>
     <main>
       <h1>Sign in to local Discava</h1>
-      <p>Local dev only: pick who to be. No password, no AWS.</p>
+      <p class="intro">Local dev only: pick who to be. No password, no AWS.</p>
 
-      <form method="post">
-        <input type="hidden" name="username" value="alice" />
-        <input
-          type="hidden"
-          name="claims"
-          value='{"sub":"00000000-0000-4000-8000-000000000001","username":"alice","email":"alice@example.com","email_verified":true,"given_name":"Alice","family_name":"Instructor","name":"Alice Instructor","cognito:groups":["instructor","student"]}'
-        />
-        <button><strong>Alice</strong><span>instructor, student</span></button>
-      </form>
+      <div class="columns">
+        <section class="users">
+          <h2>Test users</h2>
 
-      <form method="post">
-        <input type="hidden" name="username" value="bob" />
-        <input
-          type="hidden"
-          name="claims"
-          value='{"sub":"00000000-0000-4000-8000-000000000002","username":"bob","email":"bob@example.com","email_verified":true,"given_name":"Bob","family_name":"Student","name":"Bob Student","cognito:groups":["student"]}'
-        />
-        <button><strong>Bob</strong><span>student</span></button>
-      </form>
+          <form method="post">
+            <input type="hidden" name="username" value="alice" />
+            <input
+              type="hidden"
+              name="claims"
+              value='{"sub":"00000000-0000-4000-8000-000000000001","username":"alice","email":"alice@example.com","email_verified":true,"given_name":"Alice","family_name":"Instructor","name":"Alice Instructor","cognito:groups":["instructor","student"]}'
+            />
+            <button class="user"><strong>Alice</strong><span>instructor, student</span></button>
+          </form>
 
-      <form method="post">
-        <input type="hidden" name="username" value="dan" />
-        <input
-          type="hidden"
-          name="claims"
-          value='{"sub":"00000000-0000-4000-8000-000000000003","username":"dan","email":"dan@example.com","email_verified":true,"given_name":"Dan","family_name":"Student","name":"Dan Student","cognito:groups":["student"]}'
-        />
-        <button><strong>Dan</strong><span>student (a second one, e.g. not enrolled)</span></button>
-      </form>
+          <form method="post">
+            <input type="hidden" name="username" value="bob" />
+            <input
+              type="hidden"
+              name="claims"
+              value='{"sub":"00000000-0000-4000-8000-000000000002","username":"bob","email":"bob@example.com","email_verified":true,"given_name":"Bob","family_name":"Student","name":"Bob Student","cognito:groups":["student"]}'
+            />
+            <button class="user"><strong>Bob</strong><span>student</span></button>
+          </form>
 
-      <form method="post">
-        <input type="hidden" name="username" value="carol" />
-        <input
-          type="hidden"
-          name="claims"
-          value='{"sub":"00000000-0000-4000-8000-000000000004","username":"carol","email":"carol@example.com","email_verified":true,"given_name":"Carol","family_name":"Admin","name":"Carol Admin","cognito:groups":["admin"]}'
-        />
-        <button><strong>Carol</strong><span>admin</span></button>
-      </form>
+          <form method="post">
+            <input type="hidden" name="username" value="dan" />
+            <input
+              type="hidden"
+              name="claims"
+              value='{"sub":"00000000-0000-4000-8000-000000000003","username":"dan","email":"dan@example.com","email_verified":true,"given_name":"Dan","family_name":"Student","name":"Dan Student","cognito:groups":["student"]}'
+            />
+            <button class="user"><strong>Dan</strong><span>student (a second one, e.g. not enrolled)</span></button>
+          </form>
 
-      <details>
-        <summary>Someone else</summary>
-        <form method="post">
-          <label>Username <input name="username" required /></label>
-          <label
-            >Claims (JSON)
-            <textarea name="claims" rows="5">
-{"sub":"00000000-0000-4000-8000-000000000099","username":"someone","email":"someone@example.com","cognito:groups":["student"]}</textarea
-            >
-          </label>
-          <button><strong>Sign in</strong><span>with these claims</span></button>
-        </form>
-      </details>
+          <form method="post">
+            <input type="hidden" name="username" value="carol" />
+            <input
+              type="hidden"
+              name="claims"
+              value='{"sub":"00000000-0000-4000-8000-000000000004","username":"carol","email":"carol@example.com","email_verified":true,"given_name":"Carol","family_name":"Admin","name":"Carol Admin","cognito:groups":["admin"]}'
+            />
+            <button class="user"><strong>Carol</strong><span>admin</span></button>
+          </form>
+        </section>
+
+        <section class="someone-else">
+          <h2>Someone else</h2>
+          <form id="someone-else" method="post" novalidate>
+            <input type="hidden" name="username" />
+            <input type="hidden" name="claims" />
+
+            <div class="row">
+              <div class="field">
+                <label for="new-given-name">First name</label>
+                <input id="new-given-name" autocomplete="off" required />
+                <div class="error">Enter a first name.</div>
+              </div>
+              <div class="field">
+                <label for="new-family-name">Last name</label>
+                <input id="new-family-name" autocomplete="off" required />
+                <div class="error">Enter a last name.</div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="new-email">Email</label>
+              <input id="new-email" type="email" autocomplete="off" required />
+              <div class="error">Enter an email address, like erin@example.com.</div>
+            </div>
+
+            <div class="field">
+              <label for="new-username">Username</label>
+              <input
+                id="new-username"
+                autocomplete="off"
+                required
+                pattern="[a-z0-9._\-]+"
+              />
+              <div class="error">
+                Enter a username: lowercase letters, digits, dots, dashes or
+                underscores.
+              </div>
+            </div>
+
+            <fieldset id="groups">
+              <legend>Roles</legend>
+              <label><input type="checkbox" value="student" checked /> student</label>
+              <label><input type="checkbox" value="instructor" /> instructor</label>
+              <label><input type="checkbox" value="admin" /> admin</label>
+            </fieldset>
+            <div class="error">Pick at least one role.</div>
+
+            <p class="hint">
+              The same username always signs in as the same user.
+            </p>
+
+            <button class="submit">Sign in</button>
+          </form>
+        </section>
+      </div>
     </main>
+
+    <script>
+      const form = document.getElementById('someone-else');
+      const fields = ['new-given-name', 'new-family-name', 'new-email', 'new-username'].map(
+        (id) => document.getElementById(id),
+      );
+      const groups = document.getElementById('groups');
+      const checkedGroups = () =>
+        [...groups.querySelectorAll('input:checked')].map(({ value }) => value);
+      let submitted = false;
+
+      // Marks invalid fields once the user has tried to submit, so errors
+      // don't show before they've typed anything.
+      const validate = () => {
+        let valid = true;
+        for (const input of fields) {
+          input.value = input.value.trim();
+          const ok = input.checkValidity();
+          input.closest('.field').classList.toggle('invalid', submitted && !ok);
+          valid &&= ok;
+        }
+        const hasGroup = checkedGroups().length > 0;
+        groups.classList.toggle('invalid', submitted && !hasGroup);
+        return valid && hasGroup;
+      };
+
+      // A stable sub per username (a UUID-shaped SHA-256 prefix), so a user
+      // signed in this way keeps their local data across sign-ins.
+      const subFor = async (username) => {
+        const digest = await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(`discava-local:${username}`),
+        );
+        const hex = [...new Uint8Array(digest)]
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('');
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+      };
+
+      form.addEventListener('input', validate);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        submitted = true;
+        if (!validate()) {
+          form.querySelector('.invalid input')?.focus();
+          return;
+        }
+        const [givenName, familyName, email, username] = fields.map(
+          ({ value }) => value,
+        );
+        form.elements.username.value = username;
+        form.elements.claims.value = JSON.stringify({
+          sub: await subFor(username),
+          username,
+          email,
+          email_verified: true,
+          given_name: givenName,
+          family_name: familyName,
+          name: `${givenName} ${familyName}`,
+          'cognito:groups': checkedGroups(),
+        });
+        form.submit();
+      });
+    </script>
   </body>
 </html>
