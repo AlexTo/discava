@@ -15,11 +15,11 @@
         "cwd": "{projectRoot}"
       }
     },
-    "oidc": {
+    "local-oidc": {
       "executor": "nx:run-commands",
       "continuous": true,
       "options": {
-        "command": "tsx src/oidc/start-container.ts",
+        "command": "tsx src/local-oidc/start-container.ts",
         "cwd": "{projectRoot}"
       }
     },

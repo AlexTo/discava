@@ -53,7 +53,7 @@
       "dependsOn": [
         {
           "projects": ["@discava/common-scripts"],
-          "target": "oidc"
+          "target": "local-oidc"
         },
         {
           "projects": ["@discava/core-api"],
