@@ -21,7 +21,7 @@ import {
   resolveTableName,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
-import { handler as preTokenGeneration } from '../identity/pre-token-generation.js';
+import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
@@ -34,10 +34,10 @@ import {
 import { createTranscoder, type Docker } from './transcoder.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
-// when deployed, done locally, so local changes reach the same handlers. Each
-// handler is called as Lambda would call it: the real exported handler, with
-// the event shape its trigger delivers. Failures are logged, not retried; AWS's
-// retries, batch bisecting and failure queues are only on dev.
+// when deployed, done locally, so local changes reach the same handler logic.
+// Each trigger gets the event shape it delivers; most call the real exported
+// handler. Failures are logged, not retried; AWS's retries, batch bisecting
+// and failure queues are only on dev.
 //
 // Triggers so far:
 // - the core table's stream -> progress-recalculation, filtered and batched
@@ -167,11 +167,14 @@ const server = startEventRunnerServer({
   },
   runPreTokenGeneration: async (request) => {
     log(`pre-token-generation <- ${request.userName}`);
-    await invoke(
-      'pre-token-generation',
-      preTokenGeneration,
+    const synced = await syncUserFromPreTokenGenerationEvent(
       preTokenGenerationEvent(request),
     );
+    if (!synced) {
+      throw new Error(
+        'The pre-token-generation trigger could not sync the user',
+      );
+    }
   },
   log,
 });
