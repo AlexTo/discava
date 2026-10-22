@@ -51,7 +51,9 @@ export default defineConfig({
     timeout: 5 * 60_000,
     // As Ctrl-C would, so the local containers are stopped too.
     gracefulShutdown: { signal: 'SIGINT', timeout: 30_000 },
-    stdout: 'ignore',
+    // In CI, the stack's output goes in the job log, to see why it didn't
+    // start or what a service did; locally it'd drown the test output.
+    stdout: CI ? 'pipe' : 'ignore',
     stderr: 'pipe',
   },
 });
