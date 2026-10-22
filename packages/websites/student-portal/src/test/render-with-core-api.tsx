@@ -137,12 +137,15 @@ export const renderWithCoreApi = (
     auth = {},
     routeTree,
     path = '/',
+    runtimeConfig = {},
   }: {
     handlers?: Record<string, Handler>;
     signedIn?: boolean;
     auth?: Partial<AuthContextProps>;
     routeTree?: AnyRoute;
     path?: string;
+    // Merged into the runtime config the portal sees.
+    runtimeConfig?: Record<string, unknown>;
   } = {},
 ) => {
   const calls: ApiCall[] = [];
@@ -166,7 +169,10 @@ export const renderWithCoreApi = (
   const user = userEvent.setup();
   const result = render(
     <RuntimeConfigContext.Provider
-      value={{ media: { PublicMediaBucket: PUBLIC_MEDIA_URL } }}
+      value={{
+        media: { PublicMediaBucket: PUBLIC_MEDIA_URL },
+        ...runtimeConfig,
+      }}
     >
       <AuthContext.Provider value={authContext}>
         <QueryClientProvider client={queryClient}>
