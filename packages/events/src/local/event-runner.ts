@@ -26,11 +26,11 @@ import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { createBatcher, pollStream } from './dynamodb-stream.js';
+import { startEventRunnerServer } from './event-runner-server.js';
 import {
   preTokenGenerationEvent,
-  startEventRunnerServer,
   transcodeCompletionEvent,
-} from './endpoints.js';
+} from './trigger-events.js';
 import { createTranscoder, type Docker } from './transcoder.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
@@ -154,9 +154,9 @@ const transcoder = createTranscoder({
 
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
-  submit: (request) => transcoder.submit(request),
-  cancel: (jobId) => transcoder.cancel(jobId),
-  schedule: ({ payload }) => {
+  submitTranscodeJob: (request) => transcoder.submit(request),
+  cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
+  scheduleTranscodeCleanup: ({ payload }) => {
     log(
       `transcode-cleanup scheduled in ${LOCAL_EVENT_RUNNER.cleanupDelaySeconds}s for ${payload.contentItemId}/${payload.submissionNonce}`,
     );
@@ -165,7 +165,7 @@ const server = startEventRunnerServer({
       LOCAL_EVENT_RUNNER.cleanupDelaySeconds * 1000,
     ).unref();
   },
-  signIn: async (request) => {
+  runPreTokenGeneration: async (request) => {
     log(`pre-token-generation <- ${request.userName}`);
     await invoke(
       'pre-token-generation',
