@@ -52,13 +52,21 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      # For the Docker login role (below).
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
+      # Logged in to ECR Public, as the Trivy job is: DynamoDB local's image is
+      # there, and ECR Public refuses anonymous pulls from shared GitHub runner
+      # IPs once their quota's used ("Data limit exceeded").
       - uses: ./.github/actions/init-monorepo
         with:
+          aws-docker-login-role-arn: ${{ vars.AWS_DOCKER_LOGIN_ROLE_ARN }}
           setup-uv: "false"
 
       - name: Install Chromium for Playwright
