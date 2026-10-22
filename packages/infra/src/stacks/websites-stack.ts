@@ -5,6 +5,7 @@
 import {
   AdminPortal,
   InstructorPortal,
+  RuntimeConfig,
   StaticWebsite,
   StaticWebsiteProps,
   StudentPortal,
@@ -128,6 +129,15 @@ export class WebsitesStack extends Stack {
           c.node.path.includes(`/${id}/AccessLogs`),
       );
     }
+
+    // Every portal's address goes in every portal's runtime config, so one
+    // can send people to another: e.g. a student who signs in to the
+    // instructor portal is pointed to the student portal (#235).
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    runtimeConfig.set('connection', 'portals', {
+      ...runtimeConfig.get('connection').portals,
+      [id]: `https://${config?.domainNames?.[0] ?? portal.cloudFrontDistribution.distributionDomainName}`,
+    });
 
     return portal;
   }

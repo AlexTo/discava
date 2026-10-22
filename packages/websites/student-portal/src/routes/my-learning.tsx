@@ -2,12 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@discava/common-shadcn/components/ui/tabs';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Alert } from '../components/alert';
@@ -49,7 +51,7 @@ function MyLearning() {
         </div>
       ) : enrolmentsQuery.isError ? (
         <Alert type="error" header="Couldn't load your courses">
-          {enrolmentsQuery.error.message}
+          {apiErrorMessage(enrolmentsQuery.error)}
         </Alert>
       ) : (
         <Tabs defaultValue="in-progress">

@@ -5,6 +5,7 @@
 
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { IMyEnrolment } from '@discava/core-api';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -113,7 +114,7 @@ export function SignedInHome() {
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 pt-6 pb-10 lg:px-8">
       {enrolmentsQuery.isError ? (
         <Alert type="error" header="Couldn't load your courses">
-          {enrolmentsQuery.error.message}
+          {apiErrorMessage(enrolmentsQuery.error)}
         </Alert>
       ) : null}
       <ResumeHero firstName={firstName} course={resume} />
@@ -155,7 +156,7 @@ export function SignedInHome() {
           </div>
         ) : newCoursesQuery.isError ? (
           <Alert type="error" header="Couldn't load courses">
-            {newCoursesQuery.error.message}
+            {apiErrorMessage(newCoursesQuery.error)}
           </Alert>
         ) : newCourses.length === 0 ? (
           <div className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">

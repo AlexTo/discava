@@ -31,6 +31,13 @@ const LOCAL_DEV_CONFIG: IRuntimeConfig = {
     authority: 'http://localhost:9400/discava',
     clientId: 'local',
   },
+  // Where `pnpm dev` serves each portal, as the deployed config has their
+  // addresses (#235).
+  portals: {
+    StudentPortal: 'http://localhost:4201',
+    InstructorPortal: 'http://localhost:4200',
+    AdminPortal: 'http://localhost:4202',
+  },
   apis: {
     CoreApi: 'http://localhost:2022/',
   },

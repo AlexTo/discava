@@ -25,6 +25,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
@@ -100,9 +101,7 @@ export function EditLessonTextDialog({
       });
       setOpen(false);
     } catch (error) {
-      setSaveError(
-        error instanceof Error ? error.message : "Couldn't save the text",
-      );
+      setSaveError(apiErrorMessage(error, "Couldn't save the text"));
     }
   };
 
@@ -274,7 +273,7 @@ export function RemoveLessonTextButton({
                 : `Couldn't remove the ${noun}`
             }
           >
-            {error.message}
+            {apiErrorMessage(error)}
           </Alert>
         )}
 

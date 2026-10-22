@@ -11,6 +11,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@discava/common-shadcn/components/ui/collapsible';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { ChevronDown, FileText, Search } from 'lucide-react';
@@ -68,7 +69,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
         ) : (
           <div className="text-left">
             <Alert type="error" header="Couldn't load this course">
-              {courseQuery.error?.message}
+              {apiErrorMessage(courseQuery.error)}
             </Alert>
           </div>
         )}

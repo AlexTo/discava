@@ -2,10 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { CircleCheck, FileText, ListChecks, Play } from 'lucide-react';
 import { Alert } from '../../../../components/alert';
@@ -67,7 +69,7 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
   if (videoQuery.isError) {
     return (
       <Alert type="error" header="Couldn't load this video">
-        {videoQuery.error.message}
+        {apiErrorMessage(videoQuery.error)}
       </Alert>
     );
   }
@@ -125,7 +127,7 @@ function MarkAsDone({
         <Alert type="error" header="Couldn't mark this as done">
           {errorCode(complete.error) === 'NOT_FOUND'
             ? 'This item is no longer available.'
-            : complete.error.message}
+            : apiErrorMessage(complete.error)}
         </Alert>
       ) : null}
     </div>

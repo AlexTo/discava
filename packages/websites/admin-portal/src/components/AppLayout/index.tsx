@@ -29,10 +29,12 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@discava/common-shadcn/components/ui/sidebar';
+import { signOut } from '@discava/common-web-utils/sign-out';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import * as React from 'react';
 import { useAuth } from 'react-oidc-context';
 import Config from '../../config';
+import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
 
 const getBreadcrumbs = (
@@ -67,7 +69,9 @@ const getBreadcrumbs = (
 };
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { user, removeUser, signoutRedirect, clearStaleState } = useAuth();
+  const auth = useAuth();
+  const { user } = auth;
+  const { localOidc } = useRuntimeConfig();
   const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
     { href: string; text: string }[]
   >([{ text: '/', href: '/' }]);
@@ -126,17 +130,9 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer"
-                  onSelect={() => {
-                    removeUser();
-                    signoutRedirect({
-                      post_logout_redirect_uri: window.location.origin,
-                      extraQueryParams: {
-                        redirect_uri: window.location.origin,
-                        response_type: 'code',
-                      },
-                    });
-                    clearStaleState();
-                  }}
+                  // The same sign-out as the other portals, which works with
+                  // Cognito (it ignores signoutRedirect's parameter).
+                  onSelect={() => signOut(auth, { localOidc })}
                 >
                   Sign out
                 </DropdownMenuItem>

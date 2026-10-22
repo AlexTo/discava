@@ -15,6 +15,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -105,7 +106,7 @@ export function EditLessonDialog({
         >
           {isError && (
             <Alert type="error" header="Couldn't update the lesson">
-              {error.message}
+              {apiErrorMessage(error)}
             </Alert>
           )}
 

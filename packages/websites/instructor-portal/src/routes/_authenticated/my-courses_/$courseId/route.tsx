@@ -9,6 +9,7 @@ import {
 } from '@discava/common-shadcn/components/ui/alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Card } from '@discava/common-shadcn/components/ui/card';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { BookOpen, CalendarDays, Info } from 'lucide-react';
@@ -94,7 +95,7 @@ function RouteComponent() {
       >
         {notFound
           ? "This course doesn't exist, or you don't have access to it."
-          : error.message}
+          : apiErrorMessage(error)}
       </Alert>
     );
   }

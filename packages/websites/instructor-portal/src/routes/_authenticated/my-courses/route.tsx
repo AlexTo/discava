@@ -17,6 +17,7 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from '@discava/common-shadcn/components/ui/toggle-group';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -206,7 +207,7 @@ function RouteComponent() {
           </div>
         ) : coursesQuery.isError ? (
           <Alert type="error" header="Couldn't load your courses">
-            {coursesQuery.error.message}
+            {apiErrorMessage(coursesQuery.error)}
           </Alert>
         ) : visibleCourses.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

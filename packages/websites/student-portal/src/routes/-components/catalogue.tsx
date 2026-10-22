@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -144,7 +145,7 @@ export function Catalogue() {
           ) : coursesQuery.isError ? (
             <div className="mt-10">
               <Alert type="error" header="Couldn't load courses">
-                {coursesQuery.error.message}
+                {apiErrorMessage(coursesQuery.error)}
               </Alert>
             </div>
           ) : (

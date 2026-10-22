@@ -14,6 +14,7 @@ import {
   AlertDialogTrigger,
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { Alert } from '../../../../../../components/alert';
@@ -98,7 +99,7 @@ export function DeleteModuleDialog({
                 : "Couldn't delete the module"
             }
           >
-            {error.message}
+            {apiErrorMessage(error)}
           </Alert>
         )}
 
