@@ -63,15 +63,20 @@ const withinBudget = <T>(work: Promise<T>): Promise<T> => {
 // however they were created, and a changed name reaches it within the hour.
 // The tokens themselves are left as they are. Best-effort: a failed or slow
 // write is logged and the user still signs in.
-export const preTokenGeneration = async (
+/**
+ * Syncs the profile from a pre-token-generation event. Local dev uses the
+ * result to avoid caching a failed sync; the deployed trigger still treats
+ * failure as best-effort and returns the original event.
+ */
+export const syncUserFromPreTokenGenerationEvent = async (
   event: PreTokenGenerationTriggerEvent,
-): Promise<PreTokenGenerationTriggerEvent> => {
+): Promise<boolean> => {
   const profile = userProfileFrom(event.request.userAttributes);
   if (!profile) {
     logger.warn('No sub in the user attributes; no user record to sync', {
       triggerSource: event.triggerSource,
     });
-    return event;
+    return true;
   }
 
   try {
@@ -83,12 +88,20 @@ export const preTokenGeneration = async (
       outcome,
       triggerSource: event.triggerSource,
     });
+    return true;
   } catch (error) {
     logger.error('Could not sync the user record; signing in anyway', {
       userId: profile.userId,
       error,
     });
+    return false;
   }
+};
+
+export const preTokenGeneration = async (
+  event: PreTokenGenerationTriggerEvent,
+): Promise<PreTokenGenerationTriggerEvent> => {
+  await syncUserFromPreTokenGenerationEvent(event);
   return event;
 };
 
