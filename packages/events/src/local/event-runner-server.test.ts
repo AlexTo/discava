@@ -3,16 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { AddressInfo } from 'node:net';
-import { EventBridgeSchema } from '@aws-lambda-powertools/parser/schemas';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { transcodeComplete } from '../media/transcode-complete.js';
-import {
-  startMediaJobsServer,
-  transcodeCompletionEvent,
-} from './media-jobs.js';
-
-const applyTranscodeOutcome = vi.hoisted(() => vi.fn());
-vi.mock('../media/transcode-outcome.js', () => ({ applyTranscodeOutcome }));
+import { startEventRunnerServer } from './event-runner-server.js';
 
 const USER_METADATA = {
   courseId: 'course-1',
@@ -23,35 +15,20 @@ const USER_METADATA = {
   submissionNonce: 'nonce-1',
 };
 
-describe('transcodeCompletionEvent', () => {
-  it('is accepted by transcode-complete as MediaConvert’s event would be', async () => {
-    const event = EventBridgeSchema.parse(
-      transcodeCompletionEvent('local-job-1', 'COMPLETE', USER_METADATA),
-    );
-
-    await transcodeComplete(event);
-
-    expect(applyTranscodeOutcome).toHaveBeenCalledWith(expect.anything(), {
-      jobId: 'local-job-1',
-      status: 'COMPLETE',
-      ...USER_METADATA,
-    });
-  });
-});
-
-describe('startMediaJobsServer', () => {
-  let server: ReturnType<typeof startMediaJobsServer> | undefined;
+describe('startEventRunnerServer', () => {
+  let server: ReturnType<typeof startEventRunnerServer> | undefined;
   afterEach(() => {
     server?.close();
   });
 
   const start = () => {
     const handlers = {
-      submit: vi.fn(() => 'local-job-1'),
-      cancel: vi.fn((jobId: string) => jobId === 'local-job-1'),
-      schedule: vi.fn(),
+      submitTranscodeJob: vi.fn(() => 'local-job-1'),
+      cancelTranscodeJob: vi.fn((jobId: string) => jobId === 'local-job-1'),
+      scheduleTranscodeCleanup: vi.fn(),
+      runPreTokenGeneration: vi.fn(async () => {}),
     };
-    server = startMediaJobsServer({ port: 0, ...handlers, log: () => {} });
+    server = startEventRunnerServer({ port: 0, ...handlers, log: () => {} });
     const url = (path: string) =>
       `http://localhost:${(server!.address() as AddressInfo).port}${path}`;
     return { handlers, url };
@@ -78,7 +55,7 @@ describe('startMediaJobsServer', () => {
 
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ jobId: 'local-job-1' });
-    expect(handlers.submit).toHaveBeenCalledWith(job);
+    expect(handlers.submitTranscodeJob).toHaveBeenCalledWith(job);
   });
 
   it('refuses a job without somewhere to put its output', async () => {
@@ -118,6 +95,36 @@ describe('startMediaJobsServer', () => {
     });
 
     expect(response.status).toBe(202);
-    expect(handlers.schedule).toHaveBeenCalledWith({ payload });
+    expect(handlers.scheduleTranscodeCleanup).toHaveBeenCalledWith({ payload });
+  });
+
+  it('runs the pre token generation trigger for a sign-in, answering once it has', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+    const signIn = {
+      userName: 'erin',
+      userAttributes: { sub: 'user-1', given_name: 'Erin' },
+    };
+
+    const response = await fetch(url('/triggers/pre-token-generation'), {
+      method: 'POST',
+      ...json(signIn),
+    });
+
+    expect(response.status).toBe(204);
+    expect(handlers.runPreTokenGeneration).toHaveBeenCalledWith(signIn);
+  });
+
+  it('refuses a sign-in without the user’s sub', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/triggers/pre-token-generation'), {
+      method: 'POST',
+      ...json({ userName: 'erin', userAttributes: {} }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(handlers.runPreTokenGeneration).not.toHaveBeenCalled();
   });
 });

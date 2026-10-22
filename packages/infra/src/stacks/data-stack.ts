@@ -5,10 +5,12 @@
 import {
   CoreTable,
   EventsPostConfirmation,
+  EventsPreTokenGeneration,
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
   PublicMediaBucket,
+  RuntimeConfig,
   StudentPortal,
   suppressRules,
   UserIdentity,
@@ -70,6 +72,7 @@ export class DataStack extends Stack {
 
     this.identity = this.createIdentity(identityConfig);
     this.coreTable = this.createCoreTable(coreTableConfig);
+    this.syncUsersToCoreTable();
     this.lessonMediaBucket = this.createLessonMediaBucket(lessonMediaConfig);
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
@@ -136,6 +139,37 @@ export class DataStack extends Stack {
     );
 
     return identity;
+  }
+
+  // Keeps each user's core table record in step with Cognito (#230). Pre
+  // token generation runs on every sign-in, including an admin-created user's
+  // first, and on every token refresh; post-confirmation misses admin-created
+  // users, and managed login doesn't run post-authentication.
+  private syncUsersToCoreTable() {
+    const preTokenGeneration = new EventsPreTokenGeneration(
+      this,
+      'PreTokenGeneration',
+    );
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    preTokenGeneration.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(preTokenGeneration);
+    this.coreTable.grantReadWriteData(preTokenGeneration);
+    // Its environment only holds the AppConfig application's ID (a Ref).
+    // Checkov's secret scan also reads a __file__ key its own parser injects
+    // (the template's path), and this stack's CDK-hashed template file name
+    // trips CKV_AWS_45 on it.
+    suppressRules(
+      preTokenGeneration,
+      ['CKV_AWS_45'],
+      'Environment only holds the AppConfig application ID; checkov flags its injected template path',
+    );
+    this.identity.userPool.addTrigger(
+      UserPoolOperation.PRE_TOKEN_GENERATION,
+      preTokenGeneration,
+    );
   }
 
   private createCoreTable(coreTableConfig?: CoreTableComponentConfig) {

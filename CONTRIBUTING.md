@@ -50,7 +50,7 @@ pnpm dev
 | core-api / instructor-api | 2022 / 2023 | API Gateway and Lambda |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
-| Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler and the table's stream |
+| Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler, the table's stream, and Cognito's pre token generation trigger (which keeps user records in step) |
 | Local OIDC server | 9400 | Cognito |
 
 **Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.

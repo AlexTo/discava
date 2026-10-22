@@ -100,6 +100,13 @@ export interface LocalScheduleRequest {
   payload: Record<string, string>;
 }
 
+/** A sign-in to run the pre token generation trigger for, in local dev. */
+export interface LocalSignInRequest {
+  userName: string;
+  /** As Cognito's userAttributes: `sub`, `email`, `given_name`… */
+  userAttributes: Record<string, string>;
+}
+
 /**
  * Calls the local event runner, throwing if it's not running or refuses.
  * Returns its JSON response, if any.
@@ -133,6 +140,66 @@ export const callLocalEventRunner = async <T = unknown>(
   const text = await response.text();
   return text ? (JSON.parse(text) as T) : undefined;
 };
+
+const PROFILE_CLAIMS = ['sub', 'email', 'given_name', 'family_name'] as const;
+
+/**
+ * Builds syncLocalUser around how it reaches the event runner (a parameter so
+ * tests can stand in for it).
+ */
+export const createLocalUserSync = (
+  signIn: (request: LocalSignInRequest) => Promise<unknown>,
+) => {
+  // Users already synced (or being synced) by this process, keyed by their
+  // profile claims, so a changed name syncs again. Empty on every restart,
+  // which only rewrites the same records.
+  const synced = new Map<string, Promise<void>>();
+
+  return (claims: Record<string, unknown> | undefined): Promise<void> => {
+    if (typeof claims?.sub !== 'string') {
+      return Promise.resolve();
+    }
+    const userAttributes = Object.fromEntries(
+      PROFILE_CLAIMS.flatMap((claim) =>
+        typeof claims[claim] === 'string' ? [[claim, claims[claim]]] : [],
+      ),
+    ) as Record<string, string>;
+    const key = JSON.stringify(userAttributes);
+
+    let sync = synced.get(key);
+    if (!sync) {
+      // Shared by the requests a portal sends together after sign-in.
+      sync = signIn({
+        userName:
+          typeof claims.username === 'string' ? claims.username : claims.sub,
+        userAttributes,
+      }).then(
+        () => {},
+        (error) => {
+          // Tried again on the user's next request; this one goes ahead,
+          // as a sign-in does when the deployed trigger's write fails.
+          synced.delete(key);
+          console.warn(
+            `Couldn't sync local user ${claims.sub}: ${(error as Error).message}`,
+          );
+        },
+      );
+      synced.set(key, sync);
+    }
+    return sync;
+  };
+};
+
+/**
+ * Local dev's stand-in for Cognito's pre token generation trigger (#230), which
+ * keeps the core table's user records in step when deployed. The local OIDC
+ * server has no triggers, so the APIs' local servers call this with each
+ * request's token claims, and the first time this process sees a user (or
+ * their name changes) it has the event runner run the real trigger handler.
+ */
+export const syncLocalUser = createLocalUserSync((request) =>
+  callLocalEventRunner('POST', '/triggers/pre-token-generation', request),
+);
 
 /**
  * The OIDC server local dev signs in with instead of Cognito (#226):

@@ -2,36 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type {
   LocalScheduleRequest,
+  LocalSignInRequest,
   LocalTranscodeJobRequest,
 } from '@discava/common-server-utils/local-dev';
-
-// The event runner's endpoints for what MediaConvert and EventBridge
-// Scheduler do when deployed (#137): instructor-api and the event handlers
-// call these instead in local dev (see common-server-utils/local-dev).
-
-/**
- * The EventBridge event MediaConvert emits when a job finishes, as the
- * TranscodeComplete rule delivers it to transcode-complete.
- */
-export const transcodeCompletionEvent = (
-  jobId: string,
-  status: 'COMPLETE' | 'ERROR',
-  userMetadata: Record<string, string>,
-) => ({
-  version: '0',
-  id: randomUUID(),
-  'detail-type': 'MediaConvert Job State Change',
-  source: 'aws.mediaconvert',
-  account: '000000000000',
-  time: new Date().toISOString(),
-  region: 'local',
-  resources: [`arn:aws:mediaconvert:local:000000000000:jobs/${jobId}`],
-  detail: { jobId, status, userMetadata },
-});
+// The event runner's HTTP interface for the local service stand-ins described
+// in common-server-utils/local-dev.
 
 const readJson = async (request: IncomingMessage): Promise<unknown> => {
   const chunks: Buffer[] = [];
@@ -42,25 +20,33 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
 };
 
 /**
- * Serves:
+ * Starts the event runner's HTTP server on `port`, which local dev calls
+ * instead of AWS (see callLocalEventRunner). Each endpoint hands the request
+ * to the matching callback, which the event runner wires to the transcoder or
+ * the real handler:
  * - `POST /transcode-jobs` (LocalTranscodeJobRequest) -> `{ jobId }`, as
  *   MediaConvert's CreateJob
  * - `DELETE /transcode-jobs/<jobId>`, as CancelJob (404 if there's no such
  *   job left to finish)
  * - `POST /schedules/transcode-cleanup` (LocalScheduleRequest), as a one-off
  *   Scheduler schedule targeting transcode-cleanup
+ * - `POST /triggers/pre-token-generation` (LocalSignInRequest), as Cognito
+ *   running its pre token generation trigger at sign-in; answers 204 once
+ *   the handler has run (400 without `userName` and `userAttributes.sub`)
  */
-export const startMediaJobsServer = ({
+export const startEventRunnerServer = ({
   port,
-  submit,
-  cancel,
-  schedule,
+  submitTranscodeJob,
+  cancelTranscodeJob,
+  scheduleTranscodeCleanup,
+  runPreTokenGeneration,
   log,
 }: {
   port: number;
-  submit: (request: LocalTranscodeJobRequest) => string;
-  cancel: (jobId: string) => boolean;
-  schedule: (request: LocalScheduleRequest) => void;
+  submitTranscodeJob: (request: LocalTranscodeJobRequest) => string;
+  cancelTranscodeJob: (jobId: string) => boolean;
+  scheduleTranscodeCleanup: (request: LocalScheduleRequest) => void;
+  runPreTokenGeneration: (request: LocalSignInRequest) => Promise<void>;
   log: (message: string) => void;
 }) => {
   const server = createServer(async (request, response) => {
@@ -77,14 +63,14 @@ export const startMediaJobsServer = ({
             message: 'inputKey and outputPrefix (…/) needed',
           });
         }
-        const jobId = submit(job);
+        const jobId = submitTranscodeJob(job);
         log(`transcode job ${jobId} queued for ${job.inputKey}`);
         return send(201, { jobId });
       }
       const canceled = path.match(/^\/transcode-jobs\/([^/]+)$/);
       if (request.method === 'DELETE' && canceled) {
         const jobId = decodeURIComponent(canceled[1]);
-        return cancel(jobId)
+        return cancelTranscodeJob(jobId)
           ? send(204)
           : send(404, { message: 'No such job' });
       }
@@ -92,8 +78,28 @@ export const startMediaJobsServer = ({
         request.method === 'POST' &&
         path === '/schedules/transcode-cleanup'
       ) {
-        schedule((await readJson(request)) as LocalScheduleRequest);
+        scheduleTranscodeCleanup(
+          (await readJson(request)) as LocalScheduleRequest,
+        );
         return send(202);
+      }
+      if (
+        request.method === 'POST' &&
+        path === '/triggers/pre-token-generation'
+      ) {
+        const signedIn = (await readJson(request)) as LocalSignInRequest;
+        if (
+          !signedIn.userName ||
+          typeof signedIn.userAttributes?.sub !== 'string'
+        ) {
+          return send(400, {
+            message: 'userName and userAttributes.sub needed',
+          });
+        }
+        // Answered once the trigger has run, so the API's first request
+        // after sign-in already finds the user's record.
+        await runPreTokenGeneration(signedIn);
+        return send(204);
       }
       send(404, { message: `No ${request.method} ${path}` });
     } catch (error) {

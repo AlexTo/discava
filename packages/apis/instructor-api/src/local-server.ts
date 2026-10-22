@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { syncLocalUser } from '@discava/common-server-utils/local-dev';
 import {
   type CreateHTTPContextOptions,
   createHTTPServer,
@@ -14,10 +15,14 @@ const PORT = 2023;
 createHTTPServer({
   router: appRouter,
   middleware: cors({ origin: true, credentials: true }),
-  createContext({ req }: CreateHTTPContextOptions) {
+  async createContext({ req }: CreateHTTPContextOptions) {
+    const claims = decodeClaims(req);
+    // What Cognito's pre token generation trigger does at sign-in when
+    // deployed: keep the user's core table record in step (#230).
+    await syncLocalUser(claims);
     return {
       event: {
-        requestContext: { authorizer: { claims: decodeClaims(req) } },
+        requestContext: { authorizer: { claims } },
       } as any,
       context: {} as any,
       info: {} as any,
@@ -35,12 +40,11 @@ createHTTPServer({
 
 console.log(`Local TRPC server listening on port ${PORT}`);
 
-// There's no API Gateway locally to verify the caller's Cognito token and flatten
-// it into event.requestContext.authorizer.claims, so decode it ourselves from the
-// real Authorization header the frontend sends (see InstructorApiClientProvider).
-// The token still comes from a genuine Cognito sign-in in the browser — we just
-// don't re-verify the signature here, since API Gateway already does that once
-// deployed.
+// There's no API Gateway locally to verify the caller's token and flatten it into
+// event.requestContext.authorizer.claims, so decode it ourselves from the real
+// Authorization header the frontend sends (see InstructorApiClientProvider). Locally
+// the token comes from the local OIDC server (#226), with the same claims as
+// Cognito's; we don't verify its signature, which API Gateway does once deployed.
 const decodeClaims = (
   req: CreateHTTPContextOptions['req'],
 ): Record<string, string> | undefined => {

@@ -288,6 +288,41 @@ describe('the sign-up trigger (#29)', () => {
   });
 });
 
+describe('the user record trigger (#230)', () => {
+  const stack = synth({});
+
+  it('runs on every token the pool issues, with the core table to write to', () => {
+    const data = stack('Data');
+    const [fn] = Object.keys(
+      data.findResources('AWS::Lambda::Function', {
+        Properties: {
+          Environment: {
+            Variables: { RUNTIME_CONFIG_APP_ID: Match.anyValue() },
+          },
+        },
+      }),
+    ).filter((id) => id.startsWith('PreTokenGeneration'));
+
+    data.hasResourceProperties('AWS::Cognito::UserPool', {
+      LambdaConfig: Match.objectLike({
+        PreTokenGeneration: { 'Fn::GetAtt': [fn, 'Arn'] },
+      }),
+    });
+    data.hasResourceProperties('AWS::IAM::Policy', {
+      Roles: [
+        { Ref: Match.stringLikeRegexp('^PreTokenGenerationServiceRole') },
+      ],
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: Match.arrayWith(['dynamodb:GetItem', 'dynamodb:PutItem']),
+          }),
+        ]),
+      },
+    });
+  });
+});
+
 describe('progress recalculation', () => {
   const stack = synth({});
 
