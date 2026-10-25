@@ -145,3 +145,123 @@ export const addQuiz = async (
     page.getByRole('button', { name: `Hide quiz ${title}` }),
   ).toBeVisible();
 };
+
+// What the course editor calls each kind of content item in its controls'
+// names, e.g. "Hide text Reading one".
+export type ItemKind = 'text' | 'video' | 'quiz';
+
+// Hides a published item from students, confirming in the dialog.
+export const hideItem = async (page: Page, kind: ItemKind, title: string) => {
+  await page.getByRole('button', { name: `Hide ${kind} ${title}` }).click();
+  await page
+    .getByRole('alertdialog', { name: `Hide ${kind}` })
+    .getByRole('button', { name: `Hide ${kind}`, exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: `Publish ${kind} ${title}` }),
+  ).toBeVisible();
+};
+
+// Publishes a hidden item to students again, confirming in the dialog.
+export const publishItem = async (
+  page: Page,
+  kind: ItemKind,
+  title: string,
+) => {
+  await page.getByRole('button', { name: `Publish ${kind} ${title}` }).click();
+  await page
+    .getByRole('alertdialog', { name: `Publish ${kind}` })
+    .getByRole('button', { name: `Publish ${kind}`, exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: `Hide ${kind} ${title}` }),
+  ).toBeVisible();
+};
+
+// Removes an item from a published course, which archives it (a draft's are
+// deleted), and waits for it in the archived section.
+export const archiveItem = async (
+  page: Page,
+  kind: ItemKind,
+  title: string,
+) => {
+  await page.getByRole('button', { name: `Remove ${title}` }).click();
+  const dialog = page.getByRole('alertdialog', { name: `Archive ${kind}` });
+  await dialog.getByRole('button', { name: `Archive ${kind}` }).click();
+  await expect(
+    page.getByRole('button', { name: `Restore ${kind} ${title}` }),
+  ).toBeVisible();
+};
+
+// Restores an archived item from the archived section.
+export const restoreItem = async (
+  page: Page,
+  kind: ItemKind,
+  title: string,
+) => {
+  await page.getByRole('button', { name: `Restore ${kind} ${title}` }).click();
+  await expect(
+    page.getByRole('button', { name: `Restore ${kind} ${title}` }),
+  ).toHaveCount(0);
+};
+
+// Moves an item one place up in its lesson with the keyboard, as the drag
+// handle allows (Space to pick up, an arrow to move, Space to drop).
+export const moveItemUp = async (page: Page, title: string) => {
+  await page.getByRole('button', { name: `Reorder ${title}` }).focus();
+  await page.keyboard.press('Space');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Space');
+};
+
+// The course editor's image preview, once the course has an image.
+export const courseImagePreview = (page: Page) =>
+  page.locator('img[src*="discava-public-media"]');
+
+// Adds or changes the course's image: uploads `file` in the crop dialog and
+// saves it as cropped by default (centred, 16:9). Waits for the preview to
+// show an image other than the one there before.
+export const setCourseImage = async (page: Page, file: string) => {
+  const preview = courseImagePreview(page);
+  const before = (await preview.count())
+    ? await preview.getAttribute('src')
+    : null;
+  await page
+    .getByRole('button', { name: /^(Add image|Change image)$/ })
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Course image' });
+  await dialog.getByLabel('Course image file').setInputFiles(file);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(preview).toHaveAttribute('src', /discava-public-media/);
+  if (before) {
+    await expect(preview).not.toHaveAttribute('src', before);
+  }
+};
+
+// Removes the course's image.
+export const removeCourseImage = async (page: Page) => {
+  await page.getByRole('button', { name: 'Change image' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Course image' });
+  await dialog.getByRole('button', { name: 'Remove image' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('No course image')).toBeVisible();
+};
+
+// A published course with one module and one lesson holding `readings` (text
+// items), for scenarios that need a course to take rather than to build.
+export const createPublishedCourse = async (
+  page: Page,
+  { title, readings }: { title: string; readings: string[] },
+) => {
+  await createCourse(page, {
+    title,
+    summary: 'A course made by the end-to-end tests.',
+  });
+  await addModule(page, 'Module one');
+  await addLesson(page, 'Lesson one');
+  for (const reading of readings) {
+    await addTextItem(page, { title: reading, body: `${reading}.` });
+  }
+  await publishCourse(page);
+};
