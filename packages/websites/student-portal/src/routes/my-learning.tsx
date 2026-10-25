@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Alert } from '../components/alert';
 import { CourseProgressCard } from '../components/course-progress-card';
+import { PageBreadcrumbs } from '../components/page-breadcrumbs';
 import { Spinner } from '../components/spinner';
 import { useCoreApi } from '../hooks/useCoreApi';
 import { requireSignIn } from '../lib/require-sign-in';
@@ -42,6 +43,7 @@ function MyLearning() {
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-6 pt-8 pb-10 lg:px-8">
+      <PageBreadcrumbs crumbs={[{ label: 'My Learning' }]} />
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
         My Learning
       </h1>

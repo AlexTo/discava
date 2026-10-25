@@ -55,6 +55,22 @@ describe('CoursePage', () => {
     expect(screen.getByRole('button', { name: 'Enrol now' })).toBeEnabled();
   });
 
+  it('places the course under Home', async () => {
+    renderPage();
+
+    const trail = within(
+      await screen.findByRole('navigation', { name: 'breadcrumb' }),
+    );
+    expect(trail.getByRole('link', { name: 'Home' })).toHaveAttribute(
+      'href',
+      '/',
+    );
+    expect(trail.getByText('Linear Algebra')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
   it('jumps to each section from the tab bar', async () => {
     renderPage();
 
