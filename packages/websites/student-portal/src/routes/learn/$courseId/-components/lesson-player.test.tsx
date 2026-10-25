@@ -174,6 +174,15 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   ...overrides,
 });
 
+// Each crumb's text and where it links, the current page last with none.
+const breadcrumbs = async () =>
+  within(await screen.findByRole('navigation', { name: 'breadcrumb' }))
+    .getAllByRole('listitem')
+    .map((crumb) => [
+      crumb.textContent,
+      crumb.querySelector('a')?.getAttribute('href'),
+    ]);
+
 const outline = () =>
   screen.findByRole('navigation', { name: 'Course outline' });
 const outlineLink = async (name: string) =>
@@ -194,6 +203,22 @@ describe('CourseHome', () => {
     expect(screen.getByRole('link', { name: /^Start/ })).toHaveAttribute(
       'href',
       '/learn/course-1/lesson/lesson-1',
+    );
+  });
+
+  it('places the course under My Learning, and links its course page', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+
+    expect(await breadcrumbs()).toEqual([
+      ['Home', '/'],
+      ['My Learning', '/my-learning'],
+      ['Linear Algebra', undefined],
+    ]);
+    expect(screen.getByRole('link', { name: 'Course page' })).toHaveAttribute(
+      'href',
+      '/learn/course-1',
     );
   });
 
@@ -604,6 +629,17 @@ describe('LessonPage', () => {
         2,
       ),
     );
+  });
+
+  it('places the lesson under its course', async () => {
+    openLesson('lesson-2');
+
+    expect(await breadcrumbs()).toEqual([
+      ['Home', '/'],
+      ['My Learning', '/my-learning'],
+      ['Linear Algebra', '/learn/course-1/home'],
+      ['Lecture 2', undefined],
+    ]);
   });
 
   it('says when the instructor has removed the lesson', async () => {

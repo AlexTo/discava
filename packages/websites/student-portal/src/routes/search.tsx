@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { Alert } from '../components/alert';
+import { PageBreadcrumbs } from '../components/page-breadcrumbs';
 import { Spinner } from '../components/spinner';
 import { useCoreApi } from '../hooks/useCoreApi';
 
@@ -46,6 +47,7 @@ function RouteComponent() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10 lg:px-8">
+      <PageBreadcrumbs crumbs={[{ label: 'Search' }]} className="mb-6" />
       {!query ? (
         <div className="py-16 text-center">
           <Search className="mx-auto size-8 text-muted-foreground" />
