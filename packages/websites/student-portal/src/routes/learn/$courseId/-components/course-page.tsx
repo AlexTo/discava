@@ -18,6 +18,7 @@ import { ChevronDown, FileText, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
+import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
 import { EnrolmentActions } from './enrolment-actions';
@@ -91,6 +92,10 @@ export function CoursePage({ courseId }: { courseId: string }) {
     <main className="w-full">
       <section className="border-b bg-muted/40">
         <div className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
+          <PageBreadcrumbs
+            crumbs={[{ label: course.title }]}
+            className="mb-6"
+          />
           <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_20rem] md:items-start">
             <div>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">

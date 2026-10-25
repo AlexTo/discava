@@ -12,16 +12,13 @@ import {
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
-import {
-  ArrowLeft,
-  ChevronDown,
-  Circle,
-  CircleCheck,
-  Lock,
-  Search,
-} from 'lucide-react';
+import { ChevronDown, Circle, CircleCheck, Lock, Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Alert } from '../../../../components/alert';
+import {
+  type Crumb,
+  PageBreadcrumbs,
+} from '../../../../components/page-breadcrumbs';
 import { Spinner } from '../../../../components/spinner';
 import {
   type CoursePlayer,
@@ -253,15 +250,31 @@ export function CoursePlayerLayout({
     return <Unavailable courseId={courseId} error={player.error} />;
   }
 
+  // A lesson the course no longer lists ends the trail at the course.
+  const activeLesson = course.modules
+    .flatMap((module) => module.lessons)
+    .find((lesson) => lesson.lessonId === activeLessonId);
+  const crumbs: Crumb[] = [
+    { label: 'My Learning', link: { to: '/my-learning' } },
+    {
+      label: course.title,
+      link: { to: '/learn/$courseId/home', params: { courseId } },
+    },
+    ...(activeLesson ? [{ label: activeLesson.title }] : []),
+  ];
+
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
-      <Link
-        to="/learn/$courseId"
-        params={{ courseId }}
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" /> Course page
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <PageBreadcrumbs crumbs={crumbs} className="min-w-0" />
+        <Link
+          to="/learn/$courseId"
+          params={{ courseId }}
+          className="shrink-0 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Course page
+        </Link>
+      </div>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
