@@ -87,6 +87,22 @@ export const addVideoItem = async (
   ).toBeVisible();
 };
 
+// Adds a file item to the last lesson, uploading `file`, titled with the
+// file's name unless `title` is given.
+export const addFileItem = async (
+  page: Page,
+  { title, file }: { title: string; file: string },
+) => {
+  await page.getByRole('button', { name: 'File', exact: true }).last().click();
+  const dialog = page.getByRole('dialog', { name: 'Add file' });
+  await dialog.getByLabel('File to attach').setInputFiles(file);
+  await dialog.getByLabel('Title', { exact: true }).fill(title);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(
+    page.getByRole('button', { name: `Hide file ${title}` }),
+  ).toBeVisible();
+};
+
 // Opens a video item's editor, which previews it once it's transcoded, and
 // waits for the preview to play. The editor fetches the video's state when
 // it opens, so this reopens it until the transcode is done.
@@ -148,7 +164,7 @@ export const addQuiz = async (
 
 // What the course editor calls each kind of content item in its controls'
 // names, e.g. "Hide text Reading one".
-export type ItemKind = 'text' | 'video' | 'quiz';
+export type ItemKind = 'text' | 'video' | 'quiz' | 'file';
 
 // Hides a published item from students, confirming in the dialog.
 export const hideItem = async (page: Page, kind: ItemKind, title: string) => {

@@ -21,3 +21,14 @@ export const VideoUrlOutputSchema = z.object({
 });
 
 export type IVideoUrlOutput = z.output<typeof VideoUrlOutputSchema>;
+
+export const FileUrlInputSchema = ContentItemRefSchema;
+
+export type IFileUrlInput = z.output<typeof FileUrlInputSchema>;
+
+// A short-lived link to download a file item's file (#102).
+export const FileUrlOutputSchema = z.object({
+  url: z.string(),
+});
+
+export type IFileUrlOutput = z.output<typeof FileUrlOutputSchema>;

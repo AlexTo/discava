@@ -5,6 +5,12 @@
 
 import { t } from './init.js';
 import {
+  createContentItemFile,
+  createContentItemFileUploadUrl,
+  createContentItemFileUrl,
+  updateContentItemFile,
+} from './procedures/content-item-file.js';
+import {
   createContentItemQuiz,
   updateContentItemQuiz,
 } from './procedures/content-item-quiz.js';
@@ -99,6 +105,10 @@ export const appRouter = router({
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
     createVideoUrl: createContentItemVideoUrl,
+    createFileUploadUrl: createContentItemFileUploadUrl,
+    createFile: createContentItemFile,
+    updateFile: updateContentItemFile,
+    createFileUrl: createContentItemFileUrl,
     delete: deleteContentItem,
     publish: publishContentItem,
     hide: hideContentItem,

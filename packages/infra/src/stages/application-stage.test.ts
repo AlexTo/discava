@@ -44,10 +44,10 @@ const methodSettings = (template: Template) =>
   );
 
 const API_FUNCTIONS = {
-  CoreApi: ['CoreApiRouterHandler', 'CoreApiVideoUrlHandler'],
+  CoreApi: ['CoreApiRouterHandler', 'CoreApiMediaUrlHandler'],
   InstructorApi: [
     'InstructorApiRouterHandler',
-    'InstructorApiVideoUrlHandler',
+    'InstructorApiMediaUrlHandler',
     'InstructorApiMediaHandler',
     'InstructorApiCourseImageHandler',
   ],
@@ -176,7 +176,7 @@ describe("core-api's functions", () => {
     });
 
     expect(roles).toHaveLength(1);
-    expect(roles[0]).toMatch(/^CoreApiVideoUrlHandlerServiceRole/);
+    expect(roles[0]).toMatch(/^CoreApiMediaUrlHandlerServiceRole/);
   });
 });
 

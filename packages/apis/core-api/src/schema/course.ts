@@ -103,6 +103,15 @@ export const ContentItemSchema = z.discriminatedUnion('type', [
     ...ContentItemBaseSchema,
     type: z.literal('quiz'),
   }),
+  // Without its storage key: the file is downloaded through
+  // contentItem.fileUrl's signed link (#102).
+  z.object({
+    ...ContentItemBaseSchema,
+    type: z.literal('file'),
+    fileName: z.string(),
+    fileSize: z.number(),
+    mimeType: z.string(),
+  }),
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;

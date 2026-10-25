@@ -277,6 +277,59 @@ describe('LessonContentItemsRow', () => {
     expect(screen.queryByRole('button', { name: 'Quiz' })).toBeNull();
   });
 
+  describe('a file (#102)', () => {
+    const file = {
+      contentItemId: 'f',
+      type: 'file',
+      title: 'Week 1 slides',
+      status: 'ready',
+      fileName: 'week-1.pdf',
+      fileSize: 1536,
+      visibility: 'visible' as const,
+    };
+
+    it('shows its kind and size, with the controls other items have', () => {
+      renderRow({ contentItems: [file] });
+
+      expect(screen.getByText('PDF · 1.5 KB')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Hide file Week 1 slides' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Remove Week 1 slides' }),
+      ).toBeInTheDocument();
+    });
+
+    it('opens it to edit, showing the file attached now', async () => {
+      const { user } = renderRow({ contentItems: [file] });
+
+      await user.click(
+        screen.getByRole('button', { name: 'Edit Week 1 slides' }),
+      );
+
+      const dialog = await screen.findByRole('dialog', { name: 'Edit file' });
+      expect(within(dialog).getByLabelText('Title')).toHaveValue(
+        'Week 1 slides',
+      );
+      expect(within(dialog).getByText('week-1.pdf')).toBeInTheDocument();
+    });
+
+    it('opens an empty Add file dialog from the File button', async () => {
+      const { user } = renderRow();
+
+      await user.click(screen.getByRole('button', { name: 'File' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Add file' });
+      expect(within(dialog).getByLabelText('Title')).toHaveValue('');
+    });
+
+    it('in an archived course, offers no File button', () => {
+      renderRow({ readOnly: true });
+
+      expect(screen.queryByRole('button', { name: 'File' })).toBeNull();
+    });
+  });
+
   describe('a video being replaced (#209)', () => {
     const video = (status: string) => ({
       contentItemId: 'v',

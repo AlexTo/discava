@@ -33,13 +33,13 @@ export const createContentItemEntity = async () =>
           type: 'string',
           required: true,
         },
-        // 'video', 'text' and 'quiz' today; leaves room for sibling content
-        // types (file) from #102. Per-type required-ness (e.g. a video
-        // needs s3Key/mimeType, a text item needs body) is enforced by the
-        // zod schemas in instructor-api/core-api, not here -- ElectroDB has
-        // no native discriminated-attribute support for a single entity.
+        // Per-type required-ness (e.g. a video needs s3Key/mimeType, a text
+        // item needs body, a file needs s3Key/fileName/fileSize/mimeType) is
+        // enforced by the zod schemas in instructor-api/core-api, not here --
+        // ElectroDB has no native discriminated-attribute support for a
+        // single entity. Assignments are still to come (#102).
         type: {
-          type: ['video', 'text', 'quiz'] as const,
+          type: ['video', 'text', 'quiz', 'file'] as const,
           required: true,
         },
         // 'ready' by default so synchronous types (text, and any future
@@ -114,6 +114,19 @@ export const createContentItemEntity = async () =>
         // output schema.
         submissionNonce: {
           type: 'string',
+        },
+        // File-only attributes (type: 'file', #102). The file itself is at
+        // s3Key in the lesson media bucket, under the item's own
+        // .../content-items/<id>/<submissionNonce>/ folder (the nonce being
+        // its upload's id), so deleting or replacing it retires that folder
+        // the way a video's version is. mimeType holds its content type.
+        // The name it was uploaded with, which downloads are saved under.
+        fileName: {
+          type: 'string',
+        },
+        // In bytes.
+        fileSize: {
+          type: 'number',
         },
         // Tiptap's JSON document, stored as a string. Only present for
         // type: 'text'.

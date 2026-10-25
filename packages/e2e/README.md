@@ -34,20 +34,21 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
 
 - `users.ts`: `signIn`; `newUser` for a fresh user through the local OIDC page's "Someone else" form; `testUser` for Alice, Bob, Dan or Carol; `uniqueName` for course titles and the like.
 - `instructor-portal.ts`:
-  - building: `createCourse`, `addModule`, `addLesson`, `addTextItem`, `addVideoItem`, `addQuiz`, or all at once with `createPublishedCourse`;
+  - building: `createCourse`, `addModule`, `addLesson`, `addTextItem`, `addVideoItem`, `addFileItem`, `addQuiz`, or all at once with `createPublishedCourse`;
   - checking and publishing: `expectVideoPreviewToPlay`, `publishCourse`;
   - changing a published course: `hideItem`, `publishItem`, `archiveItem`, `restoreItem`, `moveItemUp`;
   - the course image: `setCourseImage`, `removeCourseImage`, `courseImagePreview`.
 - `student-portal.ts`:
   - getting in: `openCourse`, `enrol`, `startFirstLesson`;
-  - in a lesson: `lessonItem`, `lessonVideo`, `markItemDone`, `takeQuiz`;
+  - in a lesson: `lessonItem`, `lessonVideo`, `downloadLessonFile`, `markItemDone`, `takeQuiz`;
   - the result: `expectCourseCompleted`;
   - after an instructor's change, or a page loaded before background work finished: `expectAfterReloads`.
 - `images.ts`: the test images, `publicMediaImages`, and `expectImageLoaded`, which checks an image really loaded.
 - `video.ts`: `expectToPlay`, which checks a `<video>` really plays, and `THREE_SECOND_VIDEO`, the test video.
+- `files.ts`: `WORKSHEET_PDF`, the test file for file items.
 - `portals.ts`: where everything runs.
 
-Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, and two small 1600×900 JPEGs for course images. All are made with ffmpeg; the commands are in `src/helpers/video.ts` and `src/helpers/images.ts`. Keep fixtures synthetic and small, never real course material.
+Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, two small 1600×900 JPEGs for course images, and `worksheet.pdf`, a 596-byte one-page PDF. The video and images are made with ffmpeg, the commands in `src/helpers/video.ts` and `src/helpers/images.ts`; the PDF is written by hand (see `src/helpers/files.ts`). Keep fixtures synthetic and small, never real course material.
 
 Add a helper when a step will be reused, and keep each one waiting for what it did to show, so the next step starts from a settled page. Find elements by role and accessible name, as a user would (`getByRole('button', { name: 'Publish' })`), rather than by CSS. If something has no accessible name, that's worth fixing in the portal too.
 

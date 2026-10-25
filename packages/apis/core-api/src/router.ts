@@ -7,7 +7,7 @@ import {
   completeContentItem,
   myItemCompletions,
 } from './procedures/completion.js';
-import { videoUrl } from './procedures/content-item.js';
+import { fileUrl, videoUrl } from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -42,6 +42,7 @@ export const appRouter = router({
   contentItem: router({
     complete: completeContentItem,
     videoUrl,
+    fileUrl,
   }),
   quiz: router({
     view: viewQuiz,

@@ -218,6 +218,12 @@ export class MediaPipelineStack extends Stack {
     this.grantScheduleCleanupWrite(handler);
   }
 
+  // For a handler that only retires lesson media (e.g. a replaced file item's
+  // old version, #102), without submitting or cancelling transcode jobs.
+  public grantScheduleCleanup(handler: LambdaFunctionHandler) {
+    this.grantScheduleCleanupWrite(handler);
+  }
+
   // Grants permission to create/update a one-time cleanup schedule in
   // scheduleGroup, targeting schedulerRole -- shared by every handler that
   // can end up retiring a submission's nonce-scoped S3 output, whether by
