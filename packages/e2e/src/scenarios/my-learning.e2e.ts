@@ -51,7 +51,10 @@ test('a student keeps track of their courses, then signs out', async ({
   });
 
   await test.step('My Learning sorts them into in progress and completed', async () => {
-    await student.getByRole('link', { name: 'My Learning' }).click();
+    await student
+      .getByRole('banner')
+      .getByRole('link', { name: 'My Learning' })
+      .click();
     await expectAfterReloads(student, async () => {
       await expect(
         student.getByRole('tab', { name: 'In progress (1)' }),

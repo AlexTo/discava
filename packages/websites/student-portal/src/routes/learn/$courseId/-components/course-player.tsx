@@ -278,9 +278,7 @@ export function CoursePlayerLayout({
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          <Link to="/learn/$courseId/home" params={{ courseId }}>
-            {course.title}
-          </Link>
+          {course.title}
         </h1>
         {enrolment ? (
           <div className="w-full max-w-56 space-y-1.5">
