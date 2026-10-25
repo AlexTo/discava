@@ -83,3 +83,22 @@ export const takeQuiz = async (page: Page, title: string, answer: string) => {
   await quiz.getByRole('button', { name: 'Submit' }).click();
   return quiz;
 };
+
+// For what a page fetched before background work changed it: an instructor's
+// change (a student's open page has no reason to fetch the course again), or
+// progress recalculation landing after a page that doesn't wait for it (only
+// the course player does, #237) was loaded. Reloads until `check` passes.
+export const expectAfterReloads = async (
+  page: Page,
+  check: () => Promise<void>,
+) => {
+  await expect(async () => {
+    await page.reload();
+    await check();
+  }).toPass({ timeout: 30_000 });
+};
+
+// The open lesson's step links, in order (a lesson with more than one item
+// lists them).
+export const lessonSteps = (page: Page) =>
+  page.getByRole('navigation', { name: 'Lesson steps' }).getByRole('link');
