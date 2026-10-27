@@ -2,11 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  type createProgressEntity,
-  filterEffectivelyVisible,
-} from '@discava/core-table';
 import type { EntityItem } from 'electrodb';
+import type { createProgressEntity } from '../entities/progress.js';
+import { filterEffectivelyVisible } from './curriculum.js';
 
 export type LessonStatus = NonNullable<
   EntityItem<Awaited<ReturnType<typeof createProgressEntity>>>['status']

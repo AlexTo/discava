@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { readFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
 import { WORKSHEET_PDF } from '../helpers/files.js';
 import {
   addFileItem,
@@ -22,6 +21,7 @@ import {
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
 // A lesson file from upload to download (#102): the upload goes to S3Mock's

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { test } from '@playwright/test';
+
 import {
   addLesson,
   addModule,
@@ -20,6 +20,7 @@ import {
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
+import { test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 

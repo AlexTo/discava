@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, test } from '@playwright/test';
+
 import {
   COURSE_IMAGE_BARS,
   COURSE_IMAGE_PATTERN,
@@ -21,6 +21,7 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { expectAfterReloads, openCourse } from '../helpers/student-portal.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
 // A course's display image (#76): cropped in the browser to a 1280x720 JPEG,

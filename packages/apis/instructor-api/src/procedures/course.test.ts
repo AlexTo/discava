@@ -228,6 +228,35 @@ describe('createCourse', () => {
     expect(result).toEqual(course);
   });
 
+  // Invariant: courseInstructor.courseUpdatedAt is the course's updatedAt.
+  it("copies the course's updatedAt to its instructor when the clock ticked between them", async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2023-12-31') });
+    try {
+      await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: courseCreate.mock.calls[0][0].courseId,
+      instructorId: INSTRUCTOR_SUB,
+    });
+    expect(courseInstructorPatchSet).toHaveBeenCalledWith({
+      courseUpdatedAt: course.updatedAt,
+    });
+  });
+
+  it('writes nothing more when the timestamps already match', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date(course.updatedAt) });
+    try {
+      await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(courseInstructorPatch).not.toHaveBeenCalled();
+  });
+
   it('throws INTERNAL_SERVER_ERROR when the transaction is canceled', async () => {
     transactionGo.mockResolvedValue({ canceled: true, data: [] });
 

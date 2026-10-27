@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, test } from '@playwright/test';
+
 import { PORTALS } from '../helpers/portals.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { signIn, testUser } from '../helpers/users.js';
 
 // Each portal sends a signed-out visitor to the local OIDC server (#226), and

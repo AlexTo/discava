@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { Curriculum } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Curriculum } from './progress.js';
 import { recalculateStudent } from './recalculate.js';
 
 // The table, as the recalculation reads and writes it.

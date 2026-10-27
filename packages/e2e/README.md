@@ -32,6 +32,7 @@ When a test fails, its trace, screenshots and video are kept in `dist/packages/e
 
 One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it from the helpers in `src/helpers/`:
 
+- `table-invariants.ts`: `test` and `expect`. Import them from here, not from `@playwright/test` (see "Table invariants" below).
 - `users.ts`: `signIn`; `newUser` for a fresh user through the local OIDC page's "Someone else" form; `testUser` for Alice, Bob, Dan or Carol; `uniqueName` for course titles and the like.
 - `instructor-portal.ts`:
   - building: `createCourse`, `addModule`, `addLesson`, `addTextItem`, `addVideoItem`, `addFileItem`, `addQuiz`, or all at once with `createPublishedCourse`;
@@ -60,6 +61,16 @@ The tests run against whatever local data there is, and never reset it:
 - **The fixed test users** (Alice, Bob, Dan, Carol) are shared with whoever uses the local stack, so scenarios only read as them.
 
 Locally, each run leaves its users and courses behind. `pnpm nx run @discava/common-scripts:reset-local-data` clears everything (stop `pnpm dev` first).
+
+## Table invariants
+
+After every scenario, the core table must still keep the rules in `@discava/core-table`'s `helpers/invariants.ts` (#57): every course has an instructor, quiz summaries agree with their attempts, progress matches completions, and so on. `test` from `table-invariants.ts` checks them automatically. A scenario fails if it leaves a violation that wasn't there when it started, so older local data can't fail a run. The check waits up to 30 seconds for the progress recalculation to catch up.
+
+When one fails, the message names the rule and the record. To check the whole local table yourself, with `pnpm dev` running:
+
+```sh
+LOCAL_DEV=true pnpm exec tsx -e "import('@discava/core-table').then(async (t) => console.log(t.checkTableInvariants(await t.loadTableSnapshot(await t.createCoreTableService()))))"
+```
 
 ## Background work
 

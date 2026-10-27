@@ -17,6 +17,10 @@
     "src/**/*.ts",
     "playwright.config.ts"
   ],
-  "references": [],
+  "references": [
+    {
+      "path": "../databases/core-table/tsconfig.lib.json"
+    }
+  ],
   "exclude": []
 }

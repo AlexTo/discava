@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "catalog:",
+    "@discava/core-table": "workspace:*",
+    "electrodb": "catalog:",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
