@@ -119,9 +119,11 @@ export class CoreApiStack extends Stack {
     Object.values(integrations).forEach(({ handler }) =>
       coreTable.grantReadWriteData(handler),
     );
-    lessonMediaBucket.grantReadSigningKey(
-      this.privilegedHandler(integrations, 'contentItem.videoUrl'),
-    );
+    for (const op of ['contentItem.videoUrl', 'contentItem.fileUrl'] as const) {
+      lessonMediaBucket.grantReadSigningKey(
+        this.privilegedHandler(integrations, op),
+      );
+    }
 
     this.coreApi.restrictCorsTo(
       ...portals,

@@ -144,6 +144,10 @@ export class InstructorApiStack extends Stack {
     for (const op of TRANSCODE_CANCEL_PROCEDURES) {
       mediaPipeline.grantCancelTranscodeJob(this.privilegedHandler(op));
     }
+    // A replaced file's old version is retired by a scheduled cleanup (#102).
+    mediaPipeline.grantScheduleCleanup(
+      this.privilegedHandler('contentItem.updateFile'),
+    );
 
     this.instructorApi.restrictCorsTo(
       instructorPortal,
@@ -169,9 +173,21 @@ export class InstructorApiStack extends Stack {
     lessonMediaBucket.grantPut(
       this.privilegedHandler('contentItem.createVideoUploadUrl'),
     );
-    lessonMediaBucket.grantReadSigningKey(
-      this.privilegedHandler('contentItem.createVideoUrl'),
-    );
+    for (const op of [
+      'contentItem.createVideoUrl',
+      'contentItem.createFileUrl',
+    ] as const) {
+      lessonMediaBucket.grantReadSigningKey(this.privilegedHandler(op));
+    }
+    // A file item's file is copied in from the upload bucket when it's saved,
+    // and the copy deleted again if the save then fails (#102).
+    for (const op of [
+      'contentItem.createFile',
+      'contentItem.updateFile',
+    ] as const) {
+      lessonMediaBucket.grantPut(this.privilegedHandler(op));
+      lessonMediaBucket.grantDelete(this.privilegedHandler(op));
+    }
     // bestEffortDeleteContentItemVideos lists a ready item's whole
     // .../content-items/<id>/ prefix (manifest + segments) before batch-
     // deleting it, so every handler that can reach that best-effort cleanup
@@ -197,14 +213,21 @@ export class InstructorApiStack extends Stack {
   ) {
     // createContentItemVideoUploadUrl targets this bucket instead of
     // lessonMediaBucket -- the raw upload never sits behind CloudFront.
-    lessonMediaUploadBucket.grantPut(
-      this.privilegedHandler('contentItem.createVideoUploadUrl'),
-    );
+    for (const op of [
+      'contentItem.createVideoUploadUrl',
+      'contentItem.createFileUploadUrl',
+    ] as const) {
+      lessonMediaUploadBucket.grantPut(this.privilegedHandler(op));
+    }
     // createContentItemVideo/updateContentItemVideo check the upload
     // actually exists before recording/submitting a transcode job for it.
+    // createContentItemFile/updateContentItemFile check theirs too, then copy
+    // it (which reads it) into the lesson media bucket.
     for (const op of [
       'contentItem.createVideo',
       'contentItem.updateVideo',
+      'contentItem.createFile',
+      'contentItem.updateFile',
     ] as const) {
       lessonMediaUploadBucket.grantRead(this.privilegedHandler(op));
     }

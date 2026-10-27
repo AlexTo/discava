@@ -4,13 +4,21 @@
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileText, ListChecks, PencilLine, Video } from 'lucide-react';
+import {
+  FileText,
+  ListChecks,
+  Paperclip,
+  PencilLine,
+  Video,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 import { HiddenBadge } from '../hidden-badge';
 import { DragHandle, SortableList } from '../sortable-list';
 import { ContentItemVisibilityButton } from '../visibility-buttons';
+import { AttachLessonFileDialog } from './attach-lesson-file-dialog';
 import {
   AttachLessonVideoDialog,
   RemoveLessonVideoButton,
@@ -34,6 +42,9 @@ export type ContentItem = {
   studentActivityCount?: number;
   // A quiz's questions, to show how many it has.
   questions?: unknown[];
+  // A file item's file (#102).
+  fileName?: string;
+  fileSize?: number;
 };
 
 const ROW_CLASS =
@@ -123,6 +134,70 @@ export function LessonContentItemsRow({
               archive={archive}
               students={item.studentActivityCount}
               noun="quiz"
+            />
+          </>
+        )}
+      </>
+    ) : item.type === 'file' ? (
+      <>
+        {handle}
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+          <Paperclip className="size-3.5" />
+        </div>
+        <span className="flex-1 truncate text-xs font-medium">
+          {item.title}
+        </span>
+        {item.fileName && (
+          <span className="text-[11px] text-muted-foreground">
+            {fileKind(item.fileName)}
+            {item.fileSize !== undefined &&
+              ` · ${formatFileSize(item.fileSize)}`}
+          </span>
+        )}
+        {item.visibility === 'hidden' && <HiddenBadge />}
+        {!readOnly && (
+          <>
+            <ContentItemVisibilityButton
+              courseId={courseId}
+              moduleId={moduleId}
+              lessonId={lessonId}
+              contentItemId={item.contentItemId}
+              noun="file"
+              title={item.title}
+              visibility={item.visibility}
+              draft={draft}
+              className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
+            />
+            <AttachLessonFileDialog
+              courseId={courseId}
+              moduleId={moduleId}
+              lessonId={lessonId}
+              contentItemId={item.contentItemId}
+              title={item.title}
+              description={item.description}
+              fileName={item.fileName}
+              fileSize={item.fileSize}
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  type="button"
+                  aria-label={`Edit ${item.title}`}
+                  className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
+                >
+                  <PencilLine />
+                </Button>
+              }
+            />
+            <RemoveLessonTextButton
+              courseId={courseId}
+              moduleId={moduleId}
+              lessonId={lessonId}
+              contentItemId={item.contentItemId}
+              title={item.title}
+              archive={archive}
+              students={item.studentActivityCount}
+              noun="file"
             />
           </>
         )}
@@ -308,6 +383,16 @@ export function LessonContentItemsRow({
             trigger={
               <Button variant="outline" size="sm" type="button">
                 <ListChecks /> Quiz
+              </Button>
+            }
+          />
+          <AttachLessonFileDialog
+            courseId={courseId}
+            moduleId={moduleId}
+            lessonId={lessonId}
+            trigger={
+              <Button variant="outline" size="sm" type="button">
+                <Paperclip /> File
               </Button>
             }
           />

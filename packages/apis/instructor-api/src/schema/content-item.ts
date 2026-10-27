@@ -59,10 +59,24 @@ export const QuizContentItemSchema = z.object({
   questionsHash: z.string(),
 });
 
+// A document students download (#102): slides, a worksheet, a dataset.
+export const FileContentItemSchema = z.object({
+  ...ContentItemBaseSchema,
+  type: z.literal('file'),
+  // In the lesson media bucket.
+  s3Key: z.string(),
+  // The name it was uploaded with, which downloads are saved under.
+  fileName: z.string(),
+  // In bytes.
+  fileSize: z.number(),
+  mimeType: z.string(),
+});
+
 export const ContentItemSchema = z.discriminatedUnion('type', [
   VideoContentItemSchema,
   TextContentItemSchema,
   QuizContentItemSchema,
+  FileContentItemSchema,
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;
@@ -346,4 +360,127 @@ export const ReorderContentItemsOutputSchema = z.array(ContentItemSchema);
 
 export type IReorderContentItemsOutput = z.output<
   typeof ReorderContentItemsOutputSchema
+>;
+
+// What a file item may be (#102), by extension: documents, spreadsheets,
+// slides, plain text and images, and zip archives. Not HTML or anything
+// executable: files are served from the lesson media domain. The portal's
+// file picker offers the same list.
+export const LESSON_FILE_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  md: 'text/markdown',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  zip: 'application/zip',
+};
+
+export const LESSON_FILE_MAX_BYTES = 100 * 1024 * 1024;
+
+const FileNameSchema = z.string().trim().min(1).max(255);
+
+export const CreateContentItemFileUploadUrlInputSchema = z.object({
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonId: z.string(),
+  fileName: FileNameSchema,
+  // Signed into the upload URL, so the upload has to be exactly this size.
+  fileSize: z.number().int().positive().max(LESSON_FILE_MAX_BYTES),
+  // Set when replacing an existing file item's file.
+  contentItemId: z.string().optional(),
+});
+
+export type ICreateContentItemFileUploadUrlInput = z.output<
+  typeof CreateContentItemFileUploadUrlInputSchema
+>;
+
+export const CreateContentItemFileUploadUrlOutputSchema = z.object({
+  contentItemId: z.string(),
+  uploadUrl: z.string(),
+  // The headers the upload must be sent with (they're signed).
+  headers: z.record(z.string(), z.string()),
+  objectKey: z.string(),
+});
+
+export type ICreateContentItemFileUploadUrlOutput = z.output<
+  typeof CreateContentItemFileUploadUrlOutputSchema
+>;
+
+export const CreateContentItemFileInputSchema = z.object({
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonId: z.string(),
+  contentItemId: z.string(),
+  title: z.string().min(1).max(200),
+  description: z.string().optional(),
+  objectKey: z.string(),
+  fileName: FileNameSchema,
+});
+
+export type ICreateContentItemFileInput = z.output<
+  typeof CreateContentItemFileInputSchema
+>;
+
+export const CreateContentItemFileOutputSchema = FileContentItemSchema;
+
+export type ICreateContentItemFileOutput = z.output<
+  typeof CreateContentItemFileOutputSchema
+>;
+
+export const UpdateContentItemFileInputSchema = z
+  .object({
+    courseId: z.string(),
+    moduleId: z.string(),
+    lessonId: z.string(),
+    contentItemId: z.string(),
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().optional(),
+    // A new file, uploaded with createFileUploadUrl; both or neither.
+    objectKey: z.string().optional(),
+    fileName: FileNameSchema.optional(),
+  })
+  .refine(
+    ({ objectKey, fileName }) =>
+      (objectKey === undefined) === (fileName === undefined),
+    'objectKey and fileName go together',
+  );
+
+export type IUpdateContentItemFileInput = z.output<
+  typeof UpdateContentItemFileInputSchema
+>;
+
+export const UpdateContentItemFileOutputSchema = FileContentItemSchema;
+
+export type IUpdateContentItemFileOutput = z.output<
+  typeof UpdateContentItemFileOutputSchema
+>;
+
+export const CreateContentItemFileUrlInputSchema = z.object({
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonId: z.string(),
+  contentItemId: z.string(),
+});
+
+export type ICreateContentItemFileUrlInput = z.output<
+  typeof CreateContentItemFileUrlInputSchema
+>;
+
+// A short-lived link to download the file.
+export const CreateContentItemFileUrlOutputSchema = z.object({
+  url: z.string(),
+});
+
+export type ICreateContentItemFileUrlOutput = z.output<
+  typeof CreateContentItemFileUrlOutputSchema
 >;

@@ -5,13 +5,15 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { videoUrl } from './content-item.js';
+import { fileUrl, videoUrl } from './content-item.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
-const { db, getSignedCloudFrontCookies } = vi.hoisted(() => ({
-  db: {} as Record<string, any>,
-  getSignedCloudFrontCookies: vi.fn(),
-}));
+const { db, getSignedCloudFrontCookies, getSignedCloudFrontFileUrl } =
+  vi.hoisted(() => ({
+    db: {} as Record<string, any>,
+    getSignedCloudFrontCookies: vi.fn(),
+    getSignedCloudFrontFileUrl: vi.fn(),
+  }));
 
 const stored = (name: string) => ({
   get: vi.fn(() => ({
@@ -36,9 +38,10 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
     async (key: string) => `https://media.example.com/${key}`,
   ),
   getSignedCloudFrontCookies,
+  getSignedCloudFrontFileUrl,
 }));
 
-const caller = t.createCallerFactory(t.router({ videoUrl }));
+const caller = t.createCallerFactory(t.router({ videoUrl, fileUrl }));
 
 const USER_SUB = 'student-1';
 
@@ -82,6 +85,9 @@ beforeEach(() => {
     'CloudFront-Policy=p; Domain=example.com',
     'CloudFront-Signature=s; Domain=example.com',
   ]);
+  getSignedCloudFrontFileUrl.mockImplementation(
+    async (key: string) => `https://media.example.com/${key}?Signature=s`,
+  );
 });
 
 describe('contentItem.videoUrl', () => {
@@ -189,5 +195,63 @@ describe('contentItem.videoUrl', () => {
     await expect(anonymous.videoUrl(ref)).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
     });
+  });
+});
+
+describe('contentItem.fileUrl', () => {
+  const FILE =
+    'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/upload-1/worksheet.pdf';
+
+  beforeEach(() => {
+    db.contentItem = {
+      ...ref,
+      type: 'file',
+      status: 'ready',
+      s3Key: FILE,
+      fileName: 'worksheet.pdf',
+      visibility: 'visible',
+    };
+  });
+
+  it('returns an enrolled student a signed link to the file', async () => {
+    await expect(call().fileUrl(ref)).resolves.toEqual({
+      url: `https://media.example.com/${FILE}?Signature=s`,
+    });
+    expect(getSignedCloudFrontFileUrl).toHaveBeenCalledWith(FILE);
+  });
+
+  it('still downloads in an archived course the student is enrolled in', async () => {
+    db.course.status = 'archived';
+
+    await expect(call().fileUrl(ref)).resolves.toHaveProperty('url');
+  });
+
+  it.each([
+    ['not enrolled', () => delete db.enrolment],
+    ['dropped', () => (db.enrolment.status = 'dropped')],
+  ])('is FORBIDDEN to a student who is %s', async (_, arrange) => {
+    arrange();
+
+    await expect(call().fileUrl(ref)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(getSignedCloudFrontFileUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the course is gone', () => delete db.course],
+    ['the item is gone', () => delete db.contentItem],
+    ['its module is hidden', () => (db.module.visibility = 'hidden')],
+    ['its lesson is archived', () => (db.lesson.archivedAt = '2024-01-01')],
+    ['it is hidden', () => (db.contentItem.visibility = 'hidden')],
+    ['it is archived', () => (db.contentItem.archivedAt = '2024-01-01')],
+    ['it is not a file', () => (db.contentItem.type = 'video')],
+  ])('is NOT_FOUND when %s', async (_, arrange) => {
+    arrange();
+
+    await expect(call().fileUrl(ref)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(getSignedCloudFrontFileUrl).not.toHaveBeenCalled();
   });
 });

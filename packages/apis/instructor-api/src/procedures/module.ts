@@ -232,13 +232,19 @@ const hardDeleteModule = async (
 
   // Best-effort: the DynamoDB records are the source of truth for the
   // module's content, so a failure to remove the underlying S3 objects is
-  // logged rather than thrown. Only video content items have an S3 object
-  // to clean up (and possibly a still-running transcode job).
+  // logged rather than thrown. Video and file items have S3 objects to
+  // clean up (and a video possibly a still-running transcode job); a file's
+  // sits in a version folder the same cleanup retires (#102).
   const videoContentItems = contentItems.filter(
     (item) => item.type === 'video',
   );
   await bestEffortCancelTranscodeJobs(logger, videoContentItems);
-  await bestEffortDeleteContentItemVideos(logger, videoContentItems);
+  await bestEffortDeleteContentItemVideos(
+    logger,
+    contentItems.filter(
+      (item) => item.type === 'video' || item.type === 'file',
+    ),
+  );
   await bestEffortRetirePreviousVersions(logger, videoContentItems);
 };
 

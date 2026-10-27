@@ -59,8 +59,9 @@ const PUBLIC: ReadonlySet<Operations> = new Set<Operations>(PUBLIC_OPERATIONS);
  * permissions off the router that serves every other procedure.
  */
 export const CORE_API_DEDICATED_FUNCTIONS = {
-  // Core-api's only holder of the CloudFront signing key
-  VideoUrl: ['contentItem.videoUrl'],
+  // Core-api's only holder of the CloudFront signing key: video playback and
+  // file download links
+  MediaUrl: ['contentItem.videoUrl', 'contentItem.fileUrl'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 const functionNameFor = (op: Operations | '$router'): string =>

@@ -57,13 +57,17 @@ type Operations = Procedures<AppRouter>;
  * procedure.
  */
 export const INSTRUCTOR_API_DEDICATED_FUNCTIONS = {
-  // The only holder of the CloudFront signing key
-  VideoUrl: ['contentItem.createVideoUrl'],
+  // The only holder of the CloudFront signing key: video previews and file
+  // download links
+  MediaUrl: ['contentItem.createVideoUrl', 'contentItem.createFileUrl'],
   // Writes and deletes lesson media, and submits/cancels transcode jobs
   Media: [
     'contentItem.createVideoUploadUrl',
     'contentItem.createVideo',
     'contentItem.updateVideo',
+    'contentItem.createFileUploadUrl',
+    'contentItem.createFile',
+    'contentItem.updateFile',
     'contentItem.delete',
     'contentItem.deletePermanently',
     'lesson.delete',

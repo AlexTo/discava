@@ -63,7 +63,17 @@ export const lessonItem = (page: Page, title: string) =>
 export const lessonVideo = (page: Page, title: string) =>
   page.locator('video').and(page.getByLabel(title, { exact: true }));
 
-// Marks a text or video item done, and waits for the item to say so (its
+// Downloads the file item `title`'s file through its Download button, and
+// returns the download.
+export const downloadLessonFile = async (page: Page, title: string) => {
+  const downloading = page.waitForEvent('download');
+  await lessonItem(page, title)
+    .getByRole('button', { name: 'Download' })
+    .click();
+  return downloading;
+};
+
+// Marks a text, video or file item done, and waits for the item to say so (its
 // button gives way to a "Done" label).
 export const markItemDone = async (page: Page, title: string) => {
   const item = lessonItem(page, title);

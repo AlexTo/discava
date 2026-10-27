@@ -143,6 +143,11 @@ const cleanUpDeletedContentItem = async (
     }
     await bestEffortRetirePreviousVersions(logger, [contentItem]);
   }
+  // A file item's file sits in its own version folder, as a ready video's
+  // output does, so the same cleanup retires it (#102).
+  if (contentItem.type === 'file' && contentItem.s3Key) {
+    await bestEffortDeleteContentItemVideos(logger, [contentItem]);
+  }
 };
 
 // Type-agnostic: works the same for every content item type (video, text,

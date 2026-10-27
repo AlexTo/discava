@@ -7,9 +7,25 @@ import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from '@discava/common-shadcn/components/ui/item';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useQuery } from '@tanstack/react-query';
-import { CircleCheck, FileText, ListChecks, Play } from 'lucide-react';
+import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  CircleCheck,
+  FileText,
+  ListChecks,
+  Paperclip,
+  Play,
+} from 'lucide-react';
+import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
@@ -24,6 +40,7 @@ export const ITEM_TYPES = {
   text: { label: 'Reading', icon: FileText },
   video: { label: 'Video', icon: Play },
   quiz: { label: 'Quiz', icon: ListChecks },
+  file: { label: 'File', icon: Paperclip },
 } as const;
 
 // The element id a step in the step bar scrolls to.
@@ -83,8 +100,71 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
   );
 }
 
-// Text and video items are done when the student says so, never on their
-// own. A quiz completes itself once passed or out of attempts.
+// A file item's file (#102): what it is, and a Download button. Links last
+// minutes, so each click asks for a fresh one, then the browser goes to it;
+// the file is stored to download (not open) under its name. Downloading
+// doesn't mark it done: the student does that, as for text and video.
+function FileDownload({
+  item,
+}: {
+  item: Extract<PlayerItem, { type: 'file' }>;
+}) {
+  const trpc = useCoreApi();
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<unknown>();
+  const [isFetching, setIsFetching] = useState(false);
+  const { courseId, moduleId, lessonId, contentItemId } = item;
+
+  const download = async () => {
+    setError(undefined);
+    setIsFetching(true);
+    try {
+      const { url } = await queryClient.fetchQuery({
+        ...trpc.contentItem.fileUrl.queryOptions({
+          courseId,
+          moduleId,
+          lessonId,
+          contentItemId,
+        }),
+        staleTime: 0,
+      });
+      window.location.href = url;
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Item variant="outline">
+        <ItemMedia variant="icon">
+          <Paperclip />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{item.fileName}</ItemTitle>
+          <ItemDescription>
+            {fileKind(item.fileName)} · {formatFileSize(item.fileSize)}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          <Button onClick={() => void download()} disabled={isFetching}>
+            {isFetching ? 'Preparing…' : 'Download'}
+          </Button>
+        </ItemActions>
+      </Item>
+      {error ? (
+        <Alert type="error" header="Couldn't download this file">
+          {apiErrorMessage(error)}
+        </Alert>
+      ) : null}
+    </div>
+  );
+}
+
+// Text, video and file items are done when the student says so, never on
+// their own. A quiz completes itself once passed or out of attempts.
 function MarkAsDone({
   item,
   done,
@@ -134,8 +214,8 @@ function MarkAsDone({
   );
 }
 
-// One content item of a lesson: its title, its content and, for text and
-// video, Mark as done.
+// One content item of a lesson: its title, its content and, for text, video
+// and file items, Mark as done.
 export function ContentItem({
   item,
   done,
@@ -177,6 +257,7 @@ export function ContentItem({
         <RichTextView value={item.body} className="prose-base" />
       ) : null}
       {item.type === 'video' ? <VideoPlayer item={item} /> : null}
+      {item.type === 'file' ? <FileDownload item={item} /> : null}
       {item.type === 'quiz' ? (
         <QuizItem item={item} readOnly={readOnly} />
       ) : null}
