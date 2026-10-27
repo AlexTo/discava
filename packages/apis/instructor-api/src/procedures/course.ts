@@ -39,8 +39,8 @@ export const createCourse = courseProcedure
     const { sub: currentUser } = ctx.user;
     const { title, description } = input;
     // Course.updatedAt is computed by ElectroDB at write time (not settable
-    // here), so this is only an approximation of its real value - fine for a
-    // brand new course that's never been touched since.
+    // here), so this is only an approximation of its real value, corrected
+    // below once the course is read back.
     const courseUpdatedAt = new Date().toISOString();
 
     // A course must always have at least one instructor, so the course and
@@ -71,6 +71,15 @@ export const createCourse = courseProcedure
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to create course',
       });
+    }
+
+    // The clock can tick between the two timestamps; the instructor's copy
+    // has to be the course's own (#57). The creator is its only instructor.
+    if (course.updatedAt !== courseUpdatedAt) {
+      await coreTable.entities.courseInstructor
+        .patch({ courseId, instructorId: currentUser })
+        .set({ courseUpdatedAt: course.updatedAt })
+        .go();
     }
 
     return course;

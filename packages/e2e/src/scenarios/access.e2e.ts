@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, test } from '@playwright/test';
+
 import {
   addLesson,
   addModule,
@@ -16,6 +16,7 @@ import {
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, testUser, uniqueName } from '../helpers/users.js';
 
 // Who may see what, checked from the portals: the APIs refuse, and the pages

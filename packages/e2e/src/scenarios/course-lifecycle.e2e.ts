@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, test } from '@playwright/test';
+
 import {
   addLesson,
   addModule,
@@ -25,6 +25,7 @@ import {
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
 // Changing a course after it's published: what an enrolled student sees, and

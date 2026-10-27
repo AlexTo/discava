@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  type Curriculum,
+  computeProgress,
   type createCoreTableService,
   isConditionalCheckFailed,
 } from '@discava/core-table';
-import { type Curriculum, computeProgress } from './progress.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
