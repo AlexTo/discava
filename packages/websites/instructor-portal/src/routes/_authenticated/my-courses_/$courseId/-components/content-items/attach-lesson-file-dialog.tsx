@@ -29,7 +29,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Upload } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { type FileRejection, useDropzone } from 'react-dropzone';
 import { Alert } from '../../../../../../components/alert';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
@@ -134,6 +134,9 @@ export function AttachLessonFileDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [titleValue, setTitleValue] = useState(title ?? '');
+  // Whether the title has been typed in since the dialog opened. Once it has,
+  // an upload finishing never changes it (#256).
+  const titleTyped = useRef(false);
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
   const [error, setError] = useState<string>();
@@ -177,11 +180,14 @@ export function AttachLessonFileDialog({
         fileName: file.name,
         fileSize: file.size,
       });
-      // A starting title, the name without its extension, unless one was
-      // typed (maybe while the file uploaded).
-      setTitleValue((current) =>
-        current.trim() ? current : file.name.replace(/\.[^.]+$/, ''),
-      );
+      // A starting title, the name without its extension, unless there's a
+      // title already or one was typed, even if only just: the upload can
+      // finish between keystrokes, and the name would land among them.
+      if (!titleTyped.current) {
+        setTitleValue((current) =>
+          current.trim() ? current : file.name.replace(/\.[^.]+$/, ''),
+        );
+      }
     } catch (failure) {
       setError(apiErrorMessage(failure, 'Failed to upload the file'));
     } finally {
@@ -256,6 +262,7 @@ export function AttachLessonFileDialog({
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
         if (nextOpen) {
+          titleTyped.current = false;
           setTitleValue(title ?? '');
           setDescriptionValue(description ?? '');
           setPendingUpload(undefined);
@@ -285,7 +292,10 @@ export function AttachLessonFileDialog({
           <Input
             id="lesson-file-title"
             value={titleValue}
-            onChange={(event) => setTitleValue(event.target.value)}
+            onChange={(event) => {
+              titleTyped.current = true;
+              setTitleValue(event.target.value);
+            }}
             placeholder="e.g. Week 1 slides"
             autoFocus
           />

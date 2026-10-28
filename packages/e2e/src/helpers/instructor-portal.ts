@@ -96,8 +96,8 @@ export const addFileItem = async (
   await page.getByRole('button', { name: 'File', exact: true }).last().click();
   const dialog = page.getByRole('dialog', { name: 'Add file' });
   await dialog.getByLabel('File to attach').setInputFiles(file);
-  // Once uploaded, the dialog starts the title from the file's name. Wait
-  // for that before typing, or it can land mid-way through the typing.
+  // Wait for the upload: the dialog then starts the title from the file's
+  // name, which this types over.
   const titleField = dialog.getByLabel('Title', { exact: true });
   await expect(titleField).not.toHaveValue('');
   await titleField.fill(title);
