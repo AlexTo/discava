@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@discava/common-tiptap": "workspace:*",
+    "@discava/common-web-utils": "workspace:*",
     "@tailwindcss/typography": "catalog:",
     "@tiptap/core": "catalog:",
     "@tiptap/pm": "catalog:",
@@ -23,8 +24,7 @@
     "tslib": "^2.3.0",
     "tw-animate-css": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:",
-    "@discava/common-web-utils": "workspace:*"
+    "vitest": "catalog:"
   },
   "license": "Apache-2.0",
   "imports": {

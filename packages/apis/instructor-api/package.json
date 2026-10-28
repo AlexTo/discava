@@ -15,6 +15,8 @@
     "@aws-sdk/client-scheduler": "catalog:",
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@discava/common-server-utils": "workspace:*",
+    "@discava/common-tiptap": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
@@ -23,9 +25,7 @@
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
     "uuid": "catalog:",
-    "zod": "catalog:",
-    "@discava/common-tiptap": "workspace:*",
-    "@discava/common-server-utils": "workspace:*"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",
