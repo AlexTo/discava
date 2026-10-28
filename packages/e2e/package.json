@@ -5,7 +5,10 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "catalog:",
+    "@discava/core-api": "workspace:*",
     "@discava/core-table": "workspace:*",
+    "@discava/instructor-api": "workspace:*",
+    "@trpc/client": "catalog:",
     "electrodb": "catalog:",
     "tslib": "^2.3.0"
   },

@@ -13,6 +13,7 @@ import {
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireNotArchived,
+  writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
 import {
@@ -182,14 +183,8 @@ export const createContentItemFile = courseProcedure
     const file = await takeUpload(key, objectKey, fileName);
 
     // Appended to the end of the lesson, as other content is.
-    const { data: contentItems } = await coreTable.entities.contentItem.query
-      .primary({ courseId, moduleId, lessonId })
-      .go();
-    const order =
-      contentItems.reduce((max, item) => Math.max(max, item.order), 0) + 1;
-
     try {
-      await writeUnderActiveAncestors(coreTable, key, (entities) => [
+      await writeAtEnd(coreTable, key, (entities, order) => [
         entities.contentItem
           .create({
             ...key,

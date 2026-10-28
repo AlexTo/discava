@@ -15,13 +15,13 @@ import {
   initialVisibilityFields,
   isDraftCourse,
   MAX_TRANSACTION_ITEMS,
-  nextOrder,
   requireActiveCourse,
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
   transactionConflict,
+  writeAtEnd,
   writeInActiveCourse,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
@@ -239,37 +239,23 @@ export const createLesson = courseProcedure
       'Restore the module before adding lessons to it',
     );
 
-    // New lessons append to the end of their module. `order` isn't part of
-    // any key (lesson counts per module are small enough to sort
-    // client-side), so this is a plain query-and-increment rather than an
-    // atomic counter.
-    const { data: lessons } = await coreTable.entities.lesson.query
-      .primary({ courseId, moduleId })
-      .go();
-    const order =
-      lessons.reduce((max, lesson) => Math.max(max, lesson.order), 0) + 1;
-
-    // Created in the same transaction as a check that the module is still
-    // there and not archived, so a module archived or deleted after the
+    // Appended to the module in the same transaction as a check that it's
+    // still there and not archived, so a module archived or deleted after the
     // check above can't end up with a new lesson.
     const lessonId = uuidv7();
-    await writeUnderActiveAncestors(
-      coreTable,
-      { courseId, moduleId },
-      (entities) => [
-        entities.lesson
-          .create({
-            lessonId,
-            moduleId,
-            courseId,
-            title,
-            description,
-            order,
-            ...initialVisibilityFields(course),
-          })
-          .commit(),
-      ],
-    );
+    await writeAtEnd(coreTable, { courseId, moduleId }, (entities, order) => [
+      entities.lesson
+        .create({
+          lessonId,
+          moduleId,
+          courseId,
+          title,
+          description,
+          order,
+          ...initialVisibilityFields(course),
+        })
+        .commit(),
+    ]);
 
     // Transactions don't return the written attributes.
     return getLessonOrThrow(coreTable, { courseId, moduleId, lessonId });
@@ -529,24 +515,12 @@ export const restoreLesson = courseProcedure
     }
     requireNotArchived(module, 'Restore the module first');
 
-    // A restored lesson goes to the end of its module; the instructor drags it
-    // where they want. Every page: all siblings count.
-    const { data: lessons } = await coreTable.entities.lesson.query
-      .primary({ courseId, moduleId })
-      .go({ pages: 'all' });
-    // Conditioned on the module still being active, so a module archived
-    // after the check above doesn't end up with an active lesson under it.
-    await writeUnderActiveAncestors(
-      coreTable,
-      { courseId, moduleId },
-      (entities) => [
-        entities.lesson
-          .patch(key)
-          .set({ order: nextOrder(lessons) })
-          .remove(['archivedAt'])
-          .commit(),
-      ],
-    );
+    // A restored lesson goes to the end of its module, conditioned on the
+    // module still being active, so a module archived after the check above
+    // doesn't end up with an active lesson under it.
+    await writeAtEnd(coreTable, { courseId, moduleId }, (entities, order) => [
+      entities.lesson.patch(key).set({ order }).remove(['archivedAt']).commit(),
+    ]);
 
     // Transactions don't return the written attributes.
     return getLessonOrThrow(coreTable, key);

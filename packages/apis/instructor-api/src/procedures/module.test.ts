@@ -11,6 +11,8 @@ import { createModule, deleteModule, updateModule } from './module.js';
 const {
   courseGet,
   courseInstructorGet,
+  courseInstructorQueryPrimary,
+  courseInstructorPatch,
   moduleQueryPrimary,
   moduleCreate,
   moduleGet,
@@ -29,6 +31,8 @@ const {
 } = vi.hoisted(() => ({
   courseGet: vi.fn(),
   courseInstructorGet: vi.fn(),
+  courseInstructorQueryPrimary: vi.fn(),
+  courseInstructorPatch: vi.fn(),
   moduleQueryPrimary: vi.fn(),
   moduleCreate: vi.fn(),
   moduleGet: vi.fn(),
@@ -53,6 +57,8 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       course: { get: courseGet },
       courseInstructor: {
         get: courseInstructorGet,
+        query: { primary: courseInstructorQueryPrimary },
+        patch: courseInstructorPatch,
       },
       module: {
         query: {
@@ -163,6 +169,16 @@ beforeEach(() => {
       data: { courseId: COURSE_ID, instructorId: INSTRUCTOR_SUB },
     }),
   });
+  // Claiming an order updates the course, so its instructors' copy of
+  // updatedAt is refreshed.
+  courseInstructorQueryPrimary.mockReturnValue({
+    go: vi.fn().mockResolvedValue({
+      data: [{ courseId: COURSE_ID, instructorId: INSTRUCTOR_SUB }],
+    }),
+  });
+  courseInstructorPatch.mockReturnValue({
+    set: () => ({ go: vi.fn().mockResolvedValue({}) }),
+  });
   moduleQueryPrimary.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: [] }),
   });
@@ -194,6 +210,10 @@ beforeEach(() => {
     fn({
       course: {
         check: () => ({ where: () => ({ commit: () => ({}) }) }),
+        // Adding or restoring a module claims the course's next order (#71).
+        patch: () => ({
+          set: () => ({ where: () => ({ commit: () => ({}) }) }),
+        }),
       },
       module: {
         create: moduleCreate,

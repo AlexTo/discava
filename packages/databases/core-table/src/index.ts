@@ -39,6 +39,11 @@ export {
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
 export {
+  type StudentActivity,
+  studentActivityAt,
+  studentActivityWrites,
+} from './helpers/student-activity.js';
+export {
   type IUserProfile,
   profileChanged,
   syncUserProfile,

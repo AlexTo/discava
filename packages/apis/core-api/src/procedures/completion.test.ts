@@ -30,6 +30,7 @@ const attr = new Proxy({}, { get: (_, name) => name });
 const ops = {
   eq: (name: string, value: unknown) => `${name} = ${value}`,
   ne: (name: string, value: unknown) => `${name} <> ${value}`,
+  lte: (name: string, value: unknown) => `${name} <= ${value}`,
   exists: (name: string) => `exists(${name})`,
   notExists: (name: string) => `notExists(${name})`,
 };
@@ -244,7 +245,8 @@ describe('complete', () => {
       op: 'patch',
       key: { courseId: 'course-1', userId: USER_SUB },
       set: { lastActivityAt: result.completedAt },
-      condition: 'exists(userId) AND status <> dropped',
+      // ...and no later activity landed since (#71).
+      condition: `exists(userId) AND status <> dropped AND (notExists(lastActivityAt) OR lastActivityAt <= ${result.completedAt})`,
     });
     // For the caller, never for a user named in the input.
     expect(itemOf(transaction, 'itemCompletion').data).toMatchObject({
@@ -263,6 +265,36 @@ describe('complete', () => {
     expect(itemOf(transactions[0], 'contentItem').add).toEqual({
       studentActivityCount: 1,
     });
+  });
+
+  // Invariant: a student's activity times never go backwards, even when
+  // another Lambda's clock is ahead (#71).
+  it('records it no earlier than the student’s last activity', async () => {
+    const later = new Date(Date.now() + 60_000).toISOString();
+    db.enrolment = { ...db.enrolment, lastActivityAt: later };
+
+    await expect(complete()).resolves.toMatchObject({ completedAt: later });
+    expect(itemOf(transactions[0], 'enrolment').set).toEqual({
+      lastActivityAt: later,
+    });
+  });
+
+  it('retries with a later time when another activity landed first', async () => {
+    const later = new Date(Date.now() + 60_000).toISOString();
+    transactionGo.mockImplementationOnce(async () => {
+      db.enrolment = { ...db.enrolment, lastActivityAt: later };
+      return cancelledWith([
+        'None',
+        'None',
+        'None',
+        'None',
+        'ConditionalCheckFailed',
+        'None',
+      ]);
+    });
+
+    await expect(complete()).resolves.toMatchObject({ completedAt: later });
+    expect(transactions).toHaveLength(2);
   });
 
   // Invariant: at most one completion per student and item, counted once.

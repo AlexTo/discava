@@ -19,7 +19,13 @@
   ],
   "references": [
     {
+      "path": "../apis/instructor-api/tsconfig.lib.json"
+    },
+    {
       "path": "../databases/core-table/tsconfig.lib.json"
+    },
+    {
+      "path": "../apis/core-api/tsconfig.lib.json"
     }
   ],
   "exclude": []

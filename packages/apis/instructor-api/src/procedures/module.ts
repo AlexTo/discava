@@ -16,12 +16,12 @@ import {
   initialVisibilityFields,
   isDraftCourse,
   MAX_TRANSACTION_ITEMS,
-  nextOrder,
   requireActiveCourse,
   requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
   transactionConflict,
+  writeAtEnd,
   writeInActiveCourse,
 } from '../lib/course-lifecycle.js';
 import { bestEffortCancelTranscodeJobs } from '../lib/mediaconvert-client.js';
@@ -259,18 +259,9 @@ export const createModule = courseProcedure
     const course = await getCourseOrThrow(coreTable, courseId);
     requireCourseNotArchived(course);
 
-    // New modules append to the end of the course. `order` isn't part of any
-    // key (module counts per course are small enough to sort client-side),
-    // so this is a plain query-and-increment rather than an atomic counter.
-    const { data: modules } = await coreTable.entities.module.query
-      .primary({ courseId })
-      .go();
-    const order =
-      modules.reduce((max, module) => Math.max(max, module.order), 0) + 1;
-
-    // Created behind a check that the course still isn't archived.
+    // Appended to the course, behind a check that it still isn't archived.
     const moduleId = uuidv7();
-    await writeInActiveCourse(coreTable, courseId, (entities) => [
+    await writeAtEnd(coreTable, { courseId }, (entities, order) => [
       entities.module
         .create({
           moduleId,
@@ -551,15 +542,11 @@ export const restoreModule = courseProcedure
     // An archived course is read-only: restore the course first.
     await requireActiveCourse(coreTable, courseId);
 
-    // A restored module goes to the end of the course; the instructor drags
-    // it where they want. Every page: all siblings count.
-    const { data: modules } = await coreTable.entities.module.query
-      .primary({ courseId })
-      .go({ pages: 'all' });
-    await writeInActiveCourse(coreTable, courseId, (entities) => [
+    // A restored module goes to the end of the course.
+    await writeAtEnd(coreTable, { courseId }, (entities, order) => [
       entities.module
         .patch({ courseId, moduleId })
-        .set({ order: nextOrder(modules) })
+        .set({ order })
         .remove(['archivedAt'])
         .commit(),
     ]);
