@@ -308,9 +308,11 @@ describe('publicListCourses', () => {
     await callAnonymously().publicListCourses({});
 
     expect(courseQueryByStatus).toHaveBeenCalledWith({ status: 'published' });
+    // Newest first: the sort key is the courseId, a UUIDv7.
     expect(courseQueryByStatus.mock.results[0].value.go).toHaveBeenCalledWith({
       cursor: undefined,
       limit: 10,
+      order: 'desc',
     });
   });
 
@@ -327,6 +329,7 @@ describe('publicListCourses', () => {
     expect(courseQueryByStatus.mock.results[0].value.go).toHaveBeenCalledWith({
       cursor: 'prev-page',
       limit: 20,
+      order: 'desc',
     });
     expect(result).toEqual({ items: [course], cursor: 'next-page' });
   });

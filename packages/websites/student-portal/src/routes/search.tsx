@@ -15,8 +15,8 @@ import { useCoreApi } from '../hooks/useCoreApi';
 
 // What the top bar's search finds: published courses whose title or
 // description contain every word searched for, in any order and case.
-// Filtered in the browser from the first 100 published courses, the same list
-// the catalogue shows, until there's search on the server (#53).
+// Filtered in the browser from the newest 100 published courses, the same
+// list the catalogue shows, until there's search on the server (#53).
 export const matchesQuery = (
   course: { title: string; description?: string },
   query: string,

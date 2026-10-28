@@ -56,6 +56,9 @@ test('a student keeps track of their courses, then signs out', async ({
       .getByRole('banner')
       .getByRole('link', { name: 'My Learning' })
       .click();
+    // Both tabs, and "Continue" once the unfinished course's progress is
+    // above 0%: each comes from the progress recalculation, a few seconds
+    // after the item was marked done.
     await expectAfterReloads(student, async () => {
       await expect(
         student.getByRole('tab', { name: 'In progress (1)' }),
@@ -63,10 +66,10 @@ test('a student keeps track of their courses, then signs out', async ({
       await expect(
         student.getByRole('tab', { name: 'Completed (1)' }),
       ).toBeVisible();
+      await expect(
+        student.getByRole('link', { name: `Continue: ${unfinished}` }),
+      ).toBeVisible({ timeout: 2_000 });
     });
-    await expect(
-      student.getByRole('link', { name: `Continue: ${unfinished}` }),
-    ).toBeVisible();
 
     await student.getByRole('tab', { name: 'Completed (1)' }).click();
     await expect(
