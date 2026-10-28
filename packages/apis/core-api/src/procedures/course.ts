@@ -82,10 +82,12 @@ export const publicListCourses = publicCourseProcedure
     const coreTable = ctx.coreTable!;
     const { cursor, limit } = input;
 
+    // byStatus's sort key is the courseId, a UUIDv7, so order: 'desc' lists
+    // the newest courses first.
     const { data: courses, cursor: nextCursor } =
       await coreTable.entities.course.query
         .byStatus({ status: 'published' })
-        .go({ cursor, limit });
+        .go({ cursor, limit, order: 'desc' });
 
     return { items: courses, cursor: nextCursor };
   });
