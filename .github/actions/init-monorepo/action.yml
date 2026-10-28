@@ -49,7 +49,7 @@ runs:
     - name: Use PNPM
       id: pnpm-setup-1
       continue-on-error: true
-      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         install: 'false'
     - name: Wait before trying PNPM again
@@ -60,7 +60,7 @@ runs:
       id: pnpm-setup-2
       if: ${{ steps.pnpm-setup-1.outcome == 'failure' }}
       continue-on-error: true
-      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         install: 'false'
     - name: Wait before trying PNPM a last time
@@ -69,7 +69,7 @@ runs:
       run: sleep 45
     - name: Use PNPM (last try)
       if: ${{ steps.pnpm-setup-2.outcome == 'failure' }}
-      uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         install: 'false'
     # Node 24 matches the Lambda runtime (nodejs24.x).
@@ -79,7 +79,7 @@ runs:
         node-version: 24
     - name: Install the latest version of uv
       if: ${{ inputs.setup-uv == 'true' }}
-      uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       with:
         version: 'latest'
     - name: Get pnpm store directory
