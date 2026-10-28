@@ -196,7 +196,12 @@ const committable = (chain: any): any => {
 const transactionEntities = {
   course: { check: (key: unknown) => committable(courseCheck(key)) },
   module: { check: (key: unknown) => committable(moduleCheck(key)) },
-  lesson: { check: (key: unknown) => committable(lessonCheck(key)) },
+  lesson: {
+    check: (key: unknown) => committable(lessonCheck(key)),
+    // Appending to the lesson claims its next order (#71), behind the same
+    // condition as the check.
+    patch: (key: unknown) => committable({ set: () => lessonCheck(key) }),
+  },
   contentItem: {
     create: (item: unknown) => committable(contentItemCreate(item)),
     patch: (key: unknown) => committable(contentItemPatch(key)),

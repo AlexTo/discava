@@ -886,9 +886,18 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1151.0
+      '@discava/core-api':
+        specifier: workspace:*
+        version: link:../apis/core-api
       '@discava/core-table':
         specifier: workspace:*
         version: link:../databases/core-table
+      '@discava/instructor-api':
+        specifier: workspace:*
+        version: link:../apis/instructor-api
+      '@trpc/client':
+        specifier: 'catalog:'
+        version: 11.19.0(@trpc/server@11.19.0(typescript@6.0.3))(typescript@6.0.3)
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1151.0)

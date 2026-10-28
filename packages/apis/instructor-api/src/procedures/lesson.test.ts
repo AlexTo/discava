@@ -196,6 +196,10 @@ beforeEach(() => {
       },
       module: {
         check: () => ({ where: () => ({ commit: () => ({}) }) }),
+        // Adding a lesson claims the module's next order (#71).
+        patch: () => ({
+          set: () => ({ where: () => ({ commit: () => ({}) }) }),
+        }),
       },
       lesson: {
         create: lessonCreate,

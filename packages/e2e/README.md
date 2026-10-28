@@ -48,10 +48,20 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
 - `video.ts`: `expectToPlay`, which checks a `<video>` really plays, and `THREE_SECOND_VIDEO`, the test video.
 - `files.ts`: `WORKSHEET_PDF`, the test file for file items.
 - `portals.ts`: where everything runs.
+- `api.ts`: `apiUser`, a new user signed in on the local OIDC server without a browser, with a typed client for each API; and `createPublishedCourseViaApi`. For `src/concurrency/`.
 
 Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, two small 1600×900 JPEGs for course images, and `worksheet.pdf`, a 596-byte one-page PDF. The video and images are made with ffmpeg, the commands in `src/helpers/video.ts` and `src/helpers/images.ts`; the PDF is written by hand (see `src/helpers/files.ts`). Keep fixtures synthetic and small, never real course material.
 
 Add a helper when a step will be reused, and keep each one waiting for what it did to show, so the next step starts from a settled page. Find elements by role and accessible name, as a user would (`getByRole('button', { name: 'Publish' })`), rather than by CSS. If something has no accessible name, that's worth fixing in the portal too.
+
+## Concurrent requests
+
+The scenarios do one thing at a time, as a person in one tab does, so they never make two requests race. `src/concurrency/` does (#71). Its tests call the APIs directly and fire the same request several times at once, as two tabs or a double click would:
+- a student completing items or submitting a quiz;
+- an instructor adding modules, lessons or items;
+- a course archived while a student is completing an item.
+
+Each test checks what the callers were told. The table-invariants fixture then checks the table they left behind. Add a test here when a write could race another, for example a new procedure that reads a value and then writes based on it.
 
 ## Data
 
