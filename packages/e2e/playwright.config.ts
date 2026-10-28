@@ -12,8 +12,10 @@ const CI = !!process.env.CI;
 // OIDC server standing in for AWS. Locally they reuse a running `pnpm dev`;
 // in CI they start one.
 export default defineConfig({
-  testDir: './src/scenarios',
-  testMatch: '**/*.e2e.ts',
+  // User flows in src/scenarios; requests racing each other, made straight to
+  // the APIs, in src/concurrency.
+  testDir: './src',
+  testMatch: ['scenarios/**/*.e2e.ts', 'concurrency/**/*.e2e.ts'],
   outputDir: '../../dist/packages/e2e/test-results',
   // Scenarios share one stack; each makes its own users and courses, so they
   // could run side by side, but one at a time keeps a slow transcode or stream

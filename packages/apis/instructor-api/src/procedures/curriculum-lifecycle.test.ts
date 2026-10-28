@@ -49,6 +49,8 @@ const TEXT_BODY = JSON.stringify({
 });
 const {
   courseInstructorGet,
+  courseInstructorQueryPrimary,
+  courseInstructorPatch,
   courseGet,
   moduleGet,
   moduleCreate,
@@ -69,6 +71,8 @@ const {
   bestEffortCancelTranscodeJobs,
 } = vi.hoisted(() => ({
   courseInstructorGet: vi.fn(),
+  courseInstructorQueryPrimary: vi.fn(),
+  courseInstructorPatch: vi.fn(),
   courseGet: vi.fn(),
   moduleGet: vi.fn(),
   moduleCreate: vi.fn(),
@@ -93,7 +97,11 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
   createCoreTableService: vi.fn(async () => ({
     entities: {
-      courseInstructor: { get: courseInstructorGet },
+      courseInstructor: {
+        get: courseInstructorGet,
+        query: { primary: courseInstructorQueryPrimary },
+        patch: courseInstructorPatch,
+      },
       course: { get: courseGet },
       module: {
         get: moduleGet,
@@ -292,6 +300,16 @@ const ancestorCheck = (entity: 'module' | 'lesson', key: object) => ({
 });
 const NOT_ARCHIVED = 'not exists(archivedAt)';
 
+// Adding or restoring a record claims its parent's next order (#71): the
+// parent's check becomes a patch of its lastChildOrder, behind the same
+// condition and that nothing else claimed it since it was read.
+const claimed = (check: { condition: string }) => ({
+  ...check,
+  op: 'patch',
+  set: { lastChildOrder: expect.any(Number) },
+  condition: `${check.condition} AND not exists(lastChildOrder)`,
+});
+
 const transactionEntity = (entity: string) => ({
   patch: (key: Record<string, string>) => ({
     set: (set: Record<string, unknown>) => ({
@@ -352,6 +370,12 @@ beforeEach(() => {
   courseInstructorGet.mockReturnValue(
     resolves({ courseId: COURSE_ID, instructorId: INSTRUCTOR_SUB }),
   );
+  // Adding or restoring a module updates the course (claiming its next
+  // order), so its instructors' copy of updatedAt is refreshed.
+  courseInstructorQueryPrimary.mockReturnValue(
+    resolves([{ courseId: COURSE_ID, instructorId: INSTRUCTOR_SUB }]),
+  );
+  courseInstructorPatch.mockReturnValue({ set: () => resolves({}) });
   setCourseStatus('draft');
   createdRecords = [];
   // Records created in a transaction are read back with get afterwards.
@@ -981,7 +1005,7 @@ describe('restore', () => {
     const result = await callAs().restoreModule(moduleKey);
 
     expect(transactionWrites).toEqual([
-      courseCheck(),
+      claimed(courseCheck()),
       {
         entity: 'module',
         op: 'patch',
@@ -1019,7 +1043,7 @@ describe('restore', () => {
 
     expect(transactionWrites).toEqual([
       courseCheck(),
-      ancestorCheck('module', moduleKey),
+      claimed(ancestorCheck('module', moduleKey)),
       {
         entity: 'lesson',
         op: 'patch',
@@ -1066,7 +1090,7 @@ describe('restore', () => {
     expect(transactionWrites).toEqual([
       courseCheck(),
       ancestorCheck('module', moduleKey),
-      ancestorCheck('lesson', lessonKey),
+      claimed(ancestorCheck('lesson', lessonKey)),
       {
         entity: 'contentItem',
         op: 'patch',
@@ -2323,9 +2347,12 @@ describe('parent archived between the checks and the write', () => {
         message: 'Restore the module first',
       });
       // The write was only ever attempted inside the guarded transaction.
+      const moduleCheck = ancestorCheck('module', moduleKey);
       expect(transactionWrites.slice(0, 2)).toEqual([
         courseCheck(),
-        ancestorCheck('module', moduleKey),
+        procedure === 'createLesson' || procedure === 'restoreLesson'
+          ? claimed(moduleCheck)
+          : moduleCheck,
       ]);
     },
   );
@@ -2363,10 +2390,14 @@ describe('parent archived between the checks and the write', () => {
         code: 'PRECONDITION_FAILED',
         message: 'Restore the lesson first',
       });
+      const lessonCheck = ancestorCheck('lesson', lessonKey);
       expect(transactionWrites.slice(0, 3)).toEqual([
         courseCheck(),
         ancestorCheck('module', moduleKey),
-        ancestorCheck('lesson', lessonKey),
+        procedure === 'createContentItemText' ||
+        procedure === 'restoreContentItem'
+          ? claimed(lessonCheck)
+          : lessonCheck,
       ]);
     },
   );
@@ -2579,7 +2610,9 @@ describe('course archived between the checks and the write', () => {
         message: 'Restore the course first',
       });
       // The write was only ever attempted behind the course check.
-      expect(transactionWrites[0]).toEqual(courseCheck());
+      expect(transactionWrites[0]).toEqual(
+        procedure === 'createModule' ? claimed(courseCheck()) : courseCheck(),
+      );
     },
   );
 
@@ -2774,9 +2807,9 @@ describe('publishing leaves content hidden on purpose alone', () => {
 describe('restore puts the record at the end of its parent', () => {
   const restoredOrder = () =>
     (
-      transactionWrites.find(({ op, set }) => op === 'patch' && set) as {
-        set: { order: number };
-      }
+      transactionWrites.find(
+        ({ op, set }) => op === 'patch' && set?.order !== undefined,
+      ) as { set: { order: number } }
     ).set.order;
 
   it('restoreModule: after every module in the course, archived ones included', async () => {

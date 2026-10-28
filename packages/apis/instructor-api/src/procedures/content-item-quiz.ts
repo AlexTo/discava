@@ -11,6 +11,7 @@ import {
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireNotArchived,
+  writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
 import { hashQuizQuestions } from '../lib/quiz-hash.js';
@@ -57,17 +58,10 @@ export const createContentItemQuiz = courseProcedure
 
     const contentItemId = uuidv7();
 
-    // Appended to the end of the lesson, as text items are.
-    const { data: contentItems } = await coreTable.entities.contentItem.query
-      .primary({ courseId, moduleId, lessonId })
-      .go();
-    const order =
-      contentItems.reduce((max, item) => Math.max(max, item.order), 0) + 1;
-
-    // Created in the same transaction as checks that the module and lesson
-    // are still there and not archived.
+    // Appended to the lesson, as text items are, in the same transaction as
+    // checks that the module and lesson are still there and not archived.
     const key = { courseId, moduleId, lessonId, contentItemId };
-    await writeUnderActiveAncestors(coreTable, key, (entities) => [
+    await writeAtEnd(coreTable, key, (entities, order) => [
       entities.contentItem
         .create({
           ...key,

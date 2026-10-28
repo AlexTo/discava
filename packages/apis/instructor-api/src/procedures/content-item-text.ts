@@ -10,6 +10,7 @@ import {
   initialVisibilityFields,
   requireAncestorsNotArchived,
   requireNotArchived,
+  writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
 import {
@@ -56,21 +57,11 @@ export const createContentItemText = courseProcedure
     // createContentItemVideoUploadUrl), so the id is generated here.
     const contentItemId = uuidv7();
 
-    // New content items append to the end of the lesson. `order` isn't part
-    // of any key (content item counts per lesson are small enough to sort
-    // client-side), so this is a plain query-and-increment rather than an
-    // atomic counter.
-    const { data: contentItems } = await coreTable.entities.contentItem.query
-      .primary({ courseId, moduleId, lessonId })
-      .go();
-    const order =
-      contentItems.reduce((max, item) => Math.max(max, item.order), 0) + 1;
-
-    // Created in the same transaction as checks that the module and lesson
-    // are still there and not archived, so one archived or deleted after
-    // the checks above can't end up with new content.
+    // Appended to the lesson in the same transaction as checks that the
+    // module and lesson are still there and not archived, so one archived or
+    // deleted after the checks above can't end up with new content.
     const key = { courseId, moduleId, lessonId, contentItemId };
-    await writeUnderActiveAncestors(coreTable, key, (entities) => [
+    await writeAtEnd(coreTable, key, (entities, order) => [
       entities.contentItem
         .create({
           ...key,

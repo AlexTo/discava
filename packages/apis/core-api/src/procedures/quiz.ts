@@ -2,7 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type createCoreTableService, isShown } from '@discava/core-table';
+import {
+  type createCoreTableService,
+  isShown,
+  studentActivityAt,
+  studentActivityWrites,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -99,7 +104,7 @@ const loadQuiz = async (
     quizVersion: item.quizVersion as number,
     questionsHash: item.questionsHash as string,
   };
-  return { course, quiz, summary, completion };
+  return { course, quiz, enrolment: enrolment!, summary, completion };
 };
 
 export const attemptsRemain = (settings: IQuizSettings, attemptsUsed: number) =>
@@ -246,7 +251,7 @@ export const submitQuizAttempt = courseProcedure
     const { courseId, moduleId, lessonId, contentItemId, answers } = input;
 
     for (let tries = 0; tries < MAX_SUBMIT_TRIES; tries++) {
-      const { course, quiz, summary, completion } = await loadQuiz(
+      const { course, quiz, enrolment, summary, completion } = await loadQuiz(
         coreTable,
         input,
         userId,
@@ -284,7 +289,7 @@ export const submitQuizAttempt = courseProcedure
         answers,
       );
       const attemptId = uuidv7();
-      const submittedAt = new Date().toISOString();
+      const submittedAt = studentActivityAt(enrolment);
       const attempt: IQuizAttempt = {
         attemptId,
         answers,
@@ -312,109 +317,63 @@ export const submitQuizAttempt = courseProcedure
       const itemKey = { courseId, moduleId, lessonId, contentItemId };
       const summaryKey = { userId, courseId, contentItemId };
       const { canceled, data } = await coreTable.transaction
-        .write(
-          ({
-            course,
-            module,
-            lesson,
-            contentItem,
-            enrolment,
-            quizSummary,
-            quizAttempt,
-            itemCompletion,
-          }) => [
-            course
-              .check({ courseId })
-              .where((attr, op) => op.eq(attr.status, 'published'))
-              .commit(),
-            module
-              .check({ courseId, moduleId })
-              .where(
-                (attr, op) =>
-                  `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)}`,
-              )
-              .commit(),
-            lesson
-              .check({ courseId, moduleId, lessonId })
-              .where(
-                (attr, op) =>
-                  `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)}`,
-              )
-              .commit(),
-            summary
-              ? contentItem
-                  .check(itemKey)
-                  .where(
-                    (attr, op) =>
-                      `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)} AND ${op.eq(attr.quizVersion, quiz.quizVersion)}`,
-                  )
-                  .commit()
-              : contentItem
-                  .update(itemKey)
-                  .add({ studentActivityCount: 1 })
-                  .where(
-                    (attr, op) =>
-                      `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)} AND ${op.eq(attr.quizVersion, quiz.quizVersion)}`,
-                  )
-                  .commit(),
-            // Still enrolled, and this is now their latest activity.
-            enrolment
-              .patch({ courseId, userId })
-              .set({ lastActivityAt: submittedAt })
-              .where(
-                (attr, op) =>
-                  `${op.exists(attr.userId)} AND ${op.ne(attr.status, 'dropped')}`,
-              )
-              .commit(),
-            summary
-              ? quizSummary
-                  .patch(summaryKey)
-                  .set({
-                    attemptsUsed: nextSummary.attemptsUsed,
-                    bestScore: nextSummary.bestScore,
-                    bestAttemptId: nextSummary.bestAttemptId,
-                    ...(nextSummary.passedAt && {
-                      passedAt: nextSummary.passedAt,
-                    }),
-                  })
-                  .where((attr, op) =>
-                    op.eq(attr.attemptsUsed, summary.attemptsUsed),
-                  )
-                  .commit()
-              : quizSummary
+        .write((entities) => [
+          // The first attempt counts the student on the quiz.
+          ...studentActivityWrites(entities, {
+            ...itemKey,
+            userId,
+            at: submittedAt,
+            firstRecord: !summary,
+            quizVersion: quiz.quizVersion,
+          }),
+          summary
+            ? entities.quizSummary
+                .patch(summaryKey)
+                .set({
+                  attemptsUsed: nextSummary.attemptsUsed,
+                  bestScore: nextSummary.bestScore,
+                  bestAttemptId: nextSummary.bestAttemptId,
+                  ...(nextSummary.passedAt && {
+                    passedAt: nextSummary.passedAt,
+                  }),
+                })
+                .where((attr, op) =>
+                  op.eq(attr.attemptsUsed, summary.attemptsUsed),
+                )
+                .commit()
+            : entities.quizSummary
+                .create({
+                  ...summaryKey,
+                  moduleId,
+                  lessonId,
+                  ...nextSummary,
+                })
+                .commit(),
+          entities.quizAttempt
+            .create({
+              userId,
+              courseId,
+              moduleId,
+              lessonId,
+              contentItemId,
+              ...attempt,
+            })
+            .commit(),
+          ...(completes
+            ? [
+                entities.itemCompletion
                   .create({
-                    ...summaryKey,
+                    userId,
+                    courseId,
                     moduleId,
                     lessonId,
-                    ...nextSummary,
+                    contentItemId,
+                    completedAt: submittedAt,
                   })
                   .commit(),
-            quizAttempt
-              .create({
-                userId,
-                courseId,
-                moduleId,
-                lessonId,
-                contentItemId,
-                ...attempt,
-              })
-              .commit(),
-            ...(completes
-              ? [
-                  itemCompletion
-                    .create({
-                      userId,
-                      courseId,
-                      moduleId,
-                      lessonId,
-                      contentItemId,
-                      completedAt: submittedAt,
-                    })
-                    .commit(),
-                ]
-              : []),
-          ],
-        )
+              ]
+            : []),
+        ])
         .go();
 
       if (!canceled) {

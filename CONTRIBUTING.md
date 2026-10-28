@@ -73,6 +73,12 @@ Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) gene
 
 [Biome](https://biomejs.dev) formats and lints this codebase (single quotes, trailing commas, 80-column width); `pnpm lint` runs it with `--configuration=fix`. Every source file, except generated output, translated docs, and `.astro` files, carries an Apache-2.0 SPDX header, written by the `license#sync` Nx sync generator (configured in [aws-nx-plugin.config.mts](aws-nx-plugin.config.mts)). Please don't hand-edit headers; `pnpm lint` and `pnpm build` keep them in sync for you.
 
+### Rules That Span Records
+
+Every API and event handler shares the core table, and some rules span records that different writers touch. For example, core-api counts the students who have used an item (`studentActivityCount`), and instructor-api relies on that count to refuse deleting the item. A write that keeps a rule another API or handler depends on goes in a `core-table` helper, for example `studentActivityWrites` in `helpers/student-activity.ts`, and every procedure making that write calls the helper. Don't write it by hand in each procedure. A rule that only one API keeps can stay in that API.
+
+Add a check for each such rule to `core-table`'s `helpers/invariants.ts`. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
+
 ### Testing Portal Components
 
 The instructor portal's components are tested with [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com/docs/react-testing-library/intro), in jsdom. Put a test next to the component as `<name>.test.tsx`.

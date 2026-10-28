@@ -65,6 +65,13 @@ export const createLessonEntity = async () =>
         publishedAt: {
           type: 'string',
         },
+        // The last `order` handed to one of its content items. Adding or restoring
+        // one claims the next in the same transaction, conditioned on this,
+        // so two added at once can't share an `order` (#71). Absent until the
+        // first is added.
+        lastChildOrder: {
+          type: 'number',
+        },
         createdAt: {
           type: 'string',
           required: true,

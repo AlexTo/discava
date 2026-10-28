@@ -14,12 +14,12 @@ import {
   getCourseOrThrow,
   isDraftCourse,
   MAX_TRANSACTION_ITEMS,
-  nextOrder,
   requireActiveCourse,
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
+  writeAtEnd,
   writeInActiveCourse,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
@@ -309,18 +309,13 @@ export const restoreContentItem = courseProcedure
     requireNotArchived(module, 'Restore the module first');
     requireNotArchived(lesson, 'Restore the lesson first');
 
-    // A restored item goes to the end of its lesson; the instructor drags it
-    // where they want. Every page: all siblings count.
-    const { data: siblings } = await coreTable.entities.contentItem.query
-      .primary({ courseId, moduleId, lessonId })
-      .go({ pages: 'all' });
-    // Conditioned on the module and lesson still being active, so one
-    // archived after the checks above doesn't end up with an active item
-    // under it.
-    await writeUnderActiveAncestors(coreTable, key, (entities) => [
+    // A restored item goes to the end of its lesson, conditioned on the
+    // module and lesson still being active, so one archived after the checks
+    // above doesn't end up with an active item under it.
+    await writeAtEnd(coreTable, key, (entities, order) => [
       entities.contentItem
         .patch(key)
-        .set({ order: nextOrder(siblings) })
+        .set({ order })
         .remove(['archivedAt'])
         .commit(),
     ]);

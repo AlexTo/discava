@@ -208,49 +208,114 @@ const conflict = () =>
     message: 'The record was modified by another request; please retry',
   });
 
+// A claim on the next `order` among a parent's children (see writeAtEnd): the
+// parent's lastChildOrder as it was read, and the order to hand out.
+export interface OrderClaim {
+  lastChildOrder: number | undefined;
+  order: number;
+}
+
+// Another record claimed the order first, or was claiming it at that moment
+// (TransactionConflict); writeAtEnd reads again and retries.
+class OrderTaken extends Error {}
+
+// The condition that the parent's lastChildOrder hasn't moved since it was
+// read.
+const unclaimedSince = <Attribute>(
+  op: {
+    eq: (attribute: Attribute, value: number) => string;
+    notExists: (attribute: Attribute) => string;
+  },
+  attribute: Attribute,
+  { lastChildOrder }: OrderClaim,
+) =>
+  lastChildOrder === undefined
+    ? op.notExists(attribute)
+    : op.eq(attribute, lastChildOrder);
+
 // Lets a transaction land only while the course exists and isn't archived: an
 // archived course is read-only (see requireCourseNotArchived), and a check made
-// from an earlier read could be overtaken by the course being archived.
+// from an earlier read could be overtaken by the course being archived. With a
+// claim, it also hands its order to the new or restored module.
 export const activeCourseCheck = (
   entities: TransactionEntities,
   courseId: string,
-) =>
-  entities.course
-    .check({ courseId })
-    .where(
-      (attr, op) =>
-        `${op.exists(attr.courseId)} AND ${op.ne(attr.status, 'archived')}`,
-    )
-    .commit();
+  claim?: OrderClaim,
+): TransactionItems[number] => {
+  const active: Parameters<
+    ReturnType<typeof entities.course.check>['where']
+  >[0] = (attr, op) =>
+    [
+      op.exists(attr.courseId),
+      op.ne(attr.status, 'archived'),
+      ...(claim ? [unclaimedSince(op, attr.lastChildOrder, claim)] : []),
+    ].join(' AND ');
+  return claim
+    ? entities.course
+        .patch({ courseId })
+        .set({ lastChildOrder: claim.order })
+        .where(active)
+        .commit()
+    : entities.course.check({ courseId }).where(active).commit();
+};
 
 // Condition checks that let a transaction land only while the course and
 // every ancestor still exist and aren't archived. They go first in the
 // transaction: their position is how a cancellation is attributed back to
-// them.
+// them. With a claim, the nearest ancestor also hands its order to the new or
+// restored child.
 const ancestorChecks = (
   entities: TransactionEntities,
   { courseId, moduleId, lessonId }: AncestorKey,
-) => [
-  activeCourseCheck(entities, courseId),
-  entities.module
-    .check({ courseId, moduleId })
-    .where(
-      (attr, op) =>
-        `${op.exists(attr.moduleId)} AND ${op.notExists(attr.archivedAt)}`,
-    )
-    .commit(),
-  ...(lessonId === undefined
-    ? []
-    : [
-        entities.lesson
-          .check({ courseId, moduleId, lessonId })
-          .where(
-            (attr, op) =>
-              `${op.exists(attr.lessonId)} AND ${op.notExists(attr.archivedAt)}`,
-          )
+  claim?: OrderClaim,
+) => {
+  const moduleClaim = lessonId === undefined ? claim : undefined;
+  const moduleActive: Parameters<
+    ReturnType<typeof entities.module.check>['where']
+  >[0] = (attr, op) =>
+    [
+      op.exists(attr.moduleId),
+      op.notExists(attr.archivedAt),
+      ...(moduleClaim
+        ? [unclaimedSince(op, attr.lastChildOrder, moduleClaim)]
+        : []),
+    ].join(' AND ');
+  const lessonActive: Parameters<
+    ReturnType<typeof entities.lesson.check>['where']
+  >[0] = (attr, op) =>
+    [
+      op.exists(attr.lessonId),
+      op.notExists(attr.archivedAt),
+      ...(claim ? [unclaimedSince(op, attr.lastChildOrder, claim)] : []),
+    ].join(' AND ');
+  return [
+    activeCourseCheck(entities, courseId),
+    moduleClaim
+      ? entities.module
+          .patch({ courseId, moduleId })
+          .set({ lastChildOrder: moduleClaim.order })
+          .where(moduleActive)
+          .commit()
+      : entities.module
+          .check({ courseId, moduleId })
+          .where(moduleActive)
           .commit(),
-      ]),
-];
+    ...(lessonId === undefined
+      ? []
+      : [
+          claim
+            ? entities.lesson
+                .patch({ courseId, moduleId, lessonId })
+                .set({ lastChildOrder: claim.order })
+                .where(lessonActive)
+                .commit()
+            : entities.lesson
+                .check({ courseId, moduleId, lessonId })
+                .where(lessonActive)
+                .commit(),
+        ]),
+  ];
+};
 
 // Runs `writes` in one transaction behind condition checks on every
 // ancestor, so the write lands only if no ancestor was archived or removed
@@ -276,10 +341,11 @@ export const writeUnderActiveAncestors = async (
   onWriteConflict: () => Promise<never> | never = () => {
     throw conflict();
   },
+  claim?: OrderClaim,
 ) => {
   const { canceled, data } = await coreTable.transaction
     .write((entities) => [
-      ...ancestorChecks(entities, ancestors),
+      ...ancestorChecks(entities, ancestors, claim),
       ...writes(entities),
     ])
     .go();
@@ -297,14 +363,14 @@ export const writeUnderActiveAncestors = async (
 
   if (failedAt(0, ancestorCount)) {
     await requireAncestorsNotArchived(coreTable, ancestors);
-    throw conflict();
+    throw claim ? new OrderTaken() : conflict();
   }
   if (failedAt(ancestorCount)) {
     await onWriteConflict();
     throw conflict();
   }
   if (hasTransactionConflict(results)) {
-    throw transactionConflict();
+    throw claim ? new OrderTaken() : transactionConflict();
   }
   throw new TRPCError({
     code: 'INTERNAL_SERVER_ERROR',
@@ -326,10 +392,11 @@ export const writeInActiveCourse = async (
   onWriteConflict: () => Promise<never> | never = () => {
     throw conflict();
   },
+  claim?: OrderClaim,
 ) => {
   const { canceled, data } = await coreTable.transaction
     .write((entities) => [
-      activeCourseCheck(entities, courseId),
+      activeCourseCheck(entities, courseId, claim),
       ...writes(entities),
     ])
     .go();
@@ -351,14 +418,14 @@ export const writeInActiveCourse = async (
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
     requireCourseNotArchived(course);
-    throw conflict();
+    throw claim ? new OrderTaken() : conflict();
   }
   if (failedAt(1)) {
     await onWriteConflict();
     throw conflict();
   }
   if (hasTransactionConflict(results)) {
-    throw transactionConflict();
+    throw claim ? new OrderTaken() : transactionConflict();
   }
   throw new TRPCError({
     code: 'INTERNAL_SERVER_ERROR',
@@ -366,12 +433,110 @@ export const writeInActiveCourse = async (
   });
 };
 
-// The `order` that puts a record after all of its siblings, archived ones
-// included, so it sorts last and never collides with an archived sibling
-// restored later. Used when restoring: a restored record goes to the end of
-// its parent, and the instructor drags it where they want.
-export const nextOrder = (siblings: { order: number }[]) =>
-  siblings.reduce((max, { order }) => Math.max(max, order), 0) + 1;
+// Enough for a handful of records added at once: each try, one of them lands.
+const MAX_ORDER_TRIES = 5;
+
+// The parent's lastChildOrder and its children's orders, every page: all
+// siblings count.
+const readOrders = async (
+  coreTable: CoreTable,
+  { courseId, moduleId, lessonId }: { courseId: string } & Partial<AncestorKey>,
+) => {
+  const [{ data: parent }, { data: siblings }] = await Promise.all(
+    moduleId === undefined
+      ? ([
+          coreTable.entities.course.get({ courseId }).go(),
+          coreTable.entities.module.query
+            .primary({ courseId })
+            .go({ pages: 'all' }),
+        ] as const)
+      : lessonId === undefined
+        ? ([
+            coreTable.entities.module.get({ courseId, moduleId }).go(),
+            coreTable.entities.lesson.query
+              .primary({ courseId, moduleId })
+              .go({ pages: 'all' }),
+          ] as const)
+        : ([
+            coreTable.entities.lesson
+              .get({ courseId, moduleId, lessonId })
+              .go(),
+            coreTable.entities.contentItem.query
+              .primary({ courseId, moduleId, lessonId })
+              .go({ pages: 'all' }),
+          ] as const),
+  );
+  if (!parent) {
+    throw new TRPCError({ code: 'NOT_FOUND' });
+  }
+  return {
+    lastChildOrder: parent.lastChildOrder,
+    orders: siblings.map(({ order }) => order),
+  };
+};
+
+// Writes a module (under `{ courseId }`), lesson (`{ courseId, moduleId }`) or
+// content item (`{ courseId, moduleId, lessonId }`) at the end of its parent:
+// a new one, or one being restored. It goes after all of its siblings,
+// archived ones included, so it never collides with an archived sibling
+// restored later; the instructor drags it where they want. Its order comes
+// from the parent, which records the last one it handed out (lastChildOrder)
+// in the same transaction as the write, conditioned on what was read. Of two
+// records added at once, one lands and the other reads again and takes the
+// next order (#71). The write runs behind the same checks as
+// writeUnderActiveAncestors (or writeInActiveCourse, for a module), with the
+// same errors.
+export const writeAtEnd = async (
+  coreTable: CoreTable,
+  parent: { courseId: string } & Partial<AncestorKey>,
+  writes: (entities: TransactionEntities, order: number) => TransactionItems,
+  onWriteConflict?: () => Promise<never> | never,
+) => {
+  const { courseId, moduleId } = parent;
+  for (let tries = 0; tries < MAX_ORDER_TRIES; tries++) {
+    const { lastChildOrder, orders } = await readOrders(coreTable, parent);
+    const claim = {
+      lastChildOrder,
+      order: Math.max(lastChildOrder ?? 0, ...orders) + 1,
+    };
+    const write = (entities: TransactionEntities) =>
+      writes(entities, claim.order);
+    try {
+      if (moduleId === undefined) {
+        await writeInActiveCourse(
+          coreTable,
+          courseId,
+          write,
+          onWriteConflict,
+          claim,
+        );
+        // Claiming the order updated the course.
+        const course = await getCourseOrThrow(coreTable, courseId);
+        await refreshInstructorCourseUpdatedAt(
+          coreTable,
+          courseId,
+          course.updatedAt,
+        );
+      } else {
+        await writeUnderActiveAncestors(
+          coreTable,
+          { ...parent, moduleId },
+          write,
+          onWriteConflict,
+          claim,
+        );
+      }
+      return claim.order;
+    } catch (error) {
+      if (!(error instanceof OrderTaken)) {
+        throw error;
+      }
+      // Spread out the retries, so the racers don't collide again.
+      await new Promise((resolve) => setTimeout(resolve, Math.random() * 50));
+    }
+  }
+  throw transactionConflict();
+};
 
 // DynamoDB caps a single transaction at 100 items.
 export const MAX_TRANSACTION_ITEMS = 100;

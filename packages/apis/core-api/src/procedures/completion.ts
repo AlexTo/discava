@@ -2,7 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { isShown } from '@discava/core-table';
+import {
+  isShown,
+  studentActivityAt,
+  studentActivityWrites,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -119,67 +123,21 @@ export const completeContentItem = courseProcedure
         }
       }
 
-      const completedAt = new Date().toISOString();
+      // A quiz's activity was counted by its first attempt.
+      const completedAt = studentActivityAt(enrolment!);
       const { canceled, data } = await coreTable.transaction
-        .write(
-          ({
-            course,
-            module,
-            lesson,
-            contentItem,
-            enrolment,
-            itemCompletion,
-          }) => [
-            course
-              .check({ courseId })
-              .where((attr, op) => op.eq(attr.status, 'published'))
-              .commit(),
-            module
-              .check({ courseId, moduleId })
-              .where(
-                (attr, op) =>
-                  `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)}`,
-              )
-              .commit(),
-            lesson
-              .check({ courseId, moduleId, lessonId })
-              .where(
-                (attr, op) =>
-                  `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)}`,
-              )
-              .commit(),
-            isQuiz
-              ? // The quiz still has the settings eligibility was judged
-                // against; its activity was counted by the first attempt.
-                contentItem
-                  .check(itemKey)
-                  .where(
-                    (attr, op) =>
-                      `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)} AND ${op.eq(attr.quizVersion, item.quizVersion)}`,
-                  )
-                  .commit()
-              : contentItem
-                  .update(itemKey)
-                  .add({ studentActivityCount: 1 })
-                  .where(
-                    (attr, op) =>
-                      `${op.eq(attr.visibility, 'visible')} AND ${op.notExists(attr.archivedAt)}`,
-                  )
-                  .commit(),
-            // Still enrolled, and this is now their latest activity.
-            enrolment
-              .patch({ courseId, userId })
-              .set({ lastActivityAt: completedAt })
-              .where(
-                (attr, op) =>
-                  `${op.exists(attr.userId)} AND ${op.ne(attr.status, 'dropped')}`,
-              )
-              .commit(),
-            itemCompletion
-              .create({ ...completionKey, moduleId, completedAt })
-              .commit(),
-          ],
-        )
+        .write((entities) => [
+          ...studentActivityWrites(entities, {
+            ...itemKey,
+            userId,
+            at: completedAt,
+            firstRecord: !isQuiz,
+            ...(isQuiz && { quizVersion: item.quizVersion as number }),
+          }),
+          entities.itemCompletion
+            .create({ ...completionKey, moduleId, completedAt })
+            .commit(),
+        ])
         .go();
 
       if (!canceled) {

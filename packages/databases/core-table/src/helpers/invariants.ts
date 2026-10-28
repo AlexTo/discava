@@ -29,7 +29,7 @@ type Item<F extends () => Promise<any>> = EntityItem<Awaited<ReturnType<F>>>;
 export interface TableSnapshot {
   courses: Pick<
     Item<typeof createCourseEntity>,
-    'courseId' | 'status' | 'publishedAt' | 'updatedAt'
+    'courseId' | 'status' | 'publishedAt' | 'updatedAt' | 'lastChildOrder'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -39,6 +39,7 @@ export interface TableSnapshot {
     | 'visibility'
     | 'archivedAt'
     | 'publishedAt'
+    | 'lastChildOrder'
   >[];
   lessons: Pick<
     Item<typeof createLessonEntity>,
@@ -49,6 +50,7 @@ export interface TableSnapshot {
     | 'visibility'
     | 'archivedAt'
     | 'publishedAt'
+    | 'lastChildOrder'
   >[];
   contentItems: Pick<
     Item<typeof createContentItemEntity>,
@@ -143,6 +145,7 @@ export const INVARIANTS = [
   'student-records-placed-with-item',
   'last-activity-at-current',
   'draft-course-nothing-archived',
+  'child-order-claimed',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -889,6 +892,77 @@ export const checkDraftCourseNothingArchived = (
     );
 };
 
+// 18. Every module, lesson and content item has an `order` its parent handed
+// out: no higher than the parent's lastChildOrder. Adding or restoring one
+// claims the next order from the parent in the same transaction (#71), and a
+// reorder only rearranges orders already handed out, so a record above it
+// was written without a claim, and could share its order with a sibling
+// added at the same moment.
+export const checkChildOrderClaimed = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const lastChildOrders = new Map<string, number | undefined>([
+    ...snapshot.courses.map(
+      ({ courseId, lastChildOrder }) =>
+        [JSON.stringify({ courseId }), lastChildOrder] as const,
+    ),
+    ...snapshot.modules.map(
+      ({ courseId, moduleId, lastChildOrder }) =>
+        [JSON.stringify({ courseId, moduleId }), lastChildOrder] as const,
+    ),
+    ...snapshot.lessons.map(
+      ({ courseId, moduleId, lessonId, lastChildOrder }) =>
+        [
+          JSON.stringify({ courseId, moduleId, lessonId }),
+          lastChildOrder,
+        ] as const,
+    ),
+  ]);
+  const unclaimed = <T extends { order: number }>(
+    children: T[],
+    parent: (child: T) => Record<string, string>,
+    key: (child: T) => Record<string, string>,
+  ) =>
+    children.flatMap((child) => {
+      const parentKey = JSON.stringify(parent(child));
+      // A missing parent is checkCurriculumHasParents' to report.
+      if (!lastChildOrders.has(parentKey)) {
+        return [];
+      }
+      const lastChildOrder = lastChildOrders.get(parentKey) ?? 0;
+      return child.order > lastChildOrder
+        ? [
+            violation(
+              'child-order-claimed',
+              key(child),
+              `order ${child.order} is above its parent's lastChildOrder (${lastChildOrder})`,
+            ),
+          ]
+        : [];
+    });
+  return [
+    ...unclaimed(
+      snapshot.modules,
+      ({ courseId }) => ({ courseId }),
+      ({ courseId, moduleId }) => ({ courseId, moduleId }),
+    ),
+    ...unclaimed(
+      snapshot.lessons,
+      ({ courseId, moduleId }) => ({ courseId, moduleId }),
+      ({ courseId, moduleId, lessonId }) => ({ courseId, moduleId, lessonId }),
+    ),
+    ...unclaimed(
+      snapshot.contentItems,
+      ({ courseId, moduleId, lessonId }) => ({ courseId, moduleId, lessonId }),
+      ({ courseId, lessonId, contentItemId }) => ({
+        courseId,
+        lessonId,
+        contentItemId,
+      }),
+    ),
+  ];
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -908,6 +982,7 @@ const CHECKS = [
   checkStudentRecordsPlacedWithItem,
   checkLastActivityAtCurrent,
   checkDraftCourseNothingArchived,
+  checkChildOrderClaimed,
 ];
 
 // Every violation in the snapshot, by every check.

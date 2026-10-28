@@ -214,11 +214,15 @@ beforeEach(() => {
   const ancestorCheck = () => ({
     where: () => ({ commit: () => ({}) }),
   });
+  const lessonPatch = () => ({
+    set: () => ({ where: () => ({ commit: () => ({}) }) }),
+  });
   transactionWrite.mockImplementation((fn) => {
     fn({
       course: { check: ancestorCheck },
       module: { check: ancestorCheck },
-      lesson: { check: ancestorCheck },
+      // Appending to the lesson claims its next order (#71).
+      lesson: { check: ancestorCheck, patch: lessonPatch },
       contentItem: { create: contentItemCreate, patch: contentItemPatch },
     });
     return { go: transactionGo };

@@ -26,10 +26,16 @@ const prefix = 'courses/c1/modules/m1/lessons/l1/content-items';
 // so 50% and the lesson in progress. Items are in order: text, quiz, video, file.
 const consistentTable = (): TableSnapshot => ({
   courses: [
-    { courseId: 'c1', status: 'published', publishedAt: T, updatedAt: T },
+    {
+      courseId: 'c1',
+      status: 'published',
+      publishedAt: T,
+      updatedAt: T,
+      lastChildOrder: 1,
+    },
   ],
-  modules: [{ ...ids, ...shown, order: 1 }],
-  lessons: [{ ...ids, ...shown, order: 1 }],
+  modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
+  lessons: [{ ...ids, ...shown, order: 1, lastChildOrder: 4 }],
   contentItems: [
     {
       ...ids,
@@ -579,12 +585,14 @@ describe('the rules added after #57', () => {
     });
 
     it('accepts the same order under different parents', () => {
+      table.modules[0].lastChildOrder = 2;
       table.lessons.push({
         ...ids,
         ...shown,
         moduleId: 'm1',
         lessonId: 'l2',
         order: 2,
+        lastChildOrder: 1,
       });
       table.contentItems.push({
         ...ids,
@@ -642,6 +650,23 @@ describe('the rules added after #57', () => {
 
       item('video').archivedAt = T;
       expectOnly('draft-course-nothing-archived');
+    });
+  });
+
+  describe('18. child-order-claimed', () => {
+    it("reports a record above its parent's lastChildOrder", () => {
+      item('file').order = 5;
+      expectOnly('child-order-claimed', /order 5 is above .*\(4\)/);
+    });
+
+    it('reports one under a parent that never handed out an order', () => {
+      table.modules[0].lastChildOrder = undefined;
+      expectOnly('child-order-claimed', /\(0\)/);
+    });
+
+    it('accepts orders below it: the record at the top was removed', () => {
+      table.lessons[0].lastChildOrder = 9;
+      expect(broken().invariants).toEqual([]);
     });
   });
 });

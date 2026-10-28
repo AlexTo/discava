@@ -31,6 +31,7 @@ const attr = new Proxy({}, { get: (_, name) => name });
 const ops = {
   eq: (name: string, value: unknown) => `${name} = ${value}`,
   ne: (name: string, value: unknown) => `${name} <> ${value}`,
+  lte: (name: string, value: unknown) => `${name} <= ${value}`,
   exists: (name: string) => `exists(${name})`,
   notExists: (name: string) => `notExists(${name})`,
 };
@@ -364,7 +365,8 @@ describe('submitAttempt', () => {
       op: 'patch',
       key: { courseId: 'course-1', userId: USER_SUB },
       set: { lastActivityAt: result.attempt.submittedAt },
-      condition: 'exists(userId) AND status <> dropped',
+      // ...and no later activity landed since (#71).
+      condition: `exists(userId) AND status <> dropped AND (notExists(lastActivityAt) OR lastActivityAt <= ${result.attempt.submittedAt})`,
     });
     const attemptId = result.attempt.attemptId;
     expect(itemOf(transaction, 'quizSummary').data).toMatchObject({
