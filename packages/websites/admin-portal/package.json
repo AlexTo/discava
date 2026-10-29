@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@discava/common-shadcn": "workspace:*",
+    "@discava/common-web-utils": "workspace:*",
     "@discava/core-api": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-query-devtools": "catalog:",
@@ -17,8 +18,7 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-oidc-context": "catalog:",
-    "tailwindcss": "catalog:",
-    "@discava/common-web-utils": "workspace:*"
+    "tailwindcss": "catalog:"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",
