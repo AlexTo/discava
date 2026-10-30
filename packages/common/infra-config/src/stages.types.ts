@@ -342,6 +342,31 @@ export type LessonMediaComponentConfig = {
 };
 
 /**
+ * Per-stage settings for the OpenSearch Serverless search collection (#53).
+ */
+export type SearchComponentConfig = {
+  /** Use customer-managed KMS encryption instead of the cheaper AWS-owned default */
+  enableKmsEncryption?: boolean;
+  /** Enable automatic key rotation on the collection's KMS key. Only used when `enableKmsEncryption` is true */
+  enableKeyRotation?: boolean;
+  /**
+   * Multi-AZ with standby replicas, for zero-downtime during an AZ outage.
+   * Roughly doubles OCU cost.
+   *
+   * @default true
+   */
+  standbyReplicas?: boolean;
+  /**
+   * Retain the collection (and its KMS key, if any) when the stack is
+   * deleted, instead of destroying it and all its indices along with the
+   * stack.
+   *
+   * @default true
+   */
+  retainOnDelete?: boolean;
+};
+
+/**
  * Per-stage settings for the public media bucket: media anyone may see, such
  * as course display images, served through CloudFront without signing.
  */
@@ -380,6 +405,7 @@ export type StageComponents = {
   adminPortal?: AdminPortalComponentConfig;
   lessonMedia?: LessonMediaComponentConfig;
   publicMedia?: PublicMediaComponentConfig;
+  search?: SearchComponentConfig;
 };
 
 /**

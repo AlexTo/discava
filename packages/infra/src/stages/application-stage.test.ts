@@ -9,7 +9,10 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
-import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
+import {
+  PROGRESS_STREAM_FILTERS,
+  SEARCH_STREAM_FILTERS,
+} from '@discava/core-table';
 import { App, type Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
@@ -350,30 +353,89 @@ describe("the portals' addresses (#235)", () => {
   });
 });
 
+// A DynamoEventSource's filter patterns, for the mapping whose target
+// function's logical id starts with `functionPrefix`. CoreApi has two such
+// mappings on the core table's stream (progress recalculation, search
+// indexing), each with its own filters, so a bare `findResources` across all
+// of them isn't enough to test either in isolation.
+const streamFilterPatterns = (template: Template, functionPrefix: string) => {
+  const functionId = Object.keys(
+    template.findResources('AWS::Lambda::Function'),
+  ).find((id) => id.startsWith(functionPrefix))!;
+  const mappings = Object.values(
+    template.findResources('AWS::Lambda::EventSourceMapping', {
+      Properties: { FunctionName: { Ref: functionId } },
+    }),
+  ) as {
+    Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
+  }[];
+  return mappings.flatMap(
+    ({ Properties }) =>
+      Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
+        JSON.parse(Pattern),
+      ) ?? [],
+  );
+};
+
+const asPatterns = (
+  filters: readonly {
+    eventName: string;
+    image: string;
+    entities: readonly string[];
+  }[],
+) =>
+  filters.map(({ eventName, image, entities }) => ({
+    eventName: [eventName],
+    dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
+  }));
+
 describe('progress recalculation', () => {
   const stack = synth({});
 
   // Local dev's event runner filters the stream with the same definition
   // (#137), so what triggers a recalculation can't differ between the two.
   it('is triggered by exactly the shared progress stream filters', () => {
-    const mappings = Object.values(
-      stack('CoreApi').findResources('AWS::Lambda::EventSourceMapping'),
+    expect(
+      streamFilterPatterns(stack('CoreApi'), 'ProgressRecalculation'),
+    ).toEqual(asPatterns(PROGRESS_STREAM_FILTERS));
+  });
+});
+
+describe('search indexing (#53)', () => {
+  const stack = synth({});
+
+  // Local dev's event runner filters the stream with the same definition,
+  // the same as progress recalculation above.
+  it('is triggered by exactly the shared search stream filters', () => {
+    expect(streamFilterPatterns(stack('CoreApi'), 'SearchIndexing')).toEqual(
+      asPatterns(SEARCH_STREAM_FILTERS),
+    );
+  });
+
+  it('gives the indexing function write access to the search collection, and only read access to the core table', () => {
+    const template = stack('CoreApi');
+    const policies = Object.values(
+      template.findResources('AWS::IAM::Policy', {
+        Properties: {
+          Roles: [
+            { Ref: Match.stringLikeRegexp('^SearchIndexingServiceRole') },
+          ],
+        },
+      }),
     ) as {
-      Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
+      Properties: {
+        PolicyDocument: { Statement: { Action: string | string[] }[] };
+      };
     }[];
-    const patterns = mappings.flatMap(
-      ({ Properties }) =>
-        Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
-          JSON.parse(Pattern),
-        ) ?? [],
+    const actions = policies.flatMap((policy) =>
+      policy.Properties.PolicyDocument.Statement.flatMap((statement) =>
+        [statement.Action].flat(),
+      ),
     );
 
-    expect(patterns).toEqual(
-      PROGRESS_STREAM_FILTERS.map(({ eventName, image, entities }) => ({
-        eventName: [eventName],
-        dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
-      })),
-    );
+    expect(actions).toContain('aoss:APIAccessAll');
+    expect(actions).toContain('dynamodb:GetItem');
+    expect(actions).not.toContain('dynamodb:PutItem');
   });
 });
 

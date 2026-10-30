@@ -104,6 +104,11 @@ export default {
               enableKmsEncryption: false,
               retainOnDelete: false,
             },
+            search: {
+              enableKmsEncryption: false,
+              standbyReplicas: false,
+              retainOnDelete: false,
+            },
           },
         },
         'discava-production': {
@@ -178,6 +183,12 @@ export default {
               enableWaf: true,
               enableKmsEncryption: true,
               enableKeyRotation: true,
+              retainOnDelete: true,
+            },
+            search: {
+              enableKmsEncryption: true,
+              enableKeyRotation: true,
+              standbyReplicas: true,
               retainOnDelete: true,
             },
           },

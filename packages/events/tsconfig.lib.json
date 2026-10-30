@@ -14,10 +14,13 @@
   ],
   "references": [
     {
-      "path": "../common/server-utils/tsconfig.lib.json"
+      "path": "../databases/search/tsconfig.lib.json"
     },
     {
       "path": "../databases/core-table/tsconfig.lib.json"
+    },
+    {
+      "path": "../common/server-utils/tsconfig.lib.json"
     }
   ],
   "exclude": [

@@ -1,0 +1,78 @@
+---
+title: Search
+description: "How cross-content-type search works: the OpenSearch Serverless collection, the indexing pipeline, and how visibility is enforced."
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+Discava has no full-text or cross-entity search inside the core table (`packages/databases/core-table`): it's fine for key-based access, but not for "find a course or lesson whose title or description matches this text". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) is the search layer for that, kept outside the core table rather than added as more GSIs.
+
+## Scope (v1)
+
+Two document types, each its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index):
+
+- **courses**: every currently **published** course.
+- **lessons**: every lesson that's currently **effectively visible** (its own `visibility`/`archivedAt`, its module's, and its course being published -- see <Link path="design/live-course-editing">Live course editing</Link>).
+
+Only a document that's currently visible is ever indexed; an unpublished course or hidden/archived lesson has its document deleted rather than kept with a flag. "One query across content types" means a single multi-index search (`index: ['courses', 'lessons']`), not a shared index.
+
+## Packages
+
+| Package | Holds |
+|---|---|
+| `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates indices / updates mappings, never deletes one) |
+| `packages/common/constructs` | `OpenSearchCollection` (generic: the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
+| `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the indices in sync |
+| `packages/apis/core-api` | `search.query`: the tRPC procedure |
+
+This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
+
+## Indexing pipeline
+
+```d2 title="A course or curriculum edit reaches the search indices through the same DynamoDB stream progress recalculation reads"
+table: "Core table" {shape: cylinder}
+stream: "DynamoDB Stream"
+recalc: "Progress recalculation"
+index: "Search indexing"
+search: "OpenSearch Serverless" {shape: cylinder}
+
+table -> stream
+stream -> recalc: "PROGRESS_STREAM_FILTERS"
+stream -> index: "SEARCH_STREAM_FILTERS"
+index -> search: "index / delete"
+```
+
+The core table's stream already feeds progress recalculation (`CoreApiStack`); search indexing is a second, independent `DynamoEventSource` on the same stream, with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`) and its own dead-letter queue, so a failure in one never blocks the other.
+
+`index-content.ts` re-derives a record's correct state rather than applying the stream record as a diff, the same philosophy as progress recalculation:
+
+- A **course** record carries its own `status`; if it's `'published'` the document is written (validated against `CourseDocumentSchema` first), otherwise it's deleted.
+- A **lesson** record carries its own visibility, but not its module's state or its course's status, so both are looked up before deciding to index or delete.
+- A **module** record has no document of its own, but its visibility decides every one of its lessons' effective visibility; an edit re-checks each of them (the module record alone doesn't say which lessons it has, so they're queried by `courseId` + `moduleId`).
+- Every `REMOVE` deletes the record's document by its old image's key.
+- A document's id is always the entity's own key (`courseId`, `lessonId`), so a replayed or retried record writes the same document again rather than a duplicate -- idempotent, the same requirement the core table's own writers hold to.
+
+A freshly created index starts empty: the stream only carries changes made after its mapping exists. `packages/databases/search/src/index-sync/backfill.ts` (re)indexes everything currently published/visible from the table, for exactly that case or to repair one after an indexing bug.
+
+## The search procedure
+
+`core-api`'s `search.query` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
+
+Visibility is enforced twice: once at index time (above), and again in the query itself, so a bug in one isn't the only thing standing between a caller and something they shouldn't see:
+
+- **Courses** are always filtered to `status: 'published'` in the query, even though every indexed course already is one.
+- **Lessons** are only ever searched for a signed-in caller, scoped to the `courseId`s they're currently enrolled in (not `dropped`) -- looked up before the OpenSearch request and passed in as a filter, not applied after the fact. An anonymous caller, or one not enrolled anywhere, gets a courses-only search: the `lessons` index isn't included in the request at all.
+
+## Local dev
+
+An `opensearchproject/opensearch` container (`packages/common/scripts/src/opensearch`, the same `runLocalContainer` pattern as DynamoDB local and S3Mock), security plugin disabled and memory capped, started by `@discava/search`'s `dev` target. `pnpm nx run @discava/common-scripts:reset-local-data` also wipes its indices. The local event runner (`packages/events/src/local/event-runner.ts`) routes `SEARCH_STREAM_FILTERS` matches to the same indexing handler deployed stages use.
+
+## Deviations from #1267
+
+Kept here so the upstream `ts#opensearch` proposal (or a PR adopting it) can check each one:
+
+- CDK has no L2 construct for `AWS::OpenSearchServerless::*` yet, only L1 `Cfn*` resources; `OpenSearchCollection` hand-rolls the data access policy and `grantRead`/`grantWrite` on top of them.
+- A grantee's data access policy entry needs its literal principal ARN (OpenSearch Serverless authorises by ARN there, not via the grantee's own IAM policy), which can't live in a stack created before the grantee's without creating a circular stack dependency. The policy is built lazily (the same deferred-Aspect technique `RuntimeConfig` uses) and placed in a stack set by `placeAccessPolicyIn`, not always the collection's own stack.
+- The index-sync custom resource's own data access grant is a separate, eager, same-stack policy from the one `grantRead`/`grantWrite` populate: it has to exist before the custom resource first runs, during the collection's own stack's deploy, which a deferred cross-stack policy can't guarantee.

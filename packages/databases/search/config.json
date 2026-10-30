@@ -1,0 +1,9 @@
+{
+  "runtimeConfigKey": "Search",
+  "localDev": {
+    "port": 9200,
+    "image": "opensearchproject/opensearch:latest",
+    "containerName": "discava-opensearch",
+    "containerEngine": "docker"
+  }
+}
