@@ -357,6 +357,23 @@ export type SearchComponentConfig = {
    */
   standbyReplicas?: boolean;
   /**
+   * The collection group's indexing/search capacity floor, in OCUs. 0 is
+   * true scale-to-zero (no cost while idle, a ~10-30s cold start on the
+   * first request after one); a non-zero minimum keeps that much capacity
+   * always warm, avoiding that latency at a small continuous cost.
+   *
+   * @default 0
+   */
+  minIndexingCapacityInOcu?: number;
+  minSearchCapacityInOcu?: number;
+  /**
+   * The collection group's indexing/search capacity ceiling, in OCUs.
+   *
+   * @default 4
+   */
+  maxIndexingCapacityInOcu?: number;
+  maxSearchCapacityInOcu?: number;
+  /**
    * Retain the collection (and its KMS key, if any) when the stack is
    * deleted, instead of destroying it and all its indices along with the
    * stack.

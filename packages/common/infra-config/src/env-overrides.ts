@@ -111,6 +111,10 @@ const COMPONENT_FIELDS: Record<
     enableKmsEncryption: 'boolean',
     enableKeyRotation: 'boolean',
     standbyReplicas: 'boolean',
+    minIndexingCapacityInOcu: 'number',
+    minSearchCapacityInOcu: 'number',
+    maxIndexingCapacityInOcu: 'number',
+    maxSearchCapacityInOcu: 'number',
     retainOnDelete: 'boolean',
   },
 };

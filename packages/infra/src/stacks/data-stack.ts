@@ -286,6 +286,10 @@ export class DataStack extends Stack {
       enableKmsEncryption: searchConfig?.enableKmsEncryption ?? true,
       enableKeyRotation: searchConfig?.enableKeyRotation ?? true,
       standbyReplicas: searchConfig?.standbyReplicas ?? true,
+      minIndexingCapacityInOcu: searchConfig?.minIndexingCapacityInOcu,
+      minSearchCapacityInOcu: searchConfig?.minSearchCapacityInOcu,
+      maxIndexingCapacityInOcu: searchConfig?.maxIndexingCapacityInOcu,
+      maxSearchCapacityInOcu: searchConfig?.maxSearchCapacityInOcu,
       removalPolicy:
         (searchConfig?.retainOnDelete ?? true)
           ? RemovalPolicy.RETAIN

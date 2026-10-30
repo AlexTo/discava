@@ -23,6 +23,7 @@ import {
 import {
   CfnAccessPolicy,
   CfnCollection,
+  CfnCollectionGroup,
   CfnSecurityPolicy,
 } from 'aws-cdk-lib/aws-opensearchserverless';
 import { Provider } from 'aws-cdk-lib/custom-resources';
@@ -52,11 +53,39 @@ export interface OpenSearchCollectionProps {
 
   /**
    * Multi-AZ with standby replicas, for zero-downtime during an AZ outage.
-   * Roughly doubles OCU cost, so off by default in a development stage.
+   * Roughly doubles OCU cost, so off by default in a development stage. A
+   * property of the collection *group* (NextGen), not the collection itself.
    *
    * @default true
    */
   readonly standbyReplicas?: boolean;
+
+  /**
+   * The collection group's indexing capacity floor and ceiling, in OCUs
+   * (NextGen's unit of compute). A minimum of 0 is true scale-to-zero: no
+   * cost while idle, at the price of a ~10-30s cold start on the first
+   * request after one. A non-zero minimum keeps that capacity always warm
+   * (a small continuous cost) so real traffic never pays that latency.
+   *
+   * @default 0
+   */
+  readonly minIndexingCapacityInOcu?: number;
+
+  /**
+   * @default 4
+   */
+  readonly maxIndexingCapacityInOcu?: number;
+
+  /** Same tradeoff as `minIndexingCapacityInOcu`, for search capacity.
+   *
+   * @default 0
+   */
+  readonly minSearchCapacityInOcu?: number;
+
+  /**
+   * @default 4
+   */
+  readonly maxSearchCapacityInOcu?: number;
 
   /**
    * Server-side encryption's KMS key. Only used when `enableKmsEncryption`
@@ -157,11 +186,13 @@ const renderAccessPolicy = (
   );
 
 /**
- * An Amazon OpenSearch Serverless collection: the collection itself, its
- * encryption/network/data-access security policies, and the custom resource
- * that creates its indices and keeps their mappings in sync (never deletes
- * one). There's no CDK L2 construct for Serverless yet, only the L1
- * `Cfn*` resources this wraps.
+ * An Amazon OpenSearch Serverless collection: a NextGen collection group (the
+ * generation with no fixed OCU floor -- a minimum of 0 scales to zero cost
+ * while idle, unlike classic's always-on 2-OCU minimum) holding one
+ * collection, that collection's encryption/network/data-access security
+ * policies, and the custom resource that creates its indices and keeps their
+ * mappings in sync (never deletes one). There's no CDK L2 construct for
+ * Serverless yet, only the L1 `Cfn*` resources this wraps.
  *
  * `grantRead`/`grantWrite` add the grantee to a data access policy
  * (OpenSearch Serverless authorises by principal ARN there, not by the
@@ -193,6 +224,10 @@ export abstract class OpenSearchCollection extends Construct {
       runtimeConfigKey,
       description,
       standbyReplicas = true,
+      minIndexingCapacityInOcu = 0,
+      maxIndexingCapacityInOcu = 4,
+      minSearchCapacityInOcu = 0,
+      maxSearchCapacityInOcu = 4,
       encryptionKey,
       enableKmsEncryption = true,
       enableKeyRotation = true,
@@ -245,12 +280,30 @@ export abstract class OpenSearchCollection extends Construct {
       ]),
     });
 
+    // NextGen (as opposed to the classic generation, which has a fixed
+    // 2-OCU floor whether or not anything is happening): capacity -- and so
+    // cost -- is set per collection *group*, not per collection. Standby
+    // replicas move here too (CfnCollectionGroupProps requires it; the
+    // member collection no longer sets its own).
+    const collectionGroup = new CfnCollectionGroup(this, 'CollectionGroup', {
+      name: `${collectionName}-group`,
+      generation: 'NEXTGEN',
+      standbyReplicas: standbyReplicas ? 'ENABLED' : 'DISABLED',
+      capacityLimits: {
+        minIndexingCapacityInOcu,
+        maxIndexingCapacityInOcu,
+        minSearchCapacityInOcu,
+        maxSearchCapacityInOcu,
+      },
+    });
+
     this.collection = new CfnCollection(this, runtimeConfigKey, {
       name: collectionName,
       description,
       type: 'SEARCH',
-      standbyReplicas: standbyReplicas ? 'ENABLED' : 'DISABLED',
+      collectionGroupName: collectionGroup.name,
     });
+    this.collection.addDependency(collectionGroup);
     this.collection.addDependency(encryptionPolicy);
     this.collection.addDependency(networkPolicy);
     this.collection.applyRemovalPolicy(removalPolicy);

@@ -18,12 +18,21 @@ Two document types, each its own index (mapping types were removed in OpenSearch
 
 Only a document that's currently visible is ever indexed; an unpublished course or hidden/archived lesson has its document deleted rather than kept with a flag. "One query across content types" means a single multi-index search (`index: ['courses', 'lessons']`), not a shared index.
 
+## Cost: NextGen, not zero-ETL
+
+Two AWS-native alternatives were considered and rejected for how the collection is sized and how it's kept in sync, both on cost:
+
+- **Sync**: [OpenSearch Ingestion's zero-ETL integration for DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html) runs a managed pipeline billed per OCU-hour with a fixed minimum, continuously, whether or not the table is changing -- and has no local-dev equivalent. DynamoDB Streams → Lambda (above) costs nothing between writes and reuses the local event runner that already existed for progress recalculation.
+- **Collection capacity**: the collection's capacity is set on a NextGen collection group (`AWS::OpenSearchServerless::CollectionGroup`, `Generation: NEXTGEN`), not the classic generation. Classic has a fixed 2-OCU floor, billed continuously, idle or not. NextGen's floor is a per-stage choice (`CapacityLimits.min{Indexing,Search}CapacityInOcu`): `discava-development` sets it to 0 -- true scale-to-zero between testers, at the cost of a ~10-30s cold start on the first search after a quiet spell -- while `discava-production` keeps a small non-zero minimum (smaller than classic's fixed floor) so real traffic is never served from cold.
+
+NextGen is only available in a subset of regions (as of writing: US East N. Virginia/Ohio, US West Oregon, Asia Pacific Mumbai/Singapore/Sydney/Tokyo, Europe Frankfurt/Ireland/Spain/Stockholm) -- confirm the stage's deploy region is one of them.
+
 ## Packages
 
 | Package | Holds |
 |---|---|
 | `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates indices / updates mappings, never deletes one) |
-| `packages/common/constructs` | `OpenSearchCollection` (generic: the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
+| `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
 | `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the indices in sync |
 | `packages/apis/core-api` | `search.query`: the tRPC procedure |
 
@@ -76,3 +85,4 @@ Kept here so the upstream `ts#opensearch` proposal (or a PR adopting it) can che
 - CDK has no L2 construct for `AWS::OpenSearchServerless::*` yet, only L1 `Cfn*` resources; `OpenSearchCollection` hand-rolls the data access policy and `grantRead`/`grantWrite` on top of them.
 - A grantee's data access policy entry needs its literal principal ARN (OpenSearch Serverless authorises by ARN there, not via the grantee's own IAM policy), which can't live in a stack created before the grantee's without creating a circular stack dependency. The policy is built lazily (the same deferred-Aspect technique `RuntimeConfig` uses) and placed in a stack set by `placeAccessPolicyIn`, not always the collection's own stack.
 - The index-sync custom resource's own data access grant is a separate, eager, same-stack policy from the one `grantRead`/`grantWrite` populate: it has to exist before the custom resource first runs, during the collection's own stack's deploy, which a deferred cross-stack policy can't guarantee.
+- Every collection is created inside its own NextGen `AWS::OpenSearchServerless::CollectionGroup` (see "Cost" above), a resource that postdates #1267; a generator written against #1267 as it stands would create a classic, always-on collection instead.
