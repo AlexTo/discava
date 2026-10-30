@@ -1,0 +1,19 @@
+{
+  "name": "@discava/search",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-lambda-powertools/parameters": "catalog:",
+    "@aws-sdk/client-appconfigdata": "catalog:",
+    "@aws-sdk/credential-providers": "catalog:",
+    "@opensearch-project/opensearch": "catalog:",
+    "tslib": "^2.3.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "catalog:",
+    "@types/node": "catalog:"
+  },
+  "license": "Apache-2.0"
+}

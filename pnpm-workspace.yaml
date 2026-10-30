@@ -55,6 +55,7 @@ catalog:
   rolldown: 1.2.15
   aws-xray-sdk-core: 3.12.0
   zod: 4.6.7
+  '@opensearch-project/opensearch': 3.9.0
   '@aws-lambda-powertools/logger': 2.36.0
   '@aws-lambda-powertools/metrics': 2.36.0
   '@aws-lambda-powertools/tracer': 2.36.0

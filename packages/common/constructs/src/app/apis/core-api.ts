@@ -62,6 +62,9 @@ export const CORE_API_DEDICATED_FUNCTIONS = {
   // Core-api's only holder of the CloudFront signing key: video playback and
   // file download links
   MediaUrl: ['contentItem.videoUrl', 'contentItem.fileUrl'],
+  // The search procedure is the only one that talks to OpenSearch, so it is
+  // the only one that needs (and is granted) the collection's data access.
+  Search: ['search'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 const functionNameFor = (op: Operations | '$router'): string =>

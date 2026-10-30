@@ -9,7 +9,10 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
-import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
+import {
+  PROGRESS_STREAM_FILTERS,
+  SEARCH_STREAM_FILTERS,
+} from '@discava/core-table';
 import { App, type Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
@@ -350,30 +353,210 @@ describe("the portals' addresses (#235)", () => {
   });
 });
 
-describe('progress recalculation', () => {
+describe("the core table's stream consumers", () => {
   const stack = synth({});
 
-  // Local dev's event runner filters the stream with the same definition
-  // (#137), so what triggers a recalculation can't differ between the two.
-  it('is triggered by exactly the shared progress stream filters', () => {
+  // Local dev's event runner filters the stream with the same definitions
+  // (#137), so what triggers a recalculation or a reindex can't differ
+  // between the two.
+  const streamFilterPatterns = (filters: typeof PROGRESS_STREAM_FILTERS) =>
+    filters.map(({ eventName, image, entities }) => ({
+      eventName: [eventName],
+      dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
+    }));
+
+  it('triggers exactly the shared progress and search stream filters', () => {
     const mappings = Object.values(
       stack('CoreApi').findResources('AWS::Lambda::EventSourceMapping'),
     ) as {
       Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
     }[];
-    const patterns = mappings.flatMap(
-      ({ Properties }) =>
-        Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
-          JSON.parse(Pattern),
-        ) ?? [],
-    );
+    const patterns = mappings
+      .flatMap(
+        ({ Properties }) =>
+          Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
+            JSON.parse(Pattern),
+          ) ?? [],
+      )
+      .sort(JSON.stringify);
 
     expect(patterns).toEqual(
-      PROGRESS_STREAM_FILTERS.map(({ eventName, image, entities }) => ({
-        eventName: [eventName],
-        dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
-      })),
+      [
+        ...streamFilterPatterns(PROGRESS_STREAM_FILTERS),
+        ...streamFilterPatterns(SEARCH_STREAM_FILTERS),
+      ].sort(JSON.stringify),
     );
+  });
+});
+
+describe('OpenSearch Serverless search (#53)', () => {
+  const stack = synth({});
+
+  // Resolves CloudFormation intrinsics (Fn::Join, Fn::GetAtt, Ref) to plain
+  // text so a token-laden string can be read: a join becomes its parts
+  // concatenated, a GetAtt/Ref becomes the referenced logical id.
+  const flatten = (node: unknown): string => {
+    if (typeof node === 'string' || typeof node === 'number') {
+      return String(node);
+    }
+    if (Array.isArray(node)) return node.map(flatten).join('');
+    if (node && typeof node === 'object') {
+      // A CFN intrinsic is a single-key object, e.g. {"Fn::Join": [...]}.
+      const [fn, arg] = Object.entries(node)[0] as [string, unknown];
+      switch (fn) {
+        case 'Fn::Join':
+          return flatten(arg);
+        case 'Fn::GetAtt':
+          return Array.isArray(arg) ? String(arg[0]) : String(arg);
+        case 'Ref':
+          return String(arg);
+        default:
+          return flatten(arg);
+      }
+    }
+    return '';
+  };
+
+  it('creates the collection and its network and data policies', () => {
+    const template = stack('CoreApi');
+    const collections = Object.keys(
+      template.findResources('AWS::OpenSearchServerless::Collection'),
+    );
+    const securityPolicies = Object.keys(
+      template.findResources('AWS::OpenSearchServerless::SecurityPolicy'),
+    );
+    const accessPolicies = Object.keys(
+      template.findResources('AWS::OpenSearchServerless::AccessPolicy'),
+    );
+    expect(collections).toHaveLength(1);
+    expect(securityPolicies).toHaveLength(1);
+    expect(accessPolicies).toHaveLength(1);
+
+    // Serverless names are lowercase-only; the collection is encrypted with
+    // an AWS-owned key.
+    const [collection] = Object.values(
+      template.findResources('AWS::OpenSearchServerless::Collection'),
+    ) as {
+      Properties: { Name: string; EncryptionConfig: { AWSOwnedKey: boolean } };
+    }[];
+    expect(collection.Properties.Name).toMatch(/^[a-z][a-z0-9-]{2,27}$/);
+    expect(collection.Properties.EncryptionConfig).toEqual({
+      AWSOwnedKey: true,
+    });
+  });
+
+  // Maps the stack's Lambda functions to the IAM policy documents attached to
+  // their execution roles, so a statement can be checked against a function.
+  const functionPolicies = () => {
+    const template = stack('CoreApi');
+    const roleToFunction = Object.fromEntries(
+      Object.entries(template.findResources('AWS::Lambda::Function')).map(
+        ([id, fn]) => [
+          JSON.stringify(
+            (fn as { Properties: { Role: unknown } }).Properties.Role,
+          ),
+          id,
+        ],
+      ),
+    );
+    const policies: Record<string, { Action: string | string[] }[]> = {};
+    for (const policy of Object.values(
+      template.findResources('AWS::IAM::Policy'),
+    ) as {
+      Properties: {
+        Roles: { Ref: string }[];
+        PolicyDocument: { Statement: { Action: string | string[] }[] };
+      };
+    }[]) {
+      const fn =
+        roleToFunction[
+          JSON.stringify({
+            'Fn::GetAtt': [policy.Properties.Roles[0].Ref, 'Arn'],
+          })
+        ];
+      // A role can carry several inline policies (one per grant), so
+      // accumulate rather than overwrite.
+      if (fn)
+        policies[fn] = [
+          ...(policies[fn] ?? []),
+          ...policy.Properties.PolicyDocument.Statement,
+        ];
+    }
+    return policies;
+  };
+
+  it('lets the search function read the collection and the indexer write it', () => {
+    const policies = functionPolicies();
+    const search = Object.keys(policies).find((id) =>
+      id.includes('CoreApiSearch'),
+    );
+    const indexer = Object.keys(policies).find((id) =>
+      id.includes('SearchIndexer'),
+    );
+    expect(search).toBeDefined();
+    expect(indexer).toBeDefined();
+
+    // Both principals carry the aoss API-access statement, scoped to the
+    // collection.
+    const aossActions = (fn: string) =>
+      policies[fn]
+        .flatMap((s) => [s.Action].flat())
+        .filter((a) => a.startsWith('aoss:'));
+    expect(aossActions(search)).toEqual(['aoss:APIAccessAll']);
+    expect(aossActions(indexer)).toEqual(['aoss:APIAccessAll']);
+  });
+
+  it('grants the search function read-only and the indexer read-write data access', () => {
+    const [dataPolicy] = Object.values(
+      stack('CoreApi').findResources('AWS::OpenSearchServerless::AccessPolicy'),
+    ) as { Properties: { Policy: unknown } }[];
+    // The policy embeds the granted roles' ARNs (Fn::GetAtt inside an
+    // Fn::Join), so flatten those intrinsics to the role's logical id before
+    // parsing the document.
+    const document = JSON.parse(flatten(dataPolicy.Properties.Policy)) as {
+      Description: string;
+      Principal: string[];
+      Rules: { Permission: string[] }[];
+    }[];
+
+    // The write statement names only the indexer role; the read statement
+    // names the search function and the indexer (a writer may also read).
+    const [read, write] = document;
+    expect(write.Principal).toEqual(
+      expect.arrayContaining([expect.stringMatching(/SearchIndexer/)]),
+    );
+    expect(write.Principal).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/CoreApiSearch/)]),
+    );
+    expect(read.Principal).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/CoreApiSearch/),
+        expect.stringMatching(/SearchIndexer/),
+      ]),
+    );
+    expect(write.Rules.flatMap((r) => r.Permission)).toEqual(
+      expect.arrayContaining(['aoss:WriteDocument', 'aoss:CreateIndex']),
+    );
+  });
+
+  it('wires an index-sync custom resource that depends on the collection and data policy', () => {
+    const template = stack('CoreApi');
+    const resources = Object.entries(
+      template.findResources('AWS::CloudFormation::CustomResource'),
+    );
+    const [syncId, sync] = resources.find(([id]) => id.includes('IndexSync'));
+    expect(syncId).toBeDefined();
+
+    // The resource passes the collection endpoint and the index manifest to
+    // the handler, and waits for the collection and its data access policy.
+    const properties = JSON.stringify(
+      (sync as { Properties: unknown }).Properties,
+    );
+    expect(properties).toContain('"endpoint"');
+    expect(properties).toContain('"indices"');
+    const deps = [sync.DependsOn].flat() as string[];
+    expect(deps.some((d) => d.includes('Collection'))).toBe(true);
+    expect(deps.some((d) => d.includes('DataAccessPolicy'))).toBe(true);
   });
 });
 

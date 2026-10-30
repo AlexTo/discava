@@ -1,0 +1,87 @@
+---
+title: Cross-content-type search
+description: How a single full-text search reaches courses, modules, lessons, content items and users, built on OpenSearch Serverless and kept in step with the core table by its stream.
+sidebar:
+  order: 4
+---
+
+import Link from '@components/link.astro';
+
+A learner or instructor types into one search box and gets results across every content type at once — a course, a module, a lesson, a content item and, for staff, a user — merged and ordered by relevance. This design is issue #53.
+
+The search is **full-text across the whole curriculum hierarchy and people**, not a filter on a list. It is backed by **AWS OpenSearch Serverless**, and the data in its indices comes from the **single DynamoDB core table** (see [Shared concepts](#shared-concepts)) — never from a second database. The core table's stream keeps the indices in step, so a write to the table is a write to the search index.
+
+## What is searchable
+
+Five content types are indexed, one per OpenSearch index:
+
+| Index | Document | Matched fields |
+|---|---|---|
+| `courses` | a course | `title`, `description` (folded into `searchText`) |
+| `modules` | a module | `title`, `description` (folded into `searchText`) |
+| `lessons` | a lesson | `title`, `description` (folded into `searchText`) |
+| `content-items` | a content item | `title`, `description` (folded into `searchText`) |
+| `users` | a user | `displayName` (matched into `searchText`) |
+
+Each document carries, besides the matched text, the fields a result shows (e.g. a content item carries `lessonTitle` and its type) and the state the query filters on (see [Visibility and scope](#visibility-and-scope)).
+
+## How it works
+
+```d2 title="A write to the core table flows through its stream to the indexer, which rewrites the affected documents in OpenSearch; a search reads the indices back"
+direction: right
+
+table: "DynamoDB\ncore table" {shape: cylinder}
+stream: "DynamoDB stream\n(course, module, lesson,\ncontent item, user)" {shape: parallelogram}
+indexer: "search indexer\nLambda" {shape: box}
+os: "OpenSearch Serverless\ncollection\n(courses, modules, lessons,\ncontent-items, users)" {shape: cylinder}
+api: "core-api\nsearch procedure" {shape: box}
+caller: "portal" {shape: oval}
+
+table -> stream: "INSERT / MODIFY / REMOVE"
+stream -> indexer: "filtered records"
+indexer -> os: "put / delete docs"
+api -> os: "search per index"
+os -> api: "hits"
+api -> caller
+```
+
+**The index is a projection, not a source of truth.** Every document is built from the core table's records by the indexing pipeline in `@discava/events`. The pipeline reads the table and writes OpenSearch; it never writes the table, so it cannot trigger itself. Each document's id is the record's key, so a write is idempotent: a replay, retry or re-scan rewrites the same document.
+
+**The stream drives the pipeline.** The core table's stream is filtered (in `@discava/core-table`'s `SEARCH_STREAM_FILTERS`, the one definition both the deployed event source mapping and local dev's event runner use) to the insert, modify and remove of the indexed types. A **course** record reindexes that course and everything under it; a **module, lesson or content item** record reindexes its whole course (a module has no index of its own, but editing it changes its lessons' and items' documents); a **user** record reindexes that user. The indexer re-reads the record's *current* state (or removes the document), so it is safe to over- or under-filter — the only cost of a missed record is that the next change to the same record repairs it.
+
+**A search runs one query per type, in parallel.** The five indices have different fields and different filters (a module has no `courseStatus`, a content item has no `visibility` of its own in the same sense), so a single multi-index query cannot express them. The search procedure runs one query per requested type against its own index, each with its own filter, and merges the hits ordered by relevance.
+
+## Visibility and scope
+
+Search reuses the same rules as the rest of the app, so a search result can never show what a direct read would hide.
+
+**Effective visibility.** A content-type hit (module, lesson, content item) is returned only when it **and every ancestor** is effectively visible and the course is published. The document carries the state of itself and its ancestors (its own `visibility`/`archivedAt`, its lesson's, and the course's `status`), so the filter is answered from the document alone — see [Effective visibility](#effective-visibility) in the shared concepts.
+
+**The enrolment scope.** A **course** search is open to any published course, so a student can find a course and enrol from the result. A **content-type** search is scoped to the caller's enrolments: a student only sees content from courses they're enrolled in (dropped enrolments don't count), an instructor or admin is unscoped. The scope is a `terms` filter on `courseId`; a student with no enrolments is scoped to no courses and gets no content hits.
+
+**Who may search users.** Users carry no visibility flags; the index cannot decide this. The **API** does: a student's requested types are restricted to `course`, `module`, `lesson`, `contentItem`, so `user` is silently dropped from their query. An instructor or admin may search `user` as well. This is done in the `search` procedure's middleware (the same place the enrolment scope is computed), not in the index.
+
+## The OpenSearch Serverless collection
+
+The search backend is an **OpenSearch Serverless** collection, created by the `SearchCollection` construct in `@discava/common-constructs` and owned by the core-api stack:
+
+- **One collection**, type `SEARCH`, encrypted at rest with an **AWS-owned key** and deletion-protected.
+- **A Next Gen collection group it scales in.** The collection lives in a `CollectionGroup` with `generation: NEXTGEN`. The group's **minimum** search and indexing capacity are **0 OCUs**, so the collection **scales to zero**: with no traffic it drops to 0 and is charged no compute, waking on the next request. The group's **maximum** capacity (search and indexing OCUs, default 2 — the smallest AWS allows) is the ceiling it may scale to. Standby replicas are disabled.
+- **A network policy** that allows the public endpoint. The two Lambdas that reach it (the search function and the indexer) run outside a VPC and reach the collection over the internet; access is still gated by SigV4 and the data policy.
+- **A data access policy** that scopes which principals may read and which may write. The **core-api search function is read-only**; the **search indexer** (and the index-sync resource, which creates the indices at deploy) is **read-write**.
+- **The IAM gate.** Every data-access principal also gets an `aoss:APIAccessAll` policy scoped to the collection — the two-layer access model (data policy + IAM).
+
+**The indices are created at deploy, not by the code that queries them.** An index-sync custom resource runs on every deploy: it reads the index definitions (the manifest generated from `@discava/search`'s index definitions) and **creates a missing index and adds new mappings to an existing one, but never deletes an index** — so a deploy can't destroy search data.
+
+**The endpoint is published to the runtime config.** The collection's endpoint is written to the `opensearch` namespace (`Search` key) of the AppConfig-backed runtime config. The search client and the indexer read it at request time, so neither hardcodes an endpoint; in local dev they use the local container instead.
+
+## Local dev
+
+`pnpm dev` starts a **local OpenSearch container** as the stand-in for the Serverless collection, in `@discava/search`'s dev target alongside the portals, the APIs, the event runner and the local stand-ins for DynamoDB, S3 and Cognito. Locally the indices are created with a prefix (so a fresh local stack doesn't collide with a previous one) and the local event runner applies the same `SEARCH_STREAM_FILTERS`, so the stream-driven indexing is exercised end to end without AWS. A backfill target reindexes the whole core table into the index on demand, so a local (or freshly deployed) index can be filled from existing data.
+
+## Where it lives
+
+- `@discava/search` — the index definitions, the client (endpoint + SigV4), the per-type `searchAcross` query, and the index-sync handler.
+- `@discava/events` — the indexing pipeline (stream record → document → index write) and the backfill.
+- `@discava/core-api` — the `search` tRPC procedure and the middleware that computes the caller's scope and allowed types.
+- `@discava/common-constructs` — the `SearchCollection` OpenSearch Serverless construct and the core-api stack's wiring of the indexer and the search function.

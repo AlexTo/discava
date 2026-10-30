@@ -23,6 +23,7 @@ import {
   submitQuizAttempt,
   viewQuiz,
 } from './procedures/quiz.js';
+import { search } from './procedures/search.js';
 
 export const router = t.router;
 
@@ -49,6 +50,7 @@ export const appRouter = router({
     submitAttempt: submitQuizAttempt,
     myAttempts: myQuizAttempts,
   }),
+  search,
 });
 
 export type AppRouter = typeof appRouter;

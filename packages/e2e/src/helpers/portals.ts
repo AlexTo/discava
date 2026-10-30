@@ -11,12 +11,13 @@ export const PORTALS = {
 } as const;
 
 // What else must answer before a scenario can run: the APIs, the event runner
-// and the local stand-ins for S3 and Cognito (see common-server-utils'
-// local-dev for their ports).
+// and the local stand-ins for DynamoDB, S3, Cognito and OpenSearch (see
+// common-server-utils' local-dev and @discava/search's config for their ports).
 export const SERVICES = {
   coreApi: 'http://localhost:2022/',
   instructorApi: 'http://localhost:2023/',
   eventRunner: 'http://localhost:2024/',
   s3Mock: 'http://localhost:9090/',
   localOidc: 'http://localhost:9400/discava/.well-known/openid-configuration',
+  opensearch: 'http://localhost:9200/',
 } as const;

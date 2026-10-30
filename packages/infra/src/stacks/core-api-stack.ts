@@ -7,15 +7,20 @@ import {
   CoreApi,
   CoreTable,
   EventsProgressRecalculation,
+  EventsSearchIndexer,
   InstructorPortal,
   LessonMediaBucket,
   RuntimeConfig,
+  SearchCollection,
   StudentPortal,
   suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
-import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
+import {
+  PROGRESS_STREAM_FILTERS,
+  SEARCH_STREAM_FILTERS,
+} from '@discava/core-table';
 import {
   CfnResource,
   Duration,
@@ -59,6 +64,8 @@ export interface CoreApiStackProps extends StackProps {
  */
 export class CoreApiStack extends Stack {
   public readonly coreApi: CoreApi<CoreApiIntegrations>;
+  /** The OpenSearch Serverless collection backing cross-content-type search. */
+  public readonly search: SearchCollection;
 
   constructor(
     scope: Construct,
@@ -125,6 +132,12 @@ export class CoreApiStack extends Stack {
       );
     }
 
+    // The OpenSearch Serverless collection (issue #53). The search procedure
+    // is served by its own dedicated function, which is the only core-api
+    // function granted the collection's read access.
+    this.search = new SearchCollection(this, 'Search');
+    this.search.grantReadOnly(this.privilegedHandler(integrations, 'search'));
+
     this.coreApi.restrictCorsTo(
       ...portals,
       'http://localhost:4200',
@@ -136,6 +149,7 @@ export class CoreApiStack extends Stack {
     );
 
     this.createProgressRecalculationLambda(coreTable);
+    this.createSearchIndexerLambda(coreTable);
   }
 
   // Every grant beyond the baseline (table + AppConfig) goes through this,
@@ -207,5 +221,55 @@ export class CoreApiStack extends Stack {
     );
 
     return recalculation;
+  }
+
+  // Keeps the search indices in step with the core table, from the same
+  // stream, filtered by SEARCH_STREAM_FILTERS (which local dev's event runner
+  // applies too). It reindexes each affected course and user from the table's
+  // current state, so it only reads the table.
+  private createSearchIndexerLambda(coreTable: CoreTable) {
+    const indexer = new EventsSearchIndexer(this, 'SearchIndexer');
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    indexer.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(indexer);
+    coreTable.grantReadData(indexer);
+
+    // The indexer writes the search indices, so it is the collection's
+    // read-write principal (alongside the index-sync handler).
+    this.search.grantReadWrite(indexer);
+
+    // A batch that still fails after its retries, split down to the records
+    // that fail, lands here instead of blocking the stream. The indexer
+    // reindexes from the table's current state, so the next change for the
+    // same course or user repairs what a failed batch missed.
+    const failures = new Queue(this, 'SearchIndexerFailures', {
+      encryption: QueueEncryption.KMS_MANAGED,
+      enforceSSL: true,
+      retentionPeriod: Duration.days(14),
+    });
+
+    indexer.addEventSource(
+      new DynamoEventSource(coreTable.table, {
+        startingPosition: StartingPosition.LATEST,
+        batchSize: 100,
+        maxBatchingWindow: Duration.seconds(5),
+        retryAttempts: 5,
+        bisectBatchOnError: true,
+        onFailure: new SqsDlq(failures),
+        filters: SEARCH_STREAM_FILTERS.map(({ eventName, image, entities }) =>
+          FilterCriteria.filter({
+            eventName: FilterRule.isEqual(eventName),
+            dynamodb: {
+              [image]: { __edb_e__: { S: FilterRule.or(...entities) } },
+            },
+          }),
+        ),
+      }),
+    );
+
+    return indexer;
   }
 }

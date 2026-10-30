@@ -102,6 +102,9 @@ catalogs:
     '@nx/workspace':
       specifier: 23.3.1
       version: 23.3.1
+    '@opensearch-project/opensearch':
+      specifier: 3.9.0
+      version: 3.9.0
     '@playwright/test':
       specifier: ^1.64.1
       version: 1.64.1
@@ -535,6 +538,9 @@ importers:
       '@discava/core-table':
         specifier: workspace:*
         version: link:../../databases/core-table
+      '@discava/search':
+        specifier: workspace:*
+        version: link:../../databases/search
       '@trpc/client':
         specifier: 'catalog:'
         version: 11.19.0(@trpc/server@11.19.0(typescript@6.0.3))(typescript@6.0.3)
@@ -703,6 +709,12 @@ importers:
       '@discava/common-server-utils':
         specifier: workspace:*
         version: link:../server-utils
+      '@discava/search':
+        specifier: workspace:*
+        version: link:../../databases/search
+      '@opensearch-project/opensearch':
+        specifier: 'catalog:'
+        version: 3.9.0(supports-color@7.2.0)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -881,6 +893,34 @@ importers:
         specifier: 'catalog:'
         version: 26.6.5
 
+  packages/databases/search:
+    dependencies:
+      '@aws-lambda-powertools/parameters':
+        specifier: 'catalog:'
+        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1156.0)(@aws-sdk/client-dynamodb@3.1156.0)(@aws-sdk/client-secrets-manager@3.1156.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1156.0))(@middy/core@7.9.2)
+      '@aws-sdk/client-appconfigdata':
+        specifier: 'catalog:'
+        version: 3.1156.0
+      '@aws-sdk/credential-providers':
+        specifier: 'catalog:'
+        version: 3.1156.0
+      '@opensearch-project/opensearch':
+        specifier: 'catalog:'
+        version: 3.9.0(supports-color@7.2.0)
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: 'catalog:'
+        version: 8.10.164
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
+
   packages/e2e:
     dependencies:
       '@aws-sdk/client-dynamodb':
@@ -956,6 +996,9 @@ importers:
       '@discava/core-table':
         specifier: workspace:*
         version: link:../databases/core-table
+      '@discava/search':
+        specifier: workspace:*
+        version: link:../databases/search
       '@middy/core':
         specifier: 'catalog:'
         version: 7.9.2
@@ -3414,6 +3457,10 @@ packages:
     peerDependencies:
       '@nx/devkit': '>=22.0.0'
 
+  '@opensearch-project/opensearch@3.9.0':
+    resolution: {integrity: sha512-ksIEi0wyIjVncfRwaxt5v6H4qL1aQO2eE3MxKyXGCLnR70YTSCDp+JGhdx2LpyMjtCFvr71DWtYQg9SK3pcNnA==}
+    engines: {node: '>=14', yarn: ^1.22.10}
+
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
@@ -5371,6 +5418,9 @@ packages:
     resolution: {integrity: sha512-lwalRdxXRy+Sn49/vN7W507qqmBRk5Fy2o0a9U6XTjL9IV+oR5PUiiptoBrOcaYCiVuGld8OEbNqhm6wvV3m6A==}
     engines: {node: '>= 14.x'}
 
+  aws4@1.13.2:
+    resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
+
   aws4fetch@1.0.20:
     resolution: {integrity: sha512-/djoAN709iY65ETD6LKCtyyEI04XIBP5xVvfmNxsEP0uJB5tyaGBztSryRr4HqMStr9R06PisQE7m9zDTXKu6g==}
 
@@ -6921,6 +6971,10 @@ packages:
   json-stable-stringify-without-jsonify@1.0.1:
     resolution: {integrity: sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==}
 
+  json11@2.0.2:
+    resolution: {integrity: sha512-HIrd50UPYmP6sqLuLbFVm75g16o0oZrVfxrsY0EEys22klz8mRoWlX9KAEDOSOR9Q34rcxsyC8oDveGrCz5uLQ==}
+    hasBin: true
+
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
@@ -8218,6 +8272,9 @@ packages:
 
   secure-compare@3.0.1:
     resolution: {integrity: sha512-AckIIV90rPDcBcglUwXPF3kg0P0qmPsPXAj6BBEENQE1p5yA1xfmDJzfi1Tappj37Pv2mVbKpL3Z1T+Nn7k1Qw==}
+
+  secure-json-parse@2.7.0:
+    resolution: {integrity: sha512-6aU+Rwsezw7VR8/nyvKTx8QpWH9FrcYiXXlqC4z5d5XQBDRqtbfsRjnwGyqbi3gddNtWHuEk9OANUotL26qKUw==}
 
   semver@5.7.2:
     resolution: {integrity: sha512-cBznnQ9KjJqU67B52RMC65CMarK2600WFnbkcaiwWq3xy/5haFJlshgnpjovMVJ+Hff49d8GEn0b87C5pDQ10g==}
@@ -11906,6 +11963,16 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  '@opensearch-project/opensearch@3.9.0(supports-color@7.2.0)':
+    dependencies:
+      aws4: 1.13.2
+      debug: 4.4.3(supports-color@7.2.0)
+      json11: 2.0.2
+      ms: 2.1.3
+      secure-json-parse: 2.7.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@opentelemetry/api@1.9.1': {}
 
   '@oslojs/encoding@1.1.0': {}
@@ -13876,6 +13943,8 @@ snapshots:
       cls-hooked: 4.2.2
       semver: 7.8.5
 
+  aws4@1.13.2: {}
+
   aws4fetch@1.0.20: {}
 
   axobject-query@4.1.0: {}
@@ -15589,6 +15658,8 @@ snapshots:
   json-schema-typed@8.0.2: {}
 
   json-stable-stringify-without-jsonify@1.0.1: {}
+
+  json11@2.0.2: {}
 
   json5@2.2.3: {}
 
@@ -17407,6 +17478,8 @@ snapshots:
       - typescript
 
   secure-compare@3.0.1: {}
+
+  secure-json-parse@2.7.0: {}
 
   semver@5.7.2: {}
 

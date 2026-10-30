@@ -1,1 +1,4 @@
 \.git-secrets/git-secrets:
+
+# Standard CDK test account (aws-cdk-lib docs example, used in test env)
+111122223333

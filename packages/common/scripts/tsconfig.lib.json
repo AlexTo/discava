@@ -18,6 +18,9 @@
     },
     {
       "path": "../infra-config/tsconfig.lib.json"
+    },
+    {
+      "path": "../../databases/search/tsconfig.lib.json"
     }
   ],
   "exclude": [

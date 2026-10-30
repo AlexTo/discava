@@ -19,6 +19,9 @@ export default defineConfig(() => ({
       '@discava/core-table': fileURLToPath(
         new URL('../../databases/core-table/src/index.ts', import.meta.url),
       ),
+      '@discava/search': fileURLToPath(
+        new URL('../../databases/search/src/index.ts', import.meta.url),
+      ),
     },
   },
   test: {

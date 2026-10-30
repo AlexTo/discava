@@ -9,6 +9,7 @@ import {
   createErrorPlugin,
   createLoggerPlugin,
   createMetricsPlugin,
+  createSearchPlugin,
   createTracerPlugin,
   IMiddlewareContext,
 } from './middleware/index.js';
@@ -57,3 +58,11 @@ export const courseProcedure = protectedProcedure.concat(
 export const publicCourseProcedure = publicProcedure.concat(
   createCoreTablePlugin(),
 );
+
+/**
+ * Like courseProcedure, additionally exposing ctx.searchScope and
+ * ctx.searchableTypes (see createSearchPlugin): what a search may return for
+ * this caller. A student is scoped to the courses they're enrolled in and
+ * cannot search users; an instructor or admin is unscoped.
+ */
+export const searchProcedure = courseProcedure.concat(createSearchPlugin());
