@@ -22,7 +22,13 @@
       "dependsOn": ["compile", "bundle"]
     },
     "build": {
-      "dependsOn": ["lint", "compile", "test", "bundle", "indices"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        "bundle",
+        "generate-indices-manifest"
+      ]
     },
     "backfill": {
       "executor": "nx:run-commands",
@@ -50,7 +56,7 @@
         "cwd": "{projectRoot}"
       }
     },
-    "indices": {
+    "generate-indices-manifest": {
       "executor": "nx:run-commands",
       "cache": true,
       "outputs": ["{workspaceRoot}/dist/{projectRoot}/indices"],
@@ -62,7 +68,7 @@
     "dev": {
       "executor": "nx:run-commands",
       "continuous": true,
-      "dependsOn": ["pull-image", "indices"],
+      "dependsOn": ["pull-image", "generate-indices-manifest"],
       "options": {
         "commands": [
           "tsx ../../common/scripts/src/opensearch/start-container.ts",
