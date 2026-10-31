@@ -458,6 +458,11 @@ export abstract class OpenSearchCollection extends Construct {
       properties: {
         Manifest: JSON.stringify({ indices, hash: manifestHash }),
         ManifestHash: manifestHash,
+        // CloudFormation only calls the handler again when a property
+        // changes. Replacing the collection (a new name, say) leaves the
+        // manifest as it was but leaves an empty collection with no indices,
+        // so its id is a property too: a new collection means a new sync.
+        CollectionId: this.collection.attrId,
       },
     });
     // The handler's own grant must already be in place before it runs, and

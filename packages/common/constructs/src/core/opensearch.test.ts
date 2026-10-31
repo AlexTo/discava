@@ -5,6 +5,7 @@
 // @vitest-environment node
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { Code } from 'aws-cdk-lib/aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { OpenSearchCollection } from './opensearch.js';
@@ -21,6 +22,29 @@ const create = (collectionName: string) =>
   });
 
 describe('OpenSearchCollection', () => {
+  it('re-runs the index sync when the collection is replaced', () => {
+    // CloudFormation only invokes the handler on a changed property, and the
+    // manifest alone doesn't change when the collection is replaced.
+    const stack = new Stack(new App(), 'Stack');
+    new TestCollection(stack, 'Collection', {
+      collectionName: 'discava-test',
+      runtimeConfigKey: 'Test',
+      indices: [],
+      manifestHash: 'hash',
+      indexSyncHandlerCode: Code.fromInline('exports.handler = () => {}'),
+    });
+
+    Template.fromStack(stack).hasResourceProperties(
+      'AWS::CloudFormation::CustomResource',
+      {
+        ManifestHash: 'hash',
+        CollectionId: {
+          'Fn::GetAtt': [Match.stringLikeRegexp('^CollectionTest'), 'Id'],
+        },
+      },
+    );
+  });
+
   it('accepts a name whose every derived policy name fits in 32 characters', () => {
     // 21 characters: `-encryption` makes 32.
     expect(() => create('discava-development01')).not.toThrow();
