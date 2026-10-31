@@ -407,7 +407,6 @@ export abstract class OpenSearchCollection extends Construct {
     indices: readonly OpenSearchIndexManifestEntry[],
     manifestHash: string,
   ): void {
-    const runtimeConfig = RuntimeConfig.ensure(this);
     const handler = new Function(this, 'IndexSyncHandler', {
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
@@ -415,16 +414,17 @@ export abstract class OpenSearchCollection extends Construct {
       code,
       timeout: Duration.minutes(5),
       tracing: Tracing.ACTIVE,
-      // Only ever holds the AppConfig application's ID (a Ref); checkov's
-      // secret scan also reads a __file__ key its own parser injects (the
-      // template's path), and this construct's CDK-hashed template file
-      // name trips CKV_AWS_45 on it, the same false positive data-stack.ts
-      // suppresses for PreTokenGeneration.
+      // The collection's endpoint, directly: this runs while this stack
+      // deploys, before RuntimeConfig's AppConfig content (which reads from
+      // every stack, so deploys last) exists to look it up in. Only ever
+      // holds that (a GetAtt); checkov's secret scan also reads a __file__
+      // key its own parser injects (the template's path), and this
+      // construct's CDK-hashed template file name trips CKV_AWS_45 on it, the
+      // same false positive data-stack.ts suppresses for PreTokenGeneration.
       environment: {
-        RUNTIME_CONFIG_APP_ID: runtimeConfig.appConfigApplicationId,
+        OPENSEARCH_ENDPOINT: this.collection.attrCollectionEndpoint,
       },
     });
-    runtimeConfig.grantReadAppConfig(handler);
 
     Grant.addToPrincipal({
       grantee: handler,
@@ -470,7 +470,7 @@ export abstract class OpenSearchCollection extends Construct {
     suppressRules(
       this,
       ['CKV_AWS_45'],
-      "Lambda environments here hold the AppConfig application's ID or another function's ARN, not secrets; checkov's injected template path trips this rule",
+      "Lambda environments here hold the collection's endpoint or another function's ARN, not secrets; checkov's injected template path trips this rule",
       (c) =>
         CfnResource.isCfnResource(c) &&
         c.cfnResourceType === 'AWS::Lambda::Function' &&

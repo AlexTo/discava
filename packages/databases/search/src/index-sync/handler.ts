@@ -19,6 +19,35 @@ import { syncIndices } from './sync-indices.js';
 // OpenSearchCollection in common-constructs sets it from the same manifest.
 const PHYSICAL_RESOURCE_ID = 'search-index-sync';
 
+// A data access policy takes up to about a minute to take effect after it's
+// created, and the custom resource runs right after the one granting this
+// handler's role access, so its first calls can be answered 403. Retrying a
+// forbidden request for a bounded time, rather than failing the deploy (and
+// rolling the whole stack back), covers that; anything else fails at once.
+const FORBIDDEN_RETRIES = 12;
+const FORBIDDEN_RETRY_DELAY_MS = 10_000;
+
+const isForbidden = (error: unknown) => {
+  const e = error as { statusCode?: number; meta?: { statusCode?: number } };
+  return (e?.statusCode ?? e?.meta?.statusCode) === 403;
+};
+
+const syncWhenAllowed = async (manifest: IndicesManifest) => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await syncIndices(await getOpenSearchClient(), manifest);
+      return;
+    } catch (error) {
+      if (!isForbidden(error) || attempt > FORBIDDEN_RETRIES) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, FORBIDDEN_RETRY_DELAY_MS),
+      );
+    }
+  }
+};
+
 // Backs the index-sync custom resource (OpenSearchCollection, wrapped in a
 // `Provider`): creates indices and updates their mappings on every deploy
 // where the manifest changed. Runs on Create and Update; Delete is a no-op,
@@ -34,8 +63,7 @@ export const handler = async (
   );
 
   if (event.RequestType !== 'Delete') {
-    const client = await getOpenSearchClient();
-    await syncIndices(client, manifest);
+    await syncWhenAllowed(manifest);
   }
 
   return {

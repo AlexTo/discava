@@ -29,11 +29,19 @@ let _endpoint: string | undefined;
 // The collection endpoint, published by the OpenSearchCollection construct
 // through RuntimeConfig (AppConfig) under the `opensearch` namespace, the
 // same way core-table publishes its table name under `dynamodb`.
+//
+// OPENSEARCH_ENDPOINT, when set, wins over that: the index-sync custom
+// resource runs while the stack holding the collection deploys, before the
+// RuntimeConfig stack (which deploys last) has published anything to
+// AppConfig, so it's handed the endpoint directly instead.
 export const resolveEndpoint = async (): Promise<string> => {
   if (process.env.LOCAL_DEV === 'true') {
     const { port } = localDev();
     // IPv4 explicitly, as common-server-utils' LOCAL_HOST explains.
     return `http://127.0.0.1:${port}`;
+  }
+  if (process.env.OPENSEARCH_ENDPOINT) {
+    return process.env.OPENSEARCH_ENDPOINT;
   }
   if (_endpoint === undefined) {
     const appId = process.env.RUNTIME_CONFIG_APP_ID;

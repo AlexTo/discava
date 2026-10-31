@@ -420,6 +420,23 @@ describe('search collection (#53)', () => {
     },
   );
 
+  // The index-sync custom resource runs while the Data stack deploys, before
+  // the RuntimeConfig stack has published anything to AppConfig, so a first
+  // deploy failed with "ConfigurationProfile not found" when it looked the
+  // endpoint up there. It must be handed the endpoint directly.
+  it("hands the index-sync handler the collection's endpoint, not AppConfig", () => {
+    const [handler] = resources(
+      stack('Data'),
+      'AWS::Lambda::Function',
+      'SearchCollectionIndexSyncHandler',
+    ) as { Environment: { Variables: Record<string, unknown> } }[];
+
+    expect(handler.Environment.Variables).toHaveProperty('OPENSEARCH_ENDPOINT');
+    expect(handler.Environment.Variables).not.toHaveProperty(
+      'RUNTIME_CONFIG_APP_ID',
+    );
+  });
+
   it('is named after its stage, as are its policies', () => {
     const template = stack('Data');
     template.hasResourceProperties('AWS::OpenSearchServerless::Collection', {
