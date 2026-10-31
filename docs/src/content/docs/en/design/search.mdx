@@ -11,7 +11,7 @@ Discava has no full-text or cross-entity search inside the core table (`packages
 
 Courses only: one index, **courses**, holding every currently **published** course. An unpublished course has its document deleted rather than kept with a flag.
 
-More content types (lessons, instructors, announcements) come later, each as its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index) and its own procedure, such as `search.lessons`, rather than one query mixing them. Each type has its own visibility rule (a lesson's depends on its module, its course, and the caller's enrolment), which stays simplest to read and test kept apart.
+More content types (lessons, instructors, announcements) come later, each as its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index) and its own procedure, such as `lesson.search`, rather than one query mixing them. Each type has its own visibility rule (a lesson's depends on its module, its course, and the caller's enrolment), which stays simplest to read and test kept apart.
 
 ## Cost: NextGen, not zero-ETL
 
@@ -29,7 +29,7 @@ NextGen is only available in a subset of regions (as of writing: US East N. Virg
 | `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates indices / updates mappings, never deletes one) |
 | `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
 | `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
-| `packages/apis/core-api` | `search.courses`: the tRPC procedure |
+| `packages/apis/core-api` | `course.publicSearch`: the tRPC procedure |
 
 This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
 
@@ -62,7 +62,7 @@ A freshly created index starts empty: the stream only carries changes made after
 
 ## The search procedure
 
-`core-api`'s `search.courses` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
+`core-api`'s `course.publicSearch` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
 
 It's public, like `course.publicList`: a signed-out caller can search too. Visibility is enforced twice, once at index time (above) and again in the query itself, which always filters to `status: 'published'` even though every indexed course already is one. A bug in one isn't then the only thing standing between a caller and a draft or archived course.
 

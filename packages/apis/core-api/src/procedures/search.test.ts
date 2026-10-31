@@ -5,7 +5,7 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { courses } from './search.js';
+import { publicSearchCourses } from './search.js';
 
 const { searchMock } = vi.hoisted(() => ({ searchMock: vi.fn() }));
 
@@ -14,7 +14,7 @@ vi.mock('@discava/search', async (importOriginal) => ({
   getOpenSearchClient: vi.fn(async () => ({ search: searchMock })),
 }));
 
-const router = t.router({ courses });
+const router = t.router({ publicSearch: publicSearchCourses });
 const caller = t.createCallerFactory(router);
 
 const callAnonymously = () =>
@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('search.courses', () => {
+describe('course.publicSearch', () => {
   it('searches the courses index, filtered to published courses', async () => {
     searchMock.mockResolvedValue(
       esResponse([
@@ -46,7 +46,7 @@ describe('search.courses', () => {
       ]),
     );
 
-    const result = await callAnonymously().courses({ q: 'dynamodb' });
+    const result = await callAnonymously().publicSearch({ q: 'dynamodb' });
 
     const [[request]] = searchMock.mock.calls;
     expect(request.index).toBe('courses');
@@ -65,7 +65,7 @@ describe('search.courses', () => {
       esResponse([{ _source: { courseId: 'c1', title: 'A' } }], 5),
     );
 
-    const result = await callAnonymously().courses({
+    const result = await callAnonymously().publicSearch({
       q: 'a',
       limit: 1,
       cursor: 2,

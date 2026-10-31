@@ -15,7 +15,7 @@ import {
  * (index-content.ts never indexes a draft or archived course) and again
  * here, in the query itself, by filtering to `status: 'published'`.
  */
-export const courses = searchProcedure
+export const publicSearchCourses = searchProcedure
   .input(SearchCoursesInputSchema)
   .output(SearchCoursesOutputSchema)
   .query(async ({ ctx, input }) => {
