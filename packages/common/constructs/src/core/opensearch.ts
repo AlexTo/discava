@@ -127,8 +127,8 @@ export interface OpenSearchCollectionProps {
 
   /**
    * A hash of `indices`. Passed through to the index-sync custom resource as
-   * a resource property, so changing it (and only it) is what makes
-   * CloudFormation re-run index-sync on deploy.
+   * a resource property, and returned by it so a deploy shows which manifest
+   * was applied. (The sync itself runs on every deploy, see `SyncedAt`.)
    */
   readonly manifestHash: string;
 
@@ -459,10 +459,12 @@ export abstract class OpenSearchCollection extends Construct {
         Manifest: JSON.stringify({ indices, hash: manifestHash }),
         ManifestHash: manifestHash,
         // CloudFormation only calls the handler again when a property
-        // changes. Replacing the collection (a new name, say) leaves the
-        // manifest as it was but leaves an empty collection with no indices,
-        // so its id is a property too: a new collection means a new sync.
-        CollectionId: this.collection.attrId,
+        // changes, and the manifest doesn't change when an index is deleted
+        // by hand or the collection is replaced (a new name, say), which
+        // leaves an empty collection. A value that differs on every
+        // synthesis makes every deploy run the sync, which is safe: it only
+        // creates what's missing and re-applies mappings.
+        SyncedAt: new Date().toISOString(),
       },
     });
     // The handler's own grant must already be in place before it runs, and

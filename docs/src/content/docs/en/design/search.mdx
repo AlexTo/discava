@@ -26,7 +26,7 @@ NextGen is only available in a subset of regions (as of writing: US East N. Virg
 
 | Package | Holds |
 |---|---|
-| `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates indices / updates mappings, never deletes one) |
+| `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates missing indices / updates mappings, never deletes one; runs on every deploy, so an index deleted by hand comes back) |
 | `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
 | `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
 | `packages/apis/core-api` | `course.publicSearch`: the tRPC procedure |

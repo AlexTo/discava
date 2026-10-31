@@ -21,7 +21,7 @@ const manifest = {
 };
 
 // The custom resource's ManifestHash property changes exactly when this
-// does, which is what makes CloudFormation re-run index-sync on deploy.
+// does, which shows which manifest the last deploy applied.
 const hash = createHash('sha256')
   .update(JSON.stringify(manifest))
   .digest('hex');

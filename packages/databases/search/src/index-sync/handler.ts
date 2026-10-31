@@ -14,9 +14,10 @@ import { syncIndices } from './sync-indices.js';
 // custom resource whose PhysicalResourceId changes between calls, which
 // would make it try to "delete" the old one (a no-op here, since this never
 // deletes indices, but there's no reason to make CloudFormation think a
-// replacement happened). The ManifestHash resource property is what makes
-// CloudFormation send this an Update at all when the manifest changes;
-// OpenSearchCollection in common-constructs sets it from the same manifest.
+// replacement happened). OpenSearchCollection in common-constructs sends an
+// Update on every deploy (its SyncedAt property differs each time), and
+// ManifestHash, set from the same manifest, is echoed back to show which
+// one was applied.
 const PHYSICAL_RESOURCE_ID = 'search-index-sync';
 
 // A data access policy takes up to about a minute to take effect after it's
@@ -49,8 +50,9 @@ const syncWhenAllowed = async (manifest: IndicesManifest) => {
 };
 
 // Backs the index-sync custom resource (OpenSearchCollection, wrapped in a
-// `Provider`): creates indices and updates their mappings on every deploy
-// where the manifest changed. Runs on Create and Update; Delete is a no-op,
+// `Provider`): creates any index that's missing and updates the mappings of
+// those that exist, on every deploy, so an index deleted by hand comes back.
+// Idempotent, so running it each time is safe. Runs on Create and Update; Delete is a no-op,
 // so destroying the stack leaves the collection's indices (and their data)
 // as they were -- matches core-table's RemovalPolicy.RETAIN default.
 export const handler = async (

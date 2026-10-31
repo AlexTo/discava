@@ -21,10 +21,13 @@ const create = (collectionName: string) =>
     indexSyncHandlerCode: Code.fromInline('exports.handler = () => {}'),
   });
 
-describe('OpenSearchCollection', () => {
-  it('re-runs the index sync when the collection is replaced', () => {
-    // CloudFormation only invokes the handler on a changed property, and the
-    // manifest alone doesn't change when the collection is replaced.
+// Synthesizing a stack can pass Vitest's 5s default when CI runs every
+// project's tests in parallel.
+describe('OpenSearchCollection', { timeout: 30_000 }, () => {
+  it('runs the index sync on every deploy, so a deleted index comes back', () => {
+    // CloudFormation only invokes the handler on a changed property, and
+    // neither the manifest nor the collection changes when an index is
+    // deleted by hand or the collection is replaced (a new, empty one).
     const stack = new Stack(new App(), 'Stack');
     new TestCollection(stack, 'Collection', {
       collectionName: 'discava-test',
@@ -38,9 +41,8 @@ describe('OpenSearchCollection', () => {
       'AWS::CloudFormation::CustomResource',
       {
         ManifestHash: 'hash',
-        CollectionId: {
-          'Fn::GetAtt': [Match.stringLikeRegexp('^CollectionTest'), 'Id'],
-        },
+        // A value that differs each synthesis, so every deploy sends an Update.
+        SyncedAt: Match.stringLikeRegexp('^\\d{4}-\\d{2}-\\d{2}T'),
       },
     );
   });
