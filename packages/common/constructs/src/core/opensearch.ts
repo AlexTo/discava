@@ -319,9 +319,9 @@ export abstract class OpenSearchCollection extends Construct {
       type: 'SEARCH',
       collectionGroupName: collectionGroup.name,
     });
-    this.collection.addDependency(collectionGroup);
-    this.collection.addDependency(encryptionPolicy);
-    this.collection.addDependency(networkPolicy);
+    this.collection.addResourceDependency(collectionGroup);
+    this.collection.addResourceDependency(encryptionPolicy);
+    this.collection.addResourceDependency(networkPolicy);
     this.collection.applyRemovalPolicy(removalPolicy);
 
     const rc = RuntimeConfig.ensure(this);
@@ -415,6 +415,7 @@ export abstract class OpenSearchCollection extends Construct {
     indices: readonly OpenSearchIndexManifestEntry[],
     manifestHash: string,
   ): void {
+    const runtimeConfig = RuntimeConfig.ensure(this);
     const handler = new Function(this, 'IndexSyncHandler', {
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
@@ -427,13 +428,10 @@ export abstract class OpenSearchCollection extends Construct {
       // template's path), and this construct's CDK-hashed template file
       // name trips CKV_AWS_45 on it, the same false positive data-stack.ts
       // suppresses for PreTokenGeneration.
-      environment: {},
+      environment: {
+        RUNTIME_CONFIG_APP_ID: runtimeConfig.appConfigApplicationId,
+      },
     });
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    handler.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
     runtimeConfig.grantReadAppConfig(handler);
 
     Grant.addToPrincipal({
@@ -458,7 +456,7 @@ export abstract class OpenSearchCollection extends Construct {
         ),
       },
     );
-    bootstrapAccessPolicy.addDependency(this.collection);
+    bootstrapAccessPolicy.addResourceDependency(this.collection);
 
     const provider = new Provider(this, 'IndexSyncProvider', {
       onEventHandler: handler,
