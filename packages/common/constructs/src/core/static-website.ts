@@ -412,7 +412,10 @@ export class StaticWebsite extends Construct {
       deliverySourceName: source.name,
       deliveryDestinationArn: destination.attrArn,
     });
-    delivery.addDependency(source);
+    delivery.addResourceDependency(
+      source,
+      'The delivery must wait for its delivery source to exist.',
+    );
   }
 }
 
