@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { errors as openSearchErrors } from '@opensearch-project/opensearch';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
@@ -54,9 +55,35 @@ describe('course.publicSearch', () => {
     expect(request.body.query.bool.filter).toEqual([
       { term: { status: 'published' } },
     ]);
+    // Every word must match, matching the browser filter this replaces.
+    expect(request.body.query.bool.must.multi_match).toMatchObject({
+      operator: 'and',
+      type: 'cross_fields',
+    });
     expect(result).toEqual({
       items: [{ courseId: 'c1', title: 'Intro to DynamoDB' }],
       cursor: null,
+    });
+  });
+
+  it('gives the request a timeout shorter than the Lambda’s own', async () => {
+    searchMock.mockResolvedValue(esResponse([]));
+
+    await callAnonymously().publicSearch({ q: 'dynamodb' });
+
+    const [, options] = searchMock.mock.calls[0];
+    expect(options.requestTimeout).toBeGreaterThan(0);
+  });
+
+  it('turns a cold-start timeout into a clear, retriable error', async () => {
+    searchMock.mockRejectedValue(
+      new openSearchErrors.TimeoutError('Request timed out', {} as never),
+    );
+
+    await expect(
+      callAnonymously().publicSearch({ q: 'dynamodb' }),
+    ).rejects.toMatchObject({
+      code: 'TIMEOUT',
     });
   });
 

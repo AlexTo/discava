@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { Alert } from '../components/alert';
@@ -13,37 +14,39 @@ import { PageBreadcrumbs } from '../components/page-breadcrumbs';
 import { Spinner } from '../components/spinner';
 import { useCoreApi } from '../hooks/useCoreApi';
 
-// What the top bar's search finds: published courses whose title or
-// description contain every word searched for, in any order and case.
-// Filtered in the browser from the newest 100 published courses, the same
-// list the catalogue shows, until there's search on the server (#53).
-export const matchesQuery = (
-  course: { title: string; description?: string },
-  query: string,
-) => {
-  const text = `${course.title} ${course.description ?? ''}`.toLowerCase();
-  return query
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => text.includes(word));
-};
-
 export const Route = createFileRoute('/search')({
   validateSearch: (search: Record<string, unknown>): { query?: string } =>
     typeof search.query === 'string' ? { query: search.query } : {},
   component: RouteComponent,
 });
 
+// Whether `error` is the cold-start timeout course.publicSearch returns when
+// the search collection has scaled to zero and hasn't woken up yet (#267):
+// retriable, unlike a real failure, so it gets its own message and an
+// automatic retry rather than the generic error state below.
+const isColdStart = (error: unknown) =>
+  (error as { data?: { code?: string } } | null)?.data?.code === 'TIMEOUT';
+
 function RouteComponent() {
   const query = (Route.useSearch().query ?? '').trim();
   const trpc = useCoreApi();
-  const coursesQuery = useQuery(
-    trpc.course.publicList.queryOptions({ limit: 100 }, { enabled: !!query }),
+  const searchQuery = useInfiniteQuery(
+    trpc.course.publicSearch.infiniteQueryOptions(
+      { q: query },
+      {
+        enabled: !!query,
+        getNextPageParam: (lastPage) => lastPage.cursor,
+        // A cold collection's first request times out server-side (#267);
+        // the wake it triggered keeps going, so the same query a few
+        // seconds later usually lands. One retry covers that without
+        // leaving a real failure spinning.
+        retry: (failureCount, error) => isColdStart(error) && failureCount < 1,
+        retryDelay: 3_000,
+      },
+    ),
   );
-  const results = (coursesQuery.data?.items ?? []).filter((course) =>
-    matchesQuery(course, query),
-  );
+  const results = searchQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const coldStart = isColdStart(searchQuery.error ?? searchQuery.failureReason);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10 lg:px-8">
@@ -61,14 +64,35 @@ function RouteComponent() {
           <h1 className="text-2xl font-bold tracking-tight">
             Results for &ldquo;{query}&rdquo;
           </h1>
-          {coursesQuery.isLoading ? (
-            <div className="flex justify-center py-16">
+          {searchQuery.isLoading ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-center">
               <Spinner />
+              {coldStart && (
+                <p className="text-sm text-muted-foreground">
+                  Search is starting up. This can take a few seconds.
+                </p>
+              )}
             </div>
-          ) : coursesQuery.isError ? (
+          ) : searchQuery.isError ? (
             <div className="mt-6">
-              <Alert type="error" header="Couldn't search courses">
-                {apiErrorMessage(coursesQuery.error)}
+              <Alert
+                type="error"
+                header={
+                  coldStart
+                    ? 'Search is starting up'
+                    : "Couldn't search courses"
+                }
+              >
+                <p>{apiErrorMessage(searchQuery.error)}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => searchQuery.refetch()}
+                >
+                  Try again
+                </Button>
               </Alert>
             </div>
           ) : results.length === 0 ? (
@@ -102,6 +126,20 @@ function RouteComponent() {
                   </li>
                 ))}
               </ul>
+              {searchQuery.hasNextPage && (
+                <div className="mt-6 flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={searchQuery.isFetchingNextPage}
+                    onClick={() => searchQuery.fetchNextPage()}
+                  >
+                    {searchQuery.isFetchingNextPage
+                      ? 'Loading...'
+                      : 'Load more results'}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </>
