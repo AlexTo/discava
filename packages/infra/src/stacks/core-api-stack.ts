@@ -58,6 +58,15 @@ export interface CoreApiStackProps extends StackProps {
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
 
+// checkov's CKV_AWS_27 only recognises a KMS key, not SQS-managed SSE, which
+// encrypts the queue just the same (as media-pipeline-stack.ts's queue).
+const suppressSqsManagedEncryption = (queue: Queue) =>
+  suppressRules(
+    queue,
+    ['CKV_AWS_27'],
+    'Encrypted with SQS-managed SSE, which this check does not recognise',
+  );
+
 /**
  * The tRPC API any authenticated user can call, plus the progress
  * recalculation that turns the item completions it records into lesson and
@@ -184,13 +193,14 @@ export class CoreApiStack extends Stack {
     // recomputes from scratch, so the next change for the same students
     // also repairs what a failed batch missed.
     // Its messages say where in the stream a batch failed (shard and
-    // sequence numbers), not what the records held, so the AWS managed key
-    // is enough.
+    // sequence numbers), not what the records held, so SQS-managed
+    // encryption is enough: no key to create or pay for.
     const failures = new Queue(this, 'ProgressRecalculationFailures', {
-      encryption: QueueEncryption.KMS_MANAGED,
+      encryption: QueueEncryption.SQS_MANAGED,
       enforceSSL: true,
       retentionPeriod: Duration.days(14),
     });
+    suppressSqsManagedEncryption(failures);
 
     // Only the records that can change progress invoke the Lambda (see
     // PROGRESS_STREAM_FILTERS, which local dev's event runner applies too).
@@ -237,13 +247,14 @@ export class CoreApiStack extends Stack {
     searchCollection.grantWrite(indexing.role!);
 
     // Its messages say where in the stream a batch failed, not what the
-    // records held, so the AWS managed key is enough, as
+    // records held, so SQS-managed encryption is enough, as
     // ProgressRecalculationFailures.
     const failures = new Queue(this, 'SearchIndexingFailures', {
-      encryption: QueueEncryption.KMS_MANAGED,
+      encryption: QueueEncryption.SQS_MANAGED,
       enforceSSL: true,
       retentionPeriod: Duration.days(14),
     });
+    suppressSqsManagedEncryption(failures);
 
     // Only the records that can change what's searchable invoke the Lambda
     // (see SEARCH_STREAM_FILTERS, which local dev's event runner applies
