@@ -81,6 +81,12 @@ export const apiUser = async (givenName: string, roles: Role[]) => {
 
 export type ApiUser = Awaited<ReturnType<typeof apiUser>>;
 
+// core-api's public operations (see PUBLIC_OPERATIONS), called signed out.
+export const anonymousCoreApi = () =>
+  createTRPCClient<CoreApi>({
+    links: [httpLink({ url: SERVICES.coreApi })],
+  });
+
 const textBody = (text: string) =>
   JSON.stringify({
     type: 'doc',
