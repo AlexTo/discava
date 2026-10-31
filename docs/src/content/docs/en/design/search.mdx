@@ -36,6 +36,8 @@ This mirrors `packages/databases/core-table`'s shape closely on purpose: it's ha
 ## Indexing pipeline
 
 ```d2 title="A course edit reaches the search index through the same DynamoDB stream progress recalculation reads"
+direction: right
+
 table: "Core table" {shape: cylinder}
 stream: "DynamoDB Stream"
 recalc: "Progress recalculation"
