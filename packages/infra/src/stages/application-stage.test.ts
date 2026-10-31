@@ -401,6 +401,25 @@ describe('progress recalculation', () => {
   });
 });
 
+// Stages may share an account and region (see StageIsolationSynthesizer),
+// where collection and policy names must be unique.
+describe('search collection (#53)', () => {
+  const stack = synth({});
+
+  it('is named after its stage, as are its policies', () => {
+    const template = stack('Data');
+    template.hasResourceProperties('AWS::OpenSearchServerless::Collection', {
+      Name: 'discava-test',
+    });
+    template.hasResourceProperties(
+      'AWS::OpenSearchServerless::SecurityPolicy',
+      {
+        Name: 'discava-test-encryption',
+      },
+    );
+  });
+});
+
 describe('search indexing (#53)', () => {
   const stack = synth({});
 

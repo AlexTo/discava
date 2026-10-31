@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { Stage } from 'aws-cdk-lib';
 import { Code } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import { readFileSync } from 'fs';
@@ -48,21 +49,25 @@ export type SearchCollectionProps = Omit<
   | 'manifestHash'
   | 'indexSyncHandlerCode'
   | 'collectionName'
-> & {
-  /** @default 'discava-search' */
-  readonly collectionName?: string;
-};
+>;
 
-/** Discava's search collection: courses (#53), for now. */
+/**
+ * Discava's search collection: courses (#53), for now. Named after its
+ * stage (e.g. `discava-development`): collection and policy names must be
+ * unique per account and region, and stages may share an account (see
+ * StageIsolationSynthesizer).
+ */
 export class SearchCollection extends OpenSearchCollection {
-  constructor(
-    scope: Construct,
-    id: string,
-    { collectionName = 'discava-search', ...props }: SearchCollectionProps = {},
-  ) {
+  constructor(scope: Construct, id: string, props: SearchCollectionProps = {}) {
+    const stageName = Stage.of(scope)?.stageName;
+    if (!stageName) {
+      throw new Error(
+        'SearchCollection must be created inside a Stage: its name is the stage name',
+      );
+    }
     super(scope, id, {
       ...props,
-      collectionName,
+      collectionName: stageName,
       runtimeConfigKey,
       indices: manifest.indices,
       manifestHash: manifest.hash,

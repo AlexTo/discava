@@ -42,7 +42,10 @@ export interface OpenSearchCollectionProps {
   /**
    * The collection's name. OpenSearch Serverless requires one (unlike a
    * DynamoDB table, it can't auto-generate it), and the security/access
-   * policies below are keyed on it.
+   * policies below are keyed on it. Must be unique per account and region,
+   * and 3-21 characters (lowercase letters, digits, hyphens; starting with a
+   * letter), so every policy name derived from it fits OpenSearch
+   * Serverless's 32-character limit.
    */
   readonly collectionName: string;
 
@@ -185,6 +188,14 @@ const renderAccessPolicy = (
     }),
   );
 
+// OpenSearch Serverless caps security/access policy and collection group
+// names at 32 characters; the longest suffix this construct appends to the
+// collection's name is `-encryption`.
+const MAX_COLLECTION_NAME_LENGTH = 32 - '-encryption'.length;
+const COLLECTION_NAME_PATTERN = new RegExp(
+  `^[a-z][a-z0-9-]{2,${MAX_COLLECTION_NAME_LENGTH - 1}}$`,
+);
+
 /**
  * An Amazon OpenSearch Serverless collection: a NextGen collection group (the
  * generation with no fixed OCU floor -- a minimum of 0 scales to zero cost
@@ -239,6 +250,11 @@ export abstract class OpenSearchCollection extends Construct {
     }: OpenSearchCollectionProps,
   ) {
     super(scope, id);
+    if (!COLLECTION_NAME_PATTERN.test(collectionName)) {
+      throw new Error(
+        `Invalid OpenSearch collection name '${collectionName}': it must be 3-${MAX_COLLECTION_NAME_LENGTH} characters, lowercase letters, digits and hyphens, starting with a letter`,
+      );
+    }
     this.collectionName = collectionName;
 
     const key: IKey | undefined = enableKmsEncryption
