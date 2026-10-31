@@ -19,6 +19,15 @@ export const openCourse = async (page: Page, title: string) => {
   ).toBeVisible();
 };
 
+// Searches through the top bar's search box, as a visitor would, from
+// wherever `page` already is. The box is on every page (SiteLayout), so this
+// doesn't need to start from a particular one.
+export const searchWithSiteSearch = async (page: Page, query: string) => {
+  await page.getByRole('searchbox', { name: 'Search courses' }).fill(query);
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/\/search\?query=/);
+};
+
 // Enrols from the course page, signing in first when signed out (the way a
 // visitor does, through the "Sign in to enrol" dialog), and starts learning.
 export const enrol = async (page: Page, user?: User) => {
