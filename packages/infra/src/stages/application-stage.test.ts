@@ -406,6 +406,20 @@ describe('progress recalculation', () => {
 describe('search collection (#53)', () => {
   const stack = synth({});
 
+  // AWS rejects a NextGen group with standby replicas off ("StandbyReplicas
+  // cannot be set to DISABLED for NEXTGEN collection groups"), which only
+  // showed up deploying discava-development, so check each real stage's.
+  it.each(['discava-development', 'discava-production'])(
+    "gives %s's collection group NextGen with standby replicas enabled",
+    (name) => {
+      const config = resolveStage('packages/infra', name)?.infra ?? {};
+      synth(config)('Data').hasResourceProperties(
+        'AWS::OpenSearchServerless::CollectionGroup',
+        { Generation: 'NEXTGEN', StandbyReplicas: 'ENABLED' },
+      );
+    },
+  );
+
   it('is named after its stage, as are its policies', () => {
     const template = stack('Data');
     template.hasResourceProperties('AWS::OpenSearchServerless::Collection', {

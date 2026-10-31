@@ -110,7 +110,6 @@ const COMPONENT_FIELDS: Record<
   search: {
     enableKmsEncryption: 'boolean',
     enableKeyRotation: 'boolean',
-    standbyReplicas: 'boolean',
     minIndexingCapacityInOcu: 'number',
     minSearchCapacityInOcu: 'number',
     maxIndexingCapacityInOcu: 'number',

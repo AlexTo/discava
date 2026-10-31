@@ -108,7 +108,6 @@ export default {
             // a ~10-30s cold start on the first search after a quiet spell.
             search: {
               enableKmsEncryption: false,
-              standbyReplicas: false,
               minIndexingCapacityInOcu: 0,
               minSearchCapacityInOcu: 0,
               maxIndexingCapacityInOcu: 2,
@@ -197,7 +196,6 @@ export default {
             search: {
               enableKmsEncryption: true,
               enableKeyRotation: true,
-              standbyReplicas: true,
               minIndexingCapacityInOcu: 1,
               minSearchCapacityInOcu: 1,
               maxIndexingCapacityInOcu: 8,

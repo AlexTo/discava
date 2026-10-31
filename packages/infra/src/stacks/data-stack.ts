@@ -285,7 +285,6 @@ export class DataStack extends Stack {
     return new SearchCollection(this, 'SearchCollection', {
       enableKmsEncryption: searchConfig?.enableKmsEncryption ?? true,
       enableKeyRotation: searchConfig?.enableKeyRotation ?? true,
-      standbyReplicas: searchConfig?.standbyReplicas ?? true,
       minIndexingCapacityInOcu: searchConfig?.minIndexingCapacityInOcu,
       minSearchCapacityInOcu: searchConfig?.minSearchCapacityInOcu,
       maxIndexingCapacityInOcu: searchConfig?.maxIndexingCapacityInOcu,

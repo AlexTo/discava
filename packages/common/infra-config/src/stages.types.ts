@@ -350,13 +350,6 @@ export type SearchComponentConfig = {
   /** Enable automatic key rotation on the collection's KMS key. Only used when `enableKmsEncryption` is true */
   enableKeyRotation?: boolean;
   /**
-   * Multi-AZ with standby replicas, for zero-downtime during an AZ outage.
-   * Roughly doubles OCU cost.
-   *
-   * @default true
-   */
-  standbyReplicas?: boolean;
-  /**
    * The collection group's indexing/search capacity floor, in OCUs. 0 is
    * true scale-to-zero (no cost while idle, a ~10-30s cold start on the
    * first request after one); a non-zero minimum keeps that much capacity

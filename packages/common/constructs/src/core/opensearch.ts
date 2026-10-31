@@ -55,15 +55,6 @@ export interface OpenSearchCollectionProps {
   readonly description?: string;
 
   /**
-   * Multi-AZ with standby replicas, for zero-downtime during an AZ outage.
-   * Roughly doubles OCU cost, so off by default in a development stage. A
-   * property of the collection *group* (NextGen), not the collection itself.
-   *
-   * @default true
-   */
-  readonly standbyReplicas?: boolean;
-
-  /**
    * The collection group's indexing capacity floor and ceiling, in OCUs
    * (NextGen's unit of compute). A minimum of 0 is true scale-to-zero: no
    * cost while idle, at the price of a ~10-30s cold start on the first
@@ -234,7 +225,6 @@ export abstract class OpenSearchCollection extends Construct {
       collectionName,
       runtimeConfigKey,
       description,
-      standbyReplicas = true,
       minIndexingCapacityInOcu = 0,
       maxIndexingCapacityInOcu = 4,
       minSearchCapacityInOcu = 0,
@@ -300,11 +290,13 @@ export abstract class OpenSearchCollection extends Construct {
     // 2-OCU floor whether or not anything is happening): capacity -- and so
     // cost -- is set per collection *group*, not per collection. Standby
     // replicas move here too (CfnCollectionGroupProps requires it; the
-    // member collection no longer sets its own).
+    // member collection no longer sets its own). Always ENABLED: a NextGen
+    // group rejects DISABLED ("StandbyReplicas cannot be set to DISABLED for
+    // NEXTGEN collection groups", InvalidRequest), so there's no toggle.
     const collectionGroup = new CfnCollectionGroup(this, 'CollectionGroup', {
       name: `${collectionName}-group`,
       generation: 'NEXTGEN',
-      standbyReplicas: standbyReplicas ? 'ENABLED' : 'DISABLED',
+      standbyReplicas: 'ENABLED',
       capacityLimits: {
         minIndexingCapacityInOcu,
         maxIndexingCapacityInOcu,
