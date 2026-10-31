@@ -26,7 +26,7 @@ export const RuntimeConfigContext = createContext<IRuntimeConfig | undefined>(
  */
 const LOCAL_DEV_CONFIG: IRuntimeConfig = {
   // Sign in with the local OIDC server instead of Cognito (#226; port, issuer
-  // and client from common-server-utils' LOCAL_OIDC).
+  // and client from common-scripts' local-oidc/config.json).
   localOidc: {
     authority: 'http://localhost:9400/discava',
     clientId: 'local',

@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { LOCAL_OIDC, LOCAL_S3 } from '@discava/common-server-utils/local-dev';
+import { LOCAL_S3 } from '@discava/common-server-utils/local-dev';
 
 // Deletes local dev's data, for a fresh start: DynamoDB local's table and
 // S3Mock's objects (their containers and named volumes), and the event
@@ -22,6 +22,10 @@ const dynamodb = JSON.parse(
   ),
 ).localDev as { containerName: string };
 
+const localOidc = JSON.parse(
+  readFileSync(new URL('../local-oidc/config.json', import.meta.url), 'utf-8'),
+).localDev as { containerName: string };
+
 const docker = (args: string[]) =>
   spawnSync('docker', args, { encoding: 'utf-8' });
 
@@ -33,7 +37,7 @@ if (docker(['info']).status !== 0) {
 for (const container of [
   dynamodb.containerName,
   LOCAL_S3.containerName,
-  LOCAL_OIDC.containerName,
+  localOidc.containerName,
 ]) {
   // `rm --force` succeeds even for a container that isn't there, so check.
   if (
