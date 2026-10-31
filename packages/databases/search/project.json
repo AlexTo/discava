@@ -19,7 +19,7 @@
   },
   "targets": {
     "assemble": {
-      "dependsOn": ["compile", "bundle"]
+      "dependsOn": ["compile", "bundle", "generate-indices-manifest"]
     },
     "build": {
       "dependsOn": [
