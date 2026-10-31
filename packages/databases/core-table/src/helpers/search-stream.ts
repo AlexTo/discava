@@ -2,19 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-// The entities v1's search indices (courses, lessons) are built from. A
-// content item change can't affect either: course and lesson visibility
-// never depend on their content items (see filterEffectivelyVisible), so
-// there's nothing for the indexer to recompute.
-const SEARCHABLE_ENTITIES = ['course', 'module', 'lesson'] as const;
+// The entities v1's search index (courses) is built from. A course's
+// document depends only on its own record, so no curriculum edit (module,
+// lesson or content item) can change it.
+const SEARCHABLE_ENTITIES = ['course'] as const;
 
 /**
  * Which of the core table's stream records can change what's searchable: a
- * course, or a curriculum edit that can change a lesson's effective
- * visibility (its own module or lesson record). Every INSERT/MODIFY (the
- * indexing Lambda decides whether the new image is still effectively
- * visible and published, same as a student-facing read) and REMOVE (the doc
- * is always deleted then, since a removed record can never be visible).
+ * course's. Every INSERT/MODIFY (the indexing Lambda decides whether the new
+ * image is still published) and REMOVE (the doc is always deleted then,
+ * since a removed course can never be published).
  * ElectroDB stores each record's entity name in `__edb_e__`.
  *
  * The one definition both the deployed event source mapping's filters

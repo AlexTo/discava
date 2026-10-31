@@ -220,8 +220,9 @@ export class CoreApiStack extends Stack {
 
   // The single writer of the search collection's documents, run from the
   // core table's stream, in a separate event source mapping (its own DLQ)
-  // from progress recalculation's. Only needs read access to the table
-  // (course/module/lesson state); it never writes there.
+  // from progress recalculation's. Everything it indexes is on the stream
+  // record itself, so it needs no access to the table beyond its stream
+  // (which DynamoEventSource grants).
   private createSearchIndexingLambda(
     coreTable: CoreTable,
     searchCollection: SearchCollection,
@@ -233,7 +234,6 @@ export class CoreApiStack extends Stack {
       runtimeConfig.appConfigApplicationId,
     );
     runtimeConfig.grantReadAppConfig(indexing);
-    coreTable.grantReadData(indexing);
     searchCollection.grantWrite(indexing.role!);
 
     // Its messages say where in the stream a batch failed, not what the

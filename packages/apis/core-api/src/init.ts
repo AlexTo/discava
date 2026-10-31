@@ -60,11 +60,8 @@ export const publicCourseProcedure = publicProcedure.concat(
 );
 
 /**
- * Like publicCourseProcedure, additionally exposing ctx.search: search is
- * usable signed out (it searches published courses the same as
- * course.publicList), and ctx.coreTable is needed to look up the caller's
- * enrolments when they are signed in, to scope lesson results.
+ * Like publicProcedure, additionally exposing ctx.search: search is usable
+ * signed out, since it only finds published courses, the same as
+ * course.publicList.
  */
-export const searchProcedure = publicCourseProcedure.concat(
-  createSearchPlugin(),
-);
+export const searchProcedure = publicProcedure.concat(createSearchPlugin());

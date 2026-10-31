@@ -15,27 +15,27 @@ const record = (
 });
 
 describe('matchesSearchStreamFilters', () => {
-  it('matches an inserted or modified course, module or lesson', () => {
-    for (const entity of ['course', 'module', 'lesson']) {
-      expect(
-        matchesSearchStreamFilters(record('INSERT', 'NewImage', entity)),
-      ).toBe(true);
-      expect(
-        matchesSearchStreamFilters(record('MODIFY', 'NewImage', entity)),
-      ).toBe(true);
-    }
-  });
-
-  it('matches a removed course, module or lesson, by its old image', () => {
+  it('matches an inserted or modified course', () => {
     expect(
-      matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'lesson')),
+      matchesSearchStreamFilters(record('INSERT', 'NewImage', 'course')),
+    ).toBe(true);
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'course')),
     ).toBe(true);
   });
 
-  it('ignores a content item change: neither index depends on it', () => {
+  it('matches a removed course, by its old image', () => {
     expect(
-      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'contentItem')),
-    ).toBe(false);
+      matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'course')),
+    ).toBe(true);
+  });
+
+  it('ignores a curriculum change: the courses index does not depend on it', () => {
+    for (const entity of ['module', 'lesson', 'contentItem']) {
+      expect(
+        matchesSearchStreamFilters(record('MODIFY', 'NewImage', entity)),
+      ).toBe(false);
+    }
   });
 
   it('ignores records that cannot affect search, like a new item completion', () => {
@@ -48,7 +48,7 @@ describe('matchesSearchStreamFilters', () => {
 
   it('ignores a MODIFY matched against the old image', () => {
     expect(
-      matchesSearchStreamFilters(record('MODIFY', 'OldImage', 'lesson')),
+      matchesSearchStreamFilters(record('MODIFY', 'OldImage', 'course')),
     ).toBe(false);
   });
 });

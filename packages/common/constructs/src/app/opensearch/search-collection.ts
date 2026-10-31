@@ -53,7 +53,7 @@ export type SearchCollectionProps = Omit<
   readonly collectionName?: string;
 };
 
-/** Discava's search collection: courses and lessons (#53), for now. */
+/** Discava's search collection: courses (#53), for now. */
 export class SearchCollection extends OpenSearchCollection {
   constructor(
     scope: Construct,

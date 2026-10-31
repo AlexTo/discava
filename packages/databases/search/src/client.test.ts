@@ -8,7 +8,6 @@ import { resolveIndexName } from './client.js';
 describe('resolveIndexName', () => {
   it('resolves every index defined under src/indices', () => {
     expect(resolveIndexName('courses')).toBe('courses');
-    expect(resolveIndexName('lessons')).toBe('lessons');
   });
 
   it('throws for a name no index was defined with', () => {

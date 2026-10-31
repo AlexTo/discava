@@ -412,7 +412,9 @@ describe('search indexing (#53)', () => {
     );
   });
 
-  it('gives the indexing function write access to the search collection, and only read access to the core table', () => {
+  // Everything it indexes is on the stream record itself, so it reads the
+  // core table's stream but never the table.
+  it('gives the indexing function write access to the search collection, and only stream access to the core table', () => {
     const template = stack('CoreApi');
     const policies = Object.values(
       template.findResources('AWS::IAM::Policy', {
@@ -434,7 +436,8 @@ describe('search indexing (#53)', () => {
     );
 
     expect(actions).toContain('aoss:APIAccessAll');
-    expect(actions).toContain('dynamodb:GetItem');
+    expect(actions).toContain('dynamodb:GetRecords');
+    expect(actions).not.toContain('dynamodb:GetItem');
     expect(actions).not.toContain('dynamodb:PutItem');
   });
 });
