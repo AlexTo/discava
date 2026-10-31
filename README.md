@@ -40,6 +40,7 @@ It's opinionated by design: one cloud provider, one way to deploy, rather than a
 
 - [Nx](https://nx.dev) monorepo ([pnpm](https://pnpm.io) workspaces), built with [`@aws/nx-plugin`](https://awslabs.github.io/nx-plugin-for-aws)
 - Serverless AWS: [Lambda](https://aws.amazon.com/lambda/), [DynamoDB](https://aws.amazon.com/dynamodb/) ([ElectroDB](https://electrodb.dev)), [Cognito](https://aws.amazon.com/cognito/), [CDK](https://aws.amazon.com/cdk/) infra
+- Search: [Amazon OpenSearch Serverless](https://aws.amazon.com/opensearch-service/features/serverless/) on NextGen collections, which scale all the way to zero when idle (no cost between searches), kept in sync from the DynamoDB stream
 - [React](https://react.dev) + [Vite](https://vite.dev) frontends with [TanStack Router](https://tanstack.com/router), [Tailwind](https://tailwindcss.com), and [shadcn/ui](https://ui.shadcn.com)
 - [tRPC](https://trpc.io) API
 - Agentic AI: [Amazon Bedrock](https://aws.amazon.com/bedrock/), [Bedrock AgentCore](https://aws.amazon.com/bedrock/agentcore/), and [Strands Agents](https://strandsagents.com) powering the in-app assistant and personalised learning paths
