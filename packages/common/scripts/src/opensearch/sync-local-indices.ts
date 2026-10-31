@@ -30,7 +30,13 @@ for (let attempt = 1; ; attempt++) {
     await client.cluster.health({});
     break;
   } catch (error) {
-    if (attempt >= 30) throw error;
+    if (attempt >= 30) {
+      console.error(
+        `Local OpenSearch at 127.0.0.1:${port} wasn't healthy after ${attempt} attempts:`,
+        error,
+      );
+      throw error;
+    }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
