@@ -27,7 +27,11 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * portal's runtime-config.json) collects values from all of them.
  * InstructorApi also depends on CoreApi only because the stage's single
  * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
- * whichever API stack is created first.
+ * whichever API stack is created first. Data's search collection (#53) is
+ * stateful like the core table, so it lives there too; CoreApi depends on it
+ * for the search procedure's read access and the indexing Lambda's write
+ * access (its own DynamoEventSource on the core table's stream, alongside
+ * progress recalculation's).
  */
 export class ApplicationStage extends Stage {
   constructor(
@@ -43,6 +47,7 @@ export class ApplicationStage extends Stage {
       adminPortal,
       lessonMedia,
       publicMedia,
+      search,
       ...props
     }: ApplicationStageProps,
   ) {
@@ -71,6 +76,7 @@ export class ApplicationStage extends Stage {
       coreTable,
       lessonMedia,
       publicMedia,
+      search,
       instructorPortal: websites.instructorPortal,
       studentPortal: websites.studentPortal,
     });
@@ -87,6 +93,7 @@ export class ApplicationStage extends Stage {
       coreApi,
       identity: data.identity,
       coreTable: data.coreTable,
+      searchCollection: data.searchCollection,
       lessonMediaBucket: data.lessonMediaBucket,
       portals: [
         websites.studentPortal,
@@ -114,5 +121,12 @@ export class ApplicationStage extends Stage {
       applicationStack: data,
       configurationStack: runtimeConfig,
     });
+
+    // CoreApi's functions are granted search access above, after Data (and
+    // so the collection) already exists; its data access policy needs their
+    // role ARNs, so it can't live in Data (which would then depend back on
+    // CoreApi, a cycle) -- RuntimeConfig, like the AppConfig content above,
+    // already deploys last, depending on every stack that could grant here.
+    data.searchCollection.placeAccessPolicyIn(runtimeConfig);
   }
 }

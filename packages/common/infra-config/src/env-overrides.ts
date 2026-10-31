@@ -107,6 +107,15 @@ const COMPONENT_FIELDS: Record<
     domainNames: 'string[]',
     certificateArn: 'string',
   },
+  search: {
+    enableKmsEncryption: 'boolean',
+    enableKeyRotation: 'boolean',
+    minIndexingCapacityInOcu: 'number',
+    minSearchCapacityInOcu: 'number',
+    maxIndexingCapacityInOcu: 'number',
+    maxSearchCapacityInOcu: 'number',
+    retainOnDelete: 'boolean',
+  },
 };
 
 /**

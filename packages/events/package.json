@@ -18,7 +18,9 @@
     "@aws-sdk/client-scheduler": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
+    "@discava/search": "workspace:*",
     "@middy/core": "catalog:",
+    "@opensearch-project/opensearch": "catalog:",
     "electrodb": "catalog:",
     "tslib": "^2.3.0",
     "zod": "catalog:"

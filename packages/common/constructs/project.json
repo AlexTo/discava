@@ -17,7 +17,8 @@
         "@discava/events:assemble",
         "@discava/instructor-portal:assemble",
         "@discava/admin-portal:assemble",
-        "@discava/instructor-api:assemble"
+        "@discava/instructor-api:assemble",
+        "@discava/search:assemble"
       ]
     },
     "build": {
@@ -31,7 +32,8 @@
         "@discava/events:build",
         "@discava/instructor-portal:build",
         "@discava/admin-portal:build",
-        "@discava/instructor-api:build"
+        "@discava/instructor-api:build",
+        "@discava/search:build"
       ]
     },
     "compile": {

@@ -11,6 +11,7 @@ import {
   LessonMediaUploadBucket,
   PublicMediaBucket,
   RuntimeConfig,
+  SearchCollection,
   StudentPortal,
   suppressRules,
   UserIdentity,
@@ -20,6 +21,7 @@ import type {
   IdentityComponentConfig,
   LessonMediaComponentConfig,
   PublicMediaComponentConfig,
+  SearchComponentConfig,
 } from '@discava/common-infra-config';
 import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
@@ -37,6 +39,8 @@ export interface DataStackProps extends StackProps {
   readonly lessonMedia?: LessonMediaComponentConfig;
   /** Settings for the public media bucket construct. @default all enabled */
   readonly publicMedia?: PublicMediaComponentConfig;
+  /** Settings for the OpenSearch Serverless search collection. @default all enabled */
+  readonly search?: SearchComponentConfig;
   /** Uploads and previews lesson media: allowed by both media buckets' CORS. */
   readonly instructorPortal: InstructorPortal;
   /** Plays lesson videos: allowed by the lesson media bucket's CORS only. */
@@ -54,6 +58,7 @@ export class DataStack extends Stack {
   public readonly lessonMediaBucket: LessonMediaBucket;
   public readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
   public readonly publicMediaBucket: PublicMediaBucket;
+  public readonly searchCollection: SearchCollection;
 
   constructor(
     scope: Construct,
@@ -63,6 +68,7 @@ export class DataStack extends Stack {
       coreTable: coreTableConfig,
       lessonMedia: lessonMediaConfig,
       publicMedia: publicMediaConfig,
+      search: searchConfig,
       instructorPortal,
       studentPortal,
       ...props
@@ -77,6 +83,7 @@ export class DataStack extends Stack {
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
     this.publicMediaBucket = this.createPublicMediaBucket(publicMediaConfig);
+    this.searchCollection = this.createSearchCollection(searchConfig);
 
     // hls.js fetches a video's manifest, renditions and segments with
     // cross-origin requests, so both portals that play lesson videos must be
@@ -266,6 +273,27 @@ export class DataStack extends Stack {
       );
     }
     return lessonMediaUploadBucket;
+  }
+
+  private createSearchCollection(searchConfig?: SearchComponentConfig) {
+    // Not suppressing a checkov rule for AWSOwnedKey encryption here, unlike
+    // the other resources' enableKmsEncryption toggles: checkov had no
+    // documented rule for AWS::OpenSearchServerless::Collection as of this
+    // writing. Re-check `pnpm nx run @discava/infra:checkov` once this
+    // deploys, and add the rule here (with suppressRules, matching
+    // createCoreTable above) if one flags it.
+    return new SearchCollection(this, 'SearchCollection', {
+      enableKmsEncryption: searchConfig?.enableKmsEncryption ?? true,
+      enableKeyRotation: searchConfig?.enableKeyRotation ?? true,
+      minIndexingCapacityInOcu: searchConfig?.minIndexingCapacityInOcu,
+      minSearchCapacityInOcu: searchConfig?.minSearchCapacityInOcu,
+      maxIndexingCapacityInOcu: searchConfig?.maxIndexingCapacityInOcu,
+      maxSearchCapacityInOcu: searchConfig?.maxSearchCapacityInOcu,
+      removalPolicy:
+        (searchConfig?.retainOnDelete ?? true)
+          ? RemovalPolicy.RETAIN
+          : RemovalPolicy.DESTROY,
+    });
   }
 
   private createPublicMediaBucket(

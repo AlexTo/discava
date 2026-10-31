@@ -33,6 +33,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/search/index-content.ts",
+        "name": "search-indexing",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/media/transcode-reconciler.ts",
         "name": "transcode-reconciler",
         "iac": "cdk"
@@ -76,6 +82,10 @@
       "dependsOn": [
         {
           "projects": ["@discava/core-table"],
+          "target": "dev"
+        },
+        {
+          "projects": ["@discava/search"],
           "target": "dev"
         },
         {

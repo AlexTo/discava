@@ -7,15 +7,20 @@ import {
   CoreApi,
   CoreTable,
   EventsProgressRecalculation,
+  EventsSearchIndexing,
   InstructorPortal,
   LessonMediaBucket,
   RuntimeConfig,
+  SearchCollection,
   StudentPortal,
   suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
-import { PROGRESS_STREAM_FILTERS } from '@discava/core-table';
+import {
+  PROGRESS_STREAM_FILTERS,
+  SEARCH_STREAM_FILTERS,
+} from '@discava/core-table';
 import {
   CfnResource,
   Duration,
@@ -46,11 +51,21 @@ export interface CoreApiStackProps extends StackProps {
   readonly coreApi?: CoreApiComponentConfig;
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
+  readonly searchCollection: SearchCollection;
   /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
   readonly lessonMediaBucket: LessonMediaBucket;
   /** Every portal calls core-api, so all three are allowed CORS origins. */
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
+
+// checkov's CKV_AWS_27 only recognises a KMS key, not SQS-managed SSE, which
+// encrypts the queue just the same (as media-pipeline-stack.ts's queue).
+const suppressSqsManagedEncryption = (queue: Queue) =>
+  suppressRules(
+    queue,
+    ['CKV_AWS_27'],
+    'Encrypted with SQS-managed SSE, which this check does not recognise',
+  );
 
 /**
  * The tRPC API any authenticated user can call, plus the progress
@@ -67,6 +82,7 @@ export class CoreApiStack extends Stack {
       coreApi: coreApiConfig,
       identity,
       coreTable,
+      searchCollection,
       lessonMediaBucket,
       portals,
       ...props
@@ -116,9 +132,10 @@ export class CoreApiStack extends Stack {
       );
     }
 
-    Object.values(integrations).forEach(({ handler }) =>
-      coreTable.grantReadWriteData(handler),
-    );
+    Object.values(integrations).forEach(({ handler }) => {
+      coreTable.grantReadWriteData(handler);
+      searchCollection.grantRead(handler.role!);
+    });
     for (const op of ['contentItem.videoUrl', 'contentItem.fileUrl'] as const) {
       lessonMediaBucket.grantReadSigningKey(
         this.privilegedHandler(integrations, op),
@@ -136,6 +153,7 @@ export class CoreApiStack extends Stack {
     );
 
     this.createProgressRecalculationLambda(coreTable);
+    this.createSearchIndexingLambda(coreTable, searchCollection);
   }
 
   // Every grant beyond the baseline (table + AppConfig) goes through this,
@@ -175,13 +193,14 @@ export class CoreApiStack extends Stack {
     // recomputes from scratch, so the next change for the same students
     // also repairs what a failed batch missed.
     // Its messages say where in the stream a batch failed (shard and
-    // sequence numbers), not what the records held, so the AWS managed key
-    // is enough.
+    // sequence numbers), not what the records held, so SQS-managed
+    // encryption is enough: no key to create or pay for.
     const failures = new Queue(this, 'ProgressRecalculationFailures', {
-      encryption: QueueEncryption.KMS_MANAGED,
+      encryption: QueueEncryption.SQS_MANAGED,
       enforceSSL: true,
       retentionPeriod: Duration.days(14),
     });
+    suppressSqsManagedEncryption(failures);
 
     // Only the records that can change progress invoke the Lambda (see
     // PROGRESS_STREAM_FILTERS, which local dev's event runner applies too).
@@ -207,5 +226,58 @@ export class CoreApiStack extends Stack {
     );
 
     return recalculation;
+  }
+
+  // The single writer of the search collection's documents, run from the
+  // core table's stream, in a separate event source mapping (its own DLQ)
+  // from progress recalculation's. Everything it indexes is on the stream
+  // record itself, so it needs no access to the table beyond its stream
+  // (which DynamoEventSource grants).
+  private createSearchIndexingLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+  ) {
+    const indexing = new EventsSearchIndexing(this, 'SearchIndexing');
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    indexing.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(indexing);
+    searchCollection.grantWrite(indexing.role!);
+
+    // Its messages say where in the stream a batch failed, not what the
+    // records held, so SQS-managed encryption is enough, as
+    // ProgressRecalculationFailures.
+    const failures = new Queue(this, 'SearchIndexingFailures', {
+      encryption: QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      retentionPeriod: Duration.days(14),
+    });
+    suppressSqsManagedEncryption(failures);
+
+    // Only the records that can change what's searchable invoke the Lambda
+    // (see SEARCH_STREAM_FILTERS, which local dev's event runner applies
+    // too).
+    indexing.addEventSource(
+      new DynamoEventSource(coreTable.table, {
+        startingPosition: StartingPosition.LATEST,
+        batchSize: 100,
+        maxBatchingWindow: Duration.seconds(5),
+        retryAttempts: 5,
+        bisectBatchOnError: true,
+        onFailure: new SqsDlq(failures),
+        filters: SEARCH_STREAM_FILTERS.map(({ eventName, image, entities }) =>
+          FilterCriteria.filter({
+            eventName: FilterRule.isEqual(eventName),
+            dynamodb: {
+              [image]: { __edb_e__: { S: FilterRule.or(...entities) } },
+            },
+          }),
+        ),
+      }),
+    );
+
+    return indexing;
   }
 }

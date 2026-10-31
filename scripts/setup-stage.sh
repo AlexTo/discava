@@ -1156,7 +1156,7 @@ upsert_managed_policy() {
 #   boundary; only stage roles are passed to services) and reading CDK's
 #   bootstrap version and assets, kept on the role itself so they're reviewed
 #   together
-# - <role>-data: S3, DynamoDB, KMS and CloudWatch Logs
+# - <role>-data: S3, DynamoDB, KMS, OpenSearch Serverless and CloudWatch Logs
 # - <role>-edge: CloudFront, WAF, API Gateway and Cognito
 # - <role>-compute: Lambda and its event sources, SQS, EventBridge, Scheduler,
 #   MediaConvert and AppConfig
@@ -1336,6 +1336,58 @@ EOF
         "kms:GenerateDataKey*"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "OpenSearchServerlessCollectionsForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "aoss:CreateCollection",
+        "aoss:UpdateCollection",
+        "aoss:DeleteCollection",
+        "aoss:CreateCollectionGroup",
+        "aoss:UpdateCollectionGroup",
+        "aoss:DeleteCollectionGroup",
+        "aoss:AddCollectionToCollectionGroup",
+        "aoss:TagResource",
+        "aoss:UntagResource"
+      ],
+      "Resource": [
+        "arn:$AWS_PARTITION:aoss:$AWS_REGION:$ACCOUNT_ID:collection/*",
+        "arn:$AWS_PARTITION:aoss:$AWS_REGION:$ACCOUNT_ID:collection-group/*"
+      ]
+    },
+    {
+      "Sid": "OpenSearchServerlessPoliciesAndReads",
+      "Effect": "Allow",
+      "Action": [
+        "aoss:BatchGetCollection",
+        "aoss:BatchGetCollectionGroup",
+        "aoss:ListCollections",
+        "aoss:ListCollectionGroups",
+        "aoss:ListTagsForResource",
+        "aoss:ListSecurityPolicies",
+        "aoss:ListAccessPolicies",
+        "aoss:CreateSecurityPolicy",
+        "aoss:GetSecurityPolicy",
+        "aoss:UpdateSecurityPolicy",
+        "aoss:DeleteSecurityPolicy",
+        "aoss:CreateAccessPolicy",
+        "aoss:GetAccessPolicy",
+        "aoss:UpdateAccessPolicy",
+        "aoss:DeleteAccessPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "OpenSearchServerlessServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/aws-service-role/observability.aoss.amazonaws.com/AWSServiceRoleForAmazonOpenSearchServerless",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": "observability.aoss.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "CloudWatchLogsForDiscava",
@@ -1851,6 +1903,12 @@ upsert_boundary_policy() {
         "apigateway:PATCH"
       ],
       "Resource": "arn:$AWS_PARTITION:apigateway:$AWS_REGION::/account"
+    },
+    {
+      "Sid": "SearchCollectionDataPlane",
+      "Effect": "Allow",
+      "Action": "aoss:APIAccessAll",
+      "Resource": "arn:$AWS_PARTITION:aoss:$AWS_REGION:$ACCOUNT_ID:collection/*"
     },
     {
       "Sid": "ResourcesNamedById",

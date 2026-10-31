@@ -1,0 +1,81 @@
+---
+title: Search
+description: "How course search works: the OpenSearch Serverless collection, the indexing pipeline, and how visibility is enforced."
+sidebar:
+  order: 4
+---
+
+Discava has no full-text or cross-entity search inside the core table (`packages/databases/core-table`): it's fine for key-based access, but not for "find a course whose title or description matches this text". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) is the search layer for that, kept outside the core table rather than added as more GSIs.
+
+## Scope (v1)
+
+Courses only: one index, **courses**, holding every currently **published** course. An unpublished course has its document deleted rather than kept with a flag.
+
+More content types (lessons, instructors, announcements) come later, each as its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index) and its own procedure, such as `lesson.search`, rather than one query mixing them. Each type has its own visibility rule (a lesson's depends on its module, its course, and the caller's enrolment), which stays simplest to read and test kept apart.
+
+## Cost: NextGen, not zero-ETL
+
+Two AWS-native alternatives were considered and rejected for how the collection is sized and how it's kept in sync, both on cost:
+
+- **Sync**: [OpenSearch Ingestion's zero-ETL integration for DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/OpenSearchIngestionForDynamoDB.html) runs a managed pipeline billed per OCU-hour with a fixed minimum, continuously, whether or not the table is changing -- and has no local-dev equivalent. DynamoDB Streams → Lambda (above) costs nothing between writes and reuses the local event runner that already existed for progress recalculation.
+- **Collection capacity**: the collection's capacity is set on a NextGen collection group (`AWS::OpenSearchServerless::CollectionGroup`, `Generation: NEXTGEN`), not the classic generation. Classic has a fixed 2-OCU floor, billed continuously, idle or not. NextGen's floor is a per-stage choice (`CapacityLimits.min{Indexing,Search}CapacityInOcu`): `discava-development` sets it to 0 -- true scale-to-zero between testers, at the cost of a ~10-30s cold start on the first search after a quiet spell -- while `discava-production` keeps a small non-zero minimum (smaller than classic's fixed floor) so real traffic is never served from cold.
+
+NextGen is only available in a subset of regions (as of writing: US East N. Virginia/Ohio, US West Oregon, Asia Pacific Mumbai/Singapore/Sydney/Tokyo, Europe Frankfurt/Ireland/Spain/Stockholm) -- confirm the stage's deploy region is one of them.
+
+## Packages
+
+| Package | Holds |
+|---|---|
+| `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates missing indices / updates mappings, never deletes one; runs on every deploy, so an index deleted by hand comes back) |
+| `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
+| `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
+| `packages/apis/core-api` | `course.publicSearch`: the tRPC procedure |
+
+This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
+
+## Indexing pipeline
+
+```d2 title="A course edit reaches the search index through the same DynamoDB stream progress recalculation reads"
+direction: right
+
+table: "Core table" {shape: cylinder}
+stream: "DynamoDB Stream"
+recalc: "Progress recalculation"
+index: "Search indexing"
+search: "OpenSearch Serverless" {shape: cylinder}
+
+table -> stream
+stream -> recalc: "PROGRESS_STREAM_FILTERS"
+stream -> index: "SEARCH_STREAM_FILTERS"
+index -> search: "index / delete"
+```
+
+The core table's stream already feeds progress recalculation (`CoreApiStack`); search indexing is a second, independent `DynamoEventSource` on the same stream, with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`) and its own dead-letter queue, so a failure in one never blocks the other.
+
+`index-content.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
+
+- A **course** record carries its own `status`; if it's `'published'` the document is written (validated against `CourseDocumentSchema` first), otherwise it's deleted. Everything the document needs is on the record, so the Lambda never reads the table.
+- Every `REMOVE` deletes the course's document by its old image's key.
+- A document's id is always the course's own key (`courseId`), so a replayed or retried record writes the same document again rather than a duplicate -- idempotent, the same requirement the core table's own writers hold to.
+
+A freshly created index starts empty: the stream only carries changes made after its mapping exists. `packages/databases/search/src/index-sync/backfill.ts` (re)indexes every currently published course from the table, for exactly that case or to repair one after an indexing bug.
+
+## The search procedure
+
+`core-api`'s `course.publicSearch` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
+
+It's public, like `course.publicList`: a signed-out caller can search too. Visibility is enforced twice, once at index time (above) and again in the query itself, which always filters to `status: 'published'` even though every indexed course already is one. A bug in one isn't then the only thing standing between a caller and a draft or archived course.
+
+## Local dev
+
+An `opensearchproject/opensearch` container (`packages/common/scripts/src/opensearch`, the same `runLocalContainer` pattern as DynamoDB local and S3Mock), security plugin disabled and memory capped, started by `@discava/search`'s `dev` target. Its image is pinned in `packages/databases/search/config.json` to a 3.x release rather than `latest`: [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) upgrades collections automatically to new open source releases and requires clients compatible with OpenSearch 3.x, so local dev stays on that line without moving every time a release lands. It's the newest release at the time, chosen over an older one to match Serverless, so unlike the other local images it wasn't held back two weeks. Re-pin it when Serverless moves to a newer minor version, and re-check the calls in `sync-indices.ts` and the procedures against its [list of supported operations](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html). `pnpm nx run @discava/common-scripts:reset-local-data` also wipes its indices. The local event runner (`packages/events/src/local/event-runner.ts`) routes `SEARCH_STREAM_FILTERS` matches to the same indexing handler deployed stages use.
+
+## Deviations from #1267
+
+Kept here so the upstream `ts#opensearch` proposal (or a PR adopting it) can check each one:
+
+- CDK has no L2 construct for `AWS::OpenSearchServerless::*` yet, only L1 `Cfn*` resources; `OpenSearchCollection` hand-rolls the data access policy and `grantRead`/`grantWrite` on top of them.
+- A grantee's data access policy entry needs its literal principal ARN (OpenSearch Serverless authorises by ARN there, not via the grantee's own IAM policy), which can't live in a stack created before the grantee's without creating a circular stack dependency. The policy is built lazily (the same deferred-Aspect technique `RuntimeConfig` uses) and placed in a stack set by `placeAccessPolicyIn`, not always the collection's own stack.
+- The index-sync custom resource's own data access grant is a separate, eager, same-stack policy from the one `grantRead`/`grantWrite` populate: it has to exist before the custom resource first runs, during the collection's own stack's deploy, which a deferred cross-stack policy can't guarantee.
+- Every collection is created inside its own NextGen `AWS::OpenSearchServerless::CollectionGroup` (see "Cost" above), a resource that postdates #1267; a generator written against #1267 as it stands would create a classic, always-on collection instead.
+- The target that generates the indices manifest is `generate-indices-manifest`, not `indices`: every other target in this workspace is a verb (`compile`, `bundle`, `pull-image`), and `indices` reads as if it creates or lists indices rather than writing the manifest file.

@@ -9,6 +9,7 @@ import {
   createErrorPlugin,
   createLoggerPlugin,
   createMetricsPlugin,
+  createSearchPlugin,
   createTracerPlugin,
   IMiddlewareContext,
 } from './middleware/index.js';
@@ -57,3 +58,10 @@ export const courseProcedure = protectedProcedure.concat(
 export const publicCourseProcedure = publicProcedure.concat(
   createCoreTablePlugin(),
 );
+
+/**
+ * Like publicProcedure, additionally exposing ctx.search: search is usable
+ * signed out, since it only finds published courses, the same as
+ * course.publicList.
+ */
+export const searchProcedure = publicProcedure.concat(createSearchPlugin());

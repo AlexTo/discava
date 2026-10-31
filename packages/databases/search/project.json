@@ -1,0 +1,128 @@
+{
+  "name": "@discava/search",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/databases/search/src",
+  "projectType": "library",
+  "tags": [],
+  "metadata": {
+    "generator": "ts#opensearch",
+    "ports": [9200],
+    "iac": "cdk",
+    "components": [
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/index-sync/handler.ts",
+        "name": "index-sync",
+        "iac": "cdk"
+      }
+    ]
+  },
+  "targets": {
+    "assemble": {
+      "dependsOn": ["compile", "bundle", "generate-indices-manifest"]
+    },
+    "build": {
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        "bundle",
+        "generate-indices-manifest"
+      ]
+    },
+    "backfill": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx scripts/backfill.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "bundle": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["compile"],
+      "cache": true,
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/bundle"],
+      "inputs": ["default"],
+      "options": {
+        "command": "rolldown -c rolldown.config.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "compile": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/tsc"],
+      "options": {
+        "command": "tsc --build tsconfig.lib.json",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "generate-indices-manifest": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/indices"],
+      "options": {
+        "command": "tsx scripts/generate-indices-manifest.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-image", "generate-indices-manifest"],
+      "options": {
+        "commands": [
+          "tsx ../../common/scripts/src/opensearch/start-container.ts",
+          "tsx ../../common/scripts/src/opensearch/sync-local-indices.ts"
+        ],
+        "parallel": true,
+        "cwd": "{projectRoot}"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome format {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome format --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "format",
+        {
+          "projects": ["@discava/source"],
+          "target": "license-check"
+        }
+      ],
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome lint {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome check --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "pull-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx ../../common/scripts/src/opensearch/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}

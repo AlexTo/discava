@@ -7,11 +7,11 @@ import { readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { LOCAL_S3 } from '@discava/common-server-utils/local-dev';
 
-// Deletes local dev's data, for a fresh start: DynamoDB local's table and
-// S3Mock's objects (their containers and named volumes), and the event
-// runner's working files in tmp/local-dev/. Stop `pnpm dev` first. Nothing
-// deployed is touched. Each service creates itself afresh on the next
-// `pnpm dev`.
+// Deletes local dev's data, for a fresh start: DynamoDB local's table,
+// S3Mock's objects and the local OpenSearch container's indices (their
+// containers and named volumes), and the event runner's working files in
+// tmp/local-dev/. Stop `pnpm dev` first. Nothing deployed is touched. Each
+// service creates itself afresh on the next `pnpm dev`.
 
 const dynamodb = JSON.parse(
   readFileSync(
@@ -26,6 +26,15 @@ const localOidc = JSON.parse(
   readFileSync(new URL('../local-oidc/config.json', import.meta.url), 'utf-8'),
 ).localDev as { containerName: string };
 
+const search = JSON.parse(
+  readFileSync(
+    fileURLToPath(
+      new URL('../../../../databases/search/config.json', import.meta.url),
+    ),
+    'utf-8',
+  ),
+).localDev as { containerName: string };
+
 const docker = (args: string[]) =>
   spawnSync('docker', args, { encoding: 'utf-8' });
 
@@ -38,6 +47,7 @@ for (const container of [
   dynamodb.containerName,
   LOCAL_S3.containerName,
   localOidc.containerName,
+  search.containerName,
 ]) {
   // `rm --force` succeeds even for a container that isn't there, so check.
   if (
@@ -51,6 +61,7 @@ for (const container of [
 for (const volume of [
   `${dynamodb.containerName}-data`,
   `${LOCAL_S3.containerName}-data`,
+  `${search.containerName}-data`,
 ]) {
   const result = docker(['volume', 'rm', volume]);
   console.log(

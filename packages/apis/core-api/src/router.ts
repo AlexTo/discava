@@ -23,6 +23,7 @@ import {
   submitQuizAttempt,
   viewQuiz,
 } from './procedures/quiz.js';
+import { publicSearchCourses } from './procedures/search.js';
 
 export const router = t.router;
 
@@ -36,6 +37,7 @@ export const appRouter = router({
     listByInstructor: listCoursesByInstructor,
     listInstructors: listInstructorsForCourse,
     publicList: publicListCourses,
+    publicSearch: publicSearchCourses,
     publicView: publicViewCourse,
     view: viewCourse,
   }),
@@ -62,4 +64,5 @@ export type AppRouter = typeof appRouter;
 export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
+  'course.publicSearch',
 ] as const;
