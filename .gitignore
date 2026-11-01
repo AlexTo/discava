@@ -45,3 +45,6 @@ vite.config.*.timestamp*
 .playwright-cli
 _tmp_*
 .vitest
+
+# graphify
+graphify-out/
