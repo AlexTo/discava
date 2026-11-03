@@ -33,8 +33,11 @@ export default createIndex({
   mappings: {
     properties: {
       courseId: { type: 'keyword' },
-      title: { type: 'text' },
-      description: { type: 'text' },
+      // `english` stems and drops stop words, so a search for "design" finds
+      // "designing" and "table" finds "tables". The query side analyses its
+      // terms with the same analyzer.
+      title: { type: 'text', analyzer: 'english' },
+      description: { type: 'text', analyzer: 'english' },
       status: { type: 'keyword' },
       publishedAt: { type: 'date' },
       updatedAt: { type: 'date' },

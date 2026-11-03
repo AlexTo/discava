@@ -58,7 +58,7 @@ The core table's stream already feeds progress recalculation (`CoreApiStack`); s
 - Every `REMOVE` deletes the course's document by its old image's key.
 - A document's id is always the course's own key (`courseId`), so a replayed or retried record writes the same document again rather than a duplicate -- idempotent, the same requirement the core table's own writers hold to.
 
-A freshly created index starts empty: the stream only carries changes made after its mapping exists. `packages/databases/search/src/index-sync/backfill.ts` (re)indexes every currently published course from the table, for exactly that case or to repair one after an indexing bug.
+A freshly created index starts empty: the stream only carries changes made after its mapping exists, so a course published before then isn't searchable until it's next written.
 
 ## The search procedure
 

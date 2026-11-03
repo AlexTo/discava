@@ -19,10 +19,8 @@ export const SERVICES = {
   eventRunner: 'http://localhost:2024/',
   s3Mock: 'http://localhost:9090/',
   localOidc: 'http://localhost:9400/discava/.well-known/openid-configuration',
+  // The local OpenSearch container's `courses` index (port from
+  // @discava/search's config.json). global-setup waits for it to exist (200),
+  // not just for the container to answer (#267).
+  searchIndex: 'http://localhost:9200/courses',
 } as const;
-
-// The local OpenSearch container's port (@discava/search's config.json).
-// Unlike SERVICES above, answering at all isn't enough: `@discava/search`'s
-// `dev` target starts the container and syncs its indices in parallel, so a
-// scenario that searches before the `courses` index exists would 404 (#267).
-export const SEARCH_INDEX_URL = 'http://localhost:9200/courses';

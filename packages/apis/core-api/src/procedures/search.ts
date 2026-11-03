@@ -45,10 +45,8 @@ export const publicSearchCourses = searchProcedure
                   multi_match: {
                     query: input.q,
                     fields: ['title', 'description'],
-                    // Every word must match (in title or description, in
-                    // either order), matching the browser filter this
-                    // replaces -- see search.tsx in student-portal.
-                    operator: 'and',
+                    // Any word may match (in title or description); more
+                    // matching words rank higher.
                     type: 'cross_fields',
                   },
                 },

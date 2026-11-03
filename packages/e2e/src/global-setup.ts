@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { PORTALS, SEARCH_INDEX_URL, SERVICES } from './helpers/portals.js';
+import { PORTALS, SERVICES } from './helpers/portals.js';
 
 const TIMEOUT_MS = 3 * 60_000;
 const INTERVAL_MS = 1_000;
@@ -49,10 +49,11 @@ const waitForSearchIndex = (url: string) =>
 // Playwright's webServer waits for the student portal only; `pnpm dev` starts
 // everything else alongside it, not necessarily first.
 export default async function globalSetup() {
+  const { searchIndex, ...services } = SERVICES;
   await Promise.all([
-    ...Object.entries({ ...PORTALS, ...SERVICES }).map(([name, url]) =>
+    ...Object.entries({ ...PORTALS, ...services }).map(([name, url]) =>
       waitForHttp(name, url),
     ),
-    waitForSearchIndex(SEARCH_INDEX_URL),
+    waitForSearchIndex(searchIndex),
   ]);
 }

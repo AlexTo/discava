@@ -55,11 +55,14 @@ describe('course.publicSearch', () => {
     expect(request.body.query.bool.filter).toEqual([
       { term: { status: 'published' } },
     ]);
-    // Every word must match, matching the browser filter this replaces.
+    // Not every word has to match: the default `or` operator ranks by how
+    // many do.
     expect(request.body.query.bool.must.multi_match).toMatchObject({
-      operator: 'and',
       type: 'cross_fields',
     });
+    expect(request.body.query.bool.must.multi_match).not.toHaveProperty(
+      'operator',
+    );
     expect(result).toEqual({
       items: [{ courseId: 'c1', title: 'Intro to DynamoDB' }],
       cursor: null,
