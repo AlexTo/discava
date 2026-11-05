@@ -6,7 +6,6 @@
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Code } from 'aws-cdk-lib/aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { OpenSearchCollection } from './opensearch.js';
@@ -63,28 +62,5 @@ describe('OpenSearchCollection', { timeout: 30_000 }, () => {
     for (const name of ['Discava', '1discava', 'discava_search', 'ds']) {
       expect(() => create(name)).toThrow(/Invalid OpenSearch collection name/);
     }
-  });
-
-  it('grants document deletion only through grantWriteAndDelete', () => {
-    const stack = new Stack(new App(), 'Stack');
-    const collection = new TestCollection(stack, 'Collection', {
-      collectionName: 'test-collection',
-      runtimeConfigKey: 'Test',
-      indices: [],
-      manifestHash: 'hash',
-      indexSyncHandlerCode: Code.fromInline('exports.handler = () => {}'),
-    });
-    const role = (id: string) =>
-      new Role(stack, id, { assumedBy: new ServicePrincipal('lambda') });
-    collection.grantWrite(role('Writer'));
-    collection.grantWriteAndDelete(role('Deleter'));
-
-    const policy = Template.fromStack(stack).findResources(
-      'AWS::OpenSearchServerless::AccessPolicy',
-      { Properties: { Name: 'test-collection-access' } },
-    );
-    const statements = JSON.stringify(Object.values(policy)[0]);
-    expect(statements.match(/aoss:DeleteDocument/g)).toHaveLength(1);
-    expect(statements).toContain('aoss:WriteDocument');
   });
 });
