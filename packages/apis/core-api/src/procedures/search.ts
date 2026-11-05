@@ -75,11 +75,14 @@ export const publicSearchCourses = searchProcedure
         : (body.hits.total?.value ?? hits.length);
 
     return {
-      items: hits.map(({ _source: { courseId, title, description } }) => ({
-        courseId,
-        title,
-        ...(description && { description }),
-      })),
+      items: hits.map(
+        ({ _source: { courseId, title, description, imageKey } }) => ({
+          courseId,
+          title,
+          ...(description && { description }),
+          ...(imageKey && { imageKey }),
+        }),
+      ),
       cursor: from + hits.length < total ? from + hits.length : null,
     };
   });

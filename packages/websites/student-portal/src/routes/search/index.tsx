@@ -4,17 +4,18 @@
  */
 
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
-import { Alert } from '../components/alert';
-import { PageBreadcrumbs } from '../components/page-breadcrumbs';
-import { Spinner } from '../components/spinner';
-import { useCoreApi } from '../hooks/useCoreApi';
+import { Alert } from '../../components/alert';
+import { CourseCard } from '../../components/course-card';
+import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
+import { Spinner } from '../../components/spinner';
+import { useCoreApi } from '../../hooks/useCoreApi';
+import { toDisplayCourse } from '../../lib/course-display';
 
-export const Route = createFileRoute('/search')({
+export const Route = createFileRoute('/search/')({
   validateSearch: (search: Record<string, unknown>): { query?: string } =>
     typeof search.query === 'string' ? { query: search.query } : {},
   component: RouteComponent,
@@ -49,7 +50,7 @@ function RouteComponent() {
   const coldStart = isColdStart(searchQuery.error ?? searchQuery.failureReason);
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10 lg:px-8">
+    <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
       <PageBreadcrumbs crumbs={[{ label: 'Search' }]} className="mb-6" />
       {!query ? (
         <div className="py-16 text-center">
@@ -104,28 +105,14 @@ function RouteComponent() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {results.length} {results.length === 1 ? 'course' : 'courses'}
               </p>
-              <ul className="mt-6 space-y-3">
+              <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {results.map((course) => (
-                  <li key={course.courseId}>
-                    <Link
-                      to="/learn/$courseId"
-                      params={{ courseId: course.courseId }}
-                      className="block rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    >
-                      <Card className="py-0 transition-colors hover:bg-muted/40">
-                        <CardContent className="px-5 py-4">
-                          <h2 className="font-semibold">{course.title}</h2>
-                          {course.description ? (
-                            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                              {course.description}
-                            </p>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  </li>
+                  <CourseCard
+                    key={course.courseId}
+                    course={toDisplayCourse(course)}
+                  />
                 ))}
-              </ul>
+              </div>
               {searchQuery.hasNextPage && (
                 <div className="mt-6 flex justify-center">
                   <Button

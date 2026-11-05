@@ -4,8 +4,8 @@
  */
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { routeTree } from '../routeTree.gen';
-import { ApiError, renderWithCoreApi } from '../test/render-with-core-api';
+import { routeTree } from '../../routeTree.gen';
+import { ApiError, renderWithCoreApi } from '../../test/render-with-core-api';
 
 const hit = (courseId: string, title: string, description?: string) => ({
   courseId,
@@ -38,6 +38,16 @@ describe('/search', () => {
       await screen.findByRole('link', { name: /Linear Algebra/ }),
     ).toHaveAttribute('href', '/learn/linalg');
     expect(screen.getByText('1 course')).toBeInTheDocument();
+  });
+
+  it('shows each course as the catalogue’s card, with its description and a link', async () => {
+    search('linear');
+
+    expect(await screen.findByText('Vectors and matrices')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Preview Linear Algebra' }),
+    ).toHaveAttribute('href', '/learn/linalg');
+    expect(screen.getByText('Learn more')).toBeInTheDocument();
   });
 
   it('says when nothing matches', async () => {

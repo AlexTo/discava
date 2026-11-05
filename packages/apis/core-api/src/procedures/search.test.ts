@@ -69,6 +69,29 @@ describe('course.publicSearch', () => {
     });
   });
 
+  it('returns each course’s image key when it has one', async () => {
+    searchMock.mockResolvedValue(
+      esResponse([
+        {
+          _source: {
+            courseId: 'c1',
+            title: 'With image',
+            imageKey: 'courses/c1/image.png',
+            status: 'published',
+          },
+        },
+        { _source: { courseId: 'c2', title: 'No image', status: 'published' } },
+      ]),
+    );
+
+    const result = await callAnonymously().publicSearch({ q: 'image' });
+
+    expect(result.items).toEqual([
+      { courseId: 'c1', title: 'With image', imageKey: 'courses/c1/image.png' },
+      { courseId: 'c2', title: 'No image' },
+    ]);
+  });
+
   it('gives the request a timeout shorter than the Lambda’s own', async () => {
     searchMock.mockResolvedValue(esResponse([]));
 
