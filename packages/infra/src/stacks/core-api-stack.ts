@@ -301,7 +301,7 @@ export class CoreApiStack extends Stack {
     );
     runtimeConfig.grantReadAppConfig(reindex);
     coreTable.grantReadData(reindex);
-    searchCollection.grantWriteAndDelete(reindex.role!);
+    searchCollection.grantWrite(reindex.role!);
     return reindex;
   }
 }

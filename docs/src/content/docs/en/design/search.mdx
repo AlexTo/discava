@@ -62,7 +62,7 @@ A freshly created index starts empty: the stream only carries changes made after
 
 ### Re-indexing a deployed stage
 
-`src/search/search-reindex.ts` is a private Lambda (no event source, no API route) that pages through the published courses, writes them with `_bulk` using the same `toCourseDocument` the stream indexer uses, then deletes the documents of courses that aren't published any more. It runs under its own role because the collection's data access policy names only the stack's Lambda roles, so a person's AWS login gets a 403 on the data plane; the role also holds `aoss:DeleteDocument` through `grantWriteAndDelete`. Run it after the index is recreated or an indexing bug:
+`src/search/search-reindex.ts` is a private Lambda (no event source, no API route) that pages through the published courses, writes them with `_bulk` using the same `toCourseDocument` the stream indexer uses, then deletes the documents of courses that aren't published any more. It runs under its own role because the collection's data access policy names only the stack's Lambda roles, so a person's AWS login gets a 403 on the data plane; `grantWrite`'s `aoss:WriteDocument` covers the deletes too. Run it after the index is recreated or an indexing bug:
 
 ```sh
 pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
