@@ -127,8 +127,11 @@ test.describe('access', () => {
   });
 
   test("students can't find a draft course", async ({ page }) => {
+    // Search by the title's unique suffix alone: search matches any word, so
+    // the full title would also match other courses sharing "E2E" or "course".
+    const suffix = draft.split(' ').at(-1) ?? draft;
     await page.goto(
-      `${PORTALS.student}/search?query=${encodeURIComponent(draft)}`,
+      `${PORTALS.student}/search?query=${encodeURIComponent(suffix)}`,
     );
 
     await expect(page.getByText('No courses match your search.')).toBeVisible();
