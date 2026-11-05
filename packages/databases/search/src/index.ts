@@ -8,7 +8,6 @@ export {
   resolveEndpoint,
   resolveIndexName,
 } from './client.js';
-export { backfill } from './index-sync/backfill.js';
 export {
   type IndexManifestEntry,
   type IndicesManifest,

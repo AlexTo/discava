@@ -60,6 +60,7 @@ const indexOrDeleteCourse = async (client: Client, record: StreamRecord) => {
     courseId,
     title: image.title,
     description: image.description,
+    imageKey: image.imageKey,
     status: 'published',
     publishedAt: image.publishedAt ?? image.updatedAt,
     updatedAt: image.updatedAt,

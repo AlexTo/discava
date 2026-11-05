@@ -25,19 +25,28 @@ const manifestPath = fileURLToPath(
   ),
 );
 
+// A cold JVM start (security, ML and performance-analyzer plugins all
+// loading) can take well over 30s under a contended CI runner (#267), so
+// this allows a couple of minutes rather than giving up right as it's
+// still coming up.
+const HEALTH_CHECK_ATTEMPTS = 90;
+const HEALTH_CHECK_RETRY_DELAY_MS = 2_000;
+
 for (let attempt = 1; ; attempt++) {
   try {
     await client.cluster.health({});
     break;
   } catch (error) {
-    if (attempt >= 30) {
+    if (attempt >= HEALTH_CHECK_ATTEMPTS) {
       console.error(
         `Local OpenSearch at 127.0.0.1:${port} wasn't healthy after ${attempt} attempts:`,
         error,
       );
       throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) =>
+      setTimeout(resolve, HEALTH_CHECK_RETRY_DELAY_MS),
+    );
   }
 }
 

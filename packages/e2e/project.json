@@ -61,6 +61,13 @@
         }
       }
     },
+    "seed-local-courses": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/seed-local-courses.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "e2e": {
       "executor": "nx:run-commands",
       "options": {

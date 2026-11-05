@@ -30,13 +30,6 @@
         "generate-indices-manifest"
       ]
     },
-    "backfill": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx scripts/backfill.ts",
-        "cwd": "{projectRoot}"
-      }
-    },
     "bundle": {
       "executor": "nx:run-commands",
       "dependsOn": ["compile"],
