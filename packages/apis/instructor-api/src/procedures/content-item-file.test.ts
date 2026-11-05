@@ -330,6 +330,18 @@ describe('createContentItemFileUploadUrl', () => {
     expect(getSignedUrl).not.toHaveBeenCalled();
   });
 
+  it('refuses an assignment lesson without minting an upload URL (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(
+      callAs().createContentItemFileUploadUrl(request),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+  });
+
   it('refuses an archived lesson without minting an upload URL', async () => {
     lessonGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({

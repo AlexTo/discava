@@ -199,6 +199,19 @@ describe('createContentItemText', () => {
     body: textBody,
   };
 
+  it('refuses to add a text item to an assignment lesson: it holds only its own item (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(
+      callAs().createContentItemText(validTextInput),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
   it('rejects callers who are not in the instructor group before checking course membership', async () => {
     await expect(
       callAs(['student']).createContentItemText(validTextInput),

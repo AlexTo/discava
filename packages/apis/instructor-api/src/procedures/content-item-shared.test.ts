@@ -12,6 +12,7 @@ const {
   courseGet,
   courseInstructorGet,
   contentItemGet,
+  lessonGet,
   contentItemDelete,
   contentItemDeleteWhere,
   courseCheck,
@@ -23,6 +24,7 @@ const {
   courseGet: vi.fn(),
   courseInstructorGet: vi.fn(),
   contentItemGet: vi.fn(),
+  lessonGet: vi.fn(),
   contentItemDelete: vi.fn(),
   contentItemDeleteWhere: vi.fn(),
   courseCheck: vi.fn(),
@@ -44,6 +46,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
         get: contentItemGet,
         delete: contentItemDelete,
       },
+      lesson: { get: lessonGet },
     },
     transaction: { write: transactionWrite },
   })),
@@ -134,6 +137,9 @@ beforeEach(() => {
   contentItemGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: videoContentItem }),
   });
+  lessonGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: { kind: 'lesson' } }),
+  });
   // The delete runs in a transaction with a check that the course is still a
   // draft, conditioned on the item still being as it was read.
   contentItemDelete.mockReturnValue({ where: contentItemDeleteWhere });
@@ -173,6 +179,18 @@ describe('deleteContentItem', () => {
 
     await expect(callAs().deleteContentItem(input)).rejects.toMatchObject({
       code: 'NOT_FOUND',
+    });
+    expect(contentItemDelete).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete the one item of an assignment lesson: it goes with its lesson (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: { kind: 'assignment' } }),
+    });
+
+    await expect(callAs().deleteContentItem(input)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('Delete the assignment instead'),
     });
     expect(contentItemDelete).not.toHaveBeenCalled();
   });

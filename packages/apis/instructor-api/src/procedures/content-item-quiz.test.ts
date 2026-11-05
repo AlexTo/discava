@@ -239,6 +239,18 @@ describe('createContentItemQuiz', () => {
     ...quiz,
   };
 
+  it('refuses to add a quiz to an assignment lesson: it holds only its own item (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(callAs().createContentItemQuiz(input)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+  });
+
   it('rejects callers who are not in the instructor group before checking course membership', async () => {
     await expect(
       callAs(['student']).createContentItemQuiz(input),
