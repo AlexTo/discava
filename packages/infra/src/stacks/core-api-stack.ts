@@ -8,6 +8,7 @@ import {
   CoreTable,
   EventsProgressRecalculation,
   EventsSearchIndexing,
+  EventsSearchReindex,
   InstructorPortal,
   LessonMediaBucket,
   RuntimeConfig,
@@ -154,6 +155,7 @@ export class CoreApiStack extends Stack {
 
     this.createProgressRecalculationLambda(coreTable);
     this.createSearchIndexingLambda(coreTable, searchCollection);
+    this.createSearchReindexLambda(coreTable, searchCollection);
   }
 
   // Every grant beyond the baseline (table + AppConfig) goes through this,
@@ -279,5 +281,27 @@ export class CoreApiStack extends Stack {
     );
 
     return indexing;
+  }
+
+  // Rebuilds the courses index from the core table when invoked, for after
+  // the index is recreated or an indexing bug (#273). No event source and no
+  // API route: only an IAM principal allowed lambda:InvokeFunction can call
+  // it. It runs under its own role because the collection's data access
+  // policy names Lambda roles only, so a person's AWS login can't write to
+  // the index directly.
+  private createSearchReindexLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+  ) {
+    const reindex = new EventsSearchReindex(this, 'SearchReindex');
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    reindex.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(reindex);
+    coreTable.grantReadData(reindex);
+    searchCollection.grantWriteAndDelete(reindex.role!);
+    return reindex;
   }
 }

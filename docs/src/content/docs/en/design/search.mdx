@@ -60,6 +60,16 @@ The core table's stream already feeds progress recalculation (`CoreApiStack`); s
 
 A freshly created index starts empty: the stream only carries changes made after its mapping exists, so a course published before then isn't searchable until it's next written.
 
+### Re-indexing a deployed stage
+
+`src/search/search-reindex.ts` is a private Lambda (no event source, no API route) that pages through the published courses, writes them with `_bulk` using the same `toCourseDocument` the stream indexer uses, then deletes the documents of courses that aren't published any more. It runs under its own role because the collection's data access policy names only the stack's Lambda roles, so a person's AWS login gets a 403 on the data plane; the role also holds `aoss:DeleteDocument` through `grantWriteAndDelete`. Run it after the index is recreated or an indexing bug:
+
+```sh
+pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
+```
+
+It prints how many courses were indexed and how many stale documents were removed, and running it twice leaves the same documents. A catalogue too big for one invocation's 5-minute timeout would need the Lambda to hand off to itself. Locally, `pnpm nx run @discava/e2e:seed-local-courses` seeds the index instead.
+
 ## The search procedure
 
 `core-api`'s `course.publicSearch` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.

@@ -11,7 +11,6 @@ import { DynamoDBStreamSchema } from '@aws-lambda-powertools/parser/schemas';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import {
-  CourseDocumentSchema,
   getOpenSearchClient,
   type IndexName,
   resolveIndexName,
@@ -19,6 +18,7 @@ import {
 import middy from '@middy/core';
 import type { Client } from '@opensearch-project/opensearch';
 import { z } from 'zod';
+import { toCourseDocument } from './course-document.js';
 
 process.env.POWERTOOLS_METRICS_NAMESPACE = 'SearchIndexing';
 process.env.POWERTOOLS_SERVICE_NAME = 'SearchIndexing';
@@ -56,13 +56,12 @@ const indexOrDeleteCourse = async (client: Client, record: StreamRecord) => {
   if (image?.status !== 'published') {
     return deleteDoc(client, 'courses', courseId);
   }
-  const doc = CourseDocumentSchema.parse({
+  const doc = toCourseDocument({
     courseId,
     title: image.title,
     description: image.description,
     imageKey: image.imageKey,
-    status: 'published',
-    publishedAt: image.publishedAt ?? image.updatedAt,
+    publishedAt: image.publishedAt,
     updatedAt: image.updatedAt,
   });
   await client.index({

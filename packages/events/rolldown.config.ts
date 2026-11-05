@@ -82,4 +82,15 @@ export default defineConfig([
     platform: 'node',
     external: [/@aws-sdk\/.*/],
   },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/search/search-reindex.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/search-reindex/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
 ]);
