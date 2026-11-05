@@ -151,6 +151,10 @@ const WRITE_INDEX_PERMISSIONS = [
   'aoss:ReadDocument',
   'aoss:WriteDocument',
 ];
+const DELETE_INDEX_PERMISSIONS = [
+  ...WRITE_INDEX_PERMISSIONS,
+  'aoss:DeleteDocument',
+];
 const WRITE_COLLECTION_PERMISSIONS = [
   'aoss:CreateCollectionItems',
   'aoss:UpdateCollectionItems',
@@ -393,6 +397,14 @@ export abstract class OpenSearchCollection extends Construct {
    */
   public grantWrite(grantee: IRole): void {
     this.grant(grantee, WRITE_INDEX_PERMISSIONS, WRITE_COLLECTION_PERMISSIONS);
+  }
+
+  /**
+   * `grantWrite`, plus deleting documents (which `grantWrite` leaves out, so
+   * only a grantee that must remove documents holds it).
+   */
+  public grantWriteAndDelete(grantee: IRole): void {
+    this.grant(grantee, DELETE_INDEX_PERMISSIONS, WRITE_COLLECTION_PERMISSIONS);
   }
 
   // The index-sync handler always lives in this construct's own stack (it's

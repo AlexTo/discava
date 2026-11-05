@@ -8,6 +8,13 @@
     "generator": "ts#project"
   },
   "targets": {
+    "reindex-search": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/infra/reindex-search.ts {args.stage}",
+        "cwd": "{projectRoot}"
+      }
+    },
     "reset-local-data": {
       "executor": "nx:run-commands",
       "options": {
