@@ -72,11 +72,25 @@ export const FileContentItemSchema = z.object({
   mimeType: z.string(),
 });
 
+// A graded upload (#102): the student submits files and an instructor grades
+// them. The only item in an assignment lesson, which is its title.
+export const AssignmentContentItemSchema = z.object({
+  ...ContentItemBaseSchema,
+  type: z.literal('assignment'),
+  // The instructions, as a Tiptap JSON document.
+  body: z.string(),
+  // A submission after this is accepted but marked late.
+  dueAt: z.string().optional(),
+  // What the work is graded out of.
+  maxPoints: z.number(),
+});
+
 export const ContentItemSchema = z.discriminatedUnion('type', [
   VideoContentItemSchema,
   TextContentItemSchema,
   QuizContentItemSchema,
   FileContentItemSchema,
+  AssignmentContentItemSchema,
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;

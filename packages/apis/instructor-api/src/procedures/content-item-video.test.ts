@@ -383,6 +383,23 @@ describe('createContentItemVideoUploadUrl', () => {
   // Invariant: nothing can be uploaded for an archived lesson or an archived
   // content item, so no upload is left behind that the create/update
   // procedures would then reject.
+  it('refuses an assignment lesson without minting an upload URL (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(
+      callAs().createContentItemVideoUploadUrl({
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        fileName: 'intro.mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+  });
+
   it('refuses an archived lesson without minting an upload URL', async () => {
     lessonGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({
