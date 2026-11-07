@@ -30,7 +30,7 @@ Rationale: unit tests cover logic, invariants cover data that no schema enforces
 All application data lives in the one `core-table` DynamoDB table, defined as ElectroDB entities under `packages/databases/core-table/src/entities/` and grouped into collections in `service.ts`. A feature MUST:
 
 - Add a new record type as an entity in that table, not a second table.
-- Design its access patterns up front, in the plan, and serve each with a key or a declared index. A scan MUST NOT back a user-facing query.
+- Design its access patterns up front, in the plan, and serve each user-facing request with a key or a declared index, never a scan. A scan is allowed only in tooling outside a user request (tests, invariant checks, local scripts, admin re-index jobs), and the plan MUST say where.
 - Co-locate records read together under a shared partition key, with sort keys that make a parent's children a contiguous range (as `curriculum` does for course, module, lesson and content item).
 - Add an index only for an access pattern the plan names, because indexes cost writes and storage.
 - Reach the table through `@discava/core-table` (which resolves the client and table for local and deployed use alike), never through a raw DynamoDB client in an API.
