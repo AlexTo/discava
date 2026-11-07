@@ -256,6 +256,7 @@ With multiple developers:
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
 - Verify tests fail before implementing
+- Do not edit existing tests to make them pass. If one looks wrong, stop and raise it. A task that changes an existing test must cite the spec change behind it (constitution principle IV)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
