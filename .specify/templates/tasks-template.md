@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: The Discava constitution (principle IV) requires tests, so include them. Unit tests cover new business logic. A rule spanning records or writers needs a `core-table` helper, an invariant in `helpers/invariants.ts` and a test that breaks it. A change to a main user flow needs a `packages/e2e` scenario. Drop only the layers the feature doesn't touch.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -80,12 +80,15 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 ⚠️
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
 - [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
 - [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T01A [P] [US1] Unit tests for new procedures/access patterns in the API's `*.test.ts`
+- [ ] T01B [P] [US1] (If a rule spans records or writers) Invariant in `packages/databases/core-table/src/helpers/invariants.ts` and a test that breaks it, written before the shared write helper
+- [ ] T01C [US1] (If it changes a main user flow) E2E scenario in `packages/e2e/src/scenarios/[flow].e2e.ts`; the story is done when it passes via `pnpm nx e2e @discava/e2e`
 
 ### Implementation for User Story 1
 
@@ -106,10 +109,13 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 ⚠️
 
 - [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
 - [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T02A [P] [US2] Unit tests for new procedures/access patterns in the API's `*.test.ts`
+- [ ] T02B [P] [US2] (If a rule spans records or writers) Invariant in `packages/databases/core-table/src/helpers/invariants.ts` and a test that breaks it, written before the shared write helper
+- [ ] T02C [US2] (If it changes a main user flow) E2E scenario in `packages/e2e/src/scenarios/[flow].e2e.ts`; the story is done when it passes via `pnpm nx e2e @discava/e2e`
 
 ### Implementation for User Story 2
 
@@ -128,10 +134,13 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 3 ⚠️
 
 - [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
 - [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T03A [P] [US3] Unit tests for new procedures/access patterns in the API's `*.test.ts`
+- [ ] T03B [P] [US3] (If a rule spans records or writers) Invariant in `packages/databases/core-table/src/helpers/invariants.ts` and a test that breaks it, written before the shared write helper
+- [ ] T03C [US3] (If it changes a main user flow) E2E scenario in `packages/e2e/src/scenarios/[flow].e2e.ts`; the story is done when it passes via `pnpm nx e2e @discava/e2e`
 
 ### Implementation for User Story 3
 
@@ -247,6 +256,7 @@ With multiple developers:
 - [Story] label maps task to specific user story for traceability
 - Each user story should be independently completable and testable
 - Verify tests fail before implementing
+- Do not edit existing tests to make them pass. If one looks wrong, stop and raise it. A task that changes an existing test must cite the spec change behind it (constitution principle IV)
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
 - Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
