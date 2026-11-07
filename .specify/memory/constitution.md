@@ -1,50 +1,62 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Discava Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. AWS-Native and Serverless Only
+Discava targets one cloud provider (AWS) and one way to deploy (CDK). Features MUST NOT introduce a pluggable or multi-cloud backend, and MUST use managed, serverless AWS services.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+Rationale: opinionated simplicity is the product. Every abstraction over the provider is code we maintain for no one.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Generators First
+New projects and components MUST be created with an `@aws/nx-plugin` generator (via the `nx-plugin-for-aws` MCP server) when one fits. Hand-scaffolding is allowed only when no generator applies, and the plan MUST say why.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Rationale: generator-owned structure stays upgradeable with the plugin.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Everything Runs Locally
+A feature MUST work under `pnpm dev` with Docker and no AWS account. Any AWS service a feature adds MUST get a local stand-in or a documented, justified exception. Backend code switches on `LOCAL_DEV=true`, with shared settings in `common-server-utils/local-dev`.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+Rationale: contributors and CI exercise the real flows without a deployed stage.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Layered Tests: Unit, Invariants, End to End
+Each layer has its own job; a feature uses every layer it touches.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- **Unit tests.** New business logic (tRPC procedures, entity access patterns) MUST ship with unit tests covering its main behavior and the rules it enforces (authorization, transactional guarantees).
+- **Invariants.** A rule that spans records or writers (core-api, instructor-api, event handlers) MUST be written through a shared `core-table` helper that every writer calls, and MUST have a check in `core-table`'s `helpers/invariants.ts` plus a test that breaks it.
+- **End to end.** A change to a main user flow (signing in, building and publishing a course, enrolling, learning) MUST add or extend a scenario in `packages/e2e`. Scenarios MUST make their own users and uniquely named data, MUST NOT reset local data, and MUST keep the invariant check after every test. A new write that two users could race on SHOULD add a concurrency test.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Rationale: unit tests cover logic, invariants cover data that no schema enforces, and end-to-end scenarios cover whole flows. A feature isn't done until each layer it touches passes.
+
+### V. Secure by Default
+Constructs MUST default to fully hardened settings (WAF, KMS encryption, and so on). Only a stage's config in `common/infra-config` may relax them, and `discava-production` is the hardened baseline.
+
+Rationale: a relaxed default is a production hole waiting for a forgotten flag.
+
+### VI. Change Freely Before Launch
+Until production is live, there are no real users, links or data to keep compatible. Routes, APIs and data shapes MUST be changed outright: no redirects, deprecated aliases or fallbacks for old data. Fix development data by hand.
+
+Rationale: compatibility code written now is dead weight at launch. Revisit this principle when production goes live.
+
+### VII. Repository Conventions
+- Conventional Commits for commit and PR titles.
+- Biome (not ESLint or Prettier) formats and lints.
+- Code that isn't an entity or a package's setup goes in a `helpers/` folder, one file per entity or topic. No catch-all `utils.ts`.
+- Buttons carry text labels only: no arrow icons. Icon-only controls and breadcrumb separators are fine.
+- Runtime code shared by backend Lambdas goes in `common-server-utils`, and non-UI code shared by portals goes in `common-web-utils`. Code only one consumer uses stays beside it.
+
+## Additional Constraints
+
+- Stack composition stays within CloudFormation's 500-resource limit per stack. Stateful resources live in the `Data` stack.
+- Constructs own one component's resources. `packages/infra` composes them into stacks.
+- SPDX copyright headers are generator-managed and MUST NOT be edited by hand.
+
+## Development Workflow
+
+- Run `pnpm build` (or `pnpm nx affected --target build`) before pushing. CI's PR checks run lint, test and build on what changed.
+- Follow CONTRIBUTING.md for the PR process. [CLAUDE.md](../../CLAUDE.md) holds the day-to-day commands and architecture notes; this constitution holds only the rules a plan must not break.
+- Plans MUST pass the Constitution Check against the principles above, and any violation MUST be recorded in the plan's Complexity Tracking with a justification.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes other practices where they conflict. Amend it by pull request, with the rationale in the description. Versioning is semantic: MAJOR for removing or redefining a principle, MINOR for adding a principle or materially widening one, PATCH for clarifications. Reviewers MUST check that each PR complies.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
