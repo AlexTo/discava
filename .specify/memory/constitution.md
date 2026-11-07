@@ -26,21 +26,35 @@ Each layer has its own job; a feature uses every layer it touches.
 
 Rationale: unit tests cover logic, invariants cover data that no schema enforces, and end-to-end scenarios cover whole flows. A feature isn't done until each layer it touches passes.
 
-### V. Secure by Default
+### V. Single-Table Data Model via ElectroDB
+All application data lives in the one `core-table` DynamoDB table, defined as ElectroDB entities under `packages/databases/core-table/src/entities/` and grouped into collections in `service.ts`. A feature MUST:
+
+- Add a new record type as an entity in that table, not a second table.
+- Design its access patterns up front, in the plan, and serve each with a key or a declared index. A scan MUST NOT back a user-facing query.
+- Co-locate records read together under a shared partition key, with sort keys that make a parent's children a contiguous range (as `curriculum` does for course, module, lesson and content item).
+- Add an index only for an access pattern the plan names, because indexes cost writes and storage.
+- Reach the table through `@discava/core-table` (which resolves the client and table for local and deployed use alike), never through a raw DynamoDB client in an API.
+- Consider the table's stream consumers (progress, search) when it changes a record they read. Update `PROGRESS_STREAM_FILTERS` or `SEARCH_STREAM_FILTERS` if the change affects what they react to.
+
+Rationale: single-table design fits only if access patterns are known and keys are planned. Retrofitting keys or indexes later means migrating data.
+
+### VI. Secure by Default
 Constructs MUST default to fully hardened settings (WAF, KMS encryption, and so on). Only a stage's config in `common/infra-config` may relax them, and `discava-production` is the hardened baseline.
 
 Rationale: a relaxed default is a production hole waiting for a forgotten flag.
 
-### VI. Change Freely Before Launch
+### VII. Change Freely Before Launch
 Until production is live, there are no real users, links or data to keep compatible. Routes, APIs and data shapes MUST be changed outright: no redirects, deprecated aliases or fallbacks for old data. Fix development data by hand.
 
 Rationale: compatibility code written now is dead weight at launch. Revisit this principle when production goes live.
 
-### VII. Repository Conventions
+### VIII. Repository Conventions
 - Conventional Commits for commit and PR titles.
 - Biome (not ESLint or Prettier) formats and lints.
 - Code that isn't an entity or a package's setup goes in a `helpers/` folder, one file per entity or topic. No catch-all `utils.ts`.
 - Buttons carry text labels only: no arrow icons. Icon-only controls and breadcrumb separators are fine.
+- A browser-tested change saves screenshots of its key steps (and any failure) to the git-ignored `tmp/screenshots/pr-<number>/`.
+- A change to English docs is translated locally and committed, or the PR notes that translations are pending.
 - Runtime code shared by backend Lambdas goes in `common-server-utils`, and non-UI code shared by portals goes in `common-web-utils`. Code only one consumer uses stays beside it.
 
 ## Additional Constraints
