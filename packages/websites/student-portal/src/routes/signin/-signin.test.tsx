@@ -4,8 +4,8 @@
  */
 import { waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { routeTree } from '../routeTree.gen';
-import { renderWithCoreApi } from '../test/render-with-core-api';
+import { routeTree } from '../../routeTree.gen';
+import { renderWithCoreApi } from '../../test/render-with-core-api';
 
 const course = {
   courseId: 'course-1',

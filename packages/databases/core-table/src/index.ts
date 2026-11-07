@@ -39,6 +39,11 @@ export {
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
 export {
+  matchesSearchStreamFilters,
+  SEARCH_STREAM_FILTERS,
+  type SearchStreamRecord,
+} from './helpers/search-stream.js';
+export {
   type StudentActivity,
   studentActivityAt,
   studentActivityWrites,

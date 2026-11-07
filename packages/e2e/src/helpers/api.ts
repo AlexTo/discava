@@ -20,6 +20,23 @@ const REDIRECT_URI = 'http://localhost/e2e';
 // form does, and returns their access token.
 const accessTokenFor = async (roles: Role[], givenName: string) => {
   const user = newUser(givenName, roles);
+  return accessTokenForClaims(user.username, {
+    sub: randomUUID(),
+    username: user.username,
+    email: user.email,
+    email_verified: true,
+    given_name: user.givenName,
+    family_name: user.familyName,
+    name: `${user.givenName} ${user.familyName}`,
+    'cognito:groups': roles,
+  });
+};
+
+// Signs in with the claims the local OIDC page would send for `username`.
+export const accessTokenForClaims = async (
+  username: string,
+  claims: Record<string, unknown>,
+) => {
   const authorize = `${ISSUER}/authorize?${new URLSearchParams({
     client_id: 'e2e',
     redirect_uri: REDIRECT_URI,
@@ -31,17 +48,8 @@ const accessTokenFor = async (roles: Role[], givenName: string) => {
     method: 'POST',
     redirect: 'manual',
     body: new URLSearchParams({
-      username: user.username,
-      claims: JSON.stringify({
-        sub: randomUUID(),
-        username: user.username,
-        email: user.email,
-        email_verified: true,
-        given_name: user.givenName,
-        family_name: user.familyName,
-        name: `${user.givenName} ${user.familyName}`,
-        'cognito:groups': roles,
-      }),
+      username,
+      claims: JSON.stringify(claims),
     }),
   });
   const code = new URL(signIn.headers.get('location') ?? '').searchParams.get(
@@ -65,10 +73,11 @@ const accessTokenFor = async (roles: Role[], givenName: string) => {
 };
 
 // A new user, signed in, with a client for each API.
-export const apiUser = async (givenName: string, roles: Role[]) => {
-  const headers = {
-    authorization: `Bearer ${await accessTokenFor(roles, givenName)}`,
-  };
+export const apiUser = async (givenName: string, roles: Role[]) =>
+  apiClients(await accessTokenFor(roles, givenName));
+
+export const apiClients = (accessToken: string) => {
+  const headers = { authorization: `Bearer ${accessToken}` };
   return {
     core: createTRPCClient<CoreApi>({
       links: [httpLink({ url: SERVICES.coreApi, headers })],

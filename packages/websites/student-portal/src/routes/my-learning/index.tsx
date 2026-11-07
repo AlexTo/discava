@@ -12,16 +12,16 @@ import {
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Alert } from '../components/alert';
-import { CourseProgressCard } from '../components/course-progress-card';
-import { PageBreadcrumbs } from '../components/page-breadcrumbs';
-import { Spinner } from '../components/spinner';
-import { useCoreApi } from '../hooks/useCoreApi';
-import { requireSignIn } from '../lib/require-sign-in';
+import { Alert } from '../../components/alert';
+import { CourseProgressCard } from '../../components/course-progress-card';
+import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
+import { Spinner } from '../../components/spinner';
+import { useCoreApi } from '../../hooks/useCoreApi';
+import { requireSignIn } from '../../lib/require-sign-in';
 
 // The student's courses, in progress and completed, as on Coursera's
 // /my-learning: each with its progress and what's next.
-export const Route = createFileRoute('/my-learning')({
+export const Route = createFileRoute('/my-learning/')({
   beforeLoad: requireSignIn,
   component: MyLearning,
 });

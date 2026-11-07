@@ -1,0 +1,22 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { spawnSync } from 'child_process';
+import { readFileSync } from 'fs';
+
+const { containerEngine, image } = JSON.parse(
+  readFileSync('config.json', 'utf-8'),
+).localDev;
+
+const inspect = spawnSync(containerEngine, ['image', 'inspect', image], {
+  stdio: 'ignore',
+});
+if (inspect.status !== 0) {
+  const pull = spawnSync(containerEngine, ['pull', image], {
+    stdio: 'inherit',
+  });
+  if (pull.status !== 0) {
+    process.exit(pull.status ?? 1);
+  }
+}

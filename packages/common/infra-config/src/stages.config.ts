@@ -104,6 +104,16 @@ export default {
               enableKmsEncryption: false,
               retainOnDelete: false,
             },
+            // Scales to zero between testers using it: no cost while idle,
+            // a ~10-30s cold start on the first search after a quiet spell.
+            search: {
+              enableKmsEncryption: false,
+              minIndexingCapacityInOcu: 0,
+              minSearchCapacityInOcu: 0,
+              maxIndexingCapacityInOcu: 2,
+              maxSearchCapacityInOcu: 2,
+              retainOnDelete: false,
+            },
           },
         },
         'discava-production': {
@@ -178,6 +188,18 @@ export default {
               enableWaf: true,
               enableKmsEncryption: true,
               enableKeyRotation: true,
+              retainOnDelete: true,
+            },
+            // A warm floor (never 0) so real traffic never pays NextGen's
+            // cold-start latency; still a smaller continuous cost than
+            // classic's fixed 2-OCU minimum, with headroom to scale under load.
+            search: {
+              enableKmsEncryption: true,
+              enableKeyRotation: true,
+              minIndexingCapacityInOcu: 1,
+              minSearchCapacityInOcu: 1,
+              maxIndexingCapacityInOcu: 8,
+              maxSearchCapacityInOcu: 8,
               retainOnDelete: true,
             },
           },

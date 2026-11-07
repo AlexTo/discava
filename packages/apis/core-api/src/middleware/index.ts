@@ -8,6 +8,7 @@ import { IAuthContext } from './auth.js';
 import { ICoreTableContext } from './core-table.js';
 import { ILoggerContext } from './logger.js';
 import { IMetricsContext } from './metrics.js';
+import { ISearchContext } from './search.js';
 import { ITracerContext } from './tracer.js';
 
 export * from './auth.js';
@@ -15,6 +16,7 @@ export * from './core-table.js';
 export * from './error.js';
 export * from './logger.js';
 export * from './metrics.js';
+export * from './search.js';
 export * from './tracer.js';
 
 export interface IResponseCookiesContext {
@@ -32,5 +34,6 @@ export type IMiddlewareContext =
     ICoreTableContext &
     ILoggerContext &
     IMetricsContext &
+    ISearchContext &
     ITracerContext &
     IResponseCookiesContext;

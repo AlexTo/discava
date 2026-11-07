@@ -9,3 +9,4 @@ export * from './course.js';
 export * from './enrolment.js';
 export * from './lesson-progress.js';
 export * from './quiz.js';
+export * from './search.js';

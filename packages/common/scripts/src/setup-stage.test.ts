@@ -378,6 +378,66 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
+  it("allows managing the stage's search collection, which is named by a generated id", () => {
+    // OpenSearch Serverless ARNs end in a generated collection id, unknown
+    // until the collection exists, so creating one can't be scoped by name.
+    // Policies and reads have no resource type at all.
+    const { status, executionStatements } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining([
+          'aoss:CreateCollection',
+          'aoss:DeleteCollection',
+          'aoss:CreateCollectionGroup',
+        ]),
+        Resource: [
+          'arn:aws:aoss:ap-southeast-2:111122223333:collection/*',
+          'arn:aws:aoss:ap-southeast-2:111122223333:collection-group/*',
+        ],
+      }),
+    );
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining([
+          'aoss:BatchGetCollection',
+          'aoss:CreateSecurityPolicy',
+          'aoss:CreateAccessPolicy',
+        ]),
+        Resource: '*',
+      }),
+    );
+  });
+
+  it('only lets it create the OpenSearch Serverless service-linked role', () => {
+    // The first collection in an account creates the role.
+    const { status, executionStatements } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'iam:CreateServiceLinkedRole',
+        Resource:
+          'arn:aws:iam::111122223333:role/aws-service-role/observability.aoss.amazonaws.com/AWSServiceRoleForAmazonOpenSearchServerless',
+        Condition: {
+          StringEquals: {
+            'iam:AWSServiceName': 'observability.aoss.amazonaws.com',
+          },
+        },
+      }),
+    );
+  });
+
   it('fits each of its policies within the size IAM allows', () => {
     // Whitespace excluded, IAM allows 10,240 characters across a role's
     // inline policies and 6,144 per managed policy. The test account ID and
@@ -417,6 +477,28 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
 });
 
 describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
+  it("lets the stage's functions use the search collection's data plane", () => {
+    // Every function's role is capped by the boundary, so without this the
+    // indexing Lambda, the search API and the index-sync handler are denied
+    // however their own policies read.
+    const { status, policyDocument } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'aoss:APIAccessAll',
+        Resource: 'arn:aws:aoss:ap-southeast-2:111122223333:collection/*',
+      }),
+    );
+  });
+
   it("lets the stage's functions read table streams and send to its queues", () => {
     const { status, policyDocument } = runSetup({
       kind: 'response',

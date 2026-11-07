@@ -4,8 +4,11 @@
  */
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { routeTree } from '../routeTree.gen';
-import { type Handler, renderWithCoreApi } from '../test/render-with-core-api';
+import { routeTree } from '../../routeTree.gen';
+import {
+  type Handler,
+  renderWithCoreApi,
+} from '../../test/render-with-core-api';
 
 const AT = '2026-10-01T00:00:00.000Z';
 

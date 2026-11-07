@@ -50,6 +50,9 @@
     },
     {
       "path": "./packages/common/web-utils"
+    },
+    {
+      "path": "./packages/databases/search"
     }
   ]
 }

@@ -1,1 +1,6 @@
 \.git-secrets/git-secrets:
+# AWS's own placeholder account ids, used in tests/local-dev fixtures
+# (e.g. packages/infra/src/stages/application-stage.test.ts,
+# packages/events/src/local/trigger-events.ts); not real accounts.
+111122223333
+000000000000

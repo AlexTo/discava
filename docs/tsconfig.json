@@ -63,6 +63,9 @@
       ],
       "@discava/common-web-utils/*": [
         "../packages/common/web-utils/src/*.ts"
+      ],
+      "@discava/search": [
+        "../packages/databases/search/src/index.ts"
       ]
     }
   }

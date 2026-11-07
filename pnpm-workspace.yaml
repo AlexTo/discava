@@ -131,3 +131,4 @@ catalog:
   katex: 0.18.10
   '@tiptap/static-renderer': 3.31.3
   '@playwright/test': ^1.64.1
+  '@opensearch-project/opensearch': 3.9.0

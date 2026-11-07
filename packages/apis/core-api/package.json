@@ -13,6 +13,8 @@
     "@aws-sdk/credential-providers": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
+    "@discava/search": "workspace:*",
+    "@opensearch-project/opensearch": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "aws-xray-sdk-core": "catalog:",

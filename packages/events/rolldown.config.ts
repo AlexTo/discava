@@ -51,6 +51,17 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
+    input: 'src/search/index-content.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/search-indexing/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
     input: 'src/media/transcode-reconciler.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/transcode-reconciler/index.js',
@@ -65,6 +76,17 @@ export default defineConfig([
     input: 'src/identity/pre-token-generation.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/pre-token-generation/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/search/search-reindex.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/search-reindex/index.js',
       format: 'cjs',
       codeSplitting: false,
     },

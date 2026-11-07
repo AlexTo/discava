@@ -9,14 +9,31 @@ import { signIn, type User } from './users.js';
 // Steps in the student portal, for scenarios to build on.
 
 // Finds a published course by searching for its title, and opens its page.
+// course.publicSearch is fed by the core table's stream, which batches for up
+// to 5s (#267), so a course just published may not be indexed yet: retries
+// the search rather than failing on whatever the first attempt saw.
 export const openCourse = async (page: Page, title: string) => {
-  await page.goto(
-    `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
-  );
+  await expect(async () => {
+    await page.goto(
+      `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
+    );
+    await expect(page.getByRole('link', { name: title })).toBeVisible({
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 20_000 });
   await page.getByRole('link', { name: title }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: title }),
   ).toBeVisible();
+};
+
+// Searches through the top bar's search box, as a visitor would, from
+// wherever `page` already is. The box is on every page (SiteLayout), so this
+// doesn't need to start from a particular one.
+export const searchWithSiteSearch = async (page: Page, query: string) => {
+  await page.getByRole('searchbox', { name: 'Search courses' }).fill(query);
+  await page.keyboard.press('Enter');
+  await page.waitForURL(/\/search\?query=/);
 };
 
 // Enrols from the course page, signing in first when signed out (the way a

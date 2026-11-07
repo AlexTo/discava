@@ -18,6 +18,7 @@ import {
   dynamoDBClientConfig,
   getDynamoDBClient,
   matchesProgressStreamFilters,
+  matchesSearchStreamFilters,
   resolveTableName,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
@@ -25,13 +26,14 @@ import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-gener
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
+import { handler as searchIndexing } from '../search/index-content.js';
 import { createBatcher, pollStream } from './dynamodb-stream.js';
 import { startEventRunnerServer } from './event-runner-server.js';
+import { createTranscoder, type Docker } from './transcoder.js';
 import {
   preTokenGenerationEvent,
   transcodeCompletionEvent,
 } from './trigger-events.js';
-import { createTranscoder, type Docker } from './transcoder.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
 // when deployed, done locally, so local changes reach the same handler logic.
@@ -43,6 +45,9 @@ import { createTranscoder, type Docker } from './transcoder.js';
 // - the core table's stream -> progress-recalculation, filtered and batched
 //   like its event source mapping (PROGRESS_STREAM_FILTERS, 100 records or
 //   5 s)
+// - the core table's stream -> search-indexing, filtered and batched the
+//   same way (SEARCH_STREAM_FILTERS); reset-local-data also wipes the local
+//   OpenSearch container's indices (#53)
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
@@ -96,6 +101,15 @@ const progressBatches = createBatcher<DynamoDBRecord>({
   deliver: async (Records) => {
     log(`progress-recalculation <- ${Records.length} stream record(s)`);
     await invoke('progress-recalculation', progressRecalculation, { Records });
+  },
+});
+
+const searchBatches = createBatcher<DynamoDBRecord>({
+  maxRecords: 100,
+  windowMs: 5000,
+  deliver: async (Records) => {
+    log(`search-indexing <- ${Records.length} stream record(s)`);
+    await invoke('search-indexing', searchIndexing, { Records });
   },
 });
 
@@ -202,8 +216,10 @@ for (let attempt = 1; ; attempt++) {
         getDynamoDBClient().send(
           new DescribeTableCommand({ TableName: tableName }),
         ),
-      onRecords: (records) =>
-        progressBatches.add(records.filter(matchesProgressStreamFilters)),
+      onRecords: (records) => {
+        progressBatches.add(records.filter(matchesProgressStreamFilters));
+        searchBatches.add(records.filter(matchesSearchStreamFilters));
+      },
       signal: abort.signal,
     });
     break;
@@ -213,4 +229,4 @@ for (let attempt = 1; ; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
-await progressBatches.flush();
+await Promise.all([progressBatches.flush(), searchBatches.flush()]);
