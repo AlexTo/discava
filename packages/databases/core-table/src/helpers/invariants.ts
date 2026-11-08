@@ -46,6 +46,7 @@ export interface TableSnapshot {
     | 'courseId'
     | 'moduleId'
     | 'lessonId'
+    | 'kind'
     | 'order'
     | 'visibility'
     | 'archivedAt'
@@ -146,6 +147,7 @@ export const INVARIANTS = [
   'last-activity-at-current',
   'draft-course-nothing-archived',
   'child-order-claimed',
+  'assignment-lesson-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -963,6 +965,68 @@ export const checkChildOrderClaimed = (
   ];
 };
 
+// 19 (assignments, #102). An assignment lesson holds exactly one content item,
+// a quiz or an upload assignment, and an upload assignment is only ever in an
+// assignment lesson. Creating one writes the lesson and its item together, and
+// the item can't be added to, removed or archived separately from its lesson,
+// so a lesson with none, several, or the wrong type was written outside that.
+export const checkAssignmentLessonShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const itemsByLesson = groupBy(
+    snapshot.contentItems,
+    ({ courseId, moduleId, lessonId }) =>
+      JSON.stringify({ courseId, moduleId, lessonId }),
+  );
+  const lessonKeys = new Set(
+    snapshot.lessons
+      .filter(({ kind }) => kind === 'assignment')
+      .map(({ courseId, moduleId, lessonId }) =>
+        JSON.stringify({ courseId, moduleId, lessonId }),
+      ),
+  );
+  const fromLessons = snapshot.lessons
+    .filter(({ kind }) => kind === 'assignment')
+    .flatMap(({ courseId, moduleId, lessonId }) => {
+      const record = { courseId, moduleId, lessonId };
+      const items =
+        itemsByLesson.get(JSON.stringify({ courseId, moduleId, lessonId })) ??
+        [];
+      if (items.length !== 1) {
+        return [
+          violation(
+            'assignment-lesson-shape',
+            record,
+            `assignment lesson has ${items.length} content items, not 1`,
+          ),
+        ];
+      }
+      return items[0].type === 'quiz' || items[0].type === 'assignment'
+        ? []
+        : [
+            violation(
+              'assignment-lesson-shape',
+              record,
+              `assignment lesson holds a ${items[0].type} item`,
+            ),
+          ];
+    });
+  const fromItems = snapshot.contentItems
+    .filter(
+      ({ type, courseId, moduleId, lessonId }) =>
+        type === 'assignment' &&
+        !lessonKeys.has(JSON.stringify({ courseId, moduleId, lessonId })),
+    )
+    .map(({ courseId, lessonId, contentItemId }) =>
+      violation(
+        'assignment-lesson-shape',
+        { courseId, lessonId, contentItemId },
+        "upload assignment isn't in an assignment lesson",
+      ),
+    );
+  return [...fromLessons, ...fromItems];
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -983,6 +1047,7 @@ const CHECKS = [
   checkLastActivityAtCurrent,
   checkDraftCourseNothingArchived,
   checkChildOrderClaimed,
+  checkAssignmentLessonShape,
 ];
 
 // Every violation in the snapshot, by every check.

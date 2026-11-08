@@ -37,9 +37,10 @@ export const createContentItemEntity = async () =>
         // item needs body, a file needs s3Key/fileName/fileSize/mimeType) is
         // enforced by the zod schemas in instructor-api/core-api, not here --
         // ElectroDB has no native discriminated-attribute support for a
-        // single entity. Assignments are still to come (#102).
+        // single entity. An 'assignment' is a graded upload (#102), the only
+        // item in an assignment lesson (a quiz assignment uses 'quiz').
         type: {
-          type: ['video', 'text', 'quiz', 'file'] as const,
+          type: ['video', 'text', 'quiz', 'file', 'assignment'] as const,
           required: true,
         },
         // 'ready' by default so synchronous types (text, and any future
@@ -128,8 +129,18 @@ export const createContentItemEntity = async () =>
         fileSize: {
           type: 'number',
         },
-        // Tiptap's JSON document, stored as a string. Only present for
-        // type: 'text'.
+        // Assignment-only attributes (type: 'assignment', #102). `body`, below,
+        // holds its instructions.
+        // A submission after this (ISO timestamp) is accepted but marked late.
+        dueAt: {
+          type: 'string',
+        },
+        // What the work is graded out of.
+        maxPoints: {
+          type: 'number',
+        },
+        // Tiptap's JSON document, stored as a string. Present for
+        // type: 'text', and for an assignment's instructions.
         body: {
           type: 'string',
         },

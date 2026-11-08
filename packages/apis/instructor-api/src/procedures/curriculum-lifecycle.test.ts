@@ -198,6 +198,7 @@ const lesson = {
   moduleId: MODULE_ID,
   courseId: COURSE_ID,
   title: 'Welcome',
+  kind: 'lesson' as const,
   order: 1,
   visibility: 'visible' as const,
   ...timestamps,
@@ -386,6 +387,8 @@ beforeEach(() => {
         ? {
             status: 'ready',
             studentActivityCount: 0,
+            // The entity's default for a lesson created without a kind.
+            ...(entity === 'lesson' && { kind: 'lesson' }),
             ...timestamps,
             ...created.values,
           }

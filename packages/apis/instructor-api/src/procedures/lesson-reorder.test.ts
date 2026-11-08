@@ -74,6 +74,7 @@ const lesson = (
   moduleId: MODULE_ID,
   courseId: COURSE_ID,
   title: id,
+  kind: 'lesson' as const,
   order,
   visibility: 'visible' as const,
   createdAt: '2024-01-01T00:00:00.000Z',

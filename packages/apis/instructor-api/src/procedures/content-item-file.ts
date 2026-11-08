@@ -13,6 +13,7 @@ import {
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireNotArchived,
+  requireOrdinaryLesson,
   writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
@@ -73,6 +74,7 @@ const requireActiveLesson = async (
     throw new TRPCError({ code: 'NOT_FOUND' });
   }
   requireNotArchived(lesson, 'Restore the lesson before adding content to it');
+  requireOrdinaryLesson(lesson);
   await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
 };
 

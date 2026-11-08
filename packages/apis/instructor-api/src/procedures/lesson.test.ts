@@ -121,6 +121,7 @@ const lesson = {
   moduleId: MODULE_ID,
   courseId: COURSE_ID,
   title: 'Welcome',
+  kind: 'lesson' as const,
   order: 1,
   visibility: 'visible' as const,
   createdAt: '2024-01-01T00:00:00.000Z',

@@ -35,7 +35,7 @@ const consistentTable = (): TableSnapshot => ({
     },
   ],
   modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
-  lessons: [{ ...ids, ...shown, order: 1, lastChildOrder: 4 }],
+  lessons: [{ ...ids, ...shown, kind: 'lesson', order: 1, lastChildOrder: 4 }],
   contentItems: [
     {
       ...ids,
@@ -667,6 +667,82 @@ describe('the rules added after #57', () => {
     it('accepts orders below it: the record at the top was removed', () => {
       table.lessons[0].lastChildOrder = 9;
       expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('19. assignment-lesson-shape', () => {
+    // Moves the table's quiz into a new assignment lesson of its own.
+    const assignmentLesson = () => {
+      table.lessons.push({
+        ...ids,
+        ...shown,
+        lessonId: 'a1',
+        kind: 'assignment',
+        order: 2,
+        lastChildOrder: 1,
+      });
+      table.lessons[0].lastChildOrder = 3;
+      const quiz = item('quiz');
+      quiz.lessonId = 'a1';
+      quiz.order = 1;
+      table.itemCompletions[1].lessonId = 'a1';
+      table.quizAttempts.forEach((a) => (a.lessonId = 'a1'));
+      table.quizSummaries.forEach((a) => (a.lessonId = 'a1'));
+      table.progress.push({
+        userId: 'student',
+        courseId: 'c1',
+        lessonId: 'a1',
+        status: 'completed',
+        completedAt: AT.a2,
+      });
+      return quiz;
+    };
+
+    it('accepts an assignment lesson with a quiz or an upload assignment', () => {
+      assignmentLesson();
+      expect(broken().violations.map((v) => v.invariant)).not.toContain(
+        'assignment-lesson-shape',
+      );
+      item('quiz').type = 'assignment';
+      expect(broken().violations.map((v) => v.invariant)).not.toContain(
+        'assignment-lesson-shape',
+      );
+    });
+
+    it('reports an assignment lesson with no content item', () => {
+      assignmentLesson();
+      table.contentItems = table.contentItems.filter(
+        (i) => i.contentItemId !== 'quiz',
+      );
+      expect(broken().messages).toContainEqual(
+        expect.stringMatching(/has 0 content items, not 1/),
+      );
+    });
+
+    it('reports an assignment lesson with two content items', () => {
+      assignmentLesson();
+      table.contentItems.push({
+        ...item('quiz'),
+        contentItemId: 'quiz2',
+        order: 2,
+      });
+      expect(broken().messages).toContainEqual(
+        expect.stringMatching(/has 2 content items, not 1/),
+      );
+    });
+
+    it('reports an assignment lesson holding a text item', () => {
+      assignmentLesson().type = 'text';
+      expect(broken().messages).toContainEqual(
+        expect.stringMatching(/holds a text item/),
+      );
+    });
+
+    it('reports an upload assignment outside an assignment lesson', () => {
+      item('text').type = 'assignment';
+      expect(broken().messages).toContainEqual(
+        expect.stringMatching(/isn't in an assignment lesson/),
+      );
     });
   });
 });

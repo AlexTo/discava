@@ -11,6 +11,7 @@ import {
   requireAncestorsNotArchived,
   requireCourseInstructor,
   requireNotArchived,
+  requireOrdinaryLesson,
   writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
@@ -53,6 +54,7 @@ export const createContentItemQuiz = courseProcedure
       lesson,
       'Restore the lesson before adding content to it',
     );
+    requireOrdinaryLesson(lesson);
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
     const course = await getCourseOrThrow(coreTable, courseId);
 
