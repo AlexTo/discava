@@ -53,7 +53,7 @@ No scans. Stream consumers: completion records already drive progress via `PROGR
 | Bucket | Key | Lifetime |
 |--------|-----|----------|
 | Upload | `courses/<c>/modules/<m>/lessons/<l>/content-items/<id>/submissions/<userId>/<uploadId>/<storedName>` | Expires after 2 days if never submitted |
-| Lesson media | `…/content-items/<id>/submissions/<userId>/<attemptId>/<storedName>` | Kept while it holds the student's current file. A replaced folder is deleted after `RETIRED_VERSION_DELAY_MINUTES`. A folder from a request that didn't commit is deleted when the request ends, or by its guard after `SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES` if the request crashed. The cleanup never deletes a folder holding a current file |
+| Lesson media | `…/content-items/<id>/submissions/<userId>/<attemptId>/<storedName>` | Kept while it holds the student's current file. A replaced folder is deleted after `RETIRED_VERSION_DELAY_MINUTES`, or sooner by its own attempt guard if that fires first, but never within `REPLACED_FILE_GRACE_SECONDS` of the replacement. A folder from a request that didn't commit is deleted when the request ends, or by its guard after `SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES` if the request crashed. The cleanup never deletes a folder holding a current file |
 
 ## Invariants (core-table `helpers/invariants.ts`)
 

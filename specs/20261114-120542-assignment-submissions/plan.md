@@ -55,7 +55,7 @@ No violations, so Complexity Tracking is empty.
 ## Design Decisions (detail in [research.md](./research.md))
 
 1. **One transaction for the whole write.** `assignmentSubmissionWrites` in core-table calls `studentActivityWrites` (course published, ancestors shown, enrolled, `lastActivityAt` forward, activity count only when the student has neither a submission nor a completion for the item), writes the submission (create on first, version-conditioned patch on resubmit) and creates the item completion if it doesn't exist.
-2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; a try cancelled by an unrelated write reuses the copy, and a lost race ends in `CONFLICT`. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file. The folder is not named for the version because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
+2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; a try cancelled by an unrelated write reuses the copy, and a lost race ends in `CONFLICT`. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file, and a guard never deletes a folder whose file was replaced within the last download-link lifetime. The folder is not named for the version because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
 3. **One file, replaced whole.** A submission holds exactly one file. A resubmission uploads a replacement and carries nothing over, so each submission's folder is complete on its own and the old one is retired after a delay (research R-4).
 4. **Late flag** is `dueAt !== undefined && submittedAt > dueAt`, set inside `assignmentSubmissionWrites` with `submittedAt` from `studentActivityAt(enrolment)` and the `dueAt` read in the same try, so the stored flag always agrees with the stored time.
 5. **Dedicated functions for privileged operations.** `assignment.uploadUrl` and `assignment.submit` get a new dedicated function (S3 and Scheduler rights); `assignment.submissionFileUrl` joins `MediaUrl` (the CloudFront signing key).
@@ -88,12 +88,12 @@ packages/
 ├── common/
 │   ├── server-utils/src/
 │   │   ├── local-dev.ts              # LocalScheduleRequest gains delaySeconds
-│   │   ├── media-keys.ts             # + SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES beside RETIRED_VERSION_DELAY_MINUTES
+│   │   ├── media-keys.ts             # + SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES, FILE_URL_LIFETIME_SECONDS (moved), REPLACED_FILE_GRACE_SECONDS
 │   │   ├── lesson-files.ts           # moved from instructor-api/lib + LESSON_FILE_TYPES/MAX_BYTES
 │   │   ├── lesson-files.test.ts
 │   │   ├── lesson-media-bucket.ts    # S3 client + bucket-name resolution (was instructor-api/lib/s3-client.ts)
 │   │   └── cleanup-scheduler.ts      # from instructor-api/lib and events/lib: best-effort and throwing variants
-│   └── constructs/src/app/apis/core-api.ts   # CORE_API_DEDICATED_FUNCTIONS: + AssignmentSubmit, MediaUrl gains submissionFileUrl
+│   └── constructs/src/app/apis/core-api.ts   # CORE_API_DEDICATED_FUNCTIONS: + AssignmentSubmit (25 s timeout), MediaUrl gains submissionFileUrl
 ├── databases/core-table/src/
 │   ├── entities/assignment-submission.ts     # `files` list becomes one `file` map
 │   └── helpers/
@@ -127,7 +127,7 @@ packages/
 - **R1: copy time inside one API Gateway call.** One 100 MB server-side copy is normally a few seconds and happens once per request, not once per retry. `AssignmentSubmit`'s timeout is 25 s, below the gateway's 29 s, so a request never commits after the gateway has answered for it; a request that runs out of time fails as a whole and its folder is cleaned up by the guard. T045 measures the copy.
 - **R2: stack resource limit.** One more function and four routes in CoreApi. Check the resource count at synth and move something if close.
 - **R3: stack dependency order.** CoreApi will take the upload bucket and media pipeline, as InstructorApi already does, and the `transcode-cleanup` Lambda now reads the core table. Confirm no cycle at synth.
-- **R4: the cleanup handler's path segment is called `submissionNonce`.** Submission folders pass `submissions/<userId>/<attemptId>` as that segment. The handler gains one optional field, `keepIfCurrentFor`; renaming `submissionNonce` is deliberately left out of this PR.
+- **R4: the cleanup handler's path segment is called `submissionNonce`.** Submission folders pass `submissions/<userId>/<attemptId>` as that segment. The handler gains two optional fields, `keepIfCurrentFor` and `purpose`; renaming `submissionNonce` is deliberately left out of this PR.
 - **R5: refactor blast radius.** Moving the S3 helpers and the scheduler must keep instructor-api's and events' existing tests green without edits to assertions (constitution IV: tests are a specification).
 
 ## Complexity Tracking
