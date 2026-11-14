@@ -11,6 +11,8 @@ description: "Task list for student submissions for upload assignments"
 
 **Tests**: The Discava constitution (principle IV) requires them, so they are included: unit tests for each procedure and helper, an invariant check with a test that breaks it for the rule that spans records, and a `packages/e2e` scenario plus a concurrency test for the resubmit race. Write each story's tests first and see them fail. Never weaken an existing test to make it pass (constitution IV); the refactor in Phase 2 must keep instructor-api's existing tests green without changing them.
 
+**Who runs what**: an automated agent implements these tasks without `pnpm dev` or Docker. It runs unit and component tests, lint, typecheck, `build` and `synth` locally. The e2e scenarios and the concurrency test are written by the agent but run on PR CI (`pr-checks.yml`'s `E2E tests` job, which runs `nx affected --target e2e`); a CI failure is the feedback for those. Tasks marked **(human)** need a running local stack or people, and are done by a reviewer before merging.
+
 **Organization**: Grouped by user story so each can be built and tested on its own. Paths are relative to the repository root.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -80,7 +82,7 @@ description: "Task list for student submissions for upload assignments"
 - [ ] T022 [US1] In `packages/infra/src/stacks/core-api-stack.ts` give `AssignmentSubmit` (through `privilegedHandler`) a timeout above API Gateway's 29 s and enough memory for five parallel 100 MB copies (plan risk R1), and these grants: upload bucket put and read, lesson media bucket put, read and delete, and `mediaPipeline.grantScheduleCleanup`; grant `submissionFileUrl` the CloudFront signing key like the other `MediaUrl` operations. Pass the upload bucket and media pipeline into `CoreApiStackProps` and wire them in `packages/infra/src/stages/application-stage.ts` (as InstructorApi already does). Extend `application-stage.test.ts`: the new function holds those grants and the shared router holds none of them.
 - [ ] T023 [US1] Run `pnpm nx synth @discava/infra` and `pnpm nx run @discava/infra:checkov`: confirm the CoreApi stack stays well under 500 resources and has no dependency cycle (plan risks R2, R3). Record the resource count in the PR description.
 - [ ] T024 [US1] `assignment-item.tsx` in `packages/websites/student-portal/src/routes/learn/$courseId/-components/`: instructions (read-only Tiptap), due date, limits line, file picker, per-file client checks (type, size, count, duplicate name), presigned PUT with progress, **Submit**, the submitted confirmation with the "Late" notice; text-only buttons, keyboard and live-region support, phone width. Render it from `lesson-page.tsx` for a lesson of kind `assignment` holding an upload item.
-- [ ] T025 [US1] Run the US1 unit, component and e2e tests and `pnpm nx e2e @discava/e2e` locally against `pnpm dev`; fix until green and the invariant check passes.
+- [ ] T025 [US1] Run the US1 unit and component tests (`pnpm nx run-many --target test`, run once) plus lint and typecheck locally and fix until green. The US1 e2e scenario (T016) runs on PR CI; read its result and fix any failure, including the invariant check that runs after each test.
 
 **Checkpoint**: a student can submit; the MVP is usable on its own.
 
@@ -102,7 +104,7 @@ description: "Task list for student submissions for upload assignments"
 
 - [ ] T029 [US2] `assignment.submit`, resubmission path, in `packages/apis/core-api/src/procedures/assignment.ts`: validate kept keys against the record read in the same pass; copy kept files with `copyWithinLessonMedia` into the new attempt folder; the version-conditioned patch via `assignmentSubmissionWrites`; on success schedule the old folder with `scheduleTranscodeCleanup` using nonce `submissions/<userId>/<oldVersion>-<oldAttemptId>` and `RETIRED_VERSION_DELAY_MINUTES`; on a lost race delete only this attempt's folder, re-read and retry up to 3 times, then `CONFLICT`.
 - [ ] T030 [US2] Resubmit form and the conflict, locked and failed states in `assignment-item.tsx`; keep the chosen files across a conflict.
-- [ ] T031 [US2] Run the US2 tests and the concurrency test; confirm the retirement runs through the local event runner and leaves nothing under the replaced folder.
+- [ ] T031 [US2] Run the US2 unit and component tests locally and fix until green. The concurrency test and the resubmit e2e scenario run on PR CI. The unit tests assert that retirement of the replaced folder is scheduled with the right nonce and delay; the local event runner is not run by the agent.
 
 **Checkpoint**: US1 and US2 both work on their own.
 
@@ -154,8 +156,8 @@ description: "Task list for student submissions for upload assignments"
 
 - [ ] T042 [P] Update the docs site (`docs/`) where it describes lesson content or assignments, and `CONTRIBUTING.md` only if it lists the moved `lib/` helpers.
 - [ ] T043 Run `pnpm lint`, `pnpm test` and `pnpm build`; fix every failure in the code, not the tests.
-- [ ] T044 Run [quickstart.md](./quickstart.md) by hand against `pnpm dev`, saving numbered screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/`. Also check spec SC-001 (open to confirmed submission in under 2 minutes) and SC-008 (the outline marking is recognisable at a glance) by hand with at least a few people, and record the result in the PR; no automated test covers them.
-- [ ] T045 Measure the submit time for five 100 MB files locally and note it in the PR (plan risk R1); if it nears API Gateway's 29 s limit, raise it before merging.
+- [ ] T044 **(human)** Run [quickstart.md](./quickstart.md) by hand against `pnpm dev`, saving numbered screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/`. Also check spec SC-001 (open to confirmed submission in under 2 minutes) and SC-008 (the outline marking is recognisable at a glance) by hand with at least a few people, and record the result in the PR; no automated test covers them.
+- [ ] T045 **(human)** Measure the submit time for five 100 MB files locally and note it in the PR (plan risk R1); if it nears API Gateway's 29 s limit, raise it before merging.
 - [ ] T046 Update issue #102's body: part 2 is done, decisions 2, 3, 4 and 6 are recorded as settled, and the PR says "Refs #102", never a closing keyword, because part 3 (grading) is still to come.
 
 ---
