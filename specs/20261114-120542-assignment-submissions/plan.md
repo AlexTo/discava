@@ -56,7 +56,7 @@ No violations, so Complexity Tracking is empty.
 
 1. **One transaction for the whole write.** `assignmentSubmissionWrites` in core-table calls `studentActivityWrites` (course published, ancestors shown, enrolled, `lastActivityAt` forward, activity count only when the student has neither a submission nor a completion for the item), writes the submission (create on first, version-conditioned patch on resubmit) and creates the item completion if it doesn't exist.
 2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; a try cancelled by an unrelated write reuses the copy, and a lost race ends in `CONFLICT`. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file. The folder is not named for the version because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
-3. **One file, replaced whole.** A submission holds exactly one file. A resubmission uploads a replacement and carries nothing over, so each version folder is complete on its own and the old one is retired after a delay (research R-4).
+3. **One file, replaced whole.** A submission holds exactly one file. A resubmission uploads a replacement and carries nothing over, so each submission's folder is complete on its own and the old one is retired after a delay (research R-4).
 4. **Late flag** is `dueAt !== undefined && submittedAt > dueAt`, set inside `assignmentSubmissionWrites` with `submittedAt` from `studentActivityAt(enrolment)` and the `dueAt` read in the same try, so the stored flag always agrees with the stored time.
 5. **Dedicated functions for privileged operations.** `assignment.uploadUrl` and `assignment.submit` get a new dedicated function (S3 and Scheduler rights); `assignment.submissionFileUrl` joins `MediaUrl` (the CloudFront signing key).
 6. **Access rule for reads**: enrolled (archived courses included), module, lesson and item shown. Submitting also requires a published course (enforced inside the transaction).
@@ -88,6 +88,7 @@ packages/
 ├── common/
 │   ├── server-utils/src/
 │   │   ├── local-dev.ts              # LocalScheduleRequest gains delaySeconds
+│   │   ├── media-keys.ts             # + SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES beside RETIRED_VERSION_DELAY_MINUTES
 │   │   ├── lesson-files.ts           # moved from instructor-api/lib + LESSON_FILE_TYPES/MAX_BYTES
 │   │   ├── lesson-files.test.ts
 │   │   ├── lesson-media-bucket.ts    # S3 client + bucket-name resolution (was instructor-api/lib/s3-client.ts)

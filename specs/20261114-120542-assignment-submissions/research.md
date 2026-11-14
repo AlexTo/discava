@@ -28,7 +28,7 @@ No `NEEDS CLARIFICATION` remained after clarify. This records what the codebase 
 ## R-4: One file per submission (clarify)
 
 - **Decision**: a submission holds exactly one file of at most 100 MB. A resubmit sends one new upload (object key from `uploadUrl`), which replaces the previous file; nothing is carried over from the earlier version. This is the issue's decision 4. A student whose work has several parts combines them into one document or PDF, or a zip (`zip` is in `LESSON_FILE_TYPES`).
-- **Rationale**: with one file there are no kept files to address or re-copy, no file names to collide in the version folder, and the copy inside the submit request is at most 100 MB instead of 500 MB (risk R1). A complete folder per version keeps retirement trivial and every version self-contained.
+- **Rationale**: with one file there are no kept files to address or re-copy, no file names to collide in one folder, and the copy inside the submit request is at most 100 MB instead of 500 MB (risk R1). One folder per submitted file keeps retirement trivial and every version self-contained.
 - **Alternatives**: 1–5 files with kept, removed and added files on resubmit (rejected for now: kept files need addressing without exposing storage keys, re-copying on every version and duplicate-name handling). The record's `files` list from #294 becomes a single `file` map outright (CLAUDE.md: change data shapes freely before launch); nothing has written a submission yet.
 
 ## R-5: Transaction shape and counting

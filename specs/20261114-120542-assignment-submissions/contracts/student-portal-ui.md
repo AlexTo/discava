@@ -25,7 +25,7 @@ Always shown: title, instructions (Tiptap body, read-only), due date, maximum po
 | Past the due date, submitting | Same form; after success the "Late" notice shows |
 | Conflict | "Your submission changed while you were sending it. Try again" with **Try again**, and the form keeps the chosen file |
 | Locked (returned) | The file and details stay visible and downloadable; no **Resubmit**; text: "This submission has been returned and can't be changed" |
-| Upload or submit failed (network or server) | After a failed submit the portal re-reads `mySubmission` first. If it shows the file just sent, the Submitted state is shown. Otherwise: "Something went wrong and your work was not submitted", plus "Your earlier submission is unchanged" when there is one, with **Try again** |
+| Upload or submit failed (network or server) | After a failed submit the portal re-reads `mySubmission` first. The submit went through if a submission now exists where the form had loaded none, or its `version` is higher than the one the form loaded; then the Submitted state is shown. Otherwise: "Something went wrong and your work was not submitted", plus "Your earlier submission is unchanged" when there is one, with **Try again** |
 | Unavailable | Assignment hidden, archived, or student not enrolled: the usual "no longer available" page; no submission details |
 | Course archived | Details and downloads work; submit and resubmit are not offered, with "This course is archived" |
 
