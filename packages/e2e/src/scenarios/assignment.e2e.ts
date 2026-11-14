@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { mkdtemp, truncate } from 'node:fs/promises';
+import { mkdtemp, open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { apiUser } from '../helpers/api.js';
@@ -103,7 +103,9 @@ test.describe('submitting to an upload assignment', () => {
     // sparse file on disk (it takes no real space).
     const folder = await mkdtemp(join(tmpdir(), 'discava-e2e-'));
     const huge = join(folder, 'huge.pdf');
-    await truncate(huge, 101 * 1024 * 1024);
+    const file = await open(huge, 'w');
+    await file.truncate(101 * 1024 * 1024);
+    await file.close();
     await chooseSubmissionFile(page, ASSIGNMENT, huge);
     await expect(item.getByText('huge.pdf is over 100 MB')).toBeVisible();
     await expect(item.getByRole('button', { name: 'Submit' })).toBeDisabled();
