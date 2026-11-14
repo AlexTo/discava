@@ -12,7 +12,8 @@ import {
   storedFileName,
   submissionFileKey,
   submissionFolderNonce,
-  submissionFolderOf,
+  submissionFolderPrefix,
+  submissionNonceOf,
   submissionUploadKey,
   submissionUserPrefix,
 } from './lesson-files.js';
@@ -159,23 +160,26 @@ describe('isSubmissionUploadKey', () => {
   });
 });
 
-describe('submissionFolderOf', () => {
-  it('gives the folder holding a stored file', () => {
-    expect(
-      submissionFolderOf(
-        submissionFileKey(ITEM, USER, ATTEMPT_ID, 'w.pdf'),
-        ITEM,
-        USER,
-      ),
-    ).toBe(`${ITEM_PREFIX}submissions/${USER}/${ATTEMPT_ID}/`);
+describe('submissionNonceOf', () => {
+  it('gives the cleanup segment of the folder holding a stored file', () => {
+    const nonce = submissionNonceOf(
+      submissionFileKey(ITEM, USER, ATTEMPT_ID, 'w.pdf'),
+      ITEM,
+      USER,
+    );
+
+    expect(nonce).toBe(`submissions/${USER}/${ATTEMPT_ID}`);
+    expect(submissionFolderPrefix(ITEM, nonce!)).toBe(
+      `${ITEM_PREFIX}submissions/${USER}/${ATTEMPT_ID}/`,
+    );
   });
 
   it('gives nothing for a key outside the student’s submission folders', () => {
     expect(
-      submissionFolderOf(`${ITEM_PREFIX}${ATTEMPT_ID}/w.pdf`, ITEM, USER),
+      submissionNonceOf(`${ITEM_PREFIX}${ATTEMPT_ID}/w.pdf`, ITEM, USER),
     ).toBeUndefined();
     expect(
-      submissionFolderOf(
+      submissionNonceOf(
         submissionFileKey(ITEM, 'user-2', ATTEMPT_ID, 'w.pdf'),
         ITEM,
         USER,

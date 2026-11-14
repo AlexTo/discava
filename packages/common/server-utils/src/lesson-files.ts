@@ -232,9 +232,10 @@ export const submissionFileKey = (
 export const submissionFolderNonce = (userId: string, attemptId: string) =>
   `submissions/${userId}/${attemptId}`;
 
-// The folder (with a trailing slash) a submission file's key lives in, or
-// undefined for a key outside a student's submission folders.
-export const submissionFolderOf = (
+// The cleanup folder segment (`submissions/<userId>/<attemptId>`) of a stored
+// submission file's key, or undefined for a key outside the student's
+// submission folders.
+export const submissionNonceOf = (
   objectKey: string,
   key: ItemKey,
   userId: string,
@@ -246,8 +247,12 @@ export const submissionFolderOf = (
   const match = objectKey
     .slice(prefix.length)
     .match(/^([^/]+)\/[A-Za-z0-9._-]+$/);
-  return match ? `${prefix}${match[1]}/` : undefined;
+  return match ? submissionFolderNonce(userId, match[1]) : undefined;
 };
+
+// The prefix of the folder a cleanup segment names, with a trailing slash.
+export const submissionFolderPrefix = (key: ItemKey, nonce: string) =>
+  `${itemPrefix(key)}${nonce}/`;
 
 // Whether `objectKey` is one assignment.uploadUrl issued for this item, this
 // student and this file name: the key is checked against ids the caller

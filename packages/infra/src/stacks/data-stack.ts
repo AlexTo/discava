@@ -87,8 +87,9 @@ export class DataStack extends Stack {
 
     // hls.js fetches a video's manifest, renditions and segments with
     // cross-origin requests, so both portals that play lesson videos must be
-    // allowed. Only instructors upload, so the upload bucket allows them
-    // alone.
+    // allowed. Instructors upload lesson files and videos, and students their
+    // assignment submissions (#102), so the upload bucket allows those two
+    // portals, not the admin portal.
     this.lessonMediaBucket.restrictCorsTo(
       instructorPortal,
       studentPortal,
@@ -99,8 +100,11 @@ export class DataStack extends Stack {
     );
     this.lessonMediaUploadBucket.restrictCorsTo(
       instructorPortal,
+      studentPortal,
       'http://localhost:4200',
       'http://localhost:4300',
+      'http://localhost:4201',
+      'http://localhost:4301',
     );
     // Images are shown with plain <img> tags, which need no CORS; only the
     // instructor portal's uploads do.

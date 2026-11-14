@@ -19,11 +19,11 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> CoreApi -------> InstructorApi -> RuntimeConfig
- *                    \-> MediaPipeline -/
+ *   Websites -> Data -> MediaPipeline -> CoreApi -> InstructorApi -> RuntimeConfig
  *
  * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
- * APIs depend on both, and RuntimeConfig (AppConfig content plus each
+ * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
+ * and RuntimeConfig (AppConfig content plus each
  * portal's runtime-config.json) collects values from all of them.
  * InstructorApi also depends on CoreApi only because the stage's single
  * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
@@ -95,6 +95,8 @@ export class ApplicationStage extends Stage {
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
       lessonMediaBucket: data.lessonMediaBucket,
+      lessonMediaUploadBucket: data.lessonMediaUploadBucket,
+      mediaPipeline,
       portals: [
         websites.studentPortal,
         websites.instructorPortal,
