@@ -5,7 +5,6 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import {
   deleteContentItem,
   deleteContentItemPermanently,
@@ -239,17 +238,6 @@ const resolvesPaged = (firstPage: unknown[], laterPages: unknown[]) => ({
     data: options?.pages === 'all' ? [...firstPage, ...laterPages] : firstPage,
   })),
 });
-
-// patch(key).set(values) / .remove(attributes), then .go(); returns `data`.
-const patchChain = (data: unknown) => {
-  const chain = {
-    set: vi.fn(() => chain),
-    remove: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    go: vi.fn().mockResolvedValue({ data }),
-  };
-  return chain;
-};
 
 // What a transaction was asked to write, one entry per item.
 type TransactionWrite = {
@@ -1234,7 +1222,7 @@ describe('permanent delete', () => {
       archivedAt: ARCHIVED_AT,
     });
     contentItemGet.mockReturnValue(resolves(video));
-    const where = vi.fn(() => ({
+    const where = vi.fn((_condition: (attr: any, op: any) => string) => ({
       go: vi.fn().mockResolvedValue({ data: video }),
     }));
     contentItemDelete.mockReturnValue({ where });
@@ -1384,7 +1372,7 @@ describe('descendants spanning more than one query page', () => {
     expect(
       transactionWrites
         .filter(({ entity }) => entity === 'contentItem')
-        .map(({ key }) => key.contentItemId),
+        .map(({ key }) => key?.contentItemId),
     ).toEqual(['item-1', 'item-on-page-2']);
   });
 });
@@ -1466,7 +1454,9 @@ describe('parent restored while being permanently deleted', () => {
         data: [{}, { code: 'ConditionalCheckFailed' }],
       });
 
-      await expect(callAs()[procedure](key())).rejects.toMatchObject({
+      await expect(
+        callAs()[procedure](key() as typeof lessonKey),
+      ).rejects.toMatchObject({
         code: 'CONFLICT',
         message: expect.stringContaining('was published'),
       });
@@ -1489,7 +1479,9 @@ describe('parent restored while being permanently deleted', () => {
         data: [{ code: 'TransactionConflict' }, {}, {}, {}],
       });
 
-      await expect(callAs()[procedure](key())).rejects.toMatchObject({
+      await expect(
+        callAs()[procedure](key() as typeof lessonKey),
+      ).rejects.toMatchObject({
         code: 'CONFLICT',
         message: expect.stringContaining('Please retry'),
       });
@@ -1515,7 +1507,7 @@ describe('parent restored while being permanently deleted', () => {
       });
 
       const error = await callAs()
-        [procedure](key())
+        [procedure](key() as typeof lessonKey)
         .catch((caught: unknown) => caught);
 
       expect(error).toMatchObject({ code: 'CONFLICT' });
@@ -1539,7 +1531,9 @@ describe('parent restored while being permanently deleted', () => {
         data: [{}, {}, {}, {}, { code: 'ConditionalCheckFailed' }],
       });
 
-      await expect(callAs()[procedure](key())).rejects.toMatchObject({
+      await expect(
+        callAs()[procedure](key() as typeof lessonKey),
+      ).rejects.toMatchObject({
         code: 'CONFLICT',
         message: expect.stringContaining('was published'),
       });
@@ -2051,7 +2045,7 @@ describe('lessons spanning more than one query page', () => {
     expect(
       transactionWrites
         .filter(({ entity }) => entity === 'lesson')
-        .map(({ key }) => key.lessonId),
+        .map(({ key }) => key?.lessonId),
     ).toEqual([LESSON_ID, 'lesson-page-2']);
   });
 });
@@ -2812,7 +2806,7 @@ describe('restore puts the record at the end of its parent', () => {
     (
       transactionWrites.find(
         ({ op, set }) => op === 'patch' && set?.order !== undefined,
-      ) as { set: { order: number } }
+      ) as unknown as { set: { order: number } }
     ).set.order;
 
   it('restoreModule: after every module in the course, archived ones included', async () => {

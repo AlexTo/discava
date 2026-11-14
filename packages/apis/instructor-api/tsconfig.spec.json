@@ -2,6 +2,9 @@
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./out-tsc/vitest",
+    "lib": [
+      "ES2023"
+    ],
     "types": [
       "vitest/globals",
       "vitest/importMeta",
