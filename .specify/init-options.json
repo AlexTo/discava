@@ -2,7 +2,7 @@
   "ai": "claude",
   "ai_skills": true,
   "allow_symlinks": false,
-  "feature_numbering": "sequential",
+  "feature_numbering": "timestamp",
   "here": true,
   "integration": "claude",
   "script": "sh",
