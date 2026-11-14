@@ -27,7 +27,7 @@ Two things the code showed that the spec could not:
 
 **Project Type**: web application: serverless backend (core-api, infra) + React portal
 
-**Performance Goals**: submit completes in one request. The slowest part is one server-side copy of up to 100 MB inside S3, which stays within API Gateway's 29 s limit (checked in research, risk R1).
+**Performance Goals**: submit completes in one request. The slowest part is one server-side copy of up to 100 MB inside S3, which stays within the function's 25 s timeout, itself below API Gateway's 29 s limit (checked in research, risk R1).
 
 **Constraints**: no second table; keys or declared index only; each Lambda gets only the permissions its procedures need; CloudFormation 500-resource cap per stack (CoreApi stack gains one function, `AssignmentSubmit`, and four routes); upload bucket expires objects after 2 days
 
@@ -41,11 +41,11 @@ Two things the code showed that the spec could not:
 |-----------|--------|-------|
 | I. AWS-native, serverless | Pass | S3, Lambda, EventBridge Scheduler, CloudFront; nothing new in kind |
 | II. Generators first | Pass | No new project or component is scaffolded. New dedicated core-api functions come from `CORE_API_DEDICATED_FUNCTIONS`, the repo's own mechanism, not a generator target |
-| III. Everything runs locally | Pass | S3Mock serves upload, head, copy and download; the local event runner already stands in for the Scheduler (`/schedules/transcode-cleanup`) |
+| III. Everything runs locally | Pass | S3Mock serves upload, head, copy and download; the local event runner already stands in for the Scheduler (`/schedules/transcode-cleanup`); its schedule request gains a delay so the attempt guard can't fire while its own request is running |
 | IV. Layered tests | Pass, planned | Unit tests per procedure and helper; a new invariant plus a test that breaks it; `assignment.e2e.ts`; a concurrency test for racing resubmits |
-| V. Single-table via ElectroDB | Pass | No new entity or index. Access patterns are in [data-model.md](./data-model.md); all are keyed gets. The unused `byUser` index from #294 is left alone: this feature doesn't use it |
-| VI. Secure by default | Pass | Presigned PUT bound to type and exact length; per-function least privilege; 5-minute signed download URLs; student reads keyed by `ctx.user.sub`, never a caller-supplied user id |
-| VII. Change freely before launch | Pass | `Lesson.kind` and the new item type are added to core-api's output outright, with no fallback |
+| V. Single-table via ElectroDB | Pass | No new entity or index. Access patterns are in [data-model.md](./data-model.md); all are keyed gets. The cleanup handler's check before deleting a submission folder is one more keyed get, outside any user request. The unused `byUser` index from #294 is left alone: this feature doesn't use it |
+| VI. Secure by default | Pass | Presigned PUT bound to type and exact length; per-function least privilege; 5-minute signed download URLs; student reads keyed by `ctx.user.sub`, never a caller-supplied user id; the `transcode-cleanup` Lambda gains read-only access to the core table and nothing else |
+| VII. Change freely before launch | Pass | `Lesson.kind` and the new item type are added to core-api's output outright, with no fallback; `assignmentSubmission.files` becomes `file` outright |
 | VIII. Repo conventions | Pass | Shared S3 code goes in `common-server-utils` modules; core-table code in `helpers/assignment-submission.ts`; text-only buttons |
 
 No violations, so Complexity Tracking is empty.
@@ -55,7 +55,7 @@ No violations, so Complexity Tracking is empty.
 ## Design Decisions (detail in [research.md](./research.md))
 
 1. **One transaction for the whole write.** `assignmentSubmissionWrites` in core-table calls `studentActivityWrites` (course published, ancestors shown, enrolled, `lastActivityAt` forward, activity count only when the student has neither a submission nor a completion for the item), writes the submission (create on first, version-conditioned patch on resubmit) and creates the item completion if it doesn't exist.
-2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; retries reuse the copy. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file. This differs from the issue's `<version>` folder name because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
+2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; a try cancelled by an unrelated write reuses the copy, and a lost race ends in `CONFLICT`. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file. The folder is not named for the version because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
 3. **One file, replaced whole.** A submission holds exactly one file. A resubmission uploads a replacement and carries nothing over, so each version folder is complete on its own and the old one is retired after a delay (research R-4).
 4. **Late flag** is `dueAt !== undefined && submittedAt > dueAt`, set inside `assignmentSubmissionWrites` with `submittedAt` from `studentActivityAt(enrolment)` and the `dueAt` read in the same try, so the stored flag always agrees with the stored time.
 5. **Dedicated functions for privileged operations.** `assignment.uploadUrl` and `assignment.submit` get a new dedicated function (S3 and Scheduler rights); `assignment.submissionFileUrl` joins `MediaUrl` (the CloudFront signing key).
@@ -87,6 +87,7 @@ specs/20261114-120542-assignment-submissions/
 packages/
 ├── common/
 │   ├── server-utils/src/
+│   │   ├── local-dev.ts              # LocalScheduleRequest gains delaySeconds
 │   │   ├── lesson-files.ts           # moved from instructor-api/lib + LESSON_FILE_TYPES/MAX_BYTES
 │   │   ├── lesson-files.test.ts
 │   │   ├── lesson-media-bucket.ts    # S3 client + bucket-name resolution (was instructor-api/lib/s3-client.ts)
@@ -105,6 +106,8 @@ packages/
 │   │   └── router.ts
 │   └── instructor-api/src/lib/               # imports switch to common-server-utils
 ├── events/src/media/transcode-cleanup.ts     # optional keepIfCurrentFor check; events/lib scheduler copy removed
+├── events/src/local/event-runner.ts          # honors a schedule's delaySeconds
+├── infra/src/stacks/media-pipeline-stack.ts  # transcode-cleanup Lambda: read-only on the core table
 ├── infra/src/stacks/core-api-stack.ts        # grants for the new function; takes upload bucket and media pipeline
 ├── websites/student-portal/src/routes/learn/$courseId/-components/
 │   ├── assignment-item.tsx                   # submit form, submission view

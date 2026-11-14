@@ -5,7 +5,7 @@ Prerequisites: Docker running; `pnpm i`; once, `pnpm --filter @discava/e2e exec 
 ## Automated
 
 ```sh
-pnpm nx run-many --target test --projects=@discava/core-table,@discava/core-api,@discava/instructor-api,@discava/common-server-utils,@discava/student-portal
+pnpm nx run-many --target test --projects=@discava/core-table,@discava/core-api,@discava/instructor-api,@discava/common-server-utils,@discava/events,@discava/student-portal
 pnpm nx e2e @discava/e2e        # includes assignment.e2e.ts and the resubmit race
 pnpm build                       # synth, checkov and the stack resource count
 ```

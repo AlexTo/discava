@@ -30,7 +30,7 @@ Behavior:
 4. Schedule the attempt guard before copying anything: a conditional cleanup (below) of `…/submissions/<userId>/<attemptId>/` after `SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES` (60), where `attemptId` is a random id made for this request. If scheduling fails, the request fails with a retryable error and nothing has been copied.
 5. Copy the file once into that folder. The folder name carries no version, so the tries below reuse the copy.
 6. Up to 3 tries. Each try uses a fresh read (the first uses step 1's) and sets `version` = the read version + 1 (or 1), `submittedAt = studentActivityAt(enrolment)` and `late = item.dueAt !== undefined && submittedAt > item.dueAt`, then runs one transaction through `assignmentSubmissionWrites` (first submission or resubmission, as in the data model).
-7. On a cancelled transaction: re-read. If the submission is now `returned`, or the course or item no longer allows submitting, stop with that precise error; otherwise try again with the same copy. After 3 tries: `CONFLICT`.
+7. On a cancelled transaction: re-read. If the submission is no longer the one this try read (one now exists, or its version moved), another request won: stop with `CONFLICT`, so exactly one request wins a race and the other is told to retry. If the submission is now `returned`, or the course or item no longer allows submitting, stop with that precise error. Otherwise the cancellation came from an unrelated write (for example the enrolment's `lastActivityAt` moved): try again with the same copy. After 3 tries: `CONFLICT`.
 8. Whenever the request ends without a committed record, delete the attempt folder (best effort). If the request crashes or times out instead, the guard from step 4 deletes it.
 9. On success after a resubmit: schedule retirement of the replaced folder (the one holding the previous record's file) with the same conditional cleanup, after `RETIRED_VERSION_DELAY_MINUTES`. On failure to schedule, log only.
 
@@ -92,4 +92,4 @@ The storage key never leaves the API: a student's file is fetched through `submi
 | Course archived (submit, uploadUrl) | `PRECONDITION_FAILED` |
 | Submission returned | `PRECONDITION_FAILED` |
 | Bad type, size or upload key | `BAD_REQUEST` |
-| Lost a race after retries | `CONFLICT` |
+| Lost a race, or still cancelled after 3 tries | `CONFLICT` |

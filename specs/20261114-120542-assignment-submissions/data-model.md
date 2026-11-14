@@ -44,6 +44,7 @@ The completion exists from the first submission, so a resubmission doesn't write
 | Check enrolment, course, module, lesson, item | gets on existing entities | primary |
 | Course outline with assignment fields | existing `curriculum` collection query | primary |
 | Instructor list of submissions (part 3) | query `courseId` + `contentItemId` | primary |
+| Cleanup check before deleting a submission folder (`transcode-cleanup` in `packages/events`, not a user request) | get `courseId` + `contentItemId` + `userId` (from the schedule's payload), consistent read | primary |
 
 No scans. Stream consumers: completion records already drive progress via `PROGRESS_STREAM_FILTERS`; submission records are not read by progress or search, so neither filter changes.
 

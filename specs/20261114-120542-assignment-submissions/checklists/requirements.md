@@ -32,4 +32,4 @@
 ## Notes
 
 - FR-015 names repository conventions (shared write helper, invariant check) because the project constitution requires them; storage keys, table design and procedure names are deliberately left to the plan.
-- Note-with-submission (issue decision 6) was resolved to "files only" as an assumption rather than a clarification, since it is easy to add later.
+- Note-with-submission (issue decision 6) was resolved to "one file only" as an assumption rather than a clarification, since it is easy to add later.

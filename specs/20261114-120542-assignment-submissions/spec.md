@@ -96,7 +96,7 @@ In the student portal's course outline, assignments stand out from lessons: they
 - An upload that was started but never submitted: it expires on its own and never appears in any submission.
 - The file named in a submit request is missing from the upload area, or its type or size no longer matches what was allowed: the submission is refused.
 - A student submits the same assignment from two tabs at once: only one result is saved.
-- A submit request fails or is cut off part-way: either the submission was saved or nothing changed, never a mix. Anything it stored without saving is removed within a day, and the student is shown their actual current submission, not a guess.
+- A submit request fails or is cut off part-way: either the submission was saved or nothing changed, never a mix. A file it had already moved out of the upload area without saving is removed within a day (the upload itself expires as above), and the student is shown their actual current submission, not a guess.
 - A submission arrives exactly at the due date: it counts as on time; late means strictly after.
 - The assignment is changed by an instructor (due date moved, archived) after a student has submitted: the existing submission is kept; its late flag is not recomputed until the student next submits, so a submission can stay flagged late after its due date is moved or removed.
 - A student who submitted on time resubmits after the due date: the submission becomes late. A student who submitted late and resubmits after an instructor extends the due date: the flag clears.
