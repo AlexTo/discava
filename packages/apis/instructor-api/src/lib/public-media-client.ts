@@ -11,10 +11,13 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
+  getS3Client,
+  resolveBucketName,
+} from '@discava/common-server-utils/lesson-media-bucket';
+import {
   UNATTACHED_TAG,
   UNATTACHED_TAGGING,
 } from '@discava/common-server-utils/public-media';
-import { getS3Client, resolveBucketName } from './s3-client.js';
 
 const UPLOAD_URL_EXPIRY_SECONDS = 15 * 60;
 

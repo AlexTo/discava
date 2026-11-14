@@ -22,7 +22,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
   }),
 }));
 
-vi.mock('../lib/runtime-config.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveLessonMediaBucketName,
 }));
 

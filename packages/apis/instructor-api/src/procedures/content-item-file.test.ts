@@ -89,7 +89,7 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/s3-request-presigner', () => ({ getSignedUrl }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaBucketName: vi.fn(async () => MEDIA_BUCKET),
   resolveLessonMediaUploadBucketName: vi.fn(async () => UPLOAD_BUCKET),
@@ -99,7 +99,7 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getSignedCloudFrontFileUrl,
 }));
 
-vi.mock('../lib/transcode-cleanup-scheduler.js', () => ({
+vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanup,
 }));
 

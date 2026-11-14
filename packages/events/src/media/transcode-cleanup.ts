@@ -14,11 +14,11 @@ import {
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { resolveLessonMediaBucketName } from '@discava/common-server-utils/lesson-media-bucket';
 import { s3ClientConfig } from '@discava/common-server-utils/local-dev';
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import { z } from 'zod';
-import { resolveLessonMediaBucketName } from '../lib/runtime-config.js';
 
 export type { Context };
 

@@ -10,12 +10,38 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { LESSON_FILE_TYPES } from '../schema/index.js';
 import {
+  deleteObjectsInBatches,
   getS3Client,
+  listAllObjectKeys,
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
-} from './s3-client.js';
+} from './lesson-media-bucket.js';
+
+// What a file item may be (#102), by extension: documents, spreadsheets,
+// slides, plain text and images, and zip archives. Not HTML or anything
+// executable: files are served from the lesson media domain. The portal's
+// file picker offers the same list.
+export const LESSON_FILE_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  md: 'text/markdown',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  zip: 'application/zip',
+};
+
+export const LESSON_FILE_MAX_BYTES = 100 * 1024 * 1024;
 
 // File items (#102): a file is uploaded to the lesson media upload bucket,
 // whose lifecycle rule expires anything left there, then copied into the
@@ -140,22 +166,10 @@ export const contentDisposition = (fileName: string) =>
 
 // Copies an upload into the lesson media bucket at the same key, set to
 // download (rather than open) under its original name.
-export const copyLessonFileUpload = async (
+export const copyLessonFileUpload = (
   objectKey: string,
-  { contentType, fileName }: { contentType: string; fileName: string },
-): Promise<void> => {
-  const uploadBucket = await resolveLessonMediaUploadBucketName();
-  await getS3Client().send(
-    new CopyObjectCommand({
-      Bucket: await resolveLessonMediaBucketName(),
-      Key: objectKey,
-      CopySource: `${uploadBucket}/${objectKey}`,
-      MetadataDirective: 'REPLACE',
-      ContentType: contentType,
-      ContentDisposition: contentDisposition(fileName),
-    }),
-  );
-};
+  details: { contentType: string; fileName: string },
+): Promise<void> => copyLessonFileUploadTo(objectKey, objectKey, details);
 
 // Removes a copy no item ended up pointing at (its save failed after the
 // copy). Best-effort: the lesson media bucket has no lifecycle rule, so a
@@ -175,6 +189,121 @@ export const bestEffortDeleteLessonFileCopy = async (
     logger?.error('Failed to delete an unused lesson file copy', {
       error,
       objectKey,
+    });
+  }
+};
+
+// Student submissions (#102) keep the same layout under the item's own
+// `submissions/<userId>/` folder: the upload bucket holds
+// `<uploadId>/<name>` and the lesson media bucket `<attemptId>/<name>`, where
+// the attempt id is made per submit request, so a request only ever writes
+// and deletes its own folder.
+
+type ItemKey = {
+  courseId: string;
+  moduleId: string;
+  lessonId: string;
+  contentItemId: string;
+};
+
+// A student's own folder under an item: every submission file is below it.
+export const submissionUserPrefix = (key: ItemKey, userId: string) =>
+  `${itemPrefix(key)}submissions/${userId}/`;
+
+// The key an upload issued by assignment.uploadUrl has, in the upload bucket.
+export const submissionUploadKey = (
+  key: ItemKey,
+  userId: string,
+  uploadId: string,
+  fileName: string,
+) =>
+  `${submissionUserPrefix(key, userId)}${uploadId}/${storedFileName(fileName)}`;
+
+// The key a submitted file is copied to, in the lesson media bucket.
+export const submissionFileKey = (
+  key: ItemKey,
+  userId: string,
+  attemptId: string,
+  fileName: string,
+) =>
+  `${submissionUserPrefix(key, userId)}${attemptId}/${storedFileName(fileName)}`;
+
+// The cleanup handler's folder segment for one attempt's folder.
+export const submissionFolderNonce = (userId: string, attemptId: string) =>
+  `submissions/${userId}/${attemptId}`;
+
+// The folder (with a trailing slash) a submission file's key lives in, or
+// undefined for a key outside a student's submission folders.
+export const submissionFolderOf = (
+  objectKey: string,
+  key: ItemKey,
+  userId: string,
+): string | undefined => {
+  const prefix = submissionUserPrefix(key, userId);
+  if (!objectKey.startsWith(prefix)) {
+    return undefined;
+  }
+  const match = objectKey
+    .slice(prefix.length)
+    .match(/^([^/]+)\/[A-Za-z0-9._-]+$/);
+  return match ? `${prefix}${match[1]}/` : undefined;
+};
+
+// Whether `objectKey` is one assignment.uploadUrl issued for this item, this
+// student and this file name: the key is checked against ids the caller
+// already has, never trusted to say which item or student it's for.
+export const isSubmissionUploadKey = (
+  objectKey: string,
+  key: ItemKey,
+  userId: string,
+  fileName: string,
+): boolean => {
+  const prefix = submissionUserPrefix(key, userId);
+  if (!objectKey.startsWith(prefix)) {
+    return false;
+  }
+  const match = objectKey
+    .slice(prefix.length)
+    .match(/^([0-9a-f-]{36})\/([A-Za-z0-9._-]+)$/);
+  return match !== null && match[2] === storedFileName(fileName);
+};
+
+// Copies one upload into the lesson media bucket under `targetKey`, set to
+// download under its original name. As copyLessonFileUpload, for a target key
+// that isn't the upload's own.
+export const copyLessonFileUploadTo = async (
+  uploadKey: string,
+  targetKey: string,
+  { contentType, fileName }: { contentType: string; fileName: string },
+): Promise<void> => {
+  const uploadBucket = await resolveLessonMediaUploadBucketName();
+  await getS3Client().send(
+    new CopyObjectCommand({
+      Bucket: await resolveLessonMediaBucketName(),
+      Key: targetKey,
+      CopySource: `${uploadBucket}/${uploadKey}`,
+      MetadataDirective: 'REPLACE',
+      ContentType: contentType,
+      ContentDisposition: contentDisposition(fileName),
+    }),
+  );
+};
+
+// Removes everything under one folder of the lesson media bucket (a
+// submit request's folder that no record ended up pointing at). Best-effort,
+// like bestEffortDeleteLessonFileCopy: failures are only logged.
+export const deleteLessonMediaFolder = async (
+  logger: Logger | undefined,
+  prefix: string,
+): Promise<void> => {
+  try {
+    const bucket = await resolveLessonMediaBucketName();
+    const keys = await listAllObjectKeys(logger, bucket, prefix);
+    await deleteObjectsInBatches(logger, bucket, keys);
+  } catch (error) {
+    logger?.error('Failed to delete a lesson media folder', {
+      error,
+      prefix,
     });
   }
 };

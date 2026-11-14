@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { LESSON_FILE_MAX_BYTES } from '@discava/common-server-utils/lesson-files';
 import { isValidTiptapDocument } from '@discava/common-tiptap';
 import { z } from 'zod';
 import {
@@ -375,31 +377,6 @@ export const ReorderContentItemsOutputSchema = z.array(ContentItemSchema);
 export type IReorderContentItemsOutput = z.output<
   typeof ReorderContentItemsOutputSchema
 >;
-
-// What a file item may be (#102), by extension: documents, spreadsheets,
-// slides, plain text and images, and zip archives. Not HTML or anything
-// executable: files are served from the lesson media domain. The portal's
-// file picker offers the same list.
-export const LESSON_FILE_TYPES: Record<string, string> = {
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  odt: 'application/vnd.oasis.opendocument.text',
-  ods: 'application/vnd.oasis.opendocument.spreadsheet',
-  odp: 'application/vnd.oasis.opendocument.presentation',
-  txt: 'text/plain',
-  csv: 'text/csv',
-  md: 'text/markdown',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  zip: 'application/zip',
-};
-
-export const LESSON_FILE_MAX_BYTES = 100 * 1024 * 1024;
 
 const FileNameSchema = z.string().trim().min(1).max(255);
 

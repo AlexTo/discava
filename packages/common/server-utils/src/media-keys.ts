@@ -27,3 +27,25 @@ export const SIGNED_COOKIE_LIFETIME_SECONDS = 4 * 60 * 60;
  */
 export const RETIRED_VERSION_DELAY_MINUTES =
   SIGNED_COOKIE_LIFETIME_SECONDS / 60 + 15;
+
+/**
+ * How long a file's download link works (#102): long enough to start the
+ * download, short enough that a shared link soon stops working. A download
+ * already under way isn't cut off when it expires.
+ */
+export const FILE_URL_LIFETIME_SECONDS = 5 * 60;
+
+/**
+ * How long after a student's file is replaced its old folder must be kept: a
+ * download link issued just before the replacement works for
+ * `FILE_URL_LIFETIME_SECONDS`, plus a minute's margin.
+ */
+export const REPLACED_FILE_GRACE_SECONDS = FILE_URL_LIFETIME_SECONDS + 60;
+
+/**
+ * How long a submit request's own folder is left before its guard cleanup
+ * runs (the cleanup never deletes a folder holding a student's current file).
+ * Far longer than the request's 25 s timeout, so it can't fire while the
+ * request that scheduled it is still running.
+ */
+export const SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES = 60;
