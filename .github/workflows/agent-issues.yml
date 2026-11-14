@@ -1,0 +1,74 @@
+name: Agent Issues
+
+# Opens the next implementation issue for the implementing agent (OpenHands
+# polls for the `openhands` label), when:
+# - a spec pull request labelled `spec-ready` merges, or one already merged
+#   is given that label (it was forgotten): the first issue;
+# - an agent's pull request (branch `openhands/...`, the automation's branch
+#   prefix) merges: the next one.
+# Any other merged pull request is ignored, even one that touches `specs/**`:
+# the agent's own pull requests tick tasks.md, so a path filter would loop.
+# It can also be run by hand for one spec folder: a spec merged without its
+# label, or a chain that stalled and has been sorted out.
+# The rules are in packages/common/scripts/src/agent-issues/.
+
+on:
+  pull_request:
+    types: [closed, labeled]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      spec_folder:
+        description: 'Folder under specs/, e.g. 20261114-120542-assignment-submissions'
+        required: true
+        type: string
+
+concurrency:
+  # Per pull request (or folder, by hand), never one group for all: a group
+  # keeps only its newest pending run, so merges close together would cancel
+  # each other's. A rerun for the same pull request still waits its turn.
+  group: agent-issues-${{ github.event.pull_request.number || inputs.spec_folder }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  issues: write
+  # To read the pull request's files, and to say on it why no issue was opened.
+  pull-requests: write
+
+jobs:
+  next-issue:
+    name: Open the next implementation issue
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+      ((github.event.action == 'closed' &&
+      (contains(github.event.pull_request.labels.*.name, 'spec-ready') ||
+      startsWith(github.event.pull_request.head.ref, 'openhands/'))) ||
+      (github.event.action == 'labeled' &&
+      github.event.label.name == 'spec-ready')))
+    runs-on: ubuntu-latest
+    steps:
+      # The merged result, so tasks.md shows the ticks this pull request made;
+      # main as it is now when run by hand or labelled after merging.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: >-
+            ${{ github.event.action == 'labeled' && github.event.pull_request.base.ref
+            || github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Create the issue
+        run: pnpm nx run @discava/common-scripts:agent-issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Read by the script as data, never put into a command line.
+          SPEC_FOLDER: ${{ inputs.spec_folder }}
