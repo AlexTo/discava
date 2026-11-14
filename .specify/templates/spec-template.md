@@ -8,6 +8,8 @@
 
 **Input**: User description: "$ARGUMENTS"
 
+**Parent issue**: [#<number>, or "none" if there is no tracking issue]
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--

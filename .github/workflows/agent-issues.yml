@@ -1,0 +1,52 @@
+name: Agent Issues
+
+# Opens the next implementation issue for the implementing agent (OpenHands
+# polls for the `openhands` label), when:
+# - a spec pull request labelled `spec-ready` merges: the first issue;
+# - an agent's pull request (branch `openhands/...`) merges: the next one.
+# Any other merged pull request is ignored, even one that touches `specs/**`:
+# the agent's own pull requests tick tasks.md, so a path filter would loop.
+# The rules are in packages/common/scripts/src/agent-issues/.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+concurrency:
+  # One run at a time per repository, so two merges can't each open the same
+  # issue.
+  group: agent-issues
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  next-issue:
+    name: Open the next implementation issue
+    if: >-
+      github.event.pull_request.merged == true &&
+      (contains(github.event.pull_request.labels.*.name, 'spec-ready') ||
+      startsWith(github.event.pull_request.head.ref, 'openhands/'))
+    runs-on: ubuntu-latest
+    steps:
+      # The merged result, so tasks.md shows the ticks this pull request made.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Create the issue
+        run: pnpm nx run @discava/common-scripts:agent-issue
+        env:
+          GH_TOKEN: ${{ github.token }}

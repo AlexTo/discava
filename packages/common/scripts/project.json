@@ -15,6 +15,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "agent-issue": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/agent-issues/create-next-issue.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "reset-local-data": {
       "executor": "nx:run-commands",
       "options": {
