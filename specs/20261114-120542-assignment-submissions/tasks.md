@@ -45,8 +45,8 @@ description: "Task list for student submissions for upload assignments"
 
 ### Existing bug: students can't read a course with an assignment (plan Summary 1)
 
-- [ ] T008 Add `kind: 'lesson' | 'assignment'` to `LessonSchema` and an `{ type: 'assignment', body, dueAt?, maxPoints }` member (no storage keys) to the `ContentItemSchema` union in `packages/apis/core-api/src/schema/course.ts`; update `asStudentContentItem` and the lesson mapping in `packages/apis/core-api/src/procedures/course.ts`. Test first in `packages/apis/core-api/src/procedures/course.test.ts`: a course holding an upload assignment and a quiz assignment passes output validation and exposes `kind`, `dueAt`, `maxPoints`, and never any key or `answerKey`.
-- [ ] T009 In `packages/apis/core-api/src/procedures/completion.ts`, make `completeContentItem` return an existing completion for an `assignment` item but never create one: without a completion it throws `PRECONDITION_FAILED` "Submit your work to complete it". Test first in `completion.test.ts` (both cases).
+- [x] T008 Add `kind: 'lesson' | 'assignment'` to `LessonSchema` and an `{ type: 'assignment', body, dueAt?, maxPoints }` member (no storage keys) to the `ContentItemSchema` union in `packages/apis/core-api/src/schema/course.ts`; update `asStudentContentItem` and the lesson mapping in `packages/apis/core-api/src/procedures/course.ts`. Test first in `packages/apis/core-api/src/procedures/course.test.ts`: a course holding an upload assignment and a quiz assignment passes output validation and exposes `kind`, `dueAt`, `maxPoints`, and never any key or `answerKey`.
+- [x] T009 In `packages/apis/core-api/src/procedures/completion.ts`, make `completeContentItem` return an existing completion for an `assignment` item but never create one: without a completion it throws `PRECONDITION_FAILED` "Submit your work to complete it". Test first in `completion.test.ts` (both cases).
 
 ### Shared write helper and invariants (constitution IV; impact check, data-model Invariants)
 
