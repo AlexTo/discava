@@ -1,0 +1,60 @@
+name: Agent CI Status
+
+# Sends the implementing agent back to fix a pull request whose CI failed.
+#
+# The Issue-to-PR automation revises a pull request, in the conversation that
+# opened it, when the pull request's latest commit has a commit status named
+# `software-factory/review` in state `failure` or `error` (worker.py in the
+# automation's package; it polls every 15 minutes). Nothing here set that
+# status, so a failing CI run went unanswered. This posts it when PR Checks
+# fails on an agent's branch (`openhands/issue-<n>`), at most three times per
+# pull request (labels `ci-fix-1` to `ci-fix-3`), then comments and stops
+# (`ci-fix-exhausted`). A passing run posts nothing.
+# The rules are in packages/common/scripts/src/agent-ci/.
+
+on:
+  workflow_run:
+    workflows: ["PR Checks"]
+    types: [completed]
+
+concurrency:
+  # One run at a time per branch, so two finished runs can't each count an
+  # attempt for the same pull request at once.
+  group: agent-ci-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+  # Labels and comments on a pull request go through the issues API.
+  issues: write
+  pull-requests: read
+
+jobs:
+  ci-status:
+    name: Send the agent back after a failed run
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'openhands/issue-') &&
+      (github.event.workflow_run.conclusion == 'failure' ||
+      github.event.workflow_run.conclusion == 'timed_out')
+    runs-on: ubuntu-latest
+    steps:
+      # The default branch, never the pull request's code: this job holds a
+      # token that can write statuses, labels and comments, and it must not
+      # run anything the agent (or a contributor) wrote.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Post the status
+        run: pnpm nx run @discava/common-scripts:agent-ci-status
+        env:
+          GH_TOKEN: ${{ github.token }}
