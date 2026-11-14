@@ -96,6 +96,33 @@ export const instructionsFrom = (
     .join('\n');
 };
 
+/**
+ * Task ids as runs of consecutive numbers, in file order:
+ * "`T001` to `T009`, `T047`, `T010` to `T025`". A task added later keeps its
+ * own id, so a group's ids are not always one range.
+ */
+export const idRanges = (ids: string[]): string => {
+  const runs: string[][] = [];
+  for (const id of ids) {
+    const run = runs[runs.length - 1];
+    if (
+      run &&
+      Number(id.slice(1)) === Number(run[run.length - 1].slice(1)) + 1
+    ) {
+      run.push(id);
+    } else {
+      runs.push([id]);
+    }
+  }
+  return runs
+    .map((run) =>
+      run.length === 1
+        ? `\`${run[0]}\``
+        : `\`${run[0]}\` to \`${run[run.length - 1]}\``,
+    )
+    .join(', ');
+};
+
 export interface RenderedIssue {
   title: string;
   body: string;
@@ -126,7 +153,7 @@ export const renderIssue = ({
     '',
     '## Scope',
     '',
-    `Tasks \`${ids[0]}\` to \`${ids[ids.length - 1]}\` of \`tasks.md\` (${phases}). Do not start tasks outside this range.`,
+    `Tasks ${idRanges(ids)} of \`tasks.md\`: every task under ${phases}. Do not start tasks outside these phases.`,
     '',
     INSTRUCTIONS_HEADING,
     '',

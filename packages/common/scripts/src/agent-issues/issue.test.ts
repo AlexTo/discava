@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { closedIssue, specFolders } from './discover.js';
 import {
   featureName,
+  idRanges,
   instructionsFrom,
   isSpecFolderName,
   issueMarker,
@@ -107,6 +108,19 @@ describe('renderIssue', () => {
     expect(issue.body).toContain('Parent issue: #102');
     expect(issue.body).toContain('`T001` to `T002`');
     expect(issue.body).toContain('## Instructions for the agent');
+  });
+});
+
+describe('idRanges', () => {
+  it('writes one range for consecutive ids', () => {
+    expect(idRanges(['T001', 'T002', 'T003'])).toBe('`T001` to `T003`');
+    expect(idRanges(['T007'])).toBe('`T007`');
+  });
+
+  it('keeps file order when a later task sits among earlier ones', () => {
+    expect(
+      idRanges(['T001', 'T002', 'T047', 'T048', 'T003', 'T004', 'T009']),
+    ).toBe('`T001` to `T002`, `T047` to `T048`, `T003` to `T004`, `T009`');
   });
 });
 

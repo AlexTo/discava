@@ -267,6 +267,36 @@ describe("an agent's merged pull request", () => {
   });
 });
 
+describe('a tasks.md that is not in the expected format', () => {
+  it('fails the run, names the problem and opens nothing', () => {
+    const logs: string[] = [];
+    const calls: string[][] = [];
+    writeFileSync(
+      join(root, 'specs', FOLDER, 'tasks.md'),
+      '### Phase 1: Setup\n\n- [ ] T001 Add dependencies\n',
+    );
+    expect(() =>
+      run({
+        env: {
+          GITHUB_REPOSITORY: REPOSITORY,
+          GITHUB_WORKSPACE: root,
+          GITHUB_EVENT_NAME: 'workflow_dispatch',
+          SPEC_FOLDER: FOLDER,
+        },
+        log: (message) => logs.push(message),
+        gh: (args) => {
+          calls.push(args);
+          return '';
+        },
+      }),
+    ).toThrow(/not in the format/);
+    expect(logs.join('\n')).toContain(
+      `::error file=specs/${FOLDER}/tasks.md,line=1::A phase heading must be written`,
+    );
+    expect(calls.some(([command]) => command === 'issue')).toBe(false);
+  });
+});
+
 describe('run by hand', () => {
   it('opens the next issue for the named folder, whatever the event', () => {
     const { created, calls } = runScenario({ dispatch: `specs/${FOLDER}/` });

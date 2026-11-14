@@ -44,6 +44,40 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # A feature's tasks.md is read by the Agent Issues workflow to decide which
+  # tasks the implementing agent gets, and a file that strays from the format
+  # is misread silently. Checks every specs/*/tasks.md, when one of them or
+  # the code that reads them changed.
+  tasks-format:
+    name: Tasks format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check whether a tasks.md or its reader changed
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --quiet "origin/$BASE_REF...HEAD" -- \
+            'specs/*/tasks.md' 'packages/common/scripts/src/agent-issues/'; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/init-monorepo
+        if: steps.changed.outputs.run == 'true'
+        with:
+          setup-uv: "false"
+          set-nx-shas: "false"
+
+      - name: Validate every tasks.md
+        if: steps.changed.outputs.run == 'true'
+        run: pnpm nx run @discava/common-scripts:validate-tasks
+
   # End-to-end tests (#3): Playwright drives the portals in Chromium against
   # the whole local stack, which it starts with `pnpm dev` (DynamoDB local,
   # S3Mock and the local OIDC server in Docker; no AWS). Only when something
