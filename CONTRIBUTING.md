@@ -105,6 +105,8 @@ await waitFor(() =>
 - Throw `ApiError(code, message)` from a handler to make the call fail the way the API does (`error.data.code` is set).
 - Find elements by role and accessible name, as a user or screen reader would, rather than by class or test id.
 - jsdom has no layout, so drag and drop can't be driven by the pointer or keyboard in these tests. Simulate the drop event instead (see `lesson-content-items-row.test.tsx`), and check real dragging in a browser.
+- A page that reads from core-api instead (the instructor portal's My Courses and Dashboard do, for the course list) uses `renderWithCoreApi` from `src/test/render-with-core-api.tsx` the same way. Both share their fake tRPC `fetch` from `src/test/fake-trpc-fetch.ts`.
+- A `route.tsx`'s component isn't exported directly; render `Route.options.component` from it. Name the test file `-route.test.tsx` (the `-` prefix), or TanStack Router's file-based routing picks it up as a route of its own.
 
 ### End-to-End Tests
 
