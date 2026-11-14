@@ -26,7 +26,7 @@ describe('useCoreApi', () => {
 describe('CoreApiClientProvider', () => {
   it("builds a client that calls the runtime config's CoreApi URL, authorized as the signed-in user", async () => {
     const fetchMock = vi.fn(
-      () =>
+      (_url: URL | RequestInfo, _init?: RequestInit) =>
         new Response(JSON.stringify({ result: { data: null } }), {
           status: 200,
           headers: { 'content-type': 'application/json' },

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { act, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import type { AuthContextProps } from 'react-oidc-context';
 import { describe, expect, it, vi } from 'vitest';
 import { RuntimeConfigContext } from '../RuntimeConfig';
@@ -41,14 +41,19 @@ describe('CognitoAuth', () => {
 
     renderAuth({ localOidc: { authority: 'http://local', clientId: 'x' } });
 
-    // AuthProvider (react-oidc-context) does its own async setup on mount;
-    // letting it settle avoids act() warnings unrelated to what's tested here.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(
+      await screen.findByRole('status', { name: 'Loading' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
   });
 
   it("shows an error if the sign-in service couldn't be reached", async () => {
-    authState.value = { isLoading: false, error: new Error('network down') };
+    authState.value = {
+      isLoading: false,
+      error: Object.assign(new Error('network down'), {
+        source: 'signinCallback' as const,
+      }),
+    };
 
     renderAuth({ localOidc: { authority: 'http://local', clientId: 'x' } });
 

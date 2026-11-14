@@ -5,10 +5,13 @@
 
 import type { AppRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { type RenderResult, render } from '@testing-library/react';
+import userEvent, { type UserEvent } from '@testing-library/user-event';
 import { createTRPCClient, httpLink } from '@trpc/client';
-import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
+import {
+  createTRPCOptionsProxy,
+  type TRPCOptionsProxy,
+} from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { InstructorApiTRPCContext } from '../components/InstructorApiClientProvider';
 import { RuntimeConfigContext } from '../components/RuntimeConfig';
@@ -27,10 +30,19 @@ export type { ApiCall, Handler };
 // procedures are answered by `handlers` (keyed by path, e.g. 'course.publish').
 // Returns every call the component made, the query client, and a user-event
 // instance for interacting with it.
+// Spelled out so the declaration emit doesn't have to name the API router's
+// inferred types.
+export interface RenderedWithApi extends RenderResult {
+  calls: ApiCall[];
+  queryClient: QueryClient;
+  optionsProxy: TRPCOptionsProxy<AppRouter>;
+  user: UserEvent;
+}
+
 export const renderWithInstructorApi = (
   ui: ReactElement,
   { handlers = {} }: { handlers?: Record<string, Handler> } = {},
-) => {
+): RenderedWithApi => {
   const calls: ApiCall[] = [];
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
