@@ -22,6 +22,7 @@ Each layer has its own job; a feature uses every layer it touches.
 
 - **Unit tests.** New business logic (tRPC procedures, entity access patterns) MUST ship with unit tests covering its main behavior and the rules it enforces (authorization, transactional guarantees).
 - **Invariants.** A rule that spans records or writers (core-api, instructor-api, event handlers) MUST be written through a shared `core-table` helper that every writer calls, and MUST have a check in `core-table`'s `helpers/invariants.ts` plus a test that breaks it.
+- **Impact check.** A plan MUST list the shared records the feature writes, or reads in a new way (counters, completions, enrolments, content items and the like), and for each name the existing invariants and tests that already cover it. Where the feature changes what a counted or related record means, the plan MUST extend those checks, not only add new ones, and `tasks.md` MUST carry a task for each check added or extended and its breaking test. A feature that touches no shared record says so.
 - **End to end.** A change to a main user flow (signing in, building and publishing a course, enrolling, learning) MUST add or extend a scenario in `packages/e2e`. Scenarios MUST make their own users and uniquely named data, MUST NOT reset local data, and MUST keep the invariant check after every test. A new write that two users could race on SHOULD add a concurrency test.
 - **Tests are a specification.** A failing test MUST be resolved by fixing the code, unless the spec or plan changes the behavior it covers. Weakening an existing test (loosening an assertion, deleting a case, adding `skip` or `only`, widening a mock or snapshot) is allowed only when a task names the behavior change that justifies it, and the PR description says so. Never edit a test just to turn it green. Invariants count as tests: a violated invariant means the write is wrong, so don't relax the check.
 
@@ -74,4 +75,4 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 
 This constitution supersedes other practices where they conflict. Amend it by pull request, with the rationale in the description. Versioning is semantic: MAJOR for removing or redefining a principle, MINOR for adding a principle or materially widening one, PATCH for clarifications. Reviewers MUST check that each PR complies.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
+**Version**: 1.1.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-14
