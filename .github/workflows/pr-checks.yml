@@ -113,8 +113,27 @@ jobs:
           aws-docker-login-role-arn: ${{ vars.AWS_DOCKER_LOGIN_ROLE_ARN }}
           setup-uv: "false"
 
+      # Chromium's download is cached per Playwright version. Its system
+      # libraries come from apt, outside the cache, so they're installed
+      # either way.
+      - name: Get the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @discava/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: playwright-cache
+        name: Cache Chromium for Playwright
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium for Playwright
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @discava/e2e exec playwright install --with-deps chromium
+
+      - name: Install Chromium's system libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @discava/e2e exec playwright install-deps chromium
 
       # Static output, so the job log lists each test even when they all pass.
       - name: Run e2e
