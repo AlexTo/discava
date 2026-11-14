@@ -30,9 +30,11 @@ permissions:
   contents: read
   actions: read
   statuses: write
-  # Labels and comments on a pull request go through the issues API.
+  # Labels and comments on a pull request go through the issues API, which
+  # refuses the workflow's token ("Resource not accessible by integration")
+  # for a pull request unless it can write pull requests too.
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   ci-status:
