@@ -24,7 +24,7 @@ hooks:
   before_clarify:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before clarification?
@@ -33,7 +33,7 @@ hooks:
   before_plan:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before planning?
@@ -42,7 +42,7 @@ hooks:
   before_tasks:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before task generation?
@@ -51,7 +51,7 @@ hooks:
   before_implement:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before implementation?
@@ -60,7 +60,7 @@ hooks:
   before_checklist:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before checklist?
@@ -69,7 +69,7 @@ hooks:
   before_analyze:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before analysis?
@@ -78,7 +78,7 @@ hooks:
   before_taskstoissues:
   - extension: git
     command: speckit.git.commit
-    enabled: true
+    enabled: false
     optional: true
     priority: 10
     prompt: Commit outstanding changes before issue sync?
@@ -88,7 +88,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit constitution changes?
     description: Auto-commit after constitution update
@@ -97,7 +97,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit specification changes?
     description: Auto-commit after specification
@@ -106,7 +106,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit clarification changes?
     description: Auto-commit after spec clarification
@@ -115,7 +115,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit plan changes?
     description: Auto-commit after implementation planning
@@ -124,7 +124,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit task changes?
     description: Auto-commit after task generation
@@ -133,7 +133,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit implementation changes?
     description: Auto-commit after implementation
@@ -142,7 +142,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit checklist changes?
     description: Auto-commit after checklist generation
@@ -151,7 +151,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit analysis results?
     description: Auto-commit after analysis
@@ -160,7 +160,7 @@ hooks:
   - extension: git
     command: speckit.git.commit
     enabled: true
-    optional: true
+    optional: false
     priority: 10
     prompt: Commit after syncing issues?
     description: Auto-commit after tasks-to-issues conversion
