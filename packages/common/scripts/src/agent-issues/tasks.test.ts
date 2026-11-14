@@ -4,7 +4,12 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { groupPhases, nextGroup, parsePhases } from './tasks.js';
+import {
+  groupPhases,
+  nextGroup,
+  openAgentTasks,
+  parsePhases,
+} from './tasks.js';
 
 const TASKS = `# Tasks
 
@@ -49,6 +54,13 @@ describe('parsePhases', () => {
     });
   });
 
+  it('recognises a human task with or without bold', () => {
+    const [phase] = parsePhases(
+      '## Phase 1: A\n\n- [ ] T001 (human) check\n- [ ] T002 **(Human)** look\n- [ ] T003 humans welcome\n',
+    );
+    expect(phase.tasks.map((task) => task.human)).toEqual([true, true, false]);
+  });
+
   it('ignores tasks before the first phase heading', () => {
     expect(parsePhases('- [ ] T001 stray\n')).toEqual([]);
   });
@@ -59,7 +71,8 @@ describe('groupPhases', () => {
 
   it('puts setup, foundations and the first story in one group', () => {
     expect(groups[0].phases.map((p) => p.number)).toEqual([1, 2, 3]);
-    expect(groups[0].title).toBe('Submit work (with setup and foundations)');
+    expect(groups[0].title).toBe('Submit work');
+    expect(groups[0].withFoundations).toBe(true);
     expect(groups[0].tasks.map((t) => t.id)).toEqual([
       'T001',
       'T002',
@@ -72,6 +85,7 @@ describe('groupPhases', () => {
   it('gives each later phase its own group', () => {
     expect(groups.map((g) => g.index)).toEqual([0, 1, 2]);
     expect(groups[1].title).toBe('Resubmit');
+    expect(groups[1].withFoundations).toBe(false);
     expect(groups[2].title).toBe('Polish and cross-cutting');
   });
 
@@ -79,6 +93,18 @@ describe('groupPhases', () => {
     const only = groupPhases(parsePhases('## Phase 1: A\n\n- [ ] T001 x\n'));
     expect(only).toHaveLength(1);
     expect(only[0].title).toBe('A');
+  });
+});
+
+describe('openAgentTasks', () => {
+  it('lists unticked tasks that are not for a person', () => {
+    const groups = groupPhases(parsePhases(TASKS));
+    expect(openAgentTasks(groups[0]).map((task) => task.id)).toEqual([
+      'T003',
+      'T004',
+      'T005',
+    ]);
+    expect(openAgentTasks(groups[2]).map((task) => task.id)).toEqual(['T007']);
   });
 });
 

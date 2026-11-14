@@ -24,12 +24,18 @@ export interface Phase {
 export interface TaskGroup {
   /** Position in the feature's list of groups; part of the issue's marker. */
   index: number;
+  /** What the group delivers: its last phase's title, shortened. */
   title: string;
+  /** Whether it also carries the setup and foundational phases. */
+  withFoundations: boolean;
   phases: Phase[];
   tasks: Task[];
 }
 
 const PHASE_HEADING = /^## Phase (\d+): (.+?)\s*$/;
+// "(human)", bold or not: the constitution and the tasks template write it
+// differently.
+const HUMAN_MARK = /\(human\)/i;
 const TASK_LINE = /^- \[([ xX])\] (T\d{3})\b(.*)$/;
 
 export const parsePhases = (tasksMd: string): Phase[] => {
@@ -51,7 +57,7 @@ export const parsePhases = (tasksMd: string): Phase[] => {
       phases[phases.length - 1].tasks.push({
         id: task[2],
         done: task[1] !== ' ',
-        human: task[3].includes('**(human)**'),
+        human: HUMAN_MARK.test(task[3]),
       });
     }
   }
@@ -82,20 +88,20 @@ export const groupPhases = (phases: Phase[]): TaskGroup[] => {
     batches.push(...phases.map((phase) => [phase]));
   }
   return batches.map((batch, index) => {
-    const last = batch[batch.length - 1];
-    const title =
-      batch.length > 1
-        ? `${shortTitle(last)} (with setup and foundations)`
-        : shortTitle(last);
     return {
       index,
-      title,
+      title: shortTitle(batch[batch.length - 1]),
+      withFoundations: batch.length > 1,
       phases: batch,
       tasks: batch.flatMap((phase) => phase.tasks),
     };
   });
 };
 
-/** The first group with work left for the agent (human tasks don't count). */
+/** A group's tasks the agent still has to do (human tasks don't count). */
+export const openAgentTasks = (group: TaskGroup): Task[] =>
+  group.tasks.filter((task) => !task.done && !task.human);
+
+/** The first group with work left for the agent. */
 export const nextGroup = (groups: TaskGroup[]): TaskGroup | undefined =>
-  groups.find((group) => group.tasks.some((task) => !task.done && !task.human));
+  groups.find((group) => openAgentTasks(group).length > 0);

@@ -8,17 +8,24 @@ import {
   type RenderedIssue,
   renderIssue,
 } from './issue.js';
-import { groupPhases, nextGroup, parsePhases } from './tasks.js';
+import {
+  groupPhases,
+  nextGroup,
+  openAgentTasks,
+  parsePhases,
+} from './tasks.js';
 
 export type IssuePlan =
   | { action: 'create'; issue: RenderedIssue }
-  | { action: 'skip'; reason: string };
+  | { action: 'done'; reason: string }
+  // The next group already has an issue, but its tasks aren't all ticked.
+  | { action: 'stalled'; reason: string; title: string; unticked: string[] };
 
 /**
  * What to do for one spec folder: the issue for the next group with work
- * left, unless an issue for that group already exists (open or closed). A
- * group whose issue exists but whose tasks are still unticked is left for a
- * person, not given to the agent twice.
+ * left, unless an issue for that group already exists (open or closed, with
+ * or without the agent's label). Such a group is left for a person, not given
+ * to the agent twice.
  */
 export const planIssue = ({
   folder,
@@ -35,13 +42,15 @@ export const planIssue = ({
 }): IssuePlan => {
   const group = nextGroup(groupPhases(parsePhases(tasksMd)));
   if (!group) {
-    return { action: 'skip', reason: `${folder}: no tasks left for the agent` };
+    return { action: 'done', reason: `${folder}: no tasks left for the agent` };
   }
   const marker = issueMarker(folder, group.index);
   if (existingIssueBodies.some((body) => body.includes(marker))) {
     return {
-      action: 'skip',
-      reason: `${folder}: an issue for "${group.title}" already exists but its tasks are not all done; a person needs to look`,
+      action: 'stalled',
+      reason: `${folder}: an issue for "${group.title}" already exists but its tasks are not all ticked; a person needs to look`,
+      title: group.title,
+      unticked: openAgentTasks(group).map((task) => task.id),
     };
   }
   return {

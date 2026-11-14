@@ -18,7 +18,7 @@
     "agent-issue": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx src/agent-issues/create-next-issue.ts",
+        "command": "tsx src/agent-issues/main.ts",
         "cwd": "{projectRoot}"
       }
     },

@@ -2,79 +2,145 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closedIssue, specFolders } from './discover.js';
 import { decide } from './gate.js';
-import { AGENT_LABEL, markerFolder } from './issue.js';
+import {
+  AGENT_LABEL,
+  isSpecFolderName,
+  MARKER_PREFIX,
+  markerFolder,
+} from './issue.js';
 import { planIssue } from './plan-issue.js';
 
-// Run by .github/workflows/agent-issues.yml when a pull request merges: opens
-// the next implementation issue for the implementing agent (see gate.ts for
-// which merges count, tasks.ts for how a feature is split into issues).
-// DRY_RUN=true prints the issue instead of creating it.
+// Opens the next implementation issue for the implementing agent. Run by
+// .github/workflows/agent-issues.yml (through main.ts) when a pull request
+// merges, or by hand for one spec folder (workflow_dispatch, SPEC_FOLDER).
+// See gate.ts for which merges count and tasks.ts for how a feature is split
+// into issues. DRY_RUN=true prints the issue instead of creating it.
 
-const gh = (args: string[]): string =>
-  execFileSync('gh', args, {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+export interface Deps {
+  env: Record<string, string | undefined>;
+  /** Runs the GitHub CLI with these arguments and returns its output. */
+  gh: (args: string[]) => string;
+  log: (message: string) => void;
+}
 
-const notice = (message: string) => console.log(`::notice::${message}`);
+interface PullRequestEvent {
+  number: number;
+  body: string | null;
+  merged: boolean;
+  labels: { name: string }[];
+  head: { ref: string };
+}
 
-const main = () => {
-  const eventPath = process.env.GITHUB_EVENT_PATH;
-  const repository = process.env.GITHUB_REPOSITORY;
-  if (!eventPath || !repository) {
-    throw new Error('GITHUB_EVENT_PATH and GITHUB_REPOSITORY must be set');
-  }
-  const root = process.env.GITHUB_WORKSPACE ?? process.cwd();
-  const dryRun = process.env.DRY_RUN === 'true';
-  const pr = JSON.parse(readFileSync(eventPath, 'utf8')).pull_request as {
-    number: number;
-    body: string | null;
-    merged: boolean;
-    labels: { name: string }[];
-    head: { ref: string };
-  };
+const bodyFile = (body: string): string => {
+  const file = join(mkdtempSync(join(tmpdir(), 'agent-issue-')), 'body.md');
+  writeFileSync(file, body);
+  return file;
+};
 
+// The spec folders a merged pull request is about: the one its agent issue
+// named, else the ones it changed. Undefined when the merge doesn't count.
+const foldersForPullRequest = (
+  pr: PullRequestEvent,
+  repository: string,
+  { gh, log }: Deps,
+): string[] | undefined => {
   const decision = decide({
     merged: pr.merged === true,
     labels: pr.labels.map((label) => label.name),
     headRef: pr.head.ref,
   });
   if (decision.kind === 'ignore') {
-    notice(`No issue created: ${decision.reason}`);
-    return;
+    log(`::notice::No issue created: ${decision.reason}`);
+    return undefined;
   }
-
-  // The spec folder: the one the agent's issue named, else the one the pull
-  // request changed.
-  const folders: string[] = [];
   const linked = closedIssue(pr.body);
   if (decision.kind === 'implementation' && linked !== undefined) {
-    const body = JSON.parse(
-      gh(['issue', 'view', String(linked), '--json', 'body']),
-    ).body as string;
-    const folder = markerFolder(body);
+    // "Closes #n" is the agent's prose: the number may be no issue at all, so
+    // a failed lookup falls back to the changed files like a missing marker.
+    let body: string | null = null;
+    try {
+      ({ body } = JSON.parse(
+        gh(['issue', 'view', String(linked), '--json', 'body']),
+      ) as { body: string | null });
+    } catch {
+      log(`::notice::Could not read issue #${linked}; using the changed files`);
+    }
+    const folder = markerFolder(body ?? '');
     if (folder) {
-      folders.push(folder);
+      return [folder];
     }
   }
-  if (folders.length === 0) {
-    const files = gh([
-      'api',
-      `repos/${repository}/pulls/${pr.number}/files`,
-      '--paginate',
-      '--jq',
-      '.[].filename',
-    ])
-      .split('\n')
-      .filter(Boolean);
-    folders.push(...specFolders(files));
+  const files = gh([
+    'api',
+    `repos/${repository}/pulls/${pr.number}/files`,
+    '--paginate',
+    '--jq',
+    '.[].filename',
+  ])
+    .split('\n')
+    .filter(Boolean);
+  return specFolders(files);
+};
+
+// The body of every issue that carries a marker: open or closed, and whether
+// or not it still has the agent's label (removing it is how a run is stopped
+// or repeated). One JSON string per line.
+const markedIssueBodies = (repository: string, gh: Deps['gh']): string[] =>
+  gh([
+    'api',
+    `repos/${repository}/issues?state=all&per_page=100`,
+    '--paginate',
+    '--jq',
+    `.[] | select(.pull_request == null) | (.body // "") | select(contains("${MARKER_PREFIX}")) | @json`,
+  ])
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as string);
+
+export const run = (deps: Deps): void => {
+  const { env, gh, log } = deps;
+  const repository = env.GITHUB_REPOSITORY;
+  if (!repository) {
+    throw new Error('GITHUB_REPOSITORY must be set');
   }
+  const root = env.GITHUB_WORKSPACE ?? process.cwd();
+  const dryRun = env.DRY_RUN === 'true';
+  const notice = (message: string) => log(`::notice::${message}`);
+
+  let folders: string[];
+  let prNumber: number | undefined;
+  if (env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+    // By hand, for one folder: a spec merged without its label, or a chain
+    // that stalled and has been sorted out.
+    const folder = (env.SPEC_FOLDER ?? '')
+      .trim()
+      .replace(/^specs\//, '')
+      .replace(/\/$/, '');
+    if (!isSpecFolderName(folder)) {
+      throw new Error(
+        'SPEC_FOLDER must be the name of a folder under specs/, e.g. 20261114-120542-assignment-submissions',
+      );
+    }
+    folders = [folder];
+  } else {
+    if (!env.GITHUB_EVENT_PATH) {
+      throw new Error('GITHUB_EVENT_PATH must be set');
+    }
+    const pr = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
+      .pull_request as PullRequestEvent;
+    const found = foldersForPullRequest(pr, repository, deps);
+    if (!found) {
+      return;
+    }
+    folders = found;
+    prNumber = pr.number;
+  }
+
   const withTasks = folders.filter((folder) =>
     existsSync(join(root, 'specs', folder, 'tasks.md')),
   );
@@ -87,22 +153,7 @@ const main = () => {
     join(root, '.github/ISSUE_TEMPLATE/implement-phase.md'),
     'utf8',
   );
-  const existingIssueBodies = (
-    JSON.parse(
-      gh([
-        'issue',
-        'list',
-        '--label',
-        AGENT_LABEL,
-        '--state',
-        'all',
-        '--limit',
-        '500',
-        '--json',
-        'body',
-      ]),
-    ) as { body: string }[]
-  ).map(({ body }) => body);
+  const existingIssueBodies = markedIssueBodies(repository, gh);
 
   for (const folder of withTasks) {
     const read = (file: string) =>
@@ -114,31 +165,45 @@ const main = () => {
       templateMd,
       existingIssueBodies,
     });
-    if (plan.action === 'skip') {
+    if (plan.action === 'done') {
       notice(`No issue created: ${plan.reason}`);
       continue;
     }
-    if (dryRun) {
-      console.log(`${plan.issue.title}\n\n${plan.issue.body}`);
+    if (plan.action === 'stalled') {
+      notice(`No issue created: ${plan.reason}`);
+      // Said on the pull request too: nobody reads a workflow's notices.
+      if (prNumber !== undefined && !dryRun) {
+        gh([
+          'pr',
+          'comment',
+          String(prNumber),
+          '--body-file',
+          bodyFile(
+            [
+              `The next implementation issue for \`specs/${folder}/\` was not opened: an issue for "${plan.title}" already exists, and these tasks in its \`tasks.md\` are not ticked: ${plan.unticked.join(', ')}.`,
+              '',
+              'Tick them if they are done, or finish them. Then run the **Agent Issues** workflow by hand with this spec folder to open the next issue.',
+              '',
+            ].join('\n'),
+          ),
+        ]);
+      }
       continue;
     }
-    const bodyFile = join(
-      mkdtempSync(join(tmpdir(), 'agent-issue-')),
-      'body.md',
-    );
-    writeFileSync(bodyFile, plan.issue.body);
+    if (dryRun) {
+      log(`${plan.issue.title}\n\n${plan.issue.body}`);
+      continue;
+    }
     const url = gh([
       'issue',
       'create',
       '--title',
       plan.issue.title,
       '--body-file',
-      bodyFile,
+      bodyFile(plan.issue.body),
       '--label',
       AGENT_LABEL,
     ]).trim();
     notice(`Created ${url}`);
   }
 };
-
-main();

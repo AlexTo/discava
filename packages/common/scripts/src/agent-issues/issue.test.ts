@@ -8,7 +8,9 @@ import { closedIssue, specFolders } from './discover.js';
 import {
   featureName,
   instructionsFrom,
+  isSpecFolderName,
   issueMarker,
+  issueTitle,
   markerFolder,
   parentIssue,
   renderIssue,
@@ -48,6 +50,16 @@ describe('issue helpers', () => {
     expect(markerFolder('no marker')).toBeUndefined();
   });
 
+  it('refuses a marker whose folder could leave specs/', () => {
+    for (const folder of ['../../etc', '..', '.hidden', 'a/b', '']) {
+      expect(
+        markerFolder(`<!-- agent-issue spec:${folder} group:0 -->`),
+      ).toBeUndefined();
+      expect(isSpecFolderName(folder)).toBe(false);
+    }
+    expect(isSpecFolderName('001-user.auth_v2')).toBe(true);
+  });
+
   it('names the feature without its number or timestamp', () => {
     expect(featureName(FOLDER)).toBe('assignment-submissions');
     expect(featureName('001-user-auth')).toBe('user-auth');
@@ -83,9 +95,9 @@ describe('renderIssue', () => {
     templateMd: TEMPLATE,
   });
 
-  it('writes a Conventional Commit title', () => {
+  it('writes a Conventional Commit title with a lower-case subject', () => {
     expect(issue.title).toBe(
-      'feat(assignment-submissions): Submit work (with setup and foundations)',
+      'feat(assignment-submissions): submit work (with setup and foundations)',
     );
   });
 
@@ -95,6 +107,43 @@ describe('renderIssue', () => {
     expect(issue.body).toContain('Parent issue: #102');
     expect(issue.body).toContain('`T001` to `T002`');
     expect(issue.body).toContain('## Instructions for the agent');
+  });
+});
+
+describe('issueTitle', () => {
+  const group = (title: string, withFoundations = false) => ({
+    index: 0,
+    title,
+    withFoundations,
+    phases: [],
+    tasks: [],
+  });
+
+  it('leaves an acronym alone and drops a trailing full stop', () => {
+    expect(issueTitle('001-x', group('API keys for students.'))).toBe(
+      'feat(x): API keys for students',
+    );
+  });
+
+  it('drops the suffix, then whole words, to stay within 100 characters', () => {
+    // 58 characters: fits in the 70 left after the prefix, but not with the
+    // 29-character suffix.
+    const long = 'Submit work to an upload assignment from the lesson player';
+    expect(issueTitle(FOLDER, group(long, true))).toBe(
+      'feat(assignment-submissions): submit work to an upload assignment from the lesson player',
+    );
+    const cut = issueTitle(
+      FOLDER,
+      group(`${long} and several more words of detail`),
+    );
+    expect(cut).toBe(
+      'feat(assignment-submissions): submit work to an upload assignment from the lesson player and several',
+    );
+    expect(cut.length).toBe(100);
+    // Cut mid-word: back to the last whole word.
+    expect(issueTitle(FOLDER, group(`${long} and severally more words`))).toBe(
+      'feat(assignment-submissions): submit work to an upload assignment from the lesson player and',
+    );
   });
 });
 
@@ -112,12 +161,16 @@ describe('planIssue', () => {
     expect(plan.action).toBe('create');
   });
 
-  it('does not create a second issue for the same group', () => {
+  it('does not create a second issue for the same group, and says what is left', () => {
     const plan = planIssue({
       ...input,
       existingIssueBodies: [`${issueMarker(FOLDER, 0)}\nbody`],
     });
-    expect(plan.action).toBe('skip');
+    expect(plan).toMatchObject({
+      action: 'stalled',
+      title: 'Submit work',
+      unticked: ['T001', 'T002'],
+    });
   });
 
   it('is not fooled by a marker for another group or folder', () => {
@@ -134,7 +187,7 @@ describe('planIssue', () => {
       tasksMd: TASKS.replaceAll('- [ ]', '- [x]'),
     });
     expect(plan).toEqual({
-      action: 'skip',
+      action: 'done',
       reason: `${FOLDER}: no tasks left for the agent`,
     });
   });
@@ -156,6 +209,7 @@ describe('discover', () => {
         'specs/b/plan.md',
         'packages/x.ts',
         'specs/readme.md',
+        'specs/.hidden/tasks.md',
       ]),
     ).toEqual(['a', 'b']);
   });
