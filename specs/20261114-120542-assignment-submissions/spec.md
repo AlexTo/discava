@@ -8,6 +8,8 @@
 
 **Input**: User description: "Student submissions for upload assignments (issue #102, part 2 remainder, following PR #294 which shipped assignment lessons and upload assignment authoring)."
 
+**Parent issue**: #102
+
 ## Clarifications
 
 ### Session 2026-11-14
