@@ -26,6 +26,16 @@ State: `submitted` → (part 3) `returned`. A returned record accepts no further
 
 The completion exists from the first submission, so a resubmission doesn't write one.
 
+## Shared records this feature writes, and what covers them
+
+| Record | How this feature writes it | Existing coverage | Change |
+|--------|----------------------------|-------------------|--------|
+| `contentItem.studentActivityCount` | +1 on a student's first submission, via `studentActivityWrites` | `checkActivityCountMatchesStudents` | Also counts students with an `assignmentSubmission` |
+| `enrolment.lastActivityAt` | Moved forward to the submission time, via `studentActivityWrites` | `checkLastActivityAtCurrent` | Also reads `submittedAt` |
+| `itemCompletion` | Created with the first submission (a pre-existing one is tolerated) | `checkProgressMatchesCompletions`, `checkCompletedAtIffCompleted`, `checkStudentRecords*` | None; the new `assignment-submission-shape` check requires a completion |
+| Student records (targets exist, enrolled, placed with the item) | A submission is a new kind of student record | `checkStudentRecordsHaveTargets`, `checkStudentRecordsEnrolled`, `checkStudentRecordsPlacedWithItem` | `studentRecords` includes submissions |
+| Stream consumers | Completion drives progress as before | `PROGRESS_STREAM_FILTERS` | Test that submission changes don't match them |
+
 ## Access patterns
 
 | Request | Key | Index |

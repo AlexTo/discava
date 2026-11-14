@@ -90,7 +90,7 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 ### Edge Cases
 
-- A student isn't enrolled, the course isn't published, or the assignment is hidden or archived (or its module or lesson is): submitting and viewing are refused as if it didn't exist for them.
+- A student isn't enrolled, the course isn't published, or the assignment is hidden or archived (or its module or lesson is): submitting and viewing are refused.
 - An upload that was started but never submitted: it expires on its own and never appears in any submission.
 - A file listed in a submit request that is missing from the upload area, or whose type or size no longer matches what was allowed: the whole submission is refused.
 - A student submits the same assignment from two tabs at once: only one result is saved.
@@ -125,7 +125,7 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 ### Key Entities
 
-- **Assignment submission**: A student's current work for one upload assignment. Has the student, the assignment and course it belongs to, 1–5 files (name, size, type, location), submitted time, late flag, status (submitted or returned) and a version that increases with each resubmission. One per student per assignment. Looked up by assignment (for instructors, in part 3) and by student ("my submissions in this course").
+- **Assignment submission**: A student's current work for one upload assignment. Has the student, the assignment and course it belongs to, 1–5 files (name, size, type, location), submitted time, late flag, status (submitted or returned) and a version that increases with each resubmission. One per student per assignment. Looked up by assignment (for instructors, in part 3) and by student and assignment (a student reading their own).
 - **Submission file**: One attached file, with its original name, size and type.
 - **Upload assignment item**: Existing from #294; supplies the instructions, due date and maximum points the submission is judged against.
 - **Student activity count**: Existing per-course tally of active students, which this feature increments once per student per assignment's first submission.
