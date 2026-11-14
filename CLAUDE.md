@@ -96,3 +96,14 @@ The tRPC router (`packages/apis/core-api/src/router.ts`) builds procedures from 
 - Buttons carry text labels only: no left/right arrow icons (`ArrowLeft`, `ArrowRight`, `ChevronRight`…), leading or trailing, including `Button asChild` links like "Continue" or "Back". Icon-only arrow controls (carousel prev/next) and breadcrumb separators are fine.
 - Code that isn't an entity or a package's setup goes in a `helpers/` folder, one file per entity or topic, named for what it covers (e.g. `core-table/src/helpers/content-item.ts` beside `entities/content-item.ts`, `helpers/errors.ts`). Don't leave such files loose at a package's `src/` root or add a catch-all `utils.ts`.
 - Discava hasn't launched: there are no real users, links or data to stay compatible with. When moving or renaming routes, APIs or data shapes, change them outright. Don't add redirects for old URLs, deprecated aliases or fallbacks for old data; fix up dev data by hand instead. Revisit this once production is live.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
