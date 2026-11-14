@@ -376,6 +376,7 @@ describe('viewCourse', () => {
       moduleId: 'module-1',
       courseId: course.courseId,
       title: 'First lesson',
+      kind: 'lesson' as const,
       order: 1,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -473,6 +474,7 @@ describe('viewCourse', () => {
               moduleId: 'module-1',
               courseId: course.courseId,
               title: 'Lesson',
+              kind: 'lesson' as const,
               order: 1,
               createdAt: '2024-01-01T00:00:00.000Z',
               updatedAt: '2024-01-01T00:00:00.000Z',
@@ -513,6 +515,7 @@ describe('viewCourse', () => {
       moduleId: 'module-1',
       courseId: course.courseId,
       title: 'Second lesson',
+      kind: 'lesson' as const,
       order: 2,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -522,6 +525,7 @@ describe('viewCourse', () => {
       moduleId: 'module-1',
       courseId: course.courseId,
       title: 'First lesson',
+      kind: 'lesson' as const,
       order: 1,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -552,6 +556,94 @@ describe('viewCourse', () => {
         { ...module1, lessons: [] },
       ],
     });
+  });
+
+  // #102: a student opening a course with an assignment used to fail output
+  // validation, and the lesson's kind was stripped.
+  it('serves assignment lessons: kind, due date and points, but no key', async () => {
+    const stamps = {
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    const where = {
+      courseId: course.courseId,
+      moduleId: 'module-1',
+    };
+    const upload = {
+      ...where,
+      ...stamps,
+      lessonId: 'lesson-upload',
+      contentItemId: 'item-upload',
+      type: 'assignment' as const,
+      status: 'ready' as const,
+      title: 'Essay',
+      order: 1,
+      body: '{"type":"doc"}',
+      dueAt: '2026-12-01T00:00:00.000Z',
+      maxPoints: 50,
+      // Storage details that mustn't reach a student.
+      s3Key: 'courses/secret-key',
+      submissionNonce: 'nonce',
+    };
+    const quiz = {
+      ...where,
+      ...stamps,
+      lessonId: 'lesson-quiz',
+      contentItemId: 'item-quiz',
+      type: 'quiz' as const,
+      status: 'ready' as const,
+      title: 'Quiz',
+      order: 1,
+      answerKey: [{ correct: ['a'] }],
+      questions: [{ prompt: 'Q' }],
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [course],
+          module: [{ ...where, ...stamps, title: 'Module', order: 1 }].map(
+            visible,
+          ),
+          lesson: [
+            {
+              ...where,
+              ...stamps,
+              lessonId: 'lesson-upload',
+              title: 'Essay',
+              kind: 'assignment' as const,
+              order: 1,
+            },
+            {
+              ...where,
+              ...stamps,
+              lessonId: 'lesson-quiz',
+              title: 'Quiz',
+              kind: 'assignment' as const,
+              order: 2,
+            },
+          ].map(visible),
+          contentItem: [upload, quiz].map(visible),
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    const [uploadLesson, quizLesson] = result.modules[0].lessons;
+    expect(uploadLesson.kind).toBe('assignment');
+    expect(quizLesson.kind).toBe('assignment');
+    expect(uploadLesson.contentItems[0]).toMatchObject({
+      type: 'assignment',
+      body: '{"type":"doc"}',
+      dueAt: '2026-12-01T00:00:00.000Z',
+      maxPoints: 50,
+    });
+    expect(quizLesson.contentItems[0]).toMatchObject({ type: 'quiz' });
+    const serialised = JSON.stringify(result);
+    expect(serialised).not.toContain('secret-key');
+    expect(serialised).not.toContain('nonce');
+    expect(serialised).not.toContain('answerKey');
+    expect(serialised).not.toContain('s3Key');
   });
 
   it('throws NOT_FOUND when the course does not exist', async () => {
@@ -663,6 +755,7 @@ describe('viewCourse', () => {
       moduleId: 'module-shown',
       lessonId: 'lesson-shown',
       title: 'Shown lesson',
+      kind: 'lesson' as const,
       order: 1,
     };
     const shownItem = {
@@ -790,6 +883,7 @@ describe('viewCourse', () => {
               moduleId: 'module-1',
               courseId: course.courseId,
               title: 'Lesson',
+              kind: 'lesson' as const,
               order: 1,
               ...stamps,
             }),
@@ -877,6 +971,7 @@ describe('publicViewCourse', () => {
       moduleId: 'module-1',
       courseId: publishedCourse.courseId,
       title: 'Second lesson',
+      kind: 'lesson' as const,
       order: 2,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -886,6 +981,7 @@ describe('publicViewCourse', () => {
       moduleId: 'module-1',
       courseId: publishedCourse.courseId,
       title: 'First lesson',
+      kind: 'lesson' as const,
       order: 1,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -949,6 +1045,7 @@ describe('publicViewCourse', () => {
       moduleId: 'module-shown',
       lessonId: 'lesson-shown',
       title: 'Shown lesson',
+      kind: 'lesson' as const,
       order: 1,
     };
     curriculumCollection.mockReturnValue({

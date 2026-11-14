@@ -4,6 +4,8 @@
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { scheduleTranscodeCleanupOrThrow } from '@discava/common-server-utils/cleanup-scheduler';
+import { resolveLessonMediaUploadBucketName } from '@discava/common-server-utils/lesson-media-bucket';
 import { s3ClientConfig } from '@discava/common-server-utils/local-dev';
 import {
   manifestNonce,
@@ -14,8 +16,6 @@ import {
   isConditionalCheckFailed,
   TRANSCODE_PENDING_ATTRIBUTES,
 } from '@discava/core-table';
-import { resolveLessonMediaUploadBucketName } from '../lib/runtime-config.js';
-import { scheduleTranscodeCleanupOrThrow } from '../lib/transcode-cleanup-scheduler.js';
 
 // S3Mock in local dev (#137).
 const s3Client = new S3Client(s3ClientConfig());

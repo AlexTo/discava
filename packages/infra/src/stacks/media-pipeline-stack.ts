@@ -72,8 +72,10 @@ export class MediaPipelineStack extends Stack {
       },
     );
 
-    const { scheduleGroup, schedulerRole } =
-      this.createTranscodeCleanupLambda(lessonMediaBucket);
+    const { scheduleGroup, schedulerRole } = this.createTranscodeCleanupLambda(
+      lessonMediaBucket,
+      coreTable,
+    );
     this.scheduleGroup = scheduleGroup;
     this.schedulerRole = schedulerRole;
 
@@ -296,7 +298,10 @@ export class MediaPipelineStack extends Stack {
   // mediaconvert-client.ts) -- invoked directly by EventBridge Scheduler,
   // not via a persistent Rule like TranscodeComplete, since each
   // invocation is its own one-off event rather than a recurring pattern.
-  private createTranscodeCleanupLambda(lessonMediaBucket: LessonMediaBucket) {
+  private createTranscodeCleanupLambda(
+    lessonMediaBucket: LessonMediaBucket,
+    coreTable: CoreTable,
+  ) {
     const transcodeCleanup = new EventsTranscodeCleanup(
       this,
       'TranscodeCleanup',
@@ -311,6 +316,9 @@ export class MediaPipelineStack extends Stack {
     // everything found there.
     lessonMediaBucket.grantRead(transcodeCleanup);
     lessonMediaBucket.grantDelete(transcodeCleanup);
+    // A student's submission folder is only deleted when no submission holds
+    // its file (#102): read-only, to check.
+    coreTable.grantReadData(transcodeCleanup);
 
     // A dedicated group (rather than the account's default one) so the
     // scheduler:CreateSchedule/UpdateSchedule grant can be scoped to just

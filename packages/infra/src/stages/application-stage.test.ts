@@ -47,7 +47,11 @@ const methodSettings = (template: Template) =>
   );
 
 const API_FUNCTIONS = {
-  CoreApi: ['CoreApiRouterHandler', 'CoreApiMediaUrlHandler'],
+  CoreApi: [
+    'CoreApiRouterHandler',
+    'CoreApiMediaUrlHandler',
+    'CoreApiAssignmentSubmitHandler',
+  ],
   InstructorApi: [
     'InstructorApiRouterHandler',
     'InstructorApiMediaUrlHandler',
@@ -183,6 +187,125 @@ describe("core-api's functions", () => {
   });
 });
 
+// The actions each role of a stack's template is allowed, by the role's
+// logical id's prefix.
+const actionsByRole = (template: Template) => {
+  const byRole: Record<string, string[]> = {};
+  for (const resource of Object.values(
+    template.findResources('AWS::IAM::Policy'),
+  )) {
+    const { PolicyDocument, Roles } = (
+      resource as {
+        Properties: {
+          PolicyDocument: { Statement: { Action: string | string[] }[] };
+          Roles: { Ref: string }[];
+        };
+      }
+    ).Properties;
+    const actions = PolicyDocument.Statement.flatMap((s) => [s.Action].flat());
+    for (const role of Roles) {
+      byRole[role.Ref] = [...(byRole[role.Ref] ?? []), ...actions];
+    }
+  }
+  return byRole;
+};
+
+const actionsOf = (template: Template, rolePrefix: string) =>
+  Object.entries(actionsByRole(template))
+    .filter(([role]) => role.startsWith(rolePrefix))
+    .flatMap(([, actions]) => actions);
+
+describe('submitting to an assignment (#102)', () => {
+  const stack = synth({});
+  const coreApi = stack('CoreApi');
+
+  it('serves uploadUrl and submit from a function of their own', () => {
+    expect(
+      resources(
+        coreApi,
+        'AWS::Lambda::Function',
+        'CoreApiAssignmentSubmitHandler',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('gives that function S3 and Scheduler rights, and the shared router none', () => {
+    const submit = actionsOf(
+      coreApi,
+      'CoreApiAssignmentSubmitHandlerServiceRole',
+    );
+    expect(submit).toEqual(
+      expect.arrayContaining([
+        's3:PutObject',
+        's3:GetObject*',
+        's3:DeleteObject*',
+        'scheduler:CreateSchedule',
+        'iam:PassRole',
+      ]),
+    );
+
+    const router = actionsOf(coreApi, 'CoreApiRouterHandlerServiceRole');
+    for (const action of submit.filter((a) => /^(s3|scheduler|iam):/.test(a))) {
+      expect(router).not.toContain(action);
+    }
+  });
+
+  it('reads AppConfig and the table like every core-api function, with no signing key', () => {
+    const submit = actionsOf(
+      coreApi,
+      'CoreApiAssignmentSubmitHandlerServiceRole',
+    );
+    expect(submit).toEqual(
+      expect.arrayContaining(['appconfig:GetLatestConfiguration']),
+    );
+    expect(submit).toEqual(expect.arrayContaining(['dynamodb:GetItem']));
+    expect(submit).not.toContain('secretsmanager:GetSecretValue');
+  });
+
+  it('times out at 25 seconds, below the gateway’s 29', () => {
+    expect(
+      resources(
+        coreApi,
+        'AWS::Lambda::Function',
+        'CoreApiAssignmentSubmitHandler',
+      ),
+    ).toEqual([expect.objectContaining({ Timeout: 25 })]);
+  });
+
+  it('times out at 25 seconds even when the stage sets a longer one', () => {
+    const longer = synth({
+      coreApi: { timeoutSeconds: 120 },
+    } as unknown as StageComponents)('CoreApi');
+
+    expect(
+      resources(
+        longer,
+        'AWS::Lambda::Function',
+        'CoreApiAssignmentSubmitHandler',
+      ),
+    ).toEqual([expect.objectContaining({ Timeout: 25 })]);
+    expect(
+      resources(longer, 'AWS::Lambda::Function', 'CoreApiRouterHandler'),
+    ).toEqual([expect.objectContaining({ Timeout: 120 })]);
+  });
+
+  it('lets the cleanup Lambda read the core table, and not write it', () => {
+    const cleanup = actionsOf(
+      stack('MediaPipeline'),
+      'TranscodeCleanupServiceRole',
+    );
+
+    expect(cleanup).toEqual(expect.arrayContaining(['dynamodb:GetItem']));
+    for (const write of [
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:DeleteItem',
+    ]) {
+      expect(cleanup).not.toContain(write);
+    }
+  });
+});
+
 describe('lesson media CORS', () => {
   const data = synth({})('Data');
   const origins = (value: unknown) => JSON.stringify(value);
@@ -209,7 +332,9 @@ describe('lesson media CORS', () => {
     expect(allowed).toContain('http://localhost:4200');
   });
 
-  it('lets only the instructor portal upload', () => {
+  // Instructors upload lesson files and videos; students upload their
+  // assignment submissions (#102). The admin portal uploads nothing.
+  it('lets only the instructor and student portals upload', () => {
     const buckets = Object.entries(data.findResources('AWS::S3::Bucket'));
     const [, upload] = buckets.find(([id]) =>
       id.startsWith('LessonMediaUploadBucket'),
@@ -220,8 +345,9 @@ describe('lesson media CORS', () => {
     );
 
     expect(allowed).toMatch(/InstructorPortal/);
-    expect(allowed).not.toMatch(/StudentPortal/);
-    expect(allowed).not.toContain('localhost:4201');
+    expect(allowed).toMatch(/StudentPortal/);
+    expect(allowed).not.toMatch(/AdminPortal/);
+    expect(allowed).not.toContain('localhost:4202');
   });
 });
 

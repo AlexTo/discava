@@ -9,17 +9,17 @@ import {
   CreateJobCommand,
   MediaConvertClient,
 } from '@aws-sdk/client-mediaconvert';
+import { scheduleTranscodeCleanup } from '@discava/common-server-utils/cleanup-scheduler';
+import {
+  resolveAppConfigValue,
+  resolveLessonMediaBucketName,
+  resolveLessonMediaUploadBucketName,
+} from '@discava/common-server-utils/lesson-media-bucket';
 import {
   callLocalEventRunner,
   isLocalDev,
   type LocalTranscodeJobRequest,
 } from '@discava/common-server-utils/local-dev';
-import { resolveAppConfigValue } from './runtime-config.js';
-import {
-  resolveLessonMediaBucketName,
-  resolveLessonMediaUploadBucketName,
-} from './s3-client.js';
-import { scheduleTranscodeCleanup } from './transcode-cleanup-scheduler.js';
 
 // MediaConvert's DescribeEndpoints-based account-endpoint discovery is
 // deprecated -- requests can go straight to the regional endpoint now, so a

@@ -98,6 +98,8 @@ export interface LocalTranscodeJobRequest {
 /** A transcode cleanup to run later, in local dev, with Scheduler's payload. */
 export interface LocalScheduleRequest {
   payload: Record<string, string>;
+  /** How long to wait, instead of `LOCAL_EVENT_RUNNER.cleanupDelaySeconds`. */
+  delaySeconds?: number;
 }
 
 /** A sign-in to run the pre token generation trigger for, in local dev. */

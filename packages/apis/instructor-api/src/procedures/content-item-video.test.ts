@@ -117,9 +117,12 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 // bestEffortDeleteContentItemVideos's own error-swallowing/bucket-selection
 // behavior is covered directly in lib/s3-client.test.ts; here it's just a
 // mock so these tests can assert content-item-video.ts calls it correctly.
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaUploadBucketName,
+}));
+
+vi.mock('../lib/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
   getVideoUploadETag,

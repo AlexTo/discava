@@ -43,15 +43,15 @@ vi.mock('@aws-sdk/client-s3', () => ({
   }),
 }));
 
-vi.mock('../lib/runtime-config.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveLessonMediaUploadBucketName,
 }));
 
 // scheduleTranscodeCleanupOrThrow's own idempotency/propagation behavior is
-// covered directly in lib/transcode-cleanup-scheduler.test.ts; here it's
+// covered directly in common-server-utils's cleanup-scheduler.test.ts; here it's
 // just a mock so these tests can assert transcode-complete.ts calls it
 // correctly.
-vi.mock('../lib/transcode-cleanup-scheduler.js', () => ({
+vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanupOrThrow,
 }));
 

@@ -29,6 +29,9 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    // A submission's own change; its completion is what drives progress.
+    ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
+    ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);

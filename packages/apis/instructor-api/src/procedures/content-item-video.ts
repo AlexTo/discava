@@ -11,6 +11,10 @@ import {
   getSignedCloudFrontCookies,
 } from '@discava/common-server-utils/lesson-media';
 import {
+  getS3Client,
+  resolveLessonMediaUploadBucketName,
+} from '@discava/common-server-utils/lesson-media-bucket';
+import {
   isConditionalCheckFailed,
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
@@ -34,9 +38,7 @@ import {
 } from '../lib/mediaconvert-client.js';
 import {
   bestEffortDeleteContentItemVideos,
-  getS3Client,
   getVideoUploadETag,
-  resolveLessonMediaUploadBucketName,
 } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
