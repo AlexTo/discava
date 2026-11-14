@@ -16,14 +16,15 @@
 
 - Q: When a student resubmits, is the late flag recalculated or kept from the first submission? → A: Recalculated on every submission, so it always describes the latest submission.
 - Q: Should resubmissions per student per assignment be capped? → A: No cap; the version number records how many there were.
-- Q: Must a resubmission re-attach all files? → A: No. The resubmit form starts with the current files; the student can keep, remove or add files, and the resulting 1–5 files become the new version.
+- Q: How many files does a submission hold? → A: Exactly one, of at most 100 MB. A student whose work has several parts combines them into one document or PDF, or a zip. (The issue's decision 4.)
+- Q: What does a resubmission contain? → A: One newly uploaded file, which replaces the previous one. Nothing is carried over from the earlier version.
 - Q: If the assignment or anything above it is later hidden or archived, can the student still view and download their own submission? → A: No, same as other content. The data is kept and becomes available again if the content is shown again.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Submit work to an upload assignment (Priority: P1)
 
-An enrolled student opens an upload assignment in a published course, reads the instructions, attaches up to 5 files, and submits. They see confirmation that their work was received, and the assignment counts as done in their progress.
+An enrolled student opens an upload assignment in a published course, reads the instructions, attaches one file, and submits. They see confirmation that their work was received, and the assignment counts as done in their progress.
 
 **Why this priority**: Submitting is the whole point of an upload assignment. Without it, assignments authored in #294 can't be used by students, and part 3 (grading) has nothing to grade.
 
@@ -31,11 +32,11 @@ An enrolled student opens an upload assignment in a published course, reads the 
 
 **Acceptance Scenarios**:
 
-1. **Given** an enrolled student and a shown upload assignment in a published course, **When** they attach 1–5 allowed files and submit, **Then** the submission is saved with its files, the assignment is marked complete, and they see a confirmation.
+1. **Given** an enrolled student and a shown upload assignment in a published course, **When** they attach one allowed file and submit, **Then** the submission is saved with its file, the assignment is marked complete, and they see a confirmation.
 2. **Given** the same student, **When** they submit before the due date, **Then** the submission is not flagged late.
 3. **Given** the same student, **When** they submit after the due date, **Then** the submission is accepted and flagged late, and the student is told it was late.
 4. **Given** a student who has never submitted to this assignment, **When** they submit for the first time, **Then** they are counted once as active in the course.
-5. **Given** a student attaching files, **When** a file is larger than 100 MB, is not of an allowed type, or they attach a sixth file, **Then** they are told why and nothing is submitted.
+5. **Given** a student attaching a file, **When** it is larger than 100 MB or is not of an allowed type, **Then** they are told why and nothing is submitted. Choosing another file replaces the chosen one; a submission never holds two.
 
 ---
 
@@ -45,33 +46,32 @@ A student who spots a mistake replaces their earlier submission with a new one. 
 
 **Why this priority**: Students commonly upload the wrong file. Without resubmission they'd need an instructor to intervene, but the core flow works without it.
 
-**Independent Test**: Submit, then submit again with different files, and check that only the second set of files is the student's current submission, the activity count is unchanged, and the old files are removed after a delay.
+**Independent Test**: Submit, then submit again with a different file, and check that only the second file is the student's current submission, the activity count is unchanged, and the old file is removed after a delay.
 
 **Acceptance Scenarios**:
 
-1. **Given** a student with a submission that hasn't been returned, **When** they open the assignment to resubmit, **Then** the form starts with their current files, and they can keep, remove or add files.
-2. **Given** that form, **When** they submit the resulting 1–5 files, **Then** that set replaces the previous one as a whole and the submission's version goes up by one.
-3. **Given** a resubmission that keeps some earlier files, **When** it succeeds, **Then** the kept files remain downloadable under the new version without the student re-uploading them.
-4. **Given** a resubmission, **When** it succeeds, **Then** the student is not counted as active a second time.
-5. **Given** a replaced submission, **When** the retirement delay passes, **Then** the old files are deleted, and a download link handed out just before the replacement keeps working until then.
-6. **Given** a submission that has been returned, **When** the student tries to submit again, **Then** it is refused with a clear message.
-7. **Given** two resubmissions from the same student at the same moment, **When** both are processed, **Then** exactly one wins and the other is told to retry, with no orphaned files left behind.
+1. **Given** a student with a submission that hasn't been returned, **When** they open the assignment to resubmit, **Then** they see their current file and can choose a replacement.
+2. **Given** that form, **When** they submit the new file, **Then** it replaces the previous file and the submission's version goes up by one.
+3. **Given** a resubmission, **When** it succeeds, **Then** the student is not counted as active a second time.
+4. **Given** a replaced submission, **When** the retirement delay passes, **Then** the old file is deleted, and a download link handed out just before the replacement keeps working until then.
+5. **Given** a submission that has been returned, **When** the student tries to submit again, **Then** it is refused with a clear message.
+6. **Given** two resubmissions from the same student at the same moment, **When** both are processed, **Then** exactly one wins and the other is told to retry, with no orphaned file left behind.
 
 ---
 
 ### User Story 3 - See and download my own submission (Priority: P2)
 
-A student reopens the assignment later and sees what they submitted: file names, sizes, when it was submitted, and whether it was late. They can download their own files.
+A student reopens the assignment later and sees what they submitted: the file's name and size, when it was submitted, and whether it was late. They can download their own file.
 
 **Why this priority**: Students need to confirm what the instructor will see, and to retrieve their work.
 
-**Independent Test**: Submit, reload the assignment, and check the submission details and a working download for each file. Then try to fetch another student's submission and files and confirm it's refused.
+**Independent Test**: Submit, reload the assignment, and check the submission details and a working download. Then try to fetch another student's submission and file and confirm it's refused.
 
 **Acceptance Scenarios**:
 
-1. **Given** a student with a submission, **When** they open the assignment, **Then** they see their files, submitted time, late flag and version, and can download each file.
+1. **Given** a student with a submission, **When** they open the assignment, **Then** they see their file, submitted time, late flag and version, and can download it.
 2. **Given** a student with no submission, **When** they open the assignment, **Then** they see the instructions, due date and the submit form.
-3. **Given** two students in the same course, **When** one requests the other's submission or files, **Then** the request is refused or returns nothing.
+3. **Given** two students in the same course, **When** one requests the other's submission or file, **Then** the request is refused or returns nothing.
 
 ---
 
@@ -94,31 +94,32 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 - A student isn't enrolled, or the assignment is hidden or archived (or its module or lesson is): submitting and viewing are refused. The course isn't published (for example, archived): submitting is refused, but the student can still view and download their own submission.
 - An upload that was started but never submitted: it expires on its own and never appears in any submission.
-- A file listed in a submit request that is missing from the upload area, or whose type or size no longer matches what was allowed: the whole submission is refused.
+- The file named in a submit request is missing from the upload area, or its type or size no longer matches what was allowed: the submission is refused.
 - A student submits the same assignment from two tabs at once: only one result is saved.
+- A submit request fails or is cut off part-way: either the submission was saved or nothing changed, never a mix. Anything it stored without saving is removed within a day, and the student is shown their actual current submission, not a guess.
 - A submission arrives exactly at the due date: it counts as on time; late means strictly after.
-- The assignment is changed by an instructor (due date moved, archived) after a student has submitted: the existing submission is kept; its late flag is not recomputed until the student next submits.
+- The assignment is changed by an instructor (due date moved, archived) after a student has submitted: the existing submission is kept; its late flag is not recomputed until the student next submits, so a submission can stay flagged late after its due date is moved or removed.
 - A student who submitted on time resubmits after the due date: the submission becomes late. A student who submitted late and resubmits after an instructor extends the due date: the flag clears.
-- A submission with zero files is refused.
+- A submission with no file is refused.
 - File names with accents, spaces or unusual characters still download under the student's original name.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: Enrolled students MUST be able to submit 1 to 5 files to an upload assignment that is shown, in a published course, with no archived ancestor.
-- **FR-002**: Each file MUST be at most 100 MB and of a type on the same allowlist as file content items; executables and HTML MUST be refused.
-- **FR-003**: Files MUST be uploaded first and only become part of a submission when the student submits; the submit step MUST recheck each file's existence, type and size.
-- **FR-004**: A submission MUST be recorded as one atomic change: the files, the submission record, the first-submission activity count and the item's completion all succeed or none do.
+- **FR-001**: Enrolled students MUST be able to submit exactly one file to an upload assignment that is shown, in a published course, with no archived ancestor.
+- **FR-002**: The file MUST be at most 100 MB and of a type on the same allowlist as file content items; executables and HTML MUST be refused.
+- **FR-003**: The file MUST be uploaded first and only becomes part of a submission when the student submits; the submit step MUST recheck the file's existence, type and size.
+- **FR-004**: A submission MUST be recorded as one atomic change: the file, the submission record, the first-submission activity count and the item's completion all succeed or none do.
 - **FR-005**: There MUST be at most one current submission per student per assignment, and a student MUST be able to read only their own.
-- **FR-006**: A submission made after the assignment's due date MUST be accepted and flagged late; a submission without a due date is never late. The flag is worked out afresh on every submission, including resubmissions, so it always describes the latest submission.
-- **FR-007**: A student's first submission to an assignment MUST count them once as active in the course; resubmissions MUST NOT count again.
+- **FR-006**: A submission whose recorded submission time is after the assignment's due date MUST be accepted and flagged late, so the flag and the recorded time never disagree; a submission without a due date is never late. The flag is worked out afresh on every submission, including resubmissions, so it always describes the latest submission.
+- **FR-007**: A student's first submission to an assignment MUST count them once as active in the course; resubmissions MUST NOT count again, and neither does a first submission by a student already counted for that assignment (one marked done before this feature).
 - **FR-008**: Submitting MUST mark the assignment item complete for that student, so it counts towards lesson and course progress without waiting for grading.
-- **FR-009**: A student MUST be able to resubmit while the submission has not been returned; each resubmission replaces the previous set of files as a whole and increases the submission's version. The resubmit form MUST start with the current files so the student can keep, remove or add files; files kept from an earlier version MUST NOT need re-uploading. There is no limit on the number of resubmissions; the version number records how many there were.
-- **FR-010**: Replaced files MUST be retired after a delay, not immediately, so links already handed out keep working briefly.
+- **FR-009**: A student MUST be able to resubmit while the submission has not been returned; each resubmission uploads one new file, which replaces the previous file, and increases the submission's version. The resubmit form MUST show the current file so the student knows what they are replacing. There is no limit on the number of resubmissions; the version number records how many there were.
+- **FR-010**: A replaced file MUST be retired after a delay, not immediately, so links already handed out keep working briefly.
 - **FR-011**: Once a submission has been returned by an instructor, resubmission MUST be refused. (Returning itself is part 3.)
-- **FR-012**: Concurrent resubmissions by one student MUST resolve to one winner; the loser's files MUST be cleaned up and the student told to retry.
-- **FR-013**: Students MUST be able to view their own submission (files, submitted time, late flag, version) and download their own files through short-lived links, only while the assignment is shown with no hidden or archived ancestor; unlike submitting, this still works after the course is archived, as downloads of other content do. When it is hidden or archived the submission is kept but unavailable to the student, and it becomes available again if the content is shown again.
+- **FR-012**: Concurrent resubmissions by one student MUST resolve to one winner; the loser's file MUST be cleaned up and the student told to retry.
+- **FR-013**: Students MUST be able to view their own submission (file, submitted time, late flag, version) and download their own file through a short-lived link, only while the assignment is shown with no hidden or archived ancestor; unlike submitting, this still works after the course is archived, as downloads of other content do. When it is hidden or archived the submission is kept but unavailable to the student, and it becomes available again if the content is shown again.
 - **FR-014**: The student portal outline MUST distinguish assignments from lessons with an icon, an "Assignment" label and the due date if set, and opening one MUST go directly to the submit form.
 - **FR-015**: The submission upload and the data-writing rules MUST follow the repository's shared-write and invariant conventions: the first-submission activity count is written through a shared helper and covered by an invariant check that a test can break.
 - **FR-016**: This feature builds on the submission record already added by #294 and MUST NOT create a second, competing one; any change to it goes through the existing record.
@@ -127,8 +128,8 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 ### Key Entities
 
-- **Assignment submission**: A student's current work for one upload assignment. Has the student, the assignment and course it belongs to, 1–5 files (name, size, type, location), submitted time, late flag, status (submitted or returned) and a version that increases with each resubmission. One per student per assignment. Looked up by assignment (for instructors, in part 3) and by student and assignment (a student reading their own).
-- **Submission file**: One attached file, with its original name, size and type.
+- **Assignment submission**: A student's current work for one upload assignment. Has the student, the assignment and course it belongs to, exactly one file (name, size, type, location), submitted time, late flag, status (submitted or returned) and a version that increases with each resubmission. One per student per assignment. Looked up by assignment (for instructors, in part 3) and by student and assignment (a student reading their own).
+- **Submission file**: The attached file, with its original name, size and type.
 - **Upload assignment item**: Existing from #294; supplies the instructions, due date and maximum points the submission is judged against.
 - **Student activity count**: Existing per-course tally of active students, which this feature increments once per student per assignment's first submission.
 
@@ -138,19 +139,19 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 - **SC-001**: An enrolled student can go from opening an assignment to a confirmed submission of a typical document in under 2 minutes.
 - **SC-002**: 100% of submissions to an assignment by a student who isn't enrolled, or in a hidden, archived or unpublished context, are refused.
-- **SC-003**: 0 cases where a student can see or download another student's submission or files.
+- **SC-003**: 0 cases where a student can see or download another student's submission or file.
 - **SC-004**: Across any number of resubmissions, each student is counted as active exactly once per assignment, and the data-consistency check passes after every test.
-- **SC-005**: When two submissions race, exactly one is saved in 100% of runs and no files from the losing one remain after cleanup.
+- **SC-005**: When two submissions race, exactly one is saved in 100% of runs and no file from the losing one remains after cleanup.
 - **SC-006**: 100% of late submissions are flagged and 0% of on-time ones are.
-- **SC-007**: Replaced files are gone within a day of replacement, and a link issued before the replacement works for at least the retirement delay.
+- **SC-007**: A replaced file is gone within a day of replacement, and a link issued before the replacement works for at least the retirement delay.
 - **SC-008**: A student can tell an assignment from a lesson in the outline at a glance, with the due date visible, in a usability check with at least 5 of 5 testers.
 
 ## Assumptions
 
 - PR #294 has shipped upload assignment items (instructions, due date, maximum points) and assignment lessons; this feature builds on them.
-- File uploads reuse the existing file-item rules: same allowed types, 100 MB per-file limit, the short-lived upload area, and the delayed cleanup.
-- Resolving the issue's open decisions as written: completion on submit (decision 2), late work accepted and flagged (3), 5 files of 100 MB (4).
-- Written notes with a submission (decision 6) are out of scope; a submission is files only. The issue treats it as optional, and it can be added later without changing this feature.
+- File uploads reuse the existing file-item rules: same allowed types, 100 MB file limit, the short-lived upload area, and the delayed cleanup.
+- Resolving the issue's open decisions as written: completion on submit (decision 2), late work accepted and flagged (3), one file of at most 100 MB (4).
+- Written notes with a submission (decision 6) are out of scope; a submission is one file only. The issue treats it as optional, and it can be added later without changing this feature.
 - Students can't withdraw a submission; they can only replace it.
 - Only the "returned" state is read here; nothing in this feature sets it, so until part 3 ships resubmission is always allowed.
 - Download links are valid for 5 minutes, as for file items.

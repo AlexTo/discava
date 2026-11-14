@@ -6,12 +6,12 @@
 
 ## Summary
 
-Students submit 1–5 files to an upload assignment (a content item of type `assignment` in a lesson of kind `assignment`, shipped in #294), resubmit until an instructor returns it, and view and download their own submission. core-api gains an `assignment` router (`uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl`) that reuses the file-item upload, check and copy path and the existing `assignmentSubmission` entity. Every write goes through one new `core-table` helper that composes `studentActivityWrites`, so the activity count, the item completion and the submission land in one transaction. The student portal learns about assignment lessons: core-api's course read exposes the lesson `kind` and the assignment item, the outline marks assignments, and an assignment opens straight to a submit form.
+Students submit one file (at most 100 MB) to an upload assignment (a content item of type `assignment` in a lesson of kind `assignment`, shipped in #294), resubmit until an instructor returns it, and view and download their own submission. core-api gains an `assignment` router (`uploadUrl`, `submit`, `mySubmission`, `submissionFileUrl`) that reuses the file-item upload, check and copy path and the existing `assignmentSubmission` entity. Every write goes through one new `core-table` helper that composes `studentActivityWrites`, so the activity count, the item completion and the submission land in one transaction. The student portal learns about assignment lessons: core-api's course read exposes the lesson `kind` and the assignment item, the outline marks assignments, and an assignment opens straight to a submit form.
 
 Two things the code showed that the spec could not:
 
 1. core-api's `course.view` output has neither lesson `kind` nor the `assignment` item type, so a student viewing a course containing an upload assignment from #294 would fail output validation today. Fixing it is the first core-api fix in the foundation.
-2. core-api has no S3 or scheduler plumbing. The file helpers and cleanup scheduler live in instructor-api's `lib/`, so they move to `common-server-utils` (the repo's home for code shared by two Lambdas).
+2. core-api has no S3 or scheduler plumbing. The file helpers and cleanup scheduler live in instructor-api's `lib/`, so they move to `common-server-utils` (the repo's home for code shared by two Lambdas). `packages/events` keeps its own copy of the scheduler and the bucket resolver today; it switches to the shared modules too, so there is one of each.
 
 ## Technical Context
 
@@ -27,11 +27,11 @@ Two things the code showed that the spec could not:
 
 **Project Type**: web application: serverless backend (core-api, infra) + React portal
 
-**Performance Goals**: submit completes in one request. The slowest part is server-side copies of up to 5 × 100 MB inside S3, which stay within API Gateway's 29 s limit (checked in research, risk R1).
+**Performance Goals**: submit completes in one request. The slowest part is one server-side copy of up to 100 MB inside S3, which stays within API Gateway's 29 s limit (checked in research, risk R1).
 
-**Constraints**: no second table; keys or declared index only; each Lambda gets only the permissions its procedures need; CloudFormation 500-resource cap per stack (CoreApi stack gains two functions); upload bucket expires objects after 2 days
+**Constraints**: no second table; keys or declared index only; each Lambda gets only the permissions its procedures need; CloudFormation 500-resource cap per stack (CoreApi stack gains one function, `AssignmentSubmit`, and four routes); upload bucket expires objects after 2 days
 
-**Scale/Scope**: one record per student per assignment; ≤5 files each; courses of hundreds of students
+**Scale/Scope**: one record per student per assignment; one file each; courses of hundreds of students
 
 ## Constitution Check
 
@@ -54,16 +54,16 @@ No violations, so Complexity Tracking is empty.
 
 ## Design Decisions (detail in [research.md](./research.md))
 
-1. **One transaction for the whole write.** `assignmentSubmissionWrites` in core-table calls `studentActivityWrites` (course published, ancestors shown, enrolled, `lastActivityAt` forward, activity count on the first submission only), writes the submission (create on first, version-conditioned patch on resubmit) and creates the item completion if it doesn't exist.
-2. **S3 happens around the transaction, DynamoDB decides.** Copy new and kept files into a folder unique to this attempt (`<version>-<attemptId>`) first, then run the transaction. If it fails, delete that folder. If it succeeds on a resubmit, schedule retirement of the old folder. A racing loser's transaction fails on the version condition and only its own folder is deleted. This differs from the issue's `<version>` folder name because two attempts at the same version would otherwise share a folder (research R-3).
-3. **Kept files are copied, not referenced.** The old version folder is retired after a delay, so kept files are copied server-side into the new folder. Each version folder is therefore complete on its own.
-4. **Late flag** is computed at submit time from `dueAt` read in the same pass: `late = dueAt !== undefined && now > dueAt`.
+1. **One transaction for the whole write.** `assignmentSubmissionWrites` in core-table calls `studentActivityWrites` (course published, ancestors shown, enrolled, `lastActivityAt` forward, activity count only when the student has neither a submission nor a completion for the item), writes the submission (create on first, version-conditioned patch on resubmit) and creates the item completion if it doesn't exist.
+2. **S3 happens around the transaction, DynamoDB decides.** Schedule a conditional cleanup of a folder unique to this request (`<attemptId>`), copy the uploaded file into it once, then run the transaction; retries reuse the copy. If the request ends without a commit, delete the folder; if it crashes, the scheduled cleanup does. On a successful resubmit, schedule retirement of the old folder. The cleanup never deletes the folder holding a student's current file. This differs from the issue's `<version>` folder name because two attempts at the same version would otherwise share a folder, and a version in the name would force a new copy on every retry (research R-3).
+3. **One file, replaced whole.** A submission holds exactly one file. A resubmission uploads a replacement and carries nothing over, so each version folder is complete on its own and the old one is retired after a delay (research R-4).
+4. **Late flag** is `dueAt !== undefined && submittedAt > dueAt`, set inside `assignmentSubmissionWrites` with `submittedAt` from `studentActivityAt(enrolment)` and the `dueAt` read in the same try, so the stored flag always agrees with the stored time.
 5. **Dedicated functions for privileged operations.** `assignment.uploadUrl` and `assignment.submit` get a new dedicated function (S3 and Scheduler rights); `assignment.submissionFileUrl` joins `MediaUrl` (the CloudFront signing key).
 6. **Access rule for reads**: enrolled (archived courses included), module, lesson and item shown. Submitting also requires a published course (enforced inside the transaction).
 
 ## Submit-screen states (student portal)
 
-Settles the item left open after clarify; the full table is in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md). Summary: no submission, files selected, uploading with per-file progress, submitting, submitted (with late notice), resubmit form prefilled, refused (type, size, count, duplicate name), conflict (retry), locked (returned), unavailable.
+Settles the item left open after clarify; the full table is in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md). Summary: no submission, file chosen, uploading with progress, submitting, submitted (with late notice), resubmit form showing the current file, refused (type, size), conflict (retry), locked (returned), unavailable.
 
 ## Project Structure
 
@@ -90,9 +90,10 @@ packages/
 │   │   ├── lesson-files.ts           # moved from instructor-api/lib + LESSON_FILE_TYPES/MAX_BYTES
 │   │   ├── lesson-files.test.ts
 │   │   ├── lesson-media-bucket.ts    # S3 client + bucket-name resolution (was instructor-api/lib/s3-client.ts)
-│   │   └── cleanup-scheduler.ts      # moved from instructor-api/lib/transcode-cleanup-scheduler.ts
+│   │   └── cleanup-scheduler.ts      # from instructor-api/lib and events/lib: best-effort and throwing variants
 │   └── constructs/src/app/apis/core-api.ts   # CORE_API_DEDICATED_FUNCTIONS: + AssignmentSubmit, MediaUrl gains submissionFileUrl
 ├── databases/core-table/src/
+│   ├── entities/assignment-submission.ts     # `files` list becomes one `file` map
 │   └── helpers/
 │       ├── assignment-submission.ts          # assignmentSubmissionWrites (+ test)
 │       └── invariants.ts                     # extend checks, add assignment-submission-shape (+ tests)
@@ -103,7 +104,7 @@ packages/
 │   │   ├── schema/assignment.ts, course.ts   # new schemas; Lesson.kind, assignment item
 │   │   └── router.ts
 │   └── instructor-api/src/lib/               # imports switch to common-server-utils
-├── events/src/media/transcode-cleanup.ts     # unchanged: submission folders reuse its nonce path segment
+├── events/src/media/transcode-cleanup.ts     # optional keepIfCurrentFor check; events/lib scheduler copy removed
 ├── infra/src/stacks/core-api-stack.ts        # grants for the new function; takes upload bucket and media pipeline
 ├── websites/student-portal/src/routes/learn/$courseId/-components/
 │   ├── assignment-item.tsx                   # submit form, submission view
@@ -119,11 +120,11 @@ packages/
 
 ## Risks
 
-- **R1: copy time inside one API Gateway call.** Five 100 MB server-side copies are normally seconds each, but a slow run could pass 29 s. Mitigation: copy in parallel, set the function timeout above the gateway's, and fail with a retryable error. If it proves too slow, a later change can reduce copies by keeping files in stable per-file folders.
-- **R2: stack resource limit.** Two more functions and routes in CoreApi. Check the resource count at synth and move something if close.
-- **R3: stack dependency order.** CoreApi will take the upload bucket and media pipeline, as InstructorApi already does. Confirm no cycle at synth.
-- **R4: the cleanup handler's path segment is called `submissionNonce`.** Submission folders pass `submissions/<userId>/<version>-<attemptId>` as that segment, which works unchanged. Renaming the handler's field is deliberately left out of this PR.
-- **R5: refactor blast radius.** Moving instructor-api's S3 helpers must keep its existing tests green without edits to assertions (constitution IV: tests are a specification).
+- **R1: copy time inside one API Gateway call.** One 100 MB server-side copy is normally a few seconds and happens once per request, not once per retry. `AssignmentSubmit`'s timeout is 25 s, below the gateway's 29 s, so a request never commits after the gateway has answered for it; a request that runs out of time fails as a whole and its folder is cleaned up by the guard. T045 measures the copy.
+- **R2: stack resource limit.** One more function and four routes in CoreApi. Check the resource count at synth and move something if close.
+- **R3: stack dependency order.** CoreApi will take the upload bucket and media pipeline, as InstructorApi already does, and the `transcode-cleanup` Lambda now reads the core table. Confirm no cycle at synth.
+- **R4: the cleanup handler's path segment is called `submissionNonce`.** Submission folders pass `submissions/<userId>/<attemptId>` as that segment. The handler gains one optional field, `keepIfCurrentFor`; renaming `submissionNonce` is deliberately left out of this PR.
+- **R5: refactor blast radius.** Moving the S3 helpers and the scheduler must keep instructor-api's and events' existing tests green without edits to assertions (constitution IV: tests are a specification).
 
 ## Complexity Tracking
 
