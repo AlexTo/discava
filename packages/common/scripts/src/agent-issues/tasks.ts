@@ -32,32 +32,93 @@ export interface TaskGroup {
   tasks: Task[];
 }
 
+// The format, which validate.ts holds every tasks.md to:
+// - a phase is a heading `## Phase <number>: <title>`;
+// - a task is a line `- [ ] T<3 digits> <description>` (`[x]` once done),
+//   starting in the first column, under a phase;
+// - a story's phase is titled `User Story <n> - <what it delivers>`.
 const PHASE_HEADING = /^## Phase (\d+): (.+?)\s*$/;
 // "(human)", bold or not: the constitution and the tasks template write it
 // differently.
 const HUMAN_MARK = /\(human\)/i;
 const TASK_LINE = /^- \[([ xX])\] (T\d{3})\b(.*)$/;
+// What was probably meant as a phase heading or a task, to catch the ones
+// the two patterns above would silently skip.
+const PHASE_LIKE = /^\s*#{1,6}\s+Phase\b/i;
+const TASK_LIKE = /^\s*[-*+] \[[ xX]?\]/;
+const FENCE = /^\s*(```|~~~)/;
 
-export const parsePhases = (tasksMd: string): Phase[] => {
-  const phases: Phase[] = [];
-  for (const line of tasksMd.split('\n')) {
-    const heading = PHASE_HEADING.exec(line);
-    if (heading) {
-      const title = heading[2];
-      phases.push({
-        number: Number(heading[1]),
-        title,
-        isStory: title.startsWith('User Story'),
-        tasks: [],
-      });
-      continue;
+/** A line of tasks.md that is, or looks like, a phase heading or a task. */
+export type TasksLine =
+  | { kind: 'phase'; line: number; number: number; title: string }
+  | { kind: 'task'; line: number; id: string; done: boolean; human: boolean }
+  | { kind: 'malformed-phase' | 'malformed-task'; line: number };
+
+/**
+ * The phase headings and tasks of a tasks.md in file order, with their line
+ * numbers (from 1), plus the lines that look like one but aren't written in
+ * the format. Fenced code blocks are skipped.
+ */
+export const scanLines = (tasksMd: string): TasksLine[] => {
+  const lines: TasksLine[] = [];
+  let fenced = false;
+  tasksMd.split('\n').forEach((text, index) => {
+    const line = index + 1;
+    if (FENCE.test(text)) {
+      fenced = !fenced;
+      return;
     }
-    const task = TASK_LINE.exec(line);
-    if (task && phases.length > 0) {
-      phases[phases.length - 1].tasks.push({
+    if (fenced) {
+      return;
+    }
+    const heading = PHASE_HEADING.exec(text);
+    if (heading) {
+      lines.push({
+        kind: 'phase',
+        line,
+        number: Number(heading[1]),
+        title: heading[2],
+      });
+      return;
+    }
+    const task = TASK_LINE.exec(text);
+    if (task) {
+      lines.push({
+        kind: 'task',
+        line,
         id: task[2],
         done: task[1] !== ' ',
         human: HUMAN_MARK.test(task[3]),
+      });
+      return;
+    }
+    if (PHASE_LIKE.test(text)) {
+      lines.push({ kind: 'malformed-phase', line });
+    } else if (TASK_LIKE.test(text)) {
+      lines.push({ kind: 'malformed-task', line });
+    }
+  });
+  return lines;
+};
+
+export const isStoryTitle = (title: string): boolean =>
+  title.startsWith('User Story');
+
+export const parsePhases = (tasksMd: string): Phase[] => {
+  const phases: Phase[] = [];
+  for (const line of scanLines(tasksMd)) {
+    if (line.kind === 'phase') {
+      phases.push({
+        number: line.number,
+        title: line.title,
+        isStory: isStoryTitle(line.title),
+        tasks: [],
+      });
+    } else if (line.kind === 'task' && phases.length > 0) {
+      phases[phases.length - 1].tasks.push({
+        id: line.id,
+        done: line.done,
+        human: line.human,
       });
     }
   }

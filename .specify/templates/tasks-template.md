@@ -22,6 +22,13 @@ description: "Task list template for feature implementation"
 - **(human)**: needs a running local stack or people; not done by the agent
 - Include exact file paths in descriptions
 
+**Read by automation**: the Agent Issues workflow reads this file to decide which tasks to hand the implementing agent, so keep this structure (PR checks refuse a file that strays from it):
+
+- every phase is a heading `## Phase <number>: <title>`, numbered upwards, with at least one task;
+- a user story's phase is titled `User Story <n> - <what it delivers>`; the first one ends the first implementation issue (setup, foundations and that story);
+- every task is a line `- [ ] T<3 digits> <description>` starting in the first column, under a phase, with an id no other task has; a task added later takes the next unused id, wherever it is placed;
+- a finished task is ticked in place (`- [x]`), never deleted or renumbered.
+
 ## Path Conventions
 
 - **Single project**: `src/`, `tests/` at repository root

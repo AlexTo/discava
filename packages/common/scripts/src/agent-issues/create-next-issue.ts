@@ -14,6 +14,7 @@ import {
   markerFolder,
 } from './issue.js';
 import { planIssue } from './plan-issue.js';
+import { formatProblem, validateTasks } from './validate.js';
 
 // Opens the next implementation issue for the implementing agent. Run by
 // .github/workflows/agent-issues.yml (through main.ts) when a pull request
@@ -155,12 +156,25 @@ export const run = (deps: Deps): void => {
   );
   const existingIssueBodies = markedIssueBodies(repository, gh);
 
+  // Folders whose tasks.md the reader would misread. PR checks should have
+  // stopped them; opening an issue from one would hand the agent the wrong
+  // tasks, so the run fails instead.
+  const unreadable: string[] = [];
   for (const folder of withTasks) {
     const read = (file: string) =>
       readFileSync(join(root, 'specs', folder, file), 'utf8');
+    const tasksMd = read('tasks.md');
+    const problems = validateTasks(tasksMd);
+    if (problems.length > 0) {
+      for (const problem of problems) {
+        log(formatProblem(`specs/${folder}/tasks.md`, problem, true));
+      }
+      unreadable.push(folder);
+      continue;
+    }
     const plan = planIssue({
       folder,
-      tasksMd: read('tasks.md'),
+      tasksMd,
       specMd: read('spec.md'),
       templateMd,
       existingIssueBodies,
@@ -205,5 +219,10 @@ export const run = (deps: Deps): void => {
       AGENT_LABEL,
     ]).trim();
     notice(`Created ${url}`);
+  }
+  if (unreadable.length > 0) {
+    throw new Error(
+      `No issue created for ${unreadable.join(', ')}: tasks.md is not in the format the workflow reads (see the errors above)`,
+    );
   }
 };
