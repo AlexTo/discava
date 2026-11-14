@@ -2,6 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { mkdtemp, truncate } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { apiUser } from '../helpers/api.js';
 import {
   assignmentItem,
@@ -96,11 +99,12 @@ test.describe('submitting to an upload assignment', () => {
     await startFirstLesson(page);
     const item = assignmentItem(page, ASSIGNMENT);
 
-    await chooseSubmissionFile(page, ASSIGNMENT, {
-      name: 'huge.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.alloc(101 * 1024 * 1024),
-    });
+    // Playwright takes in-memory files up to 50 MB only, so this one is a
+    // sparse file on disk (it takes no real space).
+    const folder = await mkdtemp(join(tmpdir(), 'discava-e2e-'));
+    const huge = join(folder, 'huge.pdf');
+    await truncate(huge, 101 * 1024 * 1024);
+    await chooseSubmissionFile(page, ASSIGNMENT, huge);
     await expect(item.getByText('huge.pdf is over 100 MB')).toBeVisible();
     await expect(item.getByRole('button', { name: 'Submit' })).toBeDisabled();
 
