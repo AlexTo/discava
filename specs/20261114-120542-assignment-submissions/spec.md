@@ -90,7 +90,7 @@ In the student portal's course outline, assignments stand out from lessons: they
 
 ### Edge Cases
 
-- A student isn't enrolled, the course isn't published, or the assignment is hidden or archived (or its module or lesson is): submitting and viewing are refused.
+- A student isn't enrolled, or the assignment is hidden or archived (or its module or lesson is): submitting and viewing are refused. The course isn't published (for example, archived): submitting is refused, but the student can still view and download their own submission.
 - An upload that was started but never submitted: it expires on its own and never appears in any submission.
 - A file listed in a submit request that is missing from the upload area, or whose type or size no longer matches what was allowed: the whole submission is refused.
 - A student submits the same assignment from two tabs at once: only one result is saved.

@@ -21,7 +21,7 @@ State: `submitted` → (part 3) `returned`. A returned record accepts no further
 
 | Case | Records written in one transaction |
 |------|------------------------------------|
-| First submission | `studentActivityWrites` with `firstRecord: true` (increments `contentItem.studentActivityCount`, advances `enrolment.lastActivityAt`, checks course published and ancestors shown), `assignmentSubmission` create (condition: not exists), `itemCompletion` create (condition: not exists) |
+| First submission | `studentActivityWrites` with `firstRecord: true` (increments `contentItem.studentActivityCount`, advances `enrolment.lastActivityAt`, checks course published and ancestors shown), `assignmentSubmission` create (condition: not exists), `itemCompletion` created only if none exists (an existing one with no submission is tolerated) |
 | Resubmission | `studentActivityWrites` with `firstRecord: false`, `assignmentSubmission` patch (condition: `version = <read>` and `status = 'submitted'`) |
 
 The completion exists from the first submission, so a resubmission doesn't write one.

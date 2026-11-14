@@ -10,7 +10,7 @@ Students submit 1–5 files to an upload assignment (a content item of type `ass
 
 Two things the code showed that the spec could not:
 
-1. core-api's `course.view` output has neither lesson `kind` nor the `assignment` item type, so a student viewing a course containing an upload assignment from #294 would fail output validation today. Fixing it is the first task.
+1. core-api's `course.view` output has neither lesson `kind` nor the `assignment` item type, so a student viewing a course containing an upload assignment from #294 would fail output validation today. Fixing it is the first core-api fix in the foundation.
 2. core-api has no S3 or scheduler plumbing. The file helpers and cleanup scheduler live in instructor-api's `lib/`, so they move to `common-server-utils` (the repo's home for code shared by two Lambdas).
 
 ## Technical Context
