@@ -70,9 +70,11 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 - Run `pnpm build` (or `pnpm nx affected --target build`) before pushing. CI's PR checks run lint, test and build on what changed.
 - Follow CONTRIBUTING.md for the PR process. [CLAUDE.md](../../CLAUDE.md) holds the day-to-day commands and architecture notes; this constitution holds only the rules a plan must not break.
 - Plans MUST pass the Constitution Check against the principles above, and any violation MUST be recorded in the plan's Complexity Tracking with a justification.
+- Features are implemented by autonomous agents, each on its own branch and pull request, so a task list MUST NOT require a local stack, Docker or `pnpm dev`. The agent runs unit and component tests, lint, typecheck, `build` and `synth` itself. It writes the e2e and concurrency tests, but pull request CI runs them. A task that needs a running local stack or people (manual checks, timing, screenshots) MUST be marked `(human)` in `tasks.md` and is done by a reviewer before merge.
+- Pull request CI is the gate. An agent MUST NOT merge, push to `main`, edit CI workflows, or weaken a test to make CI pass.
 
 ## Governance
 
 This constitution supersedes other practices where they conflict. Amend it by pull request, with the rationale in the description. Versioning is semantic: MAJOR for removing or redefining a principle, MINOR for adding a principle or materially widening one, PATCH for clarifications. Reviewers MUST check that each PR complies.
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-14
+**Version**: 1.2.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-14
