@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-14
 
-**Status**: Draft
+**Status**: Approved (merged in #302; implementation starts with #308)
 
 **Input**: User description: "Student submissions for upload assignments (issue #102, part 2 remainder, following PR #294 which shipped assignment lessons and upload assignment authoring)."
 
@@ -53,7 +53,7 @@ A student who spots a mistake replaces their earlier submission with a new one. 
 1. **Given** a student with a submission that hasn't been returned, **When** they open the assignment to resubmit, **Then** they see their current file and can choose a replacement.
 2. **Given** that form, **When** they submit the new file, **Then** it replaces the previous file and the submission's version goes up by one.
 3. **Given** a resubmission, **When** it succeeds, **Then** the student is not counted as active a second time.
-4. **Given** a replaced submission, **When** the retirement delay passes, **Then** the old file is deleted, and a download link handed out just before the replacement keeps working until then.
+4. **Given** a replaced submission, **When** it is retired, **Then** the old file is deleted, but never sooner than a download link's lifetime after the replacement, so a link handed out just before the replacement keeps working until it expires.
 5. **Given** a submission that has been returned, **When** the student tries to submit again, **Then** it is refused with a clear message.
 6. **Given** two resubmissions from the same student at the same moment, **When** both are processed, **Then** exactly one wins and the other is told to retry, with no orphaned file left behind.
 
@@ -116,7 +116,7 @@ In the student portal's course outline, assignments stand out from lessons: they
 - **FR-007**: A student's first submission to an assignment MUST count them once as active in the course; resubmissions MUST NOT count again, and neither does a first submission by a student already counted for that assignment (one marked done before this feature).
 - **FR-008**: Submitting MUST mark the assignment item complete for that student, so it counts towards lesson and course progress without waiting for grading.
 - **FR-009**: A student MUST be able to resubmit while the submission has not been returned; each resubmission uploads one new file, which replaces the previous file, and increases the submission's version. The resubmit form MUST show the current file so the student knows what they are replacing. There is no limit on the number of resubmissions; the version number records how many there were.
-- **FR-010**: A replaced file MUST be retired after a delay, not immediately, so links already handed out keep working briefly.
+- **FR-010**: A replaced file MUST be retired after a delay, not immediately: it MUST stay available for at least a download link's lifetime after its replacement, so a link handed out before the replacement keeps working until it expires.
 - **FR-011**: Once a submission has been returned by an instructor, resubmission MUST be refused. (Returning itself is part 3.)
 - **FR-012**: Concurrent resubmissions by one student MUST resolve to one winner; the loser's file MUST be cleaned up and the student told to retry.
 - **FR-013**: Students MUST be able to view their own submission (file, submitted time, late flag, version) and download their own file through a short-lived link, only while the assignment is shown with no hidden or archived ancestor; unlike submitting, this still works after the course is archived, as downloads of other content do. When it is hidden or archived the submission is kept but unavailable to the student, and it becomes available again if the content is shown again.
@@ -142,8 +142,8 @@ In the student portal's course outline, assignments stand out from lessons: they
 - **SC-003**: 0 cases where a student can see or download another student's submission or file.
 - **SC-004**: Across any number of resubmissions, each student is counted as active exactly once per assignment, and the data-consistency check passes after every test.
 - **SC-005**: When two submissions race, exactly one is saved in 100% of runs and no file from the losing one remains after cleanup.
-- **SC-006**: 100% of late submissions are flagged and 0% of on-time ones are.
-- **SC-007**: A replaced file is gone within a day of replacement, and a link issued before the replacement works for at least the retirement delay.
+- **SC-006**: 100% of late submissions are flagged and 0% of on-time ones are, judged by the submission's recorded time (FR-006).
+- **SC-007**: A replaced file is gone within a day of replacement and never sooner than a download link's lifetime (5 minutes) after it, so a link issued before the replacement works until it expires.
 - **SC-008**: A student can tell an assignment from a lesson in the outline at a glance, with the due date visible, in a usability check with at least 5 of 5 testers.
 
 ## Assumptions
