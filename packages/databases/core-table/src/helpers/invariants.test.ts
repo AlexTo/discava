@@ -579,7 +579,13 @@ describe('the rules added after #57', () => {
     });
 
     it('reports two lessons of a module, or modules of a course, sharing one', () => {
-      table.lessons.push({ ...ids, ...shown, lessonId: 'l2', order: 1 });
+      table.lessons.push({
+        ...ids,
+        ...shown,
+        kind: 'lesson',
+        lessonId: 'l2',
+        order: 1,
+      });
       expectOnly('sibling-order-unique', /2 lessons/);
 
       table = consistentTable();
@@ -600,6 +606,7 @@ describe('the rules added after #57', () => {
       table.lessons.push({
         ...ids,
         ...shown,
+        kind: 'lesson',
         moduleId: 'm1',
         lessonId: 'l2',
         order: 2,

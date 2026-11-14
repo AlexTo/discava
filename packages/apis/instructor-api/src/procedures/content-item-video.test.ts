@@ -1596,7 +1596,7 @@ describe('updateContentItemVideo', () => {
     ['failed', 'failed'],
   ] as const)(
     'replacing a replacement that is %s deletes its upload and keeps the previous version',
-    async (status) => {
+    async (status, _waiting) => {
       const previousS3Key = `${OBJECT_KEY_PREFIX}${CONTENT_ITEM_ID}/old-nonce/master.m3u8`;
       const replacing = {
         ...contentItem,

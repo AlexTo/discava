@@ -61,7 +61,9 @@ describe('error responses', () => {
         info: {} as any,
       }),
     });
-    const body = await response.json();
+    const body = (await response.json()) as {
+      error: { data: { code: string } };
+    };
 
     expect(response.status).toBe(401);
     expect(body.error.data.code).toBe('UNAUTHORIZED');

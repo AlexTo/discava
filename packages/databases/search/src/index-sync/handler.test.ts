@@ -25,6 +25,11 @@ const baseEvent = {
   ResourceProperties: { Manifest: JSON.stringify(manifest) },
 } as unknown as CloudFormationCustomResourceEvent;
 
+// A custom resource event of the given type; the handler only reads
+// ResourceProperties, so the rest of a real event is left out.
+const eventOf = (RequestType: 'Create' | 'Update' | 'Delete') =>
+  ({ ...baseEvent, RequestType }) as CloudFormationCustomResourceEvent;
+
 beforeEach(() => {
   getOpenSearchClientMock.mockReset().mockResolvedValue('the-client');
   syncIndicesMock.mockReset().mockResolvedValue(undefined);
@@ -33,7 +38,7 @@ beforeEach(() => {
 describe('handler', () => {
   it('syncs indices on Create and Update, with a fixed physical id', async () => {
     for (const RequestType of ['Create', 'Update'] as const) {
-      const result = await handler({ ...baseEvent, RequestType });
+      const result = await handler(eventOf(RequestType));
       expect(syncIndicesMock).toHaveBeenCalledWith('the-client', manifest);
       expect(result).toEqual({
         PhysicalResourceId: 'search-index-sync',
@@ -53,7 +58,7 @@ describe('handler', () => {
         .mockRejectedValueOnce(forbidden)
         .mockResolvedValueOnce(undefined);
 
-      const pending = handler({ ...baseEvent, RequestType: 'Create' });
+      const pending = handler(eventOf('Create'));
       await vi.advanceTimersByTimeAsync(20_000);
 
       await expect(pending).resolves.toMatchObject({ Data: { Hash: 'abc' } });
@@ -70,16 +75,14 @@ describe('handler', () => {
         meta: { statusCode: 403 },
       });
       syncIndicesMock.mockRejectedValue(forbidden);
-      const stuck = handler({ ...baseEvent, RequestType: 'Create' });
+      const stuck = handler(eventOf('Create'));
       const settled = expect(stuck).rejects.toThrow('forbidden');
       await vi.advanceTimersByTimeAsync(10_000 * 20);
       await settled;
       expect(syncIndicesMock).toHaveBeenCalledTimes(13);
 
       syncIndicesMock.mockReset().mockRejectedValue(new Error('bad mapping'));
-      await expect(
-        handler({ ...baseEvent, RequestType: 'Update' }),
-      ).rejects.toThrow('bad mapping');
+      await expect(handler(eventOf('Update'))).rejects.toThrow('bad mapping');
       expect(syncIndicesMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
@@ -87,7 +90,7 @@ describe('handler', () => {
   });
 
   it('never syncs on Delete, and still returns the same physical id', async () => {
-    const result = await handler({ ...baseEvent, RequestType: 'Delete' });
+    const result = await handler(eventOf('Delete'));
 
     expect(syncIndicesMock).not.toHaveBeenCalled();
     expect(result).toEqual({
