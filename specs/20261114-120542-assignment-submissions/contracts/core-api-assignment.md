@@ -27,7 +27,7 @@ Behavior:
 1. Read the common records, the caller's submission, the completion, and the upload's metadata.
 2. Refuse with `PRECONDITION_FAILED` if the course isn't published or the submission is `returned`.
 3. `BAD_REQUEST` for: an `objectKey` that isn't one `uploadUrl` issued for this item, this caller and this name; an upload that is missing, whose type isn't the one its name allows, or whose size is 0 or over 100 MB.
-4. Schedule the attempt guard before copying anything: a conditional cleanup (below) of `…/submissions/<userId>/<attemptId>/` after `SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES` (60), where `attemptId` is a random id made for this request. If scheduling fails, the request fails with a retryable error and nothing has been copied.
+4. Schedule the attempt guard before copying anything: a conditional cleanup (below) of `…/submissions/<userId>/<attemptId>/` after `SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES` (60), where `attemptId` is a random id made for this request. If scheduling fails, the request fails with `INTERNAL_SERVER_ERROR` (the student can try again) and nothing has been copied.
 5. Copy the file once into that folder. The folder name carries no version, so the tries below reuse the copy.
 6. Up to 3 tries. Each try uses a fresh read (the first uses step 1's) and runs one transaction through `assignmentSubmissionWrites` (first submission or resubmission, as in the data model), passing the item's `dueAt`. The helper, not the procedure, sets `version` = the read version + 1 (or 1), `submittedAt = studentActivityAt(enrolment)` and `late = dueAt !== undefined && submittedAt > dueAt`.
 7. On a cancelled transaction: re-read. If the submission is no longer the one this try read (one now exists, or its version moved), another request won: stop with `CONFLICT`, so exactly one request wins a race and the other is told to retry. If the submission is now `returned`, or the course or item no longer allows submitting, stop with that precise error. Otherwise the cancellation came from an unrelated write (for example the enrolment's `lastActivityAt` moved): try again with the same copy. After 3 tries: `CONFLICT`.
@@ -93,3 +93,4 @@ The storage key never leaves the API: a student's file is fetched through `submi
 | Submission returned | `PRECONDITION_FAILED` |
 | Bad type, size or upload key | `BAD_REQUEST` |
 | Lost a race, or still cancelled after 3 tries | `CONFLICT` |
+| The attempt guard could not be scheduled (submit) | `INTERNAL_SERVER_ERROR` |
