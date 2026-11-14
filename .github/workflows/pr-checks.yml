@@ -82,10 +82,20 @@ jobs:
   # the whole local stack, which it starts with `pnpm dev` (DynamoDB local,
   # S3Mock and the local OIDC server in Docker; no AWS). Only when something
   # the e2e project depends on changed.
+  #
+  # Sharded over runners, each starting its own stack (E2E_SHARD, read by
+  # playwright.config.ts). The `E2E tests` job below gathers the legs into one
+  # check, so a required check by that name keeps working whatever the count.
   e2e:
-    name: E2E tests
+    name: E2E tests (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     permissions:
       contents: read
       # For the Docker login role (below).
@@ -103,8 +113,27 @@ jobs:
           aws-docker-login-role-arn: ${{ vars.AWS_DOCKER_LOGIN_ROLE_ARN }}
           setup-uv: "false"
 
+      # Chromium's download is cached per Playwright version. Its system
+      # libraries come from apt, outside the cache, so they're installed
+      # either way.
+      - name: Get the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm --filter @discava/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: playwright-cache
+        name: Cache Chromium for Playwright
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Chromium for Playwright
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @discava/e2e exec playwright install --with-deps chromium
+
+      - name: Install Chromium's system libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @discava/e2e exec playwright install-deps chromium
 
       # Static output, so the job log lists each test even when they all pass.
       - name: Run e2e
@@ -114,8 +143,20 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-results
+          name: e2e-results-${{ matrix.shard }}
           path: |
             dist/packages/e2e/test-results
             dist/packages/e2e/report
           retention-days: 14
+
+  e2e-result:
+    name: E2E tests
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any e2e shard failed or was cancelled
+        # `skipped` is fine: nothing the e2e project depends on changed.
+        run: |
+          [ "${{ needs.e2e.result }}" = "failure" ] || [ "${{ needs.e2e.result }}" = "cancelled" ] && exit 1
+          exit 0
