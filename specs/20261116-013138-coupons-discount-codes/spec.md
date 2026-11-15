@@ -28,6 +28,15 @@ Resolved without asking, using the defaults below (non-interactive run).
 - Q: Does a coupon apply to free courses or to any course the instructor does not own? → A: No. A coupon needs a paid course (a price above zero); only the course's instructors manage its codes.
 - Q: Do other in-flight specs conflict? → A: No overlap found. Catalogue categories (#333) lists list prices only and never shows a coupon price; notifications (#331) and the instructor dashboard (#332) may later read redemption data but this spec adds no hook for them.
 
+### Session 2026-11-16 (clarify)
+
+Resolved without asking (non-interactive run); each answer is the recommended option.
+
+- Q: How long does a reserved redemption stay held while the student has not paid? → A: As long as the checkout can still be paid: the payment session is created to expire in 30 minutes (the shortest the payment provider allows), and the reservation is released when it expires. A short hold limits how long an abandoned checkout can block a limited code.
+- Q: What if the student starts checkout again with a different code, or none, while an earlier unpaid checkout exists? → A: A student has at most one unpaid order per course. Starting again cancels the earlier unpaid order, releases its reservation and creates the new one, in one write. The same code again returns the same unpaid order.
+- Q: At what moment does an expiry date end the code? → A: The instructor picks a date; the code works through the end of that day in UTC and the screen says so. Stored as an instant, so there is one rule everywhere.
+- Q: How does the instructor enter a fixed amount? → A: In the course's currency in whole and fractional units as people write them (for example 5.00), stored in minor units; the list shows the same format. Currencies with no minor unit follow #284's price rules.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Instructor creates a discount code for a course (Priority: P1)
@@ -131,6 +140,7 @@ The instructor sees each code's state (active, expired, used up, disabled), disa
 - A total that is not zero but below the provider's minimum charge is refused with a clear message.
 - An instructor deletes a code with a live reservation: refused, since it has a redemption.
 - Course archived: its codes cannot be applied; its orders and redemptions are kept.
+- A student starts checkout with code A, then again with code B before paying: A's reservation is released and B's taken in one write; if B is refused, A's checkout is untouched.
 - A student reuses a code they already used in the same course: refused as already used, including after a refund.
 - A course changes currency: its fixed codes are in the old currency and are refused at checkout until the instructor makes new ones; percent codes keep working.
 
@@ -139,12 +149,12 @@ The instructor sees each code's state (active, expired, used up, disabled), disa
 ### Functional Requirements
 
 - **FR-001**: An instructor of a paid course MUST be able to create, list, disable, re-enable, change the expiry or limit of, and delete an unused code for that course. Only the course's instructors MAY do so; free courses MUST NOT accept codes.
-- **FR-002**: A code MUST have text (case-insensitive, 4 to 24 characters of letters, digits and hyphens, unique within its course), a type (percent from 1 to 100, or a fixed amount in the course's currency above zero and not above the list price), an optional expiry, an optional redemption limit of at least 1, and an enabled flag. Type, value and text MUST NOT change after creation.
+- **FR-002**: A code MUST have text (case-insensitive, 4 to 24 characters of letters, digits and hyphens, unique within its course), a type (percent from 1 to 100, or a fixed amount in the course's currency above zero and not above the list price), an optional expiry (a date: the code works through the end of that day in UTC), an optional redemption limit of at least 1, and an enabled flag. Type, value and text MUST NOT change after creation.
 - **FR-003**: The price calculation MUST live in one pure function that takes a list price in minor units, the currency and a code, and returns the list price, the discount amount, the total and whether the total is zero. A percent discount is the percent of the list price rounded down; a fixed discount is capped at the list price; the total is never negative. Checkout, the preview and the free path MUST all use this function and nothing else computes a discounted price.
 - **FR-004**: A signed-in student MUST be able to apply a code to a published paid course they are not enrolled in and see the list price, discount and total before paying. Applying MUST read only and reserve nothing.
 - **FR-005**: Starting checkout with a code MUST re-validate the code on the server (existing, enabled, not expired, not used up, not already used by this student, belongs to this course, resulting total zero or at least the provider's minimum charge) and MUST charge the total the server computes, never an amount sent by the browser.
 - **FR-006**: Starting checkout with a valid code MUST reserve one redemption and create the order in one atomic write. The write MUST refuse when the count would exceed the limit, so at most N reservations exist for a limit of N whatever the concurrency. Repeating the request for the same student, course and code MUST return the same order and reservation.
-- **FR-007**: A reservation MUST be released exactly once when its checkout expires or fails, and MUST become permanent when the order is paid or is a zero-total order. A refund MUST NOT release it.
+- **FR-007**: A student MUST have at most one unpaid order per course: starting checkout again cancels the earlier unpaid order, releases its reservation and creates the new one atomically. A reservation lasts as long as its payment session can still be paid (30 minutes) and MUST be released exactly once when its checkout expires, is cancelled or fails, and MUST become permanent when the order is paid or is a zero-total order. A refund MUST NOT release it.
 - **FR-008**: When the total is zero, the system MUST create the enrolment, the order (total zero) and the redemption in one atomic write, without creating a Stripe Checkout session, and MUST be idempotent under repeats and concurrency. It MUST apply the same checks as enrolling in a course today (published).
 - **FR-009**: Each order MUST record the list price, the currency, the discount type and value as they were, the code text and its id, the discount amount and the total, so that payouts, refunds and reports can reconcile without reading the code, which may later change or be deleted. An order without a code records a discount of zero and no code.
 - **FR-010**: Each student MUST redeem a given code at most once. A student enrolled in the course MUST NOT be able to redeem any code for it.
