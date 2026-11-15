@@ -12,6 +12,18 @@
 
 **Depends on**: #284 (Stripe checkout and orders) and #285 (coupons), both being specified in parallel. Their specs are not on `main` yet; the order, refund and discount concepts this spec relies on are listed in Assumptions.
 
+## Clarifications
+
+### Session 2026-11-16
+
+Resolved without asking, using the recommended defaults below (non-interactive run).
+
+- Q: Who bears a lost dispute (chargeback) and Stripe's dispute fee? → A: The instructor amount of that order is reversed in full, like a full refund; Stripe's dispute fee and any shortfall are borne by the platform.
+- Q: Can an instructor's course be sold, and earnings accrue, before they have connected a payout account? → A: Yes. Earnings accrue as "Waiting for account setup" and are sent once the account is active; nothing blocks the sale.
+- Q: What periods can the report cover? → A: A UTC calendar month (default: the current month) or a custom date range of at most 366 days; longer or inverted ranges are refused with a clear message.
+- Q: Does the report let an instructor see the orders behind each figure? → A: Yes. Each course row expands to a paged list of its sales and refunds in the period (order reference, date, amount lines), with no buyer identity, so totals can be checked line by line.
+- Q: How is an order shared among a course's instructors, and can the fee differ per course? → A: Equally among the instructors at payment time, and the fee is one percentage per stage, never per course or per instructor.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - See what I earned, per course and period (Priority: P1)
@@ -30,6 +42,8 @@ An instructor opens an Earnings page in the instructor portal and picks a period
 4. **Given** a course with no orders in the period, **Then** it is shown with zeros (or omitted from the rows with a clear empty state if the instructor has no paid courses at all), never an error.
 5. **Given** an instructor, **When** they open Earnings, **Then** they see only their own share of their own courses, never another instructor's figures or any buyer's identity.
 6. **Given** a course taught by two instructors, **Then** each sees their own share of every order, and the shares add up to the order's instructor amount.
+7. **Given** a course row, **When** the instructor expands it, **Then** a paged list shows each sale and refund of the period (order reference, date, gross, discount, fee, net) whose lines sum to the row's figures, with no buyer identity.
+8. **Given** a custom range longer than 366 days or ending before it starts, **Then** the report is refused with a clear message.
 
 ---
 
@@ -118,7 +132,8 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - A dispute (chargeback) lost: treated as a full refund of that order; a dispute won after loss is out of scope.
 - A refund arriving after the instructor's account was closed: stays as a negative balance, shown as such.
 - Stripe retries or reorders events (refund before paid event is processed): the records settle to the same result once both are processed.
-- A report period that starts in the future, or ends before it starts: an empty state or a clear validation message, never a crash.
+- A report period that starts in the future: an empty state. A range that ends before it starts or is longer than 366 days: a clear validation message, never a crash.
+- A lost dispute: the instructor amount is reversed in full; Stripe's dispute fee is the platform's cost and never shown to or charged to the instructor.
 - Taxes: out of scope; amounts are as recorded on the order (see Assumptions).
 
 ## Requirements *(mandatory)*
@@ -145,6 +160,8 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - **FR-018**: The feature MUST work end to end in local development without an AWS account or a Stripe account, against a local stand-in for the Stripe Connect calls, including recording, reporting, onboarding status and the payout run.
 - **FR-019**: The feature MUST NOT add tax calculation or reporting, invoices, instructor-visible buyer lists, admin payout dashboards, multi-currency conversion, platform-funded coupons or manual payout requests (see Assumptions).
 - **FR-020**: Money amounts MUST be stored and calculated as integers in minor units, never floating point, and shown formatted for the instructor's locale and the order's currency.
+- **FR-021**: Each course row MUST expand to a paged list of that period's sales and refunds (order reference, date, gross, discount, refund, fee, net) that sums to the row, without buyer identity. A period is a UTC calendar month or a custom range of at most 366 days, and any other range MUST be refused with a clear message.
+- **FR-022**: A course's earnings MUST accrue even when an instructor has no active payout account; the sale is never blocked by payout setup.
 
 ### Key Entities
 
