@@ -29,6 +29,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "agent-review-status": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/agent-review/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {
