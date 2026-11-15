@@ -8,8 +8,10 @@ import {
   CoreTable,
   EventsProgressRecalculation,
   EventsSearchIndexing,
+  EventsSearchReindex,
   InstructorPortal,
   LessonMediaBucket,
+  LessonMediaUploadBucket,
   RuntimeConfig,
   SearchCollection,
   StudentPortal,
@@ -41,6 +43,7 @@ import {
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { apiLimits, publicThrottle } from './api-limits.js';
+import type { MediaPipelineStack } from './media-pipeline-stack.js';
 
 type CoreApiIntegrations = ReturnType<
   ReturnType<typeof CoreApi.defaultIntegrations>['build']
@@ -54,6 +57,10 @@ export interface CoreApiStackProps extends StackProps {
   readonly searchCollection: SearchCollection;
   /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
   readonly lessonMediaBucket: LessonMediaBucket;
+  /** Where a student's submission is uploaded before it is copied across. */
+  readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
+  /** Schedules the cleanups of a student's submission folders. */
+  readonly mediaPipeline: MediaPipelineStack;
   /** Every portal calls core-api, so all three are allowed CORS origins. */
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
@@ -84,6 +91,8 @@ export class CoreApiStack extends Stack {
       coreTable,
       searchCollection,
       lessonMediaBucket,
+      lessonMediaUploadBucket,
+      mediaPipeline,
       portals,
       ...props
     }: CoreApiStackProps,
@@ -136,11 +145,22 @@ export class CoreApiStack extends Stack {
       coreTable.grantReadWriteData(handler);
       searchCollection.grantRead(handler.role!);
     });
-    for (const op of ['contentItem.videoUrl', 'contentItem.fileUrl'] as const) {
+    for (const op of [
+      'contentItem.videoUrl',
+      'contentItem.fileUrl',
+      'assignment.submissionFileUrl',
+    ] as const) {
       lessonMediaBucket.grantReadSigningKey(
         this.privilegedHandler(integrations, op),
       );
     }
+
+    this.grantAssignmentSubmitAccess(
+      integrations,
+      lessonMediaBucket,
+      lessonMediaUploadBucket,
+      mediaPipeline,
+    );
 
     this.coreApi.restrictCorsTo(
       ...portals,
@@ -154,6 +174,29 @@ export class CoreApiStack extends Stack {
 
     this.createProgressRecalculationLambda(coreTable);
     this.createSearchIndexingLambda(coreTable, searchCollection);
+    this.createSearchReindexLambda(coreTable, searchCollection);
+  }
+
+  // Submitting to an upload assignment (#102): AssignmentSubmit presigns the
+  // upload, checks it (reading it), copies it into the lesson media bucket,
+  // deletes that copy if the submission doesn't commit, and schedules the
+  // cleanups of a student's folders. Its bucket names and the schedule's
+  // config come from AppConfig, which every core-api function can read.
+  private grantAssignmentSubmitAccess(
+    integrations: CoreApiIntegrations,
+    lessonMediaBucket: LessonMediaBucket,
+    lessonMediaUploadBucket: LessonMediaUploadBucket,
+    mediaPipeline: MediaPipelineStack,
+  ) {
+    for (const op of ['assignment.uploadUrl', 'assignment.submit'] as const) {
+      const handler = this.privilegedHandler(integrations, op);
+      lessonMediaUploadBucket.grantPut(handler);
+      lessonMediaUploadBucket.grantRead(handler);
+      lessonMediaBucket.grantPut(handler);
+      lessonMediaBucket.grantRead(handler);
+      lessonMediaBucket.grantDelete(handler);
+      mediaPipeline.grantScheduleCleanup(handler);
+    }
   }
 
   // Every grant beyond the baseline (table + AppConfig) goes through this,
@@ -279,5 +322,27 @@ export class CoreApiStack extends Stack {
     );
 
     return indexing;
+  }
+
+  // Rebuilds the courses index from the core table when invoked, for after
+  // the index is recreated or an indexing bug (#273). No event source and no
+  // API route: only an IAM principal allowed lambda:InvokeFunction can call
+  // it. It runs under its own role because the collection's data access
+  // policy names Lambda roles only, so a person's AWS login can't write to
+  // the index directly.
+  private createSearchReindexLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+  ) {
+    const reindex = new EventsSearchReindex(this, 'SearchReindex');
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    reindex.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(reindex);
+    coreTable.grantReadData(reindex);
+    searchCollection.grantWrite(reindex.role!);
+    return reindex;
   }
 }

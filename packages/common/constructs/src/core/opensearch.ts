@@ -388,8 +388,9 @@ export abstract class OpenSearchCollection extends Construct {
   }
 
   /**
-   * Lets `grantee` read and write documents, and create indices/update
-   * mappings.
+   * Lets `grantee` read, write and delete documents (`aoss:WriteDocument`
+   * covers deletes; there is no separate delete permission), and create
+   * indices/update mappings.
    */
   public grantWrite(grantee: IRole): void {
     this.grant(grantee, WRITE_INDEX_PERMISSIONS, WRITE_COLLECTION_PERMISSIONS);

@@ -11,6 +11,10 @@ import {
   getSignedCloudFrontCookies,
 } from '@discava/common-server-utils/lesson-media';
 import {
+  getS3Client,
+  resolveLessonMediaUploadBucketName,
+} from '@discava/common-server-utils/lesson-media-bucket';
+import {
   isConditionalCheckFailed,
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
@@ -23,6 +27,7 @@ import {
   initialVisibilityFields,
   requireAncestorsNotArchived,
   requireNotArchived,
+  requireOrdinaryLesson,
   writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
@@ -33,9 +38,7 @@ import {
 } from '../lib/mediaconvert-client.js';
 import {
   bestEffortDeleteContentItemVideos,
-  getS3Client,
   getVideoUploadETag,
-  resolveLessonMediaUploadBucketName,
 } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
@@ -90,6 +93,7 @@ export const createContentItemVideoUploadUrl = courseProcedure
       lesson,
       'Restore the lesson before adding content to it',
     );
+    requireOrdinaryLesson(lesson);
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
 
     const ext = extname(fileName).slice(1).toLowerCase();
@@ -189,6 +193,7 @@ export const createContentItemVideo = courseProcedure
       lesson,
       'Restore the lesson before adding content to it',
     );
+    requireOrdinaryLesson(lesson);
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
     const course = await getCourseOrThrow(coreTable, courseId);
 

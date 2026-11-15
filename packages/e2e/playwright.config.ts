@@ -7,6 +7,12 @@ import { PORTALS } from './src/helpers/portals.js';
 
 const CI = !!process.env.CI;
 
+// CI splits the suite over several runners, each with its own stack (the
+// `e2e` job's matrix): E2E_SHARD is this runner's "current/total", e.g. "2/3".
+const [shardCurrent, shardTotal] = (process.env.E2E_SHARD ?? '')
+  .split('/')
+  .map(Number);
+
 // End-to-end tests against the whole local stack (#3): the portals, APIs and
 // event runner from `pnpm dev`, with DynamoDB local, S3Mock and the local
 // OIDC server standing in for AWS. Locally they reuse a running `pnpm dev`;
@@ -22,6 +28,10 @@ export default defineConfig({
   // from crowding the others out on a small CI runner.
   workers: 1,
   fullyParallel: false,
+  shard:
+    shardCurrent && shardTotal
+      ? { current: shardCurrent, total: shardTotal }
+      : null,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
   // A scenario walks several pages and waits on background work (progress

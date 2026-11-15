@@ -22,3 +22,10 @@ globalThis.ResizeObserver ??=
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.releasePointerCapture ??= () => {};
 Element.prototype.scrollIntoView ??= () => {};
+
+// ProseMirror (the rich text editor's engine) measures the caret's screen
+// position to scroll it into view and to map clicks to a document position,
+// which needs layout that jsdom doesn't compute.
+document.elementFromPoint ??= () => null;
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();

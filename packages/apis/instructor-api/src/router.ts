@@ -5,6 +5,11 @@
 
 import { t } from './init.js';
 import {
+  createQuizAssignment,
+  createUploadAssignment,
+  updateContentItemAssignment,
+} from './procedures/assignment.js';
+import {
   createContentItemFile,
   createContentItemFileUploadUrl,
   createContentItemFileUrl,
@@ -93,6 +98,8 @@ export const appRouter = router({
     publish: publishLesson,
     hide: hideLesson,
     reorder: reorderLessons,
+    createQuizAssignment,
+    createUploadAssignment,
     restore: restoreLesson,
     deletePermanently: deleteLessonPermanently,
   }),
@@ -108,6 +115,7 @@ export const appRouter = router({
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,
+    updateAssignment: updateContentItemAssignment,
     createFileUrl: createContentItemFileUrl,
     delete: deleteContentItem,
     publish: publishContentItem,

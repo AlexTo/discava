@@ -123,6 +123,24 @@ const getContentItemOrThrow = async (
   return contentItem;
 };
 
+// An assignment lesson (#102) always holds its one item, so the item is
+// removed with its lesson, never on its own.
+const requireNotAssignmentItem = async (
+  coreTable: CoreTable,
+  { courseId, moduleId, lessonId }: ContentItemKey,
+) => {
+  const { data: lesson } = await coreTable.entities.lesson
+    .get({ courseId, moduleId, lessonId })
+    .go();
+  if (lesson?.kind === 'assignment') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        "An assignment's content can't be deleted on its own. Delete the assignment instead",
+    });
+  }
+};
+
 // Removes the record for good, then its external storage. Uses the record
 // DeleteItem actually removed (response: 'all_old'), not an earlier read -- a
 // concurrent replacement could have landed between the two, and cleaning up
@@ -169,6 +187,7 @@ export const deleteContentItem = courseProcedure
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getContentItemOrThrow(coreTable, key);
+    await requireNotAssignmentItem(coreTable, key);
     const course = await getCourseOrThrow(coreTable, courseId);
 
     if (isDraftCourse(course)) {
@@ -338,6 +357,7 @@ export const deleteContentItemPermanently = courseProcedure
     const key = { courseId, moduleId, lessonId, contentItemId };
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+    await requireNotAssignmentItem(coreTable, key);
     const existing = await getContentItemOrThrow(coreTable, key);
     if (!existing.archivedAt) {
       throw new TRPCError({

@@ -48,6 +48,12 @@
         "path": "src/identity/pre-token-generation.ts",
         "name": "pre-token-generation",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/search/search-reindex.ts",
+        "name": "search-reindex",
+        "iac": "cdk"
       }
     ]
   },

@@ -4,6 +4,12 @@
  */
 import { t } from './init.js';
 import {
+  mySubmission,
+  submissionFileUrl,
+  submit,
+  uploadUrl,
+} from './procedures/assignment.js';
+import {
   completeContentItem,
   myItemCompletions,
 } from './procedures/completion.js';
@@ -40,6 +46,12 @@ export const appRouter = router({
     publicSearch: publicSearchCourses,
     publicView: publicViewCourse,
     view: viewCourse,
+  }),
+  assignment: router({
+    uploadUrl,
+    submit,
+    mySubmission,
+    submissionFileUrl,
   }),
   contentItem: router({
     complete: completeContentItem,

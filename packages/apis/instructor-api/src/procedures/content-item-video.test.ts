@@ -117,9 +117,12 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 // bestEffortDeleteContentItemVideos's own error-swallowing/bucket-selection
 // behavior is covered directly in lib/s3-client.test.ts; here it's just a
 // mock so these tests can assert content-item-video.ts calls it correctly.
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaUploadBucketName,
+}));
+
+vi.mock('../lib/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
   getVideoUploadETag,
@@ -383,6 +386,23 @@ describe('createContentItemVideoUploadUrl', () => {
   // Invariant: nothing can be uploaded for an archived lesson or an archived
   // content item, so no upload is left behind that the create/update
   // procedures would then reject.
+  it('refuses an assignment lesson without minting an upload URL (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(
+      callAs().createContentItemVideoUploadUrl({
+        courseId: COURSE_ID,
+        moduleId: MODULE_ID,
+        lessonId: LESSON_ID,
+        fileName: 'intro.mp4',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+  });
+
   it('refuses an archived lesson without minting an upload URL', async () => {
     lessonGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({
@@ -1576,7 +1596,7 @@ describe('updateContentItemVideo', () => {
     ['failed', 'failed'],
   ] as const)(
     'replacing a replacement that is %s deletes its upload and keeps the previous version',
-    async (status) => {
+    async (status, _waiting) => {
       const previousS3Key = `${OBJECT_KEY_PREFIX}${CONTENT_ITEM_ID}/old-nonce/master.m3u8`;
       const replacing = {
         ...contentItem,

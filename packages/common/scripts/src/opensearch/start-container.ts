@@ -27,6 +27,8 @@ runLocalContainer({
     '-e',
     'DISABLE_INSTALL_DEMO_CONFIG=true',
     '-e',
+    'DISABLE_PERFORMANCE_ANALYZER_AGENT_CLI=true',
+    '-e',
     'OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m',
     '-v',
     `${containerName}-data:/usr/share/opensearch/data`,

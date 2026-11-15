@@ -10,8 +10,8 @@ import type { ZodType } from 'zod';
  * is told the document looks like), defined together so they can't drift
  * apart. Settings are index-level config (shards, replicas, analyzers).
  */
-export interface IndexDefinition<T> {
-  readonly name: string;
+export interface IndexDefinition<T, N extends string = string> {
+  readonly name: N;
   readonly schema: ZodType<T>;
   readonly settings?: Record<string, unknown>;
   readonly mappings: Record<string, unknown>;
@@ -21,6 +21,8 @@ export interface IndexDefinition<T> {
 // (`export default createIndex({...})`), and so a future generator-emitted
 // version of this file can validate its input without every index needing
 // to import a type.
-export const createIndex = <T>(
-  definition: IndexDefinition<T>,
-): IndexDefinition<T> => definition;
+// `N` keeps the index's name as a literal, so `IndexName` (client.ts) is the
+// union of the names defined, not `string`.
+export const createIndex = <T, const N extends string>(
+  definition: IndexDefinition<T, N>,
+): IndexDefinition<T, N> => definition;

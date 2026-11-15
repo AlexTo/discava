@@ -20,6 +20,7 @@ export const SearchCourseHitSchema = z.object({
   courseId: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  imageKey: z.string().optional(),
 });
 
 export type ISearchCourseHit = z.output<typeof SearchCourseHitSchema>;

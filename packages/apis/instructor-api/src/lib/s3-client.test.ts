@@ -7,7 +7,6 @@ import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
   getVideoUploadETag,
-  resolveBucketName,
 } from './s3-client.js';
 
 const { send, getAppConfig, scheduleTranscodeCleanup } = vi.hoisted(() => ({
@@ -38,7 +37,7 @@ vi.mock('@aws-lambda-powertools/parameters/appconfig', () => ({
   getAppConfig,
 }));
 
-vi.mock('./transcode-cleanup-scheduler.js', () => ({
+vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanup,
 }));
 
@@ -522,23 +521,4 @@ describe('bestEffortRetirePreviousVersions', () => {
 
     expect(scheduleTranscodeCleanup).not.toHaveBeenCalled();
   });
-});
-
-describe('resolveBucketName', () => {
-  it.each([
-    ['LessonMediaBucket', 'discava-lesson-media'],
-    ['LessonMediaUploadBucket', 'discava-lesson-media-upload'],
-    ['PublicMediaBucket', 'discava-public-media'],
-  ])(
-    'uses S3Mock’s %s in local dev, without AppConfig',
-    async (key, bucket) => {
-      vi.stubEnv('LOCAL_DEV', 'true');
-      try {
-        await expect(resolveBucketName(key)).resolves.toBe(bucket);
-        expect(getAppConfig).not.toHaveBeenCalled();
-      } finally {
-        vi.unstubAllEnvs();
-      }
-    },
-  );
 });

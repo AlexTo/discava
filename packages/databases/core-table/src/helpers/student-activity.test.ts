@@ -44,7 +44,7 @@ interface TransactItem {
 const requestFor = (activity: StudentActivity): TransactItem[] =>
   coreTable.transaction
     .write((entities) => studentActivityWrites(entities, activity))
-    .params().TransactItems;
+    .params().TransactItems as TransactItem[];
 
 // Each item's condition with its placeholders filled in, so it reads as the
 // rule it enforces.

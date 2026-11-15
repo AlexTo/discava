@@ -855,6 +855,7 @@ describe('viewCourse', () => {
     moduleId: 'module-1',
     courseId: course.courseId,
     title: 'Welcome',
+    kind: 'lesson' as const,
     order: 1,
     visibility: 'visible' as const,
     archivedAt: '2024-02-01T00:00:00.000Z',

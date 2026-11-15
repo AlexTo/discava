@@ -63,6 +63,27 @@ describe('searchIndexing', () => {
     expect(client.delete).not.toHaveBeenCalled();
   });
 
+  it('carries the course image into the document', async () => {
+    await searchIndexing({
+      Records: [
+        record('MODIFY', undefined, {
+          __edb_e__: 'course',
+          courseId: 'c1',
+          title: 'Intro',
+          imageKey: 'courses/c1/image.png',
+          status: 'published',
+          updatedAt: '2024-01-02',
+        }),
+      ],
+    } as z.infer<typeof DynamoDBStreamSchema>);
+
+    expect(client.index).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ imageKey: 'courses/c1/image.png' }),
+      }),
+    );
+  });
+
   it('deletes a course moved out of published (draft or archived)', async () => {
     const event = {
       Records: [

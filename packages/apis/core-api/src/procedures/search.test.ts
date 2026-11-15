@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { errors as openSearchErrors } from '@opensearch-project/opensearch';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
@@ -54,9 +55,61 @@ describe('course.publicSearch', () => {
     expect(request.body.query.bool.filter).toEqual([
       { term: { status: 'published' } },
     ]);
+    // Not every word has to match: the default `or` operator ranks by how
+    // many do.
+    expect(request.body.query.bool.must.multi_match).toMatchObject({
+      type: 'cross_fields',
+    });
+    expect(request.body.query.bool.must.multi_match).not.toHaveProperty(
+      'operator',
+    );
     expect(result).toEqual({
       items: [{ courseId: 'c1', title: 'Intro to DynamoDB' }],
       cursor: null,
+    });
+  });
+
+  it('returns each course’s image key when it has one', async () => {
+    searchMock.mockResolvedValue(
+      esResponse([
+        {
+          _source: {
+            courseId: 'c1',
+            title: 'With image',
+            imageKey: 'courses/c1/image.png',
+            status: 'published',
+          },
+        },
+        { _source: { courseId: 'c2', title: 'No image', status: 'published' } },
+      ]),
+    );
+
+    const result = await callAnonymously().publicSearch({ q: 'image' });
+
+    expect(result.items).toEqual([
+      { courseId: 'c1', title: 'With image', imageKey: 'courses/c1/image.png' },
+      { courseId: 'c2', title: 'No image' },
+    ]);
+  });
+
+  it('gives the request a timeout shorter than the Lambda’s own', async () => {
+    searchMock.mockResolvedValue(esResponse([]));
+
+    await callAnonymously().publicSearch({ q: 'dynamodb' });
+
+    const [, options] = searchMock.mock.calls[0];
+    expect(options.requestTimeout).toBeGreaterThan(0);
+  });
+
+  it('turns a cold-start timeout into a clear, retriable error', async () => {
+    searchMock.mockRejectedValue(
+      new openSearchErrors.TimeoutError('Request timed out', {} as never),
+    );
+
+    await expect(
+      callAnonymously().publicSearch({ q: 'dynamodb' }),
+    ).rejects.toMatchObject({
+      code: 'TIMEOUT',
     });
   });
 

@@ -83,6 +83,18 @@ export const initialVisibilityFields = (course: {
 export const firstPublishedAt = (record: { publishedAt?: string }) =>
   record.publishedAt ? {} : { publishedAt: new Date().toISOString() };
 
+// Content is added to ordinary lessons only: an assignment lesson (#102)
+// holds exactly the one item it was created with.
+export const requireOrdinaryLesson = (lesson: { kind?: string }) => {
+  if (lesson.kind === 'assignment') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'An assignment holds only its own content. Add a lesson to the module to add more',
+    });
+  }
+};
+
 export const requireNotArchived = (
   record: { archivedAt?: string },
   message: string,

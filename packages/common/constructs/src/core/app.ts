@@ -20,7 +20,7 @@ class MetricsAspect implements IAspect {
   visit(node: IConstruct): void {
     if (node instanceof Stack) {
       const id = 'uksb-4wk0bqpg5s';
-      const version = '1.3.1';
+      const version = '1.3.8';
       const tags: string[] = [
         'g61',
         'g1',

@@ -5,10 +5,16 @@
 import { z } from 'zod';
 import { CurriculumVisibilitySchema } from './visibility.js';
 
+// An 'assignment' lesson holds exactly one content item, a quiz or an upload
+// assignment (#102), and is created through lesson.createQuizAssignment or
+// lesson.createUploadAssignment, never lesson.create.
+export const LessonKindSchema = z.enum(['lesson', 'assignment']);
+
 export const LessonSchema = z.object({
   lessonId: z.string(),
   moduleId: z.string(),
   courseId: z.string(),
+  kind: LessonKindSchema,
   title: z.string(),
   description: z.string().optional(),
   order: z.number(),

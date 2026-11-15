@@ -6,7 +6,7 @@ import { type ParsedLocation, redirect } from '@tanstack/react-router';
 import type { RouterProviderContext } from '../router';
 
 // A route's beforeLoad for pages only signed-in students see: sends anyone
-// else to sign in, coming back here afterwards (see routes/signin.tsx).
+// else to sign in, coming back here afterwards (see routes/signin/index.tsx).
 export const requireSignIn = ({
   context,
   location,

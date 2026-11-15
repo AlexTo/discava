@@ -4,7 +4,7 @@
  */
 import { Service } from 'electrodb';
 import {
-  createAssignmentEntity,
+  createAssignmentSubmissionEntity,
   createContentItemEntity,
   createCourseEntity,
   createCourseInstructorEntity,
@@ -15,7 +15,6 @@ import {
   createProgressEntity,
   createQuizAttemptEntity,
   createQuizSummaryEntity,
-  createSubmissionEntity,
   createUserEntity,
 } from './entities/index.js';
 
@@ -33,8 +32,7 @@ export const createCoreTableService = async () => {
     contentItem,
     enrolment,
     courseInstructor,
-    assignment,
-    submission,
+    assignmentSubmission,
     progress,
     quizAttempt,
     quizSummary,
@@ -47,8 +45,7 @@ export const createCoreTableService = async () => {
     createContentItemEntity(),
     createEnrolmentEntity(),
     createCourseInstructorEntity(),
-    createAssignmentEntity(),
-    createSubmissionEntity(),
+    createAssignmentSubmissionEntity(),
     createProgressEntity(),
     createQuizAttemptEntity(),
     createQuizSummaryEntity(),
@@ -63,8 +60,7 @@ export const createCoreTableService = async () => {
     contentItem,
     enrolment,
     courseInstructor,
-    assignment,
-    submission,
+    assignmentSubmission,
     progress,
     quizAttempt,
     quizSummary,

@@ -89,7 +89,7 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@aws-sdk/s3-request-presigner', () => ({ getSignedUrl }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaBucketName: vi.fn(async () => MEDIA_BUCKET),
   resolveLessonMediaUploadBucketName: vi.fn(async () => UPLOAD_BUCKET),
@@ -99,7 +99,7 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getSignedCloudFrontFileUrl,
 }));
 
-vi.mock('../lib/transcode-cleanup-scheduler.js', () => ({
+vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanup,
 }));
 
@@ -328,6 +328,18 @@ describe('createContentItemFileUploadUrl', () => {
       callAs().createContentItemFileUploadUrl(request),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(getSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it('refuses an assignment lesson without minting an upload URL (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(
+      callAs().createContentItemFileUploadUrl(request),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 
   it('refuses an archived lesson without minting an upload URL', async () => {

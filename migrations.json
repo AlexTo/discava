@@ -1,35 +1,28 @@
 {
   "migrations": [
     {
-      "version": "1.3.1",
-      "description": "Turn off Biome 2.6's Markdown and YAML formatting in biome.json, which formats them by default",
-      "implementation": "./src/migrations/latest/biome-markdown-yaml-formatter-off/migration",
+      "version": "1.3.6",
+      "description": "Escape the ts#rdb create-db-user handler's SQL on an open connection, which mariadb 3.5.5 requires",
+      "implementation": "./src/migrations/latest/rdb-escape-on-connection/migration",
       "package": "@aws/nx-plugin",
-      "name": "latest-biome-markdown-yaml-formatter-off"
+      "name": "latest-rdb-escape-on-connection"
     },
     {
-      "version": "1.0.15",
-      "description": "Add the strands-agents-tools pillow override to the workspace root pyproject.toml uv override-dependencies",
-      "implementation": "./src/migrations/v1.0.15/0001-py-agent-pillow-override/migration",
+      "version": "1.3.8",
+      "description": "Replace the current_time tool from strands-agents-tools, which 0.9.0 removed, with a local current_time tool in py#agent Strands agents",
+      "implementation": "./src/migrations/latest/py-agent-vend-current-time-tool/migration",
       "package": "@aws/nx-plugin",
-      "name": "v1.0.15-0001-py-agent-pillow-override"
+      "name": "latest-py-agent-vend-current-time-tool"
     },
     {
-      "version": "1.1.1",
-      "description": "Add each CDK-guarded TypeScript agent's guardrail.json to the synth inputs of the CDK infrastructure, so a policy change is synthesised instead of served from the Nx cache",
-      "implementation": "./src/migrations/v1.1.1/0001-ts-agent-guardrails-synth-input/migration",
+      "version": "1.3.2",
+      "description": "Launch Python AgentCore code with the managed interpreter",
+      "implementation": "./src/migrations/v1.3.2/0001-py-agentcore-launcher/migration",
       "package": "@aws/nx-plugin",
-      "name": "v1.1.1-0001-ts-agent-guardrails-synth-input"
+      "name": "v1.3.2-0001-py-agentcore-launcher"
     },
     {
-      "version": "1.3.0",
-      "description": "Keep a replaced guardrail version in each Terraform guardrail module of a TypeScript agent for 15 seconds after the runtime-config deployment, so agents' 5-second runtime-config cache never points at a deleted version",
-      "implementation": "./src/migrations/v1.3.0/0001-ts-agent-guardrails-terraform-version-retention/migration",
-      "package": "@aws/nx-plugin",
-      "name": "v1.3.0-0001-ts-agent-guardrails-terraform-version-retention"
-    },
-    {
-      "version": "1.3.1",
+      "version": "1.3.8",
       "description": "Sync vended dependency versions and the tracked plugin version to those vended by this release",
       "implementation": "./src/utils/version-upgrade-migration/migration",
       "package": "@aws/nx-plugin",

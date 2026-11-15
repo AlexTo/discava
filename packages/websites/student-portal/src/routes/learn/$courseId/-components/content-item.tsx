@@ -20,6 +20,7 @@ import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CircleCheck,
+  ClipboardList,
   FileText,
   ListChecks,
   Paperclip,
@@ -29,6 +30,7 @@ import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { AssignmentItem } from './assignment-item';
 import { QuizItem } from './quiz-item';
 import {
   errorCode,
@@ -41,6 +43,7 @@ export const ITEM_TYPES = {
   video: { label: 'Video', icon: Play },
   quiz: { label: 'Quiz', icon: ListChecks },
   file: { label: 'File', icon: Paperclip },
+  assignment: { label: 'Assignment', icon: ClipboardList },
 } as const;
 
 // The element id a step in the step bar scrolls to.
@@ -215,7 +218,8 @@ function MarkAsDone({
 }
 
 // One content item of a lesson: its title, its content and, for text, video
-// and file items, Mark as done.
+// and file items, Mark as done. An upload assignment is done once the student
+// has submitted, so it has no Mark as done.
 export function ContentItem({
   item,
   done,
@@ -262,7 +266,11 @@ export function ContentItem({
         <QuizItem item={item} readOnly={readOnly} />
       ) : null}
 
-      {item.type === 'quiz' ? null : (
+      {item.type === 'assignment' ? (
+        <AssignmentItem item={item} done={done} readOnly={readOnly} />
+      ) : null}
+
+      {item.type === 'quiz' || item.type === 'assignment' ? null : (
         <div className="flex justify-end">
           <MarkAsDone item={item} done={done} readOnly={readOnly} />
         </div>

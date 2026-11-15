@@ -10,9 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as MyLearningRouteImport } from './routes/my-learning'
-import { Route as SearchRouteImport } from './routes/search'
-import { Route as SigninRouteImport } from './routes/signin'
+import { Route as MyLearningIndexRouteImport } from './routes/my-learning/index'
+import { Route as SearchIndexRouteImport } from './routes/search/index'
+import { Route as SigninIndexRouteImport } from './routes/signin/index'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
 import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
@@ -22,19 +22,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MyLearningRoute = MyLearningRouteImport.update({
-  id: '/my-learning',
-  path: '/my-learning',
+const MyLearningIndexRoute = MyLearningIndexRouteImport.update({
+  id: '/my-learning/',
+  path: '/my-learning/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SearchRoute = SearchRouteImport.update({
-  id: '/search',
-  path: '/search',
+const SearchIndexRoute = SearchIndexRouteImport.update({
+  id: '/search/',
+  path: '/search/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SigninRoute = SigninRouteImport.update({
-  id: '/signin',
-  path: '/signin',
+const SigninIndexRoute = SigninIndexRouteImport.update({
+  id: '/signin/',
+  path: '/signin/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LearnCourseIdIndexRoute = LearnCourseIdIndexRouteImport.update({
@@ -56,18 +56,18 @@ const LearnCourseIdLessonLessonIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/my-learning': typeof MyLearningRoute
-  '/search': typeof SearchRoute
-  '/signin': typeof SigninRoute
+  '/my-learning/': typeof MyLearningIndexRoute
+  '/search/': typeof SearchIndexRoute
+  '/signin/': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/my-learning': typeof MyLearningRoute
-  '/search': typeof SearchRoute
-  '/signin': typeof SigninRoute
+  '/my-learning': typeof MyLearningIndexRoute
+  '/search': typeof SearchIndexRoute
+  '/signin': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -75,9 +75,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/my-learning': typeof MyLearningRoute
-  '/search': typeof SearchRoute
-  '/signin': typeof SigninRoute
+  '/my-learning/': typeof MyLearningIndexRoute
+  '/search/': typeof SearchIndexRoute
+  '/signin/': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -86,9 +86,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/my-learning'
-    | '/search'
-    | '/signin'
+    | '/my-learning/'
+    | '/search/'
+    | '/signin/'
     | '/learn/$courseId/home'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
@@ -104,9 +104,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/my-learning'
-    | '/search'
-    | '/signin'
+    | '/my-learning/'
+    | '/search/'
+    | '/signin/'
     | '/learn/$courseId/home'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
@@ -114,9 +114,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  MyLearningRoute: typeof MyLearningRoute
-  SearchRoute: typeof SearchRoute
-  SigninRoute: typeof SigninRoute
+  MyLearningIndexRoute: typeof MyLearningIndexRoute
+  SearchIndexRoute: typeof SearchIndexRoute
+  SigninIndexRoute: typeof SigninIndexRoute
   LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
   LearnCourseIdLessonLessonIdRoute: typeof LearnCourseIdLessonLessonIdRoute
@@ -131,25 +131,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/my-learning': {
-      id: '/my-learning'
+    '/my-learning/': {
+      id: '/my-learning/'
       path: '/my-learning'
-      fullPath: '/my-learning'
-      preLoaderRoute: typeof MyLearningRouteImport
+      fullPath: '/my-learning/'
+      preLoaderRoute: typeof MyLearningIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/search': {
-      id: '/search'
+    '/search/': {
+      id: '/search/'
       path: '/search'
-      fullPath: '/search'
-      preLoaderRoute: typeof SearchRouteImport
+      fullPath: '/search/'
+      preLoaderRoute: typeof SearchIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/signin': {
-      id: '/signin'
+    '/signin/': {
+      id: '/signin/'
       path: '/signin'
-      fullPath: '/signin'
-      preLoaderRoute: typeof SigninRouteImport
+      fullPath: '/signin/'
+      preLoaderRoute: typeof SigninIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/learn/$courseId/': {
@@ -178,9 +178,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  MyLearningRoute: MyLearningRoute,
-  SearchRoute: SearchRoute,
-  SigninRoute: SigninRoute,
+  MyLearningIndexRoute: MyLearningIndexRoute,
+  SearchIndexRoute: SearchIndexRoute,
+  SigninIndexRoute: SigninIndexRoute,
   LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
   LearnCourseIdLessonLessonIdRoute: LearnCourseIdLessonLessonIdRoute,

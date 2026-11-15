@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { EntityItem } from 'electrodb';
+import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
@@ -46,6 +47,7 @@ export interface TableSnapshot {
     | 'courseId'
     | 'moduleId'
     | 'lessonId'
+    | 'kind'
     | 'order'
     | 'visibility'
     | 'archivedAt'
@@ -123,6 +125,17 @@ export interface TableSnapshot {
     | 'bestAttemptId'
     | 'passedAt'
   >[];
+  assignmentSubmissions: Pick<
+    Item<typeof createAssignmentSubmissionEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'moduleId'
+    | 'lessonId'
+    | 'contentItemId'
+    | 'file'
+    | 'version'
+    | 'submittedAt'
+  >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
 }
 
@@ -146,6 +159,8 @@ export const INVARIANTS = [
   'last-activity-at-current',
   'draft-course-nothing-archived',
   'child-order-claimed',
+  'assignment-lesson-shape',
+  'assignment-submission-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -169,7 +184,7 @@ const violation = (
 ): InvariantViolation => ({ invariant, record, message });
 
 // Every record a student's work in a course leaves, with its key: their
-// completions, quiz attempts and quiz summaries.
+// completions, quiz attempts, quiz summaries and assignment submissions.
 const studentRecords = (snapshot: TableSnapshot) => [
   ...snapshot.itemCompletions.map((r) => ({
     ...r,
@@ -193,6 +208,15 @@ const studentRecords = (snapshot: TableSnapshot) => [
   ...snapshot.quizSummaries.map((r) => ({
     ...r,
     kind: 'quiz summary',
+    key: {
+      userId: r.userId,
+      courseId: r.courseId,
+      contentItemId: r.contentItemId,
+    },
+  })),
+  ...snapshot.assignmentSubmissions.map((r) => ({
+    ...r,
+    kind: 'submission',
     key: {
       userId: r.userId,
       courseId: r.courseId,
@@ -223,8 +247,8 @@ export const checkCourseHasInstructor = (
 };
 
 // 2. A content item's studentActivityCount is the number of distinct
-// students with records for it: an itemCompletion, or for a quiz a
-// quizSummary. Each is created in the transaction that increments the count,
+// students with records for it: an itemCompletion, an assignmentSubmission,
+// or for a quiz a quizSummary. Each is created in the transaction that increments the count,
 // and neither is ever removed, so the count is exact. It gates permanent
 // deletion, so too low a count could let student data be destroyed.
 export const checkActivityCountMatchesStudents = (
@@ -234,6 +258,7 @@ export const checkActivityCountMatchesStudents = (
   for (const { contentItemId, userId } of [
     ...snapshot.itemCompletions,
     ...snapshot.quizSummaries,
+    ...snapshot.assignmentSubmissions,
   ]) {
     students.set(
       contentItemId,
@@ -680,7 +705,8 @@ export const checkStudentRecordsHaveTargets = (
           ),
         ];
       }
-      return kind !== 'completion' && item.type !== 'quiz'
+      return (kind === 'quiz attempt' || kind === 'quiz summary') &&
+        item.type !== 'quiz'
         ? [
             violation(
               'student-records-have-targets',
@@ -827,7 +853,7 @@ export const checkStudentRecordsPlacedWithItem = (
 
 // 16. An enrolment's lastActivityAt is the student's latest activity in the
 // course: it's set, in the same transaction, to the time of each completion
-// and quiz attempt. It orders "Continue where you left off".
+// quiz attempt and assignment submission. It orders "Continue where you left off".
 export const checkLastActivityAtCurrent = (
   snapshot: TableSnapshot,
 ): InvariantViolation[] => {
@@ -835,6 +861,7 @@ export const checkLastActivityAtCurrent = (
   for (const { userId, courseId, at } of [
     ...snapshot.itemCompletions.map((r) => ({ ...r, at: r.completedAt })),
     ...snapshot.quizAttempts.map((r) => ({ ...r, at: r.submittedAt })),
+    ...snapshot.assignmentSubmissions.map((r) => ({ ...r, at: r.submittedAt })),
   ]) {
     const key = `${userId} ${courseId}`;
     const current = latest.get(key);
@@ -963,6 +990,119 @@ export const checkChildOrderClaimed = (
   ];
 };
 
+// 19 (assignments, #102). An assignment lesson holds exactly one content item,
+// a quiz or an upload assignment, and an upload assignment is only ever in an
+// assignment lesson. Creating one writes the lesson and its item together, and
+// the item can't be added to, removed or archived separately from its lesson,
+// so a lesson with none, several, or the wrong type was written outside that.
+export const checkAssignmentLessonShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const itemsByLesson = groupBy(
+    snapshot.contentItems,
+    ({ courseId, moduleId, lessonId }) =>
+      JSON.stringify({ courseId, moduleId, lessonId }),
+  );
+  const lessonKeys = new Set(
+    snapshot.lessons
+      .filter(({ kind }) => kind === 'assignment')
+      .map(({ courseId, moduleId, lessonId }) =>
+        JSON.stringify({ courseId, moduleId, lessonId }),
+      ),
+  );
+  const fromLessons = snapshot.lessons
+    .filter(({ kind }) => kind === 'assignment')
+    .flatMap(({ courseId, moduleId, lessonId }) => {
+      const record = { courseId, moduleId, lessonId };
+      const items =
+        itemsByLesson.get(JSON.stringify({ courseId, moduleId, lessonId })) ??
+        [];
+      if (items.length !== 1) {
+        return [
+          violation(
+            'assignment-lesson-shape',
+            record,
+            `assignment lesson has ${items.length} content items, not 1`,
+          ),
+        ];
+      }
+      return items[0].type === 'quiz' || items[0].type === 'assignment'
+        ? []
+        : [
+            violation(
+              'assignment-lesson-shape',
+              record,
+              `assignment lesson holds a ${items[0].type} item`,
+            ),
+          ];
+    });
+  const fromItems = snapshot.contentItems
+    .filter(
+      ({ type, courseId, moduleId, lessonId }) =>
+        type === 'assignment' &&
+        !lessonKeys.has(JSON.stringify({ courseId, moduleId, lessonId })),
+    )
+    .map(({ courseId, lessonId, contentItemId }) =>
+      violation(
+        'assignment-lesson-shape',
+        { courseId, lessonId, contentItemId },
+        "upload assignment isn't in an assignment lesson",
+      ),
+    );
+  return [...fromLessons, ...fromItems];
+};
+
+// 20 (submissions, #102). An assignment submission holds one file with a key,
+// name, size and type, in the student's own folder of its item
+// (`…/content-items/<id>/submissions/<userId>/`); it is for an upload
+// assignment, has a version from 1, and comes with the item's completion,
+// which the same transaction wrote. `late` isn't checked against the item's
+// dueAt: it describes the due date at submit time, and an instructor may move
+// or remove the date afterwards.
+export const checkAssignmentSubmissionShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const items = new Map(
+    snapshot.contentItems.map((item) => [
+      `${item.courseId} ${item.contentItemId}`,
+      item,
+    ]),
+  );
+  const completed = new Set(
+    snapshot.itemCompletions.map(
+      ({ userId, courseId, contentItemId }) =>
+        `${userId} ${courseId} ${contentItemId}`,
+    ),
+  );
+  return snapshot.assignmentSubmissions.flatMap((submission) => {
+    const { userId, courseId, contentItemId, file, version } = submission;
+    const record = { userId, courseId, contentItemId };
+    const problems: string[] = [];
+    if (!file?.key || !file.fileName || !file.fileSize || !file.mimeType) {
+      problems.push('file is missing its key, name, size or type');
+    }
+    if (!(version >= 1)) {
+      problems.push(`version is ${version}, not at least 1`);
+    }
+    const item = items.get(`${courseId} ${contentItemId}`);
+    if (item) {
+      if (item.type !== 'assignment') {
+        problems.push(`submitted to a ${item.type} item`);
+      }
+      const folder = `courses/${courseId}/modules/${item.moduleId}/lessons/${item.lessonId}/content-items/${contentItemId}/submissions/${userId}/`;
+      if (file?.key && !file.key.startsWith(folder)) {
+        problems.push(`file is outside the student's folder ${folder}`);
+      }
+    }
+    if (!completed.has(`${userId} ${courseId} ${contentItemId}`)) {
+      problems.push('has no completion of the item');
+    }
+    return problems.map((message) =>
+      violation('assignment-submission-shape', record, message),
+    );
+  });
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -983,6 +1123,8 @@ const CHECKS = [
   checkLastActivityAtCurrent,
   checkDraftCourseNothingArchived,
   checkChildOrderClaimed,
+  checkAssignmentLessonShape,
+  checkAssignmentSubmissionShape,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1008,6 +1150,7 @@ export const loadTableSnapshot = async (
     progress,
     quizAttempts,
     quizSummaries,
+    assignmentSubmissions,
     users,
   ] = await Promise.all([
     entities.course.scan.go(all),
@@ -1020,6 +1163,7 @@ export const loadTableSnapshot = async (
     entities.progress.scan.go(all),
     entities.quizAttempt.scan.go(all),
     entities.quizSummary.scan.go(all),
+    entities.assignmentSubmission.scan.go(all),
     entities.user.scan.go(all),
   ]);
   return {
@@ -1033,6 +1177,7 @@ export const loadTableSnapshot = async (
     progress: progress.data,
     quizAttempts: quizAttempts.data,
     quizSummaries: quizSummaries.data,
+    assignmentSubmissions: assignmentSubmissions.data,
     users: users.data,
   };
 };

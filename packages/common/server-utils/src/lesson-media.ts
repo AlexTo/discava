@@ -6,7 +6,10 @@ import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { getSignedCookies, getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { isLocalDev, localObjectUrl } from './local-dev.js';
-import { SIGNED_COOKIE_LIFETIME_SECONDS } from './media-keys.js';
+import {
+  FILE_URL_LIFETIME_SECONDS,
+  SIGNED_COOKIE_LIFETIME_SECONDS,
+} from './media-keys.js';
 
 const runtimeConfigKey = 'LessonMediaBucket';
 
@@ -140,11 +143,6 @@ export const getCloudFrontVideoUrl = async (
   const { cloudFrontDomainName } = await resolveCloudFrontConfig();
   return `https://${cloudFrontDomainName}/${objectKey}`;
 };
-
-// How long a file item's download link works (#102): long enough to start
-// the download, short enough that a shared link soon stops working. A
-// download already under way isn't cut off when it expires.
-export const FILE_URL_LIFETIME_SECONDS = 5 * 60;
 
 // A signed CloudFront URL for one object in the lesson media bucket, e.g. a
 // file item's file. Local dev serves it straight from S3Mock, unsigned (#137).

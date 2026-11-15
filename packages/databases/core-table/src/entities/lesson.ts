@@ -33,6 +33,14 @@ export const createLessonEntity = async () =>
           type: 'string',
           required: true,
         },
+        // An 'assignment' lesson holds exactly one content item, a quiz or an
+        // upload assignment, and sits in the module's outline beside ordinary
+        // lessons (#102). Set when it's created and never changed.
+        kind: {
+          type: ['lesson', 'assignment'] as const,
+          required: true,
+          default: 'lesson',
+        },
         description: {
           type: 'string',
         },

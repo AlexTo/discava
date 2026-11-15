@@ -100,23 +100,6 @@ const lesson = {
   updatedAt: '2024-01-01T00:00:00.000Z',
 };
 
-const contentItem = {
-  contentItemId: CONTENT_ITEM_ID,
-  lessonId: LESSON_ID,
-  moduleId: MODULE_ID,
-  courseId: COURSE_ID,
-  type: 'video' as const,
-  status: 'ready' as const,
-  title: 'Intro video',
-  s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}.mp4`,
-  mimeType: 'video/mp4',
-  order: 1,
-  visibility: 'visible' as const,
-  studentActivityCount: 0,
-  createdAt: '2024-01-01T00:00:00.000Z',
-  updatedAt: '2024-01-01T00:00:00.000Z',
-};
-
 const doc = (text: string) =>
   JSON.stringify({
     type: 'doc',
@@ -238,6 +221,18 @@ describe('createContentItemQuiz', () => {
     title: 'Module check',
     ...quiz,
   };
+
+  it('refuses to add a quiz to an assignment lesson: it holds only its own item (#102)', async () => {
+    lessonGet.mockReturnValue({
+      go: vi
+        .fn()
+        .mockResolvedValue({ data: { ...lesson, kind: 'assignment' } }),
+    });
+
+    await expect(callAs().createContentItemQuiz(input)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+  });
 
   it('rejects callers who are not in the instructor group before checking course membership', async () => {
     await expect(

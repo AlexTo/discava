@@ -9,6 +9,12 @@ export {
 } from './client.js';
 export * from './entities/index.js';
 export {
+  type AssignmentSubmissionFile,
+  type AssignmentSubmissionWrite,
+  assignmentSubmissionWrites,
+  isLateSubmission,
+} from './helpers/assignment-submission.js';
+export {
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
 } from './helpers/content-item.js';
