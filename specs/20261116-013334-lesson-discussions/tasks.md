@@ -23,7 +23,7 @@ description: "Task list for Q&A and discussion threads per lesson"
 
 ---
 
-## Phase 1: Entities, pure rules and invariants (PR 1)
+## Phase 1: User Story 1 - Entities, pure rules and invariants (P1) 🎯 MVP
 
 **PR title**: `feat(discussion): discussion records, rules and invariants (#280)`
 
