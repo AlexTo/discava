@@ -29,6 +29,8 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    // The recalculation's own write when it issues a certificate.
+    ['a new certificate', record('INSERT', 'NewImage', 'certificate')],
     // A submission's own change; its completion is what drives progress.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
     ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],
