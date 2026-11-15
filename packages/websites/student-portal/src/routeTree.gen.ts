@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as MyLearningIndexRouteImport } from './routes/my-learning/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as SigninIndexRouteImport } from './routes/signin/index'
+import { Route as CertificatesCertificateIdIndexRouteImport } from './routes/certificates/$certificateId/index'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
 import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
@@ -37,6 +38,12 @@ const SigninIndexRoute = SigninIndexRouteImport.update({
   path: '/signin/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CertificatesCertificateIdIndexRoute =
+  CertificatesCertificateIdIndexRouteImport.update({
+    id: '/certificates/$certificateId/',
+    path: '/certificates/$certificateId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LearnCourseIdIndexRoute = LearnCourseIdIndexRouteImport.update({
   id: '/learn/$courseId/',
   path: '/learn/$courseId/',
@@ -60,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchIndexRoute
   '/signin': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/certificates/$certificateId': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
 }
@@ -79,6 +88,7 @@ export interface FileRoutesById {
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
 }
@@ -90,6 +100,7 @@ export interface FileRouteTypes {
     | '/search/'
     | '/signin/'
     | '/learn/$courseId/home'
+    | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
   fileRoutesByTo: FileRoutesByTo
@@ -99,6 +110,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/signin'
     | '/learn/$courseId/home'
+    | '/certificates/$certificateId'
     | '/learn/$courseId'
     | '/learn/$courseId/lesson/$lessonId'
   id:
@@ -108,6 +120,7 @@ export interface FileRouteTypes {
     | '/search/'
     | '/signin/'
     | '/learn/$courseId/home'
+    | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
   fileRoutesById: FileRoutesById
@@ -118,6 +131,7 @@ export interface RootRouteChildren {
   SearchIndexRoute: typeof SearchIndexRoute
   SigninIndexRoute: typeof SigninIndexRoute
   LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
+  CertificatesCertificateIdIndexRoute: typeof CertificatesCertificateIdIndexRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
   LearnCourseIdLessonLessonIdRoute: typeof LearnCourseIdLessonLessonIdRoute
 }
@@ -152,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SigninIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/certificates/$certificateId/': {
+      id: '/certificates/$certificateId/'
+      path: '/certificates/$certificateId'
+      fullPath: '/certificates/$certificateId/'
+      preLoaderRoute: typeof CertificatesCertificateIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/learn/$courseId/': {
       id: '/learn/$courseId/'
       path: '/learn/$courseId'
@@ -182,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchIndexRoute: SearchIndexRoute,
   SigninIndexRoute: SigninIndexRoute,
   LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
+  CertificatesCertificateIdIndexRoute: CertificatesCertificateIdIndexRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
   LearnCourseIdLessonLessonIdRoute: LearnCourseIdLessonLessonIdRoute,
 }
