@@ -21,7 +21,7 @@ description: "Task list for course completion certificates"
 
 ---
 
-## Phase 1: Certificate record and issuing helper (PR 1)
+## Phase 1: User Story 1 - Certificate record and issuing helper (P1) 🎯 MVP
 
 **PR title**: `feat(certificates): certificate record, issuing helper and invariants (#276)`
 
