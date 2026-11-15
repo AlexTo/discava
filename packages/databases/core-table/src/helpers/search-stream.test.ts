@@ -46,6 +46,12 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(false);
   });
 
+  it('ignores a new certificate: the courses index does not depend on it', () => {
+    expect(
+      matchesSearchStreamFilters(record('INSERT', 'NewImage', 'certificate')),
+    ).toBe(false);
+  });
+
   it('ignores a MODIFY matched against the old image', () => {
     expect(
       matchesSearchStreamFilters(record('MODIFY', 'OldImage', 'course')),
