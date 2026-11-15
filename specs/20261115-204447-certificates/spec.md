@@ -16,7 +16,7 @@
 
 Resolved without asking, using the defaults below (non-interactive run).
 
-- Q: Is the certificate setting on or off by default, for existing courses too? → A: On for every course; a course with no stored value reads as on.
+- Q: Is the certificate setting on or off by default, for existing courses too? → A: The setting is a required boolean on every course, on for new courses. Existing dev data is backfilled by hand, so no code treats a missing value as on.
 - Q: Does turning certificates on issue them to students who already completed? → A: Not by itself (no backfill job); a later recalculation of such a student, while on, may still issue one (FR-002's repair rule).
 - Q: Is the PDF stored, or drawn when asked? → A: Drawn on demand from the stored certificate; nothing in S3, so no new bucket, lifecycle or local stand-in.
 - Q: What identifies a learner on a certificate? → A: Given and family name as on the user record when issued; "Discava learner" if none. Never the email.
@@ -83,7 +83,7 @@ Someone with a certificate link (an employer, a profile visitor) opens the verif
 
 On a course's settings an instructor switches "Issue a certificate on completion" on or off. It governs completions from then on.
 
-**Why this priority**: Required by the issue, but a default-on course already delivers value without it.
+**Why this priority**: Required by the issue, but a new course already has certificates on, so it delivers value without this.
 
 **Independent Test**: Toggle the setting as an instructor of the course, check it persists, and check a non-instructor cannot change it.
 
@@ -120,7 +120,7 @@ On a course's settings an instructor switches "Issue a certificate on completion
 - **FR-007**: The student portal MUST serve a public verification page at a stable URL containing the certificate ID, which is also the shareable link.
 - **FR-008**: A signed-in student MUST be able to list their own certificates and download a PDF of any of them, and MUST NOT be able to read another student's. The PDF MUST show the learner, course, date, certificate ID and verification URL.
 - **FR-009**: My Learning MUST show a Certificate action on each completed course that has a certificate, offering view, PDF download and copy-link, and no action on courses without one.
-- **FR-010**: Instructors of a course MUST be able to enable or disable certificates for it; the default is enabled. The setting MUST be changeable only by that course's instructors and MUST only affect completions processed afterwards; it never removes issued certificates.
+- **FR-010**: Instructors of a course MUST be able to enable or disable certificates for it; it is a required setting, on for new courses. The setting MUST be changeable only by that course's instructors and MUST only affect completions processed afterwards; it never removes issued certificates.
 - **FR-011**: Issued certificates MUST remain verifiable and downloadable regardless of later course status (archived), the setting, or the student's later activity.
 - **FR-012**: Certificate writes MUST go through one shared `core-table` helper, and an invariant check that a test can break MUST cover that there is at most one certificate per student and course, that each matches an enrolment that is completed, and that its recorded course matches an existing course.
 - **FR-013**: The feature MUST work end to end in local development without an AWS account, including issuing, PDF download and public verification.
@@ -129,7 +129,7 @@ On a course's settings an instructor switches "Issue a certificate on completion
 ### Key Entities
 
 - **Certificate**: One per student per course. Has the certificate ID, the student, the course, the learner name, course title and completion date as printed, and when it was issued. Looked up by ID (public verification), by student (My Learning), and by student and course (idempotent issuing).
-- **Course certificate setting**: A per-course on/off flag, default on, edited by the course's instructors.
+- **Course certificate setting**: A required per-course on/off flag, on for new courses, edited by the course's instructors.
 - **Enrolment**: Existing. Its completed status and completion date are the trigger and the source of the certificate's date.
 
 ## Success Criteria *(mandatory)*
@@ -146,7 +146,7 @@ On a course's settings an instructor switches "Issue a certificate on completion
 ## Assumptions
 
 - Issuing happens where completion is decided (the progress recalculation that marks an enrolment completed), not in the request that completes the last item, so a learner's completion never fails because of a certificate. The certificate appears with the same few seconds' delay as completed progress.
-- The setting defaults to on, for new and existing courses alike (a course with no stored value reads as on).
+- The setting is required on every course and starts on for new courses. Existing courses are backfilled by hand before this ships, so there is no "absent" state and no code reads a missing value as on.
 - No backfill job: turning certificates on does not issue anything by itself. Because issuing is attempted whenever a completed student's progress is recalculated while certificates are on (FR-002), a student who completed while they were off may still receive one the next time their progress is recalculated (for example after the instructor edits visible course content). Students are never told to expect it. A deliberate one-off backfill is a follow-up.
 - A learner's name is the user record's given and family names joined by a space; if neither is present, "Discava learner". Learners cannot edit the printed name in this feature.
 - The PDF is a fixed, single-page, English-language design with no instructor signature, rendered on demand from the stored certificate. Nothing is stored in S3.

@@ -46,7 +46,7 @@ What the code showed that the spec could not:
 | IV. Layered tests | Pass, planned | Unit tests for the helper, ID generator, procedures, PDF builder and recalculation step; new invariants and breaking tests; an e2e scenario; a concurrency test for double recalculation. Impact check below |
 | V. Single-table via ElectroDB | Pass | One new entity; access patterns in [data-model.md](./data-model.md), all keyed (primary get, primary query by student, one declared index for the public ID lookup). The index is the existing `gsi1pk-gsi1sk-index`, so no new index and no new write cost beyond the item's own |
 | VI. Secure by default | Pass | Public lookup behind the existing WAF; ID is 80 bits; the verify response is a fixed four-field projection; PDF and list read by `ctx.user.sub` only; no relaxed default |
-| VII. Change freely before launch | Pass | `certificatesEnabled` added outright; absence reads as on, which is the default, not a compatibility fallback for old data |
+| VII. Change freely before launch | Pass | `certificatesEnabled` added outright as a required attribute; existing dev data is backfilled by hand, with no fallback for a missing value |
 | VIII. Repo conventions | Pass | `core-table/src/helpers/certificate.ts`, core-api `helpers`-style modules for the PDF; text-only buttons; docs page in English only |
 
 No violations, so Complexity Tracking is empty.
@@ -68,7 +68,7 @@ No violations, so Complexity Tracking is empty.
 3. **ID format**: 16 Crockford base32 characters (80 bits) from `crypto.randomBytes`, written `XXXX-XXXX-XXXX-XXXX`; the dashes are cosmetic and normalised away on input (case-insensitive, `O/I/L` accepted as `0/1/1`). The create condition guards only the primary key, so the helper first checks the ID index for the new ID and regenerates on a hit (research R-3).
 4. **Snapshot, not join.** Learner name, course title and completion date are copied at issue time (spec FR-003/004); the public page and PDF read only the certificate record.
 5. **PDF on demand, owner only.** `certificate.pdf` reads by `{ userId: ctx.user.sub, courseId }`, draws one landscape A4 page with `pdf-lib` standard fonts (text sanitised to what WinAnsi can draw, other characters replaced by `?`), and returns base64. No S3, no new infrastructure.
-6. **Setting lives on `course`.** `certificatesEnabled` boolean, read as `!== false`. instructor-api's setting procedure reuses the course-instructor authorisation of other course edits.
+6. **Setting lives on `course`.** `certificatesEnabled` is a required boolean, set to `true` when a course is created. instructor-api's setting procedure reuses the course-instructor authorisation of other course edits.
 
 ## Project Structure
 

@@ -4,7 +4,7 @@
 
 Input: `{ courseId: string; enabled: boolean }`
 
-Output: the course as the other course mutations return it, including `certificatesEnabled: boolean` (absent in storage is returned as `true`).
+Output: the course as the other course mutations return it, including `certificatesEnabled: boolean` (always present: it is required in storage).
 
 - Writes `certificatesEnabled` and moves `course.updatedAt` and each instructor's `courseUpdatedAt` the same way other course edits do (see the existing `instructor-course-updated-at` invariant).
 - Allowed in any course status.

@@ -44,7 +44,7 @@
 
 ## R-7: Setting storage and default
 
-**Decision**: `certificatesEnabled` boolean on `course`, read with `!== false`; instructor-api's setting procedure writes it explicitly. No migration: with no launch, dev data without it already reads as on.
+**Decision**: `certificatesEnabled` is a required boolean on `course`, written as `true` when a course is created and changed by instructor-api's setting procedure. Existing dev data is backfilled by hand (a one-off script or console edit before the entity change is deployed), so code never reads a missing value; no fallback, per the project's no-compatibility rule.
 
 ## R-8: Backfill
 

@@ -25,13 +25,13 @@ No scans. The table stream sees certificate inserts; they match neither `PROGRES
 
 ## `course` (existing): `certificatesEnabled`
 
-Optional boolean. Absent or `true` means on; `false` means off. Written only by instructor-api's setting procedure, which also moves `updatedAt` like other course edits.
+Required boolean (set to `true` on course creation). `true` means on; `false` means off. Existing courses are backfilled by hand. Written only by instructor-api's setting procedure, which also moves `updatedAt` like other course edits.
 
 ## Rules and where they live
 
 `issueCertificate({ coreTable, enrolment, course, user, now })` in `helpers/certificate.ts`, the only writer of `certificate`:
 
-1. Nothing if the enrolment is not `completed`, is `dropped`, has no `completedAt`, or `course.certificatesEnabled === false`.
+1. Nothing if the enrolment is not `completed`, is `dropped`, has no `completedAt`, or `course.certificatesEnabled` is `false`.
 2. Get the certificate for the student and course; return it if present.
 3. Generate an ID; check the ID index for a collision and regenerate (up to 5 tries, then throw).
 4. `create` the certificate, `learnerName` from `learnerName(user)`, `courseTitle` from the course, `completedAt` from the enrolment, conditioned on the key not existing. On a conditional failure, read and return the existing one.
