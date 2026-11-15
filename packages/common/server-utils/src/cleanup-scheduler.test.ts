@@ -2,13 +2,17 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { scheduleTranscodeCleanupOrThrow } from './transcode-cleanup-scheduler.js';
+import {
+  scheduleTranscodeCleanup,
+  scheduleTranscodeCleanupOrThrow,
+} from './cleanup-scheduler.js';
 
-const { schedulerSend, resolveTranscodeCleanupConfig, FakeConflictException } =
+const { schedulerSend, resolveAppConfigValue, FakeConflictException } =
   vi.hoisted(() => ({
     schedulerSend: vi.fn(),
-    resolveTranscodeCleanupConfig: vi.fn(),
+    resolveAppConfigValue: vi.fn(),
     FakeConflictException: class extends Error {
       name = 'ConflictException';
     },
@@ -24,8 +28,8 @@ vi.mock('@aws-sdk/client-scheduler', () => ({
   ConflictException: FakeConflictException,
 }));
 
-vi.mock('./runtime-config.js', () => ({
-  resolveTranscodeCleanupConfig,
+vi.mock('./lesson-media-bucket.js', () => ({
+  resolveAppConfigValue,
 }));
 
 const COURSE_ID = 'course-1';
@@ -48,7 +52,7 @@ const params = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resolveTranscodeCleanupConfig.mockResolvedValue({
+  resolveAppConfigValue.mockResolvedValue({
     lambdaArn: LAMBDA_ARN,
     schedulerRoleArn: SCHEDULER_ROLE_ARN,
     scheduleGroupName: SCHEDULE_GROUP_NAME,
@@ -119,6 +123,123 @@ describe('scheduleTranscodeCleanupOrThrow', () => {
 
     await expect(scheduleTranscodeCleanupOrThrow(params)).rejects.toThrow(
       'Access denied',
+    );
+  });
+});
+
+describe('scheduleTranscodeCleanup (best effort)', () => {
+  const logger = { error: vi.fn() };
+
+  it('creates the same schedule as the throwing variant', async () => {
+    await scheduleTranscodeCleanup(logger as never, params);
+
+    expect(schedulerSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        __command: 'CreateSchedule',
+        GroupName: SCHEDULE_GROUP_NAME,
+        Target: {
+          Arn: LAMBDA_ARN,
+          RoleArn: SCHEDULER_ROLE_ARN,
+          Input: JSON.stringify(params),
+        },
+      }),
+    );
+  });
+
+  it('logs a scheduling failure instead of throwing', async () => {
+    schedulerSend.mockRejectedValue(new Error('Access denied'));
+
+    await expect(
+      scheduleTranscodeCleanup(logger as never, params),
+    ).resolves.toBeUndefined();
+    expect(logger.error).toHaveBeenCalledWith(
+      'Failed to schedule transcode cleanup',
+      expect.objectContaining({ contentItemId: CONTENT_ITEM_ID }),
+    );
+  });
+
+  it('waits the given number of minutes', async () => {
+    vi.useFakeTimers({ now: new Date('2026-01-01T00:00:00Z') });
+    try {
+      await scheduleTranscodeCleanup(logger as never, params, 255);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(schedulerSend.mock.calls[0]![0].ScheduleExpression).toBe(
+      'at(2026-01-01T04:15:00)',
+    );
+  });
+});
+
+describe('cleanup options', () => {
+  it('passes keepIfCurrentFor and the purpose through in the payload', async () => {
+    await scheduleTranscodeCleanupOrThrow(params, 60, {
+      keepIfCurrentFor: 'user-1',
+      purpose: 'attempt',
+    });
+
+    expect(schedulerSend.mock.calls[0]![0].Target.Input).toBe(
+      JSON.stringify({
+        ...params,
+        keepIfCurrentFor: 'user-1',
+        purpose: 'attempt',
+      }),
+    );
+  });
+
+  it('names the schedules for one folder differently by purpose', async () => {
+    await scheduleTranscodeCleanupOrThrow(params, 60, { purpose: 'attempt' });
+    await scheduleTranscodeCleanupOrThrow(params, 60, { purpose: 'retire' });
+    await scheduleTranscodeCleanupOrThrow(params);
+
+    const names = schedulerSend.mock.calls.map(([command]) => command.Name);
+    expect(new Set(names).size).toBe(3);
+    for (const name of names) {
+      expect(name).toMatch(/^cleanup-[0-9a-f]{32}$/);
+    }
+  });
+
+  it('names a schedule without a purpose exactly as before purposes existed', async () => {
+    await scheduleTranscodeCleanupOrThrow(params);
+
+    expect(schedulerSend.mock.calls[0]![0].Name).toBe(
+      `cleanup-${createHash('sha256')
+        .update(`${CONTENT_ITEM_ID}:${SUBMISSION_NONCE}`)
+        .digest('hex')
+        .slice(0, 32)}`,
+    );
+  });
+
+  it('asks the local event runner for a longer delay when told to', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubEnv('LOCAL_DEV', 'true');
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await scheduleTranscodeCleanupOrThrow(params, 60, {
+        keepIfCurrentFor: 'user-1',
+        purpose: 'attempt',
+        localDelaySeconds: 60,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:2024/schedules/transcode-cleanup',
+      expect.objectContaining({
+        body: JSON.stringify({
+          payload: {
+            ...params,
+            keepIfCurrentFor: 'user-1',
+            purpose: 'attempt',
+          },
+          delaySeconds: 60,
+        }),
+      }),
     );
   });
 });

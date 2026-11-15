@@ -112,6 +112,16 @@ export const ContentItemSchema = z.discriminatedUnion('type', [
     fileSize: z.number(),
     mimeType: z.string(),
   }),
+  // An upload assignment (#102). `body` holds its instructions; students
+  // submit through the `assignment` router, so no storage key is exposed.
+  z.object({
+    ...ContentItemBaseSchema,
+    type: z.literal('assignment'),
+    body: z.string(),
+    // A submission after this is accepted but marked late.
+    dueAt: z.string().optional(),
+    maxPoints: z.number(),
+  }),
 ]);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;
@@ -122,6 +132,8 @@ export const LessonSchema = z.object({
   courseId: z.string(),
   title: z.string(),
   description: z.string().optional(),
+  // An assignment lesson holds one item: a quiz or an upload assignment.
+  kind: z.enum(['lesson', 'assignment']),
   order: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),

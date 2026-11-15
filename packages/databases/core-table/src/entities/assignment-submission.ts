@@ -38,12 +38,18 @@ export const createAssignmentSubmissionEntity = async () =>
           type: 'string',
           required: true,
         },
-        // What the student submitted: up to five of
-        // `{ key, fileName, fileSize, mimeType }`, `key` being the object in
-        // the lesson media bucket. Shape validated by core-api's zod schemas.
-        files: {
-          type: 'any',
+        // What the student submitted: exactly one file, `key` being its
+        // object in the lesson media bucket, in a folder named for the submit
+        // request that stored it. A resubmission replaces it whole.
+        file: {
+          type: 'map',
           required: true,
+          properties: {
+            key: { type: 'string', required: true },
+            fileName: { type: 'string', required: true },
+            fileSize: { type: 'number', required: true },
+            mimeType: { type: 'string', required: true },
+          },
         },
         // 'returned' is set when an instructor returns it with a grade and
         // feedback (grading is still to come); a returned submission can't
@@ -64,8 +70,9 @@ export const createAssignmentSubmissionEntity = async () =>
           required: true,
           default: false,
         },
-        // Incremented on every resubmission; its files sit in a folder named
-        // for it, so replaced files can be retired without touching these.
+        // 1 on the first submission, incremented on every resubmission. It
+        // isn't in the file's folder name (that names the request), so it
+        // only tells a racing resubmission that the record moved.
         version: {
           type: 'number',
           required: true,

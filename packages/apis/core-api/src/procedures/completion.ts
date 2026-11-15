@@ -50,6 +50,8 @@ const asCompletion = (record: IItemCompletion): IItemCompletion => ({
 // A quiz completes itself when an attempt passes or uses the last attempt
 // (see quiz.submitAttempt); it's accepted here only once that holds, which
 // covers an attempt limit lowered below what the student has already used.
+// An upload assignment completes by submitting, so it only returns an
+// existing completion and never creates one.
 // Completing again returns the existing completion.
 export const completeContentItem = courseProcedure
   .input(CompleteContentItemInputSchema)
@@ -100,6 +102,14 @@ export const completeContentItem = courseProcedure
       }
       if (completion) {
         return asCompletion(completion);
+      }
+      // An upload assignment completes by submitting (assignment.submit
+      // writes the completion with the submission), never by Mark as done.
+      if (item.type === 'assignment') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Submit your work to complete it',
+        });
       }
       if (course.status !== 'published') {
         throw new TRPCError({

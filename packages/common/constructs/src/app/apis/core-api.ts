@@ -62,7 +62,22 @@ export const CORE_API_DEDICATED_FUNCTIONS = {
   // Core-api's only holder of the CloudFront signing key: video playback and
   // file download links
   MediaUrl: ['contentItem.videoUrl', 'contentItem.fileUrl'],
+  // A student's submission to an upload assignment (#102): holds S3 and
+  // Scheduler rights, to hand out upload links and copy the file into the
+  // lesson media bucket
+  AssignmentSubmit: ['assignment.uploadUrl', 'assignment.submit'],
 } as const satisfies Record<string, readonly Operations[]>;
+
+/**
+ * Dedicated functions with a timeout of their own, set after the stage's
+ * options so a stage's `timeoutSeconds` can't raise it. AssignmentSubmit
+ * copies a file of up to 100 MB inside the request: it stays below API
+ * Gateway's 29 s, so a request never commits after the gateway has already
+ * answered for it.
+ */
+const DEDICATED_FUNCTION_TIMEOUTS: Readonly<Record<string, Duration>> = {
+  AssignmentSubmit: Duration.seconds(25),
+};
 
 const functionNameFor = (op: Operations | '$router'): string =>
   Object.entries(CORE_API_DEDICATED_FUNCTIONS).find(([, ops]) =>
@@ -210,7 +225,12 @@ export class CoreApi<
         const functionName = functionNameFor(op);
         let handler = handlers.get(functionName);
         if (!handler) {
-          handler = new Function(scope, `CoreApi${functionName}Handler`, props);
+          const timeout = DEDICATED_FUNCTION_TIMEOUTS[functionName];
+          handler = new Function(
+            scope,
+            `CoreApi${functionName}Handler`,
+            timeout ? { ...props, timeout } : props,
+          );
           handler.addEnvironment(
             'RUNTIME_CONFIG_APP_ID',
             rc.appConfigApplicationId,

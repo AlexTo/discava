@@ -52,7 +52,8 @@ import {
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
 // - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
-//   payload, LOCAL_EVENT_RUNNER.cleanupDelaySeconds after it's scheduled
+//   payload, the schedule's delaySeconds (default LOCAL_EVENT_RUNNER.cleanupDelaySeconds)
+//   after it's scheduled
 // - a user first seen by an API's local server -> pre-token-generation, with
 //   the event Cognito sends on sign-in (#230; see syncLocalUser)
 
@@ -170,13 +171,14 @@ const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
-  scheduleTranscodeCleanup: ({ payload }) => {
+  scheduleTranscodeCleanup: ({ payload, delaySeconds }) => {
+    const delay = delaySeconds ?? LOCAL_EVENT_RUNNER.cleanupDelaySeconds;
     log(
-      `transcode-cleanup scheduled in ${LOCAL_EVENT_RUNNER.cleanupDelaySeconds}s for ${payload.contentItemId}/${payload.submissionNonce}`,
+      `transcode-cleanup scheduled in ${delay}s for ${payload.contentItemId}/${payload.submissionNonce}`,
     );
     setTimeout(
       () => void invoke('transcode-cleanup', transcodeCleanup, payload),
-      LOCAL_EVENT_RUNNER.cleanupDelaySeconds * 1000,
+      delay * 1000,
     ).unref();
   },
   runPreTokenGeneration: async (request) => {

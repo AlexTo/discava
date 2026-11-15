@@ -2,12 +2,23 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { REPLACED_FILE_GRACE_SECONDS } from '@discava/common-server-utils/media-keys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { transcodeCleanup } from './transcode-cleanup.js';
 
-const { s3Send, resolveLessonMediaBucketName } = vi.hoisted(() => ({
-  s3Send: vi.fn(),
-  resolveLessonMediaBucketName: vi.fn(),
+const { s3Send, resolveLessonMediaBucketName, submissionGet } = vi.hoisted(
+  () => ({
+    s3Send: vi.fn(),
+    submissionGet: vi.fn(),
+    resolveLessonMediaBucketName: vi.fn(),
+  }),
+);
+
+vi.mock('@discava/core-table', () => ({
+  createCoreTableService: vi.fn(async () => ({
+    entities: { assignmentSubmission: { get: submissionGet } },
+  })),
 }));
 
 vi.mock('@aws-sdk/client-s3', () => ({
@@ -22,7 +33,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
   }),
 }));
 
-vi.mock('../lib/runtime-config.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveLessonMediaBucketName,
 }));
 
@@ -198,5 +209,112 @@ describe('transcodeCleanup', () => {
     await expect(transcodeCleanup(buildEvent())).rejects.toThrow(
       /seg1\.ts.*InternalError/,
     );
+  });
+});
+
+// A student's submission folders (#102): the cleanup never deletes the folder
+// holding their current file.
+describe('transcodeCleanup of a submission folder', () => {
+  const USER_ID = 'student-1';
+  const NONCE = `submissions/${USER_ID}/attempt-1`;
+  const FOLDER = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/${NONCE}/`;
+  const OTHER = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/submissions/${USER_ID}/attempt-2/`;
+  const NOW = new Date('2026-11-14T10:00:00.000Z');
+  const ago = (seconds: number) =>
+    new Date(NOW.getTime() - seconds * 1000).toISOString();
+
+  const event = (purpose?: 'attempt' | 'retire') => ({
+    ...buildEvent(),
+    submissionNonce: NONCE,
+    keepIfCurrentFor: USER_ID,
+    ...(purpose && { purpose }),
+  });
+  const holding = (key: string, submittedAt = ago(86_400)) =>
+    submissionGet.mockReturnValue({
+      go: vi.fn(async () => ({
+        data: { file: { key: `${key}work.pdf` }, submittedAt },
+      })),
+    });
+  const deleted = () =>
+    s3Send.mock.calls.some(([c]) => c.__command === 'DeleteObjects');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: NOW });
+    s3Send.mockImplementation(async (command: { __command: string }) =>
+      command.__command === 'ListObjectsV2'
+        ? { Contents: [{ Key: `${FOLDER}work.pdf` }], IsTruncated: false }
+        : {},
+    );
+    return () => vi.useRealTimers();
+  });
+
+  it('keeps the folder holding the student’s current file', async () => {
+    holding(FOLDER);
+
+    await transcodeCleanup(event('retire'));
+
+    expect(deleted()).toBe(false);
+    expect(s3Send).not.toHaveBeenCalled();
+  });
+
+  it('reads the submission consistently, by the item and the student', async () => {
+    const go = vi.fn(async () => ({ data: undefined }));
+    submissionGet.mockReturnValue({ go });
+
+    await transcodeCleanup(event());
+
+    expect(submissionGet).toHaveBeenCalledWith({
+      courseId: COURSE_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      userId: USER_ID,
+    });
+    expect(go).toHaveBeenCalledWith({ consistent: true });
+  });
+
+  it('deletes another folder of the same student', async () => {
+    holding(OTHER);
+
+    await transcodeCleanup(event('retire'));
+
+    expect(deleted()).toBe(true);
+  });
+
+  it('deletes the folder when there is no record', async () => {
+    submissionGet.mockReturnValue({ go: vi.fn(async () => ({ data: null })) });
+
+    await transcodeCleanup(event('attempt'));
+
+    expect(deleted()).toBe(true);
+  });
+
+  it('has an attempt cleanup keep a replaced folder while the replacement is inside the grace', async () => {
+    holding(OTHER, ago(REPLACED_FILE_GRACE_SECONDS - 1));
+
+    await transcodeCleanup(event('attempt'));
+
+    expect(deleted()).toBe(false);
+  });
+
+  it('has an attempt cleanup delete a replaced folder once the grace has passed', async () => {
+    holding(OTHER, ago(REPLACED_FILE_GRACE_SECONDS + 1));
+
+    await transcodeCleanup(event('attempt'));
+
+    expect(deleted()).toBe(true);
+  });
+
+  it('has a retire cleanup delete a replaced folder whatever the submittedAt', async () => {
+    holding(OTHER, ago(1));
+
+    await transcodeCleanup(event('retire'));
+
+    expect(deleted()).toBe(true);
+  });
+
+  it('does not read any submission without keepIfCurrentFor', async () => {
+    await transcodeCleanup(buildEvent());
+
+    expect(submissionGet).not.toHaveBeenCalled();
+    expect(deleted()).toBe(true);
   });
 });

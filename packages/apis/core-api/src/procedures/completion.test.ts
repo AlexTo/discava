@@ -450,6 +450,32 @@ describe('complete', () => {
   });
 });
 
+// An upload assignment completes by submitting (#102): Mark as done may report
+// the completion that exists, but never creates one.
+describe('an upload assignment', () => {
+  beforeEach(() => {
+    db.contentItem = { ...db.contentItem, type: 'assignment' };
+  });
+
+  it('is not completed by Mark as done: PRECONDITION_FAILED', async () => {
+    await expect(complete()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'Submit your work to complete it',
+    });
+    expect(transactions).toHaveLength(0);
+  });
+
+  it('returns the completion its submission wrote', async () => {
+    db.itemCompletion = existingCompletion;
+
+    await expect(complete()).resolves.toEqual({
+      ...ref,
+      completedAt: '2024-01-03T00:00:00.000Z',
+    });
+    expect(transactions).toHaveLength(0);
+  });
+});
+
 describe('myItemCompletions', () => {
   it('returns every completion the caller has in the course', async () => {
     completionQuery.mockReturnValue({

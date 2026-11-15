@@ -17,7 +17,7 @@ vi.mock('@aws-lambda-powertools/parameters/appconfig', () => ({
 // successful resolution into later tests -- reset and re-import per test.
 const importFreshModule = async () => {
   vi.resetModules();
-  return import('./runtime-config.js');
+  return import('./lesson-media-bucket.js');
 };
 
 const UPLOAD_BUCKET_NAME = 'lesson-media-upload-bucket';
@@ -65,4 +65,24 @@ describe('resolveLessonMediaUploadBucketName', () => {
       'Could not resolve s3.LessonMediaUploadBucket from runtime config',
     );
   });
+});
+
+describe('resolveBucketName', () => {
+  it.each([
+    ['LessonMediaBucket', 'discava-lesson-media'],
+    ['LessonMediaUploadBucket', 'discava-lesson-media-upload'],
+    ['PublicMediaBucket', 'discava-public-media'],
+  ])(
+    'uses S3Mock’s %s in local dev, without AppConfig',
+    async (key, bucket) => {
+      vi.stubEnv('LOCAL_DEV', 'true');
+      try {
+        const { resolveBucketName } = await importFreshModule();
+        await expect(resolveBucketName(key)).resolves.toBe(bucket);
+        expect(getAppConfig).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
 });

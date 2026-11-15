@@ -44,11 +44,8 @@ vi.mock('@aws-sdk/client-scheduler', () => ({
   }),
 }));
 
-vi.mock('./runtime-config.js', () => ({
+vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveAppConfigValue,
-}));
-
-vi.mock('./s3-client.js', () => ({
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
 }));

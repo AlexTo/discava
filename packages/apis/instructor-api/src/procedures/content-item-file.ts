@@ -3,6 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'node:crypto';
+import { scheduleTranscodeCleanup } from '@discava/common-server-utils/cleanup-scheduler';
+import {
+  bestEffortDeleteLessonFileCopy,
+  copyLessonFileUpload,
+  headLessonFileUpload,
+  LESSON_FILE_MAX_BYTES,
+  LESSON_FILE_TYPES,
+  lessonFileKey,
+  lessonFileType,
+  lessonFileUploadId,
+  presignLessonFileUpload,
+} from '@discava/common-server-utils/lesson-files';
 import { getSignedCloudFrontFileUrl } from '@discava/common-server-utils/lesson-media';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
@@ -17,16 +29,6 @@ import {
   writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
-import {
-  bestEffortDeleteLessonFileCopy,
-  copyLessonFileUpload,
-  headLessonFileUpload,
-  lessonFileKey,
-  lessonFileType,
-  lessonFileUploadId,
-  presignLessonFileUpload,
-} from '../lib/lesson-files.js';
-import { scheduleTranscodeCleanup } from '../lib/transcode-cleanup-scheduler.js';
 import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateContentItemFileInputSchema,
@@ -37,8 +39,6 @@ import {
   CreateContentItemFileUrlOutputSchema,
   type ICreateContentItemFileOutput,
   type IUpdateContentItemFileOutput,
-  LESSON_FILE_MAX_BYTES,
-  LESSON_FILE_TYPES,
   UpdateContentItemFileInputSchema,
   UpdateContentItemFileOutputSchema,
 } from '../schema/index.js';
