@@ -60,7 +60,7 @@ Existing items hold none of these attributes, and the code treats absence as "no
 | New or extended | Rule | Breaking test |
 |-----------------|------|---------------|
 | Extend 6 (video transcode state) | Caption attributes appear only on `video` items; `captionsStatus: pending` only with `captionsPendingSince` and only on a `ready` video | A text item with `captionTracks`; a pending status on a pending video |
-| `caption-tracks-valid` (new) | At most 5; unique language per nonce; one default per non-empty nonce; every track's nonce equals the item's current or previous manifest nonce; every key starts with the item's folder plus `<nonce>/captions/` | Six tracks; two with one language; no default; a key outside the folder |
+| `caption-tracks-valid` (new) | At most 5; unique language; one default when non-empty; every track's nonce equals the item's current manifest nonce (the version swap drops all other tracks in the same patch as `status: ready`, so no other nonce can exist); every key starts with the item's folder plus `<nonce>/captions/` | Six tracks; a track of another nonce; two with one language; no default; a key outside the folder |
 | `video-position-valid` (new) | `positionSeconds` finite, whole, within 0 to the cap; `versionId` present | A negative position; a fractional position |
 
 ## Entities not changed

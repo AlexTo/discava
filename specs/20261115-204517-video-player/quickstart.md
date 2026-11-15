@@ -25,7 +25,7 @@ Scenario `video.e2e.ts` (extended): an instructor uploads a short video; once re
 ## By hand (human)
 
 1. Local, with `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev`: play, seek, change speed with the keyboard, open the captions menu. Save screenshots to `tmp/screenshots/pr-<number>/`.
-2. On a deployed `discava-development` stage (only here): upload a video with speech and check a `.vtt` appears in its folder and shows as the default track within minutes; upload a video with no audio track and check it still becomes ready (research R-2); check the signed cookies serve the caption files in a browser from both portals; replace the video and check old tracks go and new ones appear.
+2. On a deployed `discava-development` stage (only here): upload a video with speech and check a `.vtt` appears in its `captions/` folder (and no transcript `.json` is reachable with the signed cookies) and shows as the default track within minutes; upload a video with no audio track and check it still becomes ready (research R-2); check the signed cookies serve the caption files in a browser from both portals; replace the video and check old tracks go and new ones appear.
 
 ## What only runs on dev
 
