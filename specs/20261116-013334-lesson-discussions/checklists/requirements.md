@@ -33,3 +33,4 @@
 
 - FR-019 names `core-table` and invariants because the constitution requires it; it is a repository rule, not a design choice.
 - FR-018 and the dependency section name the notifications spec's helper because that spec defines the producer contract.
+- `/speckit-checklist` was run for security and authorization, data consistency and notifications. Following the existing specs (which keep only this file), its findings were applied to the spec instead of a separate reviewer checklist: report reasons and reporter privacy (Assumptions), the moderation-in-archived-lessons rule (FR-002), the 500-reply cap's definition (FR-006), the placeholder's contents (FR-014) and the acceptance notification rules (FR-018) were made explicit.

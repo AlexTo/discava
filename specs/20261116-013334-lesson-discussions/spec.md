@@ -265,5 +265,6 @@ A student who asked a question hears about replies and accepted answers through 
 - Discava has not launched: no old data or URLs to preserve; new attributes are added outright and no fallback is written for missing ones.
 - No new AWS service, index or table: the records join the single table, and the two staff lists use sparse entries of existing indexes.
 - Notifications are a producer of the pipeline of the notifications spec; until it merges, the hooks are the last phase and are skipped without error.
+- A report carries no reason text. Instructors see the number of reporters, never who they are; reporter ids are kept only to stop one person counting twice.
 - Out of scope: editing posts, rich text, attachments, mentions, thread subscriptions or "follow", search across discussions, per-student blocking or rate limits beyond the 500-reply cap and the WAF, an admin portal view, email digests, timestamped questions on videos, counting discussions on the instructor dashboard.
 - Only the final implementation PR may close #280.
