@@ -144,6 +144,35 @@ const course = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const assignmentItem = (dueAt?: string) => ({
+  ...ref('lesson-3'),
+  contentItemId: 'assignment-1',
+  type: 'assignment',
+  status: 'ready',
+  title: 'Problem set 1',
+  order: 1,
+  body: doc('Solve the problems'),
+  maxPoints: 10,
+  ...(dueAt && { dueAt }),
+});
+
+const assignmentLesson = (
+  item: Record<string, unknown>,
+  lessonId = 'lesson-3',
+) => ({
+  ...ref(lessonId),
+  title: 'Problem set',
+  kind: 'assignment',
+  order: 3,
+  contentItems: [item],
+});
+
+const courseWithAssignment = (item: Record<string, unknown>) => {
+  const base = course();
+  base.modules[0].lessons.push(assignmentLesson(item) as never);
+  return base;
+};
+
 const enrolment = {
   courseId: 'course-1',
   userId: 'student-1',
@@ -725,5 +754,73 @@ describe('items added after completing', () => {
 
     await item('Lecture video');
     expect(screen.queryByText('New')).toBeNull();
+  });
+});
+
+describe('assignments in the outline', () => {
+  const DUE = '2026-12-24T10:30:00.000Z';
+  const dueText = `Due ${new Date(DUE).toLocaleString()}`;
+
+  it('marks an assignment with its label and due date, and a lesson not', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({
+        'course.view': () => courseWithAssignment(assignmentItem(DUE)),
+      }),
+    });
+
+    const assignment = await outlineLink('Problem set');
+    expect(within(assignment).getByText('Assignment')).toBeVisible();
+    expect(within(assignment).getByText(dueText)).toBeVisible();
+    const lesson = await outlineLink('Lecture 2');
+    expect(within(lesson).queryByText('Assignment')).toBeNull();
+    expect(within(lesson).queryByText(/^Due /)).toBeNull();
+  });
+
+  it('shows no due date when there is none', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({
+        'course.view': () => courseWithAssignment(assignmentItem()),
+      }),
+    });
+
+    const assignment = await outlineLink('Problem set');
+    expect(within(assignment).getByText('Assignment')).toBeVisible();
+    expect(within(assignment).queryByText(/^Due /)).toBeNull();
+  });
+
+  it('opens an upload assignment straight to its submit form', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-3" />, {
+      handlers: handlers({
+        'course.view': () => courseWithAssignment(assignmentItem(DUE)),
+        'assignment.mySubmission': () => null,
+      }),
+    });
+
+    expect(
+      await screen.findByRole('heading', { level: 3, name: 'Problem set 1' }),
+    ).toBeVisible();
+    expect(screen.getByText('Solve the problems')).toBeVisible();
+    expect(
+      screen.queryByRole('navigation', { name: 'Lesson steps' }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark as done' })).toBeNull();
+  });
+
+  it('opens a quiz assignment straight to the quiz', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-3" />, {
+      handlers: handlers({
+        'course.view': () =>
+          courseWithAssignment({ ...quizItem, ...ref('lesson-3') }),
+        'quiz.view': () => quizView(),
+      }),
+    });
+
+    expect(
+      await screen.findByRole('article', { name: 'Check yourself' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('navigation', { name: 'Lesson steps' }),
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark as done' })).toBeNull();
   });
 });

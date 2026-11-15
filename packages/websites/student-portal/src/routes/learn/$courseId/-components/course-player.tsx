@@ -12,7 +12,14 @@ import {
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, Circle, CircleCheck, Lock, Search } from 'lucide-react';
+import {
+  ChevronDown,
+  Circle,
+  CircleCheck,
+  ClipboardList,
+  Lock,
+  Search,
+} from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import {
@@ -23,6 +30,7 @@ import { Spinner } from '../../../../components/spinner';
 import {
   type CoursePlayer,
   errorCode,
+  lessonDueAt,
   type PlayerModule,
   useCoursePlayer,
 } from './use-course-player';
@@ -167,6 +175,7 @@ function CourseOutline({
                   {module.lessons.map((lesson) => {
                     const active = lesson.lessonId === activeLessonId;
                     const complete = isLessonComplete(lesson);
+                    const dueAt = lessonDueAt(lesson);
                     return (
                       <Link
                         key={lesson.lessonId}
@@ -189,15 +198,34 @@ function CourseOutline({
                             aria-hidden="true"
                           />
                         )}
-                        <span
-                          className={cn(
-                            'flex-1 truncate text-sm',
-                            active
-                              ? 'font-medium text-foreground'
-                              : 'text-foreground/90',
-                          )}
-                        >
-                          {lesson.title}
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={cn(
+                              'block truncate text-sm',
+                              active
+                                ? 'font-medium text-foreground'
+                                : 'text-foreground/90',
+                            )}
+                          >
+                            {lesson.title}
+                          </span>
+                          {lesson.kind === 'assignment' ? (
+                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <ClipboardList
+                                className="size-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              Assignment
+                              {dueAt ? (
+                                <>
+                                  <span aria-hidden="true">·</span>
+                                  <span>
+                                    Due {new Date(dueAt).toLocaleString()}
+                                  </span>
+                                </>
+                              ) : null}
+                            </span>
+                          ) : null}
                         </span>
                         {newItemCount(lesson) > 0 ? (
                           <span className="shrink-0 text-xs font-medium text-primary">

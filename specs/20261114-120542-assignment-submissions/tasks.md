@@ -141,14 +141,14 @@ description: "Task list for student submissions for upload assignments"
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T037 [P] [US4] Extend `packages/websites/student-portal/src/routes/learn/$courseId/-components/lesson-player.test.tsx` and `course-page.test.tsx`: an assignment shows an icon, the "Assignment" label and "Due <date>" when set, none when not; opening one goes straight to the submit form (upload) or the existing quiz view (quiz assignment), with no list of content.
-- [ ] T038 [P] [US4] Extend `packages/e2e/src/scenarios/assignment.e2e.ts` (or `learn.e2e.ts`) to assert the outline marking and the direct open.
+- [x] T037 [P] [US4] Extend `packages/websites/student-portal/src/routes/learn/$courseId/-components/lesson-player.test.tsx` and `course-page.test.tsx`: an assignment shows an icon, the "Assignment" label and "Due <date>" when set, none when not; opening one goes straight to the submit form (upload) or the existing quiz view (quiz assignment), with no list of content.
+- [x] T038 [P] [US4] Extend `packages/e2e/src/scenarios/assignment.e2e.ts` (or `learn.e2e.ts`) to assert the outline marking and the direct open.
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Outline marking in `course-player.tsx`, `course-page.tsx` and `use-course-player.ts` under `packages/websites/student-portal/src/routes/learn/$courseId/-components/`: icon, label, due date in the student's time zone; text only, no arrow icons.
-- [ ] T040 [US4] Direct open in `lesson-page.tsx`: a lesson of kind `assignment` renders its single item, the quiz view for a quiz assignment and `assignment-item.tsx` for an upload assignment.
-- [ ] T041 [US4] Run the US4 tests.
+- [x] T039 [US4] Outline marking in `course-player.tsx`, `course-page.tsx` and `use-course-player.ts` under `packages/websites/student-portal/src/routes/learn/$courseId/-components/`: icon, label, due date in the student's time zone; text only, no arrow icons.
+- [x] T040 [US4] Direct open in `lesson-page.tsx`: a lesson of kind `assignment` renders its single item, the quiz view for a quiz assignment and `assignment-item.tsx` for an upload assignment.
+- [x] T041 [US4] Run the US4 tests.
 
 **Checkpoint**: all four stories work.
 

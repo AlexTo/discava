@@ -14,7 +14,7 @@ import {
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, FileText, Search } from 'lucide-react';
+import { ChevronDown, ClipboardList, FileText, Search } from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
@@ -224,8 +224,20 @@ export function CoursePage({ courseId }: { courseId: string }) {
                                 key={lesson.lessonId}
                                 className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0 sm:px-5"
                               >
-                                <FileText className="size-4 shrink-0 text-muted-foreground" />
+                                {lesson.kind === 'assignment' ? (
+                                  <ClipboardList
+                                    className="size-4 shrink-0 text-muted-foreground"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <FileText className="size-4 shrink-0 text-muted-foreground" />
+                                )}
                                 <span className="text-sm">{lesson.title}</span>
+                                {lesson.kind === 'assignment' ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Assignment
+                                  </span>
+                                ) : null}
                               </li>
                             ))}
                           </ol>
