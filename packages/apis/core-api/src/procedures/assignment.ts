@@ -23,6 +23,7 @@ import {
   submissionNonceOf,
   submissionUploadKey,
 } from '@discava/common-server-utils/lesson-files';
+import { getSignedCloudFrontFileUrl } from '@discava/common-server-utils/lesson-media';
 import { LOCAL_EVENT_RUNNER } from '@discava/common-server-utils/local-dev';
 import {
   RETIRED_VERSION_DELAY_MINUTES,
@@ -47,6 +48,7 @@ import {
   type IAssignmentRef,
   type ISubmission,
   MySubmissionOutputSchema,
+  SubmissionFileUrlOutputSchema,
   SubmitInputSchema,
   SubmitOutputSchema,
   UploadUrlInputSchema,
@@ -192,6 +194,27 @@ export const mySubmission = courseProcedure
       input,
     );
     return submission ? toSubmission(submission) : null;
+  });
+
+// A link to download the caller's own submitted file, valid for
+// FILE_URL_LIFETIME_SECONDS. The key is read from the caller's own record and
+// never leaves the API.
+export const submissionFileUrl = courseProcedure
+  .input(AssignmentRefSchema)
+  .output(SubmissionFileUrlOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const { submission } = await readAssignment(
+      ctx.coreTable!,
+      ctx.user.sub,
+      input,
+    );
+    if (!submission) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'There is no submission to download',
+      });
+    }
+    return { url: await getSignedCloudFrontFileUrl(submission.file.key) };
   });
 
 // Checks the upload `objectKey` names, and returns what it is.

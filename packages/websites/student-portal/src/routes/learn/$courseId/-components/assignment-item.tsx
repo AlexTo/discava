@@ -132,6 +132,8 @@ export function AssignmentItem({
   const [failure, setFailure] = useState<Failure>();
   // Replacing the current file, rather than just showing it.
   const [resubmitting, setResubmitting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<unknown>();
   const getUploadUrl = useMutation(trpc.assignment.uploadUrl.mutationOptions());
   const submit = useMutation(trpc.assignment.submit.mutationOptions());
 
@@ -165,6 +167,24 @@ export function AssignmentItem({
       });
     } catch {
       return undefined;
+    }
+  };
+
+  // Links last minutes, so each click asks for a fresh one, then the browser
+  // goes to it. Only the caller's own file can be asked for.
+  const download = async () => {
+    setDownloadError(undefined);
+    setDownloading(true);
+    try {
+      const { url } = await queryClient.fetchQuery({
+        ...trpc.assignment.submissionFileUrl.queryOptions(ref),
+        staleTime: 0,
+      });
+      window.location.href = url;
+    } catch (error) {
+      setDownloadError(error);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -289,8 +309,23 @@ export function AssignmentItem({
                   {formatFileSize(submission.file.fileSize)}
                 </ItemDescription>
               </ItemContent>
-              <ItemActions />
+              <ItemActions>
+                <Button
+                  type="button"
+                  disabled={downloading}
+                  onClick={() => void download()}
+                >
+                  {downloading ? 'Preparing…' : 'Download'}
+                </Button>
+              </ItemActions>
             </Item>
+            {downloadError ? (
+              <Alert type="error" header="Couldn't download this file">
+                {errorCode(downloadError) === 'NOT_FOUND'
+                  ? 'This submission is not available'
+                  : apiErrorMessage(downloadError)}
+              </Alert>
+            ) : null}
             {locked ? (
               <p className="text-sm text-muted-foreground">
                 This submission has been returned and can't be changed

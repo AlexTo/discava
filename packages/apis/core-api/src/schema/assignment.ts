@@ -59,3 +59,5 @@ export type ISubmission = z.output<typeof SubmissionSchema>;
 export const SubmitOutputSchema = SubmissionSchema;
 
 export const MySubmissionOutputSchema = SubmissionSchema.nullable();
+
+export const SubmissionFileUrlOutputSchema = z.object({ url: z.string() });

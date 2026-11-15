@@ -61,7 +61,11 @@ const PUBLIC: ReadonlySet<Operations> = new Set<Operations>(PUBLIC_OPERATIONS);
 export const CORE_API_DEDICATED_FUNCTIONS = {
   // Core-api's only holder of the CloudFront signing key: video playback and
   // file download links
-  MediaUrl: ['contentItem.videoUrl', 'contentItem.fileUrl'],
+  MediaUrl: [
+    'contentItem.videoUrl',
+    'contentItem.fileUrl',
+    'assignment.submissionFileUrl',
+  ],
   // A student's submission to an upload assignment (#102): holds S3 and
   // Scheduler rights, to hand out upload links and copy the file into the
   // lesson media bucket

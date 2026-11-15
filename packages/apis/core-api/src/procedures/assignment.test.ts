@@ -7,7 +7,12 @@ import { RETIRED_VERSION_DELAY_MINUTES } from '@discava/common-server-utils/medi
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { mySubmission, submit, uploadUrl } from './assignment.js';
+import {
+  mySubmission,
+  submissionFileUrl,
+  submit,
+  uploadUrl,
+} from './assignment.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
 const {
@@ -19,6 +24,7 @@ const {
   presign,
   copyTo,
   deleteFolder,
+  signedUrl,
 } = vi.hoisted(() => ({
   db: {} as Record<string, any>,
   transactionGo: vi.fn(),
@@ -28,6 +34,7 @@ const {
   presign: vi.fn(),
   copyTo: vi.fn(),
   deleteFolder: vi.fn(),
+  signedUrl: vi.fn(),
 }));
 
 // A transaction item as the code built it, with its condition rendered as a
@@ -133,12 +140,27 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  '@discava/common-server-utils/lesson-media',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@discava/common-server-utils/lesson-media')
+    >()),
+    getSignedCloudFrontFileUrl: signedUrl,
+  }),
+);
+
 vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanupOrThrow: scheduleOrThrow,
   scheduleTranscodeCleanup: schedule,
 }));
 
-const router = t.router({ uploadUrl, submit, mySubmission });
+const router = t.router({
+  uploadUrl,
+  submit,
+  mySubmission,
+  submissionFileUrl,
+});
 const caller = t.createCallerFactory(router);
 
 const USER_SUB = 'student-1';
@@ -214,6 +236,7 @@ beforeEach(() => {
     uploadUrl: 'https://upload.example/put',
     headers: { 'Content-Type': 'application/pdf' },
   });
+  signedUrl.mockResolvedValue('https://cdn.example/signed');
   headUpload.mockResolvedValue({
     contentType: 'application/pdf',
     contentLength: 2048,
@@ -897,5 +920,71 @@ describe('mySubmission', () => {
   it('refuses a student who isn’t enrolled', async () => {
     db.enrolment = undefined;
     await expect(callAs(USER_SUB).mySubmission(ref)).rejects.toThrow();
+  });
+});
+
+describe('submissionFileUrl', () => {
+  const KEY = `${ITEM_PREFIX}submissions/${USER_SUB}/a/Old.pdf`;
+  beforeEach(() => {
+    db.assignmentSubmission = {
+      status: 'submitted',
+      version: 1,
+      late: false,
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      file: {
+        key: KEY,
+        fileName: 'Old.pdf',
+        fileSize: 100,
+        mimeType: 'application/pdf',
+      },
+    };
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    await expect(callAs().submissionFileUrl(ref)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  it('signs the stored key of the caller’s own record, also in an archived course', async () => {
+    db.course.status = 'archived';
+
+    await expect(callAs(USER_SUB).submissionFileUrl(ref)).resolves.toEqual({
+      url: 'https://cdn.example/signed',
+    });
+    expect(signedUrl).toHaveBeenCalledWith(KEY);
+  });
+
+  it('is NOT_FOUND with no submission', async () => {
+    db.assignmentSubmission = undefined;
+    await expect(callAs(USER_SUB).submissionFileUrl(ref)).rejects.toMatchObject(
+      { code: 'NOT_FOUND' },
+    );
+    expect(signedUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['module', 'module'],
+    ['lesson', 'lesson'],
+    ['contentItem', 'item'],
+  ])('refuses when the %s is hidden', async (entity) => {
+    db[entity] = { ...db[entity], visibility: 'hidden' };
+    await expect(callAs(USER_SUB).submissionFileUrl(ref)).rejects.toThrow();
+    expect(signedUrl).not.toHaveBeenCalled();
+  });
+
+  it('refuses an archived item', async () => {
+    db.contentItem = { ...db.contentItem, archivedAt: '2026-01-01' };
+    await expect(callAs(USER_SUB).submissionFileUrl(ref)).rejects.toThrow();
+  });
+
+  it('refuses a student who isn’t enrolled', async () => {
+    db.enrolment = undefined;
+    await expect(callAs(USER_SUB).submissionFileUrl(ref)).rejects.toThrow();
+  });
+
+  it('carries no storage key in its output', async () => {
+    const result = await callAs(USER_SUB).submissionFileUrl(ref);
+    expect(Object.keys(result)).toEqual(['url']);
   });
 });

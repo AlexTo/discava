@@ -604,4 +604,91 @@ describe('AssignmentItem', () => {
       });
     });
   });
+
+  describe('downloading the submission', () => {
+    const stored = () => submission({ version: 2, late: true });
+
+    it('shows the details and downloads through a fresh link', async () => {
+      const link = vi.fn(() => ({ url: 'https://cdn.test/essay.pdf' }));
+      const hrefs: string[] = [];
+      const location = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          ...location,
+          set href(value: string) {
+            hrefs.push(value);
+          },
+        },
+      });
+      try {
+        const { user } = render({
+          done: true,
+          handlers: {
+            'assignment.mySubmission': () => stored(),
+            'assignment.submissionFileUrl': link,
+          },
+        });
+
+        expect(await screen.findByText('essay.pdf')).toBeVisible();
+        expect(screen.getByText('Version 2')).toBeVisible();
+        expect(screen.getByText('Late')).toBeVisible();
+        await user.click(screen.getByRole('button', { name: 'Download' }));
+
+        await vi.waitFor(() =>
+          expect(hrefs).toEqual(['https://cdn.test/essay.pdf']),
+        );
+        expect(link).toHaveBeenCalledTimes(1);
+      } finally {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          value: location,
+        });
+      }
+    });
+
+    it('says so when the submission is not available', async () => {
+      const { user } = render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () => stored(),
+          'assignment.submissionFileUrl': () => {
+            throw new ApiError('NOT_FOUND', 'There is no submission');
+          },
+        },
+      });
+
+      await user.click(await screen.findByRole('button', { name: 'Download' }));
+
+      expect(
+        await screen.findByText('This submission is not available'),
+      ).toBeVisible();
+    });
+
+    it('can still be downloaded in an archived course', async () => {
+      render({
+        done: true,
+        readOnly: true,
+        handlers: { 'assignment.mySubmission': () => stored() },
+      });
+
+      expect(await screen.findByText('This course is archived')).toBeVisible();
+      expect(
+        await screen.findByRole('button', { name: 'Download' }),
+      ).toBeEnabled();
+    });
+
+    it('can still be downloaded once returned', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () => submission({ status: 'returned' }),
+        },
+      });
+
+      expect(
+        await screen.findByRole('button', { name: 'Download' }),
+      ).toBeEnabled();
+    });
+  });
 });

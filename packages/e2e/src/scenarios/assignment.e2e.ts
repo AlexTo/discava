@@ -11,6 +11,7 @@ import {
   chooseSubmissionFile,
   createUploadAssignmentCourse,
   submitChosenFile,
+  uploadSubmissionFile,
 } from '../helpers/assignment.js';
 import { WORKSHEET_PDF } from '../helpers/files.js';
 import {
@@ -174,5 +175,84 @@ test.describe('submitting to an upload assignment', () => {
         objectKey: 'courses/not/theirs.pdf',
       }),
     ).rejects.toMatchObject({ data: { code: 'FORBIDDEN' } });
+  });
+
+  test('a student downloads their own submission and nobody else’s', async ({
+    page,
+  }) => {
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const title = uniqueName('E2E download assignment course');
+    const assignment = await createUploadAssignmentCourse(instructor, {
+      courseTitle: title,
+      assignmentTitle: ASSIGNMENT,
+    });
+
+    await openCourse(page, title);
+    await enrol(page, newUser('Sam', ['student']));
+    await startFirstLesson(page);
+    await chooseSubmissionFile(page, ASSIGNMENT, WORKSHEET_PDF);
+    const item = await submitChosenFile(page, ASSIGNMENT);
+
+    // The link is S3Mock's unsigned URL in local dev; the file is Sam's.
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      item.getByRole('button', { name: 'Download' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('worksheet.pdf');
+
+    // Reloading shows the same submission.
+    await page.reload();
+    await expect(
+      assignmentItem(page, ASSIGNMENT).getByText('Version 1'),
+    ).toBeVisible();
+
+    // A second student has no submission of their own, and so no file.
+    const other = await apiUser('Olga', ['student']);
+    await other.core.course.enrol.mutate({ courseId: assignment.courseId });
+    await expect(
+      other.core.assignment.mySubmission.query(assignment),
+    ).resolves.toBeNull();
+    await expect(
+      other.core.assignment.submissionFileUrl.query(assignment),
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+  });
+
+  test('hiding the assignment hides the submission, and showing it brings it back', async () => {
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const assignment = await createUploadAssignmentCourse(instructor, {
+      courseTitle: uniqueName('E2E hidden assignment course'),
+      assignmentTitle: ASSIGNMENT,
+    });
+    const student = await apiUser('Sam', ['student']);
+    await student.core.course.enrol.mutate({ courseId: assignment.courseId });
+    await student.core.assignment.submit.mutate(
+      await uploadSubmissionFile(
+        student,
+        assignment,
+        'essay.txt',
+        Buffer.from('my essay'),
+      ),
+    );
+    await expect(
+      student.core.assignment.submissionFileUrl.query(assignment),
+    ).resolves.toMatchObject({ url: expect.any(String) });
+
+    const lesson = {
+      courseId: assignment.courseId,
+      moduleId: assignment.moduleId,
+      lessonId: assignment.lessonId,
+    };
+    await instructor.instructor.lesson.hide.mutate(lesson);
+    await expect(
+      student.core.assignment.mySubmission.query(assignment),
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+    await expect(
+      student.core.assignment.submissionFileUrl.query(assignment),
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+
+    await instructor.instructor.lesson.publish.mutate(lesson);
+    await expect(
+      student.core.assignment.mySubmission.query(assignment),
+    ).resolves.toMatchObject({ version: 1, file: { fileName: 'essay.txt' } });
   });
 });
