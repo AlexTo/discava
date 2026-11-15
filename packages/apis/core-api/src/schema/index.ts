@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 export * from './assignment.js';
+export * from './certificate.js';
 export * from './common.js';
 export * from './completion.js';
 export * from './content-item.js';
