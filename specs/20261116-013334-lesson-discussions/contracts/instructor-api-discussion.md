@@ -18,7 +18,7 @@ Input: `{ courseId, moduleId, lessonId, threadId, postId }`. Output: the post. H
 
 ## `discussion.remove` (mutation)
 
-Same input and output. Deletes any post of the course (tombstone: text removed, final). Deleting a deleted post is a no-op.
+Same input and output. Deletes any post of the course (tombstone: text removed, final; deleting a question also clears its accepted answer). Deleting a deleted post is a no-op.
 
 ## `discussion.dismissReports` (mutation)
 

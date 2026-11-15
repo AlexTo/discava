@@ -19,7 +19,7 @@ One record per question and per reply. Questions and replies share an entity so 
 | `replyCount` | number, default 0 | questions only: replies with `state = shown`, at most 500 |
 | `instructorReplyCount` | number, default 0 | questions only: shown replies with `authorIsInstructor` |
 | `voteCount` | number, default 0 | upvotes on this post |
-| `acceptedPostId` | string | questions only; a shown reply of this question |
+| `acceptedPostId` | string | questions only; a shown reply of this question; removed when the question is deleted (kept while it is hidden) |
 | `reportedBy` | string set | at most 20 user ids; absent when no open reports |
 | `unanswered` | `unanswered` | questions only; set exactly while the question is `shown`, has no `acceptedPostId` and `instructorReplyCount = 0` |
 | `reported` | `reported` | set exactly while `reportedBy` is non-empty |
@@ -59,7 +59,7 @@ Primary key: pk `courseId`, `userId`; sk `lessonId`, `threadId`, `postId`. "Did 
 | `reply` | `question.patch`: `replyCount + 1` (and `instructorReplyCount + 1` for an instructor; remove `unanswered` for an instructor reply), condition `state = shown` and `replyCount < 500`; `post.create` (reply) |
 | `vote` / `unvote` | `vote.create` (not exists) or `vote.delete` (exists); `post.patch`: `voteCount ± 1`, condition `state = shown` and, for a vote, `authorId <> voter` |
 | `accept` / `unaccept` | `question.patch`: set or remove `acceptedPostId` (condition: still the value read; for accept the reply is a shown reply of the question, checked with a `reply.check`); recompute `unanswered` (removed on accept; restored on unaccept when `instructorReplyCount = 0`, condition on the read count) |
-| `hide`, `unhide`, `delete` | `post.patch` of `state` (condition: the state read); for a reply, `question.patch`: `replyCount ∓ 1`, and `instructorReplyCount ∓ 1` for an instructor's reply, with `acceptedPostId` removed if it was this reply, `unanswered` recomputed, each conditioned on the values read; for a question, `unanswered` removed (hide, delete) or recomputed (unhide). A delete also removes `title`, `body` and `reportedBy`/`reported`. Unhide of a reply is refused when `replyCount` is already 500 |
+| `hide`, `unhide`, `delete` | `post.patch` of `state` (condition: the state read); for a reply, `question.patch`: `replyCount ∓ 1`, and `instructorReplyCount ∓ 1` for an instructor's reply, with `acceptedPostId` removed if it was this reply, `unanswered` recomputed, each conditioned on the values read; for a question, `unanswered` removed (hide, delete) or recomputed (unhide). Deleting a question also removes `acceptedPostId`, `title`, `body`, `reportedBy` and `reported`, so nothing derived from the accepted answer survives (the "Accepted answer" mark is read from `acceptedPostId`, and notifications already sent are not retracted); hiding a question keeps `acceptedPostId`, and unhide restores the question as it was. Deleting any post removes its `reportedBy` and `reported` too. Unhide of a reply is refused when `replyCount` is already 500 |
 | `report` | `post.patch`: add the reporter to `reportedBy` (condition: `state = shown`, author is not the reporter, `size(reportedBy) < 20` or reporter already in it), set `reported`. At 20, a further report returns success without a write |
 | `dismiss` | `post.patch`: remove `reportedBy` and `reported` (condition: still reported) |
 

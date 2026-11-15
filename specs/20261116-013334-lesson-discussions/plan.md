@@ -74,7 +74,7 @@ No violations, so Complexity Tracking is empty.
 2. **One helper owns every write and every counter.** `discussionWrites(entities, op)` returns the transaction items; counters (`replyCount`, `instructorReplyCount`, `voteCount`), the accepted answer and the `unanswered` and `reported` flags move only there, each write conditioned on the state it read, retried up to three times by the caller on a cancelled transaction.
 3. **"Unanswered" is a stored sparse flag, not a query.** `unanswered` exists on a question exactly while it is shown, has no accepted answer and no visible instructor reply. It is the key of the course queue (`gsi2`), so the queue is one keyed query.
 4. **Reports are a capped set on the post** (`reportedBy`, at most 20 ids) plus a sparse `reported` flag keyed on `gsi1` for the moderation queue; no third entity.
-5. **Delete is a tombstone, hide is a flag.** `state` is `shown`, `hidden` or `deleted`. Deleting removes the text and keeps the record; hiding keeps the text for instructors.
+5. **Delete is a tombstone, hide is a flag.** `state` is `shown`, `hidden` or `deleted`. Deleting removes the text (and, for a question, its accepted answer) and keeps the record; hiding keeps the text for instructors.
 6. **Votes are their own records keyed by voter**, so "one vote per person per post" is the key, and the post's `voteCount` moves in the same transaction.
 7. **The client mints post ids** (UUID v7), accepted within ten minutes of the server clock; a retry is the same id, so posting is idempotent.
 8. **Notifications last and optional.** A new reply, an accepted reply and an answered question build notification items inside the same transaction, behind the notifications spec's contract; Phases 1 to 6 ship without it.

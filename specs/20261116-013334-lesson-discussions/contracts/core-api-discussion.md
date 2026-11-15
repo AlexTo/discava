@@ -60,7 +60,7 @@ Input: `LessonRef & { threadId: string; postId: string }`. Output: `{ reported: 
 
 ## `discussion.removeOwn` (mutation)
 
-Input: `LessonRef & { threadId: string; postId: string }`. Output: the post as a placeholder. Only the author, else `FORBIDDEN`; deleting a deleted post is a no-op; deleting a hidden post is allowed. Does not need the course published or the lesson shown, only the caller's access to the course.
+Input: `LessonRef & { threadId: string; postId: string }`. Output: the post as a placeholder (deleting one's own question also clears its accepted answer). Only the author, else `FORBIDDEN`; deleting a deleted post is a no-op; deleting a hidden post is allowed. Does not need the course published or the lesson shown, only the caller's access to the course.
 
 ## Tests
 
