@@ -43,7 +43,7 @@ What the code showed that the spec could not:
 | Principle | Result | Notes |
 |-----------|--------|-------|
 | I. AWS-native, serverless | Pass | Lambda, API Gateway, DynamoDB, Secrets Manager. Stripe is an external SaaS the issue names; it is called over HTTPS and adds no pluggable backend: there is no payment-provider abstraction, the code speaks Stripe |
-| II. Generators first | Pass, with one hand-written piece | The webhook Lambda wrapper is generated with the `ts#lambda-function` generator into `packages/events` like the other handlers (T-task confirms the generator command with `generator-guide`). The checkout procedure extends core-api by hand-adding a procedure, as every procedure is. No generator fits "API Gateway method with a raw-body Lambda and no authorizer": `ts#trpc-api` generates tRPC APIs, so the `StripeWebhookApi` construct is hand-written, small, and the plan says so here. The secrets are plain CDK `Secret`s |
+| II. Generators first | Pass, with one hand-written piece | The webhook Lambda wrapper is generated with the `ts#lambda-function` generator into `packages/events` like the other handlers (T036 confirms the generator command with `generator-guide`). The checkout procedure extends core-api by hand-adding a procedure, as every procedure is. No generator fits "API Gateway method with a raw-body Lambda and no authorizer": `ts#trpc-api` generates tRPC APIs, so the `StripeWebhookApi` construct is hand-written, small, and the plan says so here. The secrets are plain CDK `Secret`s |
 | III. Everything runs locally | Pass | The Stripe stand-in in the event runner replaces Stripe and its webhook delivery; secrets come from `common-server-utils/local-dev` constants, not Secrets Manager. Documented exception: Stripe's own hosted page, 3-D Secure and real card behaviour run only against Stripe's test mode on a deployed stage (a `(human)` task) |
 | IV. Layered tests | Pass, planned | Unit tests for every helper, procedure, the webhook handler and the stand-in; invariants with breaking tests (below); an e2e scenario; a concurrency test. Impact check below |
 | V. Single-table via ElectroDB | Pass | One entity (`order`); access patterns in [data-model.md](./data-model.md), all keyed, no scan in a user request (the only scan is `loadTableSnapshot` in the invariant tooling, T009), no new index: the existing `gsi1pk-gsi1sk-index` serves "a student's orders for a course". Stream consumers considered below |
@@ -115,7 +115,7 @@ packages/
 │   │   ├── app/apis/core-api.ts                # CORE_API_DEDICATED_FUNCTIONS gains PaymentsCheckout
 │   │   └── app/lambda-functions/events-stripe-webhook.ts   # generator-owned wrapper
 │   ├── infra-config/src/stages.types.ts        # + payments component config; stages.config.ts relaxes WAF/KMS for development only
-│   └── scripts/                                 # reset-local-data also clears the stand-in's state if it persists (T-task)
+│   └── scripts/                                 # reset-local-data also clears the stand-in's state if it persists (T040 confirms it does not)
 ├── databases/core-table/src/
 │   ├── entities/order.ts                       # new entity (+ index.ts, service.ts) (+ test)
 │   ├── entities/course.ts                      # + priceAmount, priceCurrency, pricedAt
@@ -158,10 +158,10 @@ CLAUDE.md, CONTRIBUTING.md                       # one sentence each; stand-in r
 
 ## Risks
 
-- **R1: `common-web-utils/price` imported by backends.** The package is "non-UI code shared by portals" and a Biome rule stops the portals importing server-utils, not the reverse. T-task confirms no rule forbids a backend importing it; if one does, move the module to `core-table/helpers` and give the portals a generated copy of the constants through the course schema instead.
+- **R1: `common-web-utils/price` imported by backends.** The package is "non-UI code shared by portals" and a Biome rule stops the portals importing server-utils, not the reverse. T002 confirms no rule forbids a backend importing it; if one does, move the module to `core-table/helpers` and give the portals a generated copy of the constants through the course schema instead.
 - **R2: stand-in fidelity.** The `stripe` SDK speaks form-encoded requests and expects specific response shapes. The stand-in implements only `checkout.sessions.create`, `payment_intents.retrieve`, `refunds.create` and `webhookEndpoints`-free signing, and its contract file lists exactly those. Differences from real Stripe (3-D Secure, async methods, tax) are the `(human)` deployed check's job.
 - **R3: duplicate pending orders.** Two simultaneous Buy now clicks can create two orders and sessions. Both being paid is handled by the automatic refund, not prevented, so there is no lock record (R-4).
-- **R4: search index mapping.** If the OpenSearch index mapping is strict, adding fields to the course document needs a mapping change and a reindex. T-task reads the index definition in `packages/common/constructs/src/core/opensearch.ts` and `packages/events/src/search/` first.
+- **R4: search index mapping.** If the OpenSearch index mapping is strict, adding fields to the course document needs a mapping change and a reindex. T021 reads the index definition in `packages/common/constructs/src/core/opensearch.ts` and `packages/events/src/search/` first.
 - **R5: refund races a re-purchase.** A refund notice delayed past a re-purchase must not end the new enrolment: the enrolment write is conditioned on `orderId` equalling the refunded order's.
 - **R6: unmatched payments are only logged.** An operator must see them: a metric filter and alarm on the log line is out of scope here and listed in the docs as a manual check; the log carries the Stripe session id.
 - **R7: pending orders whose Stripe `expired` event never arrives.** They stay `pending` after `expiresAt`; every reader treats a pending order past its `expiresAt` as closed, and no invariant requires them to be `expired`.
