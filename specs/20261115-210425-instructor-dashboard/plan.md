@@ -59,7 +59,7 @@ Shared records this feature **reads in a new way**: `enrolment` (status and `cre
 | Record | Existing checks that cover it | What this adds |
 |--------|-------------------------------|----------------|
 | `enrolment` status, `progressPercent`, `completedAt` | progress invariants (recalculation) | Aggregates must equal sums over these; `analytics-matches-records`. No change to what a status means |
-| `progress` | progress invariants | Same; lesson funnel is a sum over statuses |
+| `progress` | progress invariants | Same; lesson funnel is a sum over statuses of non-dropped enrolments; the handler skips `progress` records whose enrolment is `dropped` (keyed enrolment read, see research.md) |
 | `itemCompletion`, `quizAttempt`, `quizSummary` | `studentActivityWrites` invariants, quiz attempt checks | Same; they are immutable or monotone (`bestScore` only rises), which the contributions rely on, so an existing check that `bestScore` never falls is cited in tasks and extended if absent |
 | `courseInstructor` | authorization tests of other instructor procedures | New procedures get their own authorization tests (instructor, co-instructor, other instructor, student, removed instructor) |
 | curriculum visibility | curriculum and progress invariants | Read-time filter only; tested |

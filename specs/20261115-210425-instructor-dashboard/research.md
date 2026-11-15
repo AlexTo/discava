@@ -42,7 +42,9 @@ Contributions by source record:
 | `quizAttempt` | per answered question `attempts` +1, and `misses` +1 when not in `correctQuestionIds`; member: learner active on `submittedAt`'s day and week |
 | `quizSummary` | per quiz one student in the band of `bestScore` (moves when the best improves) |
 
-Drop-off figures exclude dropped enrolments (FR-011): a drop moves the student's own progress contributions out, by reading that student's `progress` records for the course (one bounded keyed query, as progress recalculation does). No procedure sets `dropped` today, so this is rare; the handler and rebuild still implement it so the rule holds when one exists.
+Drop-off figures exclude dropped enrolments (FR-011): a drop moves the student's own progress contributions out, by reading that student's `progress` records for the course (one bounded keyed query, as progress recalculation does). No procedure sets `dropped` today, so this is rare (the checkout spec, #360, will); the handler and rebuild still implement it so the rule holds when one exists.
+
+The drop moves contributions out once, so a later `progress` MODIFY for that student (still matched by the stream filters, e.g. after a recalculation caused by a curriculum edit) must add nothing. Decision: the handler reads the student's enrolment (one keyed get) for each `progress` record and skips it when the status is `dropped`; carrying the status on the `progress` record was rejected because it adds a write path and a second copy of the status to keep in step. This matches the rebuild and `analytics-matches-records`, which exclude dropped enrolments.
 
 ## R-4: Adding a third stream consumer
 
