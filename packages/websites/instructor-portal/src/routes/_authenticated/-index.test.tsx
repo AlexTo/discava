@@ -6,6 +6,7 @@ import type { AppRouter as CoreApiRouter } from '@discava/core-api';
 import type { AppRouter as InstructorApiRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
@@ -13,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreApiTRPCContext } from '../../components/CoreApiClientProvider';
 import { InstructorApiTRPCContext } from '../../components/InstructorApiClientProvider';
 import { RuntimeConfigContext } from '../../components/RuntimeConfig';
-import { fakeFetch } from '../../test/fake-trpc-fetch';
+import { ApiError, fakeFetch } from '../../test/fake-trpc-fetch';
 
 const authProfile = vi.hoisted(() => ({
   current: {} as Record<string, string | undefined>,
@@ -301,5 +302,63 @@ describe('Instructor home: nothing invented', () => {
 
     await screen.findByRole('heading', { name: 'Welcome back' });
     expect(container).not.toHaveTextContent(/submission/i);
+  });
+});
+
+describe('Instructor home: loading and failure', () => {
+  it('shows a spinner, and neither the empty state nor courses, while the list loads', async () => {
+    renderPage({
+      'course.listByInstructor': () => new Promise(() => {}),
+    });
+
+    expect(
+      await screen.findByRole('status', { name: 'Loading' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("You don't teach any courses yet"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('heading', { level: 3 })).toHaveLength(0);
+  });
+
+  it('shows a spinner, not the empty state, while the signed-in user is unknown', async () => {
+    authProfile.current = {};
+    renderPage(listing([]));
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeVisible();
+    expect(
+      screen.queryByText("You don't teach any courses yet"),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows an error with Retry, not the empty state, when the request fails, and recovers on retry', async () => {
+    const user = userEvent.setup();
+    let fail = true;
+    const { calls } = renderPage({
+      'course.listByInstructor': () => {
+        if (fail) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Something went wrong');
+        }
+        return {
+          items: [course('c1', 'Back again', 'published')],
+          cursor: null,
+        };
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't load your courses",
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
+    expect(
+      screen.queryByText("You don't teach any courses yet"),
+    ).not.toBeInTheDocument();
+    expect(calls).toHaveLength(1);
+
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Back again')).toBeVisible();
+    expect(calls).toHaveLength(2);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

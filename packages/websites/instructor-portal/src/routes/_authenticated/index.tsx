@@ -11,10 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
+import { Alert } from '../../components/alert';
 import {
   type CourseStatus,
   courseStatusStyles,
@@ -118,6 +120,20 @@ function RouteComponent() {
           <div className="flex justify-center py-12">
             <Spinner />
           </div>
+        ) : coursesQuery.isError ? (
+          <div className="space-y-3">
+            <Alert type="error" header="Couldn't load your courses">
+              {apiErrorMessage(coursesQuery.error)}
+            </Alert>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => coursesQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         ) : activeCourses.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {activeCourses.slice(0, HOME_COURSE_LIMIT).map((course) => {
@@ -167,7 +183,7 @@ function RouteComponent() {
               );
             })}
           </div>
-        ) : coursesQuery.isError ? null : (
+        ) : (
           <Card className="border-dashed py-12 text-center">
             <CardContent>
               <BookOpen className="mx-auto size-8 text-muted-foreground" />
