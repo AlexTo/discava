@@ -46,6 +46,11 @@ Resolved without asking, using the defaults below (non-interactive run).
 - Q: How big can a thread get? → A: A question takes at most 500 replies; the 501st is refused with a clear message. This bounds contention on the question's counters.
 - Q: How does a retried post become one post? → A: The client mints the post's id (time-sortable) when the form opens and keeps it across retries; the server accepts it only when its time is within 10 minutes of the server clock and creates the post only if the id is new, as the announcements spec does.
 - Q: What name and role does a post show? → A: The author's given and family name when posted (the shared learner-name rule: "Discava learner" if none, never the email) and whether they were a course instructor when posting. Both are recorded on the post and do not change when the user or the course later changes.
+- Q: Do upvotes reorder replies? → A: No. Replies stay oldest first with the accepted answer pinned, and questions stay newest first. Upvotes are shown as a count only; ordering by votes would need another index for little gain at this size.
+- Q: Can instructors browse all of a lesson's questions, or only the unanswered ones? → A: Both. The instructor Q&A has three views: Unanswered (the course queue), Reported (the moderation queue) and By lesson (pick a lesson, see all its questions, including those of archived or hidden lessons, read-only there). By lesson uses the same lesson list call students use.
+- Q: Does a deleted or hidden post still show who wrote it? → A: Students see the placeholder only, with no author name, time or counts; instructors see the full post including its state. A deleted post keeps no text, but its author id stays on the record for the data-consistency checks.
+- Q: Does the 500-reply cap count hidden and deleted replies? → A: No, only visible replies, enforced when a reply is posted or a hidden reply is unhidden (unhiding past 500 is refused). Hiding and unhiding therefore cannot be used to exceed it.
+- Q: Can anyone write in an archived course? → A: No one: instructors too are refused, because an archived course is read-only (posting, replying, voting, reporting, accepting). Hide, unhide, delete and dismiss stay possible for instructors, so an archived course can be cleaned up, as announcements allow deleting there.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -194,15 +199,15 @@ A student who asked a question hears about replies and accepted answers through 
 **Access**
 
 - **FR-001**: Only a student whose enrolment in the course is not `dropped`, or an instructor listed on the course, MUST be able to list questions, open a thread, post, reply, vote, report or accept. No call takes a caller-supplied user id. Refusals MUST match the rest of the course's content (not found when the course is not visible to the caller, forbidden for a published course they are not enrolled in).
-- **FR-002**: Writes (question, reply, vote, accept, report) MUST be refused unless, in the same transaction as the write, the course is published and the lesson and its module are shown (visible and not archived). Reads follow what the caller can see of the course: students read the threads of lessons they can open, including in an archived course; instructors read any lesson's threads, including archived or hidden lessons.
+- **FR-002**: Writes by students and instructors alike (question, reply, vote, accept, report) MUST be refused unless, in the same transaction as the write, the course is published and the lesson and its module are shown (visible and not archived). Hide, unhide, delete and dismiss (instructor moderation, and authors deleting their own posts) remain allowed in an archived course and in archived or hidden lessons (only the caller's access to the course is checked). Reads follow what the caller can see of the course: students read the threads of lessons they can open, including in an archived course; instructors read any lesson's threads, including archived or hidden lessons.
 
 **Questions and replies**
 
 - **FR-003**: A question MUST have a title of 1 to 120 characters and a body of 1 to 4,000, after trimming, as plain text; a reply MUST have a body of 1 to 4,000. Invalid input MUST be refused before anything is written. Markup MUST be shown as text everywhere.
 - **FR-004**: Each post MUST record its author, the author's display name (the shared learner-name rule, never the email) and whether the author was a course instructor, when posted. These MUST NOT change when the user or the course later changes.
 - **FR-005**: Posting MUST be idempotent against client retry: the client supplies the post's id, the server accepts it only within 10 minutes of its own clock and creates the post only if the id is new.
-- **FR-006**: A question MUST take at most 500 replies; the next is refused with a clear message.
-- **FR-007**: A lesson's questions MUST be listed newest first with paging that is stable under new posts and deletions; a thread's replies MUST be listed oldest first with the same paging, the accepted answer first.
+- **FR-006**: A question MUST take at most 500 visible replies; posting another, or unhiding one past the limit, is refused with a clear message.
+- **FR-007**: A lesson's questions MUST be listed newest first with paging that is stable under new posts and deletions; a thread's replies MUST be listed oldest first with the same paging, the accepted answer first. Upvotes MUST NOT change the order.
 - **FR-008**: Posting a question or reply MUST NOT count as student activity: it MUST NOT change `studentActivityCount`, completion, progress or `lastActivityAt`.
 
 **Votes and answers**
@@ -213,9 +218,9 @@ A student who asked a question hears about replies and accepted answers through 
 
 **Instructor views and moderation**
 
-- **FR-012**: Instructors of a course MUST be able to list its unanswered questions, oldest first, with paging, including those of archived or hidden lessons and for an archived course, and to open any thread, including hidden posts. Hidden and deleted questions are not listed.
+- **FR-012**: Instructors of a course MUST be able to list its unanswered questions, oldest first, with paging, including those of archived or hidden lessons and for an archived course, and to open any thread, including hidden posts, and to list all questions of any one lesson. Hidden and deleted questions are not in the unanswered list.
 - **FR-013**: A reader MUST be able to report a visible post that is not their own, once; the post is flagged with a reporter count (up to 20 reporters remembered). Instructors MUST be able to list flagged posts of a course, hide or unhide a post, delete any post, and dismiss a post's reports. A report alone MUST NOT change what students see.
-- **FR-014**: An author MUST be able to delete their own post while they can access the course. Deleting removes the text permanently, leaves a placeholder, and is final. Hidden posts show a different placeholder to students and the full text to instructors. A hidden or deleted question is not openable by students and its replies are not shown to them.
+- **FR-014**: An author MUST be able to delete their own post while they can access the course. Deleting removes the text permanently, leaves a placeholder, and is final. Hidden posts show a different placeholder to students and the full text to instructors. A hidden or deleted post shows students its placeholder only, with no author name, time or counts. A hidden or deleted question is not openable by students and its replies are not shown to them.
 - **FR-015**: Reply counts, upvote counts, the answered state and the reported flag MUST stay equal to what the records say after any combination of concurrent writes, hides, deletes and acceptances.
 - **FR-016**: Instructor-only actions MUST be unavailable to everyone else, including an instructor of a different course, and MUST NOT leak whether another course's posts exist.
 
