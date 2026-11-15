@@ -23,7 +23,7 @@ description: "Task list for instructor revenue reporting and payouts"
 
 ---
 
-## Phase 1: Foundations: settings, revenue rules, records and invariants (PR 1)
+## Phase 1: User Story 1 - Foundations: settings, revenue rules, records and invariants (P1) 🎯 MVP
 
 **PR title**: `feat(payouts): revenue rules, earnings records and invariants (#286)`
 
