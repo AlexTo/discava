@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { PDF } from '@libpdf/core';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
-import { PDFDocument } from 'pdf-lib';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { drawCertificatePdf } from '../helpers/certificate-pdf.js';
 import { t } from '../init.js';
@@ -221,9 +222,7 @@ describe('certificate.pdf', () => {
     expect(result.fileName).toBe('certificate-0123-4567-89AB-CDEF.pdf');
     const bytes = Buffer.from(result.contentBase64, 'base64');
     expect(bytes.subarray(0, 4).toString()).toBe('%PDF');
-    expect(
-      (await PDFDocument.load(Uint8Array.from(bytes))).getPageCount(),
-    ).toBe(1);
+    expect((await PDF.load(Uint8Array.from(bytes))).getPageCount()).toBe(1);
     expect(drawCertificatePdf).toHaveBeenLastCalledWith(
       expect.objectContaining({
         verifyUrl:

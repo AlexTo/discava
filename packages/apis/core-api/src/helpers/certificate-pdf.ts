@@ -2,7 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { PDFDocument, type PDFFont, rgb, StandardFonts } from 'pdf-lib';
+import {
+  type FontInput,
+  measureText,
+  PDF,
+  rgb,
+  StandardFonts,
+} from '@libpdf/core';
 
 export interface ICertificatePdfInput {
   learnerName: string;
@@ -49,32 +55,29 @@ const formatDate = (completedAt: string): string => {
 export const drawCertificatePdf = async (
   input: ICertificatePdfInput,
 ): Promise<Uint8Array> => {
-  const pdf = await PDFDocument.create();
-  const page = pdf.addPage([WIDTH, HEIGHT]);
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const pdf = PDF.create();
+  const page = pdf.addPage({ width: WIDTH, height: HEIGHT });
+  const regular = StandardFonts.Helvetica;
+  const bold = StandardFonts.HelveticaBold;
   const maxWidth = WIDTH - MARGIN * 2;
 
   const centred = (
     rawText: string,
     y: number,
-    font: PDFFont,
+    font: FontInput,
     size: number,
     minSize = 8,
   ) => {
     let text = sanitise(rawText);
     let fitted = size;
-    while (
-      fitted > minSize &&
-      font.widthOfTextAtSize(text, fitted) > maxWidth
-    ) {
+    while (fitted > minSize && measureText(text, font, fitted) > maxWidth) {
       fitted -= 1;
     }
-    while (text.length > 1 && font.widthOfTextAtSize(text, fitted) > maxWidth) {
+    while (text.length > 1 && measureText(text, font, fitted) > maxWidth) {
       text = `${text.slice(0, -4)}...`;
     }
     page.drawText(text, {
-      x: (WIDTH - font.widthOfTextAtSize(text, fitted)) / 2,
+      x: (WIDTH - measureText(text, font, fitted)) / 2,
       y,
       size: fitted,
       font,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { PDFDocument } from 'pdf-lib';
+import { PDF } from '@libpdf/core';
 import { describe, expect, it } from 'vitest';
 import { drawCertificatePdf } from './certificate-pdf.js';
 
@@ -19,9 +19,9 @@ describe('drawCertificatePdf', () => {
   it('returns a one-page landscape A4 PDF', async () => {
     const bytes = await drawCertificatePdf(base);
     expect(new TextDecoder().decode(bytes.slice(0, 4))).toBe('%PDF');
-    const pdf = await PDFDocument.load(bytes);
+    const pdf = await PDF.load(bytes);
     expect(pdf.getPageCount()).toBe(1);
-    const { width, height } = pdf.getPage(0).getSize();
+    const { width, height } = pdf.getPage(0)!;
     expect(Math.round(width)).toBe(842);
     expect(Math.round(height)).toBe(595);
   });
@@ -36,6 +36,6 @@ describe('drawCertificatePdf', () => {
     ['an unparseable date', { completedAt: 'not a date' }],
   ])('draws one page for %s', async (_, overrides) => {
     const bytes = await drawCertificatePdf({ ...base, ...overrides });
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+    expect((await PDF.load(bytes)).getPageCount()).toBe(1);
   });
 });

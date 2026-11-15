@@ -32,7 +32,7 @@
 
 ## R-5: PDF
 
-**Decision**: `pdf-lib` with standard fonts, one landscape A4 page, drawn on demand in the shared router Lambda; returned base64 in the tRPC response (a few KB). Text outside WinAnsi becomes `?`.
+**Decision**: `@libpdf/core` with standard fonts, one landscape A4 page, drawn on demand in the shared router Lambda; returned base64 in the tRPC response (a few KB). Text outside WinAnsi becomes `?`.
 
 **Rationale**: no storage, no lifecycle, no local stand-in (constitution III), and the certificate is a pure function of its record, so the PDF can't drift from the data. Bundle impact is about 400 KB.
 

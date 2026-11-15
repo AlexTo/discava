@@ -16,6 +16,7 @@
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
+    "@libpdf/core": "catalog:",
     "@discava/search": "workspace:*",
     "@opensearch-project/opensearch": "catalog:",
     "@trpc/client": "catalog:",
@@ -23,7 +24,6 @@
     "aws-xray-sdk-core": "catalog:",
     "aws4fetch": "catalog:",
     "electrodb": "catalog:",
-    "pdf-lib": "catalog:",
     "tslib": "^2.3.0",
     "uuid": "catalog:",
     "zod": "catalog:"
