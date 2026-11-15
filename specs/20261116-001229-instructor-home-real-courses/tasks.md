@@ -41,8 +41,8 @@ description: "Task list for real courses on the instructor home page"
 
 **Goal**: a slow or failed load is never mistaken for "no courses".
 
-- [ ] T005 [US3] Test first, extending `-index.test.tsx`: while the list is pending (and while `sub` is not yet known) a spinner shows and neither the empty state nor any course card does; when the request fails an `Alert` with "Couldn't load your courses" and a Retry button show and the empty state does not; pressing Retry calls `refetch`, and when it then succeeds the courses show.
-- [ ] T006 [US3] In `packages/websites/instructor-portal/src/routes/_authenticated/index.tsx` render `Spinner` while pending and `Alert type="error"` with a Retry `Button` (text only) wired to `coursesQuery.refetch()` on error, reusing the components `my-courses/route.tsx` uses and `apiErrorMessage` from `@discava/common-web-utils/api-errors` for the detail. Make T005 pass.
+- [x] T005 [US3] Test first, extending `-index.test.tsx`: while the list is pending (and while `sub` is not yet known) a spinner shows and neither the empty state nor any course card does; when the request fails an `Alert` with "Couldn't load your courses" and a Retry button show and the empty state does not; pressing Retry calls `refetch`, and when it then succeeds the courses show.
+- [x] T006 [US3] In `packages/websites/instructor-portal/src/routes/_authenticated/index.tsx` render `Spinner` while pending and `Alert type="error"` with a Retry `Button` (text only) wired to `coursesQuery.refetch()` on error, reusing the components `my-courses/route.tsx` uses and `apiErrorMessage` from `@discava/common-web-utils/api-errors` for the detail. Make T005 pass.
 
 ---
 
