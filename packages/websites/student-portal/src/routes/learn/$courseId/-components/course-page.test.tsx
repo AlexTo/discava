@@ -24,6 +24,11 @@ const course = {
       lessons: [
         { lessonId: 'lesson-1', title: 'The geometry of linear equations' },
         { lessonId: 'lesson-2', title: 'Elimination with matrices' },
+        {
+          lessonId: 'lesson-4',
+          title: 'Problem set 1',
+          kind: 'assignment',
+        },
       ],
     },
     {
@@ -51,7 +56,7 @@ describe('CoursePage', () => {
       'href',
       '#modules',
     );
-    expect(screen.getByText('3 lessons')).toBeInTheDocument();
+    expect(screen.getByText('4 lessons')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enrol now' })).toBeEnabled();
   });
 
@@ -101,13 +106,27 @@ describe('CoursePage', () => {
     expect(
       await screen.findByText('The geometry of linear equations'),
     ).toBeVisible();
-    expect(screen.getByText('Module 1 · 2 lessons')).toBeInTheDocument();
+    expect(screen.getByText('Module 1 · 3 lessons')).toBeInTheDocument();
     expect(screen.queryByText('Projections')).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /Orthogonality/ }));
 
     expect(screen.getByText('Projections')).toBeVisible();
     expect(screen.queryByText('Elimination with matrices')).toBeNull();
+  });
+
+  it('marks an assignment in the outline with its label, and a lesson not', async () => {
+    renderPage();
+
+    const assignment = (await screen.findByText('Problem set 1')).closest('li');
+    expect(assignment).not.toBeNull();
+    expect(
+      within(assignment as HTMLElement).getByText('Assignment'),
+    ).toBeVisible();
+    const lesson = screen
+      .getByText('Elimination with matrices')
+      .closest('li') as HTMLElement;
+    expect(within(lesson).queryByText('Assignment')).toBeNull();
   });
 
   it("says when a course doesn't exist or isn't published", async () => {

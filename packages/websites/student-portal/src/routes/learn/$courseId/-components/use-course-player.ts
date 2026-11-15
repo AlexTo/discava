@@ -28,6 +28,14 @@ export interface CourseLesson {
   lesson: PlayerLesson;
 }
 
+// When an assignment lesson's item is due, if it has a due date.
+export const lessonDueAt = (lesson: PlayerLesson) => {
+  const item = lesson.contentItems[0];
+  return lesson.kind === 'assignment' && item?.type === 'assignment'
+    ? item.dueAt
+    : undefined;
+};
+
 // The tRPC error code a query or mutation failed with, e.g. 'FORBIDDEN'.
 export const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code;

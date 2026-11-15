@@ -140,7 +140,11 @@ function Lesson({
   const { module, moduleIndex, lesson } = lessons[index];
   const previous = lessons[index - 1];
   const next = lessons[index + 1];
-  const items = lesson.contentItems;
+  // An assignment lesson is its one item: no steps, no list of content.
+  const items =
+    lesson.kind === 'assignment'
+      ? lesson.contentItems.slice(0, 1)
+      : lesson.contentItems;
 
   return (
     <div className="space-y-8">

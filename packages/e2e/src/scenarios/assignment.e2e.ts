@@ -255,4 +255,37 @@ test.describe('submitting to an upload assignment', () => {
       student.core.assignment.mySubmission.query(assignment),
     ).resolves.toMatchObject({ version: 1, file: { fileName: 'essay.txt' } });
   });
+
+  test('the outline marks the assignment and opens it straight to the submit form', async ({
+    page,
+  }) => {
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const title = uniqueName('E2E outline assignment course');
+    const dueAt = '2099-01-01T00:00:00.000Z';
+    await createUploadAssignmentCourse(instructor, {
+      courseTitle: title,
+      assignmentTitle: ASSIGNMENT,
+      dueAt,
+    });
+
+    await openCourse(page, title);
+    await enrol(page, newUser('Sam', ['student']));
+    await startFirstLesson(page);
+
+    const outline = page.getByRole('navigation', { name: 'Course outline' });
+    const entry = outline.getByRole('link', { name: /Assignment/ });
+    await expect(entry).toContainText('Assignment');
+    await expect(entry).toContainText(
+      `Due ${new Date(dueAt).toLocaleString()}`,
+    );
+
+    // Opening it lands on the submit form, with no list of content.
+    await entry.click();
+    await expect(
+      assignmentItem(page, ASSIGNMENT).getByRole('button', { name: 'Submit' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'Lesson steps' }),
+    ).toHaveCount(0);
+  });
 });
