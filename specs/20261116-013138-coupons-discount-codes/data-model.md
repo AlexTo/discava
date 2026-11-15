@@ -59,7 +59,7 @@ See [contracts/order-discount-fields.md](./contracts/order-discount-fields.md). 
 ```
 (none) --claim--> reserved --confirm--> redeemed
                      |
-                     +--release (expired, cancelled, replaced, reclaimed)--> (deleted)
+                     +--release (expired, cancelled, replaced after its session was expired, reclaimed)--> (deleted)
 (none) --claim, zero total--> redeemed
 ```
 

@@ -21,7 +21,7 @@ PR CI additionally runs `pnpm nx e2e @discava/e2e`, including `coupon.e2e.ts` an
 2. Sign in as Bob. On the course page enter `spring20` (lowercase): the list price, the 20% discount and the new total show. Remove the code and apply `FREEBIE`: the button reads "Enrol for free". Press it: Bob is enrolled with no payment page.
 3. As Dan, apply `FREEBIE` and enrol. As a fourth student, apply it: "used up" (limit 2).
 4. As Alice, disable `SPRING20`; a student applying it sees "turned off". Try to delete `FREEBIE`: refused (it has redemptions). Try to lower its limit below 2: refused.
-5. With Stripe test mode forwarding (per #284's local setup), pay for the course with `SPRING20` enabled: the Stripe page shows the discounted total, and after payment the order shows list price, discount and total.
+5. With Stripe test mode, start a checkout with `SPRING20`, go back and start again with no code, then try to pay the first Stripe page: it is expired. Then start again with `SPRING20` (Stripe test mode forwarding, per #284's local setup) and pay: the Stripe page shows the discounted total, and after payment the order shows list price, discount and total.
 6. Save screenshots of each step, including any failure, to `tmp/screenshots/pr-<number>/`.
 
 ## On `discava-development` (a reviewer)

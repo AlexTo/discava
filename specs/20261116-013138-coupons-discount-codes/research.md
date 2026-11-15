@@ -34,7 +34,7 @@
 
 ## R-5: Reservation lifecycle and leaks
 
-**Decision**: a redemption is `reserved` (with `reservedUntil` = session expiry plus 5 minutes) or `redeemed`. Paid confirms it (`reserved` to `redeemed`, conditional on `reserved`). Expired, cancelled or replaced releases it: the redemption item is deleted and the counter lowered, in one transaction conditioned on the redemption still being `reserved` (so releasing twice does nothing). A claim that is refused as used up first queries that code's redemptions, releases those `reserved` past `reservedUntil` through the same release builder (with #284's helper marking the order expired), and tries once more.
+**Decision**: a redemption is `reserved` (with `reservedUntil` = session expiry plus 5 minutes) or `redeemed`. Paid confirms it (`reserved` to `redeemed`, conditional on `reserved`). Expired or cancelled releases it, and so does a replaced order, but only after its session has been expired (R-10): the redemption item is deleted and the counter lowered, in one transaction conditioned on the redemption still being `reserved` (so releasing twice does nothing). A claim that is refused as used up first queries that code's redemptions, releases those `reserved` past `reservedUntil` through the same release builder (with #284's helper marking the order expired), and tries once more.
 
 **Rationale**: Stripe retries a failed webhook for days but not forever; without the reclaim, one lost event would hold a limited code's last slot indefinitely. The grace period exists because a session cannot be paid after its expiry, so a reclaim after `reservedUntil` can never race a payment.
 
@@ -63,3 +63,11 @@
 **Decision**: percent discount = `floor(listAmount * percent / 100)`; fixed discount = `min(value, listAmount)`; total = list minus discount. A total above zero but below `MIN_CHARGE_MINOR[currency]` is refused. Amounts are integers in minor units; the instructor enters a decimal in the course currency and the portal converts with the currency's exponent.
 
 **Rationale**: integer maths avoids float drift; rounding the discount down means the percent shown is never exceeded.
+
+## R-10: Replacing an unpaid order while its session is still payable
+
+**Decision**: when a student starts checkout again (another code, none, or a code that makes the course free) and has an unpaid order with a Stripe session, the server first validates the new request read-only, then expires the old session with `checkout.sessions.expire`, and only after that succeeds runs the one transaction that cancels the old order, releases its reservation and writes the new claim. If Stripe says the session is already complete or the order is `paid`, nothing is replaced and the student is told they are already enrolled. Any other expiry failure is retryable and changes nothing. The free path uses the same step.
+
+**Rationale**: releasing a reservation while its session can still be paid lets a limit-1 code go to a second student while the first still pays the old session, so two discounted purchases go through; and a free-path enrolment made beside a live session could later charge an enrolled student. An expired session cannot be paid, so releasing afterwards is safe. Validating first means a refused new code never costs the student their earlier checkout; only losing a race after validation can, and the student simply restarts.
+
+**Alternatives**: keep the reservation until `reservedUntil` and let the expired event release it (rejected: a student who changes their mind would hold a limited code's slot, and be refused it as "used up" by their own earlier reservation, for up to 30 minutes); cancel the order and release in the same transaction without expiring (rejected: the double use above).

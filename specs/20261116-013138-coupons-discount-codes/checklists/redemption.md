@@ -16,7 +16,7 @@
 - [ ] CHK004 Are requirements defined for a "paid" event arriving after the reservation was released? [Gap, Spec §Edge Cases]
 - [ ] CHK005 Is idempotency stated for each repeatable request (checkout start, free enrolment, release), with the expected result of a repeat? [Completeness, Spec §FR-006, §FR-008]
 - [ ] CHK006 Are the invariants listed precisely enough to be breakable by a test (what exactly counts as a live redemption)? [Measurability, Spec §FR-012]
-- [ ] CHK007 Is the interaction between "one unpaid order per course" and a refused second code defined? [Consistency, Spec §FR-007]
+- [ ] CHK007 Is the interaction between "one unpaid order per course", a refused second code and a free-making code defined, including that the earlier payment session is expired before its reservation is released? [Consistency, Spec §FR-007]
 
 ## Money Correctness
 
