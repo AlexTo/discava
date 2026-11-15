@@ -116,7 +116,7 @@ packages/
 │       ├── procedures/checkout.ts  # #284's start: couponCode input, claim, free path (+ test)   [file owned by #284]
 │       ├── schema/coupon.ts
 │       └── router.ts
-├── events/ or core-api webhook     # #284's paid and expired handlers call confirm and release (+ test)
+├── (wherever #284 puts its webhook)  # paid and expired handlers call confirm and release (+ test)
 ├── websites/
 │   ├── instructor-portal/src/routes/_authenticated/my-courses_/$courseId/
 │   │   ├── coupons.tsx             # Coupons screen (+ -coupons.test.tsx)

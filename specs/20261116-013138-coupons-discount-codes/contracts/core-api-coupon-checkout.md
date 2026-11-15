@@ -12,14 +12,14 @@ Errors, all `PRECONDITION_FAILED` with the message from `COUPON_REFUSALS`, excep
 
 | Case | Code | Message |
 |------|------|---------|
-| unknown code, or a code of another course | `PRECONDITION_FAILED` | "This code is not valid for this course" (identical for both) |
+| unknown code, a code of another course, a fixed code whose currency is not the course's, or any code on a free course | `PRECONDITION_FAILED` | "This code is not valid for this course" (identical for all) |
 | disabled | `PRECONDITION_FAILED` | "This code has been turned off" |
 | expired | `PRECONDITION_FAILED` | "This code has expired" |
 | used up | `PRECONDITION_FAILED` | "This code has been used the maximum number of times" |
 | already used by the caller | `PRECONDITION_FAILED` | "You have already used this code" |
 | already enrolled | `PRECONDITION_FAILED` | "You are already enrolled in this course" |
 | total above zero but under the minimum charge | `PRECONDITION_FAILED` | "This code leaves a price too low to pay for" |
-| course not published, free or missing | `NOT_FOUND` | as `enrol` does |
+| course not published or missing | `NOT_FOUND` | as `enrol` does |
 
 ## Checkout start with a code (changes #284's `checkout.start`)
 
