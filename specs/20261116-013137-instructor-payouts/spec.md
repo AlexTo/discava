@@ -166,8 +166,8 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 ### Key Entities
 
 - **Order**: Existing from #284: the buyer, the course, the gross price, any discount from a coupon (#285), the amount paid, the currency, and its paid or refunded state.
-- **Earning**: One per order per instructor, recording the instructor's amount, their share of the platform fee, the fee percentage used, the currency, and when it was recorded. Never edited after it is recorded.
-- **Adjustment**: A negative entry tied to one earning and one refund or dispute, with the refunded amounts and when it happened.
+- **Earning**: One per order per instructor (stored as a sale entry in the instructor's ledger), recording the instructor's amount, their share of the platform fee, the fee percentage used, the currency, and when it was recorded. Never edited after it is recorded.
+- **Adjustment**: A negative entry (a refund entry in the same ledger) tied to one earning and one refund or dispute, with the refunded amounts and when it happened.
 - **Payout account**: One per instructor: the link to their Stripe account and its status.
 - **Payout**: A transfer of a set of earnings and adjustments to the instructor's Stripe account, with amount, status, date and failure reason.
 - **Stage payout settings**: The platform fee percentage, hold days and minimum payout, from stage configuration.

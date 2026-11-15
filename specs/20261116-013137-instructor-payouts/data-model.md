@@ -62,11 +62,12 @@ Keys: primary pk `instructorId`, sk `D#<day>#<courseId>#<currency>` (a day range
 | `currency` | string, required | one payout per instructor and currency |
 | `amountMinor` | integer > 0, required | sum of the entries |
 | `status` | `pending` / `sent` / `failed`, required | |
+| `entryKeys` | list of strings, required | sort keys of the entries it carries, so settlement can update them without a query |
 | `stripeTransferId` | string, optional | set when `sent` |
 | `failureReason` | string, optional | set when `failed` |
 | `createdAt`, `updatedAt`, `settledAt` | ISO strings | |
 
-Keys: primary pk `instructorId`, sk `P#<createdAt>#<payoutId>` (an instructor's payouts, newest last, one query). A payout's entries are those with its `payoutId`: found through the primary key range of the instructor (invariant tooling only) and carried as `entryKeys` (list of entry sort keys) on the payout for the settlement transaction.
+Keys: primary pk `instructorId`, sk `P#<createdAt>#<payoutId>` (an instructor's payouts, newest last, one query). A payout's entries are those with its `payoutId` and are listed in its `entryKeys`; finding them by `payoutId` alone would need a scan, which only invariant tooling does.
 
 ## Statuses the Earnings page shows (derived, not stored)
 
