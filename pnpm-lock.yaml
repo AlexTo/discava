@@ -971,6 +971,9 @@ importers:
       '@discava/instructor-api':
         specifier: workspace:*
         version: link:../apis/instructor-api
+      '@libpdf/core':
+        specifier: 'catalog:'
+        version: 0.5.3
       '@trpc/client':
         specifier: 'catalog:'
         version: 11.25.0(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(typescript@6.0.3)
