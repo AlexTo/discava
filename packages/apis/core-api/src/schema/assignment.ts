@@ -57,3 +57,5 @@ export const SubmissionSchema = z.object({
 export type ISubmission = z.output<typeof SubmissionSchema>;
 
 export const SubmitOutputSchema = SubmissionSchema;
+
+export const MySubmissionOutputSchema = SubmissionSchema.nullable();

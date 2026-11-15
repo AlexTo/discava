@@ -43,8 +43,10 @@ import {
   transactionConflict,
 } from '../lib/transaction.js';
 import {
+  AssignmentRefSchema,
   type IAssignmentRef,
   type ISubmission,
+  MySubmissionOutputSchema,
   SubmitInputSchema,
   SubmitOutputSchema,
   UploadUrlInputSchema,
@@ -115,6 +117,21 @@ const readAssignment = async (
   return { course, item, enrolment: enrolment!, submission, completion };
 };
 
+// A stored record as its student sees it: no storage key.
+const toSubmission = (
+  submission: NonNullable<Read['submission']>,
+): ISubmission => ({
+  version: submission.version,
+  status: submission.status,
+  submittedAt: submission.submittedAt,
+  late: submission.late,
+  file: {
+    fileName: submission.file.fileName,
+    fileSize: submission.file.fileSize,
+    mimeType: submission.file.mimeType,
+  },
+});
+
 type Read = Awaited<ReturnType<typeof readAssignment>>;
 
 // Submitting needs a published course (an archived one is read-only) and a
@@ -160,6 +177,21 @@ export const uploadUrl = courseProcedure
       objectKey,
       ...(await presignLessonFileUpload(objectKey, mimeType, fileSize)),
     };
+  });
+
+// The caller's own submission to the assignment, or null. Found by key from
+// the token, so it is never anyone else's. An archived course is read-only,
+// not hidden, so this works there too.
+export const mySubmission = courseProcedure
+  .input(AssignmentRefSchema)
+  .output(MySubmissionOutputSchema)
+  .query(async ({ ctx, input }): Promise<ISubmission | null> => {
+    const { submission } = await readAssignment(
+      ctx.coreTable!,
+      ctx.user.sub,
+      input,
+    );
+    return submission ? toSubmission(submission) : null;
   });
 
 // Checks the upload `objectKey` names, and returns what it is.

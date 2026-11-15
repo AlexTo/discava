@@ -2,11 +2,17 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import {
   type ApiUser,
   apiUser,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import {
+  createUploadAssignmentCourse,
+  submissionFolders,
+  uploadSubmissionFile,
+} from '../helpers/assignment.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { uniqueName } from '../helpers/users.js';
 
@@ -117,6 +123,97 @@ test.describe('a student', () => {
     if (completion.status === 'rejected') {
       expect(errorCodes([completion])).toEqual(['PRECONDITION_FAILED']);
     }
+  });
+});
+
+test.describe('a student submitting to an upload assignment', () => {
+  let assignment: Awaited<ReturnType<typeof createUploadAssignmentCourse>>;
+
+  test.beforeEach(async () => {
+    assignment = await createUploadAssignmentCourse(instructor, {
+      courseTitle: uniqueName('Concurrent submissions'),
+      assignmentTitle: 'Essay',
+    });
+    await student.core.course.enrol.mutate({ courseId: assignment.courseId });
+  });
+
+  test.afterEach(async () => {
+    await instructor.instructor.course.archive.mutate({
+      courseId: assignment.courseId,
+    });
+  });
+
+  // One upload for each racer, made before the race so only the submits race.
+  const uploads = (prefix: string) =>
+    Promise.all(
+      Array.from({ length: RACERS }, (_, index) =>
+        uploadSubmissionFile(
+          student,
+          assignment,
+          `${prefix}-${index}.txt`,
+          Buffer.from(`${prefix} ${index}`),
+        ),
+      ),
+    );
+
+  const raceSubmits = async (inputs: Awaited<ReturnType<typeof uploads>>) => {
+    const queue = [...inputs];
+    return race(() => student.core.assignment.submit.mutate(queue.pop()!));
+  };
+
+  const expectOnlyWinnersFolders = async (folders: number) => {
+    // Losers delete their folder as they finish; the poll covers any lag.
+    await expect
+      .poll(async () => (await submissionFolders(assignment)).size, {
+        timeout: 30_000,
+      })
+      .toBe(folders);
+  };
+
+  test('first submissions at once leave one record, one count and one completion', async () => {
+    const results = await raceSubmits(await uploads('first'));
+
+    expect(fulfilled(results)).toHaveLength(1);
+    expect(fulfilled(results)[0]).toMatchObject({ version: 1 });
+    expect(errorCodes(results).every((code) => code === 'CONFLICT')).toBe(true);
+    const stored = await student.core.assignment.mySubmission.query(assignment);
+    expect(stored).toMatchObject({ version: 1, status: 'submitted' });
+    const { items } = await student.core.course.myItemCompletions.query({
+      courseId: assignment.courseId,
+    });
+    expect(
+      items.filter((item) => item.contentItemId === assignment.contentItemId),
+    ).toHaveLength(1);
+    await expectOnlyWinnersFolders(1);
+  });
+
+  test('resubmits at once leave one winner and one version step', async () => {
+    await student.core.assignment.submit.mutate(
+      await uploadSubmissionFile(
+        student,
+        assignment,
+        'original.txt',
+        Buffer.from('original'),
+      ),
+    );
+
+    const results = await raceSubmits(await uploads('again'));
+
+    expect(fulfilled(results)).toHaveLength(1);
+    expect(fulfilled(results)[0]).toMatchObject({ version: 2 });
+    expect(errorCodes(results).every((code) => code === 'CONFLICT')).toBe(true);
+    const stored = await student.core.assignment.mySubmission.query(assignment);
+    expect(stored?.version).toBe(2);
+    expect(stored?.file.fileName).toBe(fulfilled(results)[0]!.file.fileName);
+    const { items } = await student.core.course.myItemCompletions.query({
+      courseId: assignment.courseId,
+    });
+    expect(
+      items.filter((item) => item.contentItemId === assignment.contentItemId),
+    ).toHaveLength(1);
+    // The replaced file's folder is retired later, so it is still there
+    // beside the winner's; the losers' are gone.
+    await expectOnlyWinnersFolders(2);
   });
 });
 

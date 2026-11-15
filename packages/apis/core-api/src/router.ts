@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { t } from './init.js';
-import { submit, uploadUrl } from './procedures/assignment.js';
+import { mySubmission, submit, uploadUrl } from './procedures/assignment.js';
 import {
   completeContentItem,
   myItemCompletions,
@@ -45,6 +45,7 @@ export const appRouter = router({
   assignment: router({
     uploadUrl,
     submit,
+    mySubmission,
   }),
   contentItem: router({
     complete: completeContentItem,
