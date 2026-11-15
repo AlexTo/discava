@@ -156,8 +156,8 @@ description: "Task list for student submissions for upload assignments"
 
 ## Phase 7: Polish and cross-cutting
 
-- [ ] T042 [P] Update the docs site (`docs/`) where it describes lesson content or assignments, and `CONTRIBUTING.md` only if it lists the moved `lib/` helpers. Translate any changed English docs page locally and commit the translations, or note in the PR description that translations are pending (constitution VIII).
-- [ ] T043 Run `pnpm lint`, `pnpm test` and `pnpm build`; fix every failure in the code, not the tests.
+- [x] T042 [P] Update the docs site (`docs/`) where it describes lesson content or assignments, and `CONTRIBUTING.md` only if it lists the moved `lib/` helpers. Translate any changed English docs page locally and commit the translations, or note in the PR description that translations are pending (constitution VIII).
+- [x] T043 Run `pnpm lint`, `pnpm test` and `pnpm build`; fix every failure in the code, not the tests.
 - [ ] T044 **(human)** Run [quickstart.md](./quickstart.md) by hand against `pnpm dev`, saving numbered screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/`. Also check spec SC-001 (open to confirmed submission in under 2 minutes) and SC-008 (the outline marking is recognisable at a glance) by hand with at least a few people, and record the result in the PR; no automated test covers them.
 - [ ] T045 **(human)** Measure the submit time for a 100 MB file locally and note it in the PR (plan risk R1); if it nears the function's 25 s timeout, flag it on the PR before merging (the timeout cannot go above API Gateway's 29 s, so the fix would be a design change, not a longer timeout).
 - [ ] T046 **(human)** Update issue #102's body: part 2 is done, decisions 2, 3 and 6 are recorded as settled (4 already is), and the PR says "Refs #102", never a closing keyword, because part 3 (grading) is still to come.
