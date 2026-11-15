@@ -6,7 +6,7 @@
 
 ## Summary
 
-A new stream consumer turns each paid order and each refund into immutable ledger entries per instructor (`earningEntry`), written with one `core-table` helper that, in one transaction, also adds the entry's figures to a per-day summary (`earningDay`). The fee, the equal split and the refund share come from one pure helper, `revenue.ts`. instructor-api gains an `earnings` router (period report from the day summaries, paged per-course lines from the ledger) and a `payout` router (Connect Express onboarding, status, dashboard link, balances and payouts). A daily scheduled Lambda (`payout-run`) sends each active instructor's released balance to their Stripe account as one transfer, using the payout's ID as Stripe's idempotency key. The instructor portal gets an Earnings page. Stage config gains the fee, hold days and minimum payout.
+A new stream consumer turns each paid order and each refund into immutable ledger entries per instructor (`earningEntry`), written with one `core-table` helper that, in one transaction, also adds the entry's figures to a per-day summary (`earningDay`). The fee, the equal split and the refund share come from one pure helper, `revenue.ts`. instructor-api gains an `earnings` router (period report from the day summaries, paged per-course lines from the ledger) and a `payout` router (Connect Express onboarding, status, dashboard link, balances and payouts). A daily scheduled Lambda (`payout-run`) sends each active instructor's released balance to their Stripe account as one transfer tagged with the payout's ID (as idempotency key and `transfer_group`), and recovers uncertain sends by looking the transfer up rather than trusting the key. The instructor portal gets an Earnings page. Stage config gains the fee, hold days and minimum payout.
 
 What the existing code and the sibling specs showed that the spec could not:
 
@@ -22,7 +22,7 @@ What the existing code and the sibling specs showed that the spec could not:
 
 **Primary Dependencies**: tRPC + zod, ElectroDB (`@discava/core-table`), the Stripe SDK (the one #284 adds; instructor-api and the new events Lambdas gain it as a direct dependency), TanStack Router/Query, shadcn (`@discava/common-shadcn`)
 
-**Storage**: the one core table; new entities `payoutAccount`, `earningEntry`, `earningDay`, `payout`; no new index
+**Storage**: the one core table; new entities `payoutAccount`, `earningEntry`, `earningDay`, `earningOrder`, `payout`; no new index
 
 **Testing**: vitest per project (with the `@discava/core-table` alias), core-table `helpers/invariants.ts`, instructor portal component tests, Playwright e2e in `packages/e2e` including `src/concurrency/`
 
@@ -46,7 +46,7 @@ What the existing code and the sibling specs showed that the spec could not:
 | II. Generators first | Pass | The two new Lambdas (`events-earnings-recording`, `events-payout-run`) are created with the `ts#lambda-function` generator, as the other `events-*` wrappers are, and wired in infra. New code in core-table, instructor-api, instructor-portal and the stage config extends existing generated projects. The plan's first task confirms the generator via the MCP server |
 | III. Everything runs locally | Pass, with one justified exception | Recording and the payout run run under the local event runner (stream consumer; a timer triggers the run). Stripe is not an AWS service: Connect calls go to the local Stripe stand-in #284 provides, extended with accounts, account links and transfers (or one added here if #284 has none). Real Stripe behaviour (hosted onboarding, transfer settlement) is checked only on a deployed stage in test mode, as `(human)` tasks |
 | IV. Layered tests | Pass, planned | Unit tests for `revenue.ts`, the helpers, procedures, Lambdas and the portal; new invariants and breaking tests; e2e scenarios; a concurrency test. Impact check below |
-| V. Single-table via ElectroDB | Pass | Four entities, every access pattern keyed or on the existing GSI ([data-model.md](./data-model.md)); no scan in a user request; one scheduled-run query uses the GSI, not a scan; stream filters updated (below) |
+| V. Single-table via ElectroDB | Pass | Five entities, every access pattern keyed or on the existing GSI ([data-model.md](./data-model.md)); no scan in a user request; the scheduled run's two queries (active accounts, pending payouts) use the GSI, not a scan; stream filters updated (below) |
 | VI. Secure by default | Pass | Procedures read only `ctx.user.sub`'s partition; the Stripe key stays in Secrets Manager with a grant to only the Lambdas that call Stripe; no relaxed default; stage config can only change fee, hold and minimum |
 | VII. Change freely before launch | Pass | New records, routes and settings are added outright; no old data to backfill or convert |
 | VIII. Repo conventions | Pass | `core-table/src/helpers/revenue.ts`, `earning.ts`, `payout.ts` (one file per topic); text-only buttons on the Earnings page; docs in English only |
@@ -57,19 +57,19 @@ No violations, so Complexity Tracking is empty.
 
 | Record | Use | Existing invariants and tests that already cover it | What changes |
 |--------|-----|------------------------------------------------------|--------------|
-| `order`, `refund` (from #284) | Read only, by the new stream consumer and the refund cumulative lookup | Whatever #284 adds for them | New checks tie ledger entries to them (`earning-matches-order`, `earning-refunds-capped`). A task re-reads #284's invariants when it lands |
+| `order`, `refund` (from #284) | Read only, by the new stream consumer | Whatever #284 adds for them | New checks tie ledger entries to them (`earning-matches-order`, `earning-refunds-capped`). A task re-reads #284's invariants when it lands |
 | `courseInstructor` | Read: instructors of the course at payment time | `course-has-instructor` | None changed. The split is a snapshot; `earning-matches-order` checks the recorded shares add up, not that they match today's instructors |
 | `course` | Read: titles for the report | `course-has-instructor`, `instructor-course-updated-at` | None; not written |
 | `user` | Not read (the report shows no buyer; instructors are their own `sub`) | `instructor-has-user` | None |
-| `earningEntry`, `earningDay`, `payout`, `payoutAccount` (new) | Written by the recording Lambda, the payout run and instructor-api onboarding | none yet | New checks: `earning-identity`, `earning-matches-order`, `earning-refunds-capped`, `earning-day-matches-entries`, `payout-matches-entries`, `payout-account-shape` |
+| `earningEntry`, `earningDay`, `earningOrder`, `payout`, `payoutAccount` (new) | Written by the recording Lambda, the payout run and instructor-api onboarding | none yet | New checks: `earning-identity`, `earning-matches-order`, `earning-refunds-capped`, `earning-day-matches-entries`, `payout-matches-entries`, `payout-account-shape` |
 | Stream consumers | New entities' inserts and updates must match none of the three filters; order and refund records must match `EARNINGS_STREAM_FILTERS` and neither of the others | `progress-stream.test.ts`, `search-stream.test.ts` | New `earnings-stream.test.ts`; an assertion in each existing stream test that ledger, summary, payout and account records match nothing (no feedback loop, FR-015), and that order and refund records do not trigger progress or search |
 
 ## Design Decisions (detail in [research.md](./research.md))
 
-1. **Ledger plus daily summary, in one transaction.** A sale or refund creates an `earningEntry` (conditioned on its key not existing) and ADDs its figures to `earningDay` in the same `TransactWrite`. A repeat fails the condition and changes nothing, so entry and summary can never disagree and each event counts once (R-3).
-2. **One pure revenue helper.** `calculateSale`, `splitAmount` and `calculateRefund` in `helpers/revenue.ts` own fee rounding, the equal split and the refund share. Refund shares are cumulative, so a full refund returns exactly the whole fee and amount whatever the order of events (R-5).
+1. **Ledger plus daily summary, in one transaction.** A sale or refund creates an `earningEntry` (conditioned on its key not existing) and ADDs its figures to `earningDay` in the same `TransactWrite`. A repeat fails the condition and changes nothing, so entry and summary can never disagree and each event counts once (R-3). A per-order `earningOrder` record holds the fee and instructor snapshot and the recorded refunded total, and refunds update it with a condition so concurrent refunds of one order serialise. A per-order `earningOrder` record holds the fee and instructor snapshot and the recorded refunded total, and refunds update it with a condition so concurrent refunds of one order serialise.
+2. **One pure revenue helper.** `calculateSale`, `splitAmount` and `calculateRefund` in `helpers/revenue.ts` own fee rounding, the equal split and the refund share. Refund shares are cumulative over the amount already recorded as refunded and serialised per order, so a full refund returns exactly the whole fee and amount whatever order refund events arrive in (R-5).
 3. **Recording from the stream, not from checkout.** A third table-stream consumer (`events-earnings-recording`) reacts to paid `order` and `refund` records and calls `recordSale` / `recordRefund`. A failure retries the batch; the helpers are idempotent (R-2).
-4. **Stripe Connect Express, separate charges and transfers, held then paid by a daily run.** Discava charges the student on the platform account (#284), and later transfers each instructor's released balance to their connected account as one transfer keyed by the payout's ID. A manual, reporting-only first slice and destination charges were rejected (R-1).
+4. **Stripe Connect Express, separate charges and transfers, held then paid by a daily run.** Discava charges the student on the platform account (#284), and later transfers each instructor's released balance to their connected account as one transfer tagged with the payout's ID (idempotency key, `transfer_group` and metadata). An uncertain send (timeout, 5xx, idempotency conflict) leaves the payout pending and is reconciled by listing transfers by group; a payout is marked failed only on a definite Stripe rejection (R-7). A manual, reporting-only first slice and destination charges were rejected (R-1).
 5. **Pull account status.** instructor-api refreshes the account from Stripe on onboarding return, on page load and the payout run before sending. No webhook route (R-6).
 6. **Refunds after sending net against the next payout.** A refund entry is open from its creation; the run sums released entries, and sends only a positive total at or above the minimum (R-7).
 7. **Stage settings validated at build.** `payouts.platformFeeBasisPoints`, `holdDays`, `minimumPayoutMinor` in `stages.config.ts`, checked in the config's types and tests, passed to the two Lambdas as environment variables by the construct (R-8).
@@ -102,7 +102,7 @@ specs/20261116-013137-instructor-payouts/
 packages/
 ├── common/infra-config/src/                  # stages.types.ts: payouts settings; stages.config.ts values (+ test)
 ├── databases/core-table/src/
-│   ├── entities/{payout-account,earning-entry,earning-day,payout}.ts   # new (+ index.ts, service.ts)
+│   ├── entities/{payout-account,earning-entry,earning-day,earning-order,payout}.ts   # new (+ index.ts, service.ts)
 │   └── helpers/
 │       ├── revenue.ts                        # calculateSale, splitAmount, calculateRefund (+ test)
 │       ├── earning.ts                        # recordSale, recordRefund, period report and lines queries (+ test)
@@ -129,10 +129,10 @@ docs/src/content/docs/en/                     # instructor page: earnings and pa
 
 ## Risks
 
-- **R1: #284/#285's shapes differ from the assumption.** Isolated behind `earnings-from-order.ts` and `EARNINGS_STREAM_FILTERS`; a task re-reads both specs when they land (T-task in Phase 2). If #284 stores refunds on the order, only the lookup in `earnings-from-order.ts` changes.
+- **R1: #284/#285's shapes differ from the assumption.** Isolated behind `earnings-from-order.ts` and `EARNINGS_STREAM_FILTERS`; a task re-reads both specs when they land (T-task in Phase 2). If #284 stores refunds on the order, only the mapping in `earnings-from-order.ts` changes.
 - **R2: sparse open-entry index.** The open-balance query relies on removing a GSI key attribute when an entry is settled. A unit test with ElectroDB `.params()` proves it; if ElectroDB cannot remove an index composite, fall back to a per-instructor balance record updated in the same transaction (research R-4).
-- **R3: transfers need platform balance.** The default hold of 14 days exceeds Stripe's settlement time, so funds are available; a failed transfer shows as Failed and retries next run (R-7).
-- **R4: Stripe API drift between the stand-in and real Stripe.** Only the `(human)` deployed check catches it; the plan keeps the Stripe surface to four calls (create account, create account link, create login link, create transfer) plus one read.
+- **R3: transfers need platform balance, and a send can be uncertain.** The default hold of 14 days exceeds Stripe's settlement time, so funds are available; a definitely rejected transfer shows as Failed and retries next run, while an uncertain one (timeout, 5xx, idempotency conflict) stays pending and is reconciled by looking up the transfer by its group, never by trusting a 24-hour idempotency key (R-7).
+- **R4: Stripe API drift between the stand-in and real Stripe.** Only the `(human)` deployed check catches it; the plan keeps the Stripe surface to four writes (create account, create account link, create login link, create transfer) and two reads (retrieve account, list transfers by group).
 - **R5: negative balance of an instructor who never earns again.** The platform absorbs it; recorded as a known limit and visible in the instructor's balance.
 - **R6: `earningDay` write contention.** Many sales of one course in a day add to one row; DynamoDB handles ADD atomically, and a popular course's rate is far below a partition's limit.
 
