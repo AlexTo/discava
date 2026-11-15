@@ -87,7 +87,7 @@ Whenever a student's payment for a course succeeds, the instructor's earnings fo
 
 ### User Story 4 - Get paid, and see the payout status (Priority: P2)
 
-Once an instructor's account is active, earnings that have passed the stage's hold period are sent to their Stripe account automatically, so instructors don't request payouts. The Earnings page shows what is on hold (with its release date), what is ready, what was sent (with date and amount), and what failed or is blocked and why. If a refund arrives after money was sent, the amount is taken back from the account when possible, otherwise it is deducted from the next payout.
+Once an instructor's account is active, earnings that have passed the stage's hold period are sent to their Stripe account automatically, so instructors don't request payouts. The Earnings page shows what is on hold (with its release date), what is ready, what was sent (with date and amount), and what failed or is blocked and why. If a refund arrives after money was sent, the amount is deducted from the next payout.
 
 **Why this priority**: This delivers the "receive" half of the issue, but it only matters once reporting and onboarding exist, and a first release could stop at reporting.
 
@@ -100,7 +100,7 @@ Once an instructor's account is active, earnings that have passed the stage's ho
 3. **Given** a payout run repeated or retried, **Then** the same earnings are never sent twice.
 4. **Given** an account that is not active, **Then** earnings stay as Waiting for account setup and are sent after it becomes active, with nothing lost.
 5. **Given** a payout that Stripe rejects, **Then** it shows as Failed with a reason, its earnings go back to ready, and a later run retries them.
-6. **Given** a refund after the money was sent, **Then** the adjustment is taken back from the instructor's Stripe account if it can be, otherwise deducted from their next payout, and the balance never silently hides a negative amount.
+6. **Given** a refund after the money was sent, **Then** the adjustment is deducted from the instructor's next payout (money is not pulled back from their Stripe account), and the balance never silently hides a negative amount.
 7. **Given** a balance below the stage's minimum payout amount, **Then** it is held as Ready until it reaches the minimum.
 
 ---
@@ -150,10 +150,10 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - **FR-008**: A sale counts in the period of its payment time and a refund in the period of the refund, so a period's report never changes after the period ends except for late-arriving refunds, which appear in their own period.
 - **FR-009**: The report and every earnings read MUST be limited to the calling instructor's own share of their own courses and MUST NOT expose buyer identity or other instructors' figures.
 - **FR-010**: Instructors MUST be able to start, resume and finish Stripe Connect onboarding from the portal, see their account's status (not started, in progress, active, restricted), and open their Stripe dashboard. Discava MUST NOT store bank or identity details.
-- **FR-011**: The account status MUST follow Stripe's account updates, delivered as signed events that are verified, deduplicated and safe to redeliver.
+- **FR-011**: The account status MUST be refreshed from Stripe when the instructor opens the Earnings page, when they return from onboarding, and before each payout, so a stale status never causes money to be sent to a restricted account.
 - **FR-012**: Earnings MUST be sent to an instructor's Stripe account automatically, only when the account is active, only after the stage's hold period, only when the balance reaches the stage's minimum payout, and never twice for the same earnings.
 - **FR-013**: The Earnings page MUST show payout status per amount: On hold (with release date), Waiting for account setup, Ready, Sent (date, amount), Failed (reason), plus the current balance and any negative balance.
-- **FR-014**: A refund after sending MUST be recovered from the instructor's Stripe account when possible, otherwise carried as a deduction on the next payout, and MUST be visible to the instructor.
+- **FR-014**: A refund after sending MUST be carried as a deduction on the instructor's next payout, MUST NOT be pulled back from their Stripe account in this feature, and MUST be visible to them as a negative balance.
 - **FR-015**: The hold period and minimum payout amount MUST be per-stage configuration, validated at build time.
 - **FR-016**: Students, other instructors and anonymous users MUST NOT be able to read any earning, payout or payout account; only instructors read their own, and only an instructor may start onboarding.
 - **FR-017**: Revenue calculation (fee, split, refund share) MUST live in one pure helper used by the recording code, the report and the tests, so its rules are written once.
@@ -196,7 +196,7 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - Reports are in UTC and in the order's currency; no conversion across currencies.
 - Earnings recorded before this feature (any orders paid before it ships) do not exist: Discava has not launched, so there is no historical data to backfill.
 - Locally, the Stripe Connect calls run against a stand-in (the same one #284's checkout uses, extended with accounts, transfers and reversals, or a stand-in added here if it has none); payout transfers, account verification and real money movement are checked only on a deployed stage in Stripe test mode.
-- Out of scope: tax, invoices, instructor-visible buyer data, admin payout dashboards, currency conversion, platform-funded coupons, manual payout requests, payout schedule choice per instructor, subscriptions and revenue sharing rules other than equal split.
+- Out of scope: reversing transfers on Stripe's side (refunds after sending are deducted from the next payout instead), a Stripe webhook for account changes (status is pulled when needed), tax, invoices, instructor-visible buyer data, admin payout dashboards, currency conversion, platform-funded coupons, manual payout requests, payout schedule choice per instructor, subscriptions and revenue sharing rules other than equal split.
 - Discava has not launched: no old data or URLs to preserve, so the new records, routes and stage settings are added outright.
 - The instructor dashboard spec (#332) may later surface a revenue summary; this feature exposes the report procedure it can reuse and adds no dashboard card itself.
 - Only the final implementation PR may close #286.
