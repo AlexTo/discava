@@ -23,7 +23,7 @@ Unique-constraint records written in the same transaction as their category.
 | pk / sk | pk fixed `categoryClaim`; sk `slug#<slug>` or `name#<normalised name>` |
 | `categoryId` | The category that owns the claim |
 
-A category has exactly one slug claim and one name claim. Rename moves the name claim.
+A category has exactly one slug claim and one name claim. Rename moves the name claim, unless the normalised name is unchanged (case or spacing only), in which case only `name` is patched.
 
 ## course (changed)
 
@@ -54,7 +54,7 @@ Additive only (#270): no existing field changes. The category's name and slug ar
 | Case | Records written in one transaction |
 |------|------------------------------------|
 | Create category | `category` create; slug claim create (not exists); name claim create (not exists) |
-| Rename category | `category` patch (name); new name claim create (not exists); old name claim delete. Slug claim untouched |
+| Rename category | `category` patch (name); new name claim create (not exists); old name claim delete (both skipped when the normalised name is unchanged: patch only). Slug claim untouched |
 | Archive category | `category` patch (status), conditioned on `active`. Courses untouched |
 | Set course catalogue fields | `course` patch, conditioned on the category existing and being active (or already the course's category) |
 

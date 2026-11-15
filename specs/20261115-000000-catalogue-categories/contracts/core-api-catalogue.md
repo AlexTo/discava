@@ -35,7 +35,7 @@ Counts: published courses matching the text query and every filter except the fa
 
 ## `category.list`
 
-No input. Output: `[{ id, name, slug, courseCount }]` for active categories, sorted by name; `courseCount` is the number of published courses with that category, from one size-0 aggregation. Categories with zero courses are included.
+No input. Output: `[{ id, name, slug, courseCount }]` for active categories, sorted by name; `courseCount` is the number of published courses with that category, from one size-0 `terms` aggregation sized to the taxonomy bound (500 buckets, not the default 10). Categories with zero courses are still listed, because the list comes from the category records and the counts are merged in.
 
 ## `category.bySlug`
 
