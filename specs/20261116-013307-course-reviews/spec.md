@@ -10,6 +10,18 @@
 
 **Parent issue**: #279
 
+## Clarifications
+
+### Session 2026-11-16
+
+Resolved without asking, using the recommended answers below (non-interactive run).
+
+- Q: Must a student have made progress before they may review? → A: No. Any student whose enrolment is not dropped may review, with no minimum progress, as the issue says "enrolled students". A progress threshold is a follow-up if fake reviews appear.
+- Q: What happens to a review an admin removes? → A: It stays as a hidden record (status removed, with the reason) that is excluded from every public view and from the summary, and it blocks the author from posting another on that course. A student's own delete removes the record entirely.
+- Q: Where does an admin find and remove reviews? → A: A "Reviews" screen in the admin portal: pick a published course, see all its reviews (removed ones marked), remove with a reason. There is no cross-course moderation queue and no student "report" button.
+- Q: How is a course's rating weighted for "Highest rated" and the relevance boost? → A: A weighted rating that treats every course as having five extra ratings averaging 3.5: `(count x average + 5 x 3.5) / (count + 5)`. A course with no ratings gets no boost and sorts after rated courses under "Highest rated". The card and page show the plain average.
+- Q: Which minimum-rating filter values does the catalogue offer? → A: 4.5 and up, 4.0 and up, 3.5 and up, 3.0 and up, applied to the plain average. Unrated courses never match a rating filter.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Rate and review a course I am enrolled in (Priority: P1)
@@ -45,7 +57,7 @@ A visitor browsing the catalogue sees each course's average rating and rating co
 2. **Given** a course with no ratings, **Then** its card and page show "No ratings yet" and no number.
 3. **Given** a course page, **Then** it shows the average, the count, how many ratings each star value has, and the course's reviews newest first, a page at a time, with each reviewer's display name and date.
 4. **Given** search results, **When** the visitor picks "Highest rated", **Then** results are ordered by rating (a course with few ratings does not outrank a well-rated one on a single vote). With the default ordering, ratings modestly lift well-rated courses among similarly relevant results.
-5. **Given** the catalogue's filters, **When** the visitor filters by a minimum rating, **Then** only courses at or above it show.
+5. **Given** the catalogue's filters, **When** the visitor filters by a minimum rating (4.5, 4.0, 3.5 or 3.0 and up), **Then** only rated courses whose average is at or above it show.
 6. **Given** a rating changes, **Then** the card, the page and search reflect it within a minute.
 
 ---
@@ -124,9 +136,10 @@ When a student posts a review of a course, its instructors get an in-app notific
 - **FR-004**: An invariant check, which a test can break, MUST cover that each course's summary equals the tally of its visible reviews, that there is at most one review per student and course, that each review's rating is in range and its student is enrolled, and that a removed review is not counted.
 - **FR-005**: Anyone, signed in or not, MUST be able to read a course's summary and its visible reviews (display name, rating, text, date, edited mark, instructor response), newest first, paged. Responses and reviews MUST never expose email addresses or user IDs.
 - **FR-006**: Catalogue cards, search results and the course page MUST show the average (one decimal) and count of a rated course and "No ratings yet" otherwise. Cards MUST NOT cost a read per course beyond the page of cards already being shown.
-- **FR-007**: Search MUST support ordering by rating, ordering by newest and by relevance (default with text), and filtering by a minimum rating. Ordering by rating and the relevance boost MUST use a weighted rating, so a course with one 5-star rating does not outrank a course with many 4.8 ratings. A course's search entry MUST update when its summary changes.
+- **FR-007**: Search MUST support ordering by rating, ordering by newest and by relevance (default with text), and filtering by a minimum plain average (4.5, 4.0, 3.5 or 3.0 and up; unrated courses never match). Ordering by rating and the relevance boost MUST use the weighted rating `(count x average + 5 x 3.5) / (count + 5)`, so a course with one 5-star rating does not outrank a course with many 4.8 ratings; unrated courses get no boost and sort after rated ones. A course's search entry MUST update when its summary changes.
 - **FR-008**: One of a course's instructors MUST be able to write, edit and delete a single public response on any visible review of the course; nobody else can. A response MUST NOT change a review's rating, text, edited mark or the summary.
 - **FR-009**: An admin MUST be able to remove any review with a reason (at most 200 characters). A removed review MUST leave public views, the instructor's response list and the summary, MUST show its author a removed notice with the reason, and MUST block that student from posting another review of the course. Removal is idempotent.
+- **FR-009a**: The admin portal MUST offer a Reviews screen: choose a published course, list all its reviews (removed ones marked, with reason), and remove one.
 - **FR-010**: Instructors of a course MUST be able to list its reviews, with each rating, text and whether it has a response, in the instructor portal.
 - **FR-011**: When a review is created, each instructor of the course SHOULD get one in-app notification through the notifications feature's producer helper, deduplicated so a retry creates none more, and none for edits or deletes. This part is delivered only once that feature exists.
 - **FR-012**: Posting MUST be refused for a course that is not published, and editing and deleting remain allowed. Reviews MUST remain readable for archived courses.
