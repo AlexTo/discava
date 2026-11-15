@@ -223,6 +223,13 @@ describe('createCourse', () => {
     expect(instructorArgs.courseId).toBe(courseArgs.courseId);
   });
 
+  it('stores certificatesEnabled: true on a new course', async () => {
+    await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    expect(courseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ certificatesEnabled: true }),
+    );
+  });
+
   it('returns the course fetched after the transaction commits', async () => {
     const result = await callAs().createCourse({ title: 'Intro to DynamoDB' });
     expect(result).toEqual(course);

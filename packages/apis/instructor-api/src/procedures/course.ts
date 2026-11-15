@@ -49,7 +49,9 @@ export const createCourse = courseProcedure
     // written attributes, so fetch the course back once the write commits.
     const { canceled } = await coreTable.transaction
       .write((entities) => [
-        entities.course.create({ courseId, title, description }).commit(),
+        entities.course
+          .create({ courseId, title, description, certificatesEnabled: true })
+          .commit(),
         entities.courseInstructor
           .create({ courseId, instructorId: currentUser, courseUpdatedAt })
           .commit(),

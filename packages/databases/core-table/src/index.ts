@@ -15,6 +15,15 @@ export {
   isLateSubmission,
 } from './helpers/assignment-submission.js';
 export {
+  type Certificate,
+  formatCertificateId,
+  generateCertificateId,
+  type IssueCertificateInput,
+  issueCertificate,
+  learnerName,
+  normaliseCertificateId,
+} from './helpers/certificate.js';
+export {
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
 } from './helpers/content-item.js';

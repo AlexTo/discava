@@ -4,6 +4,7 @@
  */
 import type { EntityItem } from 'electrodb';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
+import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
@@ -136,6 +137,16 @@ export interface TableSnapshot {
     | 'version'
     | 'submittedAt'
   >[];
+  certificates: Pick<
+    Item<typeof createCertificateEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'certificateId'
+    | 'learnerName'
+    | 'courseTitle'
+    | 'completedAt'
+    | 'issuedAt'
+  >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
 }
 
@@ -161,6 +172,8 @@ export const INVARIANTS = [
   'child-order-claimed',
   'assignment-lesson-shape',
   'assignment-submission-shape',
+  'certificate-shape',
+  'certificate-has-completed-enrolment',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1103,6 +1116,82 @@ export const checkAssignmentSubmissionShape = (
   });
 };
 
+// 21 (certificates). A certificate's ID is 16 characters of the Crockford
+// alphabet and unique across certificates, it carries the name, title and
+// dates printed on it, and it wasn't issued before the course was completed.
+export const checkCertificateShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const idCounts = new Map<string, number>();
+  for (const { certificateId } of snapshot.certificates) {
+    idCounts.set(certificateId, (idCounts.get(certificateId) ?? 0) + 1);
+  }
+  return snapshot.certificates.flatMap((certificate) => {
+    const { userId, courseId, certificateId } = certificate;
+    const record = { userId, courseId };
+    const problems: string[] = [];
+    if (!/^[0-9A-HJKMNP-TV-Z]{16}$/.test(certificateId ?? '')) {
+      problems.push(
+        `ID ${certificateId} is not 16 Crockford base32 characters`,
+      );
+    }
+    if ((idCounts.get(certificateId) ?? 0) > 1) {
+      problems.push(`ID ${certificateId} is on more than one certificate`);
+    }
+    for (const field of [
+      'learnerName',
+      'courseTitle',
+      'completedAt',
+      'issuedAt',
+    ] as const) {
+      if (!certificate[field]) {
+        problems.push(`${field} is missing`);
+      }
+    }
+    if (
+      certificate.issuedAt &&
+      certificate.completedAt &&
+      certificate.issuedAt < certificate.completedAt
+    ) {
+      problems.push('issuedAt is before completedAt');
+    }
+    return problems.map((message) =>
+      violation('certificate-shape', record, message),
+    );
+  });
+};
+
+// 22 (certificates). A certificate is for a completed enrolment, with the
+// same completedAt, in a course that exists. Certificates off for the course
+// is not a violation (the setting isn't retroactive), nor is a completed
+// enrolment without a certificate (no backfill).
+export const checkCertificateHasCompletedEnrolment = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const enrolments = new Map(
+    snapshot.enrolments.map((e) => [`${e.userId} ${e.courseId}`, e]),
+  );
+  const courses = new Set(snapshot.courses.map((c) => c.courseId));
+  return snapshot.certificates.flatMap(({ userId, courseId, completedAt }) => {
+    const record = { userId, courseId };
+    const enrolment = enrolments.get(`${userId} ${courseId}`);
+    const problems: string[] = [];
+    if (!enrolment) {
+      problems.push('certificate for a student not enrolled in the course');
+    } else if (enrolment.status !== 'completed') {
+      problems.push(`enrolment is ${enrolment.status}, not completed`);
+    } else if (enrolment.completedAt !== completedAt) {
+      problems.push("completedAt differs from the enrolment's");
+    }
+    if (!courses.has(courseId)) {
+      problems.push('certificate for a course that does not exist');
+    }
+    return problems.map((message) =>
+      violation('certificate-has-completed-enrolment', record, message),
+    );
+  });
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1125,6 +1214,8 @@ const CHECKS = [
   checkChildOrderClaimed,
   checkAssignmentLessonShape,
   checkAssignmentSubmissionShape,
+  checkCertificateShape,
+  checkCertificateHasCompletedEnrolment,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1151,6 +1242,7 @@ export const loadTableSnapshot = async (
     quizAttempts,
     quizSummaries,
     assignmentSubmissions,
+    certificates,
     users,
   ] = await Promise.all([
     entities.course.scan.go(all),
@@ -1164,6 +1256,7 @@ export const loadTableSnapshot = async (
     entities.quizAttempt.scan.go(all),
     entities.quizSummary.scan.go(all),
     entities.assignmentSubmission.scan.go(all),
+    entities.certificate.scan.go(all),
     entities.user.scan.go(all),
   ]);
   return {
@@ -1178,6 +1271,7 @@ export const loadTableSnapshot = async (
     quizAttempts: quizAttempts.data,
     quizSummaries: quizSummaries.data,
     assignmentSubmissions: assignmentSubmissions.data,
+    certificates: certificates.data,
     users: users.data,
   };
 };
