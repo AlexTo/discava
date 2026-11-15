@@ -24,7 +24,7 @@ description: "Task list for video player upgrades"
 
 ---
 
-## Phase 1: Player foundations (US2)
+## Phase 1: User Story 1 - Player foundations: speed and shortcuts (P1) 🎯 MVP
 
 **PR title**: `feat(video): speed, volume and keyboard shortcuts in the video player`
 
