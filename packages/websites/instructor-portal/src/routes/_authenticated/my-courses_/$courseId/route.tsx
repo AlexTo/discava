@@ -22,6 +22,7 @@ import {
 import { Spinner } from '../../../../components/spinner';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { ArchivedSection } from './-components/course/archived-section';
+import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
 import { CourseStatusActions } from './-components/course/course-status-actions';
@@ -144,6 +145,12 @@ function RouteComponent() {
                 dateStyle: 'medium',
               })}
             </span>
+          </div>
+          <div className="mt-4 border-t pt-4">
+            <CourseCertificatesSwitch
+              courseId={course.courseId}
+              certificatesEnabled={course.certificatesEnabled}
+            />
           </div>
         </Card>
       </section>

@@ -369,6 +369,25 @@ describe('checkTableInvariants', () => {
       table.courseInstructors[0].courseUpdatedAt = '2025-12-31T23:59:59.999Z';
       expectOnly('instructor-course-updated-at');
     });
+
+    // course.setCertificates writes certificatesEnabled, which moves the
+    // course's updatedAt; an instructor row left behind is a violation.
+    it('reports a certificatesEnabled change that did not move courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.certificatesEnabled = !course.certificatesEnabled;
+      course.updatedAt = '2025-06-01T00:00:00.000Z';
+      expectOnly('instructor-course-updated-at');
+    });
+
+    it('accepts a certificatesEnabled change that moved courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.certificatesEnabled = !course.certificatesEnabled;
+      course.updatedAt = '2025-06-01T00:00:00.000Z';
+      for (const row of table.courseInstructors) {
+        row.courseUpdatedAt = course.updatedAt;
+      }
+      expect(broken().invariants).toEqual([]);
+    });
   });
 
   describe('6. video-transcode-state', () => {

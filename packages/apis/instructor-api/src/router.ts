@@ -42,6 +42,7 @@ import {
   createCourse,
   publishCourse,
   restoreCourse,
+  setCourseCertificates,
   viewCourse,
 } from './procedures/course.js';
 import {
@@ -77,6 +78,7 @@ export const appRouter = router({
     archive: archiveCourse,
     publish: publishCourse,
     restore: restoreCourse,
+    setCertificates: setCourseCertificates,
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
