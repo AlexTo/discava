@@ -22,7 +22,7 @@ description: "Task list for the in-app and email notification pipeline"
 
 ---
 
-## Phase 1: Core-table foundation: entities, registry, stream filters (PR 1)
+## Phase 1: User Story 1 - Core-table foundation: entities, registry, stream filters (P1) 🎯 MVP
 
 **Purpose**: the four entities, the registry that is the public contract, and the stream filter constant. Serves US2.
 
