@@ -18,7 +18,7 @@ What the code showed that the spec could not:
 
 ## Technical Context
 
-**Language/Version**: TypeScript (Node 22+ Lambdas, React 19 + Vite portals), pnpm/Nx monorepo
+**Language/Version**: TypeScript (Node 24 Lambdas, React 19 + Vite portals), pnpm/Nx monorepo
 
 **Primary Dependencies**: tRPC + zod, ElectroDB (`@discava/core-table`), the official `stripe` Node SDK (new, pinned, in core-api, events and `common-server-utils/stripe`), AWS SDK Secrets Manager client (`@aws-sdk/client-secrets-manager`), TanStack Router/Query, shadcn (`@discava/common-shadcn`), `@discava/common-web-utils` (new `price` module)
 
@@ -46,7 +46,7 @@ What the code showed that the spec could not:
 | II. Generators first | Pass, with one hand-written piece | The webhook Lambda wrapper is generated with the `ts#lambda-function` generator into `packages/events` like the other handlers (T-task confirms the generator command with `generator-guide`). The checkout procedure extends core-api by hand-adding a procedure, as every procedure is. No generator fits "API Gateway method with a raw-body Lambda and no authorizer": `ts#trpc-api` generates tRPC APIs, so the `StripeWebhookApi` construct is hand-written, small, and the plan says so here. The secrets are plain CDK `Secret`s |
 | III. Everything runs locally | Pass | The Stripe stand-in in the event runner replaces Stripe and its webhook delivery; secrets come from `common-server-utils/local-dev` constants, not Secrets Manager. Documented exception: Stripe's own hosted page, 3-D Secure and real card behaviour run only against Stripe's test mode on a deployed stage (a `(human)` task) |
 | IV. Layered tests | Pass, planned | Unit tests for every helper, procedure, the webhook handler and the stand-in; invariants with breaking tests (below); an e2e scenario; a concurrency test. Impact check below |
-| V. Single-table via ElectroDB | Pass | One entity (`order`); access patterns in [data-model.md](./data-model.md), all keyed, no scan, no new index: the existing `gsi1pk-gsi1sk-index` serves "a student's orders for a course". Stream consumers considered below |
+| V. Single-table via ElectroDB | Pass | One entity (`order`); access patterns in [data-model.md](./data-model.md), all keyed, no scan in a user request (the only scan is `loadTableSnapshot` in the invariant tooling, T009), no new index: the existing `gsi1pk-gsi1sk-index` serves "a student's orders for a course". Stream consumers considered below |
 | VI. Secure by default | Pass | Webhook verifies signatures, sits behind WAF and throttling that default to on, and its function has only the table and the two secrets; the checkout function reads only the API key; secrets are KMS-encrypted per stage config. Only `discava-development` relaxes WAF and KMS in `stages.config.ts` |
 | VII. Change freely before launch | Pass | `priceAmount` and `priceCurrency` are required attributes backfilled by hand, with no fallback for a missing value; no redirects or aliases |
 | VIII. Repo conventions | Pass | `core-table/src/helpers/order.ts`; price rules in `common-web-utils/price`; Stripe modules in `common-server-utils/src/stripe/` named for what they cover; text-only buttons, docs in English with translation noted |
