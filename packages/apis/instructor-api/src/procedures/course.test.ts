@@ -10,6 +10,7 @@ import {
   createCourse,
   publishCourse,
   restoreCourse,
+  setCourseCertificates,
   viewCourse,
 } from './course.js';
 
@@ -85,6 +86,7 @@ const router = t.router({
   archiveCourse,
   publishCourse,
   restoreCourse,
+  setCourseCertificates,
   viewCourse,
 });
 const caller = t.createCallerFactory(router);
@@ -107,6 +109,7 @@ const course = {
   status: 'draft' as const,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
+  certificatesEnabled: true,
 };
 
 type CheckCondition = (
@@ -841,6 +844,105 @@ describe('restoreCourse', () => {
     expect(courseInstructorPatchSet).toHaveBeenCalledWith({
       courseUpdatedAt: '2024-03-01T00:00:00.000Z',
     });
+  });
+});
+
+describe('setCourseCertificates', () => {
+  const input = { courseId: course.courseId, enabled: false };
+
+  it('rejects callers who are not in the instructor group before checking course membership', async () => {
+    await expect(
+      callAs(['student']).setCourseCertificates(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(courseInstructorGet).not.toHaveBeenCalled();
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('throws FORBIDDEN when the caller does not teach the course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: undefined }),
+    });
+
+    await expect(callAs().setCourseCertificates(input)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('turns certificates off and on, returning the course with the setting', async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, certificatesEnabled: false },
+    });
+    const off = await callAs().setCourseCertificates(input);
+    expect(coursePatch).toHaveBeenCalledWith({ courseId: course.courseId });
+    expect(coursePatchSet).toHaveBeenCalledWith({ certificatesEnabled: false });
+    expect(off.certificatesEnabled).toBe(false);
+
+    coursePatchGo.mockResolvedValueOnce({ data: course });
+    const on = await callAs().setCourseCertificates({
+      ...input,
+      enabled: true,
+    });
+    expect(coursePatchSet).toHaveBeenLastCalledWith({
+      certificatesEnabled: true,
+    });
+    expect(on.certificatesEnabled).toBe(true);
+  });
+
+  it.each(['draft', 'published', 'archived'] as const)(
+    'changes the setting of a %s course',
+    async (status) => {
+      coursePatchGo.mockResolvedValueOnce({
+        data: { ...course, status, certificatesEnabled: false },
+      });
+
+      const result = await callAs().setCourseCertificates(input);
+
+      expect(result.status).toBe(status);
+      expect(coursePatchWhere).not.toHaveBeenCalled();
+    },
+  );
+
+  it("moves updatedAt and every instructor's courseUpdatedAt", async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: {
+        ...course,
+        certificatesEnabled: false,
+        updatedAt: '2024-03-01T00:00:00.000Z',
+      },
+    });
+    courseInstructorQueryPrimary.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [
+          { courseId: course.courseId, instructorId: INSTRUCTOR_SUB },
+          { courseId: course.courseId, instructorId: 'co-instructor' },
+        ],
+      }),
+    });
+
+    const result = await callAs().setCourseCertificates(input);
+
+    expect(result.updatedAt).toBe('2024-03-01T00:00:00.000Z');
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: course.courseId,
+      instructorId: INSTRUCTOR_SUB,
+    });
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: course.courseId,
+      instructorId: 'co-instructor',
+    });
+    expect(courseInstructorPatchSet).toHaveBeenCalledWith({
+      courseUpdatedAt: '2024-03-01T00:00:00.000Z',
+    });
+  });
+
+  it('never reads or writes existing certificates', async () => {
+    await callAs().setCourseCertificates(input);
+
+    // The entity mock above has no `certificate` entity, so a touch would
+    // throw; the course patch is the only write to the course table.
+    expect(coursePatch).toHaveBeenCalledTimes(1);
+    expect(transactionWrite).not.toHaveBeenCalled();
   });
 });
 
