@@ -396,6 +396,18 @@ describe('LessonPage', () => {
     });
   });
 
+  it('gives a ready video the speed control and the custom bar', async () => {
+    openLesson('lesson-1');
+
+    const lecture = await item('Lecture video');
+    expect(
+      await within(lecture).findByRole('button', { name: 'Playback speed' }),
+    ).toHaveTextContent('1x');
+    expect(
+      within(lecture).getByLabelText('Lecture video').hasAttribute('controls'),
+    ).toBe(false);
+  });
+
   it('says a video is still processing, without asking for its URL', async () => {
     const { calls } = openLesson('lesson-1', {
       'course.view': () =>

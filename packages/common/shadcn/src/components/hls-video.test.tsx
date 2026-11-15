@@ -74,4 +74,36 @@ describe('HlsVideo', () => {
     instance.config.xhrSetup(xhr);
     expect(xhr.withCredentials).toBe(false);
   });
+
+  it('replaces the native controls with the custom bar', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+
+    const { container, getByRole } = render(
+      <HlsVideo url={URL} withCredentials />,
+    );
+
+    expect(video(container).hasAttribute('controls')).toBe(false);
+    expect(video(container).getAttribute('controlslist')).toBe(
+      'nodownload noremoteplayback',
+    );
+    expect(getByRole('button', { name: 'Playback speed' })).toBeTruthy();
+  });
+
+  it('puts the className on the player and blocks the context menu', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+
+    const { container } = render(
+      <HlsVideo url={URL} withCredentials className="aspect-video" />,
+    );
+
+    expect(
+      container.querySelector('[data-slot="video-controls"]')?.className,
+    ).toContain('aspect-video');
+    const event = new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+    });
+    video(container).dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
 });
