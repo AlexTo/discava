@@ -37,14 +37,14 @@ Lifecycle: created on the first save; overwritten by each save (last write wins)
 
 | Attribute | Type | Notes |
 |-----------|------|-------|
-| `captionTracks` | list of map, at most 5 | Each: `trackId` (uuid), `nonce` (the version it belongs to), `language` (BCP 47 tag from the shared list), `label`, `source` (`auto` or `uploaded`), `key` (S3 key in the media bucket), `isDefault` |
+| `captionTracks` | list of map, at most 10 | Each: `trackId` (uuid), `nonce` (the version it belongs to), `language` (BCP 47 tag from the shared list), `label`, `source` (`auto` or `uploaded`), `key` (S3 key in the media bucket), `isDefault` |
 | `captionTracksRev` | number | Starts 0, incremented by every write to `captionTracks`; the condition that serialises writers |
 | `captionsStatus` | `pending`, `ready`, `failed` | For the played version's automatic captioning. Absent on a video not yet ready and on non-video items |
 | `captionsPendingSince` | string | Set with `pending`, removed with it |
 
 Rules (in `helpers/caption-tracks.ts`, `applyCaptionChange(current, change)`; every writer calls it):
 
-- At most 5 tracks; at most one per language per nonce. Adding for an occupied language replaces that track.
+- At most 10 tracks; at most one per language per nonce. Adding for an occupied language replaces that track.
 - An `auto` track never replaces an `uploaded` track of the same language (an instructor's upload may land before Transcribe finishes); the late auto result is dropped and logged, and the status still becomes `ready`. An `uploaded` track always replaces an `auto` one.
 - Exactly one `isDefault` when the list for a nonce is non-empty: the auto track when it exists; a replacement inherits the replaced track's flag; removing the default promotes the oldest remaining track.
 - A change names the nonce it is for and is refused (`STALE_VERSION`) unless that is the item's current ready version (`status: ready`, `manifestNonce(s3Key)`).
@@ -60,7 +60,7 @@ Existing items hold none of these attributes, and the code treats absence as "no
 | New or extended | Rule | Breaking test |
 |-----------------|------|---------------|
 | Extend 6 (video transcode state) | Caption attributes appear only on `video` items; `captionsStatus: pending` only with `captionsPendingSince` and only on a `ready` video | A text item with `captionTracks`; a pending status on a pending video |
-| `caption-tracks-valid` (new) | At most 5; unique language; one default when non-empty; every track's nonce equals the item's current manifest nonce (the version swap drops all other tracks in the same patch as `status: ready`, so no other nonce can exist); every key starts with the item's folder plus `<nonce>/captions/` | Six tracks; a track of another nonce; two with one language; no default; a key outside the folder |
+| `caption-tracks-valid` (new) | At most 10; unique language; one default when non-empty; every track's nonce equals the item's current manifest nonce (the version swap drops all other tracks in the same patch as `status: ready`, so no other nonce can exist); every key starts with the item's folder plus `<nonce>/captions/` | Eleven tracks; a track of another nonce; two with one language; no default; a key outside the folder |
 | `video-position-valid` (new) | `positionSeconds` finite, whole, within 0 to the cap; `versionId` present | A negative position; a fractional position |
 
 ## Entities not changed

@@ -22,7 +22,7 @@
 - Q: Does an archived course save positions? → A: No. Archived courses are read-only, so nothing is saved, but the student may still resume from a position saved earlier.
 - Q: Where do speed, volume, mute and captions on/off live? → A: In the browser (per device), not on the server. Defaults: 1x, full volume, unmuted, captions off.
 - Q: Which speeds? → A: 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, 2x.
-- Q: Which caption formats and limits? → A: WebVTT only (no conversion from SRT or others), at most 1 MB per file, at most 5 tracks per video, one track per language.
+- Q: Which caption formats and limits? → A: WebVTT only (no conversion from SRT or others), at most 1 MB per file, at most 10 tracks per video, one track per language.
 - Q: Which track is on by default? → A: The auto-generated one, as the default track the player offers. Whether it is shown is the student's remembered captions preference, which starts off.
 - Q: Which language does auto-captioning use? → A: One configured default language (en-US). There is no language detection. An instructor whose video is in another language uploads a track by hand.
 - Q: What if captions fail or are missing? → A: Playback is never blocked. The instructor sees the caption status and can always upload a track.
@@ -128,7 +128,7 @@ An instructor adds a WebVTT file in a chosen language, replaces the auto-generat
 1. **Given** an instructor of the course and a ready video, **When** they upload a valid WebVTT file of at most 1 MB with a language, **Then** it becomes a track students can pick.
 2. **Given** an existing track in that language (including the auto one), **When** they upload another, **Then** it replaces it, and is the default if it replaced the auto track.
 3. **Given** a track, **When** the instructor removes it, **Then** students no longer see it; if it was the default another becomes default or none does.
-4. **Given** a file that is not WebVTT, larger than 1 MB, or a sixth track, **When** uploaded, **Then** it is refused with a clear message and nothing changes.
+4. **Given** a file that is not WebVTT, larger than 1 MB, or an eleventh track, **When** uploaded, **Then** it is refused with a clear message and nothing changes.
 5. **Given** an instructor of another course, a student, or a user who isn't an instructor, **When** they try to manage captions, **Then** it is refused.
 6. **Given** the instructor portal preview, **When** the instructor plays the video, **Then** the same player with the same controls and tracks is used, and the caption status (generating, ready, failed) is visible.
 7. **Given** a replaced or removed track file, **When** the player later asks for it, **Then** the student never sees a stale cached version of the old file.
@@ -183,7 +183,7 @@ An instructor adds a WebVTT file in a chosen language, replaces the auto-generat
 - **FR-016**: After a video's transcode completes, captioning in one configured default language (en-US) MUST start automatically; the video becomes ready for students without waiting for it.
 - **FR-017**: The auto-generated result MUST be stored as a WebVTT track attached to the video version it was made for, and be the default track.
 - **FR-018**: A caption outcome (success, failure, duplicate, or arriving after a replacement or deletion) MUST only ever be applied to the version it was made for, and applying it twice MUST be safe.
-- **FR-019**: A video MUST hold at most 5 tracks, at most one per language; each track has a language (from a fixed list) and a label.
+- **FR-019**: A video MUST hold at most 10 tracks, at most one per language; each track has a language (from a fixed list) and a label.
 - **FR-020**: Instructors of the course MUST be able to upload (WebVTT, at most 1 MB, content checked to be WebVTT), replace (same language) and remove tracks of a ready video, and no one else may; a replacement of the auto track makes the uploaded one the default.
 - **FR-021**: Caption files MUST be served only to people allowed to play the video, with the same signed access as the video and no wider than it, and MUST never be stale after a replace or removal.
 - **FR-022**: The student's video access answer MUST list the video version's tracks (language, label, default flag, where to fetch) so the player needs no extra lookup; the instructor's preview MUST do the same.
@@ -200,7 +200,7 @@ An instructor adds a WebVTT file in a chosen language, replaces the auto-generat
 ### Key Entities
 
 - **Video position**: A student's last position in one video item: student, course and item, position in seconds, which version of the video it refers to, and when it was saved. One per student per item.
-- **Caption track**: One WebVTT file for one version of a video: language, label, whether it is the default, whether it was generated or uploaded, and where it is stored. At most 5 per version, one per language.
+- **Caption track**: One WebVTT file for one version of a video: language, label, whether it is the default, whether it was generated or uploaded, and where it is stored. At most 10 per version, one per language.
 - **Caption status**: Whether a video version's automatic captioning is pending, ready, failed or not applicable.
 - **Player preferences**: Speed, volume, mute and captions on/off, kept in the browser.
 - **Video item**: Existing; supplies the video version, its readiness and the access students use to play it.

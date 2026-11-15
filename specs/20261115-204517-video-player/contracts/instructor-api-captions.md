@@ -25,7 +25,7 @@ Steps: check the video is `ready`; `HEAD` the upload (exists, at most 1 MB); rea
 
 Output: the item's tracks (as above, with `source`).
 
-Errors: `NOT_FOUND`; `FORBIDDEN` (not this course's instructor); `PRECONDITION_FAILED` (video not ready, or replaced meanwhile: "The video changed, try again"); `BAD_REQUEST` (not WebVTT, too large, language not allowed, a sixth track); `CONFLICT` (lost a race, "Try again").
+Errors: `NOT_FOUND`; `FORBIDDEN` (not this course's instructor); `PRECONDITION_FAILED` (video not ready, or replaced meanwhile: "The video changed, try again"); `BAD_REQUEST` (not WebVTT, too large, language not allowed, an eleventh track); `CONFLICT` (lost a race, "Try again").
 
 ## contentItem.removeCaption (mutation, new)
 
@@ -33,4 +33,4 @@ Input: the ref, `trackId`. Applies `applyCaptionChange` (removing; the default m
 
 ## Tests
 
-For each: instructor of another course, a student, and a non-instructor are refused; the happy path; the five-track and one-per-language rules; replacing the auto track makes the upload default; removing the default promotes the next; invalid WebVTT (no header, binary, over 1 MB, no cue); a replaced video (stale nonce) is refused and leaves no file; a lost race leaves no orphan copy; no S3 key in any output.
+For each: instructor of another course, a student, and a non-instructor are refused; the happy path; the ten-track and one-per-language rules; replacing the auto track makes the upload default; removing the default promotes the next; invalid WebVTT (no header, binary, over 1 MB, no cue); a replaced video (stale nonce) is refused and leaves no file; a lost race leaves no orphan copy; no S3 key in any output.

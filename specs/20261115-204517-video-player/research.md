@@ -49,11 +49,11 @@ Each item: decision, rationale, alternatives. "Verify" items are what an impleme
 
 ## R-5. Tracks on the content item, not their own entity
 
-**Decision**: `captionTracks` is a list attribute on the `contentItem` (at most 5 entries, each: `trackId`, `nonce`, `language`, `label`, `source`, `key`, `isDefault`), with `captionTracksRev` (a counter) and `captionsStatus` (+ `captionsPendingSince`).
+**Decision**: `captionTracks` is a list attribute on the `contentItem` (at most 10 entries, each: `trackId`, `nonce`, `language`, `label`, `source`, `key`, `isDefault`), with `captionTracksRev` (a counter) and `captionsStatus` (+ `captionsPendingSince`).
 
-**Rationale**: tracks are read with the item every time `videoUrl` runs, are at most 5, and are replaced as a set along with the version. A separate entity would add a query to every playback for no benefit. A `captionTracksRev` condition makes concurrent writers (Transcribe's completion, two instructors, a version swap) resolve to one winner each time without a transaction.
+**Rationale**: tracks are read with the item every time `videoUrl` runs, are at most 10, and are replaced as a set along with the version. A separate entity would add a query to every playback for no benefit. A `captionTracksRev` condition makes concurrent writers (Transcribe's completion, two instructors, a version swap) resolve to one winner each time without a transaction.
 
-**Alternatives**: one record per track (a query per playback, and the five-track and one-default rules would then need a transaction); overwriting the whole item without a rev (lost updates).
+**Alternatives**: one record per track (a query per playback, and the ten-track and one-default rules would then need a transaction); overwriting the whole item without a rev (lost updates).
 
 ## R-6. Why positions are not "student records"
 
