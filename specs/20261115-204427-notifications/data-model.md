@@ -100,7 +100,7 @@ Shared records this feature writes or reads in a new way, per constitution IV:
 No counted or related record changes meaning, so no existing invariant is extended. New invariants in `helpers/invariants.ts`, each with a breaking test:
 
 1. `notification-unread-count-matches`: for each user, `unreadCount` equals the number of their notifications with no `readAt` and a position after `readThrough` (the invariant scans, in tooling only).
-2. `notification-shape`: `type` is registered; the sort key equals `<occurredAt>#<id>` (the hash itself can't be rechecked without the dedupe key), `link.path` starts with `/`, `email.state` is `sent` only with `sentAt` and `messageId`, `skipped` and `failed` carry a `reason`, and no `sending` older than 1 hour exists.
+2. `notification-shape`: `type` is registered; the sort key equals `<occurredAt>#<id>` (the hash itself can't be rechecked without the dedupe key), `link.path` starts with `/`, `email.state` is `sent` only with `sentAt` and `messageId`, `skipped` and `failed` carry a `reason`, no `sending` older than 1 hour exists, and no `pending` email older than 1 hour exists (a notification whose delivery retries ran out and went to the DLQ).
 3. `notification-state-exists`: a user with notifications has a state record, `unreadCount >= 0`, and `readThrough` (if any) is a valid position.
 4. `notification-preference-shape`: `type` registered and not `required`.
 5. `notification-broadcast-done-complete`: a `done` broadcast has `completedAt`; a `pending` one older than 1 hour is a violation (a stuck fan-out).
