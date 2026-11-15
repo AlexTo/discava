@@ -64,6 +64,7 @@ catalog:
   cors: 2.8.6
   '@types/cors': 2.8.19
   uuid: 14.0.2
+  '@libpdf/core': 0.5.3
   react: 19.3.1
   react-dom: 19.3.1
   class-variance-authority: 0.7.1

@@ -6,7 +6,7 @@
 
 ## Summary
 
-When the progress recalculation marks a student's enrolment completed in a course that has certificates on, it issues one `certificate` record through a new `core-table` helper. A certificate is created with a conditional put keyed by student and course, so a retry or a concurrent recalculation finds the existing one instead of creating another. core-api gains a `certificate` router: `verify` (public, by ID), `myCertificates` and `pdf` (owner only; the PDF is drawn on demand with `pdf-lib`, nothing stored). instructor-api gains one course setting, `certificatesEnabled`. The student portal gets a public `/certificates/$certificateId` page and a Certificate action on My Learning.
+When the progress recalculation marks a student's enrolment completed in a course that has certificates on, it issues one `certificate` record through a new `core-table` helper. A certificate is created with a conditional put keyed by student and course, so a retry or a concurrent recalculation finds the existing one instead of creating another. core-api gains a `certificate` router: `verify` (public, by ID), `myCertificates` and `pdf` (owner only; the PDF is drawn on demand with `@libpdf/core`, nothing stored). instructor-api gains one course setting, `certificatesEnabled`. The student portal gets a public `/certificates/$certificateId` page and a Certificate action on My Learning.
 
 What the code showed that the spec could not:
 
@@ -18,7 +18,7 @@ What the code showed that the spec could not:
 
 **Language/Version**: TypeScript (Node 22 Lambdas, React 19 + Vite portals), pnpm/Nx monorepo
 
-**Primary Dependencies**: tRPC + zod, ElectroDB (`@discava/core-table`), `pdf-lib` (pure JavaScript, no native binaries, new in core-api only), `node:crypto` for IDs, TanStack Router/Query, shadcn (`@discava/common-shadcn`)
+**Primary Dependencies**: tRPC + zod, ElectroDB (`@discava/core-table`), `@libpdf/core` (LibPDF, pure TypeScript, no native binaries, new in core-api only), `node:crypto` for IDs, TanStack Router/Query, shadcn (`@discava/common-shadcn`)
 
 **Storage**: the one core table; new `certificate` entity; new `certificatesEnabled` attribute on `course`
 
@@ -67,7 +67,7 @@ No violations, so Complexity Tracking is empty.
 2. **Public lookup by ID through the existing `gsi1`.** The certificate's `gsi1pk` is its ID, `gsi1sk` a constant. The verify procedure queries that index, projects four fields and returns `NOT_FOUND` for no result.
 3. **ID format**: 16 Crockford base32 characters (80 bits) from `crypto.randomBytes`, written `XXXX-XXXX-XXXX-XXXX`; the dashes are cosmetic and normalised away on input (case-insensitive, `O/I/L` accepted as `0/1/1`). The create condition guards only the primary key, so the helper first checks the ID index for the new ID and regenerates on a hit (research R-3).
 4. **Snapshot, not join.** Learner name, course title and completion date are copied at issue time (spec FR-003/004); the public page and PDF read only the certificate record.
-5. **PDF on demand, owner only.** `certificate.pdf` reads by `{ userId: ctx.user.sub, courseId }`, draws one landscape A4 page with `pdf-lib` standard fonts (text sanitised to what WinAnsi can draw, other characters replaced by `?`), and returns base64. No S3, no new infrastructure.
+5. **PDF on demand, owner only.** `certificate.pdf` reads by `{ userId: ctx.user.sub, courseId }`, draws one landscape A4 page with `@libpdf/core` standard fonts (text sanitised to what WinAnsi can draw, other characters replaced by `?`), and returns base64. No S3, no new infrastructure.
 6. **Setting lives on `course`.** `certificatesEnabled` is a required boolean, set to `true` when a course is created. instructor-api's setting procedure reuses the course-instructor authorisation of other course edits.
 
 ## Project Structure
