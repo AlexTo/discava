@@ -20,7 +20,7 @@
 
 ## R-3: Transaction conflicts under a race
 
-**Decision**: concurrent transactions touching the coupon item may be cancelled with `TransactionConflict` instead of a failed condition. The claim retries a conflict up to 3 times with a short random delay, then surfaces `CONFLICT` (the existing `transactionConflict()` in core-api). Concurrency tests assert the hard rule (never more than N live redemptions, invariants pass) and, with callers retrying a `CONFLICT`, that exactly N end up holding the code.
+**Decision**: concurrent transactions touching the coupon item may be cancelled with `TransactionConflict` instead of a failed condition. The claim retries a conflict up to 3 times with a random 50 to 150 ms delay, then surfaces `CONFLICT` (the existing `transactionConflict()` in core-api). Concurrency tests assert the hard rule (never more than N live redemptions, invariants pass) and, with callers retrying a `CONFLICT`, that exactly N end up holding the code.
 
 **Rationale**: the spec's "exactly N succeed" is reachable only when conflicts are retried; the safety rule never depends on it.
 
