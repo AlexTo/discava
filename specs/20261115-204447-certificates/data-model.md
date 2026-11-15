@@ -25,7 +25,7 @@ No scans. The table stream sees certificate inserts; they match neither `PROGRES
 
 ## `course` (existing): `certificatesEnabled`
 
-Required boolean (set to `true` on course creation). `true` means on; `false` means off. Existing courses are backfilled by hand. Written only by instructor-api's setting procedure, which also moves `updatedAt` like other course edits.
+Required boolean (set to `true` on course creation). `true` means on; `false` means off. Existing courses are backfilled by hand (done for local and `discava-development`, see tasks.md T027). Written only by instructor-api's setting procedure, which also moves `updatedAt` like other course edits.
 
 ## Rules and where they live
 
