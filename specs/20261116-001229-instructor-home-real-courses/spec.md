@@ -16,6 +16,8 @@
 
 Resolved without asking, using the defaults below (non-interactive run).
 
+- Q: Do archived courses appear on the home page and in its course count? → A: No. Home lists and counts only draft and published courses, so archived ones don't crowd out the few slots. Archived courses stay reachable (and restorable) in My Courses.
+
 - Q: What happens to home-page sections that have no real data behind them (grading queue, upcoming, recent activity)? → A: They are removed, not kept as mock. Only content backed by real data is shown. Each returns when its own feature supplies the data.
 - Q: Are the "Courses / Students / To grade" figures kept? → A: Only the course count is kept, since it is real. Student and to-grade figures are removed until real sources exist.
 - Q: Do the quick actions stay? → A: Only "Create a course", the one that works today.
@@ -26,7 +28,7 @@ Resolved without asking, using the defaults below (non-interactive run).
 
 ### User Story 1 - See my real courses when I open the portal (Priority: P1)
 
-An instructor signs in and lands on the home page. They see the courses they actually teach, most recently updated first, each with its title, status (draft, published, archived) and image if it has one. Choosing a course opens it in the course editor. They never see a course they don't teach.
+An instructor signs in and lands on the home page. They see the courses they actually teach, most recently updated first, each with its title, status (draft or published) and image if it has one. Choosing a course opens it in the course editor. They never see a course they don't teach.
 
 **Why this priority**: This is the whole feature and the reported bug. A fake course that cannot be opened is the first thing an instructor sees, and it erodes trust in everything else.
 
@@ -79,7 +81,7 @@ While courses load, the instructor sees a loading state. If loading fails, they 
 
 - An instructor teaches more courses than fit on the page: the home page shows the most recently updated few and a "View all courses" link to My Courses, which lists them all.
 - A course appears in the instructor's list but was since deleted: it is skipped rather than shown as a broken card (the list already omits such gaps).
-- An archived course is listed with its Archived status and still opens, so instructors can restore it.
+- An archived course is not listed on the home page or counted in its summary; it remains in My Courses, where it can be opened and restored.
 - A course has no image: a neutral placeholder is shown.
 - The user's profile has no name: the greeting falls back to a neutral welcome, not a made-up name.
 - A student-only user who somehow reaches the portal sees no courses; the existing access rules for the portal are unchanged.
@@ -88,11 +90,11 @@ While courses load, the instructor sees a loading state. If loading fails, they 
 
 ### Functional Requirements
 
-- **FR-001**: The home page MUST list the courses the signed-in instructor teaches, taken from their real course list, most recently updated first.
+- **FR-001**: The home page MUST list the draft and published courses the signed-in instructor teaches, taken from their real course list, most recently updated first.
 - **FR-002**: Each listed course MUST show its title and status, show its image when it has one, and open that course's editor when chosen.
 - **FR-003**: The home page MUST NOT show any course, student, count, date or activity that is not backed by real data.
 - **FR-004**: The sample grading queue, upcoming dates, recent activity, and the student and to-grade figures MUST be removed from the home page.
-- **FR-005**: The summary MUST report the real number of courses the instructor teaches.
+- **FR-005**: The summary MUST report the real number of draft and published courses the instructor teaches (archived excluded).
 - **FR-006**: An instructor with no courses MUST see an empty state with a "Create a course" action.
 - **FR-007**: The home page MUST show a limited number of courses and link to My Courses ("View all courses") for the full list.
 - **FR-008**: The page MUST show a loading state while courses load, and an error with Retry when loading fails, never the empty state for a failed load.
