@@ -31,7 +31,7 @@ What the code showed that the spec could not:
 
 **Project Type**: web application: serverless backend + React portals
 
-**Performance Goals**: a lesson's first page of questions, or a thread's first page of replies, is one keyed query; posting is one transaction of about 8 items (at most 11 with notifications), well under the 100-item limit
+**Performance Goals**: a lesson's first page of questions, or a thread's first page of replies, is one keyed query; posting is one transaction of 5 to 7 items (at most 11 with notifications), well under the 100-item limit
 
 **Constraints**: no second table, no new index, no scan in a user request; a question holds at most 500 visible replies; transaction sizes stay small by never fanning out; plain text only
 

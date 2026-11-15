@@ -47,7 +47,7 @@ Resolved without asking, using the defaults below (non-interactive run).
 - Q: How does a retried post become one post? → A: The client mints the post's id (time-sortable) when the form opens and keeps it across retries; the server accepts it only when its time is within 10 minutes of the server clock and creates the post only if the id is new, as the announcements spec does.
 - Q: What name and role does a post show? → A: The author's given and family name when posted (the shared learner-name rule: "Discava learner" if none, never the email) and whether they were a course instructor when posting. Both are recorded on the post and do not change when the user or the course later changes.
 - Q: Do upvotes reorder replies? → A: No. Replies stay oldest first with the accepted answer pinned, and questions stay newest first. Upvotes are shown as a count only; ordering by votes would need another index for little gain at this size.
-- Q: Can instructors browse all of a lesson's questions, or only the unanswered ones? → A: Both. The instructor Q&A has three views: Unanswered (the course queue), Reported (the moderation queue) and By lesson (pick a lesson, see all its questions, including those of archived or hidden lessons, read-only there). By lesson uses the same lesson list call students use.
+- Q: Can instructors browse all of a lesson's questions, or only the unanswered ones? → A: Both. The instructor Questions area has three views: Unanswered (the course queue), Reported (the moderation queue) and By lesson (pick a lesson, see all its questions, including those of archived or hidden lessons, read-only there). By lesson uses the same lesson list call students use.
 - Q: Does a deleted or hidden post still show who wrote it? → A: Students see the placeholder only, with no author name, time or counts; instructors see the full post including its state. A deleted post keeps no text, but its author id stays on the record for the data-consistency checks.
 - Q: Does the 500-reply cap count hidden and deleted replies? → A: No, only visible replies, enforced when a reply is posted or a hidden reply is unhidden (unhiding past 500 is refused). Hiding and unhiding therefore cannot be used to exceed it.
 - Q: Can anyone write in an archived course? → A: No one: instructors too are refused, because an archived course is read-only (posting, replying, voting, reporting, accepting). Hide, unhide, delete and dismiss stay possible for instructors, so an archived course can be cleaned up, as announcements allow deleting there.
@@ -118,7 +118,7 @@ A reader upvotes helpful questions and replies. The question's author, or an ins
 
 ### User Story 4 - Instructor works through unanswered questions (Priority: P1)
 
-An instructor opens a course's Q&A in the instructor portal and sees the questions nobody authoritative has answered yet, oldest waiting first, each with its lesson, author, age and reply count. They open one, reply or accept an answer, and it leaves the list.
+An instructor opens a course's Questions area in the instructor portal and sees the questions nobody authoritative has answered yet, oldest waiting first, each with its lesson, author, age and reply count. They open one, reply or accept an answer, and it leaves the list.
 
 **Why this priority**: Required by the issue, and it is what makes the feature useful to the instructor instead of a source of silent unanswered questions.
 
@@ -126,10 +126,10 @@ An instructor opens a course's Q&A in the instructor portal and sees the questio
 
 **Acceptance Scenarios**:
 
-1. **Given** an instructor of a course, **When** they open its Q&A, **Then** they see its unanswered questions oldest first with lesson title, author, time and reply count, with paging.
+1. **Given** an instructor of a course, **When** they open its Questions area, **Then** they see its unanswered questions oldest first with lesson title, author, time and reply count, with paging.
 2. **Given** a question gets a visible instructor reply or an accepted answer, **When** the list is next loaded, **Then** it is no longer listed.
 3. **Given** a question is hidden or deleted, **Then** it is not listed.
-4. **Given** a lesson that is archived, **When** the instructor reads the Q&A, **Then** its questions are still listed and readable, but cannot be answered (read-only) until the lesson is restored.
+4. **Given** a lesson that is archived, **When** the instructor reads the Questions area, **Then** its questions are still listed and readable, but cannot be answered (read-only) until the lesson is restored.
 5. **Given** a user who is not an instructor of the course (a student, another course's instructor, an admin not listed on it), **When** they request the list, **Then** it is refused.
 6. **Given** an instructor of one course, **When** they name another course's question, **Then** nothing is found.
 7. **Given** the list is empty, **Then** a short "all answered" state appears, not an error.
@@ -260,7 +260,7 @@ A student who asked a question hears about replies and accepted answers through 
 
 ## Assumptions
 
-- The Questions section is on the lesson page of the student portal (each lesson page already renders one lesson's items); the instructor's Q&A is a section of the course page in the instructor portal. Both are specified in the plan's contracts.
+- The Questions section is on the lesson page of the student portal (each lesson page already renders one lesson's items); the instructor's Questions area is a page linked from the course page in the instructor portal. Both are specified in the plan's contracts.
 - Reading and posting calls live in core-api (any authenticated user; the call checks "enrolled or instructor of this course"), so instructors reply with the same calls students use. Instructor-only calls live in instructor-api. Both go through one helper in `core-table`.
 - Discava has not launched: no old data or URLs to preserve; new attributes are added outright and no fallback is written for missing ones.
 - No new AWS service, index or table: the records join the single table, and the two staff lists use sparse entries of existing indexes.
