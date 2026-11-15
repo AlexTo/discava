@@ -117,7 +117,7 @@ When a student posts a review of a course, its instructors get an in-app notific
 
 - Two reviews by one student racing: one wins, the other is told they already have a review (and may edit it).
 - Edit racing a delete, or two edits: the loser is told the review changed and re-reads; the summary stays right.
-- Edit racing an admin removal: the removal wins; the edit is refused.
+- Edit racing an admin removal: the removal always ends up applied. An edit that commits first is then removed along with the review (the summary drops its new rating); an edit that arrives after is refused.
 - A student drops a course after reviewing: the review stays and counts; they cannot post a new one while dropped. They may still edit or delete the one they have.
 - A course is archived: its reviews stay readable; new reviews are not accepted for it.
 - A student's display name changes after posting: the review keeps the name it had when posted.

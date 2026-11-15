@@ -14,7 +14,7 @@ OwnReview    = { rating, text?, createdAt, editedAt?, version, status, removedRe
 
 ## `review.summary` (query, public)
 
-Input `{ courseId }`. Output `Summary`. A course with no `courseRating` record, or one that is not published or archived, returns `count: 0` (no existence leak for drafts: the answer is the same as for an unrated course).
+Input `{ courseId }`. Output `Summary`. A course with no `courseRating` record returns `count: 0`. A draft course has no enrolments and so no reviews, which means the answer reveals nothing about drafts.
 
 ## `review.list` (query, public)
 

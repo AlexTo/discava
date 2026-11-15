@@ -36,7 +36,7 @@ One per course that has had a rating. Primary key: pk `courseId`, sk a constant 
 | Attribute | Type | Notes |
 |-----------|------|-------|
 | `courseId` | string, required | |
-| `stars1` to `stars5` | number, required, default 0 | counts of visible reviews at each rating |
+| `stars1` to `stars5` | number, optional | counts of visible reviews at each rating; an absent counter reads as 0 (the first write is an upsert that adds to one counter only), so `starCounts` in `helpers/review-rating.ts` normalises every read |
 | `updatedAt` | as other entities | |
 
 Derived (in `helpers/review-rating.ts`, one definition for the helper, invariant, core-api and the search document): `count = sum(stars)`, `average = sum(n x stars_n) / count` (undefined when `count = 0`), `ratingScore = (count x average + 5 x 3.5) / (count + 5)`, `ratingBoost = 1 + 0.1 x (ratingScore - 3.5)`; unrated courses have no score and boost `1`.
