@@ -10,6 +10,19 @@
 
 **Parent issue**: #284
 
+## Clarifications
+
+### Session 2026-11-16
+
+Resolved without asking, using the recommended defaults below (non-interactive run).
+
+- Q: What does a full refund do to the student's access: end the enrolment with the existing "dropped" state, or add a separate "access revoked" flag beside the status? → A: End it with the existing "dropped" state. Every access check, progress job and list already treats it as not enrolled; a second concept would need a new check in each of those paths. The completion date and progress stay on the record, so two existing consistency checks are widened (Assumptions).
+- Q: How long does an unpaid checkout stay open? → A: One hour. Long enough to finish a payment, short enough that a student does not pay a price the instructor has since changed, and the stale pending order closes itself. The same hour bounds how long a student is sent back to the same payment page (FR-006).
+- Q: Which ways to pay does the first version accept? → A: Cards only, which confirm immediately. Delayed methods (bank debits, vouchers) would add "payment pending" and "payment failed later" states that the order lifecycle does not have; they are a follow-up.
+- Q: When the student returns from the payment page, does the system ask the payment provider whether it was paid, to enrol them sooner? → A: No. The only way an order becomes paid is the confirmation message (FR-008), so there is one path to test and to keep exactly-once. The return page waits and polls the enrolment (FR-013); the confirmation normally arrives within seconds.
+- Q: Can a student buy a course for someone else, or buy several courses in one payment? → A: No. One payment buys one course for the signed-in student; gifts and carts are out of scope.
+- Q: Does a student who is refunded lose their certificate? → A: No. Issued certificates stay verifiable (certificates spec #276, FR-011). Revoking them is the maintainer's call and out of scope.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Buy a paid course and start learning (Priority: P1)
@@ -127,8 +140,8 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **FR-002**: Only instructors of a course MUST be able to set its price and currency, in any course status. A change applies only to checkouts started afterwards and never changes an order or an enrolment that exists.
 - **FR-003**: The public course page and the catalogue MUST show a course's price in its currency, or "Free".
 - **FR-004**: Free enrolment MUST keep working unchanged for free courses. Enrolling in a course that has a price, other than by a confirmed payment, MUST be refused, and the refusal MUST be decided in the same step that creates the enrolment, so a price set at the same moment cannot be raced.
-- **FR-005**: A signed-in student who is not currently enrolled MUST be able to start a checkout for a published paid course. The amount and currency MUST come from the course, never from the caller. Starting a checkout MUST record a pending order first and send the student to a hosted payment page for that order.
-- **FR-006**: Starting a checkout again for the same student and course while an earlier one is still open MUST lead to the same payment page and MUST NOT create a second pending order.
+- **FR-005**: A signed-in student who is not currently enrolled MUST be able to start a checkout for a published paid course, for themselves, for that one course, paying by card. The amount and currency MUST come from the course, never from the caller. Starting a checkout MUST record a pending order first and send the student to a hosted payment page for that order.
+- **FR-006**: Starting a checkout again for the same student and course while an earlier one is still open (less than an hour old and unpaid) MUST lead to the same payment page and MUST NOT create a second pending order.
 - **FR-007**: An order MUST record the student, the course and its title as they were, the list price, the amount charged and its currency, a status (pending, paid, expired, refunded), when each change happened, the payment provider's references, and for a refund the amount refunded and why. Orders are never deleted.
 - **FR-008**: The browser returning from the payment page MUST NOT create an enrolment. Only a confirmation from the payment provider, verified as genuine, MAY mark an order paid.
 - **FR-009**: The confirmation endpoint MUST verify each message's signature against a secret held in the platform's secrets service, MUST reject any message that fails it, and MUST check that the order exists and that the paid amount and currency equal the order's.
@@ -138,13 +151,13 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **FR-013**: The course page MUST show a "confirming your payment" state for a student with a pending order who has just returned, MUST update to the enrolled state without a manual reload, and MUST show a clear message with a retry if it takes unusually long.
 - **FR-014**: A student who has not paid MUST NOT be able to read a paid course's content. Students enrolled while the course was free MUST keep access after it gets a price.
 - **FR-015**: A full refund MUST mark the order refunded and end the student's enrolment, keeping their completions, progress and issued certificates. Buying the course again MUST restore the same enrolment with its progress. A partial refund MUST be recorded on the order without changing access. Repeated refund notices MUST have the same effect as one.
-- **FR-016**: A checkout that is cancelled or expires MUST leave no enrolment and MUST close its order as expired, and the student MUST be able to start a new checkout.
+- **FR-016**: A checkout MUST expire one hour after it is started if unpaid. A checkout that is cancelled or expires MUST leave no enrolment and MUST close its order as expired, and the student MUST be able to start a new checkout.
 - **FR-017**: All payment provider credentials and the signing secret MUST be held only in the platform's secrets service, MUST NOT appear in code, configuration, logs, runtime config files or anything sent to a browser, and MUST be readable only by the functions that need them.
 - **FR-018**: The feature MUST work end to end in local development without an AWS account and without a payment provider account: a local stand-in MUST offer a hosted payment page to pay, fail or cancel, send correctly signed confirmations (including deliberate duplicates and refunds) to the same confirmation endpoint code the deployed stage runs, and be selected by the same local-dev switch the other stand-ins use. Testing against the provider's own test mode, with its command-line forwarding, MUST be documented as an option for a deployed stage.
 - **FR-019**: Order and enrolment writes MUST go through shared `core-table` helpers that every writer calls, and invariant checks that a test can break MUST cover: at most one paid order per enrolment and one enrolment per student and course; every paid order has a matching enrolment (not ended unless the order is refunded); every enrolment made by payment points to a paid or refunded order for the same student and course; no enrolment without a paid order in a course that has had a price since before the enrolment; an order's amounts and currency are valid and its status matches its recorded times.
 - **FR-020**: Orders MUST carry the list price and the amount charged separately, and fulfilment (marking an order paid and enrolling the student) MUST NOT depend on the payment provider, so that coupons (#285) can discount an order and can enrol directly for a fully discounted one, and payouts (#286) can read amounts and refunds, without reshaping the records.
 - **FR-021**: The confirmation endpoint MUST be reachable by the payment provider without signing in, MUST sit behind the platform's default hardening (WAF and throttling per stage config), and MUST NOT share a function with the signed-in APIs.
-- **FR-022**: The feature MUST NOT add taxes, invoices, subscriptions or bundles, multiple currencies on one course, coupons, instructor payouts or earnings reports, dispute handling, or emailed receipts of its own (see Assumptions and Out of scope).
+- **FR-022**: The feature MUST NOT add gifts, carts, delayed payment methods, taxes, invoices, subscriptions or bundles, multiple currencies on one course, coupons, instructor payouts or earnings reports, dispute handling, or emailed receipts of its own (see Assumptions and Out of scope).
 
 ### Key Entities
 
@@ -179,6 +192,6 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **Taxes and invoices are the platform operator's business** (tax settings and receipts in the provider's dashboard). Prices are what the student pays.
 - **Disputes and chargebacks are handled by hand** in the provider's dashboard; an operator refunds, which revokes access as above.
 - **Dependencies on in-flight specs, none blocking.** Instructor dashboard (#278): paid enrolments count like any other, and revenue figures are #286's. Catalogue categories (#283): both specs add fields to what a catalogue card shows and what the search index stores; this one adds only the price and no price filter. Notifications (#281): purchase and refund notices could use the pipeline later; this feature sends none of its own. Announcements (#282): an ended enrolment loses announcements through the same enrolled-student rule.
-- **Out of scope here, left to the sibling issues.** Coupons and discount codes, their redemption counts, and enrolling directly for a fully discounted order (#285). Stripe Connect onboarding, the platform fee, instructor earnings reports, payout status and refund adjustments in earnings (#286). Also out of scope: taxes, invoices, subscriptions, bundles, multiple currencies per course, dispute handling, emailed receipts, a purchase history page, admin portal views, and a deliberate backfill of orders.
+- **Out of scope here, left to the sibling issues.** Coupons and discount codes, their redemption counts, and enrolling directly for a fully discounted order (#285). Stripe Connect onboarding, the platform fee, instructor earnings reports, payout status and refund adjustments in earnings (#286). Also out of scope: gifts and carts, delayed payment methods (bank debits, vouchers), taxes, invoices, subscriptions, bundles, multiple currencies per course, dispute handling, emailed receipts, a purchase history page, admin portal views, and a deliberate backfill of orders.
 - Discava has not launched: no old data or URLs to preserve, so the price attributes, routes and records are added outright.
 - Only the final implementation PR may close #284.
