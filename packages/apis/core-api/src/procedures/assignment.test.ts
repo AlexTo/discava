@@ -2,10 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { RETIRED_VERSION_DELAY_MINUTES } from '@discava/common-server-utils/media-keys';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { submit, uploadUrl } from './assignment.js';
+import { mySubmission, submit, uploadUrl } from './assignment.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
 const {
@@ -136,7 +138,7 @@ vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanup: schedule,
 }));
 
-const router = t.router({ uploadUrl, submit });
+const router = t.router({ uploadUrl, submit, mySubmission });
 const caller = t.createCallerFactory(router);
 
 const USER_SUB = 'student-1';
@@ -669,5 +671,231 @@ describe('submit (first submission)', () => {
     const [transaction] = transactions;
     expect(itemOf(transaction, 'contentItem').op).toBe('check');
     expect(itemOf(transaction, 'itemCompletion').op).toBe('check');
+  });
+});
+
+describe('submit (resubmission)', () => {
+  const submitNow = () => callAs(USER_SUB).submit(submitInput());
+  const OLD_FOLDER = `submissions/${USER_SUB}/old-attempt`;
+  const previous = (overrides: Record<string, unknown> = {}) => ({
+    ...ref,
+    userId: USER_SUB,
+    status: 'submitted',
+    version: 1,
+    late: false,
+    submittedAt: '2026-01-01T00:00:00.000Z',
+    file: {
+      key: `${ITEM_PREFIX}${OLD_FOLDER}/Old.pdf`,
+      fileName: 'Old.pdf',
+      fileSize: 100,
+      mimeType: 'application/pdf',
+    },
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    db.assignmentSubmission = previous();
+    db.itemCompletion = {
+      userId: USER_SUB,
+      ...ref,
+      completedAt: '2026-01-01T00:00:00.000Z',
+    };
+  });
+
+  it('goes up one version and holds only the new file', async () => {
+    const result = await submitNow();
+
+    expect(result).toMatchObject({
+      version: 2,
+      status: 'submitted',
+      file: { fileName: 'My Essay.pdf' },
+    });
+    const patch = itemOf(transactions[0]!, 'assignmentSubmission');
+    expect(patch).toMatchObject({
+      op: 'patch',
+      set: {
+        version: 2,
+        file: {
+          key: copyTo.mock.calls[0]![1],
+          fileName: 'My Essay.pdf',
+          fileSize: 2048,
+          mimeType: 'application/pdf',
+        },
+      },
+    });
+    expect(patch.condition).toBe('version = 1 AND status = submitted');
+  });
+
+  it('neither counts the student again nor writes a completion', async () => {
+    await submitNow();
+
+    const [transaction] = transactions;
+    expect(itemOf(transaction!, 'contentItem').op).toBe('check');
+    expect(transaction!.some((item) => item.entity === 'itemCompletion')).toBe(
+      false,
+    );
+    expect(transaction!.some((item) => item.op === 'create')).toBe(false);
+  });
+
+  it('refuses a returned submission: PRECONDITION_FAILED', async () => {
+    db.assignmentSubmission = previous({ status: 'returned' });
+    await expect(submitNow()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(copyTo).not.toHaveBeenCalled();
+  });
+
+  it('schedules the retirement of the replaced folder, keeping the current file', async () => {
+    await submitNow();
+
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(schedule).toHaveBeenCalledWith(
+      expect.anything(),
+      { ...ref, submissionNonce: OLD_FOLDER },
+      RETIRED_VERSION_DELAY_MINUTES,
+      { keepIfCurrentFor: USER_SUB, purpose: 'retire' },
+    );
+    expect(deleteFolder).not.toHaveBeenCalled();
+  });
+
+  it('retires nothing when the submission fails', async () => {
+    transactionGo.mockResolvedValue(cancelledWith(['ValidationError']));
+    await expect(submitNow()).rejects.toThrow();
+    expect(schedule).not.toHaveBeenCalled();
+  });
+
+  it('only logs when the retirement can’t be scheduled', async () => {
+    // The real scheduler swallows its own failure and logs it.
+    schedule.mockResolvedValue(undefined);
+    await expect(submitNow()).resolves.toMatchObject({ version: 2 });
+  });
+
+  describe('a lost race', () => {
+    it('is a CONFLICT at once, with no second commit, deleting only its own folder', async () => {
+      transactionGo.mockResolvedValue(
+        cancelledWith([
+          'None',
+          'None',
+          'None',
+          'None',
+          'ConditionalCheckFailed',
+        ]),
+      );
+      let reads = 0;
+      db.assignmentSubmission = () =>
+        reads++ < 1
+          ? previous()
+          : previous({
+              version: 2,
+              file: {
+                ...previous().file,
+                key: `${ITEM_PREFIX}submissions/${USER_SUB}/winner/Win.pdf`,
+              },
+            });
+
+      await expect(submitNow()).rejects.toMatchObject({ code: 'CONFLICT' });
+
+      expect(transactions).toHaveLength(1);
+      expect(copyTo).toHaveBeenCalledTimes(1);
+      expect(deleteFolder).toHaveBeenCalledTimes(1);
+      expect(deleteFolder).toHaveBeenCalledWith(
+        expect.anything(),
+        folderOfCopy(),
+      );
+      expect(folderOfCopy()).not.toContain('winner');
+      expect(schedule).not.toHaveBeenCalled();
+    });
+
+    it('a try cancelled by an unrelated write retries with the same copy', async () => {
+      transactionGo
+        .mockResolvedValueOnce(
+          cancelledWith([
+            'None',
+            'None',
+            'None',
+            'None',
+            'TransactionConflict',
+          ]),
+        )
+        .mockResolvedValueOnce({ canceled: false, data: [] });
+
+      await expect(submitNow()).resolves.toMatchObject({ version: 2 });
+
+      expect(transactions).toHaveLength(2);
+      expect(copyTo).toHaveBeenCalledTimes(1);
+      expect(deleteFolder).not.toHaveBeenCalled();
+      expect(schedule).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('late', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('goes from on time to late after the due date', async () => {
+      db.contentItem.dueAt = '2026-05-01T00:00:00.000Z';
+      db.assignmentSubmission = previous({ late: false });
+
+      await expect(submitNow()).resolves.toMatchObject({ late: true });
+      expect(
+        itemOf(transactions[0]!, 'assignmentSubmission').set,
+      ).toMatchObject({ late: true });
+    });
+
+    it('goes from late to on time after an extension', async () => {
+      db.contentItem.dueAt = '2026-07-01T00:00:00.000Z';
+      db.assignmentSubmission = previous({ late: true });
+
+      await expect(submitNow()).resolves.toMatchObject({ late: false });
+      expect(
+        itemOf(transactions[0]!, 'assignmentSubmission').set,
+      ).toMatchObject({ late: false });
+    });
+  });
+});
+
+describe('mySubmission', () => {
+  it('rejects unauthenticated callers', async () => {
+    await expect(callAs().mySubmission(ref)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  it('is null before anything was submitted', async () => {
+    await expect(callAs(USER_SUB).mySubmission(ref)).resolves.toBeNull();
+  });
+
+  it('returns the caller’s own submission with no key, also in an archived course', async () => {
+    db.course.status = 'archived';
+    db.assignmentSubmission = {
+      status: 'returned',
+      version: 3,
+      late: true,
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      file: {
+        key: `${ITEM_PREFIX}submissions/${USER_SUB}/a/Old.pdf`,
+        fileName: 'Old.pdf',
+        fileSize: 100,
+        mimeType: 'application/pdf',
+      },
+    };
+
+    const result = await callAs(USER_SUB).mySubmission(ref);
+
+    expect(result).toEqual({
+      version: 3,
+      status: 'returned',
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      late: true,
+      file: { fileName: 'Old.pdf', fileSize: 100, mimeType: 'application/pdf' },
+    });
+  });
+
+  it('refuses a student who isn’t enrolled', async () => {
+    db.enrolment = undefined;
+    await expect(callAs(USER_SUB).mySubmission(ref)).rejects.toThrow();
   });
 });

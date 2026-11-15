@@ -17,8 +17,7 @@ import {
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
-import type { ISubmission } from '@discava/core-api';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleCheck, Paperclip } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Alert } from '../../../../components/alert';
@@ -105,8 +104,9 @@ type Failure =
   | { kind: 'failed'; message: string };
 
 // An upload assignment (#102): its instructions, due date and limits, and a
-// form to submit one file. core-api stores it with the submission and marks
-// the item done in the same transaction.
+// form to submit one file, and to replace it with another until the work is
+// returned. core-api stores it with the submission and marks the item done in
+// the same transaction.
 export function AssignmentItem({
   item,
   done,
@@ -130,12 +130,18 @@ export function AssignmentItem({
   );
   const [percent, setPercent] = useState(0);
   const [failure, setFailure] = useState<Failure>();
-  const [submission, setSubmission] = useState<ISubmission>();
+  // Replacing the current file, rather than just showing it.
+  const [resubmitting, setResubmitting] = useState(false);
   const getUploadUrl = useMutation(trpc.assignment.uploadUrl.mutationOptions());
   const submit = useMutation(trpc.assignment.submit.mutationOptions());
 
   const { courseId, moduleId, lessonId, contentItemId } = item;
   const ref = { courseId, moduleId, lessonId, contentItemId };
+  const submissionKey = trpc.assignment.mySubmission.queryKey(ref);
+  const { data: submission } = useQuery(
+    trpc.assignment.mySubmission.queryOptions(ref),
+  );
+  const locked = submission?.status === 'returned';
   const busy = phase !== 'idle';
   const pastDue =
     item.dueAt !== undefined && Date.now() > Date.parse(item.dueAt);
@@ -150,12 +156,27 @@ export function AssignmentItem({
     setFile(reason ? null : chosen);
   };
 
+  // The stored submission, read afresh; undefined when it can't be read.
+  const reread = async () => {
+    try {
+      return await queryClient.fetchQuery({
+        ...trpc.assignment.mySubmission.queryOptions(ref),
+        staleTime: 0,
+      });
+    } catch {
+      return undefined;
+    }
+  };
+
   const send = async () => {
     if (!file) {
       return;
     }
     setFailure(undefined);
     setPercent(0);
+    // The version the form was showing: what a failed submit is compared to.
+    const loadedVersion = submission?.version;
+    let submitted = false;
     try {
       setPhase('uploading');
       const target = await getUploadUrl.mutateAsync({
@@ -165,13 +186,15 @@ export function AssignmentItem({
       });
       await upload(target.uploadUrl, target.headers, file, setPercent);
       setPhase('submitting');
+      submitted = true;
       const result = await submit.mutateAsync({
         ...ref,
         objectKey: target.objectKey,
         fileName: file.name,
       });
-      setSubmission(result);
+      queryClient.setQueryData(submissionKey, result);
       setFile(null);
+      setResubmitting(false);
       // The submission also completed the item; progress follows once
       // recalculation has run, which the player waits for (#237).
       void queryClient.invalidateQueries({
@@ -185,16 +208,39 @@ export function AssignmentItem({
           queryKey: trpc.course.view.queryKey({ courseId }),
         });
         setFailure({ kind: 'unavailable' });
-      } else if (code === 'CONFLICT') {
-        setFailure({ kind: 'conflict' });
       } else {
-        setFailure({
-          kind: 'failed',
-          message:
-            code === 'PRECONDITION_FAILED' || code === 'BAD_REQUEST'
-              ? apiErrorMessage(error)
-              : 'Something went wrong and your work was not submitted',
-        });
+        // After a failed submit the answer may have been lost with the
+        // response, so read what is stored before saying anything. A
+        // submission the form didn't know of, or a higher version, means the
+        // file did go through. CONFLICT and the refusals are answers: the
+        // request did not commit, so only the record is refreshed.
+        const answered =
+          code === 'CONFLICT' ||
+          code === 'PRECONDITION_FAILED' ||
+          code === 'BAD_REQUEST';
+        const stored = submitted ? await reread() : undefined;
+        if (
+          !answered &&
+          stored &&
+          (loadedVersion === undefined || stored.version > loadedVersion)
+        ) {
+          setFile(null);
+          setResubmitting(false);
+          void queryClient.invalidateQueries({
+            queryKey: trpc.course.myItemCompletions.queryKey({ courseId }),
+          });
+          awaitProgressRecalculation(queryClient, trpc, courseId);
+        } else if (code === 'CONFLICT') {
+          setFailure({ kind: 'conflict' });
+        } else {
+          setFailure({
+            kind: 'failed',
+            message:
+              code === 'PRECONDITION_FAILED' || code === 'BAD_REQUEST'
+                ? apiErrorMessage(error)
+                : 'Something went wrong and your work was not submitted',
+          });
+        }
       }
     } finally {
       setPhase('idle');
@@ -245,6 +291,11 @@ export function AssignmentItem({
               </ItemContent>
               <ItemActions />
             </Item>
+            {locked ? (
+              <p className="text-sm text-muted-foreground">
+                This submission has been returned and can't be changed
+              </p>
+            ) : null}
           </div>
         ) : done ? (
           <p className="text-sm font-medium">
@@ -266,7 +317,18 @@ export function AssignmentItem({
         <Alert header="This course is archived">
           Work can no longer be submitted.
         </Alert>
-      ) : submission || done ? null : (
+      ) : locked ? null : submission && !resubmitting ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setFailure(undefined);
+            setResubmitting(true);
+          }}
+        >
+          Resubmit
+        </Button>
+      ) : !submission && done ? null : (
         <div className="space-y-3">
           {pastDue ? (
             <Alert header="This assignment is past due">
@@ -334,6 +396,12 @@ export function AssignmentItem({
           {failure?.kind === 'failed' ? (
             <Alert type="error" header="Not submitted">
               {failure.message}
+              {submission ? (
+                <>
+                  <br />
+                  Your earlier submission is unchanged
+                </>
+              ) : null}
             </Alert>
           ) : null}
 

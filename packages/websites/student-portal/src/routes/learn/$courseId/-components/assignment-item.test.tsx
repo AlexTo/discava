@@ -75,6 +75,7 @@ const render = ({
       handlers: {
         'assignment.uploadUrl': () => target,
         'assignment.submit': () => submission(),
+        'assignment.mySubmission': () => null,
         'course.myItemCompletions': () => ({ items: [] }),
         'course.myLessonProgress': () => ({ lessons: [] }),
         'course.myEnrolment': () => ({}),
@@ -148,7 +149,12 @@ describe('AssignmentItem', () => {
       expect(await screen.findByText('huge.pdf is over 100 MB')).toBeVisible();
       expect(submitButton()).toBeDisabled();
       expect(upload).not.toHaveBeenCalled();
-      expect(calls.filter((c) => c.path.startsWith('assignment'))).toEqual([]);
+      expect(
+        calls.filter(
+          (c) =>
+            c.path === 'assignment.uploadUrl' || c.path === 'assignment.submit',
+        ),
+      ).toEqual([]);
     });
 
     it('a file of a type that is not allowed', async () => {
@@ -385,5 +391,217 @@ describe('AssignmentItem', () => {
       ),
     ).toBeVisible();
     expect(screen.queryByRole('button', { name: /Submit/ })).toBeNull();
+  });
+
+  describe('resubmitting', () => {
+    const current = (overrides: Record<string, unknown> = {}) =>
+      submission({ version: 1, ...overrides });
+    const resubmit = (user: ReturnType<typeof render>['user']) =>
+      user.click(screen.getByRole('button', { name: 'Resubmit' }));
+
+    it('shows the current file and a Resubmit button', async () => {
+      render({
+        done: true,
+        handlers: { 'assignment.mySubmission': () => current() },
+      });
+
+      expect(await screen.findByText(/^Submitted/)).toBeVisible();
+      expect(screen.getByText('essay.pdf')).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Resubmit' })).toBeEnabled();
+      expect(screen.queryByLabelText('Choose file')).not.toBeInTheDocument();
+    });
+
+    it('shows the current file beside the chosen replacement, and replaces it', async () => {
+      let stored = current();
+      const { user, calls } = render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () => stored,
+          'assignment.submit': () => {
+            stored = current({
+              version: 2,
+              file: {
+                fileName: 'better.pdf',
+                fileSize: 4096,
+                mimeType: 'application/pdf',
+              },
+            });
+            return stored;
+          },
+        },
+      });
+      await screen.findByText(/^Submitted/);
+      await resubmit(user);
+
+      expect(submitButton()).toBeDisabled();
+      await choose(user, pdf('better.pdf', 4096));
+
+      // The current file stays visible while the replacement is chosen.
+      expect(screen.getByText('essay.pdf')).toBeVisible();
+      expect(await screen.findByText(/better\.pdf \(4 KB\)/)).toBeVisible();
+      expect(submitButton()).toBeEnabled();
+
+      await user.click(submitButton());
+
+      expect(await screen.findByText('Version 2')).toBeVisible();
+      expect(screen.queryByText('essay.pdf')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Resubmit' })).toBeVisible();
+      expect(calls.filter((c) => c.path === 'assignment.submit')).toHaveLength(
+        1,
+      );
+    });
+
+    it('keeps the chosen file across a conflict, and tries again', async () => {
+      let attempts = 0;
+      const { user } = render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () => current(),
+          'assignment.submit': () => {
+            if (attempts++ === 0) {
+              throw new ApiError('CONFLICT', 'conflict');
+            }
+            return current({ version: 2 });
+          },
+        },
+      });
+      await screen.findByText(/^Submitted/);
+      await resubmit(user);
+      await choose(user, pdf('better.pdf'));
+      await user.click(submitButton());
+
+      expect(
+        await screen.findByText(
+          'Your submission changed while you were sending it. Try again',
+        ),
+      ).toBeVisible();
+      expect(screen.getByText(/better\.pdf \(2 KB\)/)).toBeVisible();
+
+      await user.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(await screen.findByText('Version 2')).toBeVisible();
+    });
+
+    it('is locked once returned: details stay, no Resubmit', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () => current({ status: 'returned' }),
+        },
+      });
+
+      expect(
+        await screen.findByText(
+          "This submission has been returned and can't be changed",
+        ),
+      ).toBeVisible();
+      expect(screen.getByText('essay.pdf')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Resubmit' })).toBeNull();
+      expect(screen.queryByLabelText('Choose file')).not.toBeInTheDocument();
+    });
+
+    it('offers no Resubmit in an archived course', async () => {
+      render({
+        done: true,
+        readOnly: true,
+        handlers: { 'assignment.mySubmission': () => current() },
+      });
+
+      expect(await screen.findByText('This course is archived')).toBeVisible();
+      expect(await screen.findByText('essay.pdf')).toBeVisible();
+      expect(screen.queryByRole('button', { name: 'Resubmit' })).toBeNull();
+    });
+
+    describe('after a failed request', () => {
+      const failing = () => {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'boom');
+      };
+
+      it('shows Submitted when a higher version is now stored', async () => {
+        let stored = current();
+        const { user } = render({
+          done: true,
+          handlers: {
+            'assignment.mySubmission': () => stored,
+            'assignment.submit': () => {
+              stored = current({ version: 2 });
+              return failing();
+            },
+          },
+        });
+        await screen.findByText(/^Submitted/);
+        await resubmit(user);
+        await choose(user, pdf('better.pdf'));
+        await user.click(submitButton());
+
+        expect(await screen.findByText('Version 2')).toBeVisible();
+        expect(
+          screen.queryByText(
+            'Something went wrong and your work was not submitted',
+          ),
+        ).not.toBeInTheDocument();
+      });
+
+      it('shows Submitted when a first submission did go through', async () => {
+        let stored: unknown = null;
+        const { user } = render({
+          handlers: {
+            'assignment.mySubmission': () => stored,
+            'assignment.submit': () => {
+              stored = current();
+              return failing();
+            },
+          },
+        });
+        await choose(user, pdf());
+        await user.click(submitButton());
+
+        expect(await screen.findByText('Version 1')).toBeVisible();
+      });
+
+      it('says the work was not submitted, and the earlier one is unchanged', async () => {
+        const { user, calls } = render({
+          done: true,
+          handlers: {
+            'assignment.mySubmission': () => current(),
+            'assignment.submit': failing,
+          },
+        });
+        await screen.findByText(/^Submitted/);
+        await resubmit(user);
+        await choose(user, pdf('better.pdf'));
+        const reads = () =>
+          calls.filter((c) => c.path === 'assignment.mySubmission').length;
+        const before = reads();
+        await user.click(submitButton());
+
+        expect(
+          await screen.findByText(
+            /Something went wrong and your work was not submitted/,
+          ),
+        ).toBeVisible();
+        expect(
+          screen.getByText(/Your earlier submission is unchanged/),
+        ).toBeVisible();
+        expect(reads()).toBeGreaterThan(before);
+        expect(screen.getByRole('button', { name: 'Try again' })).toBeEnabled();
+      });
+
+      it('says only that nothing was submitted when there was no earlier one', async () => {
+        const { user } = render({
+          handlers: { 'assignment.submit': failing },
+        });
+        await choose(user, pdf());
+        await user.click(submitButton());
+
+        expect(
+          await screen.findByText(
+            'Something went wrong and your work was not submitted',
+          ),
+        ).toBeVisible();
+        expect(
+          screen.queryByText(/Your earlier submission is unchanged/),
+        ).not.toBeInTheDocument();
+      });
+    });
   });
 });

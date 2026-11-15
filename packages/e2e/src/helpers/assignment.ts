@@ -4,6 +4,7 @@
  */
 import { expect, type Page } from '@playwright/test';
 import type { ApiUser } from './api.js';
+import { SERVICES } from './portals.js';
 import { lessonItem } from './student-portal.js';
 
 // Steps for upload assignments (#102), for scenarios to build on.
@@ -68,4 +69,45 @@ export const submitChosenFile = async (page: Page, title: string) => {
   await item.getByRole('button', { name: 'Submit', exact: true }).click();
   await expect(item.getByText(/^Submitted/)).toBeVisible({ timeout: 30_000 });
   return item;
+};
+
+type AssignmentRef = Awaited<ReturnType<typeof createUploadAssignmentCourse>>;
+
+// Uploads `body` as a new submission file, as the portal does: a presigned
+// PUT to the upload bucket. Returns what `assignment.submit` is given.
+export const uploadSubmissionFile = async (
+  student: ApiUser,
+  ref: AssignmentRef,
+  fileName: string,
+  body: Buffer,
+) => {
+  const target = await student.core.assignment.uploadUrl.mutate({
+    ...ref,
+    fileName,
+    fileSize: body.length,
+  });
+  const response = await fetch(target.uploadUrl, {
+    method: 'PUT',
+    headers: target.headers,
+    body: new Uint8Array(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Uploading ${fileName} failed: ${response.status}`);
+  }
+  return { ...ref, objectKey: target.objectKey, fileName };
+};
+
+// The local lesson media bucket (see LOCAL_S3 in common-server-utils).
+const LESSON_MEDIA_BUCKET = 'discava-lesson-media';
+
+// The folders holding submission files of the assignment, in the media bucket
+// (S3Mock lists anonymously over plain HTTP).
+export const submissionFolders = async (ref: AssignmentRef) => {
+  const prefix = `courses/${ref.courseId}/modules/${ref.moduleId}/lessons/${ref.lessonId}/content-items/${ref.contentItemId}/submissions/`;
+  const response = await fetch(
+    `${SERVICES.s3Mock}${LESSON_MEDIA_BUCKET}?list-type=2&prefix=${encodeURIComponent(prefix)}`,
+  );
+  const xml = await response.text();
+  const keys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]);
+  return new Set(keys.map((key) => key.slice(0, key.lastIndexOf('/'))));
 };

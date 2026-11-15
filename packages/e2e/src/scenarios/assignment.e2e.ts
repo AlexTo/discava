@@ -84,6 +84,37 @@ test.describe('submitting to an upload assignment', () => {
     await expect(item.getByText('Late', { exact: true })).toBeVisible();
   });
 
+  test('a student resubmits with a replacement file', async ({ page }) => {
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const title = uniqueName('E2E resubmit assignment course');
+    await createUploadAssignmentCourse(instructor, {
+      courseTitle: title,
+      assignmentTitle: ASSIGNMENT,
+      dueAt: '2099-01-01T00:00:00.000Z',
+    });
+
+    await openCourse(page, title);
+    await enrol(page, newUser('Sam', ['student']));
+    await startFirstLesson(page);
+    await chooseSubmissionFile(page, ASSIGNMENT, WORKSHEET_PDF);
+    const item = await submitChosenFile(page, ASSIGNMENT);
+    await expect(item.getByText('Version 1')).toBeVisible();
+
+    await item.getByRole('button', { name: 'Resubmit' }).click();
+    await expect(item.getByText('worksheet.pdf')).toBeVisible();
+    await chooseSubmissionFile(page, ASSIGNMENT, {
+      name: 'second-draft.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('second draft'),
+    });
+    await item.getByRole('button', { name: 'Submit', exact: true }).click();
+
+    await expect(item.getByText('Version 2')).toBeVisible({ timeout: 30_000 });
+    await expect(item.getByText('second-draft.txt')).toBeVisible();
+    await expect(item.getByText('worksheet.pdf')).toHaveCount(0);
+    await expect(item.getByText('Late', { exact: true })).toHaveCount(0);
+  });
+
   test('refuses a file that is too big or of a type that isn’t allowed', async ({
     page,
   }) => {
