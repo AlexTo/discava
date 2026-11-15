@@ -62,7 +62,7 @@ No scans in user requests.
 | Case | Items in one transaction |
 |------|--------------------------|
 | Post | `review` create (not exists; a tombstone or an existing review cancels it); `enrolment` condition (status not `dropped`); `course` condition (status `published`); `courseRating` add `+1` to `stars<rating>` (creates the record if absent) |
-| Edit | `review` patch of `rating`, `text`, `editedAt`, `version + 1`, condition `version = <read>` and `status = visible`; if the rating changed, `courseRating` add `-1` to the old counter (condition counter >= 1) and `+1` to the new |
+| Edit | `review` patch of `rating`, `text`, `editedAt`, `version + 1`, condition `version = <read>` and `status = visible`; if the rating changed, ONE `courseRating` update item (DynamoDB rejects two operations on one item in a transaction) that adds `-1` to the old counter and `+1` to the new in one expression (`ADD stars<old> :neg, stars<new> :one`, condition `stars<old> >= :one`) |
 | Delete | `review` delete (condition `version = <read>`, `status = visible`); `courseRating` add `-1` to `stars<rating>` (condition >= 1) |
 | Remove (admin) | `review` patch `status = removed`, `removedAt`, `removedBy`, `removedReason`, condition `version = <read>` and `status = visible`; `courseRating` add `-1` (condition >= 1) |
 | Respond | `review` patch of the four response attributes, condition `status = visible`; `courseInstructor` condition (exists) |
