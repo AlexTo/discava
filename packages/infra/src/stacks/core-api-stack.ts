@@ -145,7 +145,11 @@ export class CoreApiStack extends Stack {
       coreTable.grantReadWriteData(handler);
       searchCollection.grantRead(handler.role!);
     });
-    for (const op of ['contentItem.videoUrl', 'contentItem.fileUrl'] as const) {
+    for (const op of [
+      'contentItem.videoUrl',
+      'contentItem.fileUrl',
+      'assignment.submissionFileUrl',
+    ] as const) {
       lessonMediaBucket.grantReadSigningKey(
         this.privilegedHandler(integrations, op),
       );

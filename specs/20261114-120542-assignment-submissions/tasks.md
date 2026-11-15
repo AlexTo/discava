@@ -120,14 +120,14 @@ description: "Task list for student submissions for upload assignments"
 
 ### Tests for User Story 3 (write first)
 
-- [ ] T032 [P] [US3] Extend `assignment.test.ts` for `assignment.mySubmission` and `assignment.submissionFileUrl`: only the caller's own record (found by `ctx.user.sub`, never an input id); `null` with no submission; hidden or archived assignment, module or lesson → refused; an archived course still works; `submissionFileUrl` with no submission → `NOT_FOUND`; the output carries no storage key; the URL is signed for 5 minutes (`FILE_URL_LIFETIME_SECONDS`) and local dev returns the unsigned S3Mock URL.
-- [ ] T033 [P] [US3] Extend `assignment-item.test.tsx` for the submitted view with downloads, the unavailable state and the archived-course state; extend `assignment.e2e.ts`: the download works, a second student can't read the first student's submission, hiding the assignment hides the submission and showing it brings it back.
+- [x] T032 [P] [US3] Extend `assignment.test.ts` for `assignment.mySubmission` and `assignment.submissionFileUrl`: only the caller's own record (found by `ctx.user.sub`, never an input id); `null` with no submission; hidden or archived assignment, module or lesson → refused; an archived course still works; `submissionFileUrl` with no submission → `NOT_FOUND`; the output carries no storage key; the URL is signed for 5 minutes (`FILE_URL_LIFETIME_SECONDS`) and local dev returns the unsigned S3Mock URL.
+- [x] T033 [P] [US3] Extend `assignment-item.test.tsx` for the submitted view with downloads, the unavailable state and the archived-course state; extend `assignment.e2e.ts`: the download works, a second student can't read the first student's submission, hiding the assignment hides the submission and showing it brings it back.
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] `assignment.mySubmission` and `assignment.submissionFileUrl` in `packages/apis/core-api/src/procedures/assignment.ts`, using `getSignedCloudFrontFileUrl` and `localObjectUrl` as `contentItem.fileUrl` does in `procedures/content-item.ts`.
-- [ ] T035 [US3] The submitted view in `assignment-item.tsx`: file name and size, submitted time, late flag, "Version <n>", **Download** (calls `submissionFileUrl`), the locked and archived-course texts; show it on load via `mySubmission`.
-- [ ] T036 [US3] Run the US3 tests.
+- [x] T034 [US3] `assignment.mySubmission` and `assignment.submissionFileUrl` in `packages/apis/core-api/src/procedures/assignment.ts`, using `getSignedCloudFrontFileUrl` and `localObjectUrl` as `contentItem.fileUrl` does in `procedures/content-item.ts`.
+- [x] T035 [US3] The submitted view in `assignment-item.tsx`: file name and size, submitted time, late flag, "Version <n>", **Download** (calls `submissionFileUrl`), the locked and archived-course texts; show it on load via `mySubmission`.
+- [x] T036 [US3] Run the US3 tests.
 
 **Checkpoint**: students can see and download their own work.
 
