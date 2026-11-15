@@ -19,4 +19,4 @@ Decides which courses the list returns, newest `courseUpdatedAt` first, through 
 ## Derived values
 
 - Home course list = list items where `status !== 'archived'`, first 6.
-- Summary "Courses" figure = number of non-archived items in the fetched list.
+- Summary "Courses" figure = number of non-archived items in the fetched list (at most the 100 requested).

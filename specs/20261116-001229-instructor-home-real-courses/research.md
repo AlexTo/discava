@@ -11,7 +11,7 @@
 - **Decision**: Fetch the list, filter out `archived` in the portal, and show the first 6.
 - **Rationale**: The procedure has no status filter, and adding one for six cards isn't worth an API change before launch. The list is capped at 100 per request like My Courses.
 - **Alternatives**: Add a `status` filter to the API (rejected for now); show archived too (rejected in clarification: they crowd the slots).
-- **Known limit**: an instructor with more than 100 courses whose newest 100 are all archived would see an empty home. Treated as unrealistic and noted, not engineered around.
+- **Known limits**: an instructor with more than 100 courses whose newest 100 are all archived would see an empty home, and the summary count covers only the fetched 100. Treated as unrealistic and noted, not engineered around.
 
 ## R3. Authorization
 

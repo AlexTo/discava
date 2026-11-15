@@ -8,7 +8,7 @@
 
 **Input**: User description: "Instructor portal home page lists the signed-in instructor's real courses (from the instructor's course list) instead of hard-coded mock data. The fake 'MTH201 · Applied Mathematics' card on the home page links to a course that doesn't exist and shows \"You don't have permission to do that.\""
 
-**Parent issue**: none
+**Parent issue**: #342
 
 ## Clarifications
 
@@ -94,9 +94,9 @@ While courses load, the instructor sees a loading state. If loading fails, they 
 - **FR-002**: Each listed course MUST show its title and status, show its image when it has one, and open that course's editor when chosen.
 - **FR-003**: The home page MUST NOT show any course, student, count, date or activity that is not backed by real data.
 - **FR-004**: The sample grading queue, upcoming dates, recent activity, and the student and to-grade figures MUST be removed from the home page.
-- **FR-005**: The summary MUST report the real number of draft and published courses the instructor teaches (archived excluded).
+- **FR-005**: The summary MUST report the real number of draft and published courses the instructor teaches (archived excluded). With more than 100 courses the figure counts only the 100 most recently updated.
 - **FR-006**: An instructor with no courses MUST see an empty state with a "Create a course" action.
-- **FR-007**: The home page MUST show a limited number of courses and link to My Courses ("View all courses") for the full list.
+- **FR-007**: The home page MUST show at most 6 courses and link to My Courses ("View all courses") for the full list.
 - **FR-008**: The page MUST show a loading state while courses load, and an error with Retry when loading fails, never the empty state for a failed load.
 - **FR-009**: A course created from the home page MUST appear in the list without a manual reload.
 - **FR-010**: The quick actions MUST be limited to ones that work today ("Create a course").
@@ -116,7 +116,7 @@ While courses load, the instructor sees a loading state. If loading fails, they 
 
 - **SC-001**: 100% of courses shown on the home page can be opened by the instructor who sees them, with no permission error.
 - **SC-002**: 0 sample names, titles, counts or dates appear on the home page for any instructor.
-- **SC-003**: An instructor sees their courses within 3 seconds of the page opening on a normal connection.
+- **SC-003**: An instructor sees their courses within 3 seconds of the page opening on a normal connection (checked by hand, task T009).
 - **SC-004**: A new instructor can go from sign-in to creating their first course in one step from the home page.
 - **SC-005**: A failed load is never mistaken for "no courses": 100% of failures show an error with Retry.
 
@@ -124,7 +124,7 @@ While courses load, the instructor sees a loading state. If loading fails, they 
 
 - The instructor's existing course list (the one My Courses already uses) is the data source; no new data or storage is needed.
 - "Most recently updated first" is the existing ordering of that list.
-- Home shows up to 6 courses; My Courses remains the full list.
+- My Courses remains the full list; Home is capped at 6 (FR-007).
 - Removed sections come back as their own features once real data exists (grading queue with assignment grading, activity with enrolment events).
-- My Courses still shows sample enrolment and ungraded figures per course. Replacing those is a follow-up, not part of this feature.
+- My Courses (per-course enrolment and ungraded figures) and the dashboard page (seeded figures) still show sample data. Replacing those is a follow-up, not part of this feature.
 - Making opening a nonexistent course report "not found" rather than "permission denied" is a separate follow-up.
