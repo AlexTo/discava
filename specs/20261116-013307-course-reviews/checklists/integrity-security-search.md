@@ -28,6 +28,8 @@
 - [ ] CHK013 Is the abuse-handling scope (no reporting, no queue, no rate limit) stated as intentional? [Assumption, Spec §FR-015]
 - [ ] CHK014 Are the removal reason's visibility rules defined (author and admin only, not public)? [Ambiguity, Spec §FR-009]
 
+- [ ] CHK023 Is it stated that a rating-changing edit updates the rating summary with a single operation on that record, not two operations on one item in the same transaction? [Clarity, Data Model "Writes by case"]
+
 ## Search and Catalogue
 
 - [ ] CHK015 Is the weighted rating defined precisely enough to compute from a count and an average? [Measurability, Spec §FR-007]

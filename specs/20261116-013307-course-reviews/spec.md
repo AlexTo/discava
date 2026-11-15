@@ -139,13 +139,13 @@ When a student posts a review of a course, its instructors get an in-app notific
 - **FR-007**: Search MUST support ordering by rating, ordering by newest and by relevance (default with text), and filtering by a minimum plain average (4.5, 4.0, 3.5 or 3.0 and up; unrated courses never match). Ordering by rating and the relevance boost MUST use the weighted rating `(count x average + 5 x 3.5) / (count + 5)`, so a course with one 5-star rating does not outrank a course with many 4.8 ratings; unrated courses get no boost and sort after rated ones. A course's search entry MUST update when its summary changes.
 - **FR-008**: One of a course's instructors MUST be able to write, edit and delete a single public response on any visible review of the course; nobody else can. A response MUST NOT change a review's rating, text, edited mark or the summary.
 - **FR-009**: An admin MUST be able to remove any review with a reason (at most 200 characters). A removed review MUST leave public views, the instructor's response list and the summary, MUST show its author a removed notice with the reason (the reason is visible only to the author and admins, never public), and MUST block that student from posting another review of the course. Removal is idempotent.
-- **FR-009a**: The admin portal MUST offer a Reviews screen: choose a published or archived course, list all its reviews (removed ones marked, with reason), and remove one.
 - **FR-010**: Instructors of a course MUST be able to list its reviews, with each rating, text and whether it has a response, in the instructor portal.
 - **FR-011**: When a review is created, each instructor of the course SHOULD get one in-app notification through the notifications feature's producer helper, deduplicated so a retry creates none more, and none for edits or deletes. This part is delivered only once that feature exists.
 - **FR-012**: Posting MUST be refused for a course that is not published, and editing and deleting remain allowed. Reviews MUST remain readable for archived courses.
 - **FR-013**: The reviewer's display name MUST be the given name and the first letter of the family name as on the user record when posted ("Alex T."), "Discava learner" if none; never the email. It MUST NOT change on later edits to the user or the review.
 - **FR-014**: The feature MUST work end to end in local development without an AWS account, including search ordering and the admin screen.
 - **FR-015**: The feature MUST NOT add reporting buttons for students, review votes ("helpful"), images, review emails, moderation queues or course-level review switches (see Assumptions).
+- **FR-016**: The admin portal MUST offer a Reviews screen: choose a published or archived course, list all its reviews (removed ones marked, with reason), and remove one.
 
 ### Key Entities
 
