@@ -638,6 +638,9 @@ importers:
       '@discava/common-tiptap':
         specifier: workspace:*
         version: link:../../common/tiptap
+      '@discava/common-web-utils':
+        specifier: workspace:*
+        version: link:../../common/web-utils
       '@discava/core-table':
         specifier: workspace:*
         version: link:../../databases/core-table

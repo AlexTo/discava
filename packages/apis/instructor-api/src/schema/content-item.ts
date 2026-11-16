@@ -5,6 +5,7 @@
 
 import { LESSON_FILE_MAX_BYTES } from '@discava/common-server-utils/lesson-files';
 import { isValidTiptapDocument } from '@discava/common-tiptap';
+import { isCaptionLanguage } from '@discava/common-web-utils/caption-languages';
 import { reportedCaptionsStatus } from '@discava/core-table';
 import { z } from 'zod';
 import {
@@ -345,6 +346,51 @@ export const CreateContentItemVideoUrlOutputSchema = z.object({
 export type ICreateContentItemVideoUrlOutput = z.output<
   typeof CreateContentItemVideoUrlOutputSchema
 >;
+
+const CaptionItemRefSchema = {
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonId: z.string(),
+  contentItemId: z.string(),
+};
+
+export const CaptionTrackOutputSchema = z.object({
+  trackId: z.string(),
+  language: z.string(),
+  label: z.string(),
+  isDefault: z.boolean(),
+  source: z.enum(['auto', 'uploaded']),
+});
+
+// A video's tracks, with no S3 keys.
+export const CaptionTracksOutputSchema = z.object({
+  captions: z.array(CaptionTrackOutputSchema),
+});
+
+export type ICaptionTracksOutput = z.output<typeof CaptionTracksOutputSchema>;
+
+export const CaptionUploadUrlInputSchema = z.object(CaptionItemRefSchema);
+
+export const CaptionUploadUrlOutputSchema = z.object({
+  uploadId: z.string(),
+  url: z.string(),
+  headers: z.record(z.string(), z.string()),
+});
+
+export const AttachCaptionInputSchema = z.object({
+  ...CaptionItemRefSchema,
+  uploadId: z.uuid(),
+  language: z.string().refine(isCaptionLanguage, 'Choose a listed language'),
+  // Plain text, shown in the player's captions menu.
+  label: z.string().trim().min(1).max(40).optional(),
+});
+
+export type IAttachCaptionInput = z.output<typeof AttachCaptionInputSchema>;
+
+export const RemoveCaptionInputSchema = z.object({
+  ...CaptionItemRefSchema,
+  trackId: z.string(),
+});
 
 export const DeleteContentItemInputSchema = z.object({
   courseId: z.string(),

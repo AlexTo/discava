@@ -188,6 +188,18 @@ export class InstructorApiStack extends Stack {
       lessonMediaBucket.grantPut(this.privilegedHandler(op));
       lessonMediaBucket.grantDelete(this.privilegedHandler(op));
     }
+    // An attached caption is copied in from the upload bucket, and the copy
+    // deleted again if the save fails; a replaced or removed track's file is
+    // deleted too.
+    lessonMediaBucket.grantPut(
+      this.privilegedHandler('contentItem.attachCaption'),
+    );
+    for (const op of [
+      'contentItem.attachCaption',
+      'contentItem.removeCaption',
+    ] as const) {
+      lessonMediaBucket.grantDelete(this.privilegedHandler(op));
+    }
     // bestEffortDeleteContentItemVideos lists a ready item's whole
     // .../content-items/<id>/ prefix (manifest + segments) before batch-
     // deleting it, so every handler that can reach that best-effort cleanup
@@ -216,6 +228,7 @@ export class InstructorApiStack extends Stack {
     for (const op of [
       'contentItem.createVideoUploadUrl',
       'contentItem.createFileUploadUrl',
+      'contentItem.captionUploadUrl',
     ] as const) {
       lessonMediaUploadBucket.grantPut(this.privilegedHandler(op));
     }
@@ -228,9 +241,15 @@ export class InstructorApiStack extends Stack {
       'contentItem.updateVideo',
       'contentItem.createFile',
       'contentItem.updateFile',
+      'contentItem.attachCaption',
     ] as const) {
       lessonMediaUploadBucket.grantRead(this.privilegedHandler(op));
     }
+    // attachCaption deletes the upload once it's attached, or when it's
+    // refused as not WebVTT or too large.
+    lessonMediaUploadBucket.grantDelete(
+      this.privilegedHandler('contentItem.attachCaption'),
+    );
     // Which bucket a delete/replace targets depends on the content item's
     // status, so these handlers need delete on both buckets.
     for (const op of [
