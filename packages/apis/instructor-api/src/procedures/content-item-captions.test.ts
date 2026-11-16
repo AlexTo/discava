@@ -13,6 +13,9 @@ import {
 
 const {
   courseInstructorGet,
+  courseGet,
+  moduleGet,
+  lessonGet,
   contentItemGet,
   contentItemPatch,
   patchSet,
@@ -22,11 +25,14 @@ const {
   headLessonFileUpload,
   presignLessonFileUpload,
   readCaptionUpload,
-  copyCaptionUpload,
+  putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
 } = vi.hoisted(() => ({
   courseInstructorGet: vi.fn(),
+  courseGet: vi.fn(),
+  moduleGet: vi.fn(),
+  lessonGet: vi.fn(),
   contentItemGet: vi.fn(),
   contentItemPatch: vi.fn(),
   patchSet: vi.fn(),
@@ -36,7 +42,7 @@ const {
   headLessonFileUpload: vi.fn(),
   presignLessonFileUpload: vi.fn(),
   readCaptionUpload: vi.fn(),
-  copyCaptionUpload: vi.fn(),
+  putCaptionFile: vi.fn(),
   bestEffortDeleteCaptionFile: vi.fn(),
   bestEffortDeleteCaptionUpload: vi.fn(),
 }));
@@ -46,6 +52,9 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   createCoreTableService: vi.fn(async () => ({
     entities: {
       courseInstructor: { get: courseInstructorGet },
+      course: { get: courseGet },
+      module: { get: moduleGet },
+      lesson: { get: lessonGet },
       contentItem: { get: contentItemGet, patch: contentItemPatch },
     },
   })),
@@ -66,7 +75,7 @@ vi.mock(
 // make them, in the right order, for the right keys.
 vi.mock('../lib/caption-files.js', () => ({
   readCaptionUpload,
-  copyCaptionUpload,
+  putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
 }));
@@ -165,6 +174,12 @@ beforeEach(() => {
       data: { courseId: COURSE_ID, instructorId: INSTRUCTOR_SUB },
     }),
   });
+  const found = (data: unknown) => ({
+    go: vi.fn().mockResolvedValue({ data }),
+  });
+  courseGet.mockReturnValue(found({ status: 'draft' }));
+  moduleGet.mockReturnValue(found({ moduleId: MODULE_ID }));
+  lessonGet.mockReturnValue(found({ lessonId: LESSON_ID }));
   setItem(video());
   wirePatch();
   patchGo.mockResolvedValue({ data: {} });
@@ -215,7 +230,7 @@ describe.each(Object.keys(calls))('%s access', (name) => {
     });
     expect(contentItemGet).not.toHaveBeenCalled();
     expect(presignLessonFileUpload).not.toHaveBeenCalled();
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
     expect(contentItemPatch).not.toHaveBeenCalled();
   });
 
@@ -239,6 +254,40 @@ describe.each(Object.keys(calls))('%s access', (name) => {
   });
 });
 
+describe.each(Object.keys(calls))('%s on archived content', (name) => {
+  const found = (data: unknown) => ({
+    go: vi.fn().mockResolvedValue({ data }),
+  });
+  const expectRefused = async () => {
+    await expect(calls[name](callAs())).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(presignLessonFileUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
+    expect(contentItemPatch).not.toHaveBeenCalled();
+  };
+
+  it('refuses an archived course', async () => {
+    courseGet.mockReturnValue(found({ status: 'archived' }));
+    await expectRefused();
+  });
+
+  it('refuses an archived module', async () => {
+    moduleGet.mockReturnValue(found({ archivedAt: '2024-01-01' }));
+    await expectRefused();
+  });
+
+  it('refuses an archived lesson', async () => {
+    lessonGet.mockReturnValue(found({ archivedAt: '2024-01-01' }));
+    await expectRefused();
+  });
+
+  it('refuses an archived item', async () => {
+    setItem(video({ archivedAt: '2024-01-01' }));
+    await expectRefused();
+  });
+});
+
 describe('captionUploadUrl', () => {
   it('presigns a text/vtt PUT under the item and returns the upload id', async () => {
     const result = await callAs().captionUploadUrl(ref);
@@ -256,8 +305,7 @@ describe('attachCaption', () => {
   it('copies the upload into the version folder and records an uploaded track', async () => {
     const result = await callAs().attachCaption(attachInput());
 
-    const [uploadKey, targetKey] = copyCaptionUpload.mock.calls[0];
-    expect(uploadKey).toBe(UPLOAD_KEY);
+    const [targetKey] = putCaptionFile.mock.calls[0];
     expect(targetKey).toMatch(
       new RegExp(`^${ITEM_PREFIX}/${NONCE}/captions/[0-9a-f-]{36}\\.vtt$`),
     );
@@ -295,7 +343,7 @@ describe('attachCaption', () => {
     await expect(
       callAs().attachCaption(attachInput({ label: 'x'.repeat(41) })),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
   });
 
   it('makes the upload the default when it replaces the auto track', async () => {
@@ -353,7 +401,7 @@ describe('attachCaption', () => {
     await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
     expect(contentItemPatch).not.toHaveBeenCalled();
   });
 
@@ -416,7 +464,7 @@ describe('attachCaption', () => {
     await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
     expect(contentItemPatch).not.toHaveBeenCalled();
     expect(bestEffortDeleteCaptionUpload).toHaveBeenCalledWith(
       expect.anything(),
@@ -432,7 +480,7 @@ describe('attachCaption', () => {
     await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
   });
 
   it('refuses a file over 1 MB without reading it', async () => {
@@ -442,7 +490,7 @@ describe('attachCaption', () => {
       code: 'BAD_REQUEST',
     });
     expect(readCaptionUpload).not.toHaveBeenCalled();
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
     expect(bestEffortDeleteCaptionUpload).toHaveBeenCalledWith(
       expect.anything(),
       UPLOAD_KEY,
@@ -455,7 +503,7 @@ describe('attachCaption', () => {
     await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });
-    expect(copyCaptionUpload).not.toHaveBeenCalled();
+    expect(putCaptionFile).not.toHaveBeenCalled();
   });
 
   it('refuses a video replaced since it was read, leaving no file', async () => {
@@ -466,7 +514,7 @@ describe('attachCaption', () => {
     await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject({
       code: 'CONFLICT',
     });
-    const copied = copyCaptionUpload.mock.calls[0][1];
+    const copied = putCaptionFile.mock.calls[0][0];
     expect(bestEffortDeleteCaptionFile).toHaveBeenCalledWith(
       expect.anything(),
       copied,
@@ -479,7 +527,7 @@ describe('attachCaption', () => {
     patchGo.mockRejectedValue(new Error('boom'));
 
     await expect(callAs().attachCaption(attachInput())).rejects.toThrow();
-    const copied = copyCaptionUpload.mock.calls[0][1];
+    const copied = putCaptionFile.mock.calls[0][0];
     expect(bestEffortDeleteCaptionFile).toHaveBeenCalledWith(
       expect.anything(),
       copied,
@@ -495,11 +543,20 @@ describe('attachCaption', () => {
       code: 'CONFLICT',
       message: 'Try again',
     });
-    const copied = copyCaptionUpload.mock.calls[0][1];
+    const copied = putCaptionFile.mock.calls[0][0];
     expect(bestEffortDeleteCaptionFile).toHaveBeenCalledTimes(1);
     expect(bestEffortDeleteCaptionFile).toHaveBeenCalledWith(
       expect.anything(),
       copied,
+    );
+  });
+
+  it('stores the validated bytes, not a copy of the upload key', async () => {
+    await callAs().attachCaption(attachInput());
+
+    expect(putCaptionFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\/captions\/[0-9a-f-]{36}\.vtt$/),
+      VALID_VTT,
     );
   });
 

@@ -28,10 +28,14 @@ import { courseProcedure } from '../init.js';
 import {
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
-  copyCaptionUpload,
+  putCaptionFile,
   readCaptionUpload,
 } from '../lib/caption-files.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import {
+  requireAncestorsNotArchived,
+  requireCourseInstructor,
+  requireNotArchived,
+} from '../lib/course-lifecycle.js';
 import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   AttachCaptionInputSchema,
@@ -69,6 +73,10 @@ const requireReadyVideo = async (
   if (!item || item.type !== 'video') {
     throw new TRPCError({ code: 'NOT_FOUND' });
   }
+  // An archived course, module, lesson or item is read-only, as for every
+  // other content item write.
+  await requireAncestorsNotArchived(coreTable, ref);
+  requireNotArchived(item, 'Restore the content item before editing it');
   const nonce = item.s3Key ? manifestNonce(item.s3Key) : undefined;
   if (item.status !== 'ready' || !nonce) {
     throw new TRPCError({
@@ -192,7 +200,10 @@ export const attachContentItemCaption = courseProcedure
       nonce,
     );
 
-    await copyCaptionUpload(uploadKey, key);
+    // Written from the bytes that were validated, not copied from the upload
+    // key: its presigned PUT stays valid, so the object there can change
+    // after it was read.
+    await putCaptionFile(key, bytes);
     try {
       await coreTable.entities.contentItem
         .patch(ref)

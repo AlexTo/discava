@@ -188,8 +188,8 @@ export class InstructorApiStack extends Stack {
       lessonMediaBucket.grantPut(this.privilegedHandler(op));
       lessonMediaBucket.grantDelete(this.privilegedHandler(op));
     }
-    // An attached caption is copied in from the upload bucket, and the copy
-    // deleted again if the save fails; a replaced or removed track's file is
+    // An attached caption is read from the upload bucket and written here, and it
+    // is deleted again if the save fails; a replaced or removed track's file is
     // deleted too.
     lessonMediaBucket.grantPut(
       this.privilegedHandler('contentItem.attachCaption'),

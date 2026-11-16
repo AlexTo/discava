@@ -4,9 +4,9 @@
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
 import {
-  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import {
   getS3Client,
@@ -30,18 +30,16 @@ export const readCaptionUpload = async (
   return Body.transformToByteArray();
 };
 
-/** Copies a validated upload into the lesson media bucket as `text/vtt`. */
-export const copyCaptionUpload = async (
-  uploadKey: string,
-  targetKey: string,
+/** Writes validated caption bytes to the lesson media bucket as `text/vtt`. */
+export const putCaptionFile = async (
+  key: string,
+  bytes: Uint8Array,
 ): Promise<void> => {
-  const uploadBucket = await resolveLessonMediaUploadBucketName();
   await getS3Client().send(
-    new CopyObjectCommand({
+    new PutObjectCommand({
       Bucket: await resolveLessonMediaBucketName(),
-      Key: targetKey,
-      CopySource: `${uploadBucket}/${uploadKey}`,
-      MetadataDirective: 'REPLACE',
+      Key: key,
+      Body: bytes,
       ContentType: 'text/vtt',
     }),
   );
