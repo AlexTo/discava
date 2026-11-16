@@ -1,0 +1,124 @@
+---
+
+description: "Task list for the core table stream event router"
+---
+
+# Tasks: Core Table Stream Event Router
+
+**Input**: Design documents from `/specs/20261116-183449-stream-event-router/`
+
+**Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
+
+**Tests**: The Discava constitution (principle IV) requires them, so they are included: unit tests for the registry, the router, the adapter, the feature runner and each handler change; construct tests for the queues, alarms and mappings; duplicate-delivery and reordered-delivery tests for both handlers (SC-004); and e2e coverage that already exists for progress and search and must pass unchanged. This feature adds no record and no cross-record rule, so no new invariant is added (see the plan's impact check); the invariant check after every e2e test stays.
+
+**Who runs what**: an automated agent implements these tasks without `pnpm dev` or Docker. It runs unit tests, lint, typecheck, `build` and `synth` locally. The e2e suite is run by PR CI (`pr-checks.yml`'s `E2E tests` job). Tasks marked **(human)** need Docker, an AWS account or a decision, and must not be attempted by an agent.
+
+**Organization**: Grouped into phases, each sized for its own agent PR and mergeable in order, except where a phase says it can run alongside another. Each phase lists the user stories it serves (US1 routing and one consumer, US2 progress and search unchanged, US3 search order-safe, US4 failures per feature, US5 local parity). Paths are relative to the repository root. Use the `ts#lambda-function` generator for new Lambda wrappers (constitution II); the construct, stack and queue code are hand-written because no generator covers them.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an unfinished task)
+- **[Story]**: US1 to US5, as above
+
+---
+
+## Phase 1: Foundation: spike, queue interface, registry, pure router (PR 1) 🎯 MVP
+
+**Purpose**: everything the router and the local runner share, with no AWS resource and no behaviour change. Serves US1 and US5.
+
+- [ ] T001 **(human)** [US5] ElasticMQ spike, which needs Docker. Run `softwaremill/elasticmq` (try the pinned candidates `v1.7.1` and `2.0.0-rc1`; use a tag or digest at least two weeks old, as the repo does for `mwader/static-ffmpeg:9.0.2`) and check three things against the repo's `@aws-sdk/client-sqs` version once T003 is merged: (1) the client works (the SDK defaults to the JSON protocol; ElasticMQ documents the query protocol), (2) a queue with `dead-letters-queue { name, max-receive-count = 5 }` moves a message after five receives, (3) amd64 and arm64 images both start. Write the outcome, the pinned tag and the exact config into [research.md](./research.md) R-2. If any check fails, record that the in-process queue (T008) is the local stand-in and skip T014 and T015 (T013 then uses the in-process queue only)
+- [ ] T002 [US1] Confirm the current SQS maximum message size from AWS documentation, state the number and the source in [research.md](./research.md) R-4, and use it as the one constant in `packages/events/src/router/queue-client.ts` (T005). Do not guess it
+- [ ] T003 [P] [US1] Add `@aws-sdk/client-sqs` (the version matching the other `@aws-sdk/client-*` packages) as a direct dependency of `packages/events/package.json` and `packages/common/server-utils/package.json`, then `pnpm i`
+- [ ] T004 [US1] Test first, then add the registry `packages/databases/core-table/src/helpers/stream-features.ts` (exported from `src/index.ts`) per [contracts/stream-feature-registration.md](./contracts/stream-feature-registration.md): `StreamFilter`, `StreamFeature`, `STREAM_FEATURES` and `featuresFor`. Two entries: `progress-recalculation` (filters `PROGRESS_STREAM_FILTERS`, `batch: { maxRecords: 100, windowSeconds: 5 }`, `maxReceiveCount: 5`) and `search-indexing` (filters `SEARCH_STREAM_FILTERS`, same batch, `maxReceiveCount: 5`, `maxConcurrency: 2`, the mapping's minimum). `featuresFor` uses `matchesProgressStreamFilters` and `matchesSearchStreamFilters` unchanged. Tests: a record reaches exactly the matching features, a record matching two is routed to both, a record matching none gets an empty list; names are unique; every filter's entities exist in the core table's entity list; every filter matches at least one record in a sample set
+- [ ] T005 [P] [US1] Test first, then add `packages/events/src/router/queue-client.ts`: the `QueueClient` interface (send a batch of messages with attributes, receive up to N with a wait, delete, move a message, queue depth) and its SQS implementation over `@aws-sdk/client-sqs`, with the size constant from T002 and the endpoint switch on `LOCAL_DEV` that `common-server-utils/local-dev` provides (T013). Tests mock the SQS client the way the repo's other handlers mock AWS clients
+- [ ] T006 [P] [US1] Test first, then add `packages/events/src/router/route-records.ts`, a pure function from stream records and `STREAM_FEATURES` to messages per feature: one record per message, body is the record as JSON in the shape in [contracts/router-message.md](./contracts/router-message.md), attributes `feature` and `entity` (the record's `__edb_e__`), and a result list of records too large to send. Tests: two matching features give two messages, none gives none, an oversized record is returned as refused and not sent
+- [ ] T007 [P] [US1] Test first, then add `packages/events/src/router/sqs-stream-records.ts`: turn an SQS event into `{ Records }` (the shape `DynamoDBStreamSchema` parses), keeping arrival order within the batch. Test it by feeding the result to `progressRecalculation` and `searchIndexing`'s parsers
+- [ ] T008 [P] [US5] Test first, then add `packages/events/src/local/in-process-queue.ts`: a `QueueClient` that keeps messages in memory with a visibility timeout, a receive count and a failure list. It is the fallback local stand-in and the fake the unit tests use. Tests: a received message reappears after the timeout, is gone once deleted, and moves to the failure list after `maxReceiveCount` receives
+- [ ] T009 [US1] Add `packages/events/src/router/handlers.ts`: a map from each registered handler name to its exported handler (`progress-recalculation`, `search-indexing`), and a test that every `STREAM_FEATURES` entry's `handler` is in it (FR-022)
+
+---
+
+## Phase 2: Local router and feature runners (PR 2)
+
+**Purpose**: the event runner routes through the same registry and a queue, so local development matches the deployed shape before any deploy change. Serves US5, US1 and US2 locally. Needs Phase 1.
+
+- [ ] T010 [US1] Test first, then add the router handler `packages/events/src/router/stream-router.ts`: parse a stream batch, call `routeRecords`, send each feature's messages with `QueueClient.sendBatch` (10 per call), and return `batchItemFailures` for any record whose message could not be sent or was refused as oversized. It does no filtering of its own. Tests with the T008 fake: a normal batch is sent, a send failure is reported per record and not for the whole batch, an oversized record is reported and nothing else is held up
+- [ ] T011 [US5] Test first, then add `packages/events/src/local/feature-runner.ts`: for one registered feature, poll its queue, gather messages into a batch by the registration (`maxRecords` or `windowSeconds`, like `createBatcher`), run the handler through `sqs-stream-records.ts`, delete the messages on success, and leave them to return after the visibility timeout on failure, moving a message to the failure queue after `maxReceiveCount` receives and logging it. Tests with the in-process queue: a burst of records for one course yields one handler run (FR-008), a failing handler sends its messages to the failure queue after the configured receives while a second runner keeps working (SC-005)
+- [ ] T012 [US5] In `packages/events/src/local/event-runner.ts`, replace `progressBatches` and `searchBatches` with the router (T010) feeding one feature runner per `STREAM_FEATURES` entry (T011), keep the abort and final flush, and update the header comment. Update `event-runner-server.ts` with `GET /router/queues` and `POST /router/redrive/{feature}` exactly as in [contracts/local-runner-routes.md](./contracts/local-runner-routes.md) (`404` for an unregistered feature, `redriven: 0` for an empty failure queue), with tests in `event-runner-server.test.ts`
+- [ ] T013 [P] [US5] Add to `packages/common/server-utils/src/local-dev.ts` the local queue settings (endpoint, region, dummy credentials, and queue names derived from the registry names) following how S3's settings are held there, with a test. The queue client reads them when `LOCAL_DEV=true`
+- [ ] T014 [US5] Skip if T001 ruled ElasticMQ out. Add `packages/common/scripts/src/elasticmq/start-container.ts` (and a `pull-image.ts`), modelled on `s3mock/start-container.ts` and the container pattern in `local-container.ts`, with the image pinned by T001 and a config file that creates, for each registry feature, a queue and a failure queue with `max-receive-count` taken from the registration. Add the `elasticmq` Nx target to `packages/common/scripts/project.json` like `s3mock`, make `packages/events`'s `dev` target depend on it, and make `reset-local-data` clear nothing extra (ElasticMQ is in-memory; add a note in its source)
+- [ ] T015 [US5] Wire the local queue client choice in `event-runner.ts`: ElasticMQ when its container is configured, the in-process queue otherwise (always, if T001 ruled ElasticMQ out), so the runner has one code path either way
+- [ ] T016 [US2] Check the e2e helpers that wait for progress and search (`packages/e2e/src/helpers/`) and the core table's invariant-check wait: they must settle on the final state, not on a fixed delay, because the router adds a few seconds. Change a helper only where it waits a fixed time; name the change in the PR description (constitution IV)
+
+---
+
+## Phase 3: Search handler re-reads the course (PR 3, can run alongside Phase 2)
+
+**Purpose**: search stays correct under reordered and duplicate delivery. Serves US3. Needs T004 only for the shared test fixtures; otherwise independent.
+
+- [ ] T017 [US3] Test first, in `packages/events/src/search/index-content.test.ts`: for one course, "published" then "unpublished" delivered in both orders and twice leaves the course out of the index; a removed course stays out when an older edit arrives afterwards; two edits delivered in either order leave the newer title and description (read from the stubbed table, not from the record); a batch of many records for one course reads the course once; a record naming no course fails (FR-015); a core-table read failure fails the batch. The existing tests that build the document from the stream image encode the old behaviour. Change only those and say in the PR description that the behaviour changed from "document from the record" to "document from the current course" (constitution IV)
+- [ ] T018 [US3] Change `packages/events/src/search/index-content.ts` per [research.md](./research.md) R-3 and FR-012: take the distinct course ids from the records (a missing id fails), read each course once by key through `createCoreTableService` from `@discava/core-table` (memoized like `progress-recalculation.ts`), then index it if its status is `published` and delete it from search (a `404` is not a failure) if it isn't or is missing. Build the document with the existing `toCourseDocument`. Update the file header and the comment that says everything it indexes is on the stream record. The handler needs `electrodb` and `@aws-sdk/client-dynamodb` as direct dependencies of `packages/events` if they aren't already (TS2883, see CLAUDE.md)
+- [ ] T019 [P] [US3] Test first, in `packages/events/src/progress/progress-recalculation.test.ts`: duplicate and reordered batches of the same records give the same recalculation (FR-014). No code change is expected, since `progressRecalculation` recomputes from the table. If a test fails, fix the handler, not the test
+
+---
+
+## Phase 4: StreamRouter construct, stack and removal of the old mappings (PR 4)
+
+**Purpose**: deploy the router, queues, alarms and failure destinations, and delete the two direct stream consumers in the same change (FR-010). Serves US1, US2, US4. Needs Phases 1 and 3, and Phase 2 for local parity.
+
+- [ ] T020 **(human)** [US4] Decide the queues' encryption, which the plan leaves open (the plan's Complexity Tracking): a KMS key following the `Data` stack's defaults, or SQS-managed encryption with the reason recorded, since the new queues hold table records, not only shard numbers. Write the decision into [plan.md](./plan.md)'s Complexity Tracking and [data-model.md](./data-model.md). T022 follows it
+- [ ] T021 [US1] Generate the router wrapper with the `ts#lambda-function` generator: add the entry in `packages/events/project.json` for `src/router/stream-router.ts` and let it create `packages/common/constructs/src/app/lambda-functions/events-stream-router.ts` and its export in `lambda-functions/index.ts`, as the other `events-*` wrappers were made. Use the `nx-plugin-for-aws` MCP `generator-guide` for `ts#lambda-function` first. Do not hand-edit SPDX headers
+- [ ] T022 [US4] Test first, then add `packages/common/constructs/src/core/stream-router.ts`, a construct that takes the core table's stream and `STREAM_FEATURES` and creates: for each feature a standard queue (visibility timeout longer than the handler's timeout, redrive to its failure queue after the registration's `maxReceiveCount`, the T020 encryption, `enforceSSL`), a failure queue (14-day retention), one CloudWatch alarm on the failure queue's `ApproximateNumberOfMessagesVisible` greater than 0 with no action attached (FR-019), and an SQS event source mapping with the registration's batch size and batching window (100 records and 5 s) and `maxConcurrency` where set; plus the router's single stream event source mapping (`startingPosition: LATEST`, batch size 100, a 5-second window, 5 retry attempts, bisect on error, `reportBatchItemFailures`, failures to a `StreamRouterFailures` queue with 14-day retention and its own alarm). Grants: the router may send to each feature queue and nothing else; the search handler gets core-table read only; progress keeps its read-write grant. Tests (synth assertions): exactly one stream event source mapping on the table, one failure queue and one alarm per feature plus the router's, the router has no grant beyond sending
+- [ ] T023 [US1] Add `packages/infra/src/stacks/stream-router-stack.ts` composing the construct with the progress and search handler Lambdas (moved out of `core-api-stack.ts`: delete `createProgressRecalculationLambda`'s and `createSearchIndexingLambda`'s event sources, `ProgressRecalculationFailures` and `SearchIndexingFailures`, and create the Lambdas here). Add it to `packages/infra/src/stages/application-stage.ts` in dependency order (after `Data`, before `RuntimeConfig`), update the stage's doc comment, and settle how the handlers read AppConfig (`RUNTIME_CONFIG_APP_ID` and `runtimeConfig.grantReadAppConfig`, since `RuntimeConfig` deploys last) so no stack dependency cycle appears. Update the `core-api-stack` and stage tests. Add a synth assertion that no stack passes 450 resources (the cap is 500)
+- [ ] T024 [US2] Run `pnpm nx run @discava/infra:synth` and `pnpm nx run @discava/infra:checkov` (the agent runs these) and fix findings, using the construct's existing `suppress` helpers only where a finding is justified in a comment, as `suppressSqsManagedEncryption` is today. Then run `pnpm nx run-many --target test --projects @discava/events,@discava/core-table,@discava/common-constructs,@discava/infra` and confirm that the only tests changed in this feature are the ones T016, T017 and the stack tests name (FR-009)
+
+---
+
+## Phase 5: Docs, wording and the follow-ups for #331 and #332 (PR 5)
+
+**Purpose**: the pattern is documented, the project's own wording describes the router, and the two waiting specs know what to change. Serves US1 and US4 (FR-023, FR-024, FR-025).
+
+- [ ] T025 [P] [US1] Add the contributor page for the per-feature pattern under `docs/` (find the contributor section with `ls docs/src/content/docs` and follow an existing page's front matter and style): the registration, filter, queue, failure queue, alarm, handler obligations (idempotent, order-safe, say how), the local behaviour, the manual redrive with the queue service's own redrive for a deployed stage, and the queue depth and age metrics to look at per feature (FR-019). English only; the PR notes that translations are pending, per the constitution
+- [ ] T026 [P] [US1] Update the stream-consumer wording: `.specify/memory/constitution.md` principle V's last bullet (it names progress and search as the consumers and says to update their filters; make it say features register with the stream router and update their registration), bump the version to 1.2.1 and the amended date with the rationale in the PR description; and `CLAUDE.md`'s `packages/events` and architecture lines that describe direct stream consumers and the local event runner's two batchers
+- [ ] T027 **(human)** [US1] After this spec merges, update the notifications (#331) and instructor dashboard (#332) specs on their own pull requests, as FR-025 requires: each takes a registration, a queue, a failure queue, an alarm and a handler from the pattern. For #331, `NOTIFICATION_STREAM_FILTERS` becomes a registration and its third mapping and DLQ are dropped. For #332, the aggregates are counters that must tolerate duplicate and reordered delivery, which needs its own check
+
+---
+
+## Phase 6: Polish (PR 6, may be folded into Phase 5)
+
+- [ ] T028 **(human)** [US2] Deploy to `discava-development` (`pnpm nx deploy @discava/infra "discava-development/*"`) and check: the core table's stream has one consumer (`aws dynamodbstreams describe-stream`); a student completing an item updates progress; publishing then unpublishing a course updates search and leaves it out; forcing a handler to fail puts messages in that feature's failure queue and trips its alarm while the other feature keeps working; a redrive from the failure queue replays them with the same result. Save screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/` as the repository's convention says
+- [ ] T029 [US2] Run `pnpm build`, `pnpm lint` and `pnpm test` (or `pnpm nx affected --target build,lint,test`), fix any failure by fixing the code and never by weakening a test, then run `graphify update .` so the knowledge graph matches the change, as CLAUDE.md asks
+
+---
+
+## Dependencies and execution order
+
+- **Phase 1** first. T003 before T005 and T007; T002 before T005; T004 before T006 and T009.
+- **Phase 2** needs Phase 1. T010 before T012; T011 before T012; T013 before T015; T014 only if T001 passed.
+- **Phase 3** needs only the registry from T004 for fixtures and can run in parallel with Phase 2.
+- **Phase 4** needs Phases 1 and 3, and Phase 2 so that local and deployed routing agree. T020 (human) before T022; T021 before T022; T022 before T023; T023 before T024.
+- **Phase 5** needs Phase 4. T027 and T028 are human and follow the merge of the phase they depend on.
+- A phase never leaves `main` broken: Phase 2 changes only local dev, Phase 3 changes only search's behaviour (correct under today's ordering too), and Phase 4 swaps the deployed consumers in one change.
+
+## Parallel opportunities
+
+- Phase 1: T003, T005, T006, T007 and T008 touch different files and can be written together once T002 and T004 are in.
+- Phase 2: T013 alongside T010 and T011.
+- Phases 2 and 3 together: the local router work and the search handler change share no files.
+- Phase 5: T025 and T026.
+
+## Story map and independent tests
+
+| Story | Tasks | Independent test |
+|-------|-------|------------------|
+| US1 routing and one consumer | T002 to T007, T009, T010, T021, T023, T025 to T027 | `route-records` and registry tests; synth shows exactly one stream mapping |
+| US2 progress and search unchanged | T016, T024, T028, T029 | existing unit and e2e tests pass, with only the named test changes |
+| US3 search order-safe | T017 to T019 | reordered and duplicate delivery tests for both handlers |
+| US4 failures per feature | T020, T022 | construct tests; a failing handler fills only its own failure queue |
+| US5 local parity | T001, T008, T011 to T015 | feature-runner and runner-server tests; a missing handler or unmatched filter fails a test |
+
+## Implementation strategy
+
+**MVP**: Phase 1 and 2, then 3 and 4. Phase 1 alone has no user-visible effect but unblocks everything, and Phase 4 is what makes the stream safe for #331 and #332. Phase 3 can ship first if search's correctness is wanted before the infrastructure move. After Phase 4, #331 and #332 each add one registration and a handler.
+
+**Risks to watch**: the T001 spike (a failed check changes T014 and T015), the encryption decision (T020), the AppConfig wiring in T023, and SQS's lack of batch bisecting (a poison message can carry its batch-mates to the failure queue, which is safe to redrive).
