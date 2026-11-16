@@ -32,7 +32,7 @@ Facts the repo showed that shaped the plan:
 
 **Project Type**: serverless backend (events, core-table, infra, constructs) plus local tooling. No portal or API change
 
-**Performance Goals**: a change reaches its handler within the same window as today plus a few seconds for the extra hop; a burst still collapses to one recalculation per course per batch
+**Performance Goals**: a change reaches its handler within the same window as today plus a few seconds for the extra hop (the router batches for 1 second and each feature queue for 5, so the windows don't stack to 10); a burst still collapses to one recalculation per course per batch
 
 **Constraints**: exactly one stream consumer (FR-001); no compatibility layer, the old direct mappings are deleted in the same change (FR-010); no existing test weakened (FR-009); the 500-resource cap per stack (new `StreamRouter` stack, R-5); least privilege (the search handler gains core-table read only, the router gains queue send only); stateful resources stay in `Data`; SPDX headers are generator-managed
 
@@ -49,17 +49,13 @@ Facts the repo showed that shaped the plan:
 | III. Everything runs locally | Pass, conditional | The event runner runs the router function and feature runners against ElasticMQ, or the in-process fallback. The R-2 spike decides, and the fallback needs no Docker, so the principle holds either way |
 | IV. Layered tests | Pass, planned | Unit tests per router/adapter/handler; reordered and duplicate delivery tests for search and progress (SC-004); a failure-destination test (SC-005); e2e scenarios for progress and search unchanged; the invariant check after every e2e test stays. No new invariant, see the impact check |
 | V. Single-table via ElectroDB | Pass | Search reads one `course` by key through `@discava/core-table`, no scan. The wording that names progress and search as the stream's consumers is updated (FR-024). `PROGRESS_STREAM_FILTERS` and `SEARCH_STREAM_FILTERS` stay and feed the registry |
-| VI. Secure by default | Pass | SQS-managed encryption on queues as today's failure queues, `enforceSSL`, least-privilege grants per function. KMS is not added because queue messages hold table records (see Complexity Tracking) |
+| VI. Secure by default | Pass | Queues default to customer-managed KMS with key rotation, `enforceSSL`, least-privilege grants per function. A new `streamRouter` component config (`enableKmsEncryption`, `enableKeyRotation`) lets a stage relax it, as the core table's does, so only `stages.config.ts` relaxes it and `discava-production` keeps the default |
 | VII. Change freely before launch | Pass | Old mappings and failure queues are removed outright; no dual-running |
 | VIII. Repo conventions | Pass | New code under `helpers/` (one file per topic) in core-table and shared modules in `common-server-utils`; no `utils.ts`; docs in English, with translations noted if docs change |
 
-**Complexity Tracking**: one item, below.
+**Complexity Tracking**: empty. The queues follow the repo's per-component encryption switch, so there is no deviation from principle VI.
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|--------------------------------------|
-| Queues carry stream records (including item contents) with SQS-managed encryption, where principle VI defaults to KMS | The existing failure queues hold only shard and sequence numbers, so SQS-managed encryption was enough. The new feature queues hold the records themselves, which include user and course data | None. **Resolve in the first infra task**: either use a KMS key per the `Data` stack's defaults, or record why SQS-managed encryption is acceptable for these tables' records. This is a gate to close before merge, not a settled justification |
-
-**Re-check after design**: still passing, with the encryption item open as stated.
+**Re-check after design**: still passing.
 
 ## Impact Check (shared records)
 

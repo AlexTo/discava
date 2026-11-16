@@ -158,13 +158,13 @@ A contributor running the local stack sees the same routing: a change to the loc
 
 - **FR-016**: A change that still fails after a feature's retries MUST be set aside in that feature's own failure destination, with enough information to identify the change and the handler, and MUST NOT block later changes.
 - **FR-017**: Failed work MUST be replayable to the same handler after the cause is fixed, by a documented manual redrive from the feature's failure destination using the queue service's own redrive. No replay tool is built in this feature. Replay MUST be safe, by FR-011, and a test MUST show that a redriven change gives the same result as its first delivery.
-- **FR-018**: Failure destinations MUST keep the retention and encryption settings the existing ones have, unless the plan justifies a change.
+- **FR-018**: Feature queues and failure destinations MUST keep the existing failure destinations' 14-day retention, and MUST use customer-managed encryption with key rotation by default, because they now hold whole table records and not only stream positions. Encryption MUST be switchable per stage through the same stage-config switch the core table uses (`enableKmsEncryption`, with `enableKeyRotation`), so a stage may fall back to the queue service's own encryption, and `discava-production` keeps the hardened default.
 - **FR-019**: Each feature's failure destination MUST have one alarm that enters the alarm state whenever the destination holds any work, visible in the console. No notification target is attached in this feature. Operators can also see, per feature, how many changes are waiting through the queue's built-in depth and age metrics, which the contributor docs list per feature. The alarm is part of the per-feature pattern, so each new feature gets one.
 
 **Local development**
 
 - **FR-020**: The local event runner MUST route changes to the same handlers using the same registrations and filters as the deployed router, with no AWS account.
-- **FR-021**: The local router MUST keep the behaviour local development has today (batching window, batch size, per-feature failure handling) so progress and search work as they do now.
+- **FR-021**: The local router MUST keep the batching window and batch size local development has today, so progress and search work as they do now. It MUST also gain what the deployed router has and local development lacks today (where a failing handler is only logged): retries by receive count and a failure destination per feature.
 - **FR-022**: A registration naming a missing handler, or whose filter is invalid, MUST fail a test rather than silently route nothing.
 
 **Pattern and documentation**
@@ -178,7 +178,7 @@ A contributor running the local stack sees the same routing: a change to the loc
 - **Stream router**: the single consumer of the core table's change stream. It holds no business logic. It only decides which features get which changes.
 - **Feature registration**: one declaration per feature: its name, the changes it cares about (a filter on event kind and record type), its handler, its batching and retry settings. The deployed router and the local router both read it.
 - **Feature queue**: the buffer between the router and one feature's handler. It absorbs bursts and lets the handler retry on its own.
-- **Failure destination**: one per feature, where work that exhausted its retries is kept for inspection and replay.
+- **Failure destination** (called a failure queue in the plan and tasks): one per feature, where work that exhausted its retries is kept for inspection and replay.
 - **Change**: one record from the stream: event kind, keys, old and new images, approximate time. It is the unit the router sends on.
 - **Current course state (search)**: the course as the core table holds it when the handler runs. Search is always made to match it, whichever change triggered the run.
 
