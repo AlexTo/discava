@@ -25,6 +25,7 @@ describe('startEventRunnerServer', () => {
     const handlers = {
       submitTranscodeJob: vi.fn(() => 'local-job-1'),
       cancelTranscodeJob: vi.fn((jobId: string) => jobId === 'local-job-1'),
+      submitTranscriptionJob: vi.fn(),
       scheduleTranscodeCleanup: vi.fn(),
       runPreTokenGeneration: vi.fn(async () => {}),
     };
@@ -68,6 +69,43 @@ describe('startEventRunnerServer', () => {
     });
 
     expect(response.status).toBe(400);
+  });
+
+  it('accepts a transcription job, as StartTranscriptionJob does', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+    const job = {
+      jobName: 'captions-item-1-nonce-1',
+      tags: { courseId: 'course-1' },
+      outputBucket: 'media',
+      outputKey: 'out/nonce-1/',
+    };
+
+    const response = await fetch(url('/transcription-jobs'), {
+      method: 'POST',
+      ...json(job),
+    });
+
+    expect(response.status).toBe(202);
+    expect(handlers.submitTranscriptionJob).toHaveBeenCalledWith(job);
+  });
+
+  it('refuses a transcription job without somewhere to put its output', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/transcription-jobs'), {
+      method: 'POST',
+      ...json({
+        jobName: 'job',
+        tags: {},
+        outputBucket: 'media',
+        outputKey: 'no-slash',
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(handlers.submitTranscriptionJob).not.toHaveBeenCalled();
   });
 
   it('cancels a job, or says there’s no such job', async () => {

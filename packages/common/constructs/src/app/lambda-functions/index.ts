@@ -11,3 +11,4 @@ export * from './events-search-reindex.js';
 export * from './events-transcode-cleanup.js';
 export * from './events-transcode-complete.js';
 export * from './events-transcode-reconciler.js';
+export * from './events-transcribe-complete.js';

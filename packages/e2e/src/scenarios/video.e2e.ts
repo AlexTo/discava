@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CAPTION_CUE, seedCaptionTrack } from '../helpers/captions.js';
+import {
+  AUTO_CAPTION_CUE,
+  CAPTION_CUE,
+  seedCaptionTrack,
+} from '../helpers/captions.js';
 import {
   addLesson,
   addModule,
@@ -292,9 +296,59 @@ test('an instructor uploads a video, and a student watches it', async ({
     await markItemDone(student, 'Video two');
   });
 
+  await test.step('a student sees the automatic captions of a new video', async () => {
+    // Nobody uploaded a track for Video two: once it was ready, the event
+    // runner's stand-in for Transcribe made the default one, with its
+    // placeholder cue (deployed, Amazon Transcribe writes the real text).
+    await student.reload();
+    const item = lessonItem(student, 'Video two');
+    const video = lessonVideo(student, 'Video two');
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    const captions = item.getByRole('button', { name: /^Captions/ });
+    await expect(captions).toBeVisible({ timeout: 30_000 });
+    await expect(captions).toHaveAccessibleName('Captions: off');
+    await item
+      .getByRole('group', { name: 'Video player' })
+      .scrollIntoViewIfNeeded();
+    await captions.click();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+    await screenshot(student, 'automatic captions listed as the default track');
+
+    await student
+      .getByRole('menuitemradio', { name: 'English (default)' })
+      .click();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+    await expect
+      .poll(() =>
+        video.evaluate((v: HTMLVideoElement) => {
+          v.currentTime = 1;
+          const cues = v.textTracks[0]?.activeCues;
+          return cues && cues.length > 0 ? (cues[0] as VTTCue).text : '';
+        }),
+      )
+      .toBe(AUTO_CAPTION_CUE);
+    await screenshot(student, 'the automatic captions placeholder shown');
+
+    // The choice survives a reload.
+    await student.reload();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+
+    // Turn them off again, so the next step starts from the default.
+    await item.getByRole('group', { name: 'Video player' }).focus();
+    await student.keyboard.press('c');
+    await expect(captions).toHaveAccessibleName('Captions: off');
+  });
+
   await test.step('a student reads along with captions', async () => {
-    // Nothing creates a track yet (the instructor's upload is Phase 6), so
-    // the scenario adds one the way that upload will.
+    // An instructor's upload doesn't exist yet (a later phase), so the
+    // scenario adds one the way that upload will, replacing the automatic
+    // track in the same language.
     await seedCaptionTrack(course, 'Video one', {
       tag: 'en-US',
       label: 'English',
@@ -306,12 +360,6 @@ test('an instructor uploads a video, and a student watches it', async ({
         timeout: 30_000,
       })
       .toBeGreaterThan(0);
-    const videoTwo = lessonItem(student, 'Video two');
-    // A video with no tracks has no captions control.
-    await expect(
-      videoTwo.getByRole('button', { name: /^Captions/ }),
-    ).toHaveCount(0);
-
     const item = lessonItem(student, 'Video one');
     const captions = item.getByRole('button', { name: /^Captions/ });
     await expect(captions).toBeVisible();
