@@ -968,12 +968,6 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1164.0
-      '@aws-sdk/client-s3':
-        specifier: 'catalog:'
-        version: 3.1164.0
-      '@discava/common-server-utils':
-        specifier: workspace:*
-        version: link:../common/server-utils
       '@discava/core-api':
         specifier: workspace:*
         version: link:../apis/core-api

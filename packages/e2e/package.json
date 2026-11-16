@@ -5,8 +5,6 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "catalog:",
-    "@aws-sdk/client-s3": "catalog:",
-    "@discava/common-server-utils": "workspace:*",
     "@discava/core-api": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@discava/instructor-api": "workspace:*",
