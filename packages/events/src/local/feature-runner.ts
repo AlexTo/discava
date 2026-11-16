@@ -23,6 +23,30 @@ export interface FeatureRunnerOptions {
 
 const RECEIVE_SIZE = 10;
 
+// Stream sequence numbers are digit strings that grow with write order.
+const sequenceOf = (record: DynamoDBRecord): bigint => {
+  const sequence = record.dynamodb?.SequenceNumber ?? '';
+  return /^\d+$/.test(sequence) ? BigInt(sequence) : 0n;
+};
+
+// A standard queue doesn't keep send order (ElasticMQ hands back messages sent
+// in the same millisecond in any order), so a batch's records are put back in
+// stream order before the handler sees them, as the stream mapping would
+// deliver them. Handlers still can't rely on it across batches, which is what
+// the search handler's re-read of the course is for.
+const inStreamOrder = (records: DynamoDBRecord[]): DynamoDBRecord[] =>
+  records
+    .map((record, index) => ({ record, index }))
+    .sort(
+      (a, b) =>
+        (sequenceOf(a.record) < sequenceOf(b.record)
+          ? -1
+          : sequenceOf(a.record) > sequenceOf(b.record)
+            ? 1
+            : 0) || a.index - b.index,
+    )
+    .map(({ record }) => record);
+
 /**
  * Local dev's stand-in for one feature's queue-to-Lambda event source
  * mapping: polls the feature's queue, gathers messages into a batch the way
@@ -79,7 +103,8 @@ export const createFeatureRunner = ({
       const event = {
         Records: batch.map(({ body }) => ({ body })),
       } as Pick<SQSEvent, 'Records'>;
-      await run(sqsStreamRecords(event));
+      const { Records } = sqsStreamRecords(event);
+      await run({ Records: inStreamOrder(Records) });
     } catch (error) {
       log(`${feature.name} failed; its messages will be received again`, error);
       for (const message of batch) {
