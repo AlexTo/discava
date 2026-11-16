@@ -210,6 +210,26 @@ describe('HlsVideo', () => {
       expect(queryByText(/Resumed at/)).toBeNull();
     });
 
+    it('applies resumeAt once: a new value while mounted changes nothing', () => {
+      vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+      Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {
+        configurable: true,
+        get: () => 4,
+      });
+      const { rerender, queryByText } = render(
+        <HlsVideo url={URL} withCredentials resumeAt={0} />,
+      );
+      // The viewer has watched on to 4:05, and a save of 4:00 has just come
+      // back and updated the cached resumeAt.
+      media.currentTime = 245;
+
+      rerender(<HlsVideo url={URL} withCredentials resumeAt={240} />);
+
+      expect(media.currentTime).toBe(245);
+      expect(queryByText(/Resumed at/)).toBeNull();
+      Reflect.deleteProperty(HTMLMediaElement.prototype, 'readyState');
+    });
+
     it('seeks when the metadata was already there', () => {
       vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
       Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {

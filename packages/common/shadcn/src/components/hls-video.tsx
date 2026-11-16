@@ -63,6 +63,10 @@ export function HlsVideo({
   // or the reporter.
   const onPositionChangeRef = useRef(onPositionChange);
   onPositionChangeRef.current = onPositionChange;
+  // Read when the video loads, not a reason to resume again: the saved
+  // position the caller holds moves on while the viewer watches.
+  const resumeAtRef = useRef(resumeAt);
+  resumeAtRef.current = resumeAt;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -101,6 +105,7 @@ export function HlsVideo({
       return;
     }
 
+    const resumeAt = resumeAtRef.current;
     setResumedAt(undefined);
     const reporter = createPositionReporter(
       (position) => onPositionChangeRef.current?.(position),
@@ -156,7 +161,7 @@ export function HlsVideo({
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [url, resumeAt]);
+  }, [url]);
 
   useEffect(() => {
     if (resumedAt === undefined) {
