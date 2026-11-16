@@ -36,7 +36,7 @@ Per feature: one standard queue, one failure queue, one alarm, one handler mappi
 | Feature queue | Standard, one KMS key for the component with rotation by default (`streamRouter.enableKmsEncryption` and `enableKeyRotation` in the stage config; off falls back to SQS-managed encryption, as `discava-development` does for its other components), `enforceSSL`, visibility timeout at least six times the handler's function timeout (AWS guidance for SQS-triggered Lambda), redrive to the failure queue after `maxReceiveCount` |
 | Failure queue | 14-day retention (as today's), the same encryption as the feature queues, `enforceSSL` |
 | Alarm | `ApproximateNumberOfMessagesVisible` > 0 on the failure queue, no action |
-| Router failure queue | The router mapping's `onFailure` destination, same settings |
+| Router failure queue | Written by the router for a record it can never send (oversized or unroutable): a small message with the record's `eventID`, keys, entity, matching features, size and reason, not the record. Also the mapping's `onFailure` destination for transient errors, which carries only the shard ID and sequence-number range. Same settings. Not replayable; repaired by `search-reindex` or the next change |
 
 ## Local runner state (not persisted)
 

@@ -18,8 +18,8 @@ What the router sends to a feature's queue, and what the feature's handler recei
 |---|---|
 | Delivery | At least once. A record can arrive twice |
 | Order | None between records, even for the same item (research R-1) |
-| Loss | None within the stream's retention while the router is up. A record the router can't send is retried by the stream mapping, then set aside in the router's failure queue |
-| Size | A record too large for the queue is refused by the router and goes to the router's failure queue (research R-4) |
+| Loss | None within the stream's retention while the router is up, except a record the router can never send (too large for the queue, or unroutable). The router writes that record's identity to its failure queue (not the record), reports it handled, and the record is repaired by `search-reindex` or the next change to the item (research R-4). A transient send error is retried by the stream mapping, which blocks the shard while it does; if retries run out the mapping's `onFailure` destination holds only the shard ID and sequence-number range, so the records are lost once past the stream's 24-hour retention |
+| Size | A record too large for the queue is never sent. The router writes its `eventID`, keys, entity, matching features and size to the router's failure queue and returns success for it, so it doesn't hold up its shard (research R-4) |
 
 ## Failure
 

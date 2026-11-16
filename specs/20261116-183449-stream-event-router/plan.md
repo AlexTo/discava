@@ -73,9 +73,9 @@ No new counted or related record and no meaning changed, so no existing invarian
 2. **A registry of features, one file (contract: [stream-feature-registration.md](./contracts/stream-feature-registration.md)).** Each feature is one entry: name, filters, handler name, queue and batching settings. The deployed stack and the local runner both read it; a test fails on a missing handler or a filter that matches nothing (FR-022).
 3. **Handlers keep their code behind an adapter (R-5).** SQS batch in, the stream event shape out, so the handlers' parsers and tests stay.
 4. **Search re-reads the course (R-3).** No version parameters and no new field.
-5. **Failures are per feature (R-4, R-6).** Retries by receive count, a failure queue and an alarm per feature, plus the router's own failure queue.
+5. **Failures are per feature (R-4, R-6).** Retries by receive count, a failure queue and an alarm per feature, plus the router's own failure queue, which the router writes to for records it can never send.
 6. **Local parity (R-2).** One `QueueClient` interface with an ElasticMQ implementation and an in-process one. The local runner polls each feature's queue, batches like the mapping does, runs the handler, and deletes or keeps messages on the result. A runner endpoint lists queues and redrives (contract: [local-runner-routes.md](./contracts/local-runner-routes.md)).
-7. **No message loss on size (R-4).** The router refuses an oversized message loudly (router failure queue and alarm).
+7. **No message loss on size (R-4).** The router doesn't send an oversized message. It records its identity in the router failure queue, trips the alarm and returns success, so its shard isn't stalled; the record is repaired by reindex or the next change.
 
 ## Access patterns (all keyed; no scans in a request)
 
