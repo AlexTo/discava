@@ -43,6 +43,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "screenshots-comment": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/comment-main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {

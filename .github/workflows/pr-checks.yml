@@ -213,36 +213,30 @@ jobs:
       actions: read
       pull-requests: write
     steps:
+      # The default branch's code, not the pull request's: this job can write
+      # to the pull request, so it never runs anything the pull request wrote
+      # (it only reads the diff from the API, like ui-screenshots.yml).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: e2e-screenshots-*
           path: screenshots
 
+      # Leads with the pictures whose `screenshot(` call this pull request
+      # adds, and folds the ones from scenarios that were already there.
       - name: Comment on the pull request
+        run: pnpm nx run @discava/common-scripts:screenshots-comment
         env:
           GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          marker='<!-- e2e-screenshots -->'
-          short="${SHA:0:7}"
-          files=$(cd screenshots 2>/dev/null && find . -name '*.png' | sed 's|^\./[^/]*/||' | sort || true)
-          {
-            printf '%s\n### E2E screenshots\n\n' "$marker"
-            if [ -z "$files" ]; then
-              printf 'No scenario took screenshots on `%s`. A pull request that changes what a user sees should add `screenshot(page, '"'"'name'"'"')` calls to an e2e scenario (see packages/e2e/README.md).\n' "$short"
-            else
-              printf 'Taken by the e2e scenarios on `%s`: %s pictures. Download the `e2e-screenshots-*` artifacts from [the run](%s#artifacts).\n\n' \
-                "$short" "$(echo "$files" | wc -l)" "$RUN_URL"
-              echo "$files" | sed 's|^|- `|; s|$|`|'
-            fi
-          } > body.md
-          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
-            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md
-          else
-            gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md
-          fi
+          SCREENSHOTS_DIR: ${{ github.workspace }}/screenshots
