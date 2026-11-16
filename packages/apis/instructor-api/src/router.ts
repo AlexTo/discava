@@ -10,6 +10,11 @@ import {
   updateContentItemAssignment,
 } from './procedures/assignment.js';
 import {
+  attachContentItemCaption,
+  createContentItemCaptionUploadUrl,
+  removeContentItemCaption,
+} from './procedures/content-item-captions.js';
+import {
   createContentItemFile,
   createContentItemFileUploadUrl,
   createContentItemFileUrl,
@@ -114,6 +119,9 @@ export const appRouter = router({
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
     createVideoUrl: createContentItemVideoUrl,
+    captionUploadUrl: createContentItemCaptionUploadUrl,
+    attachCaption: attachContentItemCaption,
+    removeCaption: removeContentItemCaption,
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,

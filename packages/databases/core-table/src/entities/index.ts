@@ -15,3 +15,4 @@ export { createProgressEntity } from './progress.js';
 export { createQuizAttemptEntity } from './quiz-attempt.js';
 export { createQuizSummaryEntity } from './quiz-summary.js';
 export { createUserEntity } from './user.js';
+export { createVideoPositionEntity } from './video-position.js';

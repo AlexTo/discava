@@ -26,6 +26,7 @@ Tasks `T0xx` to `T0yy` of `tasks.md` (<phase or story>). Do not start tasks outs
 - Read `CLAUDE.md`, `.specify/memory/constitution.md` and the spec folder first.
 - Work through the scope in order, writing each story's tests first. Tick each task in `tasks.md` in the same commit that completes it.
 - Do not use `pnpm dev`, Docker or the e2e runner locally. Run unit and component tests (once, not in watch mode), `pnpm lint`, typecheck and `pnpm build` on what you changed. E2E and concurrency tests run on PR CI: write them, then read CI's result.
+- A change to what a user sees ships with `screenshot(page, 'name')` calls (`packages/e2e/src/helpers/screenshots.ts`) in the e2e scenario for that flow, at each state a reviewer would want to see: PR CI posts them as the `E2E screenshots` comment, and the `UI Screenshots` check fails without them. Don't leave screenshots to a **(human)** task.
 - Skip tasks marked **(human)** and list them in the PR description for the reviewer.
 - Use Conventional Commits for every commit. The PR title is a Conventional Commit too, for example `feat(assignments): submit work to an upload assignment`, not `[#n] ...`.
 - In the PR description write `Refs #<parent>`. Never use `Closes` or `Fixes` against the parent issue; closing this issue is fine.

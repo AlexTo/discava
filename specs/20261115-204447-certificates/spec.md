@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Issue #276: issue a verifiable certificate on course completion. Generate a certificate (PDF + shareable page) when the completion flow marks a course complete. Unique certificate ID and a public verification URL (no auth) showing learner, course, date, ID. Show/download from My Learning. Instructor can enable/disable per course."
 

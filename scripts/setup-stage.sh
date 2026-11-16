@@ -1927,7 +1927,10 @@ upsert_boundary_policy() {
         "mediaconvert:CancelJob",
         "mediaconvert:CreateJob",
         "mediaconvert:GetJob",
-        "sns:Publish"
+        "sns:Publish",
+        "transcribe:GetTranscriptionJob",
+        "transcribe:StartTranscriptionJob",
+        "transcribe:TagResource"
       ],
       "Resource": "*"
     }

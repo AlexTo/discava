@@ -18,7 +18,11 @@ import {
   completeContentItem,
   myItemCompletions,
 } from './procedures/completion.js';
-import { fileUrl, videoUrl } from './procedures/content-item.js';
+import {
+  fileUrl,
+  saveVideoPosition,
+  videoUrl,
+} from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -66,6 +70,7 @@ export const appRouter = router({
   contentItem: router({
     complete: completeContentItem,
     videoUrl,
+    saveVideoPosition,
     fileUrl,
   }),
   quiz: router({

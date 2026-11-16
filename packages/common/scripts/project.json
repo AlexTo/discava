@@ -29,6 +29,27 @@
         "cwd": "{projectRoot}"
       }
     },
+    "agent-review-status": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/agent-review/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "ui-screenshots": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "screenshots-comment": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/comment-main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {
@@ -56,6 +77,21 @@
       "continuous": true,
       "options": {
         "command": "tsx src/s3mock/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "elasticmq": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx src/elasticmq/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-elasticmq-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/elasticmq/pull-image.ts",
         "cwd": "{projectRoot}"
       }
     },

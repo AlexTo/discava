@@ -17,6 +17,7 @@ import {
   createQuizAttemptEntity,
   createQuizSummaryEntity,
   createUserEntity,
+  createVideoPositionEntity,
 } from './entities/index.js';
 
 // Course, Module, Lesson, and ContentItem join the `curriculum` collection
@@ -39,6 +40,7 @@ export const createCoreTableService = async () => {
     quizSummary,
     itemCompletion,
     certificate,
+    videoPosition,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -53,6 +55,7 @@ export const createCoreTableService = async () => {
     createQuizSummaryEntity(),
     createItemCompletionEntity(),
     createCertificateEntity(),
+    createVideoPositionEntity(),
   ]);
 
   return new Service({
@@ -69,5 +72,6 @@ export const createCoreTableService = async () => {
     quizSummary,
     itemCompletion,
     certificate,
+    videoPosition,
   });
 };

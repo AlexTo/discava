@@ -279,8 +279,9 @@ export class MediaBucket extends Construct {
     );
   }
 
-  public grantPut(grantee: IGrantable): Grant {
-    return this.bucket.grantPut(grantee);
+  /** `objectsKeyPattern` limits the grant to matching keys (e.g. `prefix/*`). */
+  public grantPut(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantPut(grantee, objectsKeyPattern);
   }
 
   /** Grants read access to the secret holding the CloudFront signing key pair's private key. */
@@ -292,11 +293,11 @@ export class MediaBucket extends Construct {
   // served over -- for a Lambda that needs to enumerate this bucket's own
   // objects itself (e.g. listing a content item's HLS output before
   // deleting it), not for anything that ends up in front of a viewer.
-  public grantRead(grantee: IGrantable): Grant {
-    return this.bucket.grantRead(grantee);
+  public grantRead(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantRead(grantee, objectsKeyPattern);
   }
 
-  public grantDelete(grantee: IGrantable): Grant {
-    return this.bucket.grantDelete(grantee);
+  public grantDelete(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantDelete(grantee, objectsKeyPattern);
   }
 }

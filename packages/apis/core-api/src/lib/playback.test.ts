@@ -52,3 +52,44 @@ describe('asStudentContentItem', () => {
     expect(asStudentContentItem(text)).toBe(text);
   });
 });
+
+describe('asStudentContentItem, caption attributes', () => {
+  const captioned = {
+    type: 'video',
+    status: 'ready',
+    s3Key: READY,
+    captionTracks: [{ trackId: 't1', key: 'item-1/new/captions/t1.vtt' }],
+    captionTracksRev: 3,
+    captionsStatus: 'ready',
+    captionsPendingSince: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('drops them from a ready video, keeping the rest', () => {
+    expect(asStudentContentItem(captioned)).toEqual({
+      type: 'video',
+      status: 'ready',
+      s3Key: READY,
+    });
+  });
+
+  it('drops them from a video being replaced as well', () => {
+    expect(
+      asStudentContentItem({
+        ...captioned,
+        status: 'pending',
+        s3Key: NEW,
+        previousS3Key: OLD,
+      }),
+    ).toEqual({
+      type: 'video',
+      status: 'ready',
+      s3Key: OLD,
+      previousS3Key: OLD,
+    });
+  });
+
+  it('does not change the record it was given', () => {
+    asStudentContentItem(captioned);
+    expect(captioned).toHaveProperty('captionTracks');
+  });
+});

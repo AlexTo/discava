@@ -16,8 +16,11 @@ import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
 import type { createUserEntity } from '../entities/user.js';
+import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
+import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
 import { computeProgress } from './progress.js';
+import { isValidPosition } from './video-position.js';
 
 // Rules the core table must keep that span several records, or several
 // writers (core-api, instructor-api, the event handlers), and that no schema
@@ -69,9 +72,14 @@ export interface TableSnapshot {
     | 'publishedAt'
     | 'studentActivityCount'
     | 's3Key'
+    | 'previousS3Key'
     | 'transcodePending'
     | 'transcodePendingSince'
     | 'submissionNonce'
+    | 'captionTracks'
+    | 'captionTracksRev'
+    | 'captionsStatus'
+    | 'captionsPendingSince'
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
@@ -147,6 +155,15 @@ export interface TableSnapshot {
     | 'completedAt'
     | 'issuedAt'
   >[];
+  videoPositions: Pick<
+    Item<typeof createVideoPositionEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'lessonId'
+    | 'contentItemId'
+    | 'positionSeconds'
+    | 'versionId'
+  >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
 }
 
@@ -174,6 +191,8 @@ export const INVARIANTS = [
   'assignment-submission-shape',
   'certificate-shape',
   'certificate-has-completed-enrolment',
+  'video-position-valid',
+  'caption-tracks-valid',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -471,6 +490,9 @@ export const checkInstructorCourseUpdatedAt = (
 // 6. A video's transcode state is consistent: transcodePending and
 // transcodePendingSince are set together, and only while it's pending (they
 // put it in byTranscodePending); a ready video plays from a master.m3u8.
+// Caption attributes appear only on video items, and
+// captionsStatus: pending only with captionsPendingSince and only on a ready
+// video.
 export const checkVideoTranscodeState = (
   snapshot: TableSnapshot,
 ): InvariantViolation[] =>
@@ -498,8 +520,94 @@ export const checkVideoTranscodeState = (
     ) {
       problems.push(`a ready video's s3Key is ${item.s3Key ?? 'not set'}`);
     }
+    if (
+      item.type !== 'video' &&
+      (item.captionTracks !== undefined ||
+        item.captionTracksRev !== undefined ||
+        item.captionsStatus !== undefined ||
+        item.captionsPendingSince !== undefined)
+    ) {
+      problems.push(`caption attributes are set on a ${item.type} item`);
+    }
+    if (item.captionsStatus === 'pending') {
+      if (item.captionsPendingSince === undefined) {
+        problems.push('captionsStatus is pending without captionsPendingSince');
+      }
+      if (item.type === 'video' && item.status !== 'ready') {
+        problems.push(`captionsStatus is pending on a ${item.status} video`);
+      }
+    } else if (item.captionsPendingSince !== undefined) {
+      problems.push(
+        'captionsPendingSince is set while captions are not pending',
+      );
+    }
     return problems.map((message) =>
       violation('video-transcode-state', record, message),
+    );
+  });
+
+// 24 (captions). A video's caption tracks are valid: at most 10, one per
+// language, exactly one default when there are any, each of the item's
+// played version (the version swap drops every other nonce in the same patch
+// that sets status: ready), and each file under that version's captions
+// folder.
+export const checkCaptionTracksValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.contentItems.flatMap((item) => {
+    const tracks = item.captionTracks ?? [];
+    if (tracks.length === 0) {
+      return [];
+    }
+    const record = {
+      courseId: item.courseId,
+      contentItemId: item.contentItemId,
+    };
+    // The version students play: the ready video's own manifest, else the
+    // previous one kept while a replacement transcodes (or after it failed),
+    // whose tracks stay with it until the swap.
+    const manifest = item.status === 'ready' ? item.s3Key : item.previousS3Key;
+    // The nonce the manifest lives under (as server-utils' manifestNonce).
+    const nonce = manifest?.match(
+      /\/content-items\/[^/]+\/([^/]+)\/[^/]+$/,
+    )?.[1];
+    // The item's folder: everything before the version's nonce.
+    const folder =
+      manifest && nonce
+        ? manifest.slice(0, manifest.length - `/${nonce}/master.m3u8`.length)
+        : undefined;
+    const problems: string[] = [];
+    if (tracks.length > MAX_CAPTION_TRACKS) {
+      problems.push(
+        `${tracks.length} caption tracks, at most ${MAX_CAPTION_TRACKS}`,
+      );
+    }
+    const languages = new Set<string>();
+    for (const track of tracks) {
+      if (languages.has(track.language)) {
+        problems.push(`two caption tracks in ${track.language}`);
+      }
+      languages.add(track.language);
+      if (track.nonce !== nonce) {
+        problems.push(
+          `track ${track.trackId} is for version ${track.nonce}, not the current ${nonce}`,
+        );
+      }
+      if (
+        !folder ||
+        !track.key.startsWith(`${folder}/${track.nonce}/captions/`)
+      ) {
+        problems.push(
+          `track ${track.trackId} key ${track.key} is outside the version's captions folder`,
+        );
+      }
+    }
+    const defaults = tracks.filter((track) => track.isDefault).length;
+    if (defaults !== 1) {
+      problems.push(`${defaults} default caption tracks, expected 1`);
+    }
+    return problems.map((message) =>
+      violation('caption-tracks-valid', record, message),
     );
   });
 
@@ -1192,6 +1300,32 @@ export const checkCertificateHasCompletedEnrolment = (
   });
 };
 
+// 23 (video positions). A saved position is whole seconds from 0 to the cap,
+// for a named version of the video. Positions are deliberately not in
+// studentRecords (and so not in the targets and placement checks above): a
+// position isn't student activity, and deleting a video with watchers is
+// allowed, so a position may outlive its item (research R-6). Only its
+// shape is checked.
+export const checkVideoPositionValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.videoPositions.flatMap((position) => {
+    const { userId, courseId, lessonId, contentItemId } = position;
+    const record = { userId, courseId, lessonId, contentItemId };
+    const problems: string[] = [];
+    if (!isValidPosition(position.positionSeconds)) {
+      problems.push(
+        `position ${position.positionSeconds} is not whole seconds from 0 to 86,400`,
+      );
+    }
+    if (!position.versionId) {
+      problems.push('no versionId');
+    }
+    return problems.map((message) =>
+      violation('video-position-valid', record, message),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1216,6 +1350,8 @@ const CHECKS = [
   checkAssignmentSubmissionShape,
   checkCertificateShape,
   checkCertificateHasCompletedEnrolment,
+  checkVideoPositionValid,
+  checkCaptionTracksValid,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1243,6 +1379,7 @@ export const loadTableSnapshot = async (
     quizSummaries,
     assignmentSubmissions,
     certificates,
+    videoPositions,
     users,
   ] = await Promise.all([
     entities.course.scan.go(all),
@@ -1257,6 +1394,7 @@ export const loadTableSnapshot = async (
     entities.quizSummary.scan.go(all),
     entities.assignmentSubmission.scan.go(all),
     entities.certificate.scan.go(all),
+    entities.videoPosition.scan.go(all),
     entities.user.scan.go(all),
   ]);
   return {
@@ -1272,6 +1410,7 @@ export const loadTableSnapshot = async (
     quizSummaries: quizSummaries.data,
     assignmentSubmissions: assignmentSubmissions.data,
     certificates: certificates.data,
+    videoPositions: videoPositions.data,
     users: users.data,
   };
 };

@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-16
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Instructor portal home page lists the signed-in instructor's real courses (from the instructor's course list) instead of hard-coded mock data. The fake 'MTH201 · Applied Mathematics' card on the home page links to a course that doesn't exist and shows \"You don't have permission to do that.\""
 
