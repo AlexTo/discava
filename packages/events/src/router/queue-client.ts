@@ -84,12 +84,35 @@ export const messageBytes = (message: QueueMessage): number =>
 const isTransient = (senderFault: boolean | undefined, code?: string) =>
   !senderFault && code !== 'AWS.SimpleQueueService.NonExistentQueue';
 
+// SendMessageBatch limits the combined size of its entries as well as each
+// one, both to MAX_MESSAGE_BYTES, so a batch closes at 10 entries or when the
+// next message would take it over that total.
+const chunkRanges = (messages: readonly QueueMessage[]) => {
+  const ranges: { start: number; end: number }[] = [];
+  let start = 0;
+  let bytes = 0;
+  messages.forEach((message, i) => {
+    const size = messageBytes(message);
+    if (
+      i > start &&
+      (i - start >= SEND_BATCH_SIZE || bytes + size > MAX_MESSAGE_BYTES)
+    ) {
+      ranges.push({ start, end: i });
+      start = i;
+      bytes = 0;
+    }
+    bytes += size;
+  });
+  if (messages.length > 0) ranges.push({ start, end: messages.length });
+  return ranges;
+};
+
 /** A QueueClient over SQS. `queue` is a queue URL. */
 export const createSqsQueueClient = (sqs: SQSClient): QueueClient => {
   const sendBatch: QueueClient['sendBatch'] = async (queue, messages) => {
     const failures: SendFailure[] = [];
-    for (let start = 0; start < messages.length; start += SEND_BATCH_SIZE) {
-      const chunk = messages.slice(start, start + SEND_BATCH_SIZE);
+    for (const { start, end } of chunkRanges(messages)) {
+      const chunk = messages.slice(start, end);
       try {
         const result = await sqs.send(
           new SendMessageBatchCommand({
@@ -118,7 +141,9 @@ export const createSqsQueueClient = (sqs: SQSClient): QueueClient => {
         chunk.forEach((_, i) =>
           failures.push({
             index: start + i,
-            transient: true,
+            // A sender-fault error (BatchRequestTooLong, a missing queue)
+            // fails the same way on every retry.
+            transient: (error as { $fault?: string })?.$fault !== 'client',
             reason: error instanceof Error ? error.message : String(error),
           }),
         );

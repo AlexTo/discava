@@ -63,6 +63,36 @@ describe('createSqsQueueClient', () => {
     });
   });
 
+  it('starts a new batch when the next message would exceed the size limit', async () => {
+    const { sqs, calls } = fakeSqs(() => ({}));
+    const big = (n: number) => ({
+      body: 'x'.repeat(600_000) + n,
+      attributes: {},
+    });
+    await createSqsQueueClient(sqs).sendBatch('q', [
+      big(0),
+      big(1),
+      message(2),
+    ]);
+    expect(
+      calls.map((c) => (c.input.Entries as { Id: string }[]).map((e) => e.Id)),
+    ).toEqual([['0'], ['1', '2']]);
+  });
+
+  it('does not mark a thrown sender-fault error as transient', async () => {
+    const sqs = {
+      send: vi
+        .fn()
+        .mockRejectedValue(
+          Object.assign(new Error('too long'), { $fault: 'client' }),
+        ),
+    } as never;
+    const failures = await createSqsQueueClient(sqs).sendBatch('q', [
+      message(0),
+    ]);
+    expect(failures[0]?.transient).toBe(false);
+  });
+
   it('reports a failed entry by its index in the messages passed', async () => {
     const { sqs } = fakeSqs((sent) =>
       sent.input.Entries &&
