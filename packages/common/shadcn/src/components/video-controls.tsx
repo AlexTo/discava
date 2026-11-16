@@ -18,6 +18,7 @@ import {
   MaximizeIcon,
   MinimizeIcon,
   PauseIcon,
+  PictureInPicture2Icon,
   PlayIcon,
   Volume2Icon,
   VolumeXIcon,
@@ -50,7 +51,7 @@ const clamp = (value: number, min: number, max: number) =>
 /**
  * An accessible control bar and keyboard shortcuts for the `<video>` it
  * wraps, replacing the browser's native controls: play/pause, seek, volume,
- * mute, speed and fullscreen. Speed, volume and mute are remembered across
+ * mute, speed, picture-in-picture and fullscreen. Speed, volume and mute are remembered across
  * videos (see `@discava/common-web-utils/video-player`).
  *
  * The container takes focus and handles the shortcuts, so they work while
@@ -73,6 +74,8 @@ export function VideoControls({
   const [muted, setMuted] = React.useState(false);
   const [speed, setSpeed] = React.useState(1);
   const [fullscreen, setFullscreen] = React.useState(false);
+  const [pipAvailable, setPipAvailable] = React.useState(false);
+  const [pip, setPip] = React.useState(false);
   const [focusWithin, setFocusWithin] = React.useState(false);
   const [active, setActive] = React.useState(false);
   const hideTimer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -111,6 +114,15 @@ export function VideoControls({
     };
 
     reapply();
+    setPipAvailable(
+      document.pictureInPictureEnabled === true &&
+        !video.disablePictureInPicture &&
+        !video.hasAttribute('disablepictureinpicture'),
+    );
+    const onPipChange = () =>
+      setPip(document.pictureInPictureElement === video);
+    video.addEventListener('enterpictureinpicture', onPipChange);
+    video.addEventListener('leavepictureinpicture', onPipChange);
     const events = [
       'play',
       'pause',
@@ -126,6 +138,8 @@ export function VideoControls({
     }
     video.addEventListener('loadedmetadata', reapply);
     return () => {
+      video.removeEventListener('enterpictureinpicture', onPipChange);
+      video.removeEventListener('leavepictureinpicture', onPipChange);
       for (const event of events) {
         video.removeEventListener(event, sync);
       }
@@ -203,6 +217,15 @@ export function VideoControls({
       document.exitFullscreen?.()?.catch(() => {});
     } else {
       containerRef.current?.requestFullscreen?.()?.catch(() => {});
+    }
+  };
+
+  const togglePictureInPicture = () => {
+    const video = getVideo();
+    if (document.pictureInPictureElement) {
+      document.exitPictureInPicture?.()?.catch(() => {});
+    } else {
+      video?.requestPictureInPicture?.()?.catch(() => {});
     }
   };
 
@@ -359,6 +382,19 @@ export function VideoControls({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            {pipAvailable && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Picture-in-picture"
+                aria-pressed={pip}
+                onClick={togglePictureInPicture}
+                className="hover:bg-white/20 hover:text-white"
+              >
+                <PictureInPicture2Icon />
+              </Button>
+            )}
             {typeof document !== 'undefined' && document.fullscreenEnabled && (
               <Button
                 type="button"

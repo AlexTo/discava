@@ -296,6 +296,90 @@ describe('VideoControls controls', () => {
   });
 });
 
+describe('VideoControls picture-in-picture', () => {
+  const setPictureInPicture = (enabled: boolean, element: unknown = null) => {
+    Object.defineProperty(document, 'pictureInPictureEnabled', {
+      configurable: true,
+      value: enabled,
+    });
+    Object.defineProperty(document, 'pictureInPictureElement', {
+      configurable: true,
+      value: element,
+    });
+  };
+
+  afterEach(() => {
+    // jsdom has neither property.
+    setPictureInPicture(false);
+  });
+
+  it('is hidden where unsupported', () => {
+    setPictureInPicture(false);
+    setup();
+    expect(
+      screen.queryByRole('button', { name: 'Picture-in-picture' }),
+    ).toBeNull();
+  });
+
+  it('is hidden when the video disables it', () => {
+    setPictureInPicture(true);
+    render(
+      <VideoControls>
+        <video disablePictureInPicture />
+      </VideoControls>,
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Picture-in-picture' }),
+    ).toBeNull();
+  });
+
+  it('enters picture-in-picture, exposing the state', async () => {
+    setPictureInPicture(true);
+    const { video } = setup();
+    video.requestPictureInPicture = vi.fn().mockResolvedValue({});
+    const button = screen.getByRole('button', { name: 'Picture-in-picture' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(button);
+    expect(video.requestPictureInPicture).toHaveBeenCalled();
+    setPictureInPicture(true, video);
+    act(() => {
+      video.dispatchEvent(new Event('enterpictureinpicture'));
+    });
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves picture-in-picture when already in it', async () => {
+    setPictureInPicture(true);
+    const { video } = setup();
+    setPictureInPicture(true, video);
+    document.exitPictureInPicture = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      video.dispatchEvent(new Event('enterpictureinpicture'));
+    });
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Picture-in-picture' }),
+    );
+    expect(document.exitPictureInPicture).toHaveBeenCalled();
+    setPictureInPicture(true);
+    act(() => {
+      video.dispatchEvent(new Event('leavepictureinpicture'));
+    });
+    expect(
+      screen.getByRole('button', { name: 'Picture-in-picture' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('is harmless when the browser refuses', async () => {
+    setPictureInPicture(true);
+    const { video } = setup();
+    video.requestPictureInPicture = vi.fn().mockRejectedValue(new Error('no'));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Picture-in-picture' }),
+    );
+    expect(video.requestPictureInPicture).toHaveBeenCalled();
+  });
+});
+
 describe('VideoControls preferences', () => {
   it('restores saved preferences on mount', () => {
     localStorage.setItem(
