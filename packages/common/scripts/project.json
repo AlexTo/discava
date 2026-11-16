@@ -67,6 +67,7 @@
     "local-oidc": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-local-oidc-image"],
       "options": {
         "command": "tsx src/local-oidc/start-container.ts",
         "cwd": "{projectRoot}"
@@ -75,6 +76,7 @@
     "s3mock": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-s3mock-image"],
       "options": {
         "command": "tsx src/s3mock/start-container.ts",
         "cwd": "{projectRoot}"
@@ -83,8 +85,23 @@
     "elasticmq": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-elasticmq-image"],
       "options": {
         "command": "tsx src/elasticmq/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-local-oidc-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/local-oidc/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-s3mock-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/s3mock/pull-image.ts",
         "cwd": "{projectRoot}"
       }
     },
