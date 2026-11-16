@@ -37,7 +37,7 @@ import { Slider } from './ui/slider';
 // How long the bar stays after the last pointer or key activity while playing.
 const IDLE_HIDE_MS = 3000;
 
-function formatTime(seconds: number): string {
+export function formatTime(seconds: number): string {
   const total = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);

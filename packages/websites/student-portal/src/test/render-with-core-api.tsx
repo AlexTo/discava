@@ -138,6 +138,7 @@ export const renderWithCoreApi = (
     routeTree,
     path = '/',
     runtimeConfig = {},
+    queryClient: sharedQueryClient,
   }: {
     handlers?: Record<string, Handler>;
     signedIn?: boolean;
@@ -146,12 +147,19 @@ export const renderWithCoreApi = (
     path?: string;
     // Merged into the runtime config the portal sees.
     runtimeConfig?: Record<string, unknown>;
+    // Reuse another render's cache, as navigating back within one session does.
+    queryClient?: QueryClient;
   } = {},
 ) => {
   const calls: ApiCall[] = [];
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
+  const queryClient =
+    sharedQueryClient ??
+    new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
   const client = createTRPCClient<AppRouter>({
     links: [httpLink({ url: API_URL, fetch: fakeFetch(handlers, calls) })],
   });

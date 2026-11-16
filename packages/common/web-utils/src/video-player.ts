@@ -164,3 +164,56 @@ export function savePreferences(preferences: PlayerPreferences): void {
     // Preferences are a convenience: the player works without them.
   }
 }
+
+export interface PlayerPosition {
+  positionSeconds: number;
+  durationSeconds: number;
+}
+
+/** How often a playing video reports its position. */
+export const POSITION_REPORT_INTERVAL_MS = 10_000;
+
+// A report for a position this close to the last one adds nothing.
+const MIN_POSITION_MOVE_SECONDS = 1;
+
+/**
+ * Decides when a player's position is worth reporting (to be saved for
+ * resuming). `tick` is for the steady stream of time updates while playing:
+ * it reports at most every 10 seconds. `flush` is for moments the viewer may
+ * be leaving (pause, the end of a seek, the page hiding): it reports now.
+ * Both skip a position within a second of the last one reported, and a
+ * position or duration that isn't usable yet. `initialPosition` is where
+ * playback starts, so resuming reports nothing until the viewer moves on.
+ */
+export function createPositionReporter(
+  report: (position: PlayerPosition) => void,
+  options: { initialPosition?: number; now?: () => number } = {},
+) {
+  const now = options.now ?? Date.now;
+  let lastPosition = options.initialPosition ?? 0;
+  let lastAt = now();
+
+  const send = (positionSeconds: number, durationSeconds: number) => {
+    if (
+      !Number.isFinite(positionSeconds) ||
+      positionSeconds < 0 ||
+      !Number.isFinite(durationSeconds) ||
+      durationSeconds <= 0 ||
+      Math.abs(positionSeconds - lastPosition) < MIN_POSITION_MOVE_SECONDS
+    ) {
+      return;
+    }
+    lastPosition = positionSeconds;
+    lastAt = now();
+    report({ positionSeconds, durationSeconds });
+  };
+
+  return {
+    tick(positionSeconds: number, durationSeconds: number) {
+      if (now() - lastAt >= POSITION_REPORT_INTERVAL_MS) {
+        send(positionSeconds, durationSeconds);
+      }
+    },
+    flush: send,
+  };
+}

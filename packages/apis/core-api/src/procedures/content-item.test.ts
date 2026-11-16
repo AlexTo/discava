@@ -5,19 +5,53 @@
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { fileUrl, videoUrl } from './content-item.js';
+import { fileUrl, saveVideoPosition, videoUrl } from './content-item.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
-const { db, getSignedCloudFrontCookies, getSignedCloudFrontFileUrl } =
-  vi.hoisted(() => ({
-    db: {} as Record<string, any>,
-    getSignedCloudFrontCookies: vi.fn(),
-    getSignedCloudFrontFileUrl: vi.fn(),
-  }));
+const {
+  db,
+  puts,
+  positionKeys,
+  getSignedCloudFrontCookies,
+  getSignedCloudFrontFileUrl,
+} = vi.hoisted(() => ({
+  db: {} as Record<string, any>,
+  // Every write the procedures under test make, by entity.
+  puts: [] as { entity: string; item: any }[],
+  // The keys videoPosition was read by.
+  positionKeys: [] as any[],
+  getSignedCloudFrontCookies: vi.fn(),
+  getSignedCloudFrontFileUrl: vi.fn(),
+}));
 
 const stored = (name: string) => ({
-  get: vi.fn(() => ({
-    go: vi.fn(async () => ({ data: db[name] ?? null })),
+  get: vi.fn((key: any) => ({
+    go: vi.fn(async () => {
+      if (name === 'videoPosition') {
+        positionKeys.push(key);
+      }
+      return { data: db[name] ?? null };
+    }),
+  })),
+  put: vi.fn((item: any) => ({
+    go: vi.fn(async () => {
+      puts.push({ entity: name, item });
+      return { data: item };
+    }),
+  })),
+  create: vi.fn((item: any) => ({
+    go: vi.fn(async () => {
+      puts.push({ entity: name, item });
+      return { data: item };
+    }),
+  })),
+  patch: vi.fn((key: any) => ({
+    set: vi.fn((item: any) => ({
+      go: vi.fn(async () => {
+        puts.push({ entity: name, item: { ...key, ...item } });
+        return { data: item };
+      }),
+    })),
   })),
 });
 
@@ -25,10 +59,14 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
   createCoreTableService: vi.fn(async () => ({
     entities: Object.fromEntries(
-      ['course', 'module', 'lesson', 'contentItem', 'enrolment'].map((name) => [
-        name,
-        stored(name),
-      ]),
+      [
+        'course',
+        'module',
+        'lesson',
+        'contentItem',
+        'enrolment',
+        'videoPosition',
+      ].map((name) => [name, stored(name)]),
     ),
   })),
 }));
@@ -41,7 +79,9 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getSignedCloudFrontFileUrl,
 }));
 
-const caller = t.createCallerFactory(t.router({ videoUrl, fileUrl }));
+const caller = t.createCallerFactory(
+  t.router({ videoUrl, fileUrl, saveVideoPosition }),
+);
 
 const USER_SUB = 'student-1';
 
@@ -67,6 +107,8 @@ const MANIFEST =
 
 beforeEach(() => {
   vi.clearAllMocks();
+  puts.length = 0;
+  positionKeys.length = 0;
   for (const key of Object.keys(db)) {
     delete db[key];
   }
@@ -97,6 +139,8 @@ describe('contentItem.videoUrl', () => {
     await expect(call().videoUrl(ref)).resolves.toEqual({
       url: `https://media.example.com/${MANIFEST}`,
       withCredentials: false,
+      versionId: 'nonce-1',
+      resumeAt: 0,
     });
   });
 
@@ -106,6 +150,8 @@ describe('contentItem.videoUrl', () => {
     await expect(call(responseCookies).videoUrl(ref)).resolves.toEqual({
       url: `https://media.example.com/${MANIFEST}`,
       withCredentials: true,
+      versionId: 'nonce-1',
+      resumeAt: 0,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/nonce-1/',
@@ -179,10 +225,64 @@ describe('contentItem.videoUrl', () => {
     await expect(call().videoUrl(ref)).resolves.toEqual({
       url: `https://media.example.com/${previous}`,
       withCredentials: true,
+      versionId: 'old-nonce',
+      resumeAt: 0,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/',
     );
+  });
+
+  it("returns the student's saved position for the played version", async () => {
+    db.videoPosition = {
+      ...ref,
+      userId: USER_SUB,
+      positionSeconds: 95,
+      versionId: 'nonce-1',
+    };
+
+    await expect(call().videoUrl(ref)).resolves.toMatchObject({
+      versionId: 'nonce-1',
+      resumeAt: 95,
+    });
+  });
+
+  it('starts at 0 when the saved position is for another version', async () => {
+    db.videoPosition = {
+      ...ref,
+      userId: USER_SUB,
+      positionSeconds: 95,
+      versionId: 'older-nonce',
+    };
+
+    await expect(call().videoUrl(ref)).resolves.toMatchObject({
+      versionId: 'nonce-1',
+      resumeAt: 0,
+    });
+  });
+
+  it("reads only the caller's own position", async () => {
+    await call().videoUrl(ref);
+
+    expect(positionKeys).toEqual([
+      {
+        userId: USER_SUB,
+        courseId: 'course-1',
+        lessonId: 'lesson-1',
+        contentItemId: 'item-1',
+      },
+    ]);
+  });
+
+  it('leaks no S3 key', async () => {
+    const result = await call().videoUrl(ref);
+
+    expect(Object.keys(result).sort()).toEqual([
+      'resumeAt',
+      'url',
+      'versionId',
+      'withCredentials',
+    ]);
   });
 
   it('rejects unauthenticated callers', async () => {
@@ -253,5 +353,150 @@ describe('contentItem.fileUrl', () => {
       code: 'NOT_FOUND',
     });
     expect(getSignedCloudFrontFileUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('contentItem.saveVideoPosition', () => {
+  const save = (extra: Record<string, unknown> = {}) =>
+    call().saveVideoPosition({
+      ...ref,
+      versionId: 'nonce-1',
+      positionSeconds: 42,
+      durationSeconds: 600,
+      ...extra,
+    });
+
+  it("stores the caller's position with the version", async () => {
+    await expect(save()).resolves.toEqual({ saved: true, positionSeconds: 42 });
+
+    expect(puts).toEqual([
+      {
+        entity: 'videoPosition',
+        item: expect.objectContaining({
+          ...ref,
+          userId: USER_SUB,
+          positionSeconds: 42,
+          versionId: 'nonce-1',
+          savedAt: expect.any(String),
+        }),
+      },
+    ]);
+  });
+
+  it('floors a fractional position', async () => {
+    await save({ positionSeconds: 42.9 });
+
+    expect(puts[0].item.positionSeconds).toBe(42);
+  });
+
+  it.each([
+    ['within 10 seconds of the end', { positionSeconds: 595 }],
+    ['past 95% of the video', { positionSeconds: 580 }],
+  ])('stores 0 %s', async (_, change) => {
+    await expect(save(change)).resolves.toEqual({
+      saved: true,
+      positionSeconds: 0,
+    });
+
+    expect(puts[0].item.positionSeconds).toBe(0);
+  });
+
+  it('ignores a version students no longer play', async () => {
+    await expect(save({ versionId: 'old-nonce' })).resolves.toEqual({
+      saved: false,
+    });
+
+    expect(puts).toEqual([]);
+  });
+
+  it('saves for the previous version while a replacement transcodes', async () => {
+    db.contentItem = {
+      ...db.contentItem,
+      status: 'pending',
+      s3Key: 'courses/course-1/x/item-1.mp4',
+      previousS3Key:
+        'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/master.m3u8',
+    };
+
+    await expect(save({ versionId: 'old-nonce' })).resolves.toMatchObject({
+      saved: true,
+    });
+  });
+
+  it('refuses an archived course', async () => {
+    db.course.status = 'archived';
+
+    await expect(save()).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This course is archived',
+    });
+    expect(puts).toEqual([]);
+  });
+
+  it.each([
+    ['not enrolled', () => delete db.enrolment],
+    ['dropped', () => (db.enrolment.status = 'dropped')],
+  ])('is FORBIDDEN to a student who is %s', async (_, arrange) => {
+    arrange();
+
+    await expect(save()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(puts).toEqual([]);
+  });
+
+  it.each([
+    ['the item is gone', () => delete db.contentItem],
+    ['its module is hidden', () => (db.module.visibility = 'hidden')],
+    ['its lesson is archived', () => (db.lesson.archivedAt = '2024-01-01')],
+    ['it is hidden', () => (db.contentItem.visibility = 'hidden')],
+    ['it is not a video', () => (db.contentItem.type = 'text')],
+    ['it has no stream yet', () => delete db.contentItem.s3Key],
+  ])('is NOT_FOUND when %s', async (_, arrange) => {
+    arrange();
+
+    await expect(save()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(puts).toEqual([]);
+  });
+
+  it("takes the record's owner from the token, not the input", async () => {
+    await save({ userId: 'someone-else' });
+
+    expect(puts).toHaveLength(1);
+    expect(puts[0].item.userId).toBe(USER_SUB);
+  });
+
+  it('writes no completion, activity count or progress', async () => {
+    await save();
+
+    expect(puts.map((p) => p.entity)).toEqual(['videoPosition']);
+  });
+
+  it.each([
+    ['a negative position', { positionSeconds: -1 }],
+    ['a position over a day', { positionSeconds: 86_401 }],
+    ['a zero duration', { durationSeconds: 0 }],
+    ['a duration over a day', { durationSeconds: 86_401 }],
+    ['a NaN position', { positionSeconds: Number.NaN }],
+  ])('rejects %s', async (_, change) => {
+    await expect(save(change)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    expect(puts).toEqual([]);
+  });
+
+  it('rejects unauthenticated callers', async () => {
+    const anonymous = caller({
+      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
+      context: {} as any,
+      info: {} as any,
+    });
+
+    await expect(
+      anonymous.saveVideoPosition({
+        ...ref,
+        versionId: 'nonce-1',
+        positionSeconds: 1,
+        durationSeconds: 10,
+      }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
 });

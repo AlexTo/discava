@@ -146,6 +146,7 @@ const consistentTable = (): TableSnapshot => ({
   ],
   assignmentSubmissions: [],
   certificates: [],
+  videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
 });
 
@@ -200,6 +201,7 @@ describe('checkTableInvariants', () => {
         quizSummaries: [],
         assignmentSubmissions: [],
         certificates: [],
+        videoPositions: [],
         users: [],
       }),
     ).toEqual([]);
@@ -1044,6 +1046,51 @@ describe('21. certificate-shape and 22. certificate-has-completed-enrolment', ()
     const names = checkTableInvariants(table).map((v) => v.invariant);
     expect(names).not.toContain('activity-count-matches-students');
     expect(names.filter((n) => n.startsWith('student-records-'))).toEqual([]);
+  });
+});
+
+describe('video-position-valid', () => {
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  const position = () => ({
+    userId: 'student',
+    courseId: 'c1',
+    lessonId: 'l1',
+    contentItemId: 'video',
+    positionSeconds: 42,
+    versionId: 'nonce-1',
+  });
+
+  it('accepts a valid position, and 0', () => {
+    table.videoPositions.push(position(), {
+      ...position(),
+      contentItemId: 'video-2',
+      positionSeconds: 0,
+    });
+    expect(violationsOf('video-position-valid')).toEqual([]);
+  });
+
+  it.each([
+    ['a negative position', { positionSeconds: -1 }],
+    ['a fractional position', { positionSeconds: 1.5 }],
+    ['a position over the cap', { positionSeconds: 86_401 }],
+    ['a missing versionId', { versionId: '' }],
+  ])('reports %s', (_, change) => {
+    table.videoPositions.push({ ...position(), ...change });
+    expect(violationsOf('video-position-valid')).toHaveLength(1);
+  });
+
+  // A position is not a student record (research R-6): it may outlive its
+  // item, and its student needs no activity count.
+  it('is not a student record: an orphan position trips no other check', () => {
+    table.users.push({ userId: 'someone' });
+    table.videoPositions.push({
+      ...position(),
+      userId: 'someone',
+      contentItemId: 'deleted-video',
+    });
+    expect(checkTableInvariants(table)).toEqual([]);
   });
 });
 

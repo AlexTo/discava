@@ -232,6 +232,61 @@ test('an instructor uploads a video, and a student watches it', async ({
     expect((await state('Video two')).paused).toBe(false);
     await screenshot(student, 'reduced motion, bar hidden while playing');
 
+    // Resuming. The test video is 3 seconds long, so "about where it
+    // stopped" is a seek to half way, and the whole video counts as watched
+    // only at its very end. Saves go out on a seek, a pause and every 10 seconds of playing.
+    await student.emulateMedia({ reducedMotion: 'no-preference' });
+    const saved = () =>
+      student.waitForResponse(
+        (response) =>
+          response.url().includes('contentItem.saveVideoPosition') &&
+          response.ok(),
+      );
+    await second.evaluate((v: HTMLVideoElement) => v.pause());
+    const halfSaved = saved();
+    await player('Video two').press('5');
+    await halfSaved;
+
+    await student.reload();
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    // Within 10 seconds before where it stopped, and not playing.
+    await expect
+      .poll(async () => (await state('Video two')).time)
+      .toBeGreaterThan(0.5);
+    expect((await state('Video two')).paused).toBe(true);
+    await expect(lessonItem(student, 'Video two')).toContainText('Resumed at');
+    await player('Video two').scrollIntoViewIfNeeded();
+    await screenshot(student, 'resumed where the video stopped');
+
+    // Watching to the end clears the position: the next visit starts over.
+    const nearEndSaved = saved();
+    await second.evaluate((v: HTMLVideoElement) => {
+      v.playbackRate = 2;
+      v.currentTime = Math.max(0, v.duration - 1);
+    });
+    await nearEndSaved;
+    const endSaved = saved();
+    await second.evaluate((v: HTMLVideoElement) => v.play());
+    await endSaved;
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.ended))
+      .toBe(true);
+    await student.reload();
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    expect((await state('Video two')).time).toBe(0);
+    await expect(lessonItem(student, 'Video two')).not.toContainText(
+      'Resumed at',
+    );
+    await screenshot(student, 'a finished video starts at the beginning');
+
     await markItemDone(student, 'Video one');
     await markItemDone(student, 'Video two');
   });

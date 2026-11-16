@@ -30,6 +30,9 @@ describe('matchesProgressStreamFilters', () => {
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
     // The recalculation's own write when it issues a certificate.
+    // A student's saved video position, written every few seconds.
+    ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
+    ['a saved video position', record('MODIFY', 'NewImage', 'videoPosition')],
     ['a new certificate', record('INSERT', 'NewImage', 'certificate')],
     // A submission's own change; its completion is what drives progress.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
