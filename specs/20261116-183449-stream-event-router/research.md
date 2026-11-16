@@ -113,7 +113,6 @@ At the sizes in the spec (thousands of changes a day), each part is cents per mo
 
 ## Open items carried into tasks
 
-1. ElasticMQ spike (SDK protocol, pin, local redrive), a human task. Fallback: in-process queue.
+1. ElasticMQ spike (SDK protocol, exact tag string or digest, local redrive), a human task; the version is pinned at 1.7.1. Fallback: the in-process queue.
 2. Confirm the SQS message size limit and set the router's constant.
 3. Confirm the AppConfig and `RuntimeConfig` wiring for the new stack.
-4. Confirm that no write path to a `course` record bypasses the entity (for the re-read design this only matters for the re-index tool's assumptions, not for correctness).

@@ -130,7 +130,11 @@ packages/
 │   ├── server-utils/src/local-dev.ts           # + ElasticMQ endpoint and queue names
 │   └── scripts/src/elasticmq/start-container.ts  # + Nx target, like s3mock (+ config file with the queues)
 ├── infra/src/stacks/stream-router-stack.ts     # new stack; core-api-stack.ts loses the two mappings
-└── e2e/src/helpers/                            # settle-on-final-state waits (if needed)
+└── e2e/src/
+    ├── scenarios/router.e2e.ts                 # routing through the queues (T017)
+    ├── scenarios/router-failure.e2e.ts         # failure queue and redrive via the runner routes (T019)
+    ├── concurrency/router-ordering.e2e.ts      # publish, unpublish and edit races end in the table's state (T018)
+    └── helpers/router.ts                       # runner calls; other helpers: settle-on-final-state waits (if needed)
 docs/                                           # contributor page for the per-feature pattern (FR-023)
 .specify/memory/constitution.md                 # stream-consumer wording (FR-024), in the implementation PR
 ```
@@ -141,10 +145,11 @@ docs/                                           # contributor page for the per-f
 
 The task list will hold the detail; the order and the independence are:
 
-1. Local queue spike (human), `QueueClient` and the in-process queue, the registry, the pure router and adapter.
-2. The router and the feature runner locally: progress and search routed in the event runner, with the existing e2e passing.
-3. The `StreamRouter` construct and stack, the generator wrapper, alarms; the two old mappings removed.
-4. Search re-read, with the ordering and duplicate tests.
+1. Foundation: the local queue spike (human), `QueueClient` and the in-process queue, the registry, the pure router and adapter.
+2. The router and the feature runner locally: progress and search routed in the event runner, the runner routes, and the new e2e scenarios, with the existing e2e passing.
+3. Search re-read, with the ordering and duplicate tests and the table read grant. It can run alongside phase 2.
+4. The `StreamRouter` construct, stage config and stack, the generator wrapper, alarms; the two old mappings removed.
 5. Docs, the constitution wording, and the list of what #331 and #332 change.
+6. Polish: the deployed check, `build`, `lint`, `test`.
 
-Phases 2 and 3 each leave `main` working, and phase 3 cannot ship before phase 2, so the deployed and local routing never disagree.
+Phase 2 changes only local development and phase 3 changes only search's behaviour (correct under today's ordering too), so `main` stays working after each. Phase 4 cannot ship before phase 2, so the deployed and local routing never disagree.

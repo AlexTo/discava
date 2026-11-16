@@ -49,18 +49,28 @@ pnpm nx run @discava/common-constructs:test -- --run stream-router
 
 Expect: a handler that always throws sends its messages to its own failure queue after `maxReceiveCount` receives while another feature keeps processing; the construct test shows one failure queue and one alarm per feature plus the router's.
 
-Local: make a handler fail, then:
+Local, with `pnpm dev` running: make search fail its next 5 batches, change a course, then look at the queues and redrive:
 
 ```sh
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+# publish or edit a course in the instructor portal, then wait a few seconds
 curl http://localhost:2024/router/queues
 curl -X POST http://localhost:2024/router/redrive/search-indexing
 ```
 
-Expect the failure count to show, then to move back after redrive.
+Expect the failure count for `search-indexing` to show (progress's stays 0), then to move back after redrive, and the course to appear in search.
 
 ## 5. Local parity (User Story 5, FR-020 to FR-022)
 
 Run the event runner's tests. Expect: the local router and the deployed router both call `featuresFor`, a registration with a missing handler or an unmatched filter fails a test, and burst collapsing holds (a burst of edits to one course produces one recalculation).
+
+## 6. End to end (User Stories 1 to 5)
+
+PR CI runs these against the local stack (`pnpm nx e2e @discava/e2e` locally, with `pnpm dev` or letting Playwright start it):
+
+- `router.e2e.ts`: progress and search follow a course and a completion through the queues, and no failure queue holds work from the scenario.
+- `router-failure.e2e.ts`: a forced search failure ends in search's failure queue while progress keeps working, and a redrive restores the course in the index.
+- `router-ordering.e2e.ts` (concurrency): rapid publish, unpublish and edit of one course end with search matching the table's final state.
 
 ## Before merging
 
