@@ -110,8 +110,8 @@ For each quiz in the course, the instructor sees a ranking of the most-missed qu
 ### Edge Cases
 
 - A course with thousands of students: reading analytics costs the same as for a course with one, as every figure is already summed.
-- The same stream record delivered twice, or a batch retried: each event affects the figures exactly once.
-- Records arrive out of order (a quiz attempt before the enrolment's progress is recalculated): the figures settle to the same result once all records have been processed.
+- The same stream record delivered twice, a batch retried, or a failed message redriven from the failure queue: each event affects the figures exactly once.
+- Records arrive out of order, including two changes to the same record, or a student's drop before their last lesson progress is handled (a quiz attempt before the enrolment's progress is recalculated): the figures settle to the same result once all records have been processed.
 - A lesson, module or quiz is removed after students used it: its figures disappear from the views; totals that do not depend on it stay.
 - An instructor is removed from a course: they stop being able to read its analytics immediately; their other courses are unaffected.
 - Progress recalculation changes statuses after a curriculum edit (items hidden): drop-off, completion and active figures follow the new statuses.
@@ -130,7 +130,7 @@ For each quiz in the course, the instructor sees a ranking of the most-missed qu
 - **FR-005**: The detail view MUST show, for each quiz, the most-missed questions (ranked by miss rate, with attempts and misses; only questions with at least 5 attempts are ranked) and the distribution of each student's best score in ten-point bands.
 - **FR-006**: Only instructors of a course MUST be able to read its analytics. Every analytics read MUST check the caller against the course's instructor records, and MUST return nothing to anyone else, including other instructors and students.
 - **FR-007**: Analytics MUST NOT be computed by scanning students' records per request. They MUST be read from aggregates maintained as the underlying records change, so a read costs a small, fixed number of keyed lookups regardless of enrolment size.
-- **FR-008**: The aggregates MUST be updated from the core table's change stream by a handler that is safe against duplicate and retried deliveries: each source change affects each figure exactly once.
+- **FR-008**: The aggregates MUST be updated from the core table's change stream by a handler that is safe against duplicate, retried, redriven and out-of-order deliveries: each source change affects each figure exactly once, and the result does not depend on the order records arrive in.
 - **FR-009**: Each aggregate's definition (what it counts and from which records) MUST be written once, in shared code that both the stream handler and a rebuild function use.
 - **FR-010**: A rebuild function MUST be able to recompute a course's aggregates from the underlying records alone. The numbers produced by the stream MUST equal the rebuilt numbers; a consistency check in the repository's invariant checks MUST fail when they differ, and a test MUST break it.
 - **FR-011**: The active, completion and drop-off figures MUST exclude dropped enrolments; enrolments over time MUST keep them, and quiz statistics keep dropped students' attempts.
@@ -159,7 +159,7 @@ For each quiz in the course, the instructor sees a ranking of the most-missed qu
 - **SC-002**: A change (an enrolment, a completion, a quiz attempt) appears in the figures within 30 seconds in 95% of cases.
 - **SC-003**: The dashboard for an instructor with 20 courses loads its figures in under 2 seconds, and the detail view of a course in under 2 seconds, however many students are enrolled.
 - **SC-004**: 0 cases where a non-instructor of a course, including another instructor, can read any of its analytics.
-- **SC-005**: Replaying any stream batch twice leaves the figures identical in 100% of tests.
+- **SC-005**: Replaying any stream batch twice, or in reverse order, leaves the figures identical in 100% of tests.
 - **SC-006**: An instructor can find the lesson with the lowest completion share in a course within 30 seconds, in a usability check with at least 5 of 5 testers.
 - **SC-007**: No placeholder or illustrative figures remain in the instructor portal.
 

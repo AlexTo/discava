@@ -13,7 +13,7 @@ All aggregate entities share `pk = ANALYTICS#<courseId>` and differ in sort key,
 | `lessonStats` | `LESSON#<lessonId>` | `courseId`, `lessonId`, `inProgress`, `completed` (started = both) |
 | `quizQuestionStats` | `QUIZ#<contentItemId>#Q#<questionId>` | `courseId`, `contentItemId`, `questionId`, `attempts`, `misses` |
 | `quizScoreStats` | `QUIZ#<contentItemId>#SCORES` | `courseId`, `contentItemId`, `band0` .. `band9` (students whose best score is in 0-9, 10-19, .. 90-100) |
-| `analyticsMarker` | pk `ANALYTICSMARK#<courseId>`, sk `EVENT#<eventID>` or `MEMBER#<period>#<userId>` | `courseId`, `ttl` (epoch seconds) |
+| `analyticsMarker` | pk `ANALYTICSMARK#<courseId>`, sk `EVENT#<eventID>`, `MEMBER#<period>#<userId>` or `FUNNEL#<userId>#<lessonId>` | `courseId`, `ttl` (epoch seconds, required on `EVENT` and `MEMBER`: 15 days, or 15 days after the period's end; none on `FUNNEL`), `status` (`FUNNEL` only: `inProgress` or `completed`, the status counted in `lessonStats`) |
 
 Notes:
 
@@ -51,7 +51,7 @@ Notes:
 
 ## Stream filters
 
-`ANALYTICS_STREAM_FILTERS` in `core-table/src/helpers/analytics-stream.ts` (beside `PROGRESS_STREAM_FILTERS`), used by the deployed mapping and the local event runner:
+`ANALYTICS_STREAM_FILTERS` in `core-table/src/helpers/analytics-stream.ts` (beside `PROGRESS_STREAM_FILTERS`), the filters of the `analytics-update` entry in `STREAM_FEATURES`, which the deployed router stack and the local event runner both read:
 
 - INSERT and MODIFY of `enrolment`, `progress`, `quizSummary`
 - INSERT of `itemCompletion`, `quizAttempt`

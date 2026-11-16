@@ -6,10 +6,10 @@ An agent runs the unit, component, lint, typecheck, `build` and `synth` checks. 
 
 ```sh
 pnpm nx run @discava/core-table:test              # contributions, rebuild, markers, invariant and its breaking test
-pnpm nx run @discava/events:test                  # analytics handler: replay, retry, ordering
+pnpm nx run @discava/events:test                  # analytics handler: replay, retry, reordering, redrive
 pnpm nx run @discava/instructor-api:test          # analytics router, authorization
 pnpm nx run @discava/instructor-portal:test       # dashboard and course analytics pages
-pnpm nx run @discava/infra:test                   # third stream mapping, TTL on the table
+pnpm nx run @discava/infra:test                   # analytics-update registration and queue, TTL on the table
 pnpm nx run-many --target build --projects @discava/infra,@discava/events
 pnpm nx e2e @discava/e2e                          # PR CI: analytics scenario, consistency after every test
 ```

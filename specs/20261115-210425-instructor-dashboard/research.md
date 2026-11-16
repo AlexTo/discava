@@ -14,7 +14,7 @@ Decisions that shape the plan. Each lists the alternatives rejected.
 |--------|---------|
 | Per-request scan or per-student fan-out | Rejected: O(students) per view, scans are banned for user requests (constitution V) |
 | Recompute the whole course on each stream batch, like progress recalculation | Rejected: progress recalculation is cheap only because it reads one student's records. A course-wide recompute is O(students) per batch, and a busy course gets a batch every 5 seconds |
-| Stream counters with plain `ADD` and no dedupe | Rejected: Lambda stream delivery is at least once, and a retried batch (`retryAttempts: 5`, bisect on error) would double count. The acceptance criterion says numbers match the records |
+| Stream counters with plain `ADD` and no dedupe | Rejected: Lambda stream delivery is at least once, and an at-least-once delivery (a message received twice, a batch retried from the queue, or a failure-queue redrive) would double count. The acceptance criterion says numbers match the records |
 | Stream counters with exactly-once markers (chosen) | One extra small write per event, exact numbers, no scan |
 
 ## R-2: Exactly-once application of a stream record
@@ -24,9 +24,10 @@ Decisions that shape the plan. Each lists the alternatives rejected.
 - A **count contribution** (for example "enrolments +1", "lesson 3 completed +1") is applied in one transaction with a marker item `ANALYTICSMARK#<courseId> / EVENT#<eventID>` written with `attribute_not_exists`. If the marker exists the transaction cancels and the record is skipped, so a redelivered record changes nothing.
 - A **member contribution** (a distinct learner active on a day or in a week) is applied in its own transaction: a marker `MEMBER#<period>#<userId>` put with `attribute_not_exists` plus the counter increment. If the marker exists, the learner is already counted. This cannot share the event's transaction, because a failed condition cancels the whole transaction.
 - Each part is idempotent on its own, so a crash between parts is repaired by the redelivery.
-- Markers carry a `ttl` attribute: event markers 7 days (the stream keeps records 24 hours), day-member markers 2 days, week-member markers 9 days. This needs DynamoDB TTL enabled on the table on that attribute (a construct change, one task).
+- Markers carry a `ttl` attribute, and a marker must outlive the longest time a record can still be delivered, or a late redelivery would count again. A message can sit in the feature's failure queue for 14 days before a redrive (router spec, data model), and that retention counts from when the message was first sent. So: event markers 15 days from the write; member markers 15 days after the end of their period (a day marker lives 15 to 16 days, a week marker 15 to 22). The earlier 7, 2 and 9 days assumed the stream's 24-hour retention, which no longer bounds delivery. This needs DynamoDB TTL enabled on the table on that attribute (a construct change, one task).
+- A message redriven after its markers are gone is the one case this cannot absorb. The operations note says a redrive is for messages in the failure queue less than 14 days old, and the rebuild (below) repairs any course whose figures are in doubt.
 
-**Alternatives**: a version or last-sequence number on each aggregate (rejected: shards deliver in parallel, so there is no total order per course); one marker for the whole batch (rejected: bisecting changes batch composition on retry).
+**Alternatives**: a version or last-sequence number on each aggregate (rejected: the router's queues keep no order, even for one item, so there is no total order to compare against); one marker for the whole batch (rejected: a retried or redriven batch can be composed differently).
 
 ## R-3: One definition of "what each record contributes"
 
@@ -42,17 +43,28 @@ Contributions by source record:
 | `quizAttempt` | per answered question `attempts` +1, and `misses` +1 when not in `correctQuestionIds`; member: learner active on `submittedAt`'s day and week |
 | `quizSummary` | per quiz one student in the band of `bestScore` (moves when the best improves) |
 
-Drop-off figures exclude dropped enrolments (FR-011): a drop moves the student's own progress contributions out, by reading that student's `progress` records for the course (one bounded keyed query, as progress recalculation does). No procedure sets `dropped` today, so this is rare (the checkout spec, #360, will); the handler and rebuild still implement it so the rule holds when one exists.
+Drop-off figures exclude dropped enrolments (FR-011). No procedure sets `dropped` today, so a drop is rare (the checkout spec, #360, will add one); the handler and rebuild still implement it so the rule holds when one exists.
 
-The drop moves contributions out once, so a later `progress` MODIFY for that student (still matched by the stream filters, e.g. after a recalculation caused by a curriculum edit) must add nothing. Decision: the handler reads the student's enrolment (one keyed get) for each `progress` record and skips it when the status is `dropped`; carrying the status on the `progress` record was rejected because it adds a write path and a second copy of the status to keep in step. This matches the rebuild and `analytics-matches-records`, which exclude dropped enrolments.
+### Reordering and the lesson funnel
 
-## R-4: Adding a third stream consumer
+Counts built from `contributions(new) - contributions(old)` add up to the same total in any order, provided each delta is applied exactly once (markers). That holds for enrolments, completions, attempts and best-score bands. It does **not** hold for the lesson funnel once drops exist, because two rules read current state while the deltas are still in flight:
 
-AWS advises at most two simultaneous readers per DynamoDB stream shard on a standard table, because they share read throughput (5 `GetRecords` per second per shard). Progress recalculation and search indexing already use both.
+- A drop moves a student's lesson contributions out by reading their `progress` records now.
+- A `progress` record for a student whose enrolment is `dropped` is skipped.
 
-**Decision**: Add a third event source mapping on the core table's stream for the analytics handler, with its own filters and failure queue, and record it in Complexity Tracking. Each Lambda mapping polls a shard about once per second, so three mappings stay under the limit, and the filters keep the handler's invocations to analytics-relevant records. A task (human) checks for throttled `GetRecords` after deploying.
+Failure scenario: a lesson is started then completed (`progress` deltas d1: +1 `inProgress`, d2: -1 `inProgress`, +1 `completed`). The student is dropped after d1 is applied but before d2 is handled. The drop reads the *current* `progress` record (completed) and removes `completed` +1 that was never added, d2 is then skipped, and `inProgress` is left at +1: the lesson shows a learner who no longer exists. Under the stream's per-item order this was unlikely; under the router's no-order delivery it is expected sometimes.
 
-**Alternatives**: EventBridge Pipes fan-out or a Kinesis Data Streams destination (rejected for now: new infrastructure, a new local stand-in, and no benefit at three consumers; revisit if a fourth consumer is added); folding analytics into progress recalculation (rejected: couples failure and retry of two unrelated jobs, and progress recalculation's filters and batching are tuned to curriculum edits).
+**Decision**: the lesson funnel does not apply deltas of record images. For each `(student, lesson)` there is a funnel marker `FUNNEL#<userId>#<lessonId>` (an `analyticsMarker` with a `status` and no `ttl`) holding the status currently counted in `lessonStats` (`inProgress`, `completed` or none). On a `progress` record the handler reads the current `progress` record and the current enrolment (two keyed gets), works out the status that should be counted (none when the enrolment is `dropped` or the lesson is `not_started`), and moves the counters from the marker's status to that one in a transaction conditioned on the marker's current value, retrying on a conflict. A drop runs the same step for each of the student's `progress` records with the target "none". Because the target comes from current data and the move is from what was actually counted, any order, any repeat and any redrive converge on the rebuild's result, and the skip rule and the drop's read no longer disagree. The cost is one small marker item per student per lesson, and two keyed reads per `progress` record. The rebuild writes the funnel markers it implies and the invariant ignores them. The alternative of carrying the status on `progress` stays rejected (a write path and a second copy of the status).
+
+## R-4: A router feature, not a third stream consumer
+
+AWS advises at most two simultaneous readers per DynamoDB stream shard, and progress recalculation and search indexing already use both. The stream event router spec (`specs/20261116-183449-stream-event-router`) makes one router Lambda the only stream consumer and gives each feature an SQS queue, failure queue and alarm.
+
+**Decision**: analytics is a `STREAM_FEATURES` registration (`analytics-update`: `ANALYTICS_STREAM_FILTERS`, handler `analytics-update`, batch 100 / 5 s, `maxReceiveCount` 5) in `core-table/src/helpers/stream-features.ts`. It adds no mapping, no failure queue of its own and no entry in Complexity Tracking; the router stack builds its queue, failure queue and alarm. The handler reads its records through the router's `sqs-stream-records.ts`.
+
+**What the router changes for this design**: delivery is at least once and in no fixed order (even for one item), a failing batch is retried whole after the visibility timeout and moves to the failure queue after five receives (SQS cannot bisect), and a redrive replays it. Markers cover duplicates, deltas cover order for counts, the funnel markers cover order for the lesson funnel (R-3), and the marker lifetimes cover redrives (R-2).
+
+**Alternatives**: EventBridge Pipes or a Kinesis destination (rejected by the router spec); folding analytics into progress recalculation (rejected: couples failure and retry of two unrelated jobs).
 
 The analytics handler's own writes (aggregates, markers) are different entities and match none of its filters, and none of the progress or search filters match them, so there is no loop (FR-015).
 
@@ -72,11 +84,11 @@ All writes for a course land on one partition. The summary item takes one update
 
 ## R-7: Local development
 
-`pnpm dev`'s event runner gets a third batcher beside progress and search, filtered by the same `ANALYTICS_STREAM_FILTERS` the deployed mapping uses, calling the same handler. DynamoDB local supports transactions and streams. TTL is not enforced locally, which is fine: markers just stay. `reset-local-data` wipes them.
+`pnpm dev`'s event runner needs no code of its own for this feature: its router and feature runner read the same `analytics-update` registration and call the same handler from the feature's local queue (ElasticMQ, as in the router spec). DynamoDB local supports transactions and streams. TTL is not enforced locally, which is fine: markers just stay. `reset-local-data` wipes them.
 
 ## R-8: Consistency check against lag
 
-The invariant compares aggregates with sums over the source records. The e2e suite runs invariant checks after every test, while the stream lags by a few seconds. The analytics check therefore runs through a helper that polls until the aggregates settle (up to 30 seconds, matching SC-002) before failing. Unit tests of the check itself use hand-built snapshots and need no waiting.
+The invariant compares aggregates with sums over the source records. The e2e suite runs invariant checks after every test, while the stream, router and queue lag by a few seconds (the router adds its own batching window and a queue hop, a few seconds in total). The analytics check therefore runs through a helper that polls until the aggregates settle (up to 30 seconds, matching SC-002) before failing. Unit tests of the check itself use hand-built snapshots and need no waiting.
 
 ## R-9: Charts
 
