@@ -85,9 +85,11 @@ const syncCourse = async (
   coreTable: Awaited<ReturnType<typeof createCoreTableService>>,
   courseId: string,
 ) => {
+  // Read consistently, so the write that produced this batch is seen: nothing
+  // would trigger another batch to correct a stale read.
   const { data: course } = await coreTable.entities.course
     .get({ courseId })
-    .go();
+    .go({ consistent: true });
   if (course?.status !== 'published') {
     return deleteDoc(client, 'courses', courseId);
   }

@@ -117,6 +117,15 @@ describe('searchIndexing', () => {
     expect(client.delete).not.toHaveBeenCalled();
   });
 
+  it('reads the course consistently, so it sees the write that triggered the batch', async () => {
+    const go = vi.fn(async () => ({ data: stored() }));
+    courseGet.mockReturnValue({ go });
+
+    await searchIndexing(event(courseChange()));
+
+    expect(go).toHaveBeenCalledWith({ consistent: true });
+  });
+
   it.each(['draft', 'archived'])(
     'deletes a course the table holds as %s, whatever the record says',
     async (status) => {
