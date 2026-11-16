@@ -42,7 +42,7 @@ Per feature: one standard queue, one failure queue, one alarm, one handler mappi
 
 | State | Notes |
 |-------|-------|
-| Per-feature queue and failure queue | ElasticMQ queues created from the mounted config file, or in-process lists. Cleared by `reset-local-data` (ElasticMQ is in-memory) |
+| Per-feature queue and failure queue | ElasticMQ queues created from the mounted config file. Cleared by `reset-local-data` (ElasticMQ is in-memory) |
 | Per-feature batch buffer | In the runner process, as `createBatcher` holds today |
 
 ## State transitions

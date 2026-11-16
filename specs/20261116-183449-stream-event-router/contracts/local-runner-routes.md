@@ -18,7 +18,7 @@ Returns, per registered feature, the state of its queue and failure queue.
 }
 ```
 
-`count` is the number of messages in the failure queue. The ElasticMQ implementation reads queue attributes; the in-process one reads its lists.
+`count` is the number of messages in the failure queue. It is read from the queue's attributes.
 
 ## POST /router/redrive/{feature}
 
