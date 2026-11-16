@@ -44,6 +44,7 @@ import {
   preTokenGenerationEvent,
   transcodeCompletionEvent,
 } from './trigger-events.js';
+import { waitForQueue } from './wait-for-queue.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
 // when deployed, done locally, so local changes reach the same handler logic.
@@ -310,6 +311,15 @@ log(
 
 const tableName = await resolveTableName();
 const abort = new AbortController();
+// ElasticMQ starts alongside this and takes a few seconds: until it answers,
+// the feature runners would only log errors and the router would drop records.
+const [firstQueue] = routerQueues.values();
+await waitForQueue({
+  queue,
+  queueUrl: firstQueue.queueName,
+  signal: abort.signal,
+  log,
+});
 const runners = Promise.all(
   [...featureRunners.values()].map((runner) => runner.start(abort.signal)),
 );
