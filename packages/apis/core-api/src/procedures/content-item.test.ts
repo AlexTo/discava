@@ -367,7 +367,7 @@ describe('contentItem.saveVideoPosition', () => {
     });
 
   it("stores the caller's position with the version", async () => {
-    await expect(save()).resolves.toEqual({ saved: true });
+    await expect(save()).resolves.toEqual({ saved: true, positionSeconds: 42 });
 
     expect(puts).toEqual([
       {
@@ -393,7 +393,10 @@ describe('contentItem.saveVideoPosition', () => {
     ['within 10 seconds of the end', { positionSeconds: 595 }],
     ['past 95% of the video', { positionSeconds: 580 }],
   ])('stores 0 %s', async (_, change) => {
-    await expect(save(change)).resolves.toEqual({ saved: true });
+    await expect(save(change)).resolves.toEqual({
+      saved: true,
+      positionSeconds: 0,
+    });
 
     expect(puts[0].item.positionSeconds).toBe(0);
   });
@@ -415,7 +418,7 @@ describe('contentItem.saveVideoPosition', () => {
         'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/master.m3u8',
     };
 
-    await expect(save({ versionId: 'old-nonce' })).resolves.toEqual({
+    await expect(save({ versionId: 'old-nonce' })).resolves.toMatchObject({
       saved: true,
     });
   });

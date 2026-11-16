@@ -165,6 +165,7 @@ export const saveVideoPosition = courseProcedure
 
     // Creates the record on the first save, then overwrites it: the last
     // write wins.
+    const stored = videoPositionToStore(positionSeconds, durationSeconds);
     await coreTable.entities.videoPosition
       .put({
         userId,
@@ -172,12 +173,12 @@ export const saveVideoPosition = courseProcedure
         moduleId,
         lessonId,
         contentItemId,
-        positionSeconds: videoPositionToStore(positionSeconds, durationSeconds),
+        positionSeconds: stored,
         versionId,
         savedAt: new Date().toISOString(),
       })
       .go();
-    return { saved: true };
+    return { saved: true, positionSeconds: stored };
   });
 
 // A short-lived signed link to download a file item's file (#102), for a

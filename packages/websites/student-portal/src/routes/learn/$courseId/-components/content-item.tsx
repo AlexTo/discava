@@ -67,8 +67,31 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
 
   // Remembers where the student got to, to resume there next time. Failing
   // to save is not worth interrupting the lesson for, so errors are ignored.
+  // The cached videoUrl response (kept for the signed cookies' sake) holds
+  // `resumeAt`, so it follows each save: coming back to the lesson within the
+  // cache's life must resume where the student got to, not where they began.
+  const queryClient = useQueryClient();
   const savePosition = useMutation(
-    trpc.contentItem.saveVideoPosition.mutationOptions(),
+    trpc.contentItem.saveVideoPosition.mutationOptions({
+      onSuccess: (result, { versionId }) => {
+        if (!result.saved || result.positionSeconds === undefined) {
+          return;
+        }
+        const { positionSeconds } = result;
+        queryClient.setQueryData(
+          trpc.contentItem.videoUrl.queryKey({
+            courseId,
+            moduleId,
+            lessonId,
+            contentItemId,
+          }),
+          (cached) =>
+            cached && cached.versionId === versionId
+              ? { ...cached, resumeAt: positionSeconds }
+              : cached,
+        );
+      },
+    }),
   );
 
   if (item.status === 'pending') {

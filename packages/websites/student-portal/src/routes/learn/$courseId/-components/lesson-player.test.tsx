@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -201,7 +201,10 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
     versionId: 'nonce',
     resumeAt: 0,
   }),
-  'contentItem.saveVideoPosition': () => ({ saved: true }),
+  'contentItem.saveVideoPosition': (input: any) => ({
+    saved: true,
+    positionSeconds: Math.floor(input.positionSeconds),
+  }),
   'quiz.view': () => quizView(),
   'quiz.myAttempts': () => noAttempts,
   ...overrides,
@@ -486,6 +489,37 @@ describe('LessonPage', () => {
           durationSeconds: 600,
         }),
       );
+    });
+
+    it('resumes from the last save when the lesson is opened again', async () => {
+      const first = resumedVideo(0);
+      const video = await loaded(240, 600);
+      act(() => {
+        video.dispatchEvent(new Event('pause'));
+      });
+      await waitFor(() =>
+        expect(
+          first.calls.some((c) => c.path === 'contentItem.saveVideoPosition'),
+        ).toBe(true),
+      );
+
+      // Back to the same lesson with the query cache as the first visit left
+      // it: the player must not start from the cached 0.
+      first.unmount();
+      cleanup();
+      renderWithCoreApi(
+        <LessonPage courseId="course-1" lessonId="lesson-1" />,
+        {
+          handlers: handlers(),
+          queryClient: first.queryClient,
+        },
+      );
+      const again = await loaded();
+      act(() => {
+        again.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(again.currentTime).toBe(240);
     });
   });
 

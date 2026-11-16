@@ -42,8 +42,11 @@ export type ISaveVideoPositionInput = z.output<
 >;
 
 // `saved` is false when ignored because the video's version changed.
+// `positionSeconds` is what was stored (0 once the video is all but finished),
+// so the player's cached `resumeAt` can follow it.
 export const SaveVideoPositionOutputSchema = z.object({
   saved: z.boolean(),
+  positionSeconds: z.number().int().min(0).optional(),
 });
 
 export type ISaveVideoPositionOutput = z.output<
