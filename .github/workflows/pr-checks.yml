@@ -139,6 +139,18 @@ jobs:
       - name: Run e2e
         run: pnpm nx affected --target e2e --output-style=static
 
+      # Always, unlike the failure artifacts: the pictures a scenario takes of
+      # what the pull request changed (helpers/screenshots.ts), listed in the
+      # `E2E screenshots` comment. A shard with none uploads nothing.
+      - name: Upload the pull request screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-screenshots-${{ matrix.shard }}
+          path: dist/packages/e2e/screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload traces, screenshots and the report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -160,3 +172,52 @@ jobs:
         run: |
           [ "${{ needs.e2e.result }}" = "failure" ] || [ "${{ needs.e2e.result }}" = "cancelled" ] && exit 1
           exit 0
+
+  # One comment on the pull request, kept up to date, naming the screenshots
+  # the e2e scenarios took (and where to download them). Images can't be
+  # embedded: an artifact has no public URL. Only for a pull request from this
+  # repository, whose token can write; a fork's can't.
+  e2e-screenshots:
+    name: E2E screenshots
+    needs: e2e
+    if: >-
+      always() && needs.e2e.result != 'skipped' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: e2e-screenshots-*
+          path: screenshots
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- e2e-screenshots -->'
+          short="${SHA:0:7}"
+          files=$(cd screenshots 2>/dev/null && find . -name '*.png' | sed 's|^\./[^/]*/||' | sort || true)
+          {
+            printf '%s\n### E2E screenshots\n\n' "$marker"
+            if [ -z "$files" ]; then
+              printf 'No scenario took screenshots on `%s`. A pull request that changes what a user sees should add `screenshot(page, '"'"'name'"'"')` calls to an e2e scenario (see packages/e2e/README.md).\n' "$short"
+            else
+              printf 'Taken by the e2e scenarios on `%s`: %s pictures. Download the `e2e-screenshots-*` artifacts from [the run](%s#artifacts).\n\n' \
+                "$short" "$(echo "$files" | wc -l)" "$RUN_URL"
+              echo "$files" | sed 's|^|- `|; s|$|`|'
+            fi
+          } > body.md
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@body.md
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -F body=@body.md
+          fi
