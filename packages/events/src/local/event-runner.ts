@@ -10,13 +10,16 @@ import { Logger } from '@aws-lambda-powertools/logger';
 import { DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
 import { S3Client } from '@aws-sdk/client-s3';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import {
   LOCAL_EVENT_RUNNER,
   LOCAL_QUEUES,
   localBucketName,
   localFeatureFailureQueueName,
   localFeatureQueueName,
+  localQueueUrl,
   s3ClientConfig,
+  sqsClientConfig,
 } from '@discava/common-server-utils/local-dev';
 import {
   dynamoDBClientConfig,
@@ -30,11 +33,11 @@ import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { applyTranscribeOutcome } from '../media/transcribe-outcome.js';
 import { HANDLERS } from '../router/handlers.js';
+import { createSqsQueueClient } from '../router/queue-client.js';
 import { createStreamRouter } from '../router/stream-router.js';
 import { pollStream } from './dynamodb-stream.js';
 import { startEventRunnerServer } from './event-runner-server.js';
 import { createFeatureRunner } from './feature-runner.js';
-import { createInProcessQueue } from './in-process-queue.js';
 import { createTranscoder, type Docker } from './transcoder.js';
 import { createTranscriber } from './transcriber.js';
 import {
@@ -55,9 +58,10 @@ import {
 //   records or 5 s), runs the handler (progress-recalculation,
 //   search-indexing) and retries a failed batch after the queue's visibility
 //   timeout, moving a message to the feature's failure queue after its
-//   maxReceiveCount receives. Queues are in-process, so a restart empties
-//   them. GET /router/queues, POST /router/redrive/<feature> and
-//   POST /router/fail/<feature> inspect, replay and fail them; reset-local-data
+//   maxReceiveCount receives. The queues are ElasticMQ's (Docker, in memory,
+//   so a restart empties them), the one stand-in for SQS. GET /router/queues,
+//   POST /router/redrive/<feature> and POST /router/fail/<feature> inspect,
+//   replay and fail them; reset-local-data
 //   also wipes the local OpenSearch container's indices (#53)
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
@@ -123,23 +127,26 @@ const runFeatureHandler = async (
   await handler(event as never, lambdaContext(name));
 };
 
-// Visibility outlasts a feature's 5 s batch window, so a batch being gathered
-// isn't received a second time.
-const queue = createInProcessQueue({ visibilityTimeoutMs: 10_000 });
+// ElasticMQ, whose queues (and visibility timeout, which outlasts a feature's
+// 5 s batch window so a batch being gathered isn't received a second time) are
+// created from the registry when its container starts.
+const queue = createSqsQueueClient(new SQSClient(sqsClientConfig()));
 const routerQueues = new Map(
   STREAM_FEATURES.map((feature) => [
     feature.name,
     {
       feature,
-      queueName: localFeatureQueueName(feature.name),
-      failureQueueName: localFeatureFailureQueueName(feature.name),
+      queueName: localQueueUrl(localFeatureQueueName(feature.name)),
+      failureQueueName: localQueueUrl(
+        localFeatureFailureQueueName(feature.name),
+      ),
     },
   ]),
 );
 const streamRouter = createStreamRouter({
   queue,
-  queueFor: localFeatureQueueName,
-  failureQueue: LOCAL_QUEUES.routerFailureQueue,
+  queueFor: (feature) => localQueueUrl(localFeatureQueueName(feature)),
+  failureQueue: localQueueUrl(LOCAL_QUEUES.routerFailureQueue),
 });
 const featureRunners = new Map(
   [...routerQueues].map(([name, { feature, queueName, failureQueueName }]) => {

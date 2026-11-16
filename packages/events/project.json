@@ -103,6 +103,10 @@
         {
           "projects": ["@discava/common-scripts"],
           "target": "s3mock"
+        },
+        {
+          "projects": ["@discava/common-scripts"],
+          "target": "elasticmq"
         }
       ],
       "continuous": true,

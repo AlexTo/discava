@@ -736,6 +736,9 @@ importers:
       '@discava/common-server-utils':
         specifier: workspace:*
         version: link:../server-utils
+      '@discava/core-table':
+        specifier: workspace:*
+        version: link:../../databases/core-table
       '@discava/search':
         specifier: workspace:*
         version: link:../../databases/search

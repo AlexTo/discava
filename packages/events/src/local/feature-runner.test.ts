@@ -66,6 +66,32 @@ describe('createFeatureRunner', () => {
     expect(await queue.depth('q-alpha')).toEqual({ waiting: 0, inFlight: 0 });
   });
 
+  it('hands the handler a batch in stream order, whatever order it was received in', async () => {
+    const { queue, make } = setup();
+    const run = vi.fn(async () => {});
+    const runner = make('alpha', run);
+    const withSequence = (id: string, sequence: string) => ({
+      body: JSON.stringify({
+        eventID: id,
+        dynamodb: { SequenceNumber: sequence },
+      }),
+      attributes: { feature: 'f' },
+    });
+    await queue.sendBatch('q-alpha', [
+      withSequence('c', '300'),
+      withSequence('a', '99'),
+      withSequence('b', '1000'),
+    ]);
+
+    await runner.runOnce();
+
+    expect(run.mock.calls[0][0].Records.map((r) => r.eventID)).toEqual([
+      'a',
+      'c',
+      'b',
+    ]);
+  });
+
   it('closes a batch at maxRecords', async () => {
     const { queue, make } = setup({ maxRecords: 10 });
     const run = vi.fn(async () => {});

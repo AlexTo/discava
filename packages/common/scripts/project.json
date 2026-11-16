@@ -80,6 +80,21 @@
         "cwd": "{projectRoot}"
       }
     },
+    "elasticmq": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "command": "tsx src/elasticmq/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-elasticmq-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/elasticmq/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "assemble": {
       "dependsOn": ["compile"]
     },
