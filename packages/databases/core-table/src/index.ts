@@ -73,6 +73,13 @@ export {
   type SearchStreamRecord,
 } from './helpers/search-stream.js';
 export {
+  featuresFor,
+  STREAM_FEATURES,
+  type StreamFeature,
+  type StreamFilter,
+  type StreamRecordLike,
+} from './helpers/stream-features.js';
+export {
   type StudentActivity,
   studentActivityAt,
   studentActivityWrites,
