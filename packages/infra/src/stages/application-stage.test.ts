@@ -588,9 +588,9 @@ describe('search indexing (#53)', () => {
     );
   });
 
-  // Everything it indexes is on the stream record itself, so it reads the
-  // core table's stream but never the table.
-  it('gives the indexing function write access to the search collection, and only stream access to the core table', () => {
+  // It re-reads each changed course from the table (R-3), so it reads the
+  // table, and still never writes it.
+  it('gives the indexing function write access to the search collection, and read-only access to the core table', () => {
     const template = stack('CoreApi');
     const policies = Object.values(
       template.findResources('AWS::IAM::Policy', {
@@ -613,8 +613,10 @@ describe('search indexing (#53)', () => {
 
     expect(actions).toContain('aoss:APIAccessAll');
     expect(actions).toContain('dynamodb:GetRecords');
-    expect(actions).not.toContain('dynamodb:GetItem');
+    expect(actions).toContain('dynamodb:GetItem');
     expect(actions).not.toContain('dynamodb:PutItem');
+    expect(actions).not.toContain('dynamodb:UpdateItem');
+    expect(actions).not.toContain('dynamodb:DeleteItem');
   });
 });
 
