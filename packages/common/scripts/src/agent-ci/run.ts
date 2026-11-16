@@ -12,8 +12,7 @@ import {
   REVIEW_STATUS_CONTEXT,
 } from './plan.js';
 
-// Run by .github/workflows/agent-ci.yml when a workflow that gates a pull
-// request (PR Checks, UI Screenshots) finishes.
+// Run by .github/workflows/agent-ci.yml when the PR Checks workflow finishes.
 // DRY_RUN=true prints what it would do and changes nothing.
 
 export interface Deps {
