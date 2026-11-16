@@ -20,6 +20,7 @@ import {
   PauseIcon,
   PictureInPicture2Icon,
   PlayIcon,
+  SubtitlesIcon,
   Volume2Icon,
   VolumeXIcon,
 } from 'lucide-react';
@@ -45,14 +46,32 @@ export function formatTime(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
 
+/** A caption track whose file has loaded, ready to attach as a `<track>`. */
+export interface LoadedCaption {
+  trackId: string;
+  // BCP 47 tag, e.g. en-US.
+  language: string;
+  label: string;
+  isDefault: boolean;
+  // A blob URL of the file.
+  src: string;
+}
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
 /**
  * An accessible control bar and keyboard shortcuts for the `<video>` it
  * wraps, replacing the browser's native controls: play/pause, seek, volume,
- * mute, speed, picture-in-picture and fullscreen. Speed, volume and mute are remembered across
- * videos (see `@discava/common-web-utils/video-player`).
+ * mute, speed, captions, picture-in-picture and fullscreen. Speed, volume,
+ * mute and the captions choice are remembered across videos (see
+ * `@discava/common-web-utils/video-player`).
+ *
+ * `captions` are the tracks already loaded, with a `<track>` for each among
+ * the children (with its id as `data-track-id`); this shows one at a time by
+ * setting the tracks' modes. The control is absent without any (or a
+ * `captionNotice`, about a track that failed to load, which it shows in the
+ * menu).
  *
  * The container takes focus and handles the shortcuts, so they work while
  * focus is anywhere in the player. Keys the focused control already uses
@@ -61,10 +80,14 @@ const clamp = (value: number, min: number, max: number) =>
 export function VideoControls({
   children,
   className,
+  captions = [],
+  captionNotice,
 }: {
   // The `<video>` element to control.
   children: React.ReactNode;
   className?: string;
+  captions?: LoadedCaption[];
+  captionNotice?: string;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [paused, setPaused] = React.useState(true);
@@ -79,6 +102,16 @@ export function VideoControls({
   const [focusWithin, setFocusWithin] = React.useState(false);
   const [active, setActive] = React.useState(false);
   const hideTimer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  // What the viewer chose before this video: read once. Until they choose
+  // here, it decides whether captions show and which track.
+  const [rememberedCaptions] = React.useState(() => {
+    const { captionsOn, captionLanguage } = loadPreferences();
+    return { on: captionsOn, language: captionLanguage };
+  });
+  const [captionChoice, setCaptionChoice] = React.useState<{
+    on: boolean;
+    trackId: string | undefined;
+  }>();
 
   const getVideo = () =>
     containerRef.current?.querySelector('video') ?? undefined;
@@ -156,6 +189,35 @@ export function VideoControls({
 
   React.useEffect(() => () => clearTimeout(hideTimer.current), []);
 
+  // The track a toggle brings back: the last one chosen, else the remembered
+  // language, else the default, else the first.
+  const lastTrack =
+    captions.find((c) => c.trackId === captionChoice?.trackId) ??
+    captions.find((c) => c.language === rememberedCaptions.language) ??
+    captions.find((c) => c.isDefault) ??
+    captions[0];
+  const captionsOn = captionChoice?.on ?? rememberedCaptions.on;
+  const shownTrack = captionsOn ? lastTrack : undefined;
+  const shownTrackId = shownTrack?.trackId;
+
+  // Show the chosen track and hide the others, whenever either changes
+  // (tracks arrive one by one as they load).
+  React.useEffect(() => {
+    const video = getVideo();
+    if (!video) {
+      return;
+    }
+    for (const element of video.querySelectorAll('track')) {
+      const track = (element as HTMLTrackElement).track;
+      if (track) {
+        track.mode =
+          element.getAttribute('data-track-id') === shownTrackId
+            ? 'showing'
+            : 'disabled';
+      }
+    }
+  }, [captions, shownTrackId]);
+
   const showBriefly = () => {
     setActive(true);
     clearTimeout(hideTimer.current);
@@ -212,6 +274,24 @@ export function VideoControls({
     savePreference({ speed: next });
   };
 
+  const chooseCaption = (trackId: string | undefined) => {
+    const track = captions.find((c) => c.trackId === trackId);
+    if (track) {
+      setCaptionChoice({ on: true, trackId: track.trackId });
+      savePreference({ captionsOn: true, captionLanguage: track.language });
+    } else {
+      setCaptionChoice({ on: false, trackId: lastTrack?.trackId });
+      savePreference({ captionsOn: false });
+    }
+  };
+
+  const toggleCaptions = () => {
+    if (captions.length === 0) {
+      return;
+    }
+    chooseCaption(shownTrack ? undefined : lastTrack?.trackId);
+  };
+
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen?.()?.catch(() => {});
@@ -250,8 +330,7 @@ export function VideoControls({
       case 'seekFraction':
         return seekTo((duration || video.duration || 0) * action.fraction);
       case 'toggleCaptions':
-        // Captions arrive with the captions tracks.
-        return;
+        return toggleCaptions();
     }
   };
 
@@ -382,6 +461,50 @@ export function VideoControls({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            {(captions.length > 0 || captionNotice) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Captions: ${shownTrack ? shownTrack.label : 'off'}`}
+                    className="hover:bg-white/20 hover:text-white"
+                  >
+                    <SubtitlesIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuRadioGroup
+                    value={shownTrackId ?? 'off'}
+                    onValueChange={(value) =>
+                      chooseCaption(value === 'off' ? undefined : value)
+                    }
+                  >
+                    <DropdownMenuRadioItem value="off">
+                      Off
+                    </DropdownMenuRadioItem>
+                    {captions.map((caption) => (
+                      <DropdownMenuRadioItem
+                        key={caption.trackId}
+                        value={caption.trackId}
+                      >
+                        {caption.label}
+                        {caption.isDefault ? ' (default)' : ''}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  {captionNotice && (
+                    <p
+                      role="status"
+                      className="px-2 py-1.5 text-xs text-muted-foreground"
+                    >
+                      {captionNotice}
+                    </p>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {pipAvailable && (
               <Button
                 type="button"

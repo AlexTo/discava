@@ -141,6 +141,7 @@ describe('contentItem.videoUrl', () => {
       withCredentials: false,
       versionId: 'nonce-1',
       resumeAt: 0,
+      captions: [],
     });
   });
 
@@ -152,6 +153,7 @@ describe('contentItem.videoUrl', () => {
       withCredentials: true,
       versionId: 'nonce-1',
       resumeAt: 0,
+      captions: [],
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/nonce-1/',
@@ -227,6 +229,7 @@ describe('contentItem.videoUrl', () => {
       withCredentials: true,
       versionId: 'old-nonce',
       resumeAt: 0,
+      captions: [],
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/',
@@ -247,6 +250,100 @@ describe('contentItem.videoUrl', () => {
     });
   });
 
+  describe('captions', () => {
+    const FOLDER =
+      'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1';
+    const track = (language: string, extra = {}) => ({
+      trackId: `track-${language}`,
+      nonce: 'nonce-1',
+      language,
+      label: language === 'en-US' ? 'English' : language,
+      source: 'uploaded',
+      key: `${FOLDER}/nonce-1/captions/track-${language}.vtt`,
+      isDefault: false,
+      ...extra,
+    });
+
+    it('lists the played version’s tracks, default first, as plain URLs', async () => {
+      db.contentItem.captionTracks = [
+        track('es-ES'),
+        track('fr-FR', { nonce: 'older-nonce' }),
+        track('en-US', { isDefault: true, source: 'auto' }),
+      ];
+      db.contentItem.captionTracksRev = 5;
+      db.contentItem.captionsStatus = 'ready';
+
+      const { captions } = await call().videoUrl(ref);
+
+      expect(captions).toEqual([
+        {
+          trackId: 'track-en-US',
+          language: 'en-US',
+          label: 'English',
+          isDefault: true,
+          url: `https://media.example.com/${FOLDER}/nonce-1/captions/track-en-US.vtt`,
+        },
+        {
+          trackId: 'track-es-ES',
+          language: 'es-ES',
+          label: 'es-ES',
+          isDefault: false,
+          url: `https://media.example.com/${FOLDER}/nonce-1/captions/track-es-ES.vtt`,
+        },
+      ]);
+    });
+
+    it('leaks no key, revision, source or status', async () => {
+      db.contentItem.captionTracks = [track('en-US', { isDefault: true })];
+      db.contentItem.captionTracksRev = 5;
+      db.contentItem.captionsStatus = 'ready';
+
+      const result = await call().videoUrl(ref);
+
+      expect(result.captions[0]).not.toHaveProperty('key');
+      expect(result.captions[0]).not.toHaveProperty('source');
+      expect(result).not.toHaveProperty('captionTracksRev');
+      expect(result).not.toHaveProperty('captionsStatus');
+      expect(JSON.stringify(result)).not.toContain('"key"');
+    });
+
+    it('omits the tracks of another version', async () => {
+      db.contentItem.captionTracks = [
+        track('en-US', { isDefault: true, nonce: 'older-nonce' }),
+      ];
+
+      await expect(call().videoUrl(ref)).resolves.toMatchObject({
+        captions: [],
+      });
+    });
+
+    it('offers the previous version’s own tracks while a replacement transcodes', async () => {
+      db.contentItem = {
+        ...db.contentItem,
+        status: 'pending',
+        s3Key: `${FOLDER}.mp4`,
+        previousS3Key: `${FOLDER}/old-nonce/master.m3u8`,
+        captionTracks: [
+          track('en-US', {
+            isDefault: true,
+            nonce: 'old-nonce',
+            key: `${FOLDER}/old-nonce/captions/t.vtt`,
+          }),
+        ],
+      };
+
+      const { captions } = await call().videoUrl(ref);
+
+      expect(captions.map((c) => c.trackId)).toEqual(['track-en-US']);
+    });
+
+    it('is an empty list for a video with no tracks', async () => {
+      await expect(call().videoUrl(ref)).resolves.toMatchObject({
+        captions: [],
+      });
+    });
+  });
+
   it('starts at 0 when the saved position is for another version', async () => {
     db.videoPosition = {
       ...ref,
@@ -258,6 +355,7 @@ describe('contentItem.videoUrl', () => {
     await expect(call().videoUrl(ref)).resolves.toMatchObject({
       versionId: 'nonce-1',
       resumeAt: 0,
+      captions: [],
     });
   });
 
@@ -278,6 +376,7 @@ describe('contentItem.videoUrl', () => {
     const result = await call().videoUrl(ref);
 
     expect(Object.keys(result).sort()).toEqual([
+      'captions',
       'resumeAt',
       'url',
       'versionId',
