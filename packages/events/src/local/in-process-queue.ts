@@ -32,8 +32,8 @@ export interface InProcessQueueOptions {
 }
 
 /**
- * A QueueClient that keeps messages in memory: the fallback local stand-in
- * for SQS, and the fake the unit tests use. Models what the router and the
+ * A QueueClient that keeps messages in memory: the fake the unit tests use
+ * (local dev uses ElasticMQ). Models what the router and the
  * feature runners depend on: a visibility timeout, a receive count, and
  * redrive to a failure queue.
  */

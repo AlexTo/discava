@@ -50,6 +50,7 @@ pnpm dev
 | core-api / instructor-api | 2022 / 2023 | API Gateway and Lambda |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
+| ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
 | Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), EventBridge, Scheduler, the table's stream, and Cognito's pre token generation trigger (which keeps user records in step) |
 | Local OIDC server | 9400 | Cognito |
 
