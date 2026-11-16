@@ -71,3 +71,21 @@ describe('sqsStreamRecords', () => {
     await expect(searchIndexing(parsed)).resolves.toBeUndefined();
   });
 });
+
+describe('sqsToStreamRecords', () => {
+  it('turns an SQS batch into stream records and leaves a stream event alone', async () => {
+    const { sqsToStreamRecords } = await import('./sqs-stream-records.js');
+    const record = streamRecord('e1', 'course');
+    const sqs = {
+      event: {
+        Records: [{ eventSource: 'aws:sqs', body: JSON.stringify(record) }],
+      },
+    };
+    sqsToStreamRecords().before(sqs);
+    expect(sqs.event).toEqual({ Records: [record] });
+
+    const stream = { event: { Records: [record] } };
+    sqsToStreamRecords().before(stream);
+    expect(stream.event).toEqual({ Records: [record] });
+  });
+});

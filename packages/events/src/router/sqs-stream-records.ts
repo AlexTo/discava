@@ -16,3 +16,21 @@ export const sqsStreamRecords = (
     (message) => JSON.parse(message.body) as DynamoDBRecord,
   ),
 });
+
+/**
+ * A middy middleware for the feature handlers: when the event is the SQS
+ * batch a feature's queue delivers, it becomes the `{ Records }` the handler
+ * parses with `DynamoDBStreamSchema`, so the handler's logic is the same
+ * behind the queue as it was behind the stream. An event already in the
+ * stream shape (the local runner's, or a test's) passes through.
+ */
+export const sqsToStreamRecords = () => ({
+  before: (request: { event: unknown }) => {
+    const { Records } = request.event as {
+      Records?: { eventSource?: string }[];
+    };
+    if (Records?.[0]?.eventSource === 'aws:sqs') {
+      request.event = sqsStreamRecords(request.event as SQSEvent);
+    }
+  },
+});

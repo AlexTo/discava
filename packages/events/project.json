@@ -60,6 +60,12 @@
         "path": "src/search/search-reindex.ts",
         "name": "search-reindex",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/router/stream-router.ts",
+        "name": "stream-router",
+        "iac": "cdk"
       }
     ]
   },

@@ -26,6 +26,8 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY',
   'DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS',
   'DISCAVA_TEST_STAGE_INFRA_IDENTITY_ENABLE_SELF_SIGN_UP',
+  'DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KMS_ENCRYPTION',
+  'DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KEY_ROTATION',
 ];
 
 afterEach(() => {
@@ -66,6 +68,23 @@ describe('applyEnvOverrides', () => {
     expect(() => applyEnvOverrides(STAGE, {})).toThrow(
       /DISCAVA_TEST_STAGE_INFRA_CORE_API_ENABLE_WAF/,
     );
+  });
+
+  it('overrides the stream router settings', () => {
+    process.env.DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KMS_ENCRYPTION =
+      'false';
+    process.env.DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KEY_ROTATION =
+      'true';
+
+    expect(
+      applyEnvOverrides(STAGE, {
+        infra: { streamRouter: { enableKmsEncryption: true } },
+      }),
+    ).toEqual({
+      infra: {
+        streamRouter: { enableKmsEncryption: false, enableKeyRotation: true },
+      },
+    });
   });
 
   it('overrides the limit settings: numbers, log levels and self sign-up', () => {

@@ -8,6 +8,7 @@ export * from './events-pre-token-generation.js';
 export * from './events-progress-recalculation.js';
 export * from './events-search-indexing.js';
 export * from './events-search-reindex.js';
+export * from './events-stream-router.js';
 export * from './events-transcode-cleanup.js';
 export * from './events-transcode-complete.js';
 export * from './events-transcode-reconciler.js';
