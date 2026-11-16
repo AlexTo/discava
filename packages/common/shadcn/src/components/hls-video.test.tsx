@@ -2,7 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { act, cleanup, fireEvent, render } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+} from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HlsVideo } from './hls-video';
 
@@ -367,5 +374,187 @@ describe('HlsVideo', () => {
         window.dispatchEvent(new Event('pagehide'));
       }).not.toThrow();
     });
+  });
+});
+
+describe('HlsVideo captions', () => {
+  const CAPTIONS = [
+    {
+      trackId: 'b',
+      language: 'en-US',
+      label: 'English',
+      isDefault: true,
+      url: 'https://media.example.com/video/n1/captions/b.vtt',
+    },
+    {
+      trackId: 'a',
+      language: 'es-ES',
+      label: 'Spanish',
+      isDefault: false,
+      url: 'https://media.example.com/video/n1/captions/a.vtt',
+    },
+  ];
+  const created: string[] = [];
+  const revoked: string[] = [];
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+    created.length = 0;
+    revoked.length = 0;
+    fetchMock.mockReset().mockImplementation(async (url: string) => ({
+      ok: true,
+      status: 200,
+      text: async () => `WEBVTT\n\n00:00.000 --> 00:01.000\ncue of ${url}`,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    globalThis.URL.createObjectURL = vi.fn((blob: Blob) => {
+      const url = `blob:${created.length}`;
+      created.push(url);
+      (globalThis as any).__blobs = {
+        ...(globalThis as any).__blobs,
+        [url]: blob,
+      };
+      return url;
+    });
+    globalThis.URL.revokeObjectURL = vi.fn((url: string) => {
+      revoked.push(url);
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const tracks = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('track')) as HTMLTrackElement[];
+
+  it('has no captions control or track without captions', () => {
+    const { queryByRole, container } = render(
+      <HlsVideo url={URL} withCredentials />,
+    );
+    expect(queryByRole('button', { name: /^Captions/ })).toBeNull();
+    expect(tracks(container)).toHaveLength(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fetches each track and attaches it as a <track> on a blob URL', async () => {
+    const { container, findByRole } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+
+    expect(await findByRole('button', { name: /^Captions/ })).toBeTruthy();
+    await waitFor(() => expect(tracks(container)).toHaveLength(2));
+    expect(tracks(container).map((t) => t.getAttribute('src'))).toEqual([
+      'blob:0',
+      'blob:1',
+    ]);
+    const [english, spanish] = tracks(container);
+    expect(english.getAttribute('srclang')).toBe('en-US');
+    expect(english.getAttribute('label')).toBe('English');
+    expect(english.getAttribute('kind')).toBe('captions');
+    expect(spanish.getAttribute('srclang')).toBe('es-ES');
+    // The file is held as WebVTT whatever the server called it.
+    const blob = (globalThis as any).__blobs['blob:0'] as Blob;
+    expect(blob.type).toBe('text/vtt');
+    expect(await blob.text()).toContain('WEBVTT');
+  });
+
+  it('sends the signed cookies with the fetch only with withCredentials', async () => {
+    const { unmount } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledWith(CAPTIONS[0].url, {
+      credentials: 'include',
+    });
+    unmount();
+    fetchMock.mockClear();
+
+    render(<HlsVideo url={URL} withCredentials={false} captions={CAPTIONS} />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledWith(CAPTIONS[0].url, undefined);
+  });
+
+  it('skips a track that fails to load, with a notice, and plays on', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('a.vtt')
+        ? { ok: false, status: 403, text: async () => '' }
+        : { ok: true, status: 200, text: async () => 'WEBVTT' },
+    );
+    const { container, findByRole } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+
+    await waitFor(() => expect(tracks(container)).toHaveLength(1));
+    expect(tracks(container)[0].getAttribute('label')).toBe('English');
+    await userEvent.click(await findByRole('button', { name: /^Captions/ }));
+    expect(await findByRole('status')).toHaveTextContent(
+      "Couldn't load captions: Spanish.",
+    );
+    // The video is unaffected.
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+  });
+
+  it('survives every fetch rejecting', async () => {
+    fetchMock.mockRejectedValue(new Error('network'));
+    const { container, getByRole } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+
+    await waitFor(() =>
+      expect(getByRole('button', { name: /^Captions/ })).toBeTruthy(),
+    );
+    expect(tracks(container)).toHaveLength(0);
+    expect(getByRole('button', { name: 'Playback speed' })).toBeTruthy();
+  });
+
+  it('revokes the blob URLs on unmount', async () => {
+    const { container, unmount } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+    await waitFor(() => expect(tracks(container)).toHaveLength(2));
+
+    unmount();
+
+    expect(revoked.sort()).toEqual(['blob:0', 'blob:1']);
+  });
+
+  it('revokes a file that arrives after unmount', async () => {
+    let finish: (value: unknown) => void = () => {};
+    fetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { unmount } = render(
+      <HlsVideo url={URL} withCredentials captions={[CAPTIONS[0]]} />,
+    );
+    unmount();
+
+    await act(async () => {
+      finish({ ok: true, status: 200, text: async () => 'WEBVTT' });
+    });
+
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(revoked).toEqual(created);
+  });
+
+  it('does not refetch when a refetch gives equal tracks', async () => {
+    const { rerender, container } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+    await waitFor(() => expect(tracks(container)).toHaveLength(2));
+
+    rerender(
+      <HlsVideo
+        url={URL}
+        withCredentials
+        captions={CAPTIONS.map((c) => ({ ...c }))}
+      />,
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(revoked).toEqual([]);
   });
 });

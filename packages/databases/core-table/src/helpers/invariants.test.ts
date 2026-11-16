@@ -1094,6 +1094,184 @@ describe('video-position-valid', () => {
   });
 });
 
+describe('captions', () => {
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  const folder = `${prefix}/video`;
+  const track = (language: string, overrides = {}) => ({
+    trackId: `t-${language}`,
+    nonce: 'n1',
+    language,
+    label: language,
+    source: 'uploaded' as const,
+    key: `${folder}/n1/captions/t-${language}.vtt`,
+    isDefault: false,
+    ...overrides,
+  });
+  const withTracks = (...tracks: ReturnType<typeof track>[]) => {
+    item('video').captionTracks = tracks;
+  };
+
+  describe('6. video-transcode-state, caption attributes', () => {
+    it('accepts a ready video with tracks, a status and a revision', () => {
+      Object.assign(item('video'), {
+        captionTracks: [track('en-US', { isDefault: true })],
+        captionTracksRev: 2,
+        captionsStatus: 'ready',
+      });
+      expect(checkTableInvariants(table)).toEqual([]);
+    });
+
+    it('accepts a ready video whose captioning is pending', () => {
+      Object.assign(item('video'), {
+        captionsStatus: 'pending',
+        captionsPendingSince: T,
+      });
+      expect(checkTableInvariants(table)).toEqual([]);
+    });
+
+    it('reports a text item holding captionTracks', () => {
+      item('text').captionTracks = [track('en-US', { isDefault: true })];
+      expect(violationsOf('video-transcode-state')).toHaveLength(1);
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /caption attributes are set on a text item/,
+      );
+    });
+
+    it('reports a pending status on a pending video', () => {
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: undefined,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+        captionsStatus: 'pending',
+        captionsPendingSince: T,
+      });
+      expect(violationsOf('video-transcode-state')).toEqual([
+        expect.objectContaining({
+          message: expect.stringMatching(/pending on a pending video/),
+        }),
+      ]);
+    });
+
+    it('reports a pending status without captionsPendingSince', () => {
+      item('video').captionsStatus = 'pending';
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /without captionsPendingSince/,
+      );
+    });
+
+    it('reports captionsPendingSince without a pending status', () => {
+      Object.assign(item('video'), {
+        captionsStatus: 'ready',
+        captionsPendingSince: T,
+      });
+      expect(violationsOf('video-transcode-state')).toHaveLength(1);
+    });
+  });
+
+  describe('24. caption-tracks-valid', () => {
+    it('accepts a video with no tracks, and a valid list', () => {
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+      withTracks(track('en-US', { isDefault: true }), track('es-ES'));
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports eleven tracks', () => {
+      withTracks(
+        ...Array.from({ length: 11 }, (_, i) =>
+          track(`xx-${i}`, { isDefault: i === 0 }),
+        ),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /11 caption tracks/,
+      );
+    });
+
+    it('accepts the old version’s tracks while a replacement transcodes', () => {
+      withTracks(track('en-US', { isDefault: true }));
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('still reports a track of neither version while one is replaced', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          nonce: 'older',
+          key: `${folder}/older/captions/t.vtt`,
+        }),
+      );
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version older, not the current n1/,
+      );
+    });
+
+    it('reports a track whose nonce is not the current one', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          nonce: 'old',
+          key: `${folder}/old/captions/t.vtt`,
+        }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version old, not the current n1/,
+      );
+    });
+
+    it('reports two tracks in one language', () => {
+      withTracks(
+        track('en-US', { isDefault: true }),
+        track('en-US', { trackId: 'other' }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /two caption tracks in en-US/,
+      );
+    });
+
+    it('reports no default, and two defaults', () => {
+      withTracks(track('en-US'));
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /0 default/,
+      );
+      withTracks(
+        track('en-US', { isDefault: true }),
+        track('es-ES', { isDefault: true }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /2 default/,
+      );
+    });
+
+    it('reports a key outside the version’s captions folder', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          key: `${prefix}/other-item/n1/captions/t.vtt`,
+        }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /outside the version's captions folder/,
+      );
+    });
+  });
+});
+
 describe('violationId', () => {
   it('is the same for the same violation found twice, and differs otherwise', () => {
     table.courseInstructors = [];

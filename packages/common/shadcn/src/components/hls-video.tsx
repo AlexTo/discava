@@ -9,10 +9,102 @@ import {
 import Hls from 'hls.js';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { formatTime, VideoControls } from './video-controls';
+import {
+  formatTime,
+  type LoadedCaption,
+  VideoControls,
+} from './video-controls';
 
 // How long the "Resumed at" notice stays, unless the viewer plays first.
 const RESUME_NOTICE_MS = 8000;
+
+/** A caption track as the API lists it (core-api's `videoUrl`). */
+export interface PlayerCaption {
+  trackId: string;
+  language: string;
+  label: string;
+  isDefault: boolean;
+  // Plain CloudFront URL, authorised by the signed cookies.
+  url: string;
+}
+
+// Fetches each caption file and holds it as a blob URL, which a `<track>` can
+// load whatever the page's origin and cookies. The fetch sends the signed
+// cookies only with `withCredentials`, as hls.js does (a native `<track src>`
+// across origins applies `crossorigin` unevenly between browsers, and S3Mock
+// refuses credentialed requests locally). A file that fails to load is
+// skipped and named in the notice; it never affects playback. Tracks appear
+// as their files arrive, in the API's order. The blob URLs are revoked when
+// the tracks change and on unmount.
+function useCaptionFiles(
+  captions: PlayerCaption[] | undefined,
+  withCredentials: boolean,
+) {
+  const [files, setFiles] = useState<Record<string, string | null>>({});
+  const signature = (captions ?? []).map((c) => `${c.trackId}@${c.url}`).join();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `signature` stands for `captions`, which a refetch replaces with equal tracks
+  useEffect(() => {
+    setFiles({});
+    if (!captions?.length) {
+      return;
+    }
+    let cancelled = false;
+    const blobUrls: string[] = [];
+    for (const caption of captions) {
+      fetch(
+        caption.url,
+        withCredentials ? { credentials: 'include' } : undefined,
+      )
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((text) => {
+          // Typed by us, not by the server: the player needs text/vtt.
+          const src = URL.createObjectURL(
+            new Blob([text], { type: 'text/vtt' }),
+          );
+          if (cancelled) {
+            URL.revokeObjectURL(src);
+            return;
+          }
+          blobUrls.push(src);
+          setFiles((current) => ({ ...current, [caption.trackId]: src }));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFiles((current) => ({ ...current, [caption.trackId]: null }));
+          }
+        });
+    }
+    return () => {
+      cancelled = true;
+      for (const src of blobUrls) {
+        URL.revokeObjectURL(src);
+      }
+    };
+  }, [signature, withCredentials]);
+
+  const loaded: LoadedCaption[] = [];
+  const failed: string[] = [];
+  for (const caption of captions ?? []) {
+    const src = files[caption.trackId];
+    if (src) {
+      loaded.push({ ...caption, src });
+    } else if (src === null) {
+      failed.push(caption.label);
+    }
+  }
+  return {
+    loaded,
+    notice: failed.length
+      ? `Couldn't load captions: ${failed.join(', ')}.`
+      : undefined,
+  };
+}
 
 /**
  * Plays a lesson video's HLS stream (master.m3u8) from the lesson media
@@ -32,6 +124,10 @@ const RESUME_NOTICE_MS = 8000;
  * volume and keyboard shortcuts that work the same in every browser.
  * `className` styles the player as a whole, not just the `<video>`.
  *
+ * With `captions`, the player offers a captions menu (see
+ * `useCaptionFiles` for how the files load); without any, it has no such
+ * control. The browser shows the cue text as plain text.
+ *
  * With `resumeAt` above 0 the video seeks there once it loads, stays paused,
  * and says "Resumed at m:ss" with a "Start over" button until it plays or
  * 8 seconds pass. With `onPositionChange` the player reports where the viewer
@@ -44,6 +140,7 @@ export function HlsVideo({
   withCredentials,
   title,
   className,
+  captions,
   resumeAt = 0,
   onPositionChange,
 }: {
@@ -53,12 +150,15 @@ export function HlsVideo({
   // What the player is called to assistive technology.
   title?: string;
   className?: string;
+  // The video's caption tracks, from the API.
+  captions?: PlayerCaption[];
   // Seconds to start from; 0 starts at the beginning.
   resumeAt?: number;
   onPositionChange?: (position: PlayerPosition) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [resumedAt, setResumedAt] = useState<number>();
+  const captionFiles = useCaptionFiles(captions, withCredentials);
   // The latest callback, so a new one each render doesn't restart playback
   // or the reporter.
   const onPositionChangeRef = useRef(onPositionChange);
@@ -180,7 +280,11 @@ export function HlsVideo({
   };
 
   return (
-    <VideoControls className={className}>
+    <VideoControls
+      className={className}
+      captions={captionFiles.loaded}
+      captionNotice={captionFiles.notice}
+    >
       <video
         ref={videoRef}
         data-slot="hls-video"
@@ -188,7 +292,18 @@ export function HlsVideo({
         onContextMenu={(event) => event.preventDefault()}
         aria-label={title}
         className="size-full"
-      />
+      >
+        {captionFiles.loaded.map((caption) => (
+          <track
+            key={caption.trackId}
+            data-track-id={caption.trackId}
+            kind="captions"
+            srcLang={caption.language}
+            label={caption.label}
+            src={caption.src}
+          />
+        ))}
+      </video>
       {resumedAt !== undefined && (
         <div
           role="status"

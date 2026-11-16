@@ -11,7 +11,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VideoControls } from './video-controls';
+import { type LoadedCaption, VideoControls } from './video-controls';
 
 const STORAGE_KEY = 'discava-video-preferences';
 
@@ -474,5 +474,219 @@ describe('VideoControls visibility', () => {
   it('does not animate for reduced motion', () => {
     setup();
     expect(bar().className).toContain('motion-reduce:transition-none');
+  });
+});
+
+describe('VideoControls captions', () => {
+  const CAPTIONS: LoadedCaption[] = [
+    {
+      trackId: 'a',
+      language: 'es-ES',
+      label: 'Spanish',
+      isDefault: false,
+      src: 'blob:es',
+    },
+    {
+      trackId: 'b',
+      language: 'en-US',
+      label: 'English',
+      isDefault: true,
+      src: 'blob:en',
+    },
+  ];
+
+  // jsdom's <track> has no TextTrack: give each element one that records its
+  // mode, as a browser's would.
+  beforeEach(() => {
+    Object.defineProperty(HTMLTrackElement.prototype, 'track', {
+      configurable: true,
+      get(this: HTMLTrackElement) {
+        const self = this as any;
+        self.__track ??= { mode: 'disabled' };
+        return self.__track;
+      },
+    });
+  });
+  afterEach(() => {
+    // biome-ignore lint/performance/noDelete: restoring jsdom's own state
+    delete (HTMLTrackElement.prototype as any).track;
+  });
+
+  const setupCaptions = (
+    captions: LoadedCaption[] | undefined = CAPTIONS,
+    captionNotice?: string,
+  ) => {
+    const result = render(
+      <VideoControls captions={captions} captionNotice={captionNotice}>
+        <video data-testid="video">
+          {captions.map((c) => (
+            <track
+              key={c.trackId}
+              data-track-id={c.trackId}
+              kind="captions"
+              srcLang={c.language}
+              label={c.label}
+              src={c.src}
+            />
+          ))}
+        </video>
+      </VideoControls>,
+    );
+    const video = screen.getByTestId('video') as HTMLVideoElement;
+    const container = video.closest(
+      '[data-slot="video-controls"]',
+    ) as HTMLElement;
+    const modeOf = (trackId: string) =>
+      (
+        video.querySelector(
+          `track[data-track-id="${trackId}"]`,
+        ) as HTMLTrackElement
+      ).track.mode;
+    return { ...result, video, container, modeOf };
+  };
+
+  const captionsButton = () =>
+    screen.getByRole('button', { name: /^Captions/ });
+  const savedPreferences = () =>
+    JSON.parse(localStorage.getItem(STORAGE_KEY) as string);
+
+  it('has no captions control when there are none', () => {
+    setup();
+    expect(screen.queryByRole('button', { name: /^Captions/ })).toBeNull();
+    cleanup();
+    setupCaptions([]);
+    expect(screen.queryByRole('button', { name: /^Captions/ })).toBeNull();
+  });
+
+  it('starts with captions off, and lists Off plus each track with the default marked', async () => {
+    const { modeOf } = setupCaptions();
+    expect(captionsButton()).toHaveAccessibleName('Captions: off');
+    expect(modeOf('a')).toBe('disabled');
+    expect(modeOf('b')).toBe('disabled');
+    await userEvent.click(captionsButton());
+    expect(screen.getByRole('menuitemradio', { name: 'Off' })).toBeChecked();
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+  });
+
+  it('shows the chosen track, hides the rest, and remembers the choice', async () => {
+    const { modeOf } = setupCaptions();
+    await userEvent.click(captionsButton());
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: 'Spanish' }),
+    );
+    expect(modeOf('a')).toBe('showing');
+    expect(modeOf('b')).toBe('disabled');
+    expect(captionsButton()).toHaveAccessibleName('Captions: Spanish');
+    expect(savedPreferences()).toMatchObject({
+      captionsOn: true,
+      captionLanguage: 'es-ES',
+    });
+    await userEvent.click(captionsButton());
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toBeChecked();
+  });
+
+  it('turns captions off from the menu, keeping the last language', async () => {
+    const { modeOf } = setupCaptions();
+    await userEvent.click(captionsButton());
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: 'Spanish' }),
+    );
+    await userEvent.click(captionsButton());
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Off' }));
+    expect(modeOf('a')).toBe('disabled');
+    expect(savedPreferences()).toMatchObject({
+      captionsOn: false,
+      captionLanguage: 'es-ES',
+    });
+  });
+
+  it('toggles the last chosen track with C', () => {
+    const { container, modeOf } = setupCaptions();
+    // Nothing chosen yet: the default track.
+    press(container, 'c');
+    expect(modeOf('b')).toBe('showing');
+    expect(savedPreferences()).toMatchObject({
+      captionsOn: true,
+      captionLanguage: 'en-US',
+    });
+    press(container, 'c');
+    expect(modeOf('b')).toBe('disabled');
+    expect(savedPreferences().captionsOn).toBe(false);
+    press(container, 'C');
+    expect(modeOf('b')).toBe('showing');
+  });
+
+  it('toggles back to the track last chosen from the menu with C', async () => {
+    const { container, modeOf } = setupCaptions();
+    await userEvent.click(captionsButton());
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: 'Spanish' }),
+    );
+    press(container, 'c');
+    expect(modeOf('a')).toBe('disabled');
+    press(container, 'c');
+    expect(modeOf('a')).toBe('showing');
+  });
+
+  it('applies the remembered on/off choice and language on mount', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ captionsOn: true, captionLanguage: 'es-ES' }),
+    );
+    const { modeOf } = setupCaptions();
+    expect(modeOf('a')).toBe('showing');
+    expect(modeOf('b')).toBe('disabled');
+  });
+
+  it('falls back to the default track when the remembered language is not offered', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ captionsOn: true, captionLanguage: 'ja-JP' }),
+    );
+    const { modeOf } = setupCaptions();
+    expect(modeOf('b')).toBe('showing');
+  });
+
+  it('keeps captions off when the remembered choice is off', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ captionsOn: false, captionLanguage: 'es-ES' }),
+    );
+    const { modeOf } = setupCaptions();
+    expect(modeOf('a')).toBe('disabled');
+  });
+
+  it('shows the notice for a track that failed to load in the menu', async () => {
+    setupCaptions([CAPTIONS[1]], 'Spanish captions could not be loaded.');
+    await userEvent.click(captionsButton());
+    expect(
+      screen.getByText('Spanish captions could not be loaded.'),
+    ).toBeVisible();
+    expect(screen.getByRole('menuitemradio', { name: 'Off' })).toBeVisible();
+  });
+
+  it('ignores C when there are no captions', () => {
+    const { container } = setup();
+    press(container, 'c');
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('is harmless when storage throws', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('full');
+    });
+    const { container, modeOf } = setupCaptions();
+    press(container, 'c');
+    expect(modeOf('b')).toBe('showing');
   });
 });

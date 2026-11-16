@@ -15,6 +15,20 @@ export {
   isLateSubmission,
 } from './helpers/assignment-submission.js';
 export {
+  applyCaptionChange,
+  CAPTIONS_PENDING_TIMEOUT_MS,
+  type CaptionChange,
+  type CaptionChangeResult,
+  type CaptionTrack,
+  CaptionTrackError,
+  type CaptionTrackErrorCode,
+  captionWriteCondition,
+  dropOtherVersions,
+  MAX_CAPTION_TRACKS,
+  reportedCaptionsStatus,
+  tracksForPlayback,
+} from './helpers/caption-tracks.js';
+export {
   type Certificate,
   formatCertificateId,
   generateCertificateId,

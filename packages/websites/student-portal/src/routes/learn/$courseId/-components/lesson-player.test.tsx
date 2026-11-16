@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   type Handler,
@@ -413,6 +413,63 @@ describe('LessonPage', () => {
     expect(
       within(lecture).getByLabelText('Lecture video').hasAttribute('controls'),
     ).toBe(false);
+  });
+
+  describe('captions', () => {
+    const captioned = {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: true,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [
+          {
+            trackId: 'track-1',
+            language: 'en-US',
+            label: 'English',
+            isDefault: true,
+            url: 'https://media.example.com/nonce/captions/track-1.vtt',
+          },
+        ],
+      }),
+    };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('offers the captions the API lists, fetched with the signed cookies', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => 'WEBVTT',
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      URL.createObjectURL = vi.fn(() => 'blob:captions');
+      URL.revokeObjectURL = vi.fn();
+      openLesson('lesson-1', captioned);
+
+      const lecture = await item('Lecture video');
+
+      expect(
+        await within(lecture).findByRole('button', { name: /^Captions/ }),
+      ).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://media.example.com/nonce/captions/track-1.vtt',
+        { credentials: 'include' },
+      );
+    });
+
+    it('has no captions control for a video without any', async () => {
+      openLesson('lesson-1');
+
+      const lecture = await item('Lecture video');
+      await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+      expect(
+        within(lecture).queryByRole('button', { name: /^Captions/ }),
+      ).toBeNull();
+    });
   });
 
   describe('resuming a video', () => {

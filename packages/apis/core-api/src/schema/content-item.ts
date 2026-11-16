@@ -23,6 +23,21 @@ export const VideoUrlOutputSchema = z.object({
   versionId: z.string(),
   // The caller's saved position for this version, in seconds; 0 if none.
   resumeAt: z.number().int().min(0),
+  // The played version's caption tracks, the default first. Never an S3 key,
+  // the track's source or the caption status.
+  captions: z.array(
+    z.object({
+      trackId: z.string(),
+      // BCP 47 tag, e.g. en-US.
+      language: z.string(),
+      // Display label, e.g. English.
+      label: z.string(),
+      isDefault: z.boolean(),
+      // Plain CloudFront URL under the version's folder, authorised by the
+      // signed cookies set with this response (S3Mock's URL in local dev).
+      url: z.string(),
+    }),
+  ),
 });
 
 export type IVideoUrlOutput = z.output<typeof VideoUrlOutputSchema>;

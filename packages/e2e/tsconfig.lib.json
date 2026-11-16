@@ -26,6 +26,9 @@
     },
     {
       "path": "../apis/core-api/tsconfig.lib.json"
+    },
+    {
+      "path": "../common/server-utils/tsconfig.lib.json"
     }
   ],
   "exclude": []

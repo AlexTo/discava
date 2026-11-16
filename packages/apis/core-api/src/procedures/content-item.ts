@@ -9,7 +9,12 @@ import {
   getSignedCloudFrontFileUrl,
 } from '@discava/common-server-utils/lesson-media';
 import { manifestNonce } from '@discava/common-server-utils/media-keys';
-import { isShown, resumeAt, videoPositionToStore } from '@discava/core-table';
+import {
+  isShown,
+  resumeAt,
+  tracksForPlayback,
+  videoPositionToStore,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import { playableManifest } from '../lib/playback.js';
@@ -90,11 +95,23 @@ export const videoUrl = courseProcedure
     // The folder name is the version's identity: a replaced video has a new
     // one, and a position saved for another version no longer applies.
     const versionId = manifestNonce(manifest) ?? '';
+    // Only the played version's tracks: while a replacement transcodes, the
+    // previous version plays with its own.
+    const captions = await Promise.all(
+      tracksForPlayback(item.captionTracks, versionId).map(async (track) => ({
+        trackId: track.trackId,
+        language: track.language,
+        label: track.label,
+        isDefault: track.isDefault,
+        url: await getCloudFrontVideoUrl(track.key),
+      })),
+    );
     return {
       url,
       withCredentials: cookies.length > 0,
       versionId,
       resumeAt: resumeAt(position ?? undefined, versionId),
+      captions,
     };
   });
 
