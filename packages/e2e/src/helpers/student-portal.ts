@@ -9,9 +9,11 @@ import { signIn, type User } from './users.js';
 // Steps in the student portal, for scenarios to build on.
 
 // Finds a published course by searching for its title, and opens its page.
-// course.publicSearch is fed by the core table's stream, which batches for up
-// to 5s (#267), so a course just published may not be indexed yet: retries
-// the search rather than failing on whatever the first attempt saw.
+// course.publicSearch is fed by the core table's stream, through the router's
+// queue and a feature runner that batches for up to 5s (#267), and a busy
+// shard queues batches one after another, so a course just published may not
+// be indexed for a while: retries the search for up to a minute rather than
+// failing on whatever the first attempt saw.
 export const openCourse = async (page: Page, title: string) => {
   await expect(async () => {
     await page.goto(
@@ -20,7 +22,7 @@ export const openCourse = async (page: Page, title: string) => {
     await expect(page.getByRole('link', { name: title })).toBeVisible({
       timeout: 2_000,
     });
-  }).toPass({ timeout: 20_000 });
+  }).toPass({ timeout: 60_000 });
   await page.getByRole('link', { name: title }).click();
   await expect(
     page.getByRole('heading', { level: 1, name: title }),
