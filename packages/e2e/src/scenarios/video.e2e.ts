@@ -12,15 +12,17 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
   expectCourseCompleted,
+  lessonItem,
   lessonVideo,
   markItemDone,
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
-import { test } from '../helpers/table-invariants.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 
@@ -49,6 +51,10 @@ test('an instructor uploads a video, and a student watches it', async ({
       file: THREE_SECOND_VIDEO,
     });
     await expectVideoPreviewToPlay(instructor, 'Video one');
+    await expect(
+      instructor.getByRole('button', { name: 'Playback speed' }),
+    ).toBeVisible();
+    await screenshot(instructor, 'instructor video preview with controls');
     await publishCourse(instructor);
   });
 
@@ -57,6 +63,23 @@ test('an instructor uploads a video, and a student watches it', async ({
     await enrol(student, newUser('Sam', ['student']));
     await startFirstLesson(student);
     await expectToPlay(lessonVideo(student, 'Video one'));
+
+    const speed = lessonItem(student, 'Video one').getByRole('button', {
+      name: 'Playback speed',
+    });
+    await speed.click();
+    await expect(
+      student.getByRole('menuitemradio', { name: '1.5x' }),
+    ).toBeVisible();
+    await screenshot(student, 'speed menu');
+    await student.getByRole('menuitemradio', { name: '1.5x' }).click();
+    await expect(speed).toHaveText('1.5x');
+    expect(
+      await lessonVideo(student, 'Video one').evaluate(
+        (v: HTMLVideoElement) => v.playbackRate,
+      ),
+    ).toBe(1.5);
+    await screenshot(student, 'control bar at 1.5x');
     await markItemDone(student, 'Video one');
   });
 
