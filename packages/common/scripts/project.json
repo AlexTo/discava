@@ -83,6 +83,7 @@
     "elasticmq": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-elasticmq-image"],
       "options": {
         "command": "tsx src/elasticmq/start-container.ts",
         "cwd": "{projectRoot}"
