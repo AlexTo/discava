@@ -172,9 +172,10 @@ describe.skipIf(!dockerAvailable)('ElasticMQ', () => {
     const deleted = await sqs.send(
       new DeleteMessageBatchCommand({
         QueueUrl: url,
-        Entries: [...received, ...again].map((m, i) => ({
+        // The first message's earlier handle went stale when it came back.
+        Entries: [received[1], ...again].map((m, i) => ({
           Id: String(i),
-          ReceiptHandle: m.receiptHandle,
+          ReceiptHandle: m?.receiptHandle,
         })),
       }),
     );
