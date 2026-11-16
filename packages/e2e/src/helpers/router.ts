@@ -35,19 +35,35 @@ export const routerQueues = async (): Promise<RouterFeatureState[]> =>
   (await call<{ features: RouterFeatureState[] }>('GET', '/router/queues'))
     .features;
 
-// Waits until no feature has a message waiting or in flight, so what the
-// stream carried has been handled (a failed batch stays in flight until its
-// visibility timeout, so this also waits out retries).
-export const waitForQueuesToDrain = async (timeout = 60_000) =>
-  expect
+// How long the queues must stay empty to count as drained. A write's stream
+// record reaches the queues only once the runner's stream poll (1 s) reads
+// and routes it, and until then every queue looks empty, so a single empty
+// reading straight after a write proves nothing.
+const QUIET_MS = 3_000;
+
+// Waits until no feature has a message waiting or in flight, continuously for
+// QUIET_MS, so what the stream carried has been routed and handled (a failed
+// batch stays in flight until its visibility timeout, so this also waits out
+// retries).
+export const waitForQueuesToDrain = async (timeout = 60_000) => {
+  let emptySince: number | undefined;
+  await expect
     .poll(
-      async () =>
-        (await routerQueues()).filter(
+      async () => {
+        const busy = (await routerQueues()).some(
           ({ queue }) => queue.waiting + queue.inFlight > 0,
-        ).length,
+        );
+        if (busy) {
+          emptySince = undefined;
+          return false;
+        }
+        emptySince ??= Date.now();
+        return Date.now() - emptySince >= QUIET_MS;
+      },
       { message: 'The router queues did not drain', timeout },
     )
-    .toBe(0);
+    .toBe(true);
+};
 
 export const redrive = (feature: string) =>
   call<{ feature: string; redriven: number }>(
