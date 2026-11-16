@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createPositionReporter,
   DEFAULT_PREFERENCES,
   keyToAction,
   loadPreferences,
@@ -168,5 +169,79 @@ describe('preferences', () => {
       throw new Error('full');
     });
     expect(() => savePreferences(DEFAULT_PREFERENCES)).not.toThrow();
+  });
+});
+
+describe('createPositionReporter', () => {
+  let clock: number;
+  let report: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    clock = 0;
+    report = vi.fn();
+  });
+  const make = (initialPosition?: number) =>
+    createPositionReporter(report, { now: () => clock, initialPosition });
+
+  it('reports a tick at most every 10 seconds', () => {
+    const reporter = make();
+    reporter.tick(5, 100);
+    expect(report).not.toHaveBeenCalled();
+
+    clock = 10_000;
+    reporter.tick(15, 100);
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenLastCalledWith({
+      positionSeconds: 15,
+      durationSeconds: 100,
+    });
+
+    clock = 19_000;
+    reporter.tick(24, 100);
+    expect(report).toHaveBeenCalledTimes(1);
+
+    clock = 20_000;
+    reporter.tick(25, 100);
+    expect(report).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports on flush (pause, seek end, page hide) without waiting', () => {
+    const reporter = make();
+    reporter.flush(30, 100);
+    expect(report).toHaveBeenCalledWith({
+      positionSeconds: 30,
+      durationSeconds: 100,
+    });
+  });
+
+  it('skips a report whose position moved under a second', () => {
+    const reporter = make();
+    reporter.flush(30, 100);
+    reporter.flush(30.5, 100);
+    reporter.flush(29.2, 100);
+    expect(report).toHaveBeenCalledTimes(1);
+
+    reporter.flush(31, 100);
+    expect(report).toHaveBeenCalledTimes(2);
+  });
+
+  it('measures from where playback resumed', () => {
+    const reporter = make(60);
+    reporter.flush(60, 100);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('does not report before the duration is known', () => {
+    const reporter = make();
+    reporter.flush(30, Number.NaN);
+    reporter.flush(30, 0);
+    reporter.flush(30, Number.POSITIVE_INFINITY);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('does not report a negative or non-finite position', () => {
+    const reporter = make();
+    reporter.flush(-1, 100);
+    reporter.flush(Number.NaN, 100);
+    expect(report).not.toHaveBeenCalled();
   });
 });

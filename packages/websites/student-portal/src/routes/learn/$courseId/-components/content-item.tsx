@@ -17,7 +17,7 @@ import {
 } from '@discava/common-shadcn/components/ui/item';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CircleCheck,
   ClipboardList,
@@ -65,6 +65,12 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
     ),
   );
 
+  // Remembers where the student got to, to resume there next time. Failing
+  // to save is not worth interrupting the lesson for, so errors are ignored.
+  const savePosition = useMutation(
+    trpc.contentItem.saveVideoPosition.mutationOptions(),
+  );
+
   if (item.status === 'pending') {
     return (
       <Alert header="This video is still processing">
@@ -98,6 +104,17 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
       url={videoQuery.data.url}
       withCredentials={videoQuery.data.withCredentials}
       title={item.title}
+      resumeAt={videoQuery.data.resumeAt}
+      onPositionChange={(position) =>
+        savePosition.mutate({
+          courseId,
+          moduleId,
+          lessonId,
+          contentItemId,
+          versionId: videoQuery.data.versionId,
+          ...position,
+        })
+      }
       className="aspect-video w-full rounded-xl bg-black"
     />
   );

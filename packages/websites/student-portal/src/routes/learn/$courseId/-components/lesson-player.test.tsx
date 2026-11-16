@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -197,7 +197,11 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'course.myEnrolment': () => enrolment,
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
+    withCredentials: false,
+    versionId: 'nonce',
+    resumeAt: 0,
   }),
+  'contentItem.saveVideoPosition': () => ({ saved: true }),
   'quiz.view': () => quizView(),
   'quiz.myAttempts': () => noAttempts,
   ...overrides,
@@ -406,6 +410,83 @@ describe('LessonPage', () => {
     expect(
       within(lecture).getByLabelText('Lecture video').hasAttribute('controls'),
     ).toBe(false);
+  });
+
+  describe('resuming a video', () => {
+    const resumedVideo = (resumeAt: number) =>
+      openLesson('lesson-1', {
+        'contentItem.videoUrl': () => ({
+          url: 'https://media.example.com/master.m3u8',
+          withCredentials: false,
+          versionId: 'nonce',
+          resumeAt,
+        }),
+      });
+
+    // jsdom has no media playback: stand in for the element's clock.
+    const loaded = async (position = 0, duration = 600) => {
+      const video = (await within(await item('Lecture video')).findByLabelText(
+        'Lecture video',
+      )) as HTMLVideoElement;
+      Object.defineProperty(video, 'duration', { value: duration });
+      Object.defineProperty(video, 'currentTime', {
+        configurable: true,
+        writable: true,
+        value: position,
+      });
+      return video;
+    };
+
+    it('resumes at the saved position, with a notice', async () => {
+      resumedVideo(95);
+      const video = await loaded();
+
+      act(() => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(video.currentTime).toBe(95);
+      expect(
+        within(await item('Lecture video')).getByText('Resumed at 1:35'),
+      ).toBeInTheDocument();
+    });
+
+    it('has no notice for a video not watched before', async () => {
+      resumedVideo(0);
+      const video = await loaded();
+
+      act(() => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(
+        within(await item('Lecture video')).queryByText(/Resumed at/),
+      ).toBeNull();
+    });
+
+    it('saves where the student paused, for the version played', async () => {
+      const { calls } = resumedVideo(0);
+      const video = await loaded(42.5, 600);
+
+      act(() => {
+        video.dispatchEvent(new Event('pause'));
+      });
+
+      await waitFor(() =>
+        expect(
+          calls.find((call) => call.path === 'contentItem.saveVideoPosition')
+            ?.input,
+        ).toEqual({
+          courseId: 'course-1',
+          moduleId: 'module-1',
+          lessonId: 'lesson-1',
+          contentItemId: 'video-1',
+          versionId: 'nonce',
+          positionSeconds: 42.5,
+          durationSeconds: 600,
+        }),
+      );
+    });
   });
 
   it('says a video is still processing, without asking for its URL', async () => {
