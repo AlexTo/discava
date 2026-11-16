@@ -12,25 +12,29 @@ import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
 import { S3Client } from '@aws-sdk/client-s3';
 import {
   LOCAL_EVENT_RUNNER,
+  LOCAL_QUEUES,
   localBucketName,
+  localFeatureFailureQueueName,
+  localFeatureQueueName,
   s3ClientConfig,
 } from '@discava/common-server-utils/local-dev';
 import {
   dynamoDBClientConfig,
   getDynamoDBClient,
-  matchesProgressStreamFilters,
-  matchesSearchStreamFilters,
   resolveTableName,
+  STREAM_FEATURES,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
 import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { applyTranscribeOutcome } from '../media/transcribe-outcome.js';
-import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
-import { handler as searchIndexing } from '../search/index-content.js';
-import { createBatcher, pollStream } from './dynamodb-stream.js';
+import { HANDLERS } from '../router/handlers.js';
+import { createStreamRouter } from '../router/stream-router.js';
+import { pollStream } from './dynamodb-stream.js';
 import { startEventRunnerServer } from './event-runner-server.js';
+import { createFeatureRunner } from './feature-runner.js';
+import { createInProcessQueue } from './in-process-queue.js';
 import { createTranscoder, type Docker } from './transcoder.js';
 import { createTranscriber } from './transcriber.js';
 import {
@@ -41,16 +45,20 @@ import {
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
 // when deployed, done locally, so local changes reach the same handler logic.
 // Each trigger gets the event shape it delivers; most call the real exported
-// handler. Failures are logged, not retried; AWS's retries, batch bisecting
-// and failure queues are only on dev.
+// handler. Failures are logged, not retried (the stream features below have
+// their own retries and failure queues); AWS's batch bisecting is only on dev.
 //
 // Triggers so far:
-// - the core table's stream -> progress-recalculation, filtered and batched
-//   like its event source mapping (PROGRESS_STREAM_FILTERS, 100 records or
-//   5 s)
-// - the core table's stream -> search-indexing, filtered and batched the
-//   same way (SEARCH_STREAM_FILTERS); reset-local-data also wipes the local
-//   OpenSearch container's indices (#53)
+// - the core table's stream -> the stream router (the deployed router's
+//   code, over the same STREAM_FEATURES registry) -> one queue per feature ->
+//   one feature runner per feature, which batches by the registration (100
+//   records or 5 s), runs the handler (progress-recalculation,
+//   search-indexing) and retries a failed batch after the queue's visibility
+//   timeout, moving a message to the feature's failure queue after its
+//   maxReceiveCount receives. Queues are in-process, so a restart empties
+//   them. GET /router/queues, POST /router/redrive/<feature> and
+//   POST /router/fail/<feature> inspect, replay and fail them; reset-local-data
+//   also wipes the local OpenSearch container's indices (#53)
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
@@ -105,23 +113,68 @@ const invoke = async (
   }
 };
 
-const progressBatches = createBatcher<DynamoDBRecord>({
-  maxRecords: 100,
-  windowMs: 5000,
-  deliver: async (Records) => {
-    log(`progress-recalculation <- ${Records.length} stream record(s)`);
-    await invoke('progress-recalculation', progressRecalculation, { Records });
-  },
-});
+// A stream feature's handler, run as a failed Lambda invocation would: a throw
+// is for the feature runner to retry.
+const runFeatureHandler = async (
+  name: string,
+  handler: (event: never, context: Context) => Promise<unknown>,
+  event: unknown,
+) => {
+  await handler(event as never, lambdaContext(name));
+};
 
-const searchBatches = createBatcher<DynamoDBRecord>({
-  maxRecords: 100,
-  windowMs: 5000,
-  deliver: async (Records) => {
-    log(`search-indexing <- ${Records.length} stream record(s)`);
-    await invoke('search-indexing', searchIndexing, { Records });
-  },
+// Visibility outlasts a feature's 5 s batch window, so a batch being gathered
+// isn't received a second time.
+const queue = createInProcessQueue({ visibilityTimeoutMs: 10_000 });
+const routerQueues = new Map(
+  STREAM_FEATURES.map((feature) => [
+    feature.name,
+    {
+      feature,
+      queueName: localFeatureQueueName(feature.name),
+      failureQueueName: localFeatureFailureQueueName(feature.name),
+    },
+  ]),
+);
+const streamRouter = createStreamRouter({
+  queue,
+  queueFor: localFeatureQueueName,
+  failureQueue: LOCAL_QUEUES.routerFailureQueue,
 });
+const featureRunners = new Map(
+  [...routerQueues].map(([name, { feature, queueName, failureQueueName }]) => {
+    const handler = HANDLERS[feature.handler as keyof typeof HANDLERS];
+    return [
+      name,
+      createFeatureRunner({
+        feature,
+        queue,
+        queueName,
+        failureQueueName,
+        run: (event) => runFeatureHandler(name, handler, event),
+        log,
+      }),
+    ] as const;
+  }),
+);
+
+// The router retries the records it reports, as the stream mapping would.
+const ROUTER_ATTEMPTS = 3;
+const routeRecordsLocally = async (records: DynamoDBRecord[]) => {
+  let pending = records;
+  for (let attempt = 1; pending.length > 0; attempt++) {
+    const { batchItemFailures } = await streamRouter({ Records: pending });
+    if (batchItemFailures.length === 0) return;
+    const failed = new Set(batchItemFailures.map((f) => f.itemIdentifier));
+    pending = pending.filter((r) =>
+      failed.has(r.dynamodb?.SequenceNumber ?? ''),
+    );
+    if (attempt >= ROUTER_ATTEMPTS) {
+      log(`stream router gave up on ${pending.length} record(s)`, pending);
+      return;
+    }
+  }
+};
 
 // The ffmpeg image (#137 has the comparison): /ffmpeg is its entrypoint,
 // /ffprobe beside it. Pinned, at least 2 weeks old when chosen.
@@ -208,6 +261,40 @@ const server = startEventRunnerServer({
       );
     }
   },
+  routerQueues: async () => ({
+    features: await Promise.all(
+      [...routerQueues.values()].map(async (entry) => {
+        const [main, failed] = await Promise.all([
+          queue.depth(entry.queueName),
+          queue.depth(entry.failureQueueName),
+        ]);
+        return {
+          name: entry.feature.name,
+          queue: main,
+          failures: { count: failed.waiting + failed.inFlight },
+        };
+      }),
+    ),
+  }),
+  redriveFeature: async (name) => {
+    const entry = routerQueues.get(name);
+    if (!entry) return undefined;
+    let redriven = 0;
+    for (;;) {
+      const messages = await queue.receive(entry.failureQueueName, 10, 0);
+      if (messages.length === 0) return redriven;
+      for (const message of messages) {
+        await queue.move(entry.failureQueueName, entry.queueName, message);
+        redriven += 1;
+      }
+    }
+  },
+  failFeature: (name, batches) => {
+    const runner = featureRunners.get(name);
+    if (!runner) return undefined;
+    runner.failNext(batches);
+    return batches;
+  },
   log,
 });
 log(
@@ -216,6 +303,9 @@ log(
 
 const tableName = await resolveTableName();
 const abort = new AbortController();
+const runners = Promise.all(
+  [...featureRunners.values()].map((runner) => runner.start(abort.signal)),
+);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     abort.abort();
@@ -235,8 +325,9 @@ for (let attempt = 1; ; attempt++) {
           new DescribeTableCommand({ TableName: tableName }),
         ),
       onRecords: (records) => {
-        progressBatches.add(records.filter(matchesProgressStreamFilters));
-        searchBatches.add(records.filter(matchesSearchStreamFilters));
+        routeRecordsLocally(records).catch((error) =>
+          log('stream router failed', error),
+        );
       },
       signal: abort.signal,
     });
@@ -247,4 +338,4 @@ for (let attempt = 1; ; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
-await Promise.all([progressBatches.flush(), searchBatches.flush()]);
+await runners;

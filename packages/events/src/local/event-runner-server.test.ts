@@ -19,6 +19,7 @@ describe('startEventRunnerServer', () => {
   let server: ReturnType<typeof startEventRunnerServer> | undefined;
   afterEach(() => {
     server?.close();
+    vi.unstubAllEnvs();
   });
 
   const start = () => {
@@ -28,6 +29,21 @@ describe('startEventRunnerServer', () => {
       submitTranscriptionJob: vi.fn(),
       scheduleTranscodeCleanup: vi.fn(),
       runPreTokenGeneration: vi.fn(async () => {}),
+      routerQueues: vi.fn(async () => ({
+        features: [
+          {
+            name: 'search-indexing',
+            queue: { waiting: 1, inFlight: 0 },
+            failures: { count: 2 },
+          },
+        ],
+      })),
+      redriveFeature: vi.fn(async (feature: string) =>
+        feature === 'search-indexing' ? 2 : undefined,
+      ),
+      failFeature: vi.fn((feature: string, batches: number) =>
+        feature === 'search-indexing' ? batches : undefined,
+      ),
     };
     server = startEventRunnerServer({ port: 0, ...handlers, log: () => {} });
     const url = (path: string) =>
@@ -164,5 +180,107 @@ describe('startEventRunnerServer', () => {
 
     expect(response.status).toBe(400);
     expect(handlers.runPreTokenGeneration).not.toHaveBeenCalled();
+  });
+
+  it('reports each feature’s queue and failure queue', async () => {
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/router/queues'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      features: [
+        {
+          name: 'search-indexing',
+          queue: { waiting: 1, inFlight: 0 },
+          failures: { count: 2 },
+        },
+      ],
+    });
+  });
+
+  it('redrives a feature’s failure queue, answering how many moved', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/router/redrive/search-indexing'), {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      feature: 'search-indexing',
+      redriven: 2,
+    });
+    expect(handlers.redriveFeature).toHaveBeenCalledWith('search-indexing');
+  });
+
+  it('answers 404 to redriving or failing an unregistered feature', async () => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const redrive = await fetch(url('/router/redrive/nope'), {
+      method: 'POST',
+    });
+    const fail = await fetch(url('/router/fail/nope'), {
+      method: 'POST',
+      ...json({ batches: 1 }),
+    });
+
+    expect(redrive.status).toBe(404);
+    expect(fail.status).toBe(404);
+  });
+
+  describe('POST /router/fail/{feature}', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('makes the feature fail its next batches', async () => {
+      vi.stubEnv('LOCAL_DEV', 'true');
+      const { handlers, url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/router/fail/search-indexing'), {
+        method: 'POST',
+        ...json({ batches: 5 }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        feature: 'search-indexing',
+        failing: 5,
+      });
+      expect(handlers.failFeature).toHaveBeenCalledWith('search-indexing', 5);
+    });
+
+    it('answers 403 unless LOCAL_DEV is true', async () => {
+      vi.stubEnv('LOCAL_DEV', undefined);
+      const { handlers, url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/router/fail/search-indexing'), {
+        method: 'POST',
+        ...json({ batches: 5 }),
+      });
+
+      expect(response.status).toBe(403);
+      expect(handlers.failFeature).not.toHaveBeenCalled();
+    });
+
+    it('refuses a batch count that isn’t a whole number', async () => {
+      vi.stubEnv('LOCAL_DEV', 'true');
+      const { url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/router/fail/search-indexing'), {
+        method: 'POST',
+        ...json({ batches: 'many' }),
+      });
+
+      expect(response.status).toBe(400);
+    });
   });
 });
