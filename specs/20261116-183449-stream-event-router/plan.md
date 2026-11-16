@@ -8,7 +8,7 @@
 
 One router Lambda becomes the only consumer of the core table's stream. It filters each record with the filters features already define and sends it to that feature's SQS queue. Each feature has its own queue, failure queue, alarm and handler mapping. Progress recalculation and search indexing move onto it first, behaviour-preserving, so the stream stays at one consumer when notifications (#331) and the dashboard (#332) arrive.
 
-The queues don't keep per-record order, so every handler has to be order-safe. Progress recalculation already is. Search indexing becomes so by re-reading the course from the core table on each change, not by versioning its writes (research R-3). Locally, the event runner runs the same router function against ElasticMQ queues behind a `QueueClient` interface, with an in-process queue as the fallback if a first-task spike rules ElasticMQ out (research R-2).
+The queues don't keep per-record order, so every handler has to be order-safe. Progress recalculation already is. Search indexing becomes so by re-reading the course from the core table on each change, not by versioning its writes (research R-3). Locally, the event runner runs the same router function against ElasticMQ queues behind a `QueueClient` interface (research R-2; an in-memory queue is only the unit tests' fake).
 
 Facts the repo showed that shaped the plan:
 
@@ -22,7 +22,7 @@ Facts the repo showed that shaped the plan:
 
 **Language/Version**: TypeScript (Node 24 Lambdas), pnpm/Nx monorepo
 
-**Primary Dependencies**: `@aws-sdk/client-sqs` (new, `events` and `common-server-utils`), existing `@discava/core-table` (ElectroDB), `@aws-lambda-powertools/*` and middy (as the existing handlers), `aws-cdk-lib` (`aws-sqs`, `aws-lambda-event-sources`, `aws-cloudwatch`), ElasticMQ in Docker for local dev (pending the R-2 spike)
+**Primary Dependencies**: `@aws-sdk/client-sqs` (new, `events` and `common-server-utils`), existing `@discava/core-table` (ElectroDB), `@aws-lambda-powertools/*` and middy (as the existing handlers), `aws-cdk-lib` (`aws-sqs`, `aws-lambda-event-sources`, `aws-cloudwatch`), ElasticMQ in Docker for local dev (R-2 spike passed)
 
 **Storage**: no new entity, table or index. The search handler adds a keyed read of the `course` entity. Queues carry stream records as JSON
 
@@ -46,7 +46,7 @@ Facts the repo showed that shaped the plan:
 |-----------|--------|-------|
 | I. AWS-native, serverless | Pass | Lambda, SQS, DynamoDB Streams, CloudWatch. No pluggable layer: the router calls SQS directly, with a `QueueClient` interface only so tests and local dev can swap the transport |
 | II. Generators first | Pass, planned | The router Lambda and any new handler wrapper come from `ts#lambda-function` in `packages/events` (`project.json` already lists one entry per handler). The `StreamRouter` stack and constructs are hand-written because no generator creates a stack of queues and mappings; the plan says so |
-| III. Everything runs locally | Pass, conditional | The event runner runs the router function and feature runners against ElasticMQ, or the in-process fallback. The R-2 spike decides, and the fallback needs no Docker, so the principle holds either way |
+| III. Everything runs locally | Pass | The event runner runs the router function and feature runners against ElasticMQ in Docker, like the other local stand-ins (R-2 spike passed) |
 | IV. Layered tests | Pass, planned | Unit tests per router/adapter/handler; reordered and duplicate delivery tests for search and progress (SC-004); a failure-destination test (SC-005); e2e scenarios for progress and search unchanged; the invariant check after every e2e test stays. No new invariant, see the impact check |
 | V. Single-table via ElectroDB | Pass | Search reads one `course` by key through `@discava/core-table`, no scan. The wording that names progress and search as the stream's consumers is updated (FR-024). `PROGRESS_STREAM_FILTERS` and `SEARCH_STREAM_FILTERS` stay and feed the registry |
 | VI. Secure by default | Pass | Queues default to customer-managed KMS with key rotation, `enforceSSL`, least-privilege grants per function. A new `streamRouter` component config (`enableKmsEncryption`, `enableKeyRotation`) lets a stage relax it, as the core table's does, so only `stages.config.ts` relaxes it and `discava-production` keeps the default |
@@ -74,7 +74,7 @@ No new counted or related record and no meaning changed, so no existing invarian
 3. **Handlers keep their code behind an adapter (R-5).** SQS batch in, the stream event shape out, so the handlers' parsers and tests stay.
 4. **Search re-reads the course (R-3).** No version parameters and no new field.
 5. **Failures are per feature (R-4, R-6).** Retries by receive count, a failure queue and an alarm per feature, plus the router's own failure queue, which the router writes to for records it can never send.
-6. **Local parity (R-2).** One `QueueClient` interface with an ElasticMQ implementation and an in-process one. The local runner polls each feature's queue, batches like the mapping does, runs the handler, and deletes or keeps messages on the result. A runner endpoint lists queues and redrives (contract: [local-runner-routes.md](./contracts/local-runner-routes.md)).
+6. **Local parity (R-2).** One `QueueClient` interface, with the SQS implementation pointed at ElasticMQ locally and an in-memory fake used only by unit tests. The local runner polls each feature's queue, batches like the mapping does, runs the handler, and deletes or keeps messages on the result. A runner endpoint lists queues and redrives (contract: [local-runner-routes.md](./contracts/local-runner-routes.md)).
 7. **No message loss on size (R-4).** The router doesn't send an oversized message. It records its identity in the router failure queue, trips the alarm and returns success, so its shard isn't stalled; the record is repaired by reindex or the next change.
 
 ## Access patterns (all keyed; no scans in a request)
@@ -122,7 +122,7 @@ packages/
 │   └── local/
 │       ├── event-runner.ts           # runs the router and feature runners instead of two batchers
 │       ├── feature-runner.ts         # polls a queue, batches, runs the handler, retries, failure queue (+ test)
-│       ├── in-process-queue.ts       # fallback QueueClient (+ test)
+│       ├── in-process-queue.ts       # in-memory QueueClient fake for unit tests (+ test)
 │       └── event-runner-server.ts    # + GET /router/queues, POST /router/redrive/{feature}
 ├── common/
 │   ├── constructs/src/app/lambda-functions/events-stream-router.ts   # generator-owned wrapper
@@ -145,11 +145,12 @@ docs/                                           # contributor page for the per-f
 
 The task list will hold the detail; the order and the independence are:
 
-1. Foundation: the local queue spike (human), `QueueClient` and the in-process queue, the registry, the pure router and adapter.
-2. The router and the feature runner locally: progress and search routed in the event runner, the runner routes, and the new e2e scenarios, with the existing e2e passing. The ordering e2e is the one exception to "independent of phase 3": it waits for phase 3's search change, because it fails on the old behaviour.
-3. Search re-read, with the ordering and duplicate tests and the table read grant. It can run alongside phase 2.
-4. The `StreamRouter` construct, stage config and stack, the generator wrapper, alarms; the two old mappings removed.
-5. Docs, the constitution wording, and the list of what #331 and #332 change.
-6. Polish: the deployed check, `build`, `lint`, `test`.
+1. Foundation: the local queue spike (human, done), `QueueClient` and its in-memory test fake, the registry, the pure router and adapter.
+2. The router and the feature runner locally: progress and search routed in the event runner, the runner routes, and the router e2e scenario, with the existing e2e passing.
+3. ElasticMQ as the local queue (the spike passed): the container, and the runner using it on one code path.
+4. Search re-read, with the ordering and duplicate tests and the table read grant. It can run alongside phases 2 and 3. The ordering and failure e2e tests come last in it: they wait for the search change (they fail on the old behaviour), and the failure test also waits for ElasticMQ in the runner.
+5. The `StreamRouter` construct, stage config and stack, the generator wrapper, alarms; the two old mappings removed.
+6. Docs, the constitution wording, and the list of what #331 and #332 change.
+7. Polish: the deployed check, `build`, `lint`, `test`.
 
-Phase 2 changes only local development and phase 3 changes only search's behaviour (correct under today's ordering too), so `main` stays working after each. Phase 4 cannot ship before phase 2, so the deployed and local routing never disagree.
+Phases 2 and 3 change only local development and phase 4 changes only search's behaviour (correct under today's ordering too), so `main` stays working after each. Phase 5 cannot ship before phases 2 and 3, so the deployed and local routing never disagree.

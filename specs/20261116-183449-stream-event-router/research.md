@@ -25,9 +25,9 @@ Decisions for the three questions the planning input named, plus the smaller one
 
 **Not verified**: whether a Pipe counts as one of the two readers on a shard (assumed yes, by analogy with an event source mapping); the exact envelope a Pipe produces on a bus; event-pattern size and rule quotas. None of them changes the decision.
 
-## R-2: Local queues: ElasticMQ behind a queue interface, conditional on a spike; in-process fallback
+## R-2: Local queues: ElasticMQ behind a queue interface
 
-**Decision**: The local stand-in for SQS is ElasticMQ in Docker, started like S3Mock (`start-container.ts` plus an Nx target, settings in `common-server-utils/local-dev`). The router and the local feature runners talk to it through one small `QueueClient` interface, so an in-process queue can replace it without touching handlers. The first implementation task is a spike (a human task, since it needs Docker) that confirms the three open points below. If any fails, the in-process queue becomes the stand-in and ElasticMQ is dropped.
+**Decision**: The local stand-in for SQS is ElasticMQ in Docker, started like S3Mock (`start-container.ts` plus an Nx target, settings in `common-server-utils/local-dev`). The router and the local feature runners talk to it through one small `QueueClient` interface, so handlers and unit tests (which use an in-memory fake) don't depend on it. The spike (T001, a human task since it needs Docker) confirmed the open points below; its outcome is recorded after them.
 
 **Rationale**:
 
@@ -38,15 +38,40 @@ Decisions for the three questions the planning input named, plus the smaller one
 
 **Alternatives considered**:
 
-- *In-process queues in the event runner.* Kept as the fallback. It needs no Docker and the batching and failure logic is ours, but duplicate delivery, visibility and dead-lettering exist only as far as we code them, so the tests that matter would prove our simulation.
+- *In-process queues in the event runner.* Rejected once the spike passed: duplicate delivery, visibility and dead-lettering would exist only as far as we code them, so the tests that matter would prove our simulation. The in-memory queue stays as a fake for unit tests, which run without Docker.
 - *LocalStack.* Rejected: it brings a large multi-service container for one service, and the project already avoids that (S3Mock instead).
 - *`softwaremill/elasticmq-native`.* Rejected: the Docker Hub page calls it "a smaller, faster & experimental version of the docker image".
 
-**Open points the spike must settle** (the documentation read did not confirm them):
+**Open points the spike settled** (the documentation read did not confirm them):
 
 1. *SDK protocol.* The README documents the SQS query (REST) protocol and mentions no SDK v3 or JSON-protocol compatibility. Newer AWS SDK v3 clients default to the JSON protocol. A release note (v1.6.16) mentions JSON-protocol error handling, so support may exist. The spike runs the repo's SQS client against the container.
 2. *Version pinning.* **Pinned at 1.7.1** (decided 2026-11-16), the last stable release; `v2.0.0-rc1` is a release candidate and is not used. The Docker Hub page shows only a `latest` tag and no tag scheme is documented, so the spike confirms the exact tag string (`1.7.1` or `v1.7.1`) with a `docker pull`, and pins by digest if neither exists. It is older than the repo's two-week minimum (as with `mwader/static-ffmpeg:9.0.2`). **Config keys follow 1.x**: the README's kebab-case keys (`dead-letters-queue`, `max-receive-count`, `default-visibility-timeout`) are 2.x. In 1.7.1 they are camelCase (`deadLettersQueue { name, maxReceiveCount }`, `defaultVisibilityTimeout`), and the README says the camelCase names are still read by 2.x with a deprecation warning, so a later upgrade to 2.x is safe.
 3. *Redrive.* `StartMessageMoveTask` is not documented in the README (a release note mentions `ListMessageMoveTasks`). So local redrive is a small runner endpoint that reads the failure queue and re-sends (contract: `contracts/local-runner-routes.md`), not the queue service's own redrive. Deployed redrive is the queue service's (FR-017).
+
+**Spike outcome (T001, 2026-11-17): ElasticMQ stays.** Run on an amd64 host with Docker 29.9.3 against `@aws-sdk/client-sqs` 3.1164.0 (the repo's catalog version).
+
+1. *SDK protocol: passes.* `GetQueueUrl`, `SendMessageBatch` (with a message attribute), `ReceiveMessage` (with `ApproximateReceiveCount`) and `GetQueueAttributes` all work with the client's default settings. No protocol override is needed.
+2. *Pin: passes.* The tag is `1.7.1` (no `v` prefix); it is a multi-arch manifest list. Digest of the pulled image: `softwaremill/elasticmq@sha256:f1de391a9b8c18fd3f2ce37b4f7d1b8989857e8a8e18bb01284fff899e69da82` (the manifest list's per-platform digests are amd64 `980ff154…` and arm64 `4dd01bb5…`). Pin the tag `1.7.1`.
+3. *Dead-lettering: passes.* With the config below, one message was received five times (`ApproximateReceiveCount` 1 to 5, redelivered after the visibility timeout), the sixth receive returned nothing, and the failure queue held the message with its body intact.
+4. *Redrive: by design, not spiked.* ElasticMQ doesn't document `StartMessageMoveTask`, so local redrive is the runner endpoint that reads the failure queue and re-sends (`contracts/local-runner-routes.md`). Deployed redrive is the queue service's (FR-017).
+5. *Architectures: passes.* The manifest lists amd64 and arm64. amd64 was started in the spike, and `docker run --rm --platform linux/arm64 softwaremill/elasticmq:1.7.1` was confirmed to start by hand (2026-11-17), so the plain tag is enough.
+
+Config used (HOCON, 1.x camelCase, mounted at `/opt/elasticmq.conf`, port 9324):
+
+```
+include classpath("application.conf")
+node-address { protocol = http, host = "*", port = 9324, context-path = "" }
+rest-sqs { enabled = true, bind-port = 9324, bind-hostname = "0.0.0.0", sqs-limits = strict }
+queues {
+  test-failures { defaultVisibilityTimeout = 2 seconds }
+  test {
+    defaultVisibilityTimeout = 2 seconds
+    deadLettersQueue { name = "test-failures", maxReceiveCount = 5 }
+  }
+}
+```
+
+Client settings: endpoint `http://localhost:9324`, any region, dummy credentials. Queue URLs come from `GetQueueUrl`.
 
 **Local behaviour kept**: batching (100 records or 5 s) is done by the local feature runner polling its queue, so burst collapsing (FR-008) holds locally.
 
@@ -115,6 +140,6 @@ At the sizes in the spec (thousands of changes a day), each part is cents per mo
 
 ## Open items carried into tasks
 
-1. ElasticMQ spike (SDK protocol, exact tag string or digest, local redrive), a human task; the version is pinned at 1.7.1. Fallback: the in-process queue.
+1. ElasticMQ spike (SDK protocol, exact tag string or digest, local redrive), a human task, done (outcome in R-2); the version is pinned at 1.7.1.
 2. Confirm the SQS message size limit and set the router's constant.
 3. Confirm the AppConfig and `RuntimeConfig` wiring for the new stack.
