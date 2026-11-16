@@ -9,6 +9,7 @@ import {
   CreateJobCommand,
   MediaConvertClient,
 } from '@aws-sdk/client-mediaconvert';
+import { transcribeInputKey } from '@discava/common-server-utils/captions';
 import { scheduleTranscodeCleanup } from '@discava/common-server-utils/cleanup-scheduler';
 import {
   resolveAppConfigValue,
@@ -131,6 +132,12 @@ export const submitTranscodeJob = async ({
   // alongside it.
   const destination = `s3://${mediaBucketName}/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/master`;
 
+  // The audio-only group's file for Transcribe: MediaConvert appends the
+  // container's extension, so this becomes transcribe-input/<nonce>.mp4.
+  const transcribeDestination = `s3://${uploadBucketName}/${transcribeInputKey(
+    submissionNonce,
+  ).replace(/\.mp4$/, '')}`;
+
   // ClientRequestToken caps out at 64 ASCII characters; hashing keeps this
   // well within that regardless of contentItemId/nonce length.
   const clientRequestToken = createHash('sha256')
@@ -183,6 +190,12 @@ export const submitTranscodeJob = async ({
             OutputGroupSettings: {
               Type: 'HLS_GROUP_SETTINGS',
               HlsGroupSettings: { Destination: destination },
+            },
+          },
+          {
+            OutputGroupSettings: {
+              Type: 'FILE_GROUP_SETTINGS',
+              FileGroupSettings: { Destination: transcribeDestination },
             },
           },
         ],
