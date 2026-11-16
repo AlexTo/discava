@@ -36,7 +36,7 @@ They work while the player has focus, and are ignored in text fields and with Ct
 When a video has caption tracks, the player shows a captions menu: **Off**, then each track by language, with the default marked. A track that fails to load is skipped with a short notice and the video keeps playing.
 
 - **Auto-generated:** when a video finishes transcoding, Amazon Transcribe generates a track in the background. This never delays the video becoming ready.
-- **Uploaded by an instructor:** an instructor can attach a WebVTT (`.vtt`) file to a ready video. Uploading for a language that already has a track replaces it, and the upload becomes the default.
+- **Uploaded by an instructor:** an instructor can attach a WebVTT (`.vtt`) file to a ready video. Uploading for a language that already has a track replaces it and keeps its default status, so an upload that replaces the auto-generated track becomes the default. A later Transcribe result never overwrites an uploaded track.
 - **Limits:** a file can be at most 1 MB, a video has at most 10 tracks, and there is one track per language.
 
 ### Caption status
