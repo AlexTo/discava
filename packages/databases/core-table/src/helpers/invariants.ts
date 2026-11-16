@@ -16,8 +16,10 @@ import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
 import type { createUserEntity } from '../entities/user.js';
+import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
 import { computeProgress } from './progress.js';
+import { isValidPosition } from './video-position.js';
 
 // Rules the core table must keep that span several records, or several
 // writers (core-api, instructor-api, the event handlers), and that no schema
@@ -147,6 +149,15 @@ export interface TableSnapshot {
     | 'completedAt'
     | 'issuedAt'
   >[];
+  videoPositions: Pick<
+    Item<typeof createVideoPositionEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'lessonId'
+    | 'contentItemId'
+    | 'positionSeconds'
+    | 'versionId'
+  >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
 }
 
@@ -174,6 +185,7 @@ export const INVARIANTS = [
   'assignment-submission-shape',
   'certificate-shape',
   'certificate-has-completed-enrolment',
+  'video-position-valid',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1192,6 +1204,32 @@ export const checkCertificateHasCompletedEnrolment = (
   });
 };
 
+// 23 (video positions). A saved position is whole seconds from 0 to the cap,
+// for a named version of the video. Positions are deliberately not in
+// studentRecords (and so not in the targets and placement checks above): a
+// position isn't student activity, and deleting a video with watchers is
+// allowed, so a position may outlive its item (research R-6). Only its
+// shape is checked.
+export const checkVideoPositionValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.videoPositions.flatMap((position) => {
+    const { userId, courseId, lessonId, contentItemId } = position;
+    const record = { userId, courseId, lessonId, contentItemId };
+    const problems: string[] = [];
+    if (!isValidPosition(position.positionSeconds)) {
+      problems.push(
+        `position ${position.positionSeconds} is not whole seconds from 0 to 86,400`,
+      );
+    }
+    if (!position.versionId) {
+      problems.push('no versionId');
+    }
+    return problems.map((message) =>
+      violation('video-position-valid', record, message),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1216,6 +1254,7 @@ const CHECKS = [
   checkAssignmentSubmissionShape,
   checkCertificateShape,
   checkCertificateHasCompletedEnrolment,
+  checkVideoPositionValid,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1243,6 +1282,7 @@ export const loadTableSnapshot = async (
     quizSummaries,
     assignmentSubmissions,
     certificates,
+    videoPositions,
     users,
   ] = await Promise.all([
     entities.course.scan.go(all),
@@ -1257,6 +1297,7 @@ export const loadTableSnapshot = async (
     entities.quizSummary.scan.go(all),
     entities.assignmentSubmission.scan.go(all),
     entities.certificate.scan.go(all),
+    entities.videoPosition.scan.go(all),
     entities.user.scan.go(all),
   ]);
   return {
@@ -1272,6 +1313,7 @@ export const loadTableSnapshot = async (
     quizSummaries: quizSummaries.data,
     assignmentSubmissions: assignmentSubmissions.data,
     certificates: certificates.data,
+    videoPositions: videoPositions.data,
     users: users.data,
   };
 };

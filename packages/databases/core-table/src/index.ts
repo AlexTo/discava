@@ -69,4 +69,10 @@ export {
   syncUserProfile,
   userProfileFrom,
 } from './helpers/user.js';
+export {
+  isValidPosition,
+  resumeAt,
+  VIDEO_POSITION_MAX_SECONDS,
+  videoPositionToStore,
+} from './helpers/video-position.js';
 export { createCoreTableService } from './service.js';
