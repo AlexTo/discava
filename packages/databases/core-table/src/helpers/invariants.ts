@@ -72,6 +72,7 @@ export interface TableSnapshot {
     | 'publishedAt'
     | 'studentActivityCount'
     | 's3Key'
+    | 'previousS3Key'
     | 'transcodePending'
     | 'transcodePendingSince'
     | 'submissionNonce'
@@ -547,7 +548,7 @@ export const checkVideoTranscodeState = (
 
 // 24 (captions). A video's caption tracks are valid: at most 10, one per
 // language, exactly one default when there are any, each of the item's
-// current version (the version swap drops every other nonce in the same patch
+// played version (the version swap drops every other nonce in the same patch
 // that sets status: ready), and each file under that version's captions
 // folder.
 export const checkCaptionTracksValid = (
@@ -562,17 +563,18 @@ export const checkCaptionTracksValid = (
       courseId: item.courseId,
       contentItemId: item.contentItemId,
     };
+    // The version students play: the ready video's own manifest, else the
+    // previous one kept while a replacement transcodes (or after it failed),
+    // whose tracks stay with it until the swap.
+    const manifest = item.status === 'ready' ? item.s3Key : item.previousS3Key;
     // The nonce the manifest lives under (as server-utils' manifestNonce).
-    const nonce = item.s3Key?.match(
+    const nonce = manifest?.match(
       /\/content-items\/[^/]+\/([^/]+)\/[^/]+$/,
     )?.[1];
     // The item's folder: everything before the version's nonce.
     const folder =
-      item.s3Key && nonce
-        ? item.s3Key.slice(
-            0,
-            item.s3Key.length - `/${nonce}/master.m3u8`.length,
-          )
+      manifest && nonce
+        ? manifest.slice(0, manifest.length - `/${nonce}/master.m3u8`.length)
         : undefined;
     const problems: string[] = [];
     if (tracks.length > MAX_CAPTION_TRACKS) {

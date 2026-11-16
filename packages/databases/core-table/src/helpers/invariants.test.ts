@@ -1189,6 +1189,38 @@ describe('captions', () => {
       );
     });
 
+    it('accepts the old version’s tracks while a replacement transcodes', () => {
+      withTracks(track('en-US', { isDefault: true }));
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('still reports a track of neither version while one is replaced', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          nonce: 'older',
+          key: `${folder}/older/captions/t.vtt`,
+        }),
+      );
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version older, not the current n1/,
+      );
+    });
+
     it('reports a track whose nonce is not the current one', () => {
       withTracks(
         track('en-US', {
