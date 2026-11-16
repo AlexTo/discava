@@ -108,6 +108,46 @@ describe('studentsToRecalculate', () => {
     expect(enrolled).not.toHaveBeenCalled();
   });
 
+  // Captions are written to the content item, so their records pass the
+  // stream filter (every content item edit does) and are ignored here.
+  it('ignores caption writes: pending after a transcode, a track added, a failure', async () => {
+    enrolled.mockClear();
+    const track = {
+      trackId: 't1',
+      nonce: 'n1',
+      language: 'en-US',
+      label: 'English',
+      source: 'auto',
+      key: 'folder/n1/captions/t1.vtt',
+      isDefault: true,
+    };
+
+    const result = await studentsToRecalculate(
+      [
+        curriculumChange(
+          { captionsStatus: 'pending', captionsPendingSince: 'then' },
+          {
+            captionsStatus: 'ready',
+            captionTracks: [track],
+            captionTracksRev: 1,
+          },
+        ),
+        curriculumChange(
+          { captionsStatus: 'pending' },
+          { captionsStatus: 'failed' },
+        ),
+        curriculumChange(
+          { captionTracks: [track], captionTracksRev: 1 },
+          { captionTracks: [], captionTracksRev: 2 },
+        ),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+    expect(enrolled).not.toHaveBeenCalled();
+  });
+
   it('lists a course’s students once for a burst of changes, together with its completions', async () => {
     enrolled.mockClear();
 

@@ -7,6 +7,7 @@ import type {
   LocalScheduleRequest,
   LocalSignInRequest,
   LocalTranscodeJobRequest,
+  LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
 
 // The event runner's HTTP interface for the local service stand-ins described
@@ -29,6 +30,8 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  *   MediaConvert's CreateJob
  * - `DELETE /transcode-jobs/<jobId>`, as CancelJob (404 if there's no such
  *   job left to finish)
+ * - `POST /transcription-jobs` (LocalTranscriptionJobRequest) -> 202, as
+ *   Transcribe's StartTranscriptionJob (the job finishes in the background)
  * - `POST /schedules/transcode-cleanup` (LocalScheduleRequest), as a one-off
  *   Scheduler schedule targeting transcode-cleanup
  * - `POST /triggers/pre-token-generation` (LocalSignInRequest), as Cognito
@@ -39,6 +42,7 @@ export const startEventRunnerServer = ({
   port,
   submitTranscodeJob,
   cancelTranscodeJob,
+  submitTranscriptionJob,
   scheduleTranscodeCleanup,
   runPreTokenGeneration,
   log,
@@ -46,6 +50,7 @@ export const startEventRunnerServer = ({
   port: number;
   submitTranscodeJob: (request: LocalTranscodeJobRequest) => string;
   cancelTranscodeJob: (jobId: string) => boolean;
+  submitTranscriptionJob: (request: LocalTranscriptionJobRequest) => void;
   scheduleTranscodeCleanup: (request: LocalScheduleRequest) => void;
   runPreTokenGeneration: (request: LocalSignInRequest) => Promise<void>;
   log: (message: string) => void;
@@ -74,6 +79,23 @@ export const startEventRunnerServer = ({
         return cancelTranscodeJob(jobId)
           ? send(204)
           : send(404, { message: 'No such job' });
+      }
+      if (request.method === 'POST' && path === '/transcription-jobs') {
+        const job = (await readJson(request)) as LocalTranscriptionJobRequest;
+        if (
+          !job.jobName ||
+          !job.outputBucket ||
+          !job.outputKey?.endsWith('/') ||
+          typeof job.tags !== 'object' ||
+          job.tags === null
+        ) {
+          return send(400, {
+            message: 'jobName, tags, outputBucket and outputKey (…/) needed',
+          });
+        }
+        submitTranscriptionJob(job);
+        log(`transcription job ${job.jobName} queued`);
+        return send(202);
       }
       if (
         request.method === 'POST' &&

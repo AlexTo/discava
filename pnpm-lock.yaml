@@ -57,6 +57,9 @@ catalogs:
     '@aws-sdk/client-sts':
       specifier: 3.1164.0
       version: 3.1164.0
+    '@aws-sdk/client-transcribe':
+      specifier: 3.1164.0
+      version: 3.1164.0
     '@aws-sdk/cloudfront-signer':
       specifier: 3.1155.0
       version: 3.1155.0
@@ -1035,9 +1038,15 @@ importers:
       '@aws-sdk/client-scheduler':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@aws-sdk/client-transcribe':
+        specifier: 'catalog:'
+        version: 3.1164.0
       '@discava/common-server-utils':
         specifier: workspace:*
         version: link:../common/server-utils
+      '@discava/common-web-utils':
+        specifier: workspace:*
+        version: link:../common/web-utils
       '@discava/core-table':
         specifier: workspace:*
         version: link:../databases/core-table
@@ -1627,6 +1636,10 @@ packages:
 
   '@aws-sdk/client-sts@3.1164.0':
     resolution: {integrity: sha512-JIebSxHMlRBIbGLSaARtS4RMR5hVSkswgOkySa6MeztmVKyKAWOP2lXw5k4d3vdsh3UqQTm5uYwWY2GoWSIi6Q==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-transcribe@3.1164.0':
+    resolution: {integrity: sha512-xzZ/9OOR/iMcDo5xUX/RuDzadqatb1v6+E/VSY8k02MDXZR9SndDlDz4qy9tBOcg7ROCTb0qp1k8K0lVrc5aoA==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/cloudfront-signer@3.1155.0':
@@ -10014,6 +10027,17 @@ snapshots:
       '@smithy/fetch-http-handler': 5.8.0
       '@smithy/node-http-handler': 4.14.2
       '@smithy/types': 4.19.0
+      tslib: 2.8.1
+
+  '@aws-sdk/client-transcribe@3.1164.0':
+    dependencies:
+      '@aws-sdk/core': 3.981.0
+      '@aws-sdk/credential-provider-node': 3.972.96
+      '@aws-sdk/types': 3.975.1
+      '@smithy/core': 3.40.0
+      '@smithy/fetch-http-handler': 5.8.1
+      '@smithy/node-http-handler': 4.14.2
+      '@smithy/types': 4.20.0
       tslib: 2.8.1
 
   '@aws-sdk/cloudfront-signer@3.1155.0':

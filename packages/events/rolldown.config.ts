@@ -29,6 +29,17 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
+    input: 'src/media/transcribe-complete.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/transcribe-complete/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
     input: 'src/media/transcode-cleanup.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/transcode-cleanup/index.js',

@@ -8,6 +8,9 @@ import {
   captionKey,
   captionUploadKey,
   isWebVtt,
+  transcribeInputKey,
+  transcribeJobName,
+  transcribeOutputPrefix,
 } from './captions';
 
 const ref = {
@@ -100,5 +103,28 @@ describe('isWebVtt', () => {
 
   it('rejects an empty file', () => {
     expect(isWebVtt(new Uint8Array())).toBe(false);
+  });
+});
+
+describe('Transcribe locations', () => {
+  it('names the job per item and version', () => {
+    expect(transcribeJobName('i1', 'n1')).toBe('captions-i1-n1');
+  });
+
+  it('reads the audio file from the upload bucket by nonce', () => {
+    expect(transcribeInputKey('n1')).toBe('transcribe-input/n1.mp4');
+  });
+
+  it('writes outside the version folder the signed cookies authorise', () => {
+    const prefix = transcribeOutputPrefix(ref, 'n1');
+    expect(prefix).toBe(
+      'courses/c1/modules/m1/lessons/l1/content-items/i1/transcribe-output/n1/',
+    );
+    expect(prefix).not.toContain('/n1/captions/');
+    expect(
+      prefix.startsWith(
+        'courses/c1/modules/m1/lessons/l1/content-items/i1/n1/',
+      ),
+    ).toBe(false);
   });
 });

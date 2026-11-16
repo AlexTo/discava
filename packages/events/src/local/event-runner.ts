@@ -6,6 +6,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { Logger } from '@aws-lambda-powertools/logger';
 import { DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
 import { S3Client } from '@aws-sdk/client-s3';
@@ -25,11 +26,13 @@ import type { Context, DynamoDBRecord } from 'aws-lambda';
 import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
+import { applyTranscribeOutcome } from '../media/transcribe-outcome.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { handler as searchIndexing } from '../search/index-content.js';
 import { createBatcher, pollStream } from './dynamodb-stream.js';
 import { startEventRunnerServer } from './event-runner-server.js';
 import { createTranscoder, type Docker } from './transcoder.js';
+import { createTranscriber } from './transcriber.js';
 import {
   preTokenGenerationEvent,
   transcodeCompletionEvent,
@@ -51,6 +54,10 @@ import {
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
+// - a transcription job (POST /transcription-jobs; the transcriber stands in
+//   for Transcribe, writing a placeholder WebVTT) finishing ->
+//   applyTranscribeOutcome, called directly as transcribe-complete does after
+//   it looks the job up
 // - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
 //   payload, the schedule's delaySeconds (default LOCAL_EVENT_RUNNER.cleanupDelaySeconds)
 //   after it's scheduled
@@ -60,6 +67,8 @@ import {
 if (process.env.LOCAL_DEV !== 'true') {
   throw new Error('The event runner is for local dev only (LOCAL_DEV=true)');
 }
+
+const outcomeLogger = new Logger({ serviceName: 'TranscribeComplete' });
 
 const log = (message: string, details?: unknown) =>
   console.log(
@@ -167,10 +176,17 @@ const transcoder = createTranscoder({
   log,
 });
 
+const transcriber = createTranscriber({
+  s3: new S3Client(s3ClientConfig()),
+  onFinished: (outcome) => applyTranscribeOutcome(outcomeLogger, outcome),
+  log,
+});
+
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
+  submitTranscriptionJob: (request) => transcriber.submit(request),
   scheduleTranscodeCleanup: ({ payload, delaySeconds }) => {
     const delay = delaySeconds ?? LOCAL_EVENT_RUNNER.cleanupDelaySeconds;
     log(
@@ -195,7 +211,7 @@ const server = startEventRunnerServer({
   log,
 });
 log(
-  `transcode jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
+  `transcode and transcription jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
 );
 
 const tableName = await resolveTableName();

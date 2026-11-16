@@ -32,6 +32,30 @@ export const captionUploadKey = (ref: ItemRef, uploadId: string) =>
   `${itemFolder(ref)}/captions/${uploadId}.vtt`;
 
 /**
+ * The Transcribe job for a video version's automatic captions. Unique per
+ * version, so a replacement never collides with the old version's job.
+ */
+export const transcribeJobName = (contentItemId: string, nonce: string) =>
+  `captions-${contentItemId}-${nonce}`;
+
+/**
+ * The audio-only file the transcode writes for Transcribe, in the upload
+ * bucket (private, expiring), where Transcribe reads it.
+ */
+export const transcribeInputKey = (nonce: string) =>
+  `transcribe-input/${nonce}.mp4`;
+
+/**
+ * Where Transcribe writes its outputs for a version, in the lesson media
+ * bucket, ending in `/`. Outside `<nonce>/*` on purpose: the signed cookies
+ * authorise that folder, and students must not be able to fetch the JSON
+ * transcript. transcribe-complete copies the WebVTT into the version's
+ * captions folder and deletes what is left here.
+ */
+export const transcribeOutputPrefix = (ref: ItemRef, nonce: string) =>
+  `${itemFolder(ref)}/transcribe-output/${nonce}/`;
+
+/**
  * Whether bytes are a WebVTT file we accept: an optional UTF-8 byte order
  * mark, then `WEBVTT` followed by a space, tab or newline; valid UTF-8 with no
  * NUL bytes; at least one cue timing line (`-->`).

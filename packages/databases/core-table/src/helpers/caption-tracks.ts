@@ -167,12 +167,11 @@ export const reportedCaptionsStatus = (
 };
 
 // The shape of ElectroDB's where() callback arguments, as much as this needs.
-interface ConditionOps<Expression> {
-  eq(attribute: unknown, value: unknown): Expression;
-  and(...expressions: Expression[]): Expression;
-  or(...expressions: Expression[]): Expression;
-  notExists(attribute: unknown): Expression;
-  contains(attribute: unknown, value: unknown): Expression;
+// Its operations build condition strings, which are combined as text.
+interface ConditionOps {
+  eq(attribute: unknown, value: unknown): string;
+  notExists(attribute: unknown): string;
+  contains(attribute: unknown, value: unknown): string;
 }
 interface ConditionAttributes {
   captionTracksRev: unknown;
@@ -189,13 +188,13 @@ interface ConditionAttributes {
  */
 export const captionWriteCondition =
   (rev: number, nonce: string) =>
-  <Expression>(attr: ConditionAttributes, op: ConditionOps<Expression>) => {
+  (attr: ConditionAttributes, op: ConditionOps): string => {
     const revision = op.eq(attr.captionTracksRev, rev);
-    return op.and(
+    return [
       rev === 0
-        ? op.or(op.notExists(attr.captionTracksRev), revision)
+        ? `(${op.notExists(attr.captionTracksRev)} OR ${revision})`
         : revision,
       op.eq(attr.status, 'ready'),
       op.contains(attr.s3Key, `/${nonce}/`),
-    );
+    ].join(' AND ');
   };

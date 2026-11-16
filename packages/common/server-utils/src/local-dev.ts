@@ -73,7 +73,7 @@ export const localObjectUrl = (runtimeConfigKey: string, key: string): string =>
 
 /**
  * Local dev's event runner (packages/events, `src/local/event-runner.ts`),
- * which also stands in for MediaConvert and EventBridge Scheduler (#137):
+ * which also stands in for MediaConvert, Transcribe and EventBridge Scheduler (#137):
  * instructor-api and the event handlers call it instead of those services
  * in local dev.
  */
@@ -93,6 +93,17 @@ export interface LocalTranscodeJobRequest {
   outputPrefix: string;
   /** As MediaConvert's UserMetadata, carried into the completion event. */
   userMetadata: Record<string, string>;
+}
+
+/** What startCaptionJob asks the event runner to transcribe, in local dev. */
+export interface LocalTranscriptionJobRequest {
+  jobName: string;
+  /** As the Transcribe job's tags: the ids transcribe-complete looks up. */
+  tags: Record<string, string>;
+  /** Where the WebVTT goes: the lesson media bucket's local stand-in. */
+  outputBucket: string;
+  /** Ending in `/`; the file is `<outputKey><jobName>.vtt`. */
+  outputKey: string;
 }
 
 /** A transcode cleanup to run later, in local dev, with Scheduler's payload. */

@@ -267,6 +267,23 @@ describe('captionWriteCondition', () => {
     expect(condition).toContain('contains(s3Key, /abc/)');
   });
 
+  // ElectroDB's where() operations return condition strings and have no
+  // and/or: the condition is combined as text.
+  it('builds one condition string from ElectroDB-style operations only', () => {
+    const attr = { captionTracksRev: 'r', status: 's', s3Key: 'k' };
+    const op = {
+      eq: (a: string, v: unknown) => `${a} = ${v}`,
+      notExists: (a: string) => `attribute_not_exists(${a})`,
+      contains: (a: string, v: unknown) => `contains(${a}, ${v})`,
+    };
+    expect(captionWriteCondition(3, 'abc')(attr, op)).toBe(
+      'r = 3 AND s = ready AND contains(k, /abc/)',
+    );
+    expect(captionWriteCondition(0, 'abc')(attr, op)).toBe(
+      '(attribute_not_exists(r) OR r = 0) AND s = ready AND contains(k, /abc/)',
+    );
+  });
+
   it('treats an absent revision as 0', () => {
     expect(render(0, 'abc')).toContain('notExists(captionTracksRev)');
     expect(render(3, 'abc')).not.toContain('notExists');

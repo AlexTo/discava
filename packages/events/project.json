@@ -21,6 +21,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/media/transcribe-complete.ts",
+        "name": "transcribe-complete",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/media/transcode-cleanup.ts",
         "name": "transcode-cleanup",
         "iac": "cdk"
