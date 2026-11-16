@@ -55,7 +55,7 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 - Biome (not ESLint or Prettier) formats and lints.
 - Code that isn't an entity or a package's setup goes in a `helpers/` folder, one file per entity or topic. No catch-all `utils.ts`.
 - Buttons carry text labels only: no arrow icons. Icon-only controls and breadcrumb separators are fine.
-- A browser-tested change saves screenshots of its key steps (and any failure) to the git-ignored `tmp/screenshots/pr-<number>/`.
+- A browser-tested change saves screenshots of its key steps (and any failure) to the git-ignored `tmp/screenshots/pr-<number>/`. A change to what a user sees also takes them in its e2e scenario with `screenshot()`, which PR CI posts on the pull request (the `UI Screenshots` check enforces it).
 - A change to English docs is translated locally and committed, or the PR notes that translations are pending.
 - Runtime code shared by backend Lambdas goes in `common-server-utils`, and non-UI code shared by portals goes in `common-web-utils`. Code only one consumer uses stays beside it.
 
@@ -70,7 +70,7 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 - Run `pnpm build` (or `pnpm nx affected --target build`) before pushing. CI's PR checks run lint, test and build on what changed.
 - Follow CONTRIBUTING.md for the PR process. [CLAUDE.md](../../CLAUDE.md) holds the day-to-day commands and architecture notes; this constitution holds only the rules a plan must not break.
 - Plans MUST pass the Constitution Check against the principles above, and any violation MUST be recorded in the plan's Complexity Tracking with a justification.
-- Features are implemented by autonomous agents, each on its own branch and pull request, so a task list MUST NOT require a local stack, Docker or `pnpm dev`. The agent runs unit and component tests, lint, typecheck, `build` and `synth` itself. It writes the e2e and concurrency tests, but pull request CI runs them. A task that needs a running local stack or people (manual checks, timing, screenshots) MUST be marked `(human)` in `tasks.md` and is done by a reviewer before merge.
+- Features are implemented by autonomous agents, each on its own branch and pull request, so a task list MUST NOT require a local stack, Docker or `pnpm dev`. The agent runs unit and component tests, lint, typecheck, `build` and `synth` itself. It writes the e2e and concurrency tests, but pull request CI runs them. A task that needs a running local stack or people (manual checks, timing, screen readers) MUST be marked `(human)` in `tasks.md` and is done by a reviewer before merge.
 - Pull request CI is the gate. An agent MUST NOT merge, push to `main`, edit CI workflows, or weaken a test to make CI pass.
 
 ## Governance

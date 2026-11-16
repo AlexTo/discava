@@ -36,6 +36,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "ui-screenshots": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {

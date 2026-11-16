@@ -1,0 +1,47 @@
+name: UI Screenshots
+
+# A pull request that changes portal or shared UI source must add a
+# `screenshot(` call to an e2e scenario, so PR Checks' `E2E screenshots`
+# comment shows the reviewer the change. A maintainer waives it with the
+# `no-ui-screenshots` label. The rules are in
+# packages/common/scripts/src/ui-screenshots/.
+#
+# Its own workflow, not a PR Checks job, so applying or removing the label
+# re-runs only this check, not the whole e2e suite. Runs the default
+# branch's code and only reads the pull request's diff from the API, so it
+# never runs anything the pull request wrote.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+concurrency:
+  group: ui-screenshots-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  ui-screenshots:
+    name: UI changes have screenshots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Check the pull request
+        run: pnpm nx run @discava/common-scripts:ui-screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
