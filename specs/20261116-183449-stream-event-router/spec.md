@@ -10,6 +10,16 @@
 
 **Parent issue**: none
 
+## Clarifications
+
+### Session 2026-11-16
+
+- Q: When a course record is permanently removed, what version does the search index use for the removal? → A: The removed record's last-updated time plus one millisecond. It comes from the record itself, so it is the same on every delivery and retry, and it beats every earlier edit. No second clock is involved.
+- Q: How does an operator send work from a failure destination back to its handler once the cause is fixed? → A: A documented manual step using the queue service's own redrive, with no new tool. A test shows that a redriven change gives the same result as its first delivery. A script or automatic redrive can be added later if needed.
+- Q: How does an operator find out a feature's failure destination has work in it? → A: One alarm per failure destination that enters the alarm state whenever the destination holds anything, visible in the console, with no notification target. A notification channel can be added later.
+- Q: If a course change arrives with no usable last-updated time, does search apply it or refuse it? → A: Refuse it. The handler fails that change, so after its retries it ends in the search failure destination, where the alarm shows it and it can be redriven once the record is fixed.
+- Q: Does this spec's pull request also edit the notifications (#331) and dashboard (#332) specs? → A: No. This PR touches only its own spec folder (and the constitution and contributor-doc wording in FR-024). #331 and #332 are each updated afterwards on their own PRs, and this PR's description lists what each must change.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The "users" of this feature are the contributors and agents who build features that react to changes in the core table, and the operators who run the deployed stage. Learners, instructors and admins should see no change at all, other than staying correct when changes arrive in an unexpected order. Today two features consume the core table's change stream directly (progress recalculation and search indexing). That is the most a stream shard should have, and two open specs (notifications #331, instructor dashboard #332) each want another. This feature puts one router in front of the stream so any number of features can react to changes, and moves the two existing consumers onto it first.
@@ -109,7 +119,9 @@ A contributor running the local stack sees the same routing: a change to the loc
 - A poison message (a change a handler can never process): ends in that feature's failure destination, and does not retry forever or block later changes.
 - A change delivered twice (at-least-once delivery): every handler must be safe to run twice with the same input.
 - A change delivered much later than it happened: handlers that write state from the change itself (search) must not overwrite newer state with it.
-- A record with no `updatedAt` (or an older shape): search must handle it explicitly rather than treat it as the newest.
+- A record with no `updatedAt` (or one that isn't a valid time): search refuses it (FR-015), so it lands in the failure destination and trips the alarm rather than being applied unchecked or dropped.
+- Two writes to one course within the same millisecond (equal versions): the second is not newer than the first, so it is ignored by the version check. Planning decides whether the handler needs more than the last-updated time to avoid losing the second.
+- A course removed and an older edit for it delivered afterwards: the removal's version (last-updated time plus one millisecond) is higher, so the edit is ignored and the course stays out.
 - Local router and deployed router disagree on a filter: prevented by one shared registration, checked in tests.
 
 ## Requirements *(mandatory)*
@@ -136,16 +148,16 @@ A contributor running the local stack sees the same routing: a change to the loc
 
 - **FR-011**: Every handler MUST be safe to run more than once with the same change and with changes in any order. The router does not guarantee per-record order or exactly-once delivery.
 - **FR-012**: Search indexing MUST NOT let an older change overwrite a newer one. It MUST compare each change's version (taken from the course's own last-updated time) with what the index already holds and ignore a change that is not newer, including for removals.
-- **FR-013**: A removal in the search index MUST be recorded as versioned too, so that a later-arriving older change cannot bring a removed course back.
+- **FR-013**: A removal in the search index MUST be recorded as versioned too, so that a later-arriving older change cannot bring a removed course back. The removal's version is the removed record's last-updated time plus one millisecond, so it is derived from the record alone and is identical on every delivery.
 - **FR-014**: Progress recalculation MUST continue to recompute from current data on every run, and a test MUST show that duplicate and reordered deliveries give the same result.
-- **FR-015**: A course whose change carries no usable version MUST be handled by an explicit, documented rule, not silently treated as newest.
+- **FR-015**: A course change that carries no usable version (no last-updated time, or one that isn't a valid time) MUST be refused: the search handler fails that change, so after its retries it ends in the search failure destination. It MUST NOT be applied without a version check and MUST NOT be skipped silently. A test covers it.
 
 **Failures**
 
 - **FR-016**: A change that still fails after a feature's retries MUST be set aside in that feature's own failure destination, with enough information to identify the change and the handler, and MUST NOT block later changes.
-- **FR-017**: Failed work MUST be replayable to the same handler after the cause is fixed. Replay MUST be safe, by FR-011.
+- **FR-017**: Failed work MUST be replayable to the same handler after the cause is fixed, by a documented manual redrive from the feature's failure destination using the queue service's own redrive. No replay tool is built in this feature. Replay MUST be safe, by FR-011, and a test MUST show that a redriven change gives the same result as its first delivery.
 - **FR-018**: Failure destinations MUST keep the retention and encryption settings the existing ones have, unless the plan justifies a change.
-- **FR-019**: Operators MUST be able to see, per feature, how many changes are waiting and how many have failed.
+- **FR-019**: Each feature's failure destination MUST have one alarm that enters the alarm state whenever the destination holds any work, visible in the console. No notification target is attached in this feature. Operators can also see, per feature, how many changes are waiting through the queue's built-in depth and age metrics, which the contributor docs list per feature. The alarm is part of the per-feature pattern, so each new feature gets one.
 
 **Local development**
 
@@ -157,7 +169,7 @@ A contributor running the local stack sees the same routing: a change to the loc
 
 - **FR-023**: The feature MUST document the per-feature pattern (registration, filter, queue, failure destination, handler, ordering rules, local behaviour) in the repository's contributor documentation, in enough detail that notifications (#331) and the dashboard (#332) can adopt it without asking.
 - **FR-024**: The contributor documentation and the project constitution's stream-consumer wording (which today names progress and search) MUST be updated to describe routing through the router.
-- **FR-025**: The specs for notifications (#331) and the instructor dashboard (#332) MUST be updated to adopt the router in place of a direct stream consumer, once this spec is approved.
+- **FR-025**: The notifications (#331) and instructor dashboard (#332) specs MUST adopt the router in place of a direct stream consumer. Each is updated on its own pull request after this spec is approved, not in this one. This pull request's description MUST list what each must change: the registration, filter, queue, failure destination and alarm it takes from the pattern, and, for #332, the ordering and duplicate-delivery handling its aggregates need.
 
 ### Key Entities
 
@@ -187,9 +199,9 @@ A contributor running the local stack sees the same routing: a change to the loc
 - The stream's own ordering guarantee is what the handlers rely on today. Moving behind queues removes it, and this feature accepts that and makes handlers order-safe rather than paying for ordered queues.
 - Progress recalculation already recomputes from current data on every run, as its existing infrastructure comment states. This is to be confirmed against the handler in planning.
 - Search indexing today builds its document from the stream record and writes it without comparing versions, so it is the one handler that must change.
-- Course records carry a last-updated time that moves forward on every write that changes what search shows, including unpublishing. Planning confirms this and adds it where it is missing.
+- Course records carry a last-updated time that moves forward on every write that changes what search shows, including unpublishing. The course entity already sets it on every write (it watches all attributes), so no change to the record is expected. Planning confirms that no write path bypasses the entity.
 - One stream consumer feeding a shared event bus, with per-feature rules and queues, is the intended shape. The exact mechanism for the single consumer (a managed pipe or a small router function) is decided in research, based on local-dev fit, filtering power and cost.
-- The notifications (#331) and dashboard (#332) specs are in review. They are updated to use the router after this spec is approved, and are not changed here beyond FR-025.
+- The notifications (#331) and dashboard (#332) specs are in review. They are updated to use the router on their own pull requests after this spec is approved, and are not changed in this one (FR-025).
 - A few seconds of added delay between a table change and a handler running is acceptable for every current and planned consumer.
 - At current scale the cost of the bus and queues is negligible. Planning records the estimate.
 - Out of scope: changing what progress or search compute, moving non-stream events (media transcodes, identity triggers) onto the router, ordered (first-in-first-out) delivery, and any consumer other than progress and search in this change.
