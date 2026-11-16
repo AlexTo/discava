@@ -92,6 +92,8 @@ test('an instructor uploads a video, and a student watches it', async ({
       })
       .toBeGreaterThan(0);
     await expect(bar('Video one')).toHaveAttribute('data-visible', 'true');
+    // The bar is at the bottom of the player: bring it into the picture.
+    await player('Video one').scrollIntoViewIfNeeded();
     await screenshot(student, 'control bar on a paused video');
 
     await expectToPlay(video);
@@ -134,8 +136,16 @@ test('an instructor uploads a video, and a student watches it', async ({
     ).toHaveAttribute('aria-valuetext', '85%');
     await screenshot(student, 'volume lowered to 85 percent');
 
-    // Shortcuts: K pauses, 5 jumps to half way, the right arrow seeks on, and
-    // < and > step the speed (1.5x to 1.25x, then up to 1.75x).
+    // Shortcuts: K plays and pauses, 5 jumps to half way, the right arrow
+    // seeks on, and < and > step the speed (1.5x to 1.25x, then up to 1.75x).
+    // The video has ended by now (a K on an ended video plays it again), so
+    // go back to the start and check K starts it and then stops it.
+    await player('Video one').press('0');
+    await expect.poll(async () => (await state('Video one')).time).toBe(0);
+    await player('Video one').press('k');
+    await expect
+      .poll(async () => (await state('Video one')).paused)
+      .toBe(false);
     await player('Video one').press('k');
     await expect.poll(async () => (await state('Video one')).paused).toBe(true);
     await expect(bar('Video one')).toHaveAttribute('data-visible', 'true');
@@ -194,6 +204,7 @@ test('an instructor uploads a video, and a student watches it', async ({
         name: 'Playback speed',
       }),
     ).toHaveText('1.75x');
+    await player('Video two').scrollIntoViewIfNeeded();
     await screenshot(student, 'second video with the saved speed and volume');
 
     // Reduced motion: the bar shows while paused, hides once activity stops
@@ -206,6 +217,7 @@ test('an instructor uploads a video, and a student watches it', async ({
     await student.emulateMedia({ reducedMotion: 'reduce' });
     expect(await transition()).toBe('none');
     await expect(bar('Video two')).toHaveAttribute('data-visible', 'true');
+    await player('Video two').scrollIntoViewIfNeeded();
     await screenshot(student, 'reduced motion, bar on a paused video');
     // Slow enough to outlast the 3 seconds before the bar hides, and with
     // focus out of the player, which keeps the bar on.
