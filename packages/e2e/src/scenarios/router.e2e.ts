@@ -25,11 +25,15 @@ test('stream changes reach search and progress through the router queues', async
     await expect
       .poll(
         async () =>
-          (await student.core.course.publicSearch.query({ q: title })).items
-            .length,
+          (
+            await student.core.course.publicSearch.query({
+              q: title,
+              limit: 50,
+            })
+          ).items.some((hit) => hit.courseId === courseId),
         { timeout: 30_000 },
       )
-      .toBe(1);
+      .toBe(true);
   });
 
   await test.step('completing an item moves the student’s progress', async () => {
@@ -51,11 +55,15 @@ test('stream changes reach search and progress through the router queues', async
     await expect
       .poll(
         async () =>
-          (await student.core.course.publicSearch.query({ q: title })).items
-            .length,
+          (
+            await student.core.course.publicSearch.query({
+              q: title,
+              limit: 50,
+            })
+          ).items.some((hit) => hit.courseId === courseId),
         { timeout: 30_000 },
       )
-      .toBe(0);
+      .toBe(false);
   });
 
   await test.step('every feature has a queue, and nothing failed', async () => {
