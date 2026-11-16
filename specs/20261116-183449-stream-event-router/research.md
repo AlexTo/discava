@@ -1,0 +1,118 @@
+# Research: Core Table Stream Event Router
+
+Decisions for the three questions the planning input named, plus the smaller ones they forced. Each says what was verified and what was not. Sources are AWS and project documentation read during planning, and the repository as of `main` (`eb839d9`).
+
+## R-1: One stream consumer: a router Lambda, not a Pipe plus event bus
+
+**Decision**: A single router Lambda is the only consumer of the core table's stream. It applies each feature's filter and sends the matching records straight to that feature's SQS queue. There is no EventBridge Pipe and no event bus.
+
+**Rationale**:
+
+- A Pipe's filter can't match the stream record's `eventName` (INSERT, MODIFY, REMOVE): AWS lists `eventName` among the metadata fields that can't be filtered in a Pipe. Today's filters (`PROGRESS_STREAM_FILTERS`, `SEARCH_STREAM_FILTERS`) pair `eventName` with the image and entity, so a Pipe would push that half of every filter to bus rules. The Lambda reuses the existing filter helpers (`matchesProgressStreamFilters`, `matchesSearchStreamFilters`) unchanged.
+- The Pipe's L2 construct is an alpha package (`@aws-cdk/aws-pipes-alpha`), whose API can change in any release. The alternative is the raw `CfnPipe` L1. The Lambda needs neither.
+- Bus rules would match DynamoDB-JSON shapes (`{"S": "course"}`), and per-entity routing can't happen inside a Pipe (one filter set per pipe). That is a second place for the filters to live, drifting from the local runner.
+- Pipe to bus to SQS adds two billed hops and loses ordering at each. The direct path loses it once, at SQS.
+- Local dev: the router is plain TypeScript that takes a batch and a queue client. The local runner runs the very same function, so a wrong filter fails locally (FR-020, FR-022). A Pipe has no local equivalent, so the local router would be a second implementation.
+- The stream-reader guidance (at most two readers per shard) is met either way, since each is one consumer. AWS documents no exemption for a Pipe, so a Pipe isn't a way around it.
+
+**Costs accepted**: the Lambda is code we own, with its own retries, failure handling and size guard (R-4). At this scale the Lambda path is cents per month, with the fewest billable parts (invocations and SQS requests).
+
+**Alternatives considered**:
+
+- *Pipe to bus to per-feature rules and queues.* Rejected for the reasons above. The deciding ones are the `eventName` limit, the alpha construct and the second filter implementation. It remains the better choice if many unrelated teams must subscribe to table changes without touching the router, which isn't the case here.
+- *A Pipe straight to one SQS queue, with the router consuming that queue.* Rejected: it adds a hop and a queue to avoid writing a small Lambda.
+- *Each feature keeps its own stream mapping.* Rejected: the problem this feature exists to solve.
+
+**Not verified**: whether a Pipe counts as one of the two readers on a shard (assumed yes, by analogy with an event source mapping); the exact envelope a Pipe produces on a bus; event-pattern size and rule quotas. None of them changes the decision.
+
+## R-2: Local queues: ElasticMQ behind a queue interface, conditional on a spike; in-process fallback
+
+**Decision**: The local stand-in for SQS is ElasticMQ in Docker, started like S3Mock (`start-container.ts` plus an Nx target, settings in `common-server-utils/local-dev`). The router and the local feature runners talk to it through one small `QueueClient` interface, so an in-process queue can replace it without touching handlers. The first implementation task is a spike (a human task, since it needs Docker) that confirms the three open points below. If any fails, the in-process queue becomes the stand-in and ElasticMQ is dropped.
+
+**Rationale**:
+
+- It speaks the SQS API, so duplicate delivery, the visibility timeout and moving a message to a dead-letter queue after `max-receive-count` are real behaviours, not our approximation (documented in its README: the HOCON `dead-letters-queue { name, max-receive-count }` block, `default-visibility-timeout`, FIFO, retention, in-memory by default).
+- Multi-architecture images (amd64 and arm64) are published by CI (README).
+- Queues and their failure destinations can be created on startup from a mounted config file, so `pnpm dev` needs no setup step.
+- The repo already runs Docker stand-ins (DynamoDB local, S3Mock, OpenSearch, the OIDC server), so this fits the existing pattern.
+
+**Alternatives considered**:
+
+- *In-process queues in the event runner.* Kept as the fallback. It needs no Docker and the batching and failure logic is ours, but duplicate delivery, visibility and dead-lettering exist only as far as we code them, so the tests that matter would prove our simulation.
+- *LocalStack.* Rejected: it brings a large multi-service container for one service, and the project already avoids that (S3Mock instead).
+- *`softwaremill/elasticmq-native`.* Rejected: the Docker Hub page calls it "a smaller, faster & experimental version of the docker image".
+
+**Open points the spike must settle** (the documentation read did not confirm them):
+
+1. *SDK protocol.* The README documents the SQS query (REST) protocol and mentions no SDK v3 or JSON-protocol compatibility. Newer AWS SDK v3 clients default to the JSON protocol. A release note (v1.6.16) mentions JSON-protocol error handling, so support may exist. The spike runs the repo's SQS client against the container.
+2. *Version pinning.* The Docker Hub page shows only a `latest` tag, with conflicting update dates, and the GitHub releases page lists `v2.0.0-rc1` (a release candidate) as latest and `v1.7.1` as the last stable. No tag scheme is documented. The spike picks a pinned tag or digest, at least two weeks old, as the repo does for its other images (for example `mwader/static-ffmpeg:9.0.2`).
+3. *Redrive.* `StartMessageMoveTask` is not documented in the README (a release note mentions `ListMessageMoveTasks`). So local redrive is a small runner endpoint that reads the failure queue and re-sends (contract: `contracts/local-runner-routes.md`), not the queue service's own redrive. Deployed redrive is the queue service's (FR-017).
+
+**Local behaviour kept**: batching (100 records or 5 s) is done by the local feature runner polling its queue, so burst collapsing (FR-008) holds locally.
+
+## R-3: Search order safety: re-read the course, not external versioning
+
+**Decision**: On each batch the search handler takes the distinct course ids from the changes, reads each course's current state from the core table by key, and indexes the course if it is published or removes it if it isn't (or no longer exists). It uses no version parameters. This replaces the spec's first design (external versioning, with removals at the last-updated time plus one millisecond).
+
+**Why the first design was dropped**:
+
+- The search collection is an OpenSearch Serverless `SEARCH` collection (`packages/common/constructs/src/core/opensearch.ts`). AWS's supported-operations page for Serverless lists the index, delete and bulk endpoints but says nothing about the `version` or `version_type` parameters, and no unsupported-parameters list was found. Support is unconfirmed either way, and the local OpenSearch container would support them, so local tests could pass while a deployed collection rejects the call.
+- On upstream OpenSearch a delete's version is kept only for `index.gc_deletes` (60 seconds by default). After that an older indexing call can bring a deleted course back. Whether Serverless lets us set that is not documented. So "removal at updatedAt plus 1 ms" would protect for a minute at best.
+
+**Rationale for re-reading**:
+
+- It is the same property progress recalculation already has: the change says which course to look at, and the answer comes from current data, so late, duplicate and reordered deliveries converge.
+- It needs only a keyed `GetItem` per course, through `@discava/core-table` (constitution V). The handler gains core-table read access. Today it needs none ("Everything it indexes is on the stream record itself").
+- It costs one read per distinct course per batch, fewer reads than records in a burst.
+- Course records already keep `updatedAt` current (the entity sets it on every write), but this design no longer depends on it.
+
+**Residual risk, accepted** (spec FR-012): handler A reads a course, the course changes, handler B reads the new state and writes it, then A writes its older read. It needs two handlers on the same course within seconds, with A stalling across all of B. The result is a stale document until the course next changes. The existing re-index tool (`search-reindex`, #273) repairs it. The window is narrowed by capping the search mapping's concurrency (R-5).
+
+**Alternatives considered**:
+
+- *External versioning.* Rejected above. It may be added later as defence in depth if a spike on a real Serverless collection shows it works (it relates to #270, the index-change work), but nothing here depends on it.
+- *FIFO queue with the course id as message group.* Rejected: it keeps per-course order, but it forces a queue fed straight from the stream per feature, and the router sends records, so it would work only for one feature. It also doesn't remove the need to be idempotent.
+- *Write the document into a version-checked record in the core table first.* Rejected: a second write path and a new entity for a rare race.
+
+**Progress recalculation**: confirmed order-insensitive. `progressRecalculation` derives the students to recalculate from the records (a completion's student, or everyone enrolled in a course whose visible curriculum changed), then `recalculateStudent` recomputes from the table. Its comment says "Every run recomputes from scratch, so a duplicate stream record or a burst of edits only produces the same result again." One detail to test: `changesWhatStudentsSee` compares a record's old and new image, which are inside one record, so reordering between records can't affect it.
+
+## R-4: Router behaviour, failures and message size
+
+**Decision**:
+
+- The router Lambda's stream mapping keeps today's settings: batch size 100, a 5-second window, 5 retries, bisect on error, and a failure queue for the router's own failed batches (`StreamRouterFailures`, same retention and SQS-managed encryption as today's two).
+- It sends with `SendMessageBatch` (10 per call) and reports per-record failures through `batchItemFailures`, so a record that can't be sent doesn't repeat the whole batch.
+- Each queue message body is the stream record, as JSON, in the shape handlers already parse.
+- **Size**: the router checks each message's size before sending. A message over the limit isn't sent: the router fails that record, so it goes to the router's failure queue and trips its alarm. Today's entities that features read (course, curriculum, item completions) are far smaller than the limit. The SQS limit is 256 KiB in the documentation read here; AWS has announced a larger limit, which was not verified, so the code uses a constant that planning confirms in the first task.
+
+**Why**: it keeps what the existing mappings already do for retries and isolation, and makes the one new failure (an oversized or unsendable message) loud.
+
+**Alternatives considered**: sending keys only and letting handlers re-read (rejected: progress's diff logic needs both images, and keys-only would change two handlers); a larger message through S3 (rejected: nothing today comes near the limit).
+
+## R-5: Handlers behind SQS, and stack placement
+
+**Decision**:
+
+- Each feature handler keeps its logic. A thin adapter turns the SQS event into the stream event shape the handler parses today (`{ Records }`), so `progressRecalculation` and `searchIndexing` change only where stated (search: R-3).
+- Each feature's SQS event source mapping sets a batch size of 100 and a 5-second batching window (the SQS mapping supports batching windows up to 300 seconds, with batches over 10 messages when a window is set), so bursts still collapse per course (FR-008).
+- The search mapping sets a low maximum concurrency to keep handlers from overlapping (R-3). The mapping's minimum is 2.
+- Retries move from the stream mapping (`retryAttempts: 5`, bisect) to the queue (`maxReceiveCount` 5, then the failure queue). Bisecting a failed batch isn't available on SQS, so one poison message can send its batch-mates to the failure queue as well. That is acceptable here: every handler is idempotent, so redriving the collateral is safe (FR-011, FR-017).
+- **Placement**: a new `StreamRouter` stack holds the router Lambda, the feature queues, failure queues, alarms and the handlers' mappings. It moves the progress and search handlers out of `CoreApi`, which leaves room under the 500-resource cap. It depends on `Data` (table, stream, search collection). How it reads AppConfig (progress and search read `RUNTIME_CONFIG_APP_ID`, and `RuntimeConfig` deploys last) is confirmed in the first infra task.
+- The router Lambda and any new handler wrapper come from the repo's `ts#lambda-function` generator, like every `events-*` wrapper (constitution II).
+
+## R-6: Visibility and alarms
+
+**Decision**: each feature's failure queue gets one CloudWatch alarm on `ApproximateNumberOfMessagesVisible` greater than 0, with no action attached (spec FR-019). The router's own failure queue gets the same. Queue depth and age metrics for the feature queues come for free and the contributor docs list them.
+
+**Resource cost**: per feature, one queue, one failure queue, one alarm and one mapping (four resources), plus the router's fixed set. Two features plus the router stay well below the cap; the cap check is a task.
+
+## R-7: Cost estimate (FR: Assumptions)
+
+At the sizes in the spec (thousands of changes a day), each part is cents per month: router invocations, SQS requests (the first million a month are free), and alarms ($0.10 each per month, about $0.30 for three). The Pipe path would add Pipe requests ($0.40 per million) and bus events on top. The figures are from AWS pricing pages read during research and aren't a quote.
+
+## Open items carried into tasks
+
+1. ElasticMQ spike (SDK protocol, pin, local redrive), a human task. Fallback: in-process queue.
+2. Confirm the SQS message size limit and set the router's constant.
+3. Confirm the AppConfig and `RuntimeConfig` wiring for the new stack.
+4. Confirm that no write path to a `course` record bypasses the entity (for the re-read design this only matters for the re-index tool's assumptions, not for correctness).

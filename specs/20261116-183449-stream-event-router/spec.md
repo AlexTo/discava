@@ -14,10 +14,11 @@
 
 ### Session 2026-11-16
 
-- Q: When a course record is permanently removed, what version does the search index use for the removal? → A: The removed record's last-updated time plus one millisecond. It comes from the record itself, so it is the same on every delivery and retry, and it beats every earlier edit. No second clock is involved.
+- Q: When a course record is permanently removed, what version does the search index use for the removal? → A: Superseded by the planning session below. Versioning removals was dropped: the handler re-reads the course instead, so a removal needs no version.
 - Q: How does an operator send work from a failure destination back to its handler once the cause is fixed? → A: A documented manual step using the queue service's own redrive, with no new tool. A test shows that a redriven change gives the same result as its first delivery. A script or automatic redrive can be added later if needed.
 - Q: How does an operator find out a feature's failure destination has work in it? → A: One alarm per failure destination that enters the alarm state whenever the destination holds anything, visible in the console, with no notification target. A notification channel can be added later.
-- Q: If a course change arrives with no usable last-updated time, does search apply it or refuse it? → A: Refuse it. The handler fails that change, so after its retries it ends in the search failure destination, where the alarm shows it and it can be redriven once the record is fixed.
+- Q: If a course change arrives with no usable last-updated time, does search apply it or refuse it? → A: Superseded by the planning session below. The handler no longer reads a version from the change, so there is nothing to refuse.
+- Q (planning, 2026-11-16): How does search stay correct when changes arrive out of order, given the search service is not documented to support external versioning and remembers a versioned delete for only 60 seconds by default? → A: The handler re-reads the course's current state from the core table on every change and indexes or deletes to match, as progress recalculation recomputes from current data. A late, duplicate or reordered change then gives the same result as an in-order one. No search-service feature is needed. A narrow race between two overlapping handlers remains, and the existing re-index tool repairs it.
 - Q: Does this spec's pull request also edit the notifications (#331) and dashboard (#332) specs? → A: No. This PR touches only its own spec folder (and the constitution and contributor-doc wording in FR-024). #331 and #332 are each updated afterwards on their own PRs, and this PR's description lists what each must change.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -60,7 +61,7 @@ Learners still see their progress recalculated after a lesson changes, and the c
 
 ### User Story 3 - Search stays correct when changes arrive out of order (Priority: P1)
 
-A course that is published and then unpublished a moment later is not left searchable, even when the two changes reach the search handler in the opposite order. The router does not guarantee per-record order, so the search handler decides on its own whether a change is newer than what it has already applied.
+A course that is published and then unpublished a moment later is not left searchable, even when the two changes reach the search handler in the opposite order. The router does not guarantee per-record order, so the search handler works from the course's current state rather than from the order changes arrive in.
 
 **Why this priority**: Moving behind a queue removes an ordering guarantee the search handler silently relied on. Without this, an unpublished course can stay in search results until it is next edited.
 
@@ -119,9 +120,10 @@ A contributor running the local stack sees the same routing: a change to the loc
 - A poison message (a change a handler can never process): ends in that feature's failure destination, and does not retry forever or block later changes.
 - A change delivered twice (at-least-once delivery): every handler must be safe to run twice with the same input.
 - A change delivered much later than it happened: handlers that write state from the change itself (search) must not overwrite newer state with it.
-- A record with no `updatedAt` (or one that isn't a valid time): search refuses it (FR-015), so it lands in the failure destination and trips the alarm rather than being applied unchecked or dropped.
-- Two writes to one course within the same millisecond (equal versions): the second is not newer than the first, so it is ignored by the version check. Planning decides whether the handler needs more than the last-updated time to avoid losing the second.
-- A course removed and an older edit for it delivered afterwards: the removal's version (last-updated time plus one millisecond) is higher, so the edit is ignored and the course stays out.
+- A course removed and an older edit for it delivered afterwards: the handler re-reads the course, finds it missing and deletes it from search, so the course stays out.
+- Two writes to one course in quick succession, delivered in either order: the handler re-reads the current course each time, so both deliveries give the same result.
+- Two search handlers overlapping on the same course, where one reads before a write and finishes after the other has read the newer state: a rare stale result is possible until the course next changes or the re-index tool is run. This is accepted (FR-012).
+- A course change delivered when the core table can't be read: the handler fails, and the change is retried and then set aside like any failure (FR-016).
 - Local router and deployed router disagree on a filter: prevented by one shared registration, checked in tests.
 
 ## Requirements *(mandatory)*
@@ -147,10 +149,10 @@ A contributor running the local stack sees the same routing: a change to the loc
 **Ordering and duplicates**
 
 - **FR-011**: Every handler MUST be safe to run more than once with the same change and with changes in any order. The router does not guarantee per-record order or exactly-once delivery.
-- **FR-012**: Search indexing MUST NOT let an older change overwrite a newer one. It MUST compare each change's version (taken from the course's own last-updated time) with what the index already holds and ignore a change that is not newer, including for removals.
-- **FR-013**: A removal in the search index MUST be recorded as versioned too, so that a later-arriving older change cannot bring a removed course back. The removal's version is the removed record's last-updated time plus one millisecond, so it is derived from the record alone and is identical on every delivery.
+- **FR-012**: Search indexing MUST NOT let an older change overwrite a newer one. On every change it MUST read the course's current state from the core table and index the course if it is published, or remove it from search if it is not published or no longer exists, so the outcome depends on the current state and not on which change arrived last. It MUST NOT depend on any search-service versioning feature. One read per course per batch is enough. A rare stale result from two overlapping handlers is accepted, and the existing re-index tool repairs it.
+- **FR-013**: A removed or unpublished course MUST stay out of search results when an older change for it is delivered afterwards. A test covers each order.
 - **FR-014**: Progress recalculation MUST continue to recompute from current data on every run, and a test MUST show that duplicate and reordered deliveries give the same result.
-- **FR-015**: A course change that carries no usable version (no last-updated time, or one that isn't a valid time) MUST be refused: the search handler fails that change, so after its retries it ends in the search failure destination. It MUST NOT be applied without a version check and MUST NOT be skipped silently. A test covers it.
+- **FR-015**: Search indexing MUST read only the course's identity from the stream change and everything else from the core table, so a change with a missing or odd field cannot put a wrong document in the index. A change that names no course MUST fail rather than be skipped silently. A test covers it.
 
 **Failures**
 
@@ -178,7 +180,7 @@ A contributor running the local stack sees the same routing: a change to the loc
 - **Feature queue**: the buffer between the router and one feature's handler. It absorbs bursts and lets the handler retry on its own.
 - **Failure destination**: one per feature, where work that exhausted its retries is kept for inspection and replay.
 - **Change**: one record from the stream: event kind, keys, old and new images, approximate time. It is the unit the router sends on.
-- **Version (search)**: the course's own last-updated time, used to refuse an older change after a newer one.
+- **Current course state (search)**: the course as the core table holds it when the handler runs. Search is always made to match it, whichever change triggered the run.
 
 ## Success Criteria *(mandatory)*
 
@@ -198,10 +200,9 @@ A contributor running the local stack sees the same routing: a change to the loc
 - Discava has not launched, so the existing consumers are replaced outright with no migration, dual-running or compatibility layer (constitution principle VII). Existing development data is fixed by hand if needed.
 - The stream's own ordering guarantee is what the handlers rely on today. Moving behind queues removes it, and this feature accepts that and makes handlers order-safe rather than paying for ordered queues.
 - Progress recalculation already recomputes from current data on every run, as its existing infrastructure comment states. This is to be confirmed against the handler in planning.
-- Search indexing today builds its document from the stream record and writes it without comparing versions, so it is the one handler that must change.
-- Course records carry a last-updated time that moves forward on every write that changes what search shows, including unpublishing. The course entity already sets it on every write (it watches all attributes), so no change to the record is expected. Planning confirms that no write path bypasses the entity.
-- One stream consumer feeding a shared event bus, with per-feature rules and queues, is the intended shape. The exact mechanism for the single consumer (a managed pipe or a small router function) is decided in research, based on local-dev fit, filtering power and cost.
+- Search indexing today builds its document from the stream record and writes it without checking order, so it is the one handler that must change. Planning chose to make it re-read the course (FR-012) rather than version its writes: the search service is not documented to support external versioning, and it forgets a versioned delete after 60 seconds by default.
+- One stream consumer feeding a per-feature queue and failure destination for each feature is the intended shape. Planning chose a small router function as the single consumer, which sends directly to the queues, over a managed pipe plus an event bus (research R-1).
 - The notifications (#331) and dashboard (#332) specs are in review. They are updated to use the router on their own pull requests after this spec is approved, and are not changed in this one (FR-025).
 - A few seconds of added delay between a table change and a handler running is acceptable for every current and planned consumer.
-- At current scale the cost of the bus and queues is negligible. Planning records the estimate.
+- At current scale the cost of the router and queues is negligible. Planning records the estimate.
 - Out of scope: changing what progress or search compute, moving non-stream events (media transcodes, identity triggers) onto the router, ordered (first-in-first-out) delivery, and any consumer other than progress and search in this change.
