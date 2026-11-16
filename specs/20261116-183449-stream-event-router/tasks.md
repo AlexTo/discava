@@ -22,7 +22,7 @@ description: "Task list for the core table stream event router"
 
 ---
 
-## Phase 1: Foundation: spike, queue interface, registry, pure router (PR 1) 🎯 MVP
+## Phase 1: User Story 1 - Routing foundation: spike, queue interface, registry, pure router (P1) 🎯 MVP
 
 **Purpose**: everything the router and the local runner share, with no AWS resource and no behaviour change. Serves US1 and US5.
 
