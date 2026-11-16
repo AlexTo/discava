@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import type { AppRouter as CoreApi } from '@discava/core-api';
+import { createCoreTableService } from '@discava/core-table';
 import type { AppRouter as InstructorApi } from '@discava/instructor-api';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { SERVICES } from './portals.js';
 import { newUser, type Role } from './users.js';
+import { THREE_SECOND_VIDEO } from './video.js';
 
 // Calling the APIs directly, as a portal would but without a browser, for
 // what a page can't do: firing requests at the same moment (see
@@ -78,7 +81,12 @@ export const apiUser = async (givenName: string, roles: Role[]) =>
 
 export const apiClients = (accessToken: string) => {
   const headers = { authorization: `Bearer ${accessToken}` };
+  // The user's id, from the token's claims.
+  const { sub } = JSON.parse(
+    Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString(),
+  ) as { sub: string };
   return {
+    sub,
     core: createTRPCClient<CoreApi>({
       links: [httpLink({ url: SERVICES.coreApi, headers })],
     }),
@@ -148,4 +156,85 @@ export const createPublishedCourseViaApi = async (
   });
   await api.course.publish.mutate({ courseId });
   return { ...lesson, texts, quiz: { ...lesson, contentItemId: quizId } };
+};
+
+// A draft course with one lesson holding a video, uploaded and transcoded
+// (locally, by ffmpeg in the event runner) until it is ready to play, and its
+// automatic captions made. Returns the item's keys and its version's id.
+export const createCaptionedVideoViaApi = async (
+  instructor: ApiUser,
+  title: string,
+) => {
+  const api = instructor.instructor;
+  const { courseId } = await api.course.create.mutate({ title });
+  const { moduleId } = await api.module.create.mutate({
+    courseId,
+    title: 'Module 1',
+  });
+  const { lessonId } = await api.lesson.create.mutate({
+    courseId,
+    moduleId,
+    title: 'Lesson 1',
+  });
+  const lesson = { courseId, moduleId, lessonId };
+  const target = await api.contentItem.createVideoUploadUrl.mutate({
+    ...lesson,
+    fileName: 'three-seconds.mp4',
+  });
+  const put = await fetch(target.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'video/mp4' },
+    body: new Uint8Array(await readFile(THREE_SECOND_VIDEO)),
+  });
+  if (!put.ok) {
+    throw new Error(`Uploading the video failed: ${put.status}`);
+  }
+  const item = { ...lesson, contentItemId: target.contentItemId };
+  await api.contentItem.createVideo.mutate({
+    ...item,
+    title: 'Video',
+    objectKey: target.objectKey,
+    mimeType: 'video/mp4',
+  });
+
+  // Not found until transcoded; captions ready once Transcribe's stand-in has
+  // made the automatic track, which would otherwise move the track list
+  // under a test.
+  let versionId = '';
+  for (let attempt = 0; attempt < 120 && !versionId; attempt++) {
+    const url = await api.contentItem.createVideoUrl
+      .query(item)
+      .catch(() => undefined);
+    if (url?.captionsStatus === 'ready') {
+      versionId = url.versionId;
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
+  if (!versionId) {
+    throw new Error('The video was not ready with captions in time');
+  }
+  return { ...item, versionId };
+};
+
+// Makes `instructor` a second instructor of the course, as the table keeps
+// it (no API adds one yet).
+export const addCourseInstructor = async (
+  courseId: string,
+  instructor: ApiUser,
+) => {
+  const coreTable = await createCoreTableService();
+  const { data: course } = await coreTable.entities.course
+    .get({ courseId })
+    .go();
+  if (!course) {
+    throw new Error(`no course ${courseId}`);
+  }
+  await coreTable.entities.courseInstructor
+    .create({
+      courseId,
+      instructorId: instructor.sub,
+      courseUpdatedAt: course.updatedAt,
+    })
+    .go();
 };

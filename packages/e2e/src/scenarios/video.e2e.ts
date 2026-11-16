@@ -6,7 +6,10 @@
 import {
   AUTO_CAPTION_CUE,
   CAPTION_CUE,
-  seedCaptionTrack,
+  closeDialog,
+  removeCaption,
+  shownCue,
+  uploadCaption,
 } from '../helpers/captions.js';
 import {
   addLesson,
@@ -346,13 +349,20 @@ test('an instructor uploads a video, and a student watches it', async ({
   });
 
   await test.step('a student reads along with captions', async () => {
-    // An instructor's upload doesn't exist yet (a later phase), so the
-    // scenario adds one the way that upload will, replacing the automatic
-    // track in the same language.
-    await seedCaptionTrack(course, 'Video one', {
+    // The instructor uploads an English track, replacing the automatic one
+    // in the same language.
+    const dialog = await uploadCaption(instructor, 'Video one', {
       tag: 'en-US',
-      label: 'English',
+      cue: CAPTION_CUE,
     });
+    await expect(
+      dialog.getByRole('listitem', { name: 'English' }),
+    ).toContainText('uploaded');
+    await screenshot(
+      instructor,
+      'captions dialog with an uploaded English track',
+    );
+    await closeDialog(instructor);
     await student.reload();
     const video = lessonVideo(student, 'Video one');
     await expect
@@ -396,6 +406,87 @@ test('an instructor uploads a video, and a student watches it', async ({
     await expect(captions).toHaveAccessibleName('Captions: off');
     await student.keyboard.press('c');
     await expect(captions).toHaveAccessibleName('Captions: English');
+  });
+
+  await test.step('an instructor adds, replaces and removes a second language', async () => {
+    const SPANISH_CUE = 'Los subtítulos están en español.';
+    const SPANISH_CUE_2 = 'Estos subtítulos reemplazan a los anteriores.';
+
+    // The student's view of Video one, after a reload: its captions menu.
+    const openMenu = async () => {
+      await student.reload();
+      const item = lessonItem(student, 'Video one');
+      const video = lessonVideo(student, 'Video one');
+      await expect
+        .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(0);
+      const captions = item.getByRole('button', { name: /^Captions/ });
+      await item
+        .getByRole('group', { name: 'Video player' })
+        .scrollIntoViewIfNeeded();
+      await captions.click();
+      return { video, captions };
+    };
+
+    // A second language, which the student's menu lists.
+    const added = await uploadCaption(instructor, 'Video one', {
+      tag: 'es-ES',
+      cue: SPANISH_CUE,
+    });
+    await expect(
+      added.getByRole('listitem', { name: 'Spanish' }),
+    ).toContainText('uploaded');
+    await screenshot(instructor, 'captions dialog with a second language');
+    await closeDialog(instructor);
+
+    let { video, captions } = await openMenu();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toBeVisible();
+    await screenshot(student, 'captions menu listing the second language');
+    await student.getByRole('menuitemradio', { name: 'Spanish' }).click();
+    await expect(captions).toHaveAccessibleName('Captions: Spanish');
+    await expect.poll(() => shownCue(video)).toBe(SPANISH_CUE);
+    await screenshot(student, 'a second-language caption shown over the video');
+
+    // Uploading the same language again replaces the track.
+    const replaced = await uploadCaption(instructor, 'Video one', {
+      tag: 'es-ES',
+      cue: SPANISH_CUE_2,
+    });
+    await expect(
+      replaced.getByRole('listitem', { name: 'Spanish' }),
+    ).toHaveCount(1);
+    await screenshot(instructor, 'captions dialog after replacing a language');
+    await closeDialog(instructor);
+
+    ({ video, captions } = await openMenu());
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toHaveCount(1);
+    await student.getByRole('menuitemradio', { name: 'Spanish' }).click();
+    await expect.poll(() => shownCue(video)).toBe(SPANISH_CUE_2);
+
+    // Removing it takes it off the student's menu on the next load.
+    const removed = await removeCaption(instructor, 'Video one', 'Spanish');
+    await screenshot(instructor, 'captions dialog after removing a language');
+    await expect(
+      removed.getByRole('listitem', { name: 'English' }),
+    ).toBeVisible();
+    await closeDialog(instructor);
+
+    ({ captions } = await openMenu());
+    await expect(
+      student.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toHaveCount(0);
+    await screenshot(student, 'captions menu after the language was removed');
+    await student.keyboard.press('Escape');
+    await expect(captions).toBeVisible();
   });
 
   await test.step('the course shows as completed', async () => {

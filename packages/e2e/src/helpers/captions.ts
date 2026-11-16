@@ -2,21 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { randomUUID } from 'node:crypto';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { captionKey } from '@discava/common-server-utils/captions';
-import {
-  getS3Client,
-  resolveLessonMediaBucketName,
-} from '@discava/common-server-utils/lesson-media-bucket';
-import { manifestNonce } from '@discava/common-server-utils/media-keys';
-import {
-  applyCaptionChange,
-  createCoreTableService,
-} from '@discava/core-table';
-
-// The local stack, as `pnpm dev`'s APIs see it.
-process.env.LOCAL_DEV = 'true';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 // What the event runner's stand-in for Transcribe writes as the one cue (see
 // PLACEHOLDER_VTT in packages/events/src/local/transcriber.ts).
@@ -25,68 +11,84 @@ export const AUTO_CAPTION_CUE =
 
 export const CAPTION_CUE = 'Captions are shown as plain text.';
 
-// Adds an uploaded caption track to a ready video of the course titled
-// `courseTitle`, the way the instructor's upload will once it exists
-// (Phase 6): the WebVTT file goes to S3Mock under the version's captions
-// folder, and the item's tracks change through applyCaptionChange. Until
-// then nothing in the product creates a track, so the scenario does it here.
-export const seedCaptionTrack = async (
-  courseTitle: string,
+/** A WebVTT file with one cue, which shows during the video's first seconds. */
+export const webVtt = (cue: string) =>
+  `WEBVTT\n\n00:00.000 --> 00:03.000\n${cue}\n`;
+
+/**
+ * Opens a video row's Captions dialog. The row offers it once the course view
+ * knows the video is ready, so this reloads the page until it does.
+ */
+export const openCaptionsDialog = async (
+  page: Page,
   videoTitle: string,
-  language: { tag: string; label: string },
-) => {
-  const coreTable = await createCoreTableService();
-  const { data: courses } = await coreTable.entities.course.scan
-    .where((attr, op) => op.eq(attr.title, courseTitle))
-    .go({ pages: 'all' });
-  const [course] = courses;
-  const { data: items } = await coreTable.entities.contentItem.query
-    .primary({ courseId: course.courseId })
-    .go({ pages: 'all' });
-  const item = items.find((i) => i.title === videoTitle);
-  if (!item?.s3Key) {
-    throw new Error(`no ready video "${videoTitle}" in "${courseTitle}"`);
-  }
-  const nonce = manifestNonce(item.s3Key);
-  if (!nonce) {
-    throw new Error(`${item.s3Key} has no version folder`);
-  }
-
-  const trackId = randomUUID();
-  const key = captionKey(item, nonce, trackId);
-  await getS3Client().send(
-    new PutObjectCommand({
-      Bucket: await resolveLessonMediaBucketName(),
-      Key: key,
-      ContentType: 'text/vtt',
-      Body: `WEBVTT\n\n00:00.000 --> 00:03.000\n${CAPTION_CUE}\n`,
-    }),
-  );
-
-  const { tracks } = applyCaptionChange(
-    item.captionTracks,
-    {
-      type: 'add',
-      nonce,
-      track: {
-        trackId,
-        nonce,
-        language: language.tag,
-        label: language.label,
-        source: 'uploaded',
-        key,
-      },
-    },
-    { currentNonce: nonce },
-  );
-  await coreTable.entities.contentItem
-    .patch({
-      courseId: item.courseId,
-      moduleId: item.moduleId,
-      lessonId: item.lessonId,
-      contentItemId: item.contentItemId,
-    })
-    .set({ captionTracks: tracks, captionsStatus: 'ready' })
-    .add({ captionTracksRev: 1 })
-    .go();
+): Promise<Locator> => {
+  const button = page.getByRole('button', {
+    name: `Captions for ${videoTitle}`,
+  });
+  await expect(async () => {
+    if (!(await button.isVisible())) {
+      await page.reload();
+    }
+    await expect(button).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: 60_000 });
+  await button.click();
+  const dialog = page.getByRole('dialog', { name: 'Captions' });
+  await expect(dialog).toBeVisible();
+  return dialog;
 };
+
+/**
+ * Uploads a WebVTT file with `cue` for a language through the Captions dialog,
+ * waiting until it is attached. Uploading a language that already has a track
+ * replaces it. Leaves the dialog open, for a screenshot; close it with
+ * `closeDialog`.
+ */
+export const uploadCaption = async (
+  page: Page,
+  videoTitle: string,
+  { tag, cue }: { tag: string; cue: string },
+): Promise<Locator> => {
+  const dialog = await openCaptionsDialog(page, videoTitle);
+  await dialog.getByLabel('Language').selectOption(tag);
+  await dialog.getByLabel('Caption file (.vtt)').setInputFiles({
+    name: `captions-${tag}.vtt`,
+    mimeType: 'text/vtt',
+    buffer: Buffer.from(webVtt(cue)),
+  });
+  await dialog
+    .getByRole('button', { name: /^(Upload|Replace) caption$/ })
+    .click();
+  // The file field empties once the track is attached.
+  await expect(
+    dialog.getByRole('button', { name: /^(Upload|Replace) caption$/ }),
+  ).toBeDisabled({ timeout: 30_000 });
+  return dialog;
+};
+
+/** Removes a track, by its label, through the Captions dialog's confirmation. */
+export const removeCaption = async (
+  page: Page,
+  videoTitle: string,
+  label: string,
+): Promise<Locator> => {
+  const dialog = await openCaptionsDialog(page, videoTitle);
+  await dialog.getByRole('button', { name: `Remove ${label}` }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Remove caption' })
+    .getByRole('button', { name: 'Remove caption' })
+    .click();
+  await expect(dialog.getByRole('listitem', { name: label })).toHaveCount(0);
+  return dialog;
+};
+
+export const closeDialog = (page: Page) => page.keyboard.press('Escape');
+
+/** The text of the cue showing now on the track the viewer chose, if any. */
+export const shownCue = (video: Locator) =>
+  video.evaluate((v: HTMLVideoElement) => {
+    v.currentTime = 1;
+    const track = Array.from(v.textTracks).find((t) => t.mode === 'showing');
+    const cues = track?.activeCues;
+    return cues && cues.length > 0 ? (cues[0] as VTTCue).text : '';
+  });
