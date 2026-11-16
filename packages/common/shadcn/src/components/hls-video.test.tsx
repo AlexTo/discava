@@ -459,6 +459,25 @@ describe('HlsVideo captions', () => {
     expect(await blob.text()).toContain('WEBVTT');
   });
 
+  it('lifts cues that place themselves above the control bar, and leaves positioned ones', async () => {
+    const { container } = render(
+      <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+    );
+    await waitFor(() => expect(tracks(container)).toHaveLength(2));
+    const auto = { line: 'auto' };
+    const placed = { line: 2 };
+    const [english] = tracks(container);
+    // jsdom doesn't load tracks, so give the element the cues it would have.
+    Object.defineProperty(english, 'track', {
+      value: { cues: [auto, placed] },
+    });
+
+    fireEvent.load(english);
+
+    expect(auto.line).toBe(-4);
+    expect(placed.line).toBe(2);
+  });
+
   it('sends the signed cookies with the fetch only with withCredentials', async () => {
     const { unmount } = render(
       <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,

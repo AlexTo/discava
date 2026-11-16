@@ -396,7 +396,16 @@ test('an instructor uploads a video, and a student watches it', async ({
         }),
       )
       .toBe(CAPTION_CUE);
-    await screenshot(student, 'a caption shown over the video');
+    // The cue is lifted off the last line, so the control bar doesn't cover it.
+    await expect
+      .poll(() =>
+        video.evaluate(
+          (v: HTMLVideoElement) =>
+            (v.textTracks[0]?.activeCues?.[0] as VTTCue).line,
+        ),
+      )
+      .toBe(-4);
+    await screenshot(student, 'a caption shown above the control bar');
 
     // The choice survives a reload, and the C shortcut turns it off and on.
     await student.reload();

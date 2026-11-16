@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-15
 
-**Status**: Draft
+**Status**: Approved
 
 **Input**: User description: "Video player upgrades (issue #277): resume from the last watched position, playback speed, keyboard shortcuts, remembered volume and speed, and captions (auto-generated, WebVTT, instructor upload/replace/remove), with a local stand-in for the caption generation step."
 

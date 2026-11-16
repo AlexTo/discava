@@ -15,6 +15,44 @@ import {
   VideoControls,
 } from './video-controls';
 
+// Where cues sit, in lines up from the bottom of the video: the browser draws
+// them on the last line, under the control bar while it shows. Applied only to
+// cues that don't place themselves (a `line` setting in an uploaded file wins).
+const CAPTION_LINE_FROM_BOTTOM = -4;
+
+const liftCues = (track: TextTrack): void => {
+  for (const cue of Array.from(track.cues ?? [])) {
+    if ('line' in cue && cue.line === 'auto') {
+      (cue as VTTCue).line = CAPTION_LINE_FROM_BOTTOM;
+    }
+  }
+};
+
+// A `<track>` that lifts its cues once the browser has loaded them. React has
+// no onLoad for it, so the native event is listened to.
+const CaptionTrack = ({ caption }: { caption: LoadedCaption }) => {
+  const ref = useRef<HTMLTrackElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    const lift = () => liftCues(element.track);
+    element.addEventListener('load', lift);
+    return () => element.removeEventListener('load', lift);
+  }, []);
+  return (
+    <track
+      ref={ref}
+      data-track-id={caption.trackId}
+      kind="captions"
+      srcLang={caption.language}
+      label={caption.label}
+      src={caption.src}
+    />
+  );
+};
+
 // How long the "Resumed at" notice stays, unless the viewer plays first.
 const RESUME_NOTICE_MS = 8000;
 
@@ -126,7 +164,8 @@ function useCaptionFiles(
  *
  * With `captions`, the player offers a captions menu (see
  * `useCaptionFiles` for how the files load); without any, it has no such
- * control. The browser shows the cue text as plain text.
+ * control. The browser shows the cue text as plain text, a few lines up so
+ * the control bar doesn't cover it.
  *
  * With `resumeAt` above 0 the video seeks there once it loads, stays paused,
  * and says "Resumed at m:ss" with a "Start over" button until it plays or
@@ -294,14 +333,7 @@ export function HlsVideo({
         className="size-full"
       >
         {captionFiles.loaded.map((caption) => (
-          <track
-            key={caption.trackId}
-            data-track-id={caption.trackId}
-            kind="captions"
-            srcLang={caption.language}
-            label={caption.label}
-            src={caption.src}
-          />
+          <CaptionTrack key={caption.trackId} caption={caption} />
         ))}
       </video>
       {resumedAt !== undefined && (

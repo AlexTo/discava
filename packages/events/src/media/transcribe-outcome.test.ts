@@ -34,6 +34,9 @@ vi.mock('@aws-sdk/client-s3', () => ({
   DeleteObjectCommand: vi.fn(function (input) {
     return { type: 'delete', ...input };
   }),
+  GetObjectCommand: vi.fn(function (input) {
+    return { type: 'get', ...input };
+  }),
 }));
 
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
@@ -63,6 +66,17 @@ const NONCE = 'n1';
 const FOLDER = `courses/c1/modules/m1/lessons/l1/content-items/i1`;
 const SCRATCH_VTT = `${FOLDER}/transcribe-output/${NONCE}/captions-i1-n1.vtt`;
 const SCRATCH_JSON = `${FOLDER}/transcribe-output/${NONCE}/captions-i1-n1.json`;
+const SCRATCH_ACCESS_CHECK = `${FOLDER}/transcribe-output/${NONCE}/.write_access_check_file.temp`;
+const SCRATCH_FILES = [SCRATCH_VTT, SCRATCH_JSON, SCRATCH_ACCESS_CHECK];
+
+const vttWith = (text: string) => ({
+  Body: { transformToString: async () => text },
+});
+const VTT_WITH_A_CUE = 'WEBVTT\n\n0\n00:00:00.160 --> 00:00:01.870\nHello.\n';
+
+// What S3 returns by default: the scratch WebVTT for a read, nothing otherwise.
+const s3Default = async (command: { type: string }) =>
+  command.type === 'get' ? vttWith(VTT_WITH_A_CUE) : {};
 
 const outcome = (status: string, overrides = {}) => ({
   jobName: 'captions-i1-n1',
@@ -104,7 +118,7 @@ beforeEach(() => {
   patchRemove.mockReturnValue({ where: patchWhere });
   patchWhere.mockReturnValue({ go: patchGo });
   patchGo.mockResolvedValue({});
-  s3Send.mockResolvedValue({});
+  s3Send.mockImplementation(s3Default);
 });
 
 describe('applyTranscribeOutcome on COMPLETED', () => {
@@ -153,15 +167,15 @@ describe('applyTranscribeOutcome on COMPLETED', () => {
     ).toBe('rev=3 AND st=ready AND k~/n1/');
   });
 
-  it('deletes both scratch objects after the track is written', async () => {
+  it("deletes the scratch objects, including Transcribe's access check file, after the track is written", async () => {
     await applyTranscribeOutcome(logger, outcome('COMPLETED'));
 
-    expect(s3Calls('delete').map((c) => c.Key)).toEqual([
-      SCRATCH_VTT,
-      SCRATCH_JSON,
-    ]);
+    expect(s3Calls('delete').map((c) => c.Key)).toEqual(SCRATCH_FILES);
+    const [firstDelete] = s3Send.mock.calls
+      .map(([c], i) => [c, i] as const)
+      .filter(([c]) => c.type === 'delete');
     expect(patchGo.mock.invocationCallOrder[0]).toBeLessThan(
-      s3Send.mock.invocationCallOrder[1],
+      s3Send.mock.invocationCallOrder[firstDelete[1]],
     );
   });
 
@@ -185,10 +199,7 @@ describe('applyTranscribeOutcome on COMPLETED', () => {
     expect(s3Calls('copy')).toEqual([]);
     expect(patchSet).toHaveBeenCalledWith({ captionsStatus: 'ready' });
     expect(patchSet.mock.calls[0][0]).not.toHaveProperty('captionTracks');
-    expect(s3Calls('delete').map((c) => c.Key)).toEqual([
-      SCRATCH_VTT,
-      SCRATCH_JSON,
-    ]);
+    expect(s3Calls('delete').map((c) => c.Key)).toEqual(SCRATCH_FILES);
   });
 
   it.each([
@@ -257,12 +268,35 @@ describe('applyTranscribeOutcome on COMPLETED', () => {
   it('does not fail when deleting a scratch object does', async () => {
     s3Send.mockImplementation(async (command) => {
       if (command.type === 'delete') throw new Error('nope');
+      return s3Default(command);
     });
 
     await expect(
       applyTranscribeOutcome(logger, outcome('COMPLETED')),
     ).resolves.toBeUndefined();
   });
+});
+
+describe('applyTranscribeOutcome on COMPLETED without speech', () => {
+  it.each([
+    ['only the header', 'WEBVTT\n\n'],
+    ['nothing', ''],
+  ])(
+    'marks captions failed and adds no track when the WebVTT holds %s',
+    async (_name, text) => {
+      s3Send.mockImplementation(async (command) =>
+        command.type === 'get' ? vttWith(text) : {},
+      );
+
+      await applyTranscribeOutcome(logger, outcome('COMPLETED'));
+
+      expect(s3Calls('copy')).toEqual([]);
+      expect(patchSet).toHaveBeenCalledWith({ captionsStatus: 'failed' });
+      expect(patchSet.mock.calls[0][0]).not.toHaveProperty('captionTracks');
+      expect(patchRemove).toHaveBeenCalledWith(['captionsPendingSince']);
+      expect(s3Calls('delete').map((c) => c.Key)).toEqual(SCRATCH_FILES);
+    },
+  );
 });
 
 describe('applyTranscribeOutcome on FAILED', () => {
