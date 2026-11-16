@@ -8,7 +8,7 @@
 
 One router Lambda becomes the only consumer of the core table's stream. It filters each record with the filters features already define and sends it to that feature's SQS queue. Each feature has its own queue, failure queue, alarm and handler mapping. Progress recalculation and search indexing move onto it first, behaviour-preserving, so the stream stays at one consumer when notifications (#331) and the dashboard (#332) arrive.
 
-The queues don't keep per-record order, so every handler has to be order-safe. Progress recalculation already is. Search indexing becomes so by re-reading the course from the core table on each change, not by versioning its writes (research R-3). Locally, the event runner runs the same router function against ElasticMQ queues behind a `QueueClient` interface, with an in-process queue as the fallback if a first-task spike rules ElasticMQ out (research R-2).
+The queues don't keep per-record order, so every handler has to be order-safe. Progress recalculation already is. Search indexing becomes so by re-reading the course from the core table on each change, not by versioning its writes (research R-3). Locally, the event runner runs the same router function against ElasticMQ queues behind a `QueueClient` interface (research R-2; an in-memory queue is only the unit tests' fake).
 
 Facts the repo showed that shaped the plan:
 
@@ -22,7 +22,7 @@ Facts the repo showed that shaped the plan:
 
 **Language/Version**: TypeScript (Node 24 Lambdas), pnpm/Nx monorepo
 
-**Primary Dependencies**: `@aws-sdk/client-sqs` (new, `events` and `common-server-utils`), existing `@discava/core-table` (ElectroDB), `@aws-lambda-powertools/*` and middy (as the existing handlers), `aws-cdk-lib` (`aws-sqs`, `aws-lambda-event-sources`, `aws-cloudwatch`), ElasticMQ in Docker for local dev (pending the R-2 spike)
+**Primary Dependencies**: `@aws-sdk/client-sqs` (new, `events` and `common-server-utils`), existing `@discava/core-table` (ElectroDB), `@aws-lambda-powertools/*` and middy (as the existing handlers), `aws-cdk-lib` (`aws-sqs`, `aws-lambda-event-sources`, `aws-cloudwatch`), ElasticMQ in Docker for local dev (R-2 spike passed)
 
 **Storage**: no new entity, table or index. The search handler adds a keyed read of the `course` entity. Queues carry stream records as JSON
 

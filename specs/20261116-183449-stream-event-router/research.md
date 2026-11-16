@@ -27,7 +27,7 @@ Decisions for the three questions the planning input named, plus the smaller one
 
 ## R-2: Local queues: ElasticMQ behind a queue interface
 
-**Decision**: The local stand-in for SQS is ElasticMQ in Docker, started like S3Mock (`start-container.ts` plus an Nx target, settings in `common-server-utils/local-dev`). The router and the local feature runners talk to it through one small `QueueClient` interface, so an in-process queue can replace it without touching handlers. The spike (T001, a human task since it needs Docker) confirmed the open points below; its outcome is recorded after them.
+**Decision**: The local stand-in for SQS is ElasticMQ in Docker, started like S3Mock (`start-container.ts` plus an Nx target, settings in `common-server-utils/local-dev`). The router and the local feature runners talk to it through one small `QueueClient` interface, so handlers and unit tests (which use an in-memory fake) don't depend on it. The spike (T001, a human task since it needs Docker) confirmed the open points below; its outcome is recorded after them.
 
 **Rationale**:
 
@@ -53,7 +53,8 @@ Decisions for the three questions the planning input named, plus the smaller one
 1. *SDK protocol: passes.* `GetQueueUrl`, `SendMessageBatch` (with a message attribute), `ReceiveMessage` (with `ApproximateReceiveCount`) and `GetQueueAttributes` all work with the client's default settings. No protocol override is needed.
 2. *Pin: passes.* The tag is `1.7.1` (no `v` prefix); it is a multi-arch manifest list. Digest of the pulled image: `softwaremill/elasticmq@sha256:f1de391a9b8c18fd3f2ce37b4f7d1b8989857e8a8e18bb01284fff899e69da82` (the manifest list's per-platform digests are amd64 `980ff154…` and arm64 `4dd01bb5…`). Pin the tag `1.7.1`.
 3. *Dead-lettering: passes.* With the config below, one message was received five times (`ApproximateReceiveCount` 1 to 5, redelivered after the visibility timeout), the sixth receive returned nothing, and the failure queue held the message with its body intact.
-4. *Architectures: partly checked.* The manifest lists amd64 and arm64. Only amd64 was started here; arm64 start-up is unverified and T020's CI run, or any arm64 machine, is the first real check.
+4. *Redrive: by design, not spiked.* ElasticMQ doesn't document `StartMessageMoveTask`, so local redrive is the runner endpoint that reads the failure queue and re-sends (`contracts/local-runner-routes.md`). Deployed redrive is the queue service's (FR-017).
+5. *Architectures: partly checked.* The manifest lists amd64 and arm64. Only amd64 was started here; arm64 start-up is unverified and T020's CI run, or any arm64 machine, is the first real check.
 
 Config used (HOCON, 1.x camelCase, mounted at `/opt/elasticmq.conf`, port 9324):
 
@@ -139,6 +140,6 @@ At the sizes in the spec (thousands of changes a day), each part is cents per mo
 
 ## Open items carried into tasks
 
-1. ElasticMQ spike (SDK protocol, exact tag string or digest, local redrive), a human task; the version is pinned at 1.7.1. Fallback: the in-process queue.
+1. ElasticMQ spike (SDK protocol, exact tag string or digest, local redrive), a human task, done (outcome in R-2); the version is pinned at 1.7.1.
 2. Confirm the SQS message size limit and set the router's constant.
 3. Confirm the AppConfig and `RuntimeConfig` wiring for the new stack.
