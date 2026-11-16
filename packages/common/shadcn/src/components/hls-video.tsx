@@ -4,6 +4,7 @@
  */
 import Hls from 'hls.js';
 import { useEffect, useRef } from 'react';
+import { VideoControls } from './video-controls';
 
 /**
  * Plays a lesson video's HLS stream (master.m3u8) from the lesson media
@@ -18,6 +19,10 @@ import { useEffect, useRef } from 'react';
  * hides casting (Chromecast, AirPlay): the receiving device would fetch the
  * stream itself, without the viewer's signed cookies, and fail.
  * Picture-in-picture stays available, for watching while taking notes.
+ *
+ * The browser's native controls are replaced by `VideoControls`, for speed,
+ * volume and keyboard shortcuts that work the same in every browser.
+ * `className` styles the player as a whole, not just the `<video>`.
  */
 export function HlsVideo({
   url,
@@ -64,14 +69,15 @@ export function HlsVideo({
   }, [url, withCredentials]);
 
   return (
-    <video
-      ref={videoRef}
-      data-slot="hls-video"
-      controls
-      controlsList="nodownload noremoteplayback"
-      onContextMenu={(event) => event.preventDefault()}
-      aria-label={title}
-      className={className}
-    />
+    <VideoControls className={className}>
+      <video
+        ref={videoRef}
+        data-slot="hls-video"
+        controlsList="nodownload noremoteplayback"
+        onContextMenu={(event) => event.preventDefault()}
+        aria-label={title}
+        className="size-full"
+      />
+    </VideoControls>
   );
 }
