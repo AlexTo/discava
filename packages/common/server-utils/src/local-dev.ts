@@ -85,6 +85,43 @@ export const LOCAL_EVENT_RUNNER = {
   cleanupDelaySeconds: 60,
 };
 
+/**
+ * The queues local dev's stream router and feature runners use in place of
+ * SQS. Each registered stream feature (core-table's `STREAM_FEATURES`) has a
+ * queue and a failure queue named from its registration name, and the router
+ * has a failure queue of its own for records it can't send. `endpoint`,
+ * `region` and the dummy credentials are for an SQS-compatible local service
+ * (ElasticMQ, once one is configured); the in-process queue ignores them.
+ */
+export const LOCAL_QUEUES = {
+  endpoint: `http://${LOCAL_HOST}:9324`,
+  region: 'us-east-1',
+  accountId: '000000000000',
+  routerFailureQueue: 'stream-router-failures',
+};
+
+/** The local queue holding a stream feature's messages. */
+export const localFeatureQueueName = (feature: string): string =>
+  `stream-${feature}`;
+
+/** The local failure queue a stream feature's messages move to. */
+export const localFeatureFailureQueueName = (feature: string): string =>
+  `stream-${feature}-failures`;
+
+/** SQS client settings for the local queue service; empty when deployed. */
+export const sqsClientConfig = (): {
+  endpoint?: string;
+  region?: string;
+  credentials?: { accessKeyId: string; secretAccessKey: string };
+} =>
+  isLocalDev()
+    ? {
+        endpoint: LOCAL_QUEUES.endpoint,
+        region: LOCAL_QUEUES.region,
+        credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+      }
+    : {};
+
 /** What submitTranscodeJob asks the event runner to transcode, in local dev. */
 export interface LocalTranscodeJobRequest {
   /** The raw upload, in the lesson media upload bucket. */

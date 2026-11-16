@@ -8,6 +8,7 @@ import {
   apiUser,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { waitForQueuesToDrain } from '../helpers/router.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { uniqueName } from '../helpers/users.js';
 
@@ -81,7 +82,7 @@ test('completing the last item while the curriculum changes issues one certifica
   await instructor.instructor.contentItem.publish
     .mutate(course.texts[1]!)
     .catch(() => undefined);
-  await new Promise((resolve) => setTimeout(resolve, 8_000));
+  await waitForQueuesToDrain();
   const after = await student.core.certificate.myCertificates.query();
   expect(after).toHaveLength(1);
   expect(after[0]?.certificateId).toBe(issued?.certificateId);
