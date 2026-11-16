@@ -14,7 +14,7 @@ The e2e scenario makes its own users and uniquely named data and ends with the c
 
 ## By hand (local stack)
 
-1. `pnpm dev`. The event runner logs that it applies `NOTIFICATION_STREAM_FILTERS`.
+1. `pnpm dev`. The event runner lists a `notification-delivery` queue (`GET http://localhost:2024/router/queues`).
 2. Sign in as Bob in the student portal. The bell shows no badge; opening it shows "You're all caught up."
 3. Publish a notification for Bob. A small local script (task T017, `@discava/common-scripts:notify-local`) calls `publishNotification` with a registered type. Within a minute (or when you refocus the window) the badge shows 1.
 4. Open the bell: the notification is bold with a dot; select it. You land on its link, the dot clears, the badge disappears. Run the script again with the same dedupe key: still one notification.

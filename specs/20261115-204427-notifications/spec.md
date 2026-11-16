@@ -184,7 +184,7 @@ A contributor running local development triggers a notification and sees the ema
 - **FR-015**: After a notification is created, a separate delivery step triggered from the table's change stream MUST decide whether to email it and send at most one email for it. Delivery MUST NOT run in the producer's request and a delivery failure MUST NOT affect the notification or the producer.
 - **FR-016**: Delivery MUST be idempotent on retry: it claims a notification for sending before sending and records the outcome (sent, skipped with a reason, or failed) on the notification, so a second invocation sees the claim or the outcome and sends nothing. A notification whose send outcome is unknown after a crash MUST be marked unknown and not resent.
 - **FR-017**: Delivery MUST read the user's current preferences and address when it runs, and skip the email, recording why, if the user opted out, has no address, or email isn't configured for the stage.
-- **FR-018**: Transient sending failures MUST be retried by the platform's normal retry for the delivery step. Permanent failures MUST be recorded and not retried. A poison notification MUST NOT block the stream for other users.
+- **FR-018**: Transient sending failures MUST be retried by the platform's normal retry for the delivery step. Permanent failures MUST be recorded and not retried. A poison notification MUST NOT block the stream for other users: after its retries it moves to a failure queue where it can be inspected and redriven, and other users' notifications are delivered meanwhile.
 - **FR-019**: Every email MUST contain the title, body, a link to the target, a statement of why it was sent, an unsubscribe link for that type, and the standard one-click unsubscribe headers. Text and HTML versions MUST be sent, with all user-supplied text escaped.
 - **FR-020**: The sender address MUST come from stage configuration. A stage without one sends no email and reports so, rather than failing.
 
@@ -201,7 +201,7 @@ A contributor running local development triggers a notification and sees the ema
 
 **Quality and local development**
 
-- **FR-026**: Everything MUST work in local development without an AWS account: the stream-triggered steps run in the event runner, and email is captured to a local inbox instead of SES.
+- **FR-026**: Everything MUST work in local development without an AWS account: the stream-triggered steps run in the event runner (through the stream event router's local queue), and email is captured to a local inbox instead of SES.
 - **FR-027**: The writes that keep a rule other writers rely on (the unread count, idempotent creation, the read watermark) MUST live in shared core-table helpers called by every writer, each covered by an invariant check that a test can break.
 - **FR-028**: Notification titles, bodies and links MUST NOT contain secrets or private data beyond what the recipient could already see in the portal, since email is not a secure channel.
 
@@ -243,5 +243,5 @@ A contributor running local development triggers a notification and sees the ema
 - A stage without a configured, verified SES sender sends no email (`discava-development` is expected to configure one; verification and leaving the SES sandbox are manual account steps).
 - Local development stands in for SES by capturing messages to a local inbox, and for stream triggers with the event runner, as the other event handlers do.
 - Before launch there is nothing to migrate: the record shapes and registry can change outright.
-- The issue's "core-table stream/EventBridge" fan-out is built on the core-table stream, the repository's existing pattern for table-triggered handlers (progress, search). EventBridge is not needed.
+- The issue's "core-table stream/EventBridge" fan-out is built on the core-table stream, through the stream event router (`specs/20261116-183449-stream-event-router`), the repository's pattern for table-triggered handlers (progress, search). The router delivers each change at least once and in no fixed order, so delivery is designed for duplicates and reordering. EventBridge is not needed.
 - Issue #281 is closed by the PRs implementing this spec; the producer features (#279, #280, #282) and the submissions "returned" event stay with their own issues.
