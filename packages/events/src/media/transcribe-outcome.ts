@@ -7,6 +7,7 @@ import type { Logger } from '@aws-lambda-powertools/logger';
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { captionKey } from '@discava/common-server-utils/captions';
@@ -45,6 +46,17 @@ export interface TranscribeOutcome {
   vttKey?: string;
 }
 
+const WRITE_ACCESS_CHECK_FILE = '.write_access_check_file.temp';
+
+// Whether the WebVTT holds at least one cue: Transcribe writes a file with only
+// the header for audio with no speech, or no audio at all.
+const hasCues = async (bucket: string, key: string): Promise<boolean> => {
+  const { Body } = await s3Client.send(
+    new GetObjectCommand({ Bucket: bucket, Key: key }),
+  );
+  return (await Body?.transformToString())?.includes('-->') ?? false;
+};
+
 // Deleting the scratch objects only costs a stray file when it fails (they
 // sit under the item's folder, which deleting the item removes), so it never
 // fails the outcome.
@@ -54,7 +66,10 @@ const deleteScratch = async (
   vttKey: string,
 ): Promise<void> => {
   const jsonKey = vttKey.replace(/\.vtt$/, '.json');
-  for (const Key of new Set([vttKey, jsonKey])) {
+  // Transcribe checks it can write to the output folder by creating this
+  // empty file, and leaves it there.
+  const accessCheckKey = vttKey.replace(/[^/]+$/, WRITE_ACCESS_CHECK_FILE);
+  for (const Key of new Set([vttKey, jsonKey, accessCheckKey])) {
     try {
       await s3Client.send(new DeleteObjectCommand({ Bucket: bucket, Key }));
     } catch (error) {
@@ -97,7 +112,7 @@ export const applyTranscribeOutcome = async (
   const bucket = await resolveLessonMediaBucketName();
   const scratch = outcome.vttKey;
 
-  if (outcome.status === 'FAILED') {
+  const markFailed = async (): Promise<void> => {
     try {
       await coreTable.entities.contentItem
         .patch(ref)
@@ -112,6 +127,10 @@ export const applyTranscribeOutcome = async (
       }
       logger.info('Video no longer waiting for these captions', context);
     }
+  };
+
+  if (outcome.status === 'FAILED') {
+    await markFailed();
     return;
   }
 
@@ -192,6 +211,14 @@ export const applyTranscribeOutcome = async (
 
     if (!scratch) {
       throw new Error(`Transcribe job ${jobName} wrote no WebVTT file`);
+    }
+    if (!(await hasCues(bucket, scratch))) {
+      // No speech to caption: a track with no cues would only show students
+      // an empty captions menu, so it counts as a failure the instructor sees.
+      logger.warn('Transcribe found no speech; no captions added', context);
+      await markFailed();
+      await deleteScratch(logger, bucket, scratch);
+      return;
     }
     // Into the version's folder, where its signed cookies reach; copied
     // before the track is written, so a track never points at nothing.
