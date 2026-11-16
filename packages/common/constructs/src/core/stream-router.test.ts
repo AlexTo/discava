@@ -7,8 +7,12 @@ import { Duration, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { AttributeType, StreamViewType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StreamRouter, type StreamRouterFeature } from './stream-router.js';
+
+// The first synth loads much of aws-cdk-lib, which can pass vitest's default
+// 5 s on a busy CI runner.
+vi.setConfig({ testTimeout: 30_000 });
 
 const FEATURES: StreamRouterFeature[] = [
   {
