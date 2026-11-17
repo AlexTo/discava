@@ -168,22 +168,23 @@ describe("core-api's functions", () => {
   const template = synth({})('CoreApi');
 
   it('give only the video URL function the CloudFront signing key', () => {
-    const roles = Object.values(
-      template.findResources('AWS::IAM::Policy'),
-    ).flatMap((resource) => {
-      const { PolicyDocument, Roles } = (
-        resource as {
-          Properties: {
-            PolicyDocument: { Statement: { Action: string | string[] }[] };
-            Roles: { Ref: string }[];
-          };
-        }
-      ).Properties;
-      const readsSecrets = PolicyDocument.Statement.some((statement) =>
-        [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
-      );
-      return readsSecrets ? Roles.map((role) => role.Ref) : [];
-    });
+    const roles = Object.values(template.findResources('AWS::IAM::Policy'))
+      .flatMap((resource) => {
+        const { PolicyDocument, Roles } = (
+          resource as {
+            Properties: {
+              PolicyDocument: { Statement: { Action: string | string[] }[] };
+              Roles: { Ref: string }[];
+            };
+          }
+        ).Properties;
+        const readsSecrets = PolicyDocument.Statement.some((statement) =>
+          [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
+        );
+        return readsSecrets ? Roles.map((role) => role.Ref) : [];
+        // The unsubscribe function reads its own secret, not the signing key.
+      })
+      .filter((role) => !role.startsWith('NotificationUnsubscribe'));
 
     expect(roles).toHaveLength(1);
     expect(roles[0]).toMatch(/^CoreApiMediaUrlHandlerServiceRole/);
@@ -584,6 +585,229 @@ describe('the stream router', () => {
   });
 });
 
+describe('the unsubscribe route', () => {
+  const template = synth({})('CoreApi');
+  const resourceIds = (pathPart: string) =>
+    Object.entries(template.findResources('AWS::ApiGateway::Resource'))
+      .filter(([, r]) => r.Properties.PathPart === pathPart)
+      .map(([id]) => id);
+  const methodsOn = (httpMethod: string, pathPart: string) =>
+    Object.values(template.findResources('AWS::ApiGateway::Method')).filter(
+      (m) =>
+        m.Properties.HttpMethod === httpMethod &&
+        resourceIds(pathPart).some((id) =>
+          JSON.stringify(m.Properties.ResourceId).includes(id),
+        ),
+    );
+
+  it('serves a public GET and POST on unsubscribe/{token} from the unsubscribe function', () => {
+    const [functionId] = Object.keys(
+      template.findResources('AWS::Lambda::Function'),
+    ).filter((id) => id.startsWith('NotificationUnsubscribe'));
+    expect(functionId).toBeDefined();
+    for (const httpMethod of ['GET', 'POST']) {
+      const [method] = methodsOn(httpMethod, '{token}');
+      expect(method.Properties.AuthorizationType).toBe('NONE');
+      expect(JSON.stringify(method.Properties.Integration.Uri)).toContain(
+        functionId,
+      );
+    }
+  });
+
+  it('adds exactly those two routes to the API', () => {
+    const operations = Object.values(
+      template.findResources('AWS::ApiGateway::Method'),
+    ).filter((m) => m.Properties.HttpMethod !== 'OPTIONS');
+    const onToken = ['GET', 'POST'].flatMap((m) => methodsOn(m, '{token}'));
+    expect(onToken).toHaveLength(2);
+    // The router's operations are the rest.
+    expect(operations.length - onToken.length).toBeGreaterThan(0);
+  });
+
+  it('gives it the table and the secret, and not the shared router function', () => {
+    const roleStatements = (prefix: string) =>
+      JSON.stringify(
+        Object.entries(template.findResources('AWS::IAM::Policy'))
+          .filter(([id]) => id.startsWith(prefix))
+          .map(([, p]) => p.Properties.PolicyDocument),
+      );
+    const own = roleStatements(
+      'NotificationUnsubscribeServiceRoleDefaultPolicy',
+    );
+    expect(own).toContain('secretsmanager:GetSecretValue');
+    expect(own).toContain('dynamodb:');
+    expect(roleStatements('CoreApiRouterHandler')).not.toContain(
+      'secretsmanager:GetSecretValue',
+    );
+  });
+});
+
+describe('notification delivery', () => {
+  const SES_IDENTITY = 'example.com';
+  const configured: StageComponents = {
+    notifications: {
+      fromAddress: 'notifications@example.com',
+      sesIdentity: SES_IDENTITY,
+    },
+  };
+
+  // Every IAM policy statement's actions of `type`, by the stack's role.
+  const sesStatements = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+        (policy) =>
+          (
+            policy.Properties.PolicyDocument.Statement as {
+              Action: string | string[];
+              Resource: unknown;
+            }[]
+          )
+            .filter((statement) =>
+              JSON.stringify(statement.Action).includes('ses:'),
+            )
+            .map((statement) => ({ name, statement })),
+      ),
+    );
+
+  const secretReaders = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.entries(template.findResources('AWS::IAM::Policy'))
+        .filter(([, policy]) =>
+          JSON.stringify(policy.Properties.PolicyDocument).includes(
+            'NotificationUnsubscribeSecret',
+          ),
+        )
+        .map(([id]) => `${name}/${id}`),
+    );
+
+  const deliveryFunction = (components: StageComponents) => {
+    const template = synth(components)('StreamRouter');
+    const [fn] = resources(
+      template,
+      'AWS::Lambda::Function',
+      'NotificationDelivery',
+    );
+    return fn as { Timeout: number; Environment: { Variables: object } };
+  };
+
+  it('has a queue, failure queue and alarm of its own, and still one stream mapping', () => {
+    const template = synth({})('StreamRouter');
+    for (const type of ['AWS::SQS::Queue', 'AWS::CloudWatch::Alarm']) {
+      expect(
+        Object.keys(template.findResources(type)).filter((id) =>
+          id.startsWith('StreamRouterNotificationDelivery'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterNotificationDeliveryFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      stackTemplates({}).flatMap(([name, t]) =>
+        Object.values(t.findResources('AWS::Lambda::EventSourceMapping'))
+          .filter((m) =>
+            JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+          )
+          .map(() => name),
+      ),
+    ).toEqual(['StreamRouter']);
+  });
+
+  it('gives the queue a visibility timeout of six times the function timeout', () => {
+    const template = synth({})('StreamRouter');
+    const { Timeout } = deliveryFunction({});
+    expect(Timeout).toBe(120);
+    const queues = resources(
+      template,
+      'AWS::SQS::Queue',
+      'StreamRouterNotificationDelivery',
+    ).filter((queue) => queue.RedrivePolicy);
+    expect(queues).toHaveLength(1);
+    expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
+  });
+
+  it('is told where the portals and the API are, and where its secret is', () => {
+    const { Environment } = deliveryFunction(configured);
+    expect(Object.keys(Environment.Variables).sort()).toEqual(
+      [
+        'ADMIN_PORTAL_URL',
+        'CORE_API_URL',
+        'INSTRUCTOR_PORTAL_URL',
+        'NOTIFICATIONS_FROM_ADDRESS',
+        'STUDENT_PORTAL_URL',
+        'UNSUBSCRIBE_SECRET_ARN',
+      ].sort(),
+    );
+    expect(Environment.Variables).toMatchObject({
+      NOTIFICATIONS_FROM_ADDRESS: 'notifications@example.com',
+    });
+  });
+
+  it('points at the custom domains when the stage has them', () => {
+    const { Environment } = deliveryFunction({
+      studentPortal: {
+        domainNames: ['learn.example.com'],
+        certificateArn:
+          'arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+      coreApi: {
+        domainName: 'api.example.com',
+        certificateArn:
+          'arn:aws:acm:ap-southeast-2:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+    });
+    expect(Environment.Variables).toMatchObject({
+      STUDENT_PORTAL_URL: 'https://learn.example.com',
+      CORE_API_URL: 'https://api.example.com',
+    });
+  });
+
+  it('is given no sender and no SES access when the stage configures none', () => {
+    expect(deliveryFunction({}).Environment.Variables).not.toHaveProperty(
+      'NOTIFICATIONS_FROM_ADDRESS',
+    );
+    expect(sesStatements({})).toEqual([]);
+  });
+
+  it('may send only from the configured identity, and no other function may send', () => {
+    const statements = sesStatements(configured);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].name).toBe('StreamRouter');
+    expect(statements[0].statement.Action).toBe('ses:SendEmail');
+    expect(statements[0].statement.Resource).toEqual({
+      'Fn::Join': [
+        '',
+        [
+          'arn:',
+          { Ref: 'AWS::Partition' },
+          ':ses:ap-southeast-2:111122223333:identity/example.com',
+        ],
+      ],
+    });
+  });
+
+  it('is read by the delivery and unsubscribe functions only', () => {
+    const readers = secretReaders({});
+    expect(readers).toHaveLength(2);
+    expect(readers.sort()).toEqual([
+      expect.stringMatching(/^CoreApi\/NotificationUnsubscribe/),
+      expect.stringMatching(/^StreamRouter\/NotificationDelivery/),
+    ]);
+  });
+
+  it('keeps the stage under the resource cap', () => {
+    for (const [name, template] of stackTemplates(configured)) {
+      expect(
+        Object.keys(template.toJSON().Resources ?? {}).length,
+        name,
+      ).toBeLessThan(450);
+    }
+  });
+});
+
 // Stages may share an account and region (see StageIsolationSynthesizer),
 // where collection and policy names must be unique.
 describe('search collection (#53)', () => {
@@ -976,5 +1200,46 @@ describe('limits a stage leaves out', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: false },
     });
+  });
+});
+
+describe('the notification unsubscribe secret', () => {
+  const secrets = (components: StageComponents) =>
+    synth(components)('Data').findResources('AWS::SecretsManager::Secret');
+  const unsubscribeSecrets = (components: StageComponents) =>
+    Object.entries(secrets(components)).filter(([id]) =>
+      id.startsWith('NotificationUnsubscribeSecret'),
+    );
+
+  it('is a generated 64-character value', () => {
+    const [[, secret]] = unsubscribeSecrets({});
+    expect(secret.Properties.GenerateSecretString).toMatchObject({
+      PasswordLength: 64,
+      ExcludePunctuation: true,
+    });
+  });
+
+  it('is encrypted with a customer-managed key unless the stage turns that off', () => {
+    const [[, encrypted]] = unsubscribeSecrets({});
+    expect(encrypted.Properties.KmsKeyId).toBeDefined();
+
+    const [[, plain]] = unsubscribeSecrets({
+      coreTable: { enableKmsEncryption: false },
+    });
+    expect(plain.Properties.KmsKeyId).toBeUndefined();
+  });
+
+  it('is retained on delete unless the stage opts out, like the table', () => {
+    const [[, retained]] = unsubscribeSecrets({});
+    expect(retained.DeletionPolicy).toBe('Retain');
+
+    const [[, removed]] = unsubscribeSecrets({
+      coreTable: { retainOnDelete: false },
+    });
+    expect(removed.DeletionPolicy).toBe('Delete');
+  });
+
+  it('is the only notification secret in Data', () => {
+    expect(unsubscribeSecrets({})).toHaveLength(1);
   });
 });

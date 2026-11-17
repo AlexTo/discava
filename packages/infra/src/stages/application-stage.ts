@@ -20,7 +20,7 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> StreamRouter -> MediaPipeline -> CoreApi -> InstructorApi -> RuntimeConfig
+ *   Websites -> Data -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> RuntimeConfig
  *
  * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
  * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
@@ -33,7 +33,8 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * for the search procedure's read access. StreamRouter holds the single
  * reader of the core table's stream, the queues it feeds and the progress
  * and search handlers behind them (the indexing Lambda's write access to the
- * collection included); it depends on Data only.
+ * collection included); it depends on Data, and on Websites and CoreApi for the
+ * addresses the notification emails link to.
  */
 export class ApplicationStage extends Stage {
   constructor(
@@ -51,6 +52,7 @@ export class ApplicationStage extends Stage {
       lessonMedia,
       publicMedia,
       search,
+      notifications,
       ...props
     }: ApplicationStageProps,
   ) {
@@ -84,13 +86,6 @@ export class ApplicationStage extends Stage {
       studentPortal: websites.studentPortal,
     });
 
-    new StreamRouterStack(this, 'StreamRouter', {
-      ...stackProps,
-      streamRouter,
-      coreTable: data.coreTable,
-      searchCollection: data.searchCollection,
-    });
-
     const mediaPipeline = new MediaPipelineStack(this, 'MediaPipeline', {
       ...stackProps,
       coreTable: data.coreTable,
@@ -98,12 +93,13 @@ export class ApplicationStage extends Stage {
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
     });
 
-    new CoreApiStack(this, 'CoreApi', {
+    const coreApiStack = new CoreApiStack(this, 'CoreApi', {
       ...stackProps,
       coreApi,
       identity: data.identity,
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
+      notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
       mediaPipeline,
@@ -112,6 +108,17 @@ export class ApplicationStage extends Stage {
         websites.instructorPortal,
         websites.adminPortal,
       ],
+    });
+
+    new StreamRouterStack(this, 'StreamRouter', {
+      ...stackProps,
+      streamRouter,
+      coreTable: data.coreTable,
+      searchCollection: data.searchCollection,
+      notifications,
+      notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
+      portalUrls: websites.portalUrls,
+      coreApiUrl: coreApiStack.apiUrl,
     });
 
     new InstructorApiStack(this, 'InstructorApi', {

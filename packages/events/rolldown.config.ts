@@ -126,4 +126,26 @@ export default defineConfig([
     platform: 'node',
     external: [/@aws-sdk\/.*/],
   },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/notifications/delivery.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/notification-delivery/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/notifications/unsubscribe.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/notification-unsubscribe/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
 ]);

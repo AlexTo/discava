@@ -28,6 +28,8 @@ import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
 import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Key } from 'aws-cdk-lib/aws-kms';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
 export interface DataStackProps extends StackProps {
@@ -59,6 +61,8 @@ export class DataStack extends Stack {
   public readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
   public readonly publicMediaBucket: PublicMediaBucket;
   public readonly searchCollection: SearchCollection;
+  /** The HMAC key that signs notification unsubscribe links. */
+  public readonly notificationUnsubscribeSecret: Secret;
 
   constructor(
     scope: Construct,
@@ -84,6 +88,8 @@ export class DataStack extends Stack {
       this.createLessonMediaUploadBucket(lessonMediaConfig);
     this.publicMediaBucket = this.createPublicMediaBucket(publicMediaConfig);
     this.searchCollection = this.createSearchCollection(searchConfig);
+    this.notificationUnsubscribeSecret =
+      this.createNotificationUnsubscribeSecret(coreTableConfig);
 
     // hls.js fetches a video's manifest, renditions and segments with
     // cross-origin requests, so both portals that play lesson videos must be
@@ -206,6 +212,45 @@ export class DataStack extends Stack {
       );
     }
     return coreTable;
+  }
+
+  // Signs the unsubscribe links in notification emails (HMAC-SHA256); the
+  // delivery function signs with it and the unsubscribe function verifies.
+  // Replacing it would invalidate every link already sent, so it is kept like
+  // the table, and follows the table's encryption setting.
+  private createNotificationUnsubscribeSecret(
+    coreTableConfig?: CoreTableComponentConfig,
+  ) {
+    const kmsEnabled = coreTableConfig?.enableKmsEncryption ?? true;
+    const secret = new Secret(this, 'NotificationUnsubscribeSecret', {
+      description: 'HMAC key that signs notification unsubscribe links',
+      generateSecretString: {
+        passwordLength: 64,
+        excludePunctuation: true,
+      },
+      encryptionKey: kmsEnabled
+        ? new Key(this, 'NotificationUnsubscribeSecretKey', {
+            enableKeyRotation: coreTableConfig?.enableKeyRotation ?? true,
+            removalPolicy:
+              (coreTableConfig?.retainOnDelete ?? true)
+                ? RemovalPolicy.RETAIN
+                : RemovalPolicy.DESTROY,
+          })
+        : undefined,
+      removalPolicy:
+        (coreTableConfig?.retainOnDelete ?? true)
+          ? RemovalPolicy.RETAIN
+          : RemovalPolicy.DESTROY,
+    });
+    const suppressed = ['CKV_AWS_304', 'CKV2_AWS_57'];
+    if (!kmsEnabled) suppressed.push('CKV_AWS_149');
+    suppressRules(
+      secret,
+      suppressed,
+      'An HMAC key for signed links: rotating it would break every link already emailed, and links carry no expiry' +
+        (kmsEnabled ? '' : '; KMS CMK encryption disabled for this stage'),
+    );
+    return secret;
   }
 
   private createLessonMediaBucket(
