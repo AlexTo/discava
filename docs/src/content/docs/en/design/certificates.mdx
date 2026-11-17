@@ -1,0 +1,41 @@
+---
+title: Certificates
+description: How a certificate of completion is issued, switched on or off per course, shared and verified.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## The rule
+
+**A certificate is only ever written server-side, by the progress recalculation, and a student has at most one per course.** Completing a course (see <Link path="design/progress-and-completion">Progress and completion</Link>) is what issues it. Nothing a student or an instructor does in a browser can create one.
+
+## How it is issued
+
+- The progress recalculation Lambda calls `issueCertificate` after it writes a student's progress and enrolment, when the student is not dropped and the enrolment is `completed`.
+- It reads the student's `certificate` for the course first. Only when there is none does it read the course and the user, so students still in progress, and students who already have a certificate, cost no extra reads.
+- `issueCertificate` is the only writer of `certificate`. It creates the record with a condition that the key doesn't exist already, so two recalculations running at the same moment still leave one certificate with one ID, and both return it. An error is never swallowed: the batch is retried.
+- The certificate copies what it prints (the learner's name, the course title and the completion date) at the time it is issued. Renaming the course later doesn't change it.
+- The ID is 16 characters of Crockford base32, shown as `XXXX-XXXX-XXXX-XXXX`. Lookups ignore dashes, spaces and case, and read `O` as `0` and `I` or `L` as `1`.
+
+## The per-course switch
+
+An instructor turns **Issue a certificate on completion** on or off in the course's settings, in any course status. It is on for every new course.
+
+- It applies from then on. Turning it off never removes or invalidates a certificate already issued, and turning it on gives a certificate to a student who completed the course while it was off the next time their progress is recalculated.
+- Existing certificates keep verifying while the switch is off.
+
+## What the public page shows
+
+`/certificates/<ID>` in the student portal needs no sign-in. It shows the learner's name, the course title, the completion date and the certificate ID, and nothing else: no email, no user ID and no link to the learner's account. An ID that is malformed or unknown gets the same "Certificate not found".
+
+## Sharing and verifying
+
+A student finds their certificates in **My Learning**, on each completed course: **View** opens the public page, **Download PDF** saves a one-page A4 certificate that carries the same ID and the page's address, and **Copy link** copies the public page's address. Anyone with the link, or the ID, can check it on that page.
+
+## Limitations
+
+- There is no backfill: a student who completed a course before certificates existed gets a certificate only when their progress is recalculated for some other reason.
+- There is no revocation. A certificate can't be withdrawn once issued.
+- The PDF uses standard fonts, so characters outside Latin-1 (for example Chinese, Japanese or emoji) print as `?`. The public page shows them correctly.

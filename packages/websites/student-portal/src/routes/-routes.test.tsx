@@ -18,6 +18,12 @@ const course = {
 };
 
 const handlers = {
+  'certificate.verify': () => ({
+    certificateId: 'ABCD-EFGH-JKLM',
+    learnerName: 'Ada Lovelace',
+    courseTitle: 'Linear Algebra',
+    completedAt: '2026-10-05T12:00:00.000Z',
+  }),
   'course.publicList': () => ({ items: [course] }),
   'course.publicView': () => course,
   'course.myEnrolment': () => null,
@@ -96,5 +102,16 @@ describe('the top bar', () => {
       await screen.findByRole('button', { name: 'Open user menu' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
+  });
+});
+
+describe('/certificates/<ID>', () => {
+  it('is open to a signed-out visitor, with no sign-in redirect', async () => {
+    const { router, calls } = open('/certificates/ABCD-EFGH-JKLM');
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    const location = await pathAfterLoad(router);
+    expect(location.pathname).toBe('/certificates/ABCD-EFGH-JKLM');
+    expect(calls.map((c) => c.path)).toEqual(['certificate.verify']);
   });
 });

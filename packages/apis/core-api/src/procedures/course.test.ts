@@ -493,6 +493,83 @@ describe('viewCourse', () => {
     expect(item).not.toHaveProperty('previousS3Key');
   });
 
+  it('exposes none of a video’s caption attributes to students', async () => {
+    const manifest =
+      'courses/course-1/modules/module-1/lessons/lesson-1/content-items/content-item-1/n1/master.m3u8';
+    const captioned = {
+      contentItemId: 'content-item-1',
+      lessonId: 'lesson-1',
+      moduleId: 'module-1',
+      courseId: course.courseId,
+      type: 'video' as const,
+      status: 'ready' as const,
+      title: 'Lecture',
+      s3Key: manifest,
+      mimeType: 'video/mp4',
+      order: 1,
+      captionTracks: [
+        {
+          trackId: 't1',
+          nonce: 'n1',
+          language: 'en-US',
+          label: 'English',
+          source: 'auto',
+          key: 'courses/course-1/modules/module-1/lessons/lesson-1/content-items/content-item-1/n1/captions/t1.vtt',
+          isDefault: true,
+        },
+      ],
+      captionTracksRev: 2,
+      captionsStatus: 'ready',
+      captionsPendingSince: '2024-01-01T00:00:00.000Z',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [course],
+          module: [
+            {
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Module',
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ].map(visible),
+          lesson: [
+            {
+              lessonId: 'lesson-1',
+              moduleId: 'module-1',
+              courseId: course.courseId,
+              title: 'Lesson',
+              kind: 'lesson' as const,
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            },
+          ].map(visible),
+          contentItem: [captioned].map(visible),
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    const [item] = result.modules[0].lessons[0].contentItems;
+    expect(item).toMatchObject({ s3Key: manifest });
+    for (const name of [
+      'captionTracks',
+      'captionTracksRev',
+      'captionsStatus',
+      'captionsPendingSince',
+    ]) {
+      expect(item).not.toHaveProperty(name);
+    }
+    expect(JSON.stringify(result)).not.toContain('captions/t1.vtt');
+  });
+
   it('nests each module’s lessons, sorted by order', async () => {
     const module1 = {
       moduleId: 'module-2',

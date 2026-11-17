@@ -21,6 +21,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/media/transcribe-complete.ts",
+        "name": "transcribe-complete",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/media/transcode-cleanup.ts",
         "name": "transcode-cleanup",
         "iac": "cdk"
@@ -53,6 +59,12 @@
         "generator": "ts#lambda-function",
         "path": "src/search/search-reindex.ts",
         "name": "search-reindex",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/router/stream-router.ts",
+        "name": "stream-router",
         "iac": "cdk"
       }
     ]
@@ -97,6 +109,10 @@
         {
           "projects": ["@discava/common-scripts"],
           "target": "s3mock"
+        },
+        {
+          "projects": ["@discava/common-scripts"],
+          "target": "elasticmq"
         }
       ],
       "continuous": true,

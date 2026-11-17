@@ -5,6 +5,7 @@
 import { Service } from 'electrodb';
 import {
   createAssignmentSubmissionEntity,
+  createCertificateEntity,
   createContentItemEntity,
   createCourseEntity,
   createCourseInstructorEntity,
@@ -16,6 +17,7 @@ import {
   createQuizAttemptEntity,
   createQuizSummaryEntity,
   createUserEntity,
+  createVideoPositionEntity,
 } from './entities/index.js';
 
 // Course, Module, Lesson, and ContentItem join the `curriculum` collection
@@ -37,6 +39,8 @@ export const createCoreTableService = async () => {
     quizAttempt,
     quizSummary,
     itemCompletion,
+    certificate,
+    videoPosition,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -50,6 +54,8 @@ export const createCoreTableService = async () => {
     createQuizAttemptEntity(),
     createQuizSummaryEntity(),
     createItemCompletionEntity(),
+    createCertificateEntity(),
+    createVideoPositionEntity(),
   ]);
 
   return new Service({
@@ -65,5 +71,7 @@ export const createCoreTableService = async () => {
     quizAttempt,
     quizSummary,
     itemCompletion,
+    certificate,
+    videoPosition,
   });
 };

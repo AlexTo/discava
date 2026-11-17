@@ -65,6 +65,34 @@ const buildSettingsJson = () => ({
         buildRendition('360p', 640, 360, 700_000, 7),
       ],
     },
+    // The same audio as an MP4 for Amazon Transcribe, which reads whole media
+    // files, not HLS segments (and the raw upload is deleted on completion).
+    // `Destination` is overridden per job, like the HLS one.
+    {
+      Name: 'Transcribe audio',
+      OutputGroupSettings: {
+        Type: 'FILE_GROUP_SETTINGS',
+        FileGroupSettings: { Destination: 's3://placeholder/' },
+      },
+      Outputs: [
+        {
+          ContainerSettings: { Container: 'MP4' },
+          AudioDescriptions: [
+            {
+              AudioSourceName: 'Audio Selector 1',
+              CodecSettings: {
+                Codec: 'AAC',
+                AacSettings: {
+                  Bitrate: 64_000,
+                  CodingMode: 'CODING_MODE_2_0',
+                  SampleRate: 48_000,
+                },
+              },
+            },
+          ],
+        },
+      ],
+    },
   ],
 });
 
@@ -154,6 +182,8 @@ export class VideoTranscodePipeline extends Construct {
       assumedBy: new ServicePrincipal('mediaconvert.amazonaws.com'),
     });
     uploadBucket.grantRead(this.role);
+    // The audio-only file Transcribe reads (see captions' transcribeInputKey).
+    uploadBucket.grantPut(this.role, 'transcribe-input/*');
     mediaBucket.grantPut(this.role);
 
     this.jobTemplate = new CfnJobTemplate(this, 'JobTemplate', {

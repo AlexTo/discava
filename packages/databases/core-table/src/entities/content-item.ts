@@ -116,6 +116,40 @@ export const createContentItemEntity = async () =>
         submissionNonce: {
           type: 'string',
         },
+        // Caption attributes, video items only (see ../helpers/caption-tracks.ts,
+        // which every writer of captionTracks goes through). Never exposed
+        // whole in any API output: S3 keys and the revision stay server-side.
+        // At most 10 tracks, each { trackId, nonce, language, label, source,
+        // key, isDefault }.
+        captionTracks: {
+          type: 'list',
+          items: {
+            type: 'map',
+            properties: {
+              trackId: { type: 'string', required: true },
+              nonce: { type: 'string', required: true },
+              language: { type: 'string', required: true },
+              label: { type: 'string', required: true },
+              source: { type: ['auto', 'uploaded'] as const, required: true },
+              key: { type: 'string', required: true },
+              isDefault: { type: 'boolean', required: true },
+            },
+          },
+        },
+        // Starts at 0 (absent counts as 0) and is incremented by every write
+        // to captionTracks: the condition that serialises concurrent writers.
+        captionTracksRev: {
+          type: 'number',
+        },
+        // The played version's automatic captioning: pending from when the
+        // version becomes ready, then ready (a track was added) or failed.
+        captionsStatus: {
+          type: ['pending', 'ready', 'failed'] as const,
+        },
+        // When captionsStatus became pending (ISO timestamp); removed with it.
+        captionsPendingSince: {
+          type: 'string',
+        },
         // File-only attributes (type: 'file', #102). The file itself is at
         // s3Key in the lesson media bucket, under the item's own
         // .../content-items/<id>/<submissionNonce>/ folder (the nonce being

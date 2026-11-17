@@ -14,9 +14,12 @@ import {
   getS3Client,
   resolveLessonMediaUploadBucketName,
 } from '@discava/common-server-utils/lesson-media-bucket';
+import { manifestNonce } from '@discava/common-server-utils/media-keys';
 import {
   isConditionalCheckFailed,
+  reportedCaptionsStatus,
   TRANSCODE_PENDING_ATTRIBUTES,
+  tracksForPlayback,
   transcodePendingFrom,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -786,5 +789,26 @@ export const createContentItemVideoUrl = courseProcedure
     ]);
     ctx.responseCookies?.push(...cookies);
 
-    return { url, withCredentials: cookies.length > 0 };
+    // The folder name is the version's identity; its tracks live under it.
+    const versionId = manifestNonce(contentItem.s3Key) ?? '';
+    const captions = await Promise.all(
+      tracksForPlayback(contentItem.captionTracks, versionId).map(
+        async (track) => ({
+          trackId: track.trackId,
+          language: track.language,
+          label: track.label,
+          isDefault: track.isDefault,
+          source: track.source,
+          url: await getCloudFrontVideoUrl(track.key),
+        }),
+      ),
+    );
+
+    return {
+      url,
+      withCredentials: cookies.length > 0,
+      versionId,
+      captionsStatus: reportedCaptionsStatus(contentItem),
+      captions,
+    };
   });

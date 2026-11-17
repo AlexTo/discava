@@ -11,7 +11,9 @@ import { LOCAL_S3 } from '@discava/common-server-utils/local-dev';
 // S3Mock's objects and the local OpenSearch container's indices (their
 // containers and named volumes), and the event runner's working files in
 // tmp/local-dev/. Stop `pnpm dev` first. Nothing deployed is touched. Each
-// service creates itself afresh on the next `pnpm dev`.
+// service creates itself afresh on the next `pnpm dev`. ElasticMQ holds no
+// data to delete: its queues are in memory, so stopping `pnpm dev` already
+// empties them.
 
 const dynamodb = JSON.parse(
   readFileSync(

@@ -248,6 +248,17 @@ export type CoreTableComponentConfig = {
 };
 
 /**
+ * Per-stage settings for the stream router: the queues (and the KMS key)
+ * that carry the core table's changes to each feature's handler.
+ */
+export type StreamRouterComponentConfig = {
+  /** Use customer-managed KMS encryption instead of the cheaper SQS-managed default */
+  enableKmsEncryption?: boolean;
+  /** Enable automatic key rotation on the queues' KMS key. Only used when `enableKmsEncryption` is true */
+  enableKeyRotation?: boolean;
+};
+
+/**
  * Per-stage settings for the student portal static website construct.
  */
 export type StudentPortalComponentConfig = {
@@ -410,6 +421,7 @@ export type StageComponents = {
   coreApi?: CoreApiComponentConfig;
   instructorApi?: InstructorApiComponentConfig;
   coreTable?: CoreTableComponentConfig;
+  streamRouter?: StreamRouterComponentConfig;
   studentPortal?: StudentPortalComponentConfig;
   instructorPortal?: InstructorPortalComponentConfig;
   adminPortal?: AdminPortalComponentConfig;

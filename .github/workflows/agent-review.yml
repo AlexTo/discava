@@ -1,0 +1,63 @@
+name: Agent Review Status
+
+# Sends the implementing agent back to fix a pull request the OpenHands
+# reviewer asked changes on.
+#
+# The Issue-to-PR automation revises a pull request, in the conversation that
+# opened it, when the pull request's latest commit has a commit status named
+# `software-factory/review` in state `failure` or `error`. The reviewer's
+# "🔄 CHANGES REQUESTED" verdict sets no status, so nothing woke the agent.
+# This posts it when the reviewer submits such a review on an agent's branch
+# (`openhands/issue-<n>`), at most three times per pull request (labels
+# `review-fix-1` to `review-fix-3`), then comments and stops
+# (`review-fix-exhausted`). The reviewer looks again by itself once the agent
+# pushes: a new head commit is a new review for its scan.
+# The rules are in packages/common/scripts/src/agent-review/.
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+concurrency:
+  # One run at a time per pull request, so two reviews can't each count an
+  # attempt at once.
+  group: agent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  statuses: write
+  # Labels and comments on a pull request go through the issues API, which
+  # refuses the workflow's token for a pull request unless it can write pull
+  # requests too.
+  issues: write
+  pull-requests: write
+
+jobs:
+  review-status:
+    name: Send the agent back after a review asking for changes
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'openhands/issue-') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.review.body, 'CHANGES REQUESTED')
+    runs-on: ubuntu-latest
+    steps:
+      # The default branch, never the pull request's code: this job holds a
+      # token that can write statuses, labels and comments, and it must not
+      # run anything the agent wrote.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Post the status
+        run: pnpm nx run @discava/common-scripts:agent-review-status
+        env:
+          GH_TOKEN: ${{ github.token }}
