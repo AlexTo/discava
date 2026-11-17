@@ -62,8 +62,14 @@ describe('NotificationBell (admin portal)', () => {
       runtimeConfig: { portals },
     });
 
+    // The first render of a cold file can take longer than findBy's default
+    // second when CI runs every project's tests at once.
     expect(
-      await screen.findByRole('button', { name: 'Notifications, 3 unread' }),
+      await screen.findByRole(
+        'button',
+        { name: 'Notifications, 3 unread' },
+        { timeout: 10_000 },
+      ),
     ).toHaveTextContent('3');
   });
 
