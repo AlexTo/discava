@@ -40,7 +40,14 @@ export interface RenderedWithApi extends RenderResult {
 
 export const renderWithCoreApi = (
   ui: ReactElement,
-  { handlers = {} }: { handlers?: Record<string, Handler> } = {},
+  {
+    handlers = {},
+    runtimeConfig = {},
+  }: {
+    handlers?: Record<string, Handler>;
+    // Merged into the runtime config the portal sees.
+    runtimeConfig?: Record<string, unknown>;
+  } = {},
 ): RenderedWithApi => {
   const calls: ApiCall[] = [];
   const queryClient = new QueryClient({
@@ -56,7 +63,10 @@ export const renderWithCoreApi = (
   const user = userEvent.setup();
   const result = render(
     <RuntimeConfigContext.Provider
-      value={{ media: { PublicMediaBucket: PUBLIC_MEDIA_URL } }}
+      value={{
+        media: { PublicMediaBucket: PUBLIC_MEDIA_URL },
+        ...runtimeConfig,
+      }}
     >
       <QueryClientProvider client={queryClient}>
         <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>

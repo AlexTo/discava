@@ -36,6 +36,7 @@ import { useAuth } from 'react-oidc-context';
 import Config from '../../config';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
+import { NotificationBell } from '../NotificationBell';
 
 const getBreadcrumbs = (
   matchRoute: ReturnType<typeof useMatchRoute>,
@@ -110,6 +111,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger
                 className="focus-visible:ring-ring/60 cursor-pointer rounded-full shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"

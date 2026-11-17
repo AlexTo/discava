@@ -23,6 +23,7 @@ import * as React from 'react';
 import Config from '../../config';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
+import { NotificationBell } from '../NotificationBell';
 import { UserMenu } from '../UserMenu';
 import { BreadcrumbOverrideContext } from './breadcrumb-label';
 
@@ -136,6 +137,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   <a href={studentPortal}>Student</a>
                 </Button>
               ) : null}
+              <NotificationBell />
               <UserMenu />
             </div>
           </header>

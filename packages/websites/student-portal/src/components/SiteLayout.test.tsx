@@ -25,6 +25,7 @@ const renderLayout = (auth: Partial<AuthContextProps>) =>
   renderWithCoreApi(<SiteLayout>Page</SiteLayout>, {
     auth,
     runtimeConfig: { portals },
+    handlers: { 'notification.unreadCount': () => ({ unreadCount: 2 }) },
   });
 
 describe('SiteLayout', () => {
@@ -50,5 +51,30 @@ describe('SiteLayout', () => {
       await screen.findByRole('link', { name: 'My Learning' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Instructor' })).toBeNull();
+  });
+
+  it('shows the notification bell to someone signed in, after My Learning', async () => {
+    renderLayout(signedInAs(['student']));
+
+    const bell = await screen.findByRole('button', {
+      name: 'Notifications, 2 unread',
+    });
+    const myLearning = screen.getByRole('link', { name: 'My Learning' });
+    expect(
+      myLearning.compareDocumentPosition(bell) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("doesn't show the notification bell to someone signed out", async () => {
+    renderWithCoreApi(<SiteLayout>Page</SiteLayout>, {
+      signedIn: false,
+      runtimeConfig: { portals },
+    });
+
+    expect(
+      await screen.findByRole('link', { name: 'Sign in' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Notifications/ })).toBeNull();
   });
 });
