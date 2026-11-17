@@ -2,11 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { readCourseSummaries } from '@discava/core-table';
+import { readCourseAnalytics, readCourseSummaries } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
   AnalyticsCourseInputSchema,
+  CourseAnalyticsInputSchema,
+  CourseAnalyticsOutputSchema,
   CourseSummariesOutputSchema,
   type ICourseSummary,
 } from '../schema/index.js';
@@ -89,4 +91,35 @@ export const courseSummaries = courseProcedure
         updatedAt: summary?.updatedAt ?? null,
       };
     });
+  });
+
+// One course's totals and its last 30 or 90 days. The lessons and quizzes
+// are empty until the stories that fill them.
+export const course = analyticsCourseProcedure
+  .input(CourseAnalyticsInputSchema)
+  .output(CourseAnalyticsOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const analytics = await readCourseAnalytics(
+      ctx.coreTable!,
+      input.courseId,
+      input.days,
+    );
+    return {
+      totals: {
+        enrolments: analytics.enrolments,
+        active: analytics.active,
+        completed: analytics.completed,
+        dropped: analytics.dropped,
+        completionRate: completionRate(
+          analytics.completed,
+          analytics.enrolments,
+          analytics.dropped,
+        ),
+        activeThisWeek: analytics.activeLearners,
+        updatedAt: analytics.updatedAt,
+      },
+      daily: analytics.daily,
+      lessons: [],
+      quizzes: [],
+    };
   });

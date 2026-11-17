@@ -83,6 +83,49 @@ test('an instructor sees how their course is doing, and no one else can open its
     await screenshot(instructor, 'course card with an enrolment and activity');
   });
 
+  await test.step('the course analytics page shows today’s bars and the totals', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expectAfterReloads(instructor, async () => {
+      const enrolments = instructor.getByRole('table', {
+        name: 'New enrolments per day',
+      });
+      await expect(
+        enrolments.getByRole('row', { name: new RegExp(today) }),
+      ).toContainText('1', { timeout: 2_000 });
+      const active = instructor.getByRole('table', {
+        name: 'Active learners per day',
+      });
+      await expect(
+        active.getByRole('row', { name: new RegExp(today) }),
+      ).toContainText('1', { timeout: 2_000 });
+    });
+    await expect(
+      instructor.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await expect(
+      instructor
+        .getByLabel('Totals')
+        .getByText('Completed')
+        .locator('xpath=..'),
+    ).toContainText('1');
+    await expect(
+      instructor
+        .getByRole('table', { name: 'New enrolments per day' })
+        .getByRole('row'),
+    ).toHaveCount(91);
+    await screenshot(instructor, 'course analytics over 90 days');
+
+    await instructor.getByRole('button', { name: '30 days' }).click();
+    await expect(instructor).toHaveURL(/days=30/);
+    await expect(
+      instructor
+        .getByRole('table', { name: 'New enrolments per day' })
+        .getByRole('row'),
+    ).toHaveCount(31);
+    await screenshot(instructor, 'course analytics over 30 days');
+  });
+
   await test.step('a second instructor does not see the course, nor can open its analytics page', async () => {
     await other.goto(`${PORTALS.instructor}/dashboard`);
     await signIn(other, newUser('Omar', ['instructor']));
