@@ -164,6 +164,8 @@ const consistentTable = (): TableSnapshot => ({
       userId: 'student',
       contentItemId: 'quiz',
       attemptId: 'a1',
+      answers: { q1: ['x'], q2: ['y'] },
+      correctQuestionIds: ['q1'],
       scorePercent: 40,
       passed: false,
       submittedAt: AT.a1,
@@ -173,6 +175,8 @@ const consistentTable = (): TableSnapshot => ({
       userId: 'student',
       contentItemId: 'quiz',
       attemptId: 'a2',
+      answers: { q1: ['x'], q2: ['z'] },
+      correctQuestionIds: ['q1', 'q2'],
       scorePercent: 80,
       passed: true,
       submittedAt: AT.a2,
@@ -219,8 +223,32 @@ const consistentTable = (): TableSnapshot => ({
   lessonStats: [
     { courseId: 'c1', lessonId: 'l1', inProgress: 1, completed: 0 },
   ],
-  quizQuestionStats: [],
-  quizScoreStats: [],
+  // The two attempts answered q1 and q2; q2 was missed once. The best score
+  // of 80 is in band 8.
+  quizQuestionStats: [
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      questionId: 'q1',
+      attempts: 2,
+      misses: 0,
+    },
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      questionId: 'q2',
+      attempts: 2,
+      misses: 1,
+    },
+  ],
+  quizScoreStats: [
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      ...{ band0: 0, band1: 0, band2: 0, band3: 0, band4: 0 },
+      ...{ band5: 0, band6: 0, band7: 0, band8: 1, band9: 0 },
+    },
+  ],
   notifications: [],
   notificationStates: [],
   notificationPreferences: [],
@@ -264,9 +292,45 @@ const settleLessonStats = () => {
   }));
 };
 
+// The same for the quiz figures, for a test that changes an attempt or a
+// summary to try another rule.
+const settleQuizStats = () => {
+  const items = aggregatesOf(
+    sumContributions([
+      ...table.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...table.quizSummaries.map((r) => contributions('quizSummary', r)),
+    ]),
+  );
+  table.quizQuestionStats = items
+    .filter(({ kind }) => kind === 'quizQuestionStats')
+    .map(({ courseId, sk, counters }) => {
+      const [contentItemId, questionId] = sk.slice(5).split('#Q#');
+      return {
+        courseId,
+        contentItemId,
+        questionId,
+        attempts: counters.attempts ?? 0,
+        misses: counters.misses ?? 0,
+      };
+    });
+  table.quizScoreStats = items
+    .filter(({ kind }) => kind === 'quizScoreStats')
+    .map(({ courseId, sk, counters }) => ({
+      courseId,
+      contentItemId: sk.slice(5, -'#SCORES'.length),
+      ...Object.fromEntries(
+        Array.from({ length: 10 }, (_, b) => [
+          `band${b}`,
+          counters[`band${b}`] ?? 0,
+        ]),
+      ),
+    })) as typeof table.quizScoreStats;
+};
+
 // The invariants broken, each once, with the messages.
 const broken = () => {
   settleLessonStats();
+  settleQuizStats();
   const violations = checkTableInvariants(table);
   return {
     invariants: [...new Set(violations.map((v) => v.invariant))],
@@ -1402,6 +1466,8 @@ describe('26. analytics-matches-records', () => {
     table.courseStats = [];
     table.periodStats = [];
     table.lessonStats = [];
+    table.quizQuestionStats = [];
+    table.quizScoreStats = [];
     expect(violations()).toEqual([]);
   });
 
@@ -1503,6 +1569,56 @@ describe('26. analytics-matches-records', () => {
         (v) => (v.record as { item: string }).item === 'LESSON#l1',
       ),
     ).toEqual([]);
+  });
+
+  it('expects a miss count for a question answered wrongly', () => {
+    table.quizQuestionStats[1].misses = 0;
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'QUIZ#quiz#Q#q2' },
+        message: 'misses is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports an attempts count that is off for a question', () => {
+    table.quizQuestionStats[0].attempts = 3;
+    expect(violations().map((v) => v.message)).toEqual([
+      'attempts is 3, but its records add up to 2',
+    ]);
+  });
+
+  it('reports a missing item for a question that was answered', () => {
+    table.quizQuestionStats = [];
+    expect(violations().map((v) => v.record)).toEqual(
+      expect.arrayContaining([
+        { courseId: 'c1', item: 'QUIZ#quiz#Q#q1' },
+        { courseId: 'c1', item: 'QUIZ#quiz#Q#q2' },
+      ]),
+    );
+  });
+
+  it('reports a student counted in the wrong score band', () => {
+    table.quizScoreStats[0].band8 = 0;
+    table.quizScoreStats[0].band4 = 1;
+    expect(
+      violations()
+        .map((v) => v.message)
+        .sort(),
+    ).toEqual([
+      'band4 is 1, but its records add up to 0',
+      'band8 is 0, but its records add up to 1',
+    ]);
+  });
+
+  it('moves a student’s band when their best score rises', () => {
+    table.quizSummaries[0].bestScore = 100;
+    expect(violations().map((v) => v.message)).toEqual(
+      expect.arrayContaining([
+        'band8 is 1, but its records add up to 0',
+        'band9 is 0, but its records add up to 1',
+      ]),
+    );
   });
 
   it('reports aggregates for a course that has no records', () => {

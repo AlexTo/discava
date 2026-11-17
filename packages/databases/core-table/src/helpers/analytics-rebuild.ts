@@ -41,14 +41,14 @@ interface FunnelMarker {
 
 /**
  * The contributions of a course's source records (enrolments, completions,
- * attempts, and lesson progress against enrolment), and the funnel markers
+ * attempts and summaries, and lesson progress against enrolment), and the funnel markers
  * the lesson counts imply.
  */
 const courseContributions = async (
   coreTable: CoreTable,
   courseId: string,
 ): Promise<{ sum: Contributions; funnel: FunnelMarker[] }> => {
-  const { enrolment, itemCompletion, quizAttempt, progress } =
+  const { enrolment, itemCompletion, quizAttempt, quizSummary, progress } =
     coreTable.entities;
   const funnel: FunnelMarker[] = [];
   const { data: enrolments } = await enrolment.query
@@ -60,9 +60,10 @@ const courseContributions = async (
   // Each student's records by keyed query: their partition, the course's prefix.
   await forEachLimited(enrolments, 10, async (enrolled) => {
     const { userId } = enrolled;
-    const [completions, attempts, lessons] = await Promise.all([
+    const [completions, attempts, summaries, lessons] = await Promise.all([
       itemCompletion.query.primary({ userId }).begins({ courseId }).go(all),
       quizAttempt.query.primary({ userId }).begins({ courseId }).go(all),
+      quizSummary.query.primary({ userId }).begins({ courseId }).go(all),
       progress.query.primary({ userId }).begins({ courseId }).go(all),
     ]);
     for (const record of lessons.data) {
@@ -76,6 +77,7 @@ const courseContributions = async (
         contributions('itemCompletion', record),
       ),
       ...attempts.data.map((record) => contributions('quizAttempt', record)),
+      ...summaries.data.map((record) => contributions('quizSummary', record)),
       funnelContributions(lessons.data, enrolled),
     );
   });
@@ -143,6 +145,21 @@ export const rebuildCourseAnalytics = async (
     } else if (kind === 'lessonStats') {
       await lessonStats
         .put({ courseId, lessonId: sk.slice('LESSON#'.length), ...counters })
+        .go();
+    } else if (kind === 'quizQuestionStats') {
+      const [contentItemId, questionId] = sk
+        .slice('QUIZ#'.length)
+        .split('#Q#') as [string, string];
+      await quizQuestionStats
+        .put({ courseId, contentItemId, questionId, ...counters })
+        .go();
+    } else if (kind === 'quizScoreStats') {
+      await quizScoreStats
+        .put({
+          courseId,
+          contentItemId: sk.slice('QUIZ#'.length, -'#SCORES'.length),
+          ...counters,
+        })
         .go();
     } else {
       await periodStats

@@ -29,9 +29,16 @@ export {
   type CourseDay,
   type CourseSummary,
   type LessonFunnel,
+  MIN_RANKED_ATTEMPTS,
+  type QuizAnalytics,
+  type QuizListing,
+  type QuizQuestionFigures,
   readCourseAnalytics,
+  readCourseQuizzes,
   readCourseSummaries,
   readLessonFunnel,
+  readQuizAnalytics,
+  type ScoreBand,
 } from './helpers/analytics-reads.js';
 export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';
 export {

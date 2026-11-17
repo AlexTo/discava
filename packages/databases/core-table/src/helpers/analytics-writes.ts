@@ -71,7 +71,13 @@ type Entities = Parameters<TransactionWrites>[0];
 // ever `add`, so concurrent and reordered updates all count. `updatedAt` is
 // the summary's "last updated".
 const itemUpdate = (
-  { courseStats, periodStats, lessonStats }: Entities,
+  {
+    courseStats,
+    periodStats,
+    lessonStats,
+    quizQuestionStats,
+    quizScoreStats,
+  }: Entities,
   courseId: string,
   deltas: Delta[],
   now: Date,
@@ -87,6 +93,25 @@ const itemUpdate = (
   if (kind === 'lessonStats') {
     return lessonStats
       .update({ courseId, lessonId: sk.slice('LESSON#'.length) })
+      .add(counters(deltas))
+      .commit();
+  }
+  if (kind === 'quizQuestionStats') {
+    // `QUIZ#<contentItemId>#Q#<questionId>`; a content item id has no `#`.
+    const [contentItemId, questionId] = sk
+      .slice('QUIZ#'.length)
+      .split('#Q#') as [string, string];
+    return quizQuestionStats
+      .update({ courseId, contentItemId, questionId })
+      .add(counters(deltas))
+      .commit();
+  }
+  if (kind === 'quizScoreStats') {
+    return quizScoreStats
+      .update({
+        courseId,
+        contentItemId: sk.slice('QUIZ#'.length, -'#SCORES'.length),
+      })
       .add(counters(deltas))
       .commit();
   }
@@ -162,6 +187,16 @@ export const applyAnalyticsChange = async (
         ...byItem(counts).map((deltas) =>
           itemUpdate(entities, courseId, deltas, now),
         ),
+        // A change that leaves the summary alone (a quiz attempt) still
+        // updated the course's analytics.
+        ...(counts.some(({ kind }) => kind === 'courseStats')
+          ? []
+          : [
+              entities.courseStats
+                .update({ courseId })
+                .set({ updatedAt: now.toISOString() })
+                .commit(),
+            ]),
       ],
       `event ${eventId}`,
     );

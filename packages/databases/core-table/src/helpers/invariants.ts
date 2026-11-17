@@ -31,6 +31,9 @@ import {
   aggregatesOf,
   contributions,
   funnelContributions,
+  questionStatsSk,
+  SCORE_BANDS,
+  scoreStatsSk,
   sumContributions,
 } from './analytics.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
@@ -136,6 +139,8 @@ export interface TableSnapshot {
     | 'lessonId'
     | 'contentItemId'
     | 'attemptId'
+    | 'answers'
+    | 'correctQuestionIds'
     | 'scorePercent'
     | 'passed'
     | 'submittedAt'
@@ -203,7 +208,18 @@ export interface TableSnapshot {
   >[];
   quizScoreStats: Pick<
     Item<typeof createQuizScoreStatsEntity>,
-    'courseId' | 'contentItemId'
+    | 'courseId'
+    | 'contentItemId'
+    | 'band0'
+    | 'band1'
+    | 'band2'
+    | 'band3'
+    | 'band4'
+    | 'band5'
+    | 'band6'
+    | 'band7'
+    | 'band8'
+    | 'band9'
   >[];
   notifications: Pick<
     Item<typeof createNotificationEntity>,
@@ -1400,9 +1416,11 @@ export const checkVideoPositionValid = (
 // enrolments, completions and quiz attempts. The stream handler keeps them
 // current a few seconds behind the records, so a check right after a change
 // may see a difference that closes (the e2e suite waits, see
-// `waitForAnalytics`). A missing item counts as zeros. The summary, period and
-// lesson items are compared so far; the quiz aggregates are not written yet.
-// A lesson's counts come from each student's `progress` against their
+// `waitForAnalytics`). A missing item counts as zeros. The summary, period,
+// lesson and quiz items are compared. A question's counts come from the
+// attempts' `answers` and `correctQuestionIds`, a quiz's score bands from the
+// students' `bestScore` (it only rises, check 3 holding it to the best
+// attempt, and attempts are never rewritten). A lesson's counts come from each student's `progress` against their
 // enrolment (a dropped one counts nothing); the funnel markers are ignored.
 export const checkAnalyticsMatchesRecords = (
   snapshot: TableSnapshot,
@@ -1414,6 +1432,7 @@ export const checkAnalyticsMatchesRecords = (
         contributions('itemCompletion', r),
       ),
       ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...snapshot.quizSummaries.map((r) => contributions('quizSummary', r)),
       ...snapshot.enrolments.map((enrolled) =>
         funnelContributions(
           snapshot.progress.filter(
@@ -1441,6 +1460,20 @@ export const checkAnalyticsMatchesRecords = (
       sk: `LESSON#${lessonId}`,
       counters: counters as Record<string, number | undefined>,
     })),
+    ...snapshot.quizQuestionStats.map(
+      ({ courseId, contentItemId, questionId, ...counters }) => ({
+        courseId,
+        sk: questionStatsSk(contentItemId, questionId),
+        counters: counters as Record<string, number | undefined>,
+      }),
+    ),
+    ...snapshot.quizScoreStats.map(
+      ({ courseId, contentItemId, ...counters }) => ({
+        courseId,
+        sk: scoreStatsSk(contentItemId),
+        counters: counters as Record<string, number | undefined>,
+      }),
+    ),
   ];
 
   const items = new Map<
@@ -1474,6 +1507,9 @@ export const checkAnalyticsMatchesRecords = (
           'dropped',
           'activeLearners',
           'inProgress',
+          'attempts',
+          'misses',
+          ...Array.from({ length: SCORE_BANDS }, (_, band) => `band${band}`),
         ].includes(attribute),
       )
       .flatMap((attribute) => {

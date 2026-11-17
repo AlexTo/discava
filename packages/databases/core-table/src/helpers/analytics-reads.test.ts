@@ -5,8 +5,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   readCourseAnalytics,
+  readCourseQuizzes,
   readCourseSummaries,
   readLessonFunnel,
+  readQuizAnalytics,
 } from './analytics-reads.js';
 
 type Keys = Record<string, string>[];
@@ -196,8 +198,21 @@ describe('readCourseSummaries', () => {
 const collectionsOf = (
   lessonStats: Record<string, unknown>[] = [],
   curriculum: Record<string, Record<string, unknown>[]> = {},
+  quiz: {
+    quizQuestionStats?: Record<string, unknown>[];
+    quizScoreStats?: Record<string, unknown>[];
+  } = {},
 ) => ({
-  analytics: () => ({ go: async () => ({ data: { lessonStats } }) }),
+  analytics: () => ({
+    go: async () => ({
+      data: {
+        lessonStats,
+        quizQuestionStats: [],
+        quizScoreStats: [],
+        ...quiz,
+      },
+    }),
+  }),
   curriculum: () => ({
     go: async () => ({
       data: { module: [], lesson: [], contentItem: [], ...curriculum },
@@ -409,5 +424,292 @@ describe('readCourseAnalytics', () => {
     );
     expect(result.updatedAt).toBeNull();
     expect(result.enrolments).toBe(0);
+  });
+});
+
+describe('quiz analytics', () => {
+  const module = (moduleId: string, order: number, extra = {}) => ({
+    moduleId,
+    order,
+    title: moduleId,
+    ...shown,
+    ...extra,
+  });
+  const lesson = (lessonId: string, moduleId: string, order: number) => ({
+    lessonId,
+    moduleId,
+    order,
+    title: lessonId,
+    ...shown,
+  });
+  const prompt = (words: string) =>
+    JSON.stringify({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: words }] },
+      ],
+    });
+  const question = (questionId: string, words = `Question ${questionId}`) => ({
+    questionId,
+    kind: 'single',
+    prompt: prompt(words),
+    options: [],
+  });
+  const quizItem = (
+    contentItemId: string,
+    lessonId: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    contentItemId,
+    lessonId,
+    moduleId: 'm1',
+    type: 'quiz',
+    title: `Quiz ${contentItemId}`,
+    order: 1,
+    questions: [question('q1'), question('q2'), question('q3')],
+    ...shown,
+    ...extra,
+  });
+  const qStats = (
+    contentItemId: string,
+    questionId: string,
+    attempts: number,
+    misses: number,
+  ) => ({ contentItemId, questionId, attempts, misses });
+  const table = (
+    curriculum: Record<string, Record<string, unknown>[]>,
+    quiz: Parameters<typeof collectionsOf>[2] = {},
+  ) =>
+    ({
+      collections: collectionsOf(
+        [],
+        {
+          module: [module('m1', 1)],
+          lesson: [lesson('l1', 'm1', 1)],
+          ...curriculum,
+        },
+        quiz,
+      ),
+    }) as never;
+
+  describe('readQuizAnalytics', () => {
+    it('ranks questions with 5 or more attempts by miss rate, then attempts, then the rest in quiz order', async () => {
+      const result = await readQuizAnalytics(
+        table(
+          {
+            contentItem: [
+              quizItem('z1', 'l1', {
+                questions: [
+                  question('q1'),
+                  question('q2'),
+                  question('q3'),
+                  question('q4'),
+                  question('q5'),
+                ],
+              }),
+            ],
+          },
+          {
+            quizQuestionStats: [
+              qStats('z1', 'q1', 10, 5), // 50%
+              qStats('z1', 'q2', 20, 10), // 50%, more attempts
+              qStats('z1', 'q3', 5, 5), // 100%
+              qStats('z1', 'q4', 4, 4), // unranked
+              // q5 has no item: unranked, zeros
+            ],
+          },
+        ),
+        'c1',
+        'z1',
+      );
+
+      expect(result?.questions.map(({ questionId }) => questionId)).toEqual([
+        'q3',
+        'q2',
+        'q1',
+        'q4',
+        'q5',
+      ]);
+      expect(result?.questions.map(({ ranked }) => ranked)).toEqual([
+        true,
+        true,
+        true,
+        false,
+        false,
+      ]);
+      expect(result?.questions[0]).toEqual({
+        questionId: 'q3',
+        text: 'Question q3',
+        attempts: 5,
+        misses: 5,
+        missRate: 100,
+        ranked: true,
+      });
+      expect(result?.questions[4]).toMatchObject({
+        attempts: 0,
+        misses: 0,
+        missRate: null,
+        ranked: false,
+      });
+    });
+
+    it('lists only the quiz’s current questions, dropping a deleted one’s stats', async () => {
+      const result = await readQuizAnalytics(
+        table(
+          {
+            contentItem: [
+              quizItem('z1', 'l1', { questions: [question('q1')] }),
+            ],
+          },
+          {
+            quizQuestionStats: [
+              qStats('z1', 'q1', 6, 3),
+              qStats('z1', 'gone', 9, 9),
+            ],
+          },
+        ),
+        'c1',
+        'z1',
+      );
+      expect(result?.questions.map(({ questionId }) => questionId)).toEqual([
+        'q1',
+      ]);
+    });
+
+    it('does not mix in another quiz’s stats', async () => {
+      const result = await readQuizAnalytics(
+        table(
+          { contentItem: [quizItem('z1', 'l1'), quizItem('z2', 'l1')] },
+          { quizQuestionStats: [qStats('z2', 'q1', 9, 9)] },
+        ),
+        'c1',
+        'z1',
+      );
+      expect(result?.questions[0]).toMatchObject({ attempts: 0 });
+    });
+
+    it('gives ten score bands whose sum is the number of students', async () => {
+      const result = await readQuizAnalytics(
+        table(
+          { contentItem: [quizItem('z1', 'l1')] },
+          {
+            quizScoreStats: [
+              { contentItemId: 'z1', band0: 1, band4: 2, band9: 3, band5: -1 },
+            ],
+          },
+        ),
+        'c1',
+        'z1',
+      );
+      expect(result?.scoreBands).toHaveLength(10);
+      expect(result?.scoreBands.map(({ from, to }) => [from, to])).toEqual([
+        [0, 9],
+        [10, 19],
+        [20, 29],
+        [30, 39],
+        [40, 49],
+        [50, 59],
+        [60, 69],
+        [70, 79],
+        [80, 89],
+        [90, 100],
+      ]);
+      expect(result?.scoreBands.map(({ students }) => students)).toEqual([
+        1, 0, 0, 0, 2, 0, 0, 0, 0, 3,
+      ]);
+      expect(result?.students).toBe(6);
+    });
+
+    it('shows zeros for a quiz nobody has attempted', async () => {
+      const result = await readQuizAnalytics(
+        table({ contentItem: [quizItem('z1', 'l1')] }),
+        'c1',
+        'z1',
+      );
+      expect(result?.students).toBe(0);
+      expect(result?.scoreBands.every(({ students }) => students === 0)).toBe(
+        true,
+      );
+    });
+
+    it('answers undefined for an unknown quiz, a non-quiz item or a hidden quiz', async () => {
+      const curriculum = {
+        contentItem: [
+          quizItem('hidden', 'l1', { visibility: 'hidden' }),
+          { ...quizItem('video', 'l1'), type: 'video' },
+        ],
+      };
+      for (const id of ['nope', 'video', 'hidden']) {
+        expect(
+          await readQuizAnalytics(table(curriculum), 'c1', id),
+        ).toBeUndefined();
+      }
+    });
+  });
+
+  describe('readCourseQuizzes', () => {
+    it('lists the shown quizzes in course order with their student count', async () => {
+      const result = await readCourseQuizzes(
+        table(
+          {
+            module: [module('m1', 1), module('m2', 2)],
+            lesson: [lesson('l2', 'm2', 1), lesson('l1', 'm1', 1)],
+            contentItem: [
+              quizItem('b', 'l2'),
+              quizItem('a2', 'l1', { order: 2 }),
+              quizItem('a1', 'l1', { order: 1 }),
+              { ...quizItem('v', 'l1'), type: 'video' },
+              quizItem('hidden', 'l1', { visibility: 'hidden' }),
+            ],
+          },
+          {
+            quizScoreStats: [
+              { contentItemId: 'a1', band3: 2, band8: 1 },
+              { contentItemId: 'hidden', band0: 4 },
+            ],
+          },
+        ),
+        'c1',
+      );
+      expect(result).toEqual([
+        { contentItemId: 'a1', lessonId: 'l1', title: 'Quiz a1', students: 3 },
+        { contentItemId: 'a2', lessonId: 'l1', title: 'Quiz a2', students: 0 },
+        { contentItemId: 'b', lessonId: 'l2', title: 'Quiz b', students: 0 },
+      ]);
+    });
+
+    it('drops a quiz in a hidden lesson', async () => {
+      const result = await readCourseQuizzes(
+        table({
+          lesson: [{ ...lesson('l1', 'm1', 1), visibility: 'hidden' }],
+          contentItem: [quizItem('a', 'l1')],
+        }),
+        'c1',
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('is part of readCourseAnalytics', async () => {
+      const coreTable = {
+        ...(table({ contentItem: [quizItem('a', 'l1')] }) as object),
+        entities: {
+          courseStats: {
+            get: () => ({ go: async () => ({ data: [], unprocessed: [] }) }),
+          },
+          periodStats: {
+            get: () => ({ go: async () => ({ data: [], unprocessed: [] }) }),
+            query: {
+              primary: () => ({
+                between: () => ({ go: async () => ({ data: [] }) }),
+              }),
+            },
+          },
+        },
+      } as never;
+      const result = await readCourseAnalytics(coreTable, 'c1', 30, NOW);
+      expect(result.quizzes).toEqual([
+        { contentItemId: 'a', lessonId: 'l1', title: 'Quiz a', students: 0 },
+      ]);
+    });
   });
 });
