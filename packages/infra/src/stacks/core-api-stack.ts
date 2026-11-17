@@ -6,6 +6,7 @@ import {
   AdminPortal,
   CoreApi,
   CoreTable,
+  EventsNotificationUnsubscribe,
   EventsSearchReindex,
   InstructorPortal,
   LessonMediaBucket,
@@ -18,10 +19,13 @@ import {
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
 import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
+import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { apiLimits, publicThrottle } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
+import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
 type CoreApiIntegrations = ReturnType<
   ReturnType<typeof CoreApi.defaultIntegrations>['build']
@@ -33,6 +37,8 @@ export interface CoreApiStackProps extends StackProps {
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** Signs the unsubscribe links in notification emails; the unsubscribe route verifies them. */
+  readonly notificationUnsubscribeSecret: ISecret;
   /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
   readonly lessonMediaBucket: LessonMediaBucket;
   /** Where a student's submission is uploaded before it is copied across. */
@@ -61,6 +67,7 @@ export class CoreApiStack extends Stack {
       identity,
       coreTable,
       searchCollection,
+      notificationUnsubscribeSecret,
       lessonMediaBucket,
       lessonMediaUploadBucket,
       mediaPipeline,
@@ -84,8 +91,24 @@ export class CoreApiStack extends Stack {
         )
       : undefined;
 
+    const unsubscribe = this.createNotificationUnsubscribeLambda(
+      coreTable,
+      notificationUnsubscribeSecret,
+    );
+
     this.coreApi = new CoreApi(this, 'CoreApi', {
       integrations,
+      // The link in every notification email: anyone holding a signed token
+      // may open it, so both methods are public.
+      extraRoutes: (['GET', 'POST'] as const).map((method) => ({
+        method,
+        path: 'unsubscribe/{token}',
+        integration: {
+          integration: new LambdaIntegration(unsubscribe),
+          handler: unsubscribe,
+        },
+        public: true,
+      })),
       identity,
       enableWaf: coreApiConfig?.enableWaf ?? true,
       throttle: limits.throttle,
@@ -211,5 +234,23 @@ export class CoreApiStack extends Stack {
     coreTable.grantReadData(reindex);
     searchCollection.grantWrite(reindex.role!);
     return reindex;
+  }
+
+  // Turns a notification type's emails off for the user a signed link names
+  // (verifying the token with the secret), from a click in an email or a mail
+  // client's one-click request. It reads and writes the table and nothing else.
+  private createNotificationUnsubscribeLambda(
+    coreTable: CoreTable,
+    unsubscribeSecret: ISecret,
+  ) {
+    const unsubscribe = new EventsNotificationUnsubscribe(
+      this,
+      'NotificationUnsubscribe',
+    );
+    coreTable.grantReadWriteData(unsubscribe);
+    const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
+    secret.grantRead(unsubscribe);
+    unsubscribe.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
+    return unsubscribe;
   }
 }

@@ -99,6 +99,7 @@ export class ApplicationStage extends Stage {
       identity: data.identity,
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
+      notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
       mediaPipeline,

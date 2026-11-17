@@ -46,6 +46,7 @@ No `NEEDS CLARIFICATION` remained after clarify. This records what the codebase 
 - **Rationale**: mailbox providers (Gmail, Yahoo) require one-click unsubscribe for bulk senders; a link that changes state on GET is unsafe because mail scanners follow links.
 - **Alternatives**: a tRPC public mutation only (rejected: not one-click compatible); a Lambda Function URL (rejected: bypasses the API's WAF and throttles); handling in the portal only (rejected: no header target).
 - **Risk**: the construct has no non-tRPC route yet (plan R6): spike first.
+- **Spike result**: `CoreApi` takes an `extraRoutes` prop, a list of `{ method, path, integration, public }` (default none). Each is added with `resourceForPath`, so it sits beside the router's resources; a `public` one overrides the API's Cognito default with `AuthorizationType.NONE` (checkov's `CKV_AWS_59` is suppressed on that method alone, as for `PUBLIC_OPERATIONS`) and gets the stage's `publicThrottle` method settings. The stage's method-setting key escapes the path's slashes (`/~1unsubscribe~1{token}`), which CDK does itself. The CORS preflight aspect covers the new resources, and the route's handler gets `ALLOWED_ORIGINS` from `restrictCorsTo`. No API Gateway or checkov limit forced another shape, so the decision stands.
 
 ## R-7: Token signing
 

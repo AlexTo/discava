@@ -168,22 +168,23 @@ describe("core-api's functions", () => {
   const template = synth({})('CoreApi');
 
   it('give only the video URL function the CloudFront signing key', () => {
-    const roles = Object.values(
-      template.findResources('AWS::IAM::Policy'),
-    ).flatMap((resource) => {
-      const { PolicyDocument, Roles } = (
-        resource as {
-          Properties: {
-            PolicyDocument: { Statement: { Action: string | string[] }[] };
-            Roles: { Ref: string }[];
-          };
-        }
-      ).Properties;
-      const readsSecrets = PolicyDocument.Statement.some((statement) =>
-        [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
-      );
-      return readsSecrets ? Roles.map((role) => role.Ref) : [];
-    });
+    const roles = Object.values(template.findResources('AWS::IAM::Policy'))
+      .flatMap((resource) => {
+        const { PolicyDocument, Roles } = (
+          resource as {
+            Properties: {
+              PolicyDocument: { Statement: { Action: string | string[] }[] };
+              Roles: { Ref: string }[];
+            };
+          }
+        ).Properties;
+        const readsSecrets = PolicyDocument.Statement.some((statement) =>
+          [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
+        );
+        return readsSecrets ? Roles.map((role) => role.Ref) : [];
+        // The unsubscribe function reads its own secret, not the signing key.
+      })
+      .filter((role) => !role.startsWith('NotificationUnsubscribe'));
 
     expect(roles).toHaveLength(1);
     expect(roles[0]).toMatch(/^CoreApiMediaUrlHandlerServiceRole/);
@@ -584,6 +585,63 @@ describe('the stream router', () => {
   });
 });
 
+describe('the unsubscribe route', () => {
+  const template = synth({})('CoreApi');
+  const resourceIds = (pathPart: string) =>
+    Object.entries(template.findResources('AWS::ApiGateway::Resource'))
+      .filter(([, r]) => r.Properties.PathPart === pathPart)
+      .map(([id]) => id);
+  const methodsOn = (httpMethod: string, pathPart: string) =>
+    Object.values(template.findResources('AWS::ApiGateway::Method')).filter(
+      (m) =>
+        m.Properties.HttpMethod === httpMethod &&
+        resourceIds(pathPart).some((id) =>
+          JSON.stringify(m.Properties.ResourceId).includes(id),
+        ),
+    );
+
+  it('serves a public GET and POST on unsubscribe/{token} from the unsubscribe function', () => {
+    const [functionId] = Object.keys(
+      template.findResources('AWS::Lambda::Function'),
+    ).filter((id) => id.startsWith('NotificationUnsubscribe'));
+    expect(functionId).toBeDefined();
+    for (const httpMethod of ['GET', 'POST']) {
+      const [method] = methodsOn(httpMethod, '{token}');
+      expect(method.Properties.AuthorizationType).toBe('NONE');
+      expect(JSON.stringify(method.Properties.Integration.Uri)).toContain(
+        functionId,
+      );
+    }
+  });
+
+  it('adds exactly those two routes to the API', () => {
+    const operations = Object.values(
+      template.findResources('AWS::ApiGateway::Method'),
+    ).filter((m) => m.Properties.HttpMethod !== 'OPTIONS');
+    const onToken = ['GET', 'POST'].flatMap((m) => methodsOn(m, '{token}'));
+    expect(onToken).toHaveLength(2);
+    // The router's operations are the rest.
+    expect(operations.length - onToken.length).toBeGreaterThan(0);
+  });
+
+  it('gives it the table and the secret, and not the shared router function', () => {
+    const roleStatements = (prefix: string) =>
+      JSON.stringify(
+        Object.entries(template.findResources('AWS::IAM::Policy'))
+          .filter(([id]) => id.startsWith(prefix))
+          .map(([, p]) => p.Properties.PolicyDocument),
+      );
+    const own = roleStatements(
+      'NotificationUnsubscribeServiceRoleDefaultPolicy',
+    );
+    expect(own).toContain('secretsmanager:GetSecretValue');
+    expect(own).toContain('dynamodb:');
+    expect(roleStatements('CoreApiRouterHandler')).not.toContain(
+      'secretsmanager:GetSecretValue',
+    );
+  });
+});
+
 describe('notification delivery', () => {
   const SES_IDENTITY = 'example.com';
   const configured: StageComponents = {
@@ -731,10 +789,13 @@ describe('notification delivery', () => {
     });
   });
 
-  it('is the only function that reads the unsubscribe secret', () => {
+  it('is read by the delivery and unsubscribe functions only', () => {
     const readers = secretReaders({});
-    expect(readers).toHaveLength(1);
-    expect(readers[0]).toMatch(/^StreamRouter\/NotificationDelivery/);
+    expect(readers).toHaveLength(2);
+    expect(readers.sort()).toEqual([
+      expect.stringMatching(/^CoreApi\/NotificationUnsubscribe/),
+      expect.stringMatching(/^StreamRouter\/NotificationDelivery/),
+    ]);
   });
 
   it('keeps the stage under the resource cap', () => {
