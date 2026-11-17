@@ -2,19 +2,48 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { syncLocalUser } from '@discava/common-server-utils/local-dev';
+import {
+  LOCAL_PORTAL_URLS,
+  syncLocalUser,
+} from '@discava/common-server-utils/local-dev';
+import { resolveUnsubscribeSecret } from '@discava/common-server-utils/unsubscribe-token';
+import {
+  createCoreTableService,
+  NOTIFICATION_TYPES,
+  setNotificationPreference,
+} from '@discava/core-table';
 import {
   type CreateHTTPContextOptions,
   createHTTPServer,
 } from '@trpc/server/adapters/standalone';
 import cors from 'cors';
+import { unsubscribeMiddleware } from './local-unsubscribe.js';
 import { appRouter } from './router.js';
 
 const PORT = 2022;
 
+// The public unsubscribe route (not tRPC), as the deployed function serves it.
+const unsubscribe = unsubscribeMiddleware(async () => {
+  const [secret, service] = await Promise.all([
+    resolveUnsubscribeSecret(),
+    createCoreTableService(),
+  ]);
+  return {
+    secret,
+    setEmailEnabled: (userId, type, enabled) =>
+      setNotificationPreference(service, userId, type, enabled),
+    typeInfo: (type) =>
+      Object.hasOwn(NOTIFICATION_TYPES, type)
+        ? NOTIFICATION_TYPES[type]
+        : undefined,
+  };
+}, LOCAL_PORTAL_URLS.student);
+const trpcCors = cors({ origin: true, credentials: true });
+
 createHTTPServer({
   router: appRouter,
-  middleware: cors({ origin: true, credentials: true }),
+  middleware: (req: any, res: any, next: () => void) =>
+    unsubscribe(req, res, () => trpcCors(req, res, next)),
   async createContext({ req }: CreateHTTPContextOptions) {
     const claims = decodeClaims(req);
     // What Cognito's pre token generation trigger does at sign-in when

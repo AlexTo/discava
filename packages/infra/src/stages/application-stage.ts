@@ -103,6 +103,7 @@ export class ApplicationStage extends Stage {
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
       mediaPipeline,
+      studentPortalUrl: websites.portalUrls.student,
       portals: [
         websites.studentPortal,
         websites.instructorPortal,
