@@ -10,6 +10,10 @@ import {
   courseSummaries,
 } from './procedures/analytics.js';
 import {
+  createAnnouncement,
+  listAnnouncements,
+} from './procedures/announcement.js';
+import {
   createQuizAssignment,
   createUploadAssignment,
   updateContentItemAssignment,
@@ -87,6 +91,10 @@ export const appRouter = router({
     courseSummaries,
     course: analyticsCourse,
     quiz: analyticsQuiz,
+  }),
+  announcement: router({
+    create: createAnnouncement,
+    list: listAnnouncements,
   }),
   course: router({
     create: createCourse,
