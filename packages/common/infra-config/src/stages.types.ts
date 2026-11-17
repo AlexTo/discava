@@ -412,6 +412,19 @@ export type PublicMediaComponentConfig = {
 };
 
 /**
+ * Per-stage settings for notification emails. Both are account-specific, so
+ * they are set through env vars rather than committed. With neither set, the
+ * delivery function has no sender, is granted no SES access, and records each
+ * email as skipped (`not-configured`).
+ */
+export type NotificationsComponentConfig = {
+  /** Address notification emails are sent from, e.g. `notifications@example.com`. Must belong to `sesIdentity` */
+  fromAddress?: string;
+  /** SES identity (a verified domain or address) the delivery function may send from. The grant covers only this identity */
+  sesIdentity?: string;
+};
+
+/**
  * Component-level settings consuming apps use to configure their constructs
  * per stage, keyed by component name. Omitted components/flags fall back to
  * whatever default the app itself chooses.
@@ -428,6 +441,7 @@ export type StageComponents = {
   lessonMedia?: LessonMediaComponentConfig;
   publicMedia?: PublicMediaComponentConfig;
   search?: SearchComponentConfig;
+  notifications?: NotificationsComponentConfig;
 };
 
 /**

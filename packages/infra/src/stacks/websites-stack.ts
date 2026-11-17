@@ -49,6 +49,11 @@ export class WebsitesStack extends Stack {
   public readonly studentPortal: StudentPortal;
   public readonly instructorPortal: InstructorPortal;
   public readonly adminPortal: AdminPortal;
+  /** Each portal's address: its first custom domain, else its CloudFront domain. */
+  public readonly portalUrls: Record<
+    'student' | 'instructor' | 'admin',
+    string
+  >;
 
   constructor(
     scope: Construct,
@@ -81,6 +86,15 @@ export class WebsitesStack extends Stack {
       adminPortal,
       runtimeConfigScope,
     );
+    this.portalUrls = {
+      student: this.portalUrl(this.studentPortal, studentPortal),
+      instructor: this.portalUrl(this.instructorPortal, instructorPortal),
+      admin: this.portalUrl(this.adminPortal, adminPortal),
+    };
+  }
+
+  private portalUrl(portal: StaticWebsite, config: PortalConfig | undefined) {
+    return `https://${config?.domainNames?.[0] ?? portal.cloudFrontDistribution.distributionDomainName}`;
   }
 
   private createPortal<T extends StaticWebsite>(
@@ -136,7 +150,7 @@ export class WebsitesStack extends Stack {
     const runtimeConfig = RuntimeConfig.ensure(this);
     runtimeConfig.set('connection', 'portals', {
       ...runtimeConfig.get('connection').portals,
-      [id]: `https://${config?.domainNames?.[0] ?? portal.cloudFrontDistribution.distributionDomainName}`,
+      [id]: this.portalUrl(portal, config),
     });
 
     return portal;

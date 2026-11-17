@@ -41,6 +41,7 @@ import {
   IntegrationBuilder,
   RestApiIntegration,
 } from '../../core/api/utils.js';
+import { suppressRules } from '../../core/checkov.js';
 import { findCloudFrontDomainNames } from '../../core/cloudfront.js';
 import { RuntimeConfig } from '../../core/runtime-config.js';
 
@@ -93,6 +94,23 @@ const functionNameFor = (op: Operations | '$router'): string =>
  *
  * @template TIntegrations - Map of operation names to their integrations
  */
+/**
+ * A route beside the tRPC router's operations, such as a link opened from an
+ * email that no tRPC client calls.
+ */
+export interface CoreApiExtraRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  /** The path below the API's root, without a leading slash, e.g. `unsubscribe/{token}`. */
+  path: string;
+  integration: RestApiIntegration;
+  /**
+   * Whether anyone may call it: it skips the Cognito authorizer and gets the
+   * API's `publicThrottle`. Otherwise it needs a signed-in user like the
+   * router's operations.
+   */
+  public: boolean;
+}
+
 export interface CoreApiProps<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
 > {
@@ -164,6 +182,13 @@ export interface CoreApiProps<
    * @default `throttle`
    */
   publicThrottle?: ThrottleSettings;
+  /**
+   * Routes beside the router's operations. CORS is restricted like the rest
+   * of the API's.
+   *
+   * @default none
+   */
+  extraRoutes?: readonly CoreApiExtraRoute[];
 }
 
 /**
@@ -175,6 +200,7 @@ export class CoreApi<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
 > extends RestApi<Operations, TIntegrations> {
   private allowedOrigins: readonly string[] = ['*'];
+  private readonly extraRoutes: readonly CoreApiExtraRoute[];
 
   /**
    * Whether `op` is served by a function of its own (see
@@ -268,6 +294,7 @@ export class CoreApi<
       certificate,
       enableTracing = true,
       publicThrottle,
+      extraRoutes = [],
       ...props
     }: CoreApiProps<TIntegrations>,
   ) {
@@ -292,8 +319,13 @@ export class CoreApi<
         // default (/*/*) that RestApi sets from `throttle`.
         ...(publicThrottle && {
           methodOptions: Object.fromEntries(
-            [...PUBLIC].map((op) => [
-              `/${op}/${operations[op].method}`,
+            [
+              ...[...PUBLIC].map((op) => `/${op}/${operations[op].method}`),
+              ...extraRoutes
+                .filter((route) => route.public)
+                .map((route) => `/${route.path}/${route.method}`),
+            ].map((key) => [
+              key,
               {
                 throttlingRateLimit: publicThrottle.rateLimit,
                 throttlingBurstLimit: publicThrottle.burstLimit,
@@ -316,7 +348,30 @@ export class CoreApi<
       operations,
       ...props,
     });
+    this.extraRoutes = extraRoutes;
+    for (const route of extraRoutes) this.addExtraRoute(route);
     Aspects.of(this).add(new AddCorsPreflightAspect(() => this.allowedOrigins));
+  }
+
+  private addExtraRoute({
+    method,
+    path,
+    integration,
+    public: isPublic,
+  }: CoreApiExtraRoute) {
+    const added = this.api.root
+      .resourceForPath(path)
+      .addMethod(method, integration.integration, {
+        ...integration.options,
+        ...(isPublic && { authorizationType: AuthorizationType.NONE }),
+      });
+    if (isPublic) {
+      suppressRules(
+        added,
+        ['CKV_AWS_59'],
+        'Intentionally public route - see the extra route declared with public: true',
+      );
+    }
   }
 
   /**
@@ -350,7 +405,10 @@ export class CoreApi<
     this.allowedOrigins = allowedOrigins;
 
     // Set ALLOWED_ORIGINS environment variable for all Lambda integrations
-    Object.values(this.integrations).forEach((integration) => {
+    [
+      ...Object.values(this.integrations),
+      ...this.extraRoutes.map((route) => route.integration),
+    ].forEach((integration) => {
       if ('handler' in integration && integration.handler instanceof Function) {
         integration.handler.addEnvironment(
           'ALLOWED_ORIGINS',
