@@ -14,6 +14,10 @@ import type { createItemCompletionEntity } from '../entities/item-completion.js'
 import type { createLessonEntity } from '../entities/lesson.js';
 import type { createLessonStatsEntity } from '../entities/lesson-stats.js';
 import type { createModuleEntity } from '../entities/module.js';
+import type { createNotificationEntity } from '../entities/notification.js';
+import type { createNotificationBroadcastEntity } from '../entities/notification-broadcast.js';
+import type { createNotificationPreferenceEntity } from '../entities/notification-preference.js';
+import type { createNotificationStateEntity } from '../entities/notification-state.js';
 import type { createPeriodStatsEntity } from '../entities/period-stats.js';
 import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
@@ -25,6 +29,8 @@ import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
 import { aggregatesOf, contributions, sumContributions } from './analytics.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
+import { parseNotificationPosition } from './notification.js';
+import { NOTIFICATION_TYPES } from './notification-types.js';
 import { computeProgress } from './progress.js';
 import { isValidPosition } from './video-position.js';
 
@@ -194,6 +200,29 @@ export interface TableSnapshot {
     Item<typeof createQuizScoreStatsEntity>,
     'courseId' | 'contentItemId'
   >[];
+  notifications: Pick<
+    Item<typeof createNotificationEntity>,
+    | 'userId'
+    | 'occurredAt'
+    | 'id'
+    | 'type'
+    | 'link'
+    | 'readAt'
+    | 'email'
+    | 'createdAt'
+  >[];
+  notificationStates: Pick<
+    Item<typeof createNotificationStateEntity>,
+    'userId' | 'unreadCount' | 'readThrough'
+  >[];
+  notificationPreferences: Pick<
+    Item<typeof createNotificationPreferenceEntity>,
+    'userId' | 'type'
+  >[];
+  notificationBroadcasts: Pick<
+    Item<typeof createNotificationBroadcastEntity>,
+    'id' | 'type' | 'courseId' | 'status' | 'completedAt' | 'createdAt'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -223,6 +252,11 @@ export const INVARIANTS = [
   'video-position-valid',
   'caption-tracks-valid',
   'analytics-matches-records',
+  'notification-unread-count-matches',
+  'notification-shape',
+  'notification-state-exists',
+  'notification-preference-shape',
+  'notification-broadcast-done-complete',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1434,6 +1468,172 @@ export const checkAnalyticsMatchesRecords = (
   );
 };
 
+// 27-31 (notifications). Written only by the helpers in notification.ts,
+// notification-read.ts and notification-email.ts; these rules catch a writer
+// that went around them. The hour-long limits give delivery's retries and the
+// stream router's failure queue time to finish before anything is reported.
+const STUCK_AFTER_MS = 60 * 60 * 1000;
+const olderThanAnHour = (iso: string | undefined) =>
+  iso === undefined || Date.parse(iso) < Date.now() - STUCK_AFTER_MS;
+
+const notificationKey = (n: TableSnapshot['notifications'][number]) => ({
+  userId: n.userId,
+  occurredAt: n.occurredAt,
+  id: n.id,
+});
+
+// 27. A user's unreadCount is the number of their notifications that are
+// neither marked read nor at or before readThrough.
+export const checkNotificationUnreadCountMatches = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationStates.flatMap((state) => {
+    const unread = snapshot.notifications.filter(
+      (n) =>
+        n.userId === state.userId &&
+        n.readAt === undefined &&
+        (state.readThrough === undefined ||
+          `${n.occurredAt}#${n.id}` > state.readThrough),
+    ).length;
+    return state.unreadCount === unread
+      ? []
+      : [
+          violation(
+            'notification-unread-count-matches',
+            { userId: state.userId },
+            `unreadCount is ${state.unreadCount}, but ${unread} notifications are unread`,
+          ),
+        ];
+  });
+
+// 28. A notification has the shape its writers give it: a registered type,
+// a key made of a valid time and id, a link inside the portal, and an email
+// state that carries what its state requires and isn't stuck.
+export const checkNotificationShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notifications.flatMap((n) => {
+    const problems: string[] = [];
+    if (!Object.hasOwn(NOTIFICATION_TYPES, n.type)) {
+      problems.push(`type ${n.type} is not registered`);
+    }
+    if (!parseNotificationPosition(`${n.occurredAt}#${n.id}`)) {
+      problems.push(
+        `sort key ${n.occurredAt}#${n.id} is not <occurredAt>#<id> of a millisecond ISO time and 16 hex characters`,
+      );
+    }
+    if (!n.link?.path?.startsWith('/')) {
+      problems.push('link.path does not start with /');
+    }
+    const { email } = n;
+    if (email.state === 'sent' && !(email.sentAt && email.messageId)) {
+      problems.push('email is sent without sentAt and messageId');
+    }
+    if (
+      (email.state === 'skipped' || email.state === 'failed') &&
+      !email.reason
+    ) {
+      problems.push(`email is ${email.state} without a reason`);
+    }
+    if (email.state === 'sending' && olderThanAnHour(email.claimedAt)) {
+      problems.push('email has been sending for over an hour');
+    }
+    if (email.state === 'pending' && olderThanAnHour(n.createdAt)) {
+      problems.push('email is still pending an hour after the notification');
+    }
+    return problems.map((message) =>
+      violation('notification-shape', notificationKey(n), message),
+    );
+  });
+
+// 29. A user with notifications has a state, with a count that isn't
+// negative and a readThrough that is a valid position.
+export const checkNotificationStateExists = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const states = new Set(snapshot.notificationStates.map((s) => s.userId));
+  const missing = [
+    ...new Set(
+      snapshot.notifications
+        .map((n) => n.userId)
+        .filter((userId) => !states.has(userId)),
+    ),
+  ].map((userId) =>
+    violation(
+      'notification-state-exists',
+      { userId },
+      'user has notifications but no notificationState',
+    ),
+  );
+  const bad = snapshot.notificationStates.flatMap((state) => {
+    const problems: string[] = [];
+    if (!Number.isInteger(state.unreadCount) || state.unreadCount < 0) {
+      problems.push(`unreadCount ${state.unreadCount} is not a count`);
+    }
+    if (
+      state.readThrough !== undefined &&
+      !parseNotificationPosition(state.readThrough)
+    ) {
+      problems.push(`readThrough ${state.readThrough} is not a position`);
+    }
+    return problems.map((message) =>
+      violation('notification-state-exists', { userId: state.userId }, message),
+    );
+  });
+  return [...missing, ...bad];
+};
+
+// 30. A stored preference is for a registered type whose email can be
+// changed: a `required` type is always sent.
+export const checkNotificationPreferenceShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationPreferences.flatMap((preference) => {
+    const { userId, type } = preference;
+    const entry = Object.hasOwn(NOTIFICATION_TYPES, type)
+      ? NOTIFICATION_TYPES[type]
+      : undefined;
+    const problem = !entry
+      ? `type ${type} is not registered`
+      : entry.emailPolicy === 'required'
+        ? `type ${type} is required, so its email can't be changed`
+        : undefined;
+    return problem
+      ? [violation('notification-preference-shape', { userId, type }, problem)]
+      : [];
+  });
+
+// 31. A finished broadcast says when; one still pending after an hour is a
+// fan-out that stopped.
+export const checkNotificationBroadcastDoneComplete = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationBroadcasts.flatMap((broadcast) => {
+    const record = { id: broadcast.id };
+    if (broadcast.status === 'done' && !broadcast.completedAt) {
+      return [
+        violation(
+          'notification-broadcast-done-complete',
+          record,
+          'broadcast is done without completedAt',
+        ),
+      ];
+    }
+    if (
+      broadcast.status === 'pending' &&
+      olderThanAnHour(broadcast.createdAt)
+    ) {
+      return [
+        violation(
+          'notification-broadcast-done-complete',
+          record,
+          'broadcast has been pending for over an hour',
+        ),
+      ];
+    }
+    return [];
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1461,6 +1661,11 @@ const CHECKS = [
   checkVideoPositionValid,
   checkCaptionTracksValid,
   checkAnalyticsMatchesRecords,
+  checkNotificationUnreadCountMatches,
+  checkNotificationShape,
+  checkNotificationStateExists,
+  checkNotificationPreferenceShape,
+  checkNotificationBroadcastDoneComplete,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1495,6 +1700,10 @@ export const loadTableSnapshot = async (
     lessonStats,
     quizQuestionStats,
     quizScoreStats,
+    notifications,
+    notificationStates,
+    notificationPreferences,
+    notificationBroadcasts,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1515,6 +1724,10 @@ export const loadTableSnapshot = async (
     entities.lessonStats.scan.go(all),
     entities.quizQuestionStats.scan.go(all),
     entities.quizScoreStats.scan.go(all),
+    entities.notification.scan.go(all),
+    entities.notificationState.scan.go(all),
+    entities.notificationPreference.scan.go(all),
+    entities.notificationBroadcast.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1536,5 +1749,9 @@ export const loadTableSnapshot = async (
     lessonStats: lessonStats.data,
     quizQuestionStats: quizQuestionStats.data,
     quizScoreStats: quizScoreStats.data,
+    notifications: notifications.data,
+    notificationStates: notificationStates.data,
+    notificationPreferences: notificationPreferences.data,
+    notificationBroadcasts: notificationBroadcasts.data,
   };
 };

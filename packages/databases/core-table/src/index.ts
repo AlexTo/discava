@@ -79,7 +79,11 @@ export {
   filterEffectivelyVisible,
   isShown,
 } from './helpers/curriculum.js';
-export { isConditionalCheckFailed } from './helpers/errors.js';
+export {
+  isConditionalCheckFailed,
+  NotFoundError,
+  VersionConflictError,
+} from './helpers/errors.js';
 export {
   checkAnalyticsMatchesRecords,
   checkTableInvariants,
@@ -90,6 +94,35 @@ export {
   type TableSnapshot,
   violationId,
 } from './helpers/invariants.js';
+export {
+  type NotificationInput,
+  type NotificationTransactionItems,
+  type NotifyCourseStudentsInput,
+  notificationBroadcastId,
+  notificationId,
+  notificationPosition,
+  notificationWrites,
+  notifyCourseStudents,
+  parseNotificationPosition,
+  publishNotification,
+} from './helpers/notification.js';
+export {
+  claimEmail,
+  type EmailSkipReason,
+  markEmailFailed,
+  markEmailSent,
+  markEmailUnknown,
+  type NotificationKey,
+  notificationEmailTransitions,
+  readEmailState,
+  releaseEmailClaim,
+  skipEmail,
+} from './helpers/notification-email.js';
+export {
+  MARK_ALL_CHUNK,
+  markNotificationRead,
+  markNotificationsRead,
+} from './helpers/notification-read.js';
 export {
   matchesNotificationStreamFilters,
   NOTIFICATION_STREAM_FILTERS,
