@@ -9,11 +9,8 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
-import {
-  PROGRESS_STREAM_FILTERS,
-  SEARCH_STREAM_FILTERS,
-} from '@discava/core-table';
-import { App, type Stack } from 'aws-cdk-lib';
+import { STREAM_FEATURES } from '@discava/core-table';
+import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { ApplicationStage } from './application-stage.js';
@@ -479,51 +476,81 @@ describe("the portals' addresses (#235)", () => {
   });
 });
 
-// A DynamoEventSource's filter patterns, for the mapping whose target
-// function's logical id starts with `functionPrefix`. CoreApi has two such
-// mappings on the core table's stream (progress recalculation, search
-// indexing), each with its own filters, so a bare `findResources` across all
-// of them isn't enough to test either in isolation.
-const streamFilterPatterns = (template: Template, functionPrefix: string) => {
-  const functionId = Object.keys(
-    template.findResources('AWS::Lambda::Function'),
-  ).find((id) => id.startsWith(functionPrefix))!;
-  const mappings = Object.values(
-    template.findResources('AWS::Lambda::EventSourceMapping', {
-      Properties: { FunctionName: { Ref: functionId } },
-    }),
-  ) as {
-    Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
-  }[];
-  return mappings.flatMap(
-    ({ Properties }) =>
-      Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
-        JSON.parse(Pattern),
-      ) ?? [],
-  );
+// Every stack in the stage, by name, with its synthesized template.
+const stackTemplates = (components: StageComponents) => {
+  const stage = new ApplicationStage(new App(), 'discava-test', {
+    env: { account: '111122223333', region: 'ap-southeast-2' },
+    ...components,
+  });
+  return stage.node.children
+    .filter((child): child is Stack => child instanceof Stack)
+    .map((child) => [child.node.id, Template.fromStack(child)] as const);
 };
 
-const asPatterns = (
-  filters: readonly {
-    eventName: string;
-    image: string;
-    entities: readonly string[];
-  }[],
-) =>
-  filters.map(({ eventName, image, entities }) => ({
-    eventName: [eventName],
-    dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
-  }));
-
-describe('progress recalculation', () => {
+describe('the stream router', () => {
   const stack = synth({});
 
-  // Local dev's event runner filters the stream with the same definition
-  // (#137), so what triggers a recalculation can't differ between the two.
-  it('is triggered by exactly the shared progress stream filters', () => {
+  // The mappings on the core table's stream: its stream ARN is exported from
+  // Data, so a mapping on it refers to that export.
+  const streamMappings = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::Lambda::EventSourceMapping'))
+        .filter((m) =>
+          JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+        )
+        .map(() => name),
+    );
+
+  it('is the only reader of the core table stream', () => {
+    expect(streamMappings({})).toEqual(['StreamRouter']);
+  });
+
+  it('keeps the old per-feature mappings and handlers out of CoreApi', () => {
+    const template = stack('CoreApi');
+    expect(template.findResources('AWS::Lambda::EventSourceMapping')).toEqual(
+      {},
+    );
+    expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toEqual([]);
     expect(
-      streamFilterPatterns(stack('CoreApi'), 'ProgressRecalculation'),
-    ).toEqual(asPatterns(PROGRESS_STREAM_FILTERS));
+      Object.keys(template.findResources('AWS::Lambda::Function')).filter(
+        (id) => /^(ProgressRecalculation|SearchIndexing)/.test(id),
+      ),
+    ).toEqual([]);
+  });
+
+  it('has a queue, failure queue, alarm and mapping per registered feature', () => {
+    const template = stack('StreamRouter');
+    const features = STREAM_FEATURES.length;
+    // Each feature's queue and failure queue, and the router's failures.
+    expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toHaveLength(
+      features * 2 + 1,
+    );
+    expect(
+      Object.keys(template.findResources('AWS::CloudWatch::Alarm')),
+    ).toHaveLength(features + 1);
+    // Each feature's, and the router's from the stream.
+    expect(
+      Object.keys(template.findResources('AWS::Lambda::EventSourceMapping')),
+    ).toHaveLength(features + 1);
+  });
+
+  it("applies the stage's encryption setting to the queues", () => {
+    const development = synth(
+      resolveStage('packages/infra', 'discava-development')?.infra ?? {},
+    )('StreamRouter');
+    expect(Object.keys(development.findResources('AWS::KMS::Key'))).toEqual([]);
+    expect(
+      Object.keys(stack('StreamRouter').findResources('AWS::KMS::Key')),
+    ).toHaveLength(1);
+  });
+
+  it('keeps every stack under 450 resources (the cap is 500)', () => {
+    for (const [name, template] of stackTemplates({})) {
+      expect(
+        Object.keys(template.toJSON().Resources ?? {}).length,
+        name,
+      ).toBeLessThan(450);
+    }
   });
 });
 
@@ -580,18 +607,10 @@ describe('search collection (#53)', () => {
 describe('search indexing (#53)', () => {
   const stack = synth({});
 
-  // Local dev's event runner filters the stream with the same definition,
-  // the same as progress recalculation above.
-  it('is triggered by exactly the shared search stream filters', () => {
-    expect(streamFilterPatterns(stack('CoreApi'), 'SearchIndexing')).toEqual(
-      asPatterns(SEARCH_STREAM_FILTERS),
-    );
-  });
-
   // It re-reads each changed course from the table (R-3), so it reads the
   // table, and still never writes it.
   it('gives the indexing function write access to the search collection, and read-only access to the core table', () => {
-    const template = stack('CoreApi');
+    const template = stack('StreamRouter');
     const policies = Object.values(
       template.findResources('AWS::IAM::Policy', {
         Properties: {

@@ -2,9 +2,17 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { Logger } from '@aws-lambda-powertools/logger';
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware';
+import { Tracer } from '@aws-lambda-powertools/tracer';
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
+import { SQSClient } from '@aws-sdk/client-sqs';
+import { sqsClientConfig } from '@discava/common-server-utils/local-dev';
 import { STREAM_FEATURES, type StreamFeature } from '@discava/core-table';
+import middy from '@middy/core';
 import type { DynamoDBRecord } from 'aws-lambda';
 import {
+  createSqsQueueClient,
   MAX_MESSAGE_BYTES,
   type QueueClient,
   type QueueMessage,
@@ -120,3 +128,45 @@ export const createStreamRouter =
       })),
     };
   };
+
+process.env.POWERTOOLS_SERVICE_NAME = 'StreamRouter';
+
+const tracer = new Tracer();
+const logger = new Logger();
+
+// The queue URLs come from the stack: `FEATURE_QUEUE_URLS` is a JSON object
+// from each registered feature's name to its queue's URL, and
+// `FAILURE_QUEUE_URL` is the router's own failure queue. Built on the first
+// invocation and kept for a warm Lambda, as the other handlers' clients are.
+let router: ReturnType<typeof createStreamRouter> | undefined;
+const getRouter = () => {
+  if (!router) {
+    const urls = JSON.parse(process.env.FEATURE_QUEUE_URLS ?? '{}') as Record<
+      string,
+      string
+    >;
+    const failureQueue = process.env.FAILURE_QUEUE_URL;
+    if (!failureQueue) {
+      throw new Error('FAILURE_QUEUE_URL is not set');
+    }
+    router = createStreamRouter({
+      queue: createSqsQueueClient(new SQSClient(sqsClientConfig())),
+      queueFor: (feature) => {
+        const url = urls[feature];
+        if (!url) {
+          throw new Error(`No queue URL for stream feature '${feature}'`);
+        }
+        return url;
+      },
+      failureQueue,
+    });
+  }
+  return router;
+};
+
+export const handler = middy()
+  .use(captureLambdaHandler(tracer))
+  .use(injectLambdaContext(logger))
+  .handler(async (event: unknown) =>
+    getRouter()(event as { Records: DynamoDBRecord[] }),
+  );

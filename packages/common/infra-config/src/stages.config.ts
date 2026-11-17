@@ -91,6 +91,7 @@ export default {
               maxReadRequestUnits: 100,
               maxWriteRequestUnits: 50,
             },
+            streamRouter: { enableKmsEncryption: false },
             studentPortal: { enableWaf: false, enableKmsEncryption: false },
             instructorPortal: { enableWaf: false, enableKmsEncryption: false },
             adminPortal: { enableWaf: false, enableKmsEncryption: false },

@@ -19,6 +19,7 @@ import {
 import middy from '@middy/core';
 import type { Client } from '@opensearch-project/opensearch';
 import { z } from 'zod';
+import { sqsToStreamRecords } from '../router/sqs-stream-records.js';
 import { toCourseDocument } from './course-document.js';
 
 process.env.POWERTOOLS_METRICS_NAMESPACE = 'SearchIndexing';
@@ -133,5 +134,6 @@ export const handler = middy()
   .use(captureLambdaHandler(tracer))
   .use(injectLambdaContext(logger))
   .use(logMetrics(metrics))
+  .use(sqsToStreamRecords())
   .use(parser({ schema: DynamoDBStreamSchema }))
   .handler(searchIndexing);
