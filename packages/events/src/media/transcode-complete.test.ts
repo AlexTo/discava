@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { TRANSCODE_PENDING_ATTRIBUTES } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { transcodeComplete } from './transcode-complete.js';
 
@@ -9,7 +11,9 @@ const {
   contentItemPatch,
   contentItemPatchSet,
   contentItemPatchRemove,
+  contentItemPatchAdd,
   contentItemPatchWhere,
+  startCaptionJob,
   s3Send,
   resolveLessonMediaUploadBucketName,
   scheduleTranscodeCleanupOrThrow,
@@ -17,7 +21,9 @@ const {
   contentItemPatch: vi.fn(),
   contentItemPatchSet: vi.fn(),
   contentItemPatchRemove: vi.fn(),
+  contentItemPatchAdd: vi.fn(),
   contentItemPatchWhere: vi.fn(),
+  startCaptionJob: vi.fn(),
   s3Send: vi.fn(),
   resolveLessonMediaUploadBucketName: vi.fn(),
   scheduleTranscodeCleanupOrThrow: vi.fn(),
@@ -42,6 +48,8 @@ vi.mock('@aws-sdk/client-s3', () => ({
     return input;
   }),
 }));
+
+vi.mock('../lib/transcribe-client.js', () => ({ startCaptionJob }));
 
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveLessonMediaUploadBucketName,
@@ -109,7 +117,12 @@ beforeEach(() => {
     where: contentItemPatchWhere,
     remove: contentItemPatchRemove,
   });
-  contentItemPatchRemove.mockReturnValue({ where: contentItemPatchWhere });
+  contentItemPatchRemove.mockReturnValue({
+    where: contentItemPatchWhere,
+    add: contentItemPatchAdd,
+  });
+  contentItemPatchAdd.mockReturnValue({ where: contentItemPatchWhere });
+  startCaptionJob.mockResolvedValue(undefined);
   contentItemPatchWhere.mockReturnValue({
     go: vi.fn().mockResolvedValue({}),
   });
@@ -130,6 +143,8 @@ describe('transcodeComplete', () => {
     expect(contentItemPatchSet).toHaveBeenCalledWith({
       status: 'ready',
       s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/${SUBMISSION_NONCE}/master.m3u8`,
+      captionsStatus: 'pending',
+      captionsPendingSince: expect.any(String),
     });
   });
 
@@ -152,6 +167,124 @@ describe('transcodeComplete', () => {
     expect(contentItemPatchSet).toHaveBeenCalledWith({
       status: 'ready',
       s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/a-different-nonce/master.m3u8`,
+      captionsStatus: 'pending',
+      captionsPendingSince: expect.any(String),
+    });
+  });
+
+  describe('automatic captions', () => {
+    const TARGET = {
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      nonce: SUBMISSION_NONCE,
+    };
+
+    it('marks captioning pending, drops the old version tracks and moves the revision, in the same patch as ready', async () => {
+      await transcodeComplete(buildEvent('COMPLETE') as any);
+
+      expect(contentItemPatch).toHaveBeenCalledTimes(1);
+      expect(contentItemPatchRemove).toHaveBeenCalledWith([
+        'previousS3Key',
+        'captionTracks',
+        ...TRANSCODE_PENDING_ATTRIBUTES,
+      ]);
+      expect(contentItemPatchAdd).toHaveBeenCalledWith({ captionTracksRev: 1 });
+      // The existing nonce condition still guards all of it.
+      expect(contentItemPatchWhere).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts exactly one caption job for the version', async () => {
+      await transcodeComplete(buildEvent('COMPLETE') as any);
+
+      expect(startCaptionJob).toHaveBeenCalledTimes(1);
+      expect(startCaptionJob).toHaveBeenCalledWith(TARGET);
+    });
+
+    it('starts the job after retiring the previous version', async () => {
+      contentItemPatchWhere.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            previousS3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}/old-nonce/master.m3u8`,
+          },
+        }),
+      });
+
+      await transcodeComplete(buildEvent('COMPLETE') as any);
+
+      expect(
+        scheduleTranscodeCleanupOrThrow.mock.invocationCallOrder[0],
+      ).toBeLessThan(startCaptionJob.mock.invocationCallOrder[0]);
+    });
+
+    it('starts no job when the item no longer owns the submission (so applying an outcome twice starts one)', async () => {
+      contentItemPatchWhere.mockReturnValue({
+        go: vi.fn().mockRejectedValue(conditionalCheckFailedError()),
+      });
+
+      await transcodeComplete(buildEvent('COMPLETE') as any);
+
+      expect(startCaptionJob).not.toHaveBeenCalled();
+    });
+
+    it('starts no job on ERROR', async () => {
+      await transcodeComplete(buildEvent('ERROR') as any);
+
+      expect(startCaptionJob).not.toHaveBeenCalled();
+    });
+
+    it('leaves the video ready with captions failed when the job cannot be started', async () => {
+      const go = vi.fn().mockResolvedValue({});
+      contentItemPatchWhere
+        .mockReturnValueOnce({ go: vi.fn().mockResolvedValue({}) })
+        .mockReturnValueOnce({ go });
+      startCaptionJob.mockRejectedValue(new Error('Transcribe is unavailable'));
+
+      await expect(
+        transcodeComplete(buildEvent('COMPLETE') as any),
+      ).resolves.toBeUndefined();
+
+      expect(contentItemPatchSet).toHaveBeenLastCalledWith({
+        captionsStatus: 'failed',
+      });
+      expect(contentItemPatchRemove).toHaveBeenLastCalledWith([
+        'captionsPendingSince',
+      ]);
+      const [where] = contentItemPatchWhere.mock.calls[1];
+      const op = {
+        eq: (a: string, v: unknown) => `${a}=${v}`,
+        contains: (a: string, v: string) => `${a}~${v}`,
+      };
+      expect(
+        where({ status: 'st', s3Key: 'k', captionsStatus: 'cs' }, op),
+      ).toBe(`st=ready AND k~/${SUBMISSION_NONCE}/ AND cs=pending`);
+      // Readiness is not undone: the raw upload is still deleted.
+      expect(s3Send).toHaveBeenCalled();
+    });
+
+    it('does not mark failed when the job already exists', async () => {
+      startCaptionJob.mockRejectedValue(
+        Object.assign(new Error('exists'), { name: 'ConflictException' }),
+      );
+
+      await transcodeComplete(buildEvent('COMPLETE') as any);
+
+      expect(contentItemPatch).toHaveBeenCalledTimes(1);
+    });
+
+    it('still succeeds when marking captions failed fails too', async () => {
+      startCaptionJob.mockRejectedValue(new Error('Transcribe is unavailable'));
+      contentItemPatchWhere
+        .mockReturnValueOnce({ go: vi.fn().mockResolvedValue({}) })
+        .mockReturnValueOnce({
+          go: vi.fn().mockRejectedValue(new Error('DynamoDB is unavailable')),
+        });
+
+      await expect(
+        transcodeComplete(buildEvent('COMPLETE') as any),
+      ).resolves.toBeUndefined();
+      expect(s3Send).toHaveBeenCalled();
     });
   });
 
@@ -390,6 +523,7 @@ describe('a completed replacement (#209)', () => {
     // ...and it's no longer waiting for a transcode (#125).
     expect(contentItemPatchRemove).toHaveBeenCalledWith([
       'previousS3Key',
+      'captionTracks',
       'transcodePending',
       'transcodePendingSince',
     ]);

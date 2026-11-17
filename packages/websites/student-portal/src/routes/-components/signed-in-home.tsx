@@ -41,7 +41,7 @@ function ResumeHero({
     <section className="rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 px-6 py-6 text-primary-foreground shadow-sm sm:px-8">
       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
             {course ? `Welcome back, ${firstName}` : `Welcome, ${firstName}`}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-primary-foreground/80">
@@ -168,7 +168,7 @@ export function SignedInHome() {
             {newCourses.map((course) => (
               <Card
                 key={course.courseId}
-                className="group gap-4 overflow-hidden py-0 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+                className="group gap-4 overflow-hidden py-0 transition-[translate,border-color,box-shadow] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/30 hover:shadow-md"
               >
                 <CourseThumbnail course={course} iconClassName="text-4xl" />
                 <CardContent className="flex flex-1 flex-col gap-3 px-5 pb-5">

@@ -46,6 +46,15 @@ const renderPage = (publicView: () => unknown = () => course) =>
   });
 
 describe('CoursePage', () => {
+  it('does not show announcements on the public course page', async () => {
+    renderPage();
+
+    await screen.findByRole('heading', { level: 1, name: 'Linear Algebra' });
+    expect(
+      screen.queryByRole('heading', { name: 'Announcements' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('heads the page with the course and what it contains', async () => {
     renderPage();
 

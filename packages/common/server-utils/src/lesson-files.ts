@@ -116,12 +116,13 @@ export const lessonFileUploadId = (
   return match?.[1];
 };
 
-// A presigned PUT for the upload, holding it to `contentType` and exactly
-// `contentLength` bytes.
+// A presigned PUT for the upload, holding it to `contentType` and, when given,
+// exactly `contentLength` bytes (a caller that can't know the size when it
+// signs checks it after the upload instead).
 export const presignLessonFileUpload = async (
   objectKey: string,
   contentType: string,
-  contentLength: number,
+  contentLength?: number,
 ): Promise<{ uploadUrl: string; headers: Record<string, string> }> => ({
   uploadUrl: await getSignedUrl(
     getS3Client(),
@@ -129,11 +130,15 @@ export const presignLessonFileUpload = async (
       Bucket: await resolveLessonMediaUploadBucketName(),
       Key: objectKey,
       ContentType: contentType,
-      ContentLength: contentLength,
+      ...(contentLength !== undefined && { ContentLength: contentLength }),
     }),
     {
       expiresIn: UPLOAD_URL_EXPIRY_SECONDS,
-      signableHeaders: new Set(['content-type', 'content-length']),
+      signableHeaders: new Set(
+        contentLength === undefined
+          ? ['content-type']
+          : ['content-type', 'content-length'],
+      ),
     },
   ),
   headers: { 'Content-Type': contentType },

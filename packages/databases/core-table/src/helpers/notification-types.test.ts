@@ -1,0 +1,154 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  buildNotification,
+  NOTIFICATION_TYPES,
+  NotificationInputError,
+} from './notification-types.js';
+
+const sample = (id: string): Record<string, string> =>
+  Object.fromEntries(
+    NOTIFICATION_TYPES[id].params.map((name) => [name, `<${name}>`]),
+  );
+
+const ids = Object.keys(NOTIFICATION_TYPES);
+
+describe('NOTIFICATION_TYPES', () => {
+  it('has the four v1 types', () => {
+    expect(ids.sort()).toEqual([
+      'announcement.posted',
+      'assignment.returned',
+      'discussion.reply',
+      'review.received',
+    ]);
+  });
+
+  it.each(ids)('%s is keyed by its own <area>.<event> id', (id) => {
+    expect(NOTIFICATION_TYPES[id].id).toBe(id);
+    expect(id).toMatch(/^[a-z]+\.[a-z]+$/);
+  });
+
+  it('sets the email policies', () => {
+    expect(
+      Object.fromEntries(
+        ids.map((id) => [id, NOTIFICATION_TYPES[id].emailPolicy]),
+      ),
+    ).toEqual({
+      'assignment.returned': 'default-on',
+      'announcement.posted': 'default-on',
+      'discussion.reply': 'default-on',
+      'review.received': 'default-off',
+    });
+  });
+});
+
+describe('buildNotification', () => {
+  it.each(ids)('builds a title, body and link for %s', (id) => {
+    const built = buildNotification(id, sample(id));
+
+    expect(built.title.length).toBeGreaterThan(0);
+    expect(built.body.length).toBeGreaterThan(0);
+    expect(built.link.path.startsWith('/')).toBe(true);
+    expect(['student', 'instructor', 'admin']).toContain(built.link.portal);
+  });
+
+  it('links an assignment return to the lesson', () => {
+    expect(
+      buildNotification('assignment.returned', {
+        courseId: 'c1',
+        lessonId: 'l1',
+        assignmentTitle: 'A',
+        courseTitle: 'C',
+      }).link,
+    ).toEqual({ portal: 'student', path: '/learn/c1/lesson/l1' });
+  });
+
+  it('links an announcement to the course home', () => {
+    expect(
+      buildNotification('announcement.posted', {
+        courseId: 'c1',
+        courseTitle: 'C',
+        announcementTitle: 'A',
+        excerpt: 'E',
+      }).link,
+    ).toEqual({ portal: 'student', path: '/learn/c1/home' });
+  });
+
+  it('links a review to the instructor portal', () => {
+    expect(
+      buildNotification('review.received', {
+        courseId: 'c1',
+        courseTitle: 'C',
+        rating: '5',
+      }).link,
+    ).toEqual({ portal: 'instructor', path: '/my-courses/c1/reviews' });
+  });
+
+  it('throws on an unknown type', () => {
+    expect(() => buildNotification('nope.nothing', {})).toThrow(
+      NotificationInputError,
+    );
+  });
+
+  it.each(ids)('throws on a missing param for %s', (id) => {
+    for (const name of NOTIFICATION_TYPES[id].params) {
+      const { [name]: _, ...rest } = sample(id);
+      expect(() => buildNotification(id, rest)).toThrow(NotificationInputError);
+    }
+  });
+
+  it('throws on an empty param', () => {
+    expect(() =>
+      buildNotification('assignment.returned', {
+        ...sample('assignment.returned'),
+        courseId: '',
+      }),
+    ).toThrow(NotificationInputError);
+  });
+
+  it('throws on a non-string param', () => {
+    expect(() =>
+      buildNotification('review.received', {
+        ...sample('review.received'),
+        rating: 5 as never,
+      }),
+    ).toThrow(NotificationInputError);
+  });
+
+  it('truncates the title to 120 and the body to 500 characters with an ellipsis', () => {
+    const long = 'x'.repeat(1000);
+    const built = buildNotification('announcement.posted', {
+      courseId: 'c1',
+      courseTitle: long,
+      announcementTitle: long,
+      excerpt: long,
+    });
+
+    expect(built.title).toHaveLength(120);
+    expect(built.title.endsWith('…')).toBe(true);
+    expect(built.body).toHaveLength(500);
+    expect(built.body.endsWith('…')).toBe(true);
+  });
+
+  it('leaves short text alone', () => {
+    const built = buildNotification('discussion.reply', {
+      courseId: 'c1',
+      lessonId: 'l1',
+      authorName: 'Bob',
+      excerpt: 'Hello',
+    });
+    expect(built.title).not.toContain('…');
+    expect(built.body).not.toContain('…');
+  });
+
+  it.each(ids)('%s ignores a param the type does not declare', (id) => {
+    const built = buildNotification(id, {
+      ...sample(id),
+      surprise: 'SURPRISE',
+    });
+    expect(JSON.stringify(built)).not.toContain('SURPRISE');
+  });
+});

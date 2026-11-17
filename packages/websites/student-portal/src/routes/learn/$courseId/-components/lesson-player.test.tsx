@@ -2,8 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   type Handler,
@@ -195,8 +195,16 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'course.myItemCompletions': () => ({ items: [] }),
   'course.myLessonProgress': () => ({ lessons: [] }),
   'course.myEnrolment': () => enrolment,
+  'announcement.list': () => ({ items: [] }),
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
+    withCredentials: false,
+    versionId: 'nonce',
+    resumeAt: 0,
+  }),
+  'contentItem.saveVideoPosition': (input: any) => ({
+    saved: true,
+    positionSeconds: Math.floor(input.positionSeconds),
   }),
   'quiz.view': () => quizView(),
   'quiz.myAttempts': () => noAttempts,
@@ -233,6 +241,38 @@ describe('CourseHome', () => {
       'href',
       '/learn/course-1/lesson/lesson-1',
     );
+  });
+
+  it('shows the course announcements after where to pick up', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({
+        'announcement.list': () => ({
+          items: [
+            {
+              announcementId: 'a-1',
+              courseId: 'course-1',
+              title: 'Welcome',
+              body: doc('Glad you are here'),
+              authorName: 'Alice Smith',
+              createdAt: AT,
+            },
+          ],
+        }),
+      }),
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Announcements' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Glad you are here')).toBeInTheDocument();
+    // Beside where to pick up, in the course's main content.
+    expect(
+      screen
+        .getByRole('link', { name: /^Start/ })
+        .compareDocumentPosition(
+          screen.getByRole('heading', { name: 'Announcements' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('places the course under My Learning, and links its course page', async () => {
@@ -393,6 +433,183 @@ describe('LessonPage', () => {
       moduleId: 'module-1',
       lessonId: 'lesson-1',
       contentItemId: 'video-1',
+    });
+  });
+
+  it('gives a ready video the speed control and the custom bar', async () => {
+    openLesson('lesson-1');
+
+    const lecture = await item('Lecture video');
+    expect(
+      await within(lecture).findByRole('button', { name: 'Playback speed' }),
+    ).toHaveTextContent('1x');
+    expect(
+      within(lecture).getByLabelText('Lecture video').hasAttribute('controls'),
+    ).toBe(false);
+  });
+
+  describe('captions', () => {
+    const captioned = {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: true,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [
+          {
+            trackId: 'track-1',
+            language: 'en-US',
+            label: 'English',
+            isDefault: true,
+            url: 'https://media.example.com/nonce/captions/track-1.vtt',
+          },
+        ],
+      }),
+    };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('offers the captions the API lists, fetched with the signed cookies', async () => {
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => 'WEBVTT',
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      URL.createObjectURL = vi.fn(() => 'blob:captions');
+      URL.revokeObjectURL = vi.fn();
+      openLesson('lesson-1', captioned);
+
+      const lecture = await item('Lecture video');
+
+      expect(
+        await within(lecture).findByRole('button', { name: /^Captions/ }),
+      ).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://media.example.com/nonce/captions/track-1.vtt',
+        { credentials: 'include' },
+      );
+    });
+
+    it('has no captions control for a video without any', async () => {
+      openLesson('lesson-1');
+
+      const lecture = await item('Lecture video');
+      await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+      expect(
+        within(lecture).queryByRole('button', { name: /^Captions/ }),
+      ).toBeNull();
+    });
+  });
+
+  describe('resuming a video', () => {
+    const resumedVideo = (resumeAt: number) =>
+      openLesson('lesson-1', {
+        'contentItem.videoUrl': () => ({
+          url: 'https://media.example.com/master.m3u8',
+          withCredentials: false,
+          versionId: 'nonce',
+          resumeAt,
+        }),
+      });
+
+    // jsdom has no media playback: stand in for the element's clock.
+    const loaded = async (position = 0, duration = 600) => {
+      const video = (await within(await item('Lecture video')).findByLabelText(
+        'Lecture video',
+      )) as HTMLVideoElement;
+      Object.defineProperty(video, 'duration', { value: duration });
+      Object.defineProperty(video, 'currentTime', {
+        configurable: true,
+        writable: true,
+        value: position,
+      });
+      return video;
+    };
+
+    it('resumes at the saved position, with a notice', async () => {
+      resumedVideo(95);
+      const video = await loaded();
+
+      act(() => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(video.currentTime).toBe(95);
+      expect(
+        within(await item('Lecture video')).getByText('Resumed at 1:35'),
+      ).toBeInTheDocument();
+    });
+
+    it('has no notice for a video not watched before', async () => {
+      resumedVideo(0);
+      const video = await loaded();
+
+      act(() => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(
+        within(await item('Lecture video')).queryByText(/Resumed at/),
+      ).toBeNull();
+    });
+
+    it('saves where the student paused, for the version played', async () => {
+      const { calls } = resumedVideo(0);
+      const video = await loaded(42.5, 600);
+
+      act(() => {
+        video.dispatchEvent(new Event('pause'));
+      });
+
+      await waitFor(() =>
+        expect(
+          calls.find((call) => call.path === 'contentItem.saveVideoPosition')
+            ?.input,
+        ).toEqual({
+          courseId: 'course-1',
+          moduleId: 'module-1',
+          lessonId: 'lesson-1',
+          contentItemId: 'video-1',
+          versionId: 'nonce',
+          positionSeconds: 42.5,
+          durationSeconds: 600,
+        }),
+      );
+    });
+
+    it('resumes from the last save when the lesson is opened again', async () => {
+      const first = resumedVideo(0);
+      const video = await loaded(240, 600);
+      act(() => {
+        video.dispatchEvent(new Event('pause'));
+      });
+      await waitFor(() =>
+        expect(
+          first.calls.some((c) => c.path === 'contentItem.saveVideoPosition'),
+        ).toBe(true),
+      );
+
+      // Back to the same lesson with the query cache as the first visit left
+      // it: the player must not start from the cached 0.
+      first.unmount();
+      cleanup();
+      renderWithCoreApi(
+        <LessonPage courseId="course-1" lessonId="lesson-1" />,
+        {
+          handlers: handlers(),
+          queryClient: first.queryClient,
+        },
+      );
+      const again = await loaded();
+      act(() => {
+        again.dispatchEvent(new Event('loadedmetadata'));
+      });
+
+      expect(again.currentTime).toBe(240);
     });
   });
 

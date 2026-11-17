@@ -1065,10 +1065,113 @@ describe('createContentItemVideoUrl', () => {
     expect(result).toEqual({
       url: 'https://example.cloudfront.net/plain-url',
       withCredentials: true,
+      versionId: '',
+      captions: [],
     });
     expect(responseCookies).toEqual([
       'CloudFront-Policy=fake; Domain=example.com',
     ]);
+  });
+
+  describe('captions', () => {
+    const folder = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}`;
+    const track = (language: string, extra = {}) => ({
+      trackId: `track-${language}`,
+      nonce: 'n1',
+      language,
+      label: language,
+      source: 'uploaded' as const,
+      key: `${folder}/n1/captions/track-${language}.vtt`,
+      isDefault: false,
+      ...extra,
+    });
+    const withCaptions = (extra: object) =>
+      contentItemGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            ...contentItem,
+            s3Key: `${folder}/n1/master.m3u8`,
+            ...extra,
+          },
+        }),
+      });
+
+    beforeEach(() => {
+      getCloudFrontVideoUrl.mockImplementation(
+        async (key: string) => `https://example.cloudfront.net/${key}`,
+      );
+    });
+
+    it('lists the played version’s tracks, default first, with source and URL', async () => {
+      withCaptions({
+        captionTracks: [
+          track('es-ES'),
+          track('fr-FR', { nonce: 'old' }),
+          track('en-US', { isDefault: true, source: 'auto' }),
+        ],
+        captionTracksRev: 4,
+        captionsStatus: 'ready',
+      });
+
+      const result = await callAs().createContentItemVideoUrl(input);
+
+      expect(result.versionId).toBe('n1');
+      expect(result.captionsStatus).toBe('ready');
+      expect(result.captions).toEqual([
+        {
+          trackId: 'track-en-US',
+          language: 'en-US',
+          label: 'en-US',
+          isDefault: true,
+          source: 'auto',
+          url: `https://example.cloudfront.net/${folder}/n1/captions/track-en-US.vtt`,
+        },
+        {
+          trackId: 'track-es-ES',
+          language: 'es-ES',
+          label: 'es-ES',
+          isDefault: false,
+          source: 'uploaded',
+          url: `https://example.cloudfront.net/${folder}/n1/captions/track-es-ES.vtt`,
+        },
+      ]);
+    });
+
+    it('returns no S3 key and no revision', async () => {
+      withCaptions({
+        captionTracks: [track('en-US', { isDefault: true })],
+        captionTracksRev: 4,
+      });
+
+      const result = await callAs().createContentItemVideoUrl(input);
+
+      const body = JSON.stringify(result);
+      expect(body).not.toContain('captionTracksRev');
+      expect(body).not.toContain('"key"');
+      expect(result.captions[0]).not.toHaveProperty('key');
+    });
+
+    it('reports a pending status older than two hours as failed', async () => {
+      withCaptions({
+        captionsStatus: 'pending',
+        captionsPendingSince: new Date(
+          Date.now() - 3 * 3_600_000,
+        ).toISOString(),
+      });
+      await expect(
+        callAs().createContentItemVideoUrl(input),
+      ).resolves.toMatchObject({ captionsStatus: 'failed' });
+    });
+
+    it('reports a recent pending status as pending', async () => {
+      withCaptions({
+        captionsStatus: 'pending',
+        captionsPendingSince: new Date().toISOString(),
+      });
+      await expect(
+        callAs().createContentItemVideoUrl(input),
+      ).resolves.toMatchObject({ captionsStatus: 'pending' });
+    });
   });
 
   it.each(['pending', 'failed'] as const)(

@@ -333,6 +333,7 @@ export function AttachLessonVideoDialog({
               <HlsVideo
                 url={video.url}
                 withCredentials={video.withCredentials}
+                captions={video.captions}
                 className="w-full rounded-lg border"
               />
             )
@@ -353,7 +354,7 @@ export function AttachLessonVideoDialog({
             <div className="space-y-1">
               <p className="text-sm font-medium">
                 {isUploading
-                  ? `Uploading... ${uploadProgress}%`
+                  ? `Uploading… ${uploadProgress}%`
                   : pendingUpload
                     ? 'Video uploaded — click Save to attach it'
                     : contentItemId
@@ -389,7 +390,7 @@ export function AttachLessonVideoDialog({
             disabled={!canSave || isSaving}
             onClick={handleSave}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -510,10 +511,10 @@ export function RemoveLessonVideoButton({
           >
             {archive
               ? isPending
-                ? 'Archiving...'
+                ? 'Archiving…'
                 : 'Archive video'
               : isPending
-                ? 'Removing...'
+                ? 'Removing…'
                 : 'Remove video'}
           </Button>
         </AlertDialogFooter>

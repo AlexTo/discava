@@ -98,7 +98,7 @@ export const uploadSubmissionFile = async (
 };
 
 // The local lesson media bucket (see LOCAL_S3 in common-server-utils).
-const LESSON_MEDIA_BUCKET = 'discava-lesson-media';
+export const LESSON_MEDIA_BUCKET = 'discava-lesson-media';
 
 // The folders holding submission files of the assignment, in the media bucket
 // (S3Mock lists anonymously over plain HTTP).

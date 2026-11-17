@@ -110,7 +110,7 @@ describe('AttachLessonVideoDialog', () => {
         } as ProgressEvent);
       });
       expect(screen.getByLabelText('Upload progress')).toBeInTheDocument();
-      expect(screen.getByText('Uploading... 50%')).toBeInTheDocument();
+      expect(screen.getByText('Uploading… 50%')).toBeInTheDocument();
 
       uploads[0].finish();
       await waitFor(() =>
@@ -274,6 +274,60 @@ describe('AttachLessonVideoDialog', () => {
       expect(
         screen.getByText(/Drop a new file below to retry/),
       ).toBeInTheDocument();
+    });
+
+    it('previews the video with its captions', async () => {
+      vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue(
+        'probably',
+      );
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => 'WEBVTT',
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      URL.createObjectURL = vi.fn(() => 'blob:captions');
+      URL.revokeObjectURL = vi.fn();
+      const { user } = renderWithInstructorApi(
+        <AttachLessonVideoDialog
+          {...lesson}
+          contentItemId="item-1"
+          title="Lecture 1"
+          description="Welcome"
+          status="ready"
+          trigger={<Button type="button">Edit</Button>}
+        />,
+        {
+          handlers: {
+            'contentItem.createVideoUrl': () => ({
+              url: 'https://media.test/item-1/n1/master.m3u8',
+              withCredentials: true,
+              versionId: 'n1',
+              captions: [
+                {
+                  trackId: 't1',
+                  language: 'en-US',
+                  label: 'English',
+                  isDefault: true,
+                  source: 'auto',
+                  url: 'https://media.test/item-1/n1/captions/t1.vtt',
+                },
+              ],
+            }),
+          },
+        },
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+      expect(
+        await screen.findByRole('button', { name: /^Captions/ }),
+      ).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://media.test/item-1/n1/captions/t1.vtt',
+        { credentials: 'include' },
+      );
+      vi.unstubAllGlobals();
     });
 
     it('replaces the video, closes, and refreshes the course view', async () => {

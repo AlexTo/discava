@@ -193,7 +193,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save'}
+                  {isSubmitting ? 'Saving…' : 'Save'}
                 </Button>
               )}
             </form.Subscribe>
