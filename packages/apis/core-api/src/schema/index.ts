@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+export * from './announcement.js';
 export * from './assignment.js';
 export * from './certificate.js';
 export * from './common.js';
