@@ -233,6 +233,25 @@ describe('markNotificationsRead', () => {
     expect(second).toEqual({ unreadCount: 0, more: false });
   });
 
+  it('keeps every count when more than 500 remain after a readThrough', async () => {
+    const fake = createFakeNotificationTable();
+    const total = 2 * MARK_ALL_CHUNK + 100;
+    const positions = await seed(fake, total);
+    const last = positions[total - 1]!;
+
+    const first = await markNotificationsRead(fake.service, 'u1', last);
+    expect(first).toEqual({ unreadCount: total - MARK_ALL_CHUNK, more: true });
+    // 600 remain after readThrough: the boundary notification the range
+    // query returns again must not use up a slot of the next chunk.
+    const second = await markNotificationsRead(fake.service, 'u1', last);
+    expect(second).toEqual({ unreadCount: 100, more: true });
+    expect(state(fake).readThrough).toBe(positions[2 * MARK_ALL_CHUNK - 1]);
+
+    const third = await markNotificationsRead(fake.service, 'u1', last);
+    expect(third).toEqual({ unreadCount: 0, more: false });
+    expect(state(fake)).toMatchObject({ unreadCount: 0, readThrough: last });
+  });
+
   it('retries when a publish lands mid-way, and ends consistent', async () => {
     const fake = createFakeNotificationTable();
     const positions = await seed(fake, 3);

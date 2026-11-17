@@ -122,12 +122,14 @@ export const markNotificationsRead = async (
     const upTo = parseNotificationPosition(through);
     const from = readThrough && parseNotificationPosition(readThrough);
     const query = reads.notification.query.primary({ userId });
-    // One more than the chunk, to know whether there is more.
+    // One more than the chunk, to know whether there is more; and one for
+    // the readThrough notification itself, which `between` includes and the
+    // filter below drops.
     const { data } = await (from
       ? query.between(from, upTo!)
       : query.lte(upTo!)
     ).go({
-      limit: MARK_ALL_CHUNK + 1,
+      limit: MARK_ALL_CHUNK + (from ? 2 : 1),
       pages: 1,
     });
     const range = data
