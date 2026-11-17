@@ -1606,6 +1606,19 @@ EOF
       "Resource": "arn:$AWS_PARTITION:sqs:$AWS_REGION:$ACCOUNT_ID:$RESOURCE_PREFIX*"
     },
     {
+      "Sid": "CloudWatchAlarmsForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:ListTagsForResource",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource"
+      ],
+      "Resource": "arn:$AWS_PARTITION:cloudwatch:$AWS_REGION:$ACCOUNT_ID:alarm:$RESOURCE_PREFIX*"
+    },
+    {
       "Sid": "EventBridgeRulesForDiscava",
       "Effect": "Allow",
       "Action": [
