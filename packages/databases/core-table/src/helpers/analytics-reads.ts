@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
-import { weekKey } from './analytics.js';
+import { dayKey, weekKey } from './analytics.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
@@ -93,4 +93,64 @@ export const readCourseSummaries = async (
       updatedAt: summary?.updatedAt ?? null,
     };
   });
+};
+
+export interface CourseDay {
+  /** The UTC day, `yyyy-mm-dd`. */
+  date: string;
+  enrolments: number;
+  activeLearners: number;
+}
+
+export interface CourseAnalytics extends CourseSummary {
+  /** Enrolled and neither completed nor dropped; never below 0. */
+  active: number;
+  /** Exactly the days asked for, oldest first, zero filled. */
+  daily: CourseDay[];
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * One course's totals and its last `days` UTC days (today included), from the
+ * summary item, this week's item and one range query over the day items.
+ */
+export const readCourseAnalytics = async (
+  coreTable: CoreTable,
+  courseId: string,
+  days: number,
+  now = new Date(),
+): Promise<CourseAnalytics> => {
+  const dates = Array.from({ length: days }, (_, i) =>
+    new Date(now.getTime() - (days - 1 - i) * DAY_MS)
+      .toISOString()
+      .slice(0, 10),
+  );
+  const [[summary], { data: items }] = await Promise.all([
+    readCourseSummaries(coreTable, [courseId], now),
+    coreTable.entities.periodStats.query
+      .primary({ courseId })
+      .between(
+        { periodKey: dayKey(dates[0]) as string },
+        { periodKey: dayKey(dates[days - 1]) as string },
+      )
+      .go({ pages: 'all' }),
+  ]);
+
+  const dayOf = new Map(items.map((item) => [item.periodKey, item]));
+  return {
+    ...summary,
+    active: Math.max(
+      0,
+      summary.enrolments - summary.completed - summary.dropped,
+    ),
+    daily: dates.map((date) => {
+      const item = dayOf.get(`DAY#${date}`);
+      return {
+        date,
+        enrolments: counter(item?.enrolments),
+        activeLearners: counter(item?.activeLearners),
+      };
+    }),
+  };
 };

@@ -112,12 +112,11 @@ function RouteComponent() {
           {courses.map((course) => {
             const status = courseStatusLabels[course.status] ?? 'Draft';
             return (
-              // The course analytics route arrives with the next story; until
-              // it is in the route tree a router Link to it can't type-check,
-              // so this is a plain anchor, which it becomes then.
-              <a
+              <Link
                 key={course.courseId}
-                href={`/dashboard/${encodeURIComponent(course.courseId)}`}
+                to="/dashboard/$courseId"
+                params={{ courseId: course.courseId }}
+                search={{ days: 90 }}
                 className="block h-full"
               >
                 <Card className="h-full gap-4 transition-shadow hover:shadow-md">
@@ -158,7 +157,7 @@ function RouteComponent() {
                     </p>
                   </CardContent>
                 </Card>
-              </a>
+              </Link>
             );
           })}
         </section>

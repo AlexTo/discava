@@ -6,23 +6,30 @@ import { TRPCError } from '@trpc/server';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { analyticsCourseProcedure, courseSummaries } from './analytics.js';
+import {
+  course as analyticsCourse,
+  analyticsCourseProcedure,
+  courseSummaries,
+} from './analytics.js';
 
 const {
   courseInstructorGet,
   courseInstructorByInstructor,
   courseGet,
   readCourseSummaries,
+  readCourseAnalytics,
 } = vi.hoisted(() => ({
   courseInstructorGet: vi.fn(),
   courseInstructorByInstructor: vi.fn(),
   courseGet: vi.fn(),
   readCourseSummaries: vi.fn(),
+  readCourseAnalytics: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importActual) => ({
   ...(await importActual<typeof import('@discava/core-table')>()),
   readCourseSummaries,
+  readCourseAnalytics,
   createCoreTableService: vi.fn(async () => ({
     entities: {
       course: { get: courseGet },
@@ -37,7 +44,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
 // A course-scoped procedure the authorization matrix is written against once;
 // each later one is added to PROCEDURES.
 const probe = analyticsCourseProcedure.query(() => 'allowed');
-const router = t.router({ courseSummaries, probe });
+const router = t.router({ courseSummaries, course: analyticsCourse, probe });
 const caller = t.createCallerFactory(router);
 
 const buildEvent = (sub: string, groups: string[]): APIGatewayProxyEvent =>
@@ -68,8 +75,30 @@ const TEACHES: Record<string, string[]> = {
   'instructor-2': ['course-2'],
 };
 
+// What readCourseAnalytics answers, unless a test says otherwise.
+const analytics = (overrides: Record<string, unknown> = {}) => {
+  readCourseAnalytics.mockImplementation(
+    async (_table: unknown, _id: string, days: number) => ({
+      courseId: 'course-1',
+      enrolments: 10,
+      completed: 4,
+      dropped: 1,
+      active: 5,
+      activeLearners: 6,
+      updatedAt: '2026-11-17T09:00:00.000Z',
+      daily: Array.from({ length: days }, (_, i) => ({
+        date: `d${i}`,
+        enrolments: 0,
+        activeLearners: 0,
+      })),
+      ...overrides,
+    }),
+  );
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  analytics();
   courseInstructorGet.mockImplementation(
     ({ courseId, instructorId }: Record<string, string>) => ({
       go: async () => ({
@@ -87,6 +116,11 @@ describe('analyticsCourseProcedure: who may read a course’s analytics', () => 
       name: 'the probe',
       call: (c: ReturnType<typeof callAs>, id: string) =>
         c.probe({ courseId: id }),
+    },
+    {
+      name: 'analytics.course',
+      call: (c: ReturnType<typeof callAs>, id: string) =>
+        c.course({ courseId: id, days: 30 }).then(() => 'allowed'),
     },
   ];
 
@@ -308,5 +342,74 @@ describe('analytics.courseSummaries', () => {
       callAs('student-1', ['student']).courseSummaries(),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(courseInstructorByInstructor).not.toHaveBeenCalled();
+  });
+});
+
+describe('analytics.course', () => {
+  it('gives the totals, with the completion rate and this week', async () => {
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+
+    expect(result.totals).toEqual({
+      enrolments: 10,
+      active: 5,
+      completed: 4,
+      dropped: 1,
+      completionRate: 44,
+      activeThisWeek: 6,
+      updatedAt: '2026-11-17T09:00:00.000Z',
+    });
+    expect(result.lessons).toEqual([]);
+    expect(result.quizzes).toEqual([]);
+  });
+
+  it.each([30, 90])('gives %i daily entries', async (days) => {
+    const result = await callAs().course({ courseId: 'course-1', days });
+
+    expect(result.daily).toHaveLength(days);
+    expect(readCourseAnalytics).toHaveBeenCalledWith(
+      expect.anything(),
+      'course-1',
+      days,
+    );
+  });
+
+  it('defaults to 90 days', async () => {
+    const result = await callAs().course({ courseId: 'course-1' });
+    expect(result.daily).toHaveLength(90);
+  });
+
+  it.each([7, 60, 0, '30'])('rejects %s days', async (days) => {
+    await expect(
+      callAs().course({ courseId: 'course-1', days: days as never }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(readCourseAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('has no completion rate when nobody is left enrolled', async () => {
+    analytics({ enrolments: 2, dropped: 2, completed: 0, active: 0 });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.totals.completionRate).toBeNull();
+  });
+
+  it('reads nothing for a course the caller does not teach', async () => {
+    await expect(
+      callAs('instructor-2').course({ courseId: 'course-1', days: 30 }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(readCourseAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('contains no student identifier', async () => {
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(Object.keys(result).sort()).toEqual([
+      'daily',
+      'lessons',
+      'quizzes',
+      'totals',
+    ]);
+    expect(Object.keys(result.daily[0]).sort()).toEqual([
+      'activeLearners',
+      'date',
+      'enrolments',
+    ]);
   });
 });
