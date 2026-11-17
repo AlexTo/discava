@@ -5,13 +5,24 @@
 
 import { completeCourse } from '../helpers/certificate.js';
 import {
+  addLesson,
+  addModule,
+  addQuiz,
+  createCourse,
   createPublishedCourse,
   hideItem,
+  publishCourse,
   publishItem,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
-import { expectAfterReloads } from '../helpers/student-portal.js';
+import {
+  enrol,
+  expectAfterReloads,
+  openCourse,
+  startFirstLesson,
+  takeQuiz,
+} from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
@@ -174,5 +185,71 @@ test('an instructor sees how their course is doing, and no one else can open its
     await expect(other.getByText(title)).toHaveCount(0);
     await expect(other.getByText('Enrolments')).toHaveCount(0);
     await screenshot(other, 'analytics page of a course they do not teach');
+  });
+});
+
+// Quiz analysis (#278, story 4): a wrong answer shows as an attempt and a miss
+// on its question, and the student's best score lands in the 0-9 band. One
+// attempt is under the five a question needs to be ranked, so it says so.
+test('an instructor sees which quiz question a learner missed', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E quiz analytics course');
+  const instructor = await browser.newPage();
+  const learner = await browser.newPage();
+  let courseId = '';
+
+  await test.step('the instructor publishes a course with a one-question quiz', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Quinn', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A quiz analytics course made by the end-to-end tests.',
+    });
+    courseId = instructor.url().split('/').pop() ?? '';
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addQuiz(instructor, {
+      title: 'Quiz one',
+      attempts: 2,
+      question: 'What is 2 + 2?',
+      options: ['3', '4'],
+      correct: '4',
+    });
+    await publishCourse(instructor);
+  });
+
+  await test.step('a student enrols and answers wrongly', async () => {
+    await openCourse(learner, title);
+    await enrol(learner, newUser('Sam', ['student']));
+    await startFirstLesson(learner);
+    const quiz = await takeQuiz(learner, 'Quiz one', '3');
+    await expect(quiz.getByText('This attempt: 0% · Not passed')).toBeVisible();
+  });
+
+  await test.step('the question and the score band show within 30 seconds', async () => {
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expectAfterReloads(instructor, async () => {
+      await expect(
+        instructor.getByRole('article', { name: 'Quiz one' }),
+      ).toContainText('1 student', { timeout: 2_000 });
+    });
+    await screenshot(instructor, 'quiz panel closed');
+
+    await instructor.getByRole('button', { name: 'Show analysis' }).click();
+    const questions = instructor.getByRole('table', {
+      name: 'Most-missed questions for Quiz one',
+    });
+    const row = questions.getByRole('row', { name: /What is 2 \+ 2\?/ });
+    await expect(row).toContainText('Not enough attempts');
+    await expect(row.getByRole('cell').nth(2)).toHaveText('1');
+    await expect(row.getByRole('cell').nth(3)).toHaveText('1');
+
+    const scores = instructor.getByRole('table', {
+      name: 'Best scores for Quiz one',
+    });
+    await expect(scores.getByRole('row', { name: /0-9/ })).toContainText('1');
+    await expect(scores.getByRole('row')).toHaveCount(11);
+    await screenshot(instructor, 'quiz analysis with a missed question');
   });
 });

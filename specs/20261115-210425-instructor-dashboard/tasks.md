@@ -155,16 +155,16 @@ description: "Task list for the instructor dashboard and course analytics"
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T048 [P] [US4] Extend `analytics.test.ts`: a `quizAttempt` contributes `attempts` +1 for each question id in `answers` and `misses` +1 for each not in `correctQuestionIds`; a `quizSummary` contributes one student to the band of `bestScore` (0-9 .. 90-100, 100 in the last), and a rising best moves the student between bands once; extend the invariant test (with its breaking case) and the rebuild test. Check `invariants.ts` for an existing check that `bestScore` never decreases and `attempts` are immutable; if missing, add one with its breaking test, because the contributions rely on it (plan R4).
-- [ ] T049 [P] [US4] Extend `analytics-reads.test.ts` and instructor-api's `analytics.test.ts` for `analytics.quiz`: only the quiz's current questions (a deleted question is dropped), `ranked` true at 5 or more attempts, ranked first by `missRate` descending then `attempts` descending, the unranked after in quiz order; ten `scoreBands`; `students` equals their sum; a quiz of another course or an unknown one answers `NOT_FOUND`; `analytics.course` lists the course's shown quizzes.
-- [ ] T050 [P] [US4] Extend `$courseId/-route.test.tsx` and add `quiz-panel.test.tsx`: ranked questions with attempts, misses and miss rate, "Not enough attempts", ten score bars with a text alternative, empty state; extend `analytics.e2e.ts`: a student answers wrongly and the question and band show.
+- [x] T048 [P] [US4] Extend `analytics.test.ts`: a `quizAttempt` contributes `attempts` +1 for each question id in `answers` and `misses` +1 for each not in `correctQuestionIds`; a `quizSummary` contributes one student to the band of `bestScore` (0-9 .. 90-100, 100 in the last), and a rising best moves the student between bands once; extend the invariant test (with its breaking case) and the rebuild test. Check `invariants.ts` for an existing check that `bestScore` never decreases and `attempts` are immutable; if missing, add one with its breaking test, because the contributions rely on it (plan R4).
+- [x] T049 [P] [US4] Extend `analytics-reads.test.ts` and instructor-api's `analytics.test.ts` for `analytics.quiz`: only the quiz's current questions (a deleted question is dropped), `ranked` true at 5 or more attempts, ranked first by `missRate` descending then `attempts` descending, the unranked after in quiz order; ten `scoreBands`; `students` equals their sum; a quiz of another course or an unknown one answers `NOT_FOUND`; `analytics.course` lists the course's shown quizzes.
+- [x] T050 [P] [US4] Extend `$courseId/-route.test.tsx` and add `quiz-panel.test.tsx`: ranked questions with attempts, misses and miss rate, "Not enough attempts", ten score bars with a text alternative, empty state; extend `analytics.e2e.ts`: a student answers wrongly and the question and band show.
 
 ### Implementation for User Story 4
 
-- [ ] T051 [US4] Add the `quizAttempt` question and `quizSummary` band contributions to `helpers/analytics.ts`, extend `analytics-matches-records` and `rebuildCourseAnalytics` (T048), and add the `quiz`-prefixed reads to `analytics-reads.ts` joined with the curriculum's current quiz questions.
-- [ ] T052 [US4] Add `analytics.quiz` and the `quizzes` list of `analytics.course` in `procedures/analytics.ts`.
-- [ ] T053 [US4] Add `quiz-panel.tsx` and the score chart under `$courseId/-components/`, shown per quiz in the route; text-only buttons.
-- [ ] T054 [US4] Run the US4 tests.
+- [x] T051 [US4] Add the `quizAttempt` question and `quizSummary` band contributions to `helpers/analytics.ts`, extend `analytics-matches-records` and `rebuildCourseAnalytics` (T048), and add the `quiz`-prefixed reads to `analytics-reads.ts` joined with the curriculum's current quiz questions.
+- [x] T052 [US4] Add `analytics.quiz` and the `quizzes` list of `analytics.course` in `procedures/analytics.ts`.
+- [x] T053 [US4] Add `quiz-panel.tsx` and the score chart under `$courseId/-components/`, shown per quiz in the route; text-only buttons.
+- [x] T054 [US4] Run the US4 tests.
 
 **Checkpoint**: all four stories work.
 

@@ -424,6 +424,7 @@ const fakeCoreTable = (records: {
       },
       itemCompletion: ofUser(records.itemCompletions),
       quizAttempt: ofUser(records.quizAttempts),
+      quizSummary: ofUser(records.quizSummaries),
       progress: ofUser(records.progress),
       analyticsMarker: {
         ...putter('analyticsMarker'),
@@ -438,8 +439,8 @@ const fakeCoreTable = (records: {
       courseStats: putter('courseStats'),
       periodStats: putter('periodStats'),
       lessonStats: putter('lessonStats'),
-      quizQuestionStats: deleter('quizQuestionStats'),
-      quizScoreStats: deleter('quizScoreStats'),
+      quizQuestionStats: putter('quizQuestionStats'),
+      quizScoreStats: putter('quizScoreStats'),
     },
     collections: {
       analytics: () => ({
@@ -573,5 +574,206 @@ describe('rebuildCourseAnalytics', () => {
       vi.useRealTimers();
     }
     expect(second.puts).toEqual(first.puts);
+  });
+});
+
+const attempt = (overrides: Record<string, unknown> = {}) => ({
+  courseId: 'c1',
+  contentItemId: 'quiz1',
+  userId: 'u1',
+  submittedAt: '2026-11-17T08:00:00.000Z',
+  answers: { q1: ['a'], q2: ['b'], q3: ['c'] },
+  correctQuestionIds: ['q1'],
+  ...overrides,
+});
+
+const summary = (bestScore: unknown, overrides = {}) => ({
+  courseId: 'c1',
+  contentItemId: 'quiz1',
+  userId: 'u1',
+  bestScore,
+  ...overrides,
+});
+
+const questionSk = (questionId: string) => `QUIZ#quiz1#Q#${questionId}`;
+
+describe('contributions of a quiz attempt', () => {
+  it('counts an attempt on each answered question and a miss on each not correct', () => {
+    const result = contributions('quizAttempt', attempt());
+    const quizCounts = result.counts.filter(
+      ({ kind }) => kind === 'quizQuestionStats',
+    );
+    expect(quizCounts).toHaveLength(5);
+    expect(amount(result, questionSk('q1'), 'attempts')).toBe(1);
+    expect(amount(result, questionSk('q1'), 'misses')).toBe(0);
+    expect(amount(result, questionSk('q2'), 'attempts')).toBe(1);
+    expect(amount(result, questionSk('q2'), 'misses')).toBe(1);
+    expect(amount(result, questionSk('q3'), 'misses')).toBe(1);
+    expect(result.counts.every(({ courseId }) => courseId === 'c1')).toBe(true);
+  });
+
+  it('still makes the student active', () => {
+    expect(contributions('quizAttempt', attempt()).members).toHaveLength(2);
+  });
+
+  it('counts a skipped question (no answer) as neither an attempt nor a miss', () => {
+    const result = contributions(
+      'quizAttempt',
+      attempt({ answers: { q1: ['a'] }, correctQuestionIds: [] }),
+    );
+    expect(amount(result, questionSk('q1'), 'misses')).toBe(1);
+    expect(amount(result, questionSk('q2'), 'attempts')).toBe(0);
+  });
+
+  it('gives no question counts for an attempt without answers or a quiz', () => {
+    expect(
+      contributions('quizAttempt', attempt({ answers: undefined })).counts,
+    ).toEqual([]);
+    expect(
+      contributions('quizAttempt', attempt({ contentItemId: undefined }))
+        .counts,
+    ).toEqual([]);
+  });
+
+  it('is immutable: the same attempt seen as before and after adds nothing', () => {
+    const image = attempt();
+    expect(contributionsOfChange('quizAttempt', image, image).counts).toEqual(
+      [],
+    );
+  });
+});
+
+describe('contributions of a quiz summary', () => {
+  const band = (score: number) =>
+    contributions('quizSummary', summary(score)).counts;
+
+  it.each([
+    [0, 'band0'],
+    [9, 'band0'],
+    [10, 'band1'],
+    [55, 'band5'],
+    [89, 'band8'],
+    [90, 'band9'],
+    [99, 'band9'],
+    [100, 'band9'],
+  ])('puts a best score of %i in %s', (score, attribute) => {
+    expect(band(score)).toEqual([
+      {
+        kind: 'quizScoreStats',
+        courseId: 'c1',
+        sk: 'QUIZ#quiz1#SCORES',
+        attribute,
+        amount: 1,
+      },
+    ]);
+  });
+
+  it('gives nothing for a summary with no usable score', () => {
+    expect(contributions('quizSummary', summary(undefined)).counts).toEqual([]);
+    expect(contributions('quizSummary', summary('80')).counts).toEqual([]);
+    expect(contributions('quizSummary', summary(-5)).counts).toEqual([]);
+  });
+
+  it('moves a student between bands once when their best rises', () => {
+    const { counts } = contributionsOfChange(
+      'quizSummary',
+      summary(40),
+      summary(85),
+    );
+    expect(counts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ attribute: 'band4', amount: -1 }),
+        expect.objectContaining({ attribute: 'band8', amount: 1 }),
+      ]),
+    );
+    expect(counts).toHaveLength(2);
+  });
+
+  it('moves nothing when the best rises within a band', () => {
+    expect(
+      contributionsOfChange('quizSummary', summary(41), summary(49)).counts,
+    ).toEqual([]);
+  });
+
+  it('adds the student to a band when the summary is created', () => {
+    expect(
+      contributionsOfChange('quizSummary', undefined, summary(70)).counts,
+    ).toEqual([expect.objectContaining({ attribute: 'band7', amount: 1 })]);
+  });
+
+  it('adds up in any order of deliveries', () => {
+    const first = contributionsOfChange('quizSummary', undefined, summary(30));
+    const second = contributionsOfChange(
+      'quizSummary',
+      summary(30),
+      summary(75),
+    );
+    const forward = sumContributions([first, second]);
+    const backward = sumContributions([second, first]);
+    expect(aggregatesOf(forward)).toEqual(aggregatesOf(backward));
+    expect(aggregatesOf(forward)[0].counters).toEqual({ band7: 1 });
+  });
+});
+
+describe('aggregatesOf quiz contributions', () => {
+  it('puts question counters and band counters on their own items', () => {
+    const items = aggregatesOf(
+      sumContributions([
+        contributions('quizAttempt', attempt()),
+        contributions('quizAttempt', attempt({ userId: 'u2' })),
+        contributions('quizSummary', summary(80)),
+      ]),
+    );
+    expect(items).toEqual(
+      expect.arrayContaining([
+        {
+          kind: 'quizQuestionStats',
+          courseId: 'c1',
+          sk: questionSk('q2'),
+          counters: { attempts: 2, misses: 2 },
+        },
+        {
+          kind: 'quizScoreStats',
+          courseId: 'c1',
+          sk: 'QUIZ#quiz1#SCORES',
+          counters: { band8: 1 },
+        },
+      ]),
+    );
+  });
+});
+
+describe('rebuildCourseAnalytics for quizzes', () => {
+  it('writes question and score items from attempts and summaries', async () => {
+    const { coreTable, puts } = fakeCoreTable({
+      enrolments: [enrolment()],
+      quizAttempts: [attempt(), attempt({ answers: { q1: ['a'] } })],
+      quizSummaries: [summary(100)],
+    });
+    await rebuildCourseAnalytics(coreTable, 'c1');
+
+    expect(puts.filter(({ kind }) => kind === 'quizQuestionStats')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          courseId: 'c1',
+          contentItemId: 'quiz1',
+          questionId: 'q1',
+          attempts: 2,
+        }),
+        expect.objectContaining({
+          contentItemId: 'quiz1',
+          questionId: 'q2',
+          attempts: 1,
+          misses: 1,
+        }),
+      ]),
+    );
+    expect(puts.filter(({ kind }) => kind === 'quizScoreStats')).toEqual([
+      expect.objectContaining({
+        courseId: 'c1',
+        contentItemId: 'quiz1',
+        band9: 1,
+      }),
+    ]);
   });
 });

@@ -79,16 +79,59 @@ export const LessonDropOffSchema = z.object({
 
 export type ILessonDropOff = z.output<typeof LessonDropOffSchema>;
 
+export const QuizListingSchema = z.object({
+  contentItemId: z.string(),
+  lessonId: z.string(),
+  title: z.string(),
+  /** Students with a best score. */
+  students: CountSchema,
+});
+
+export type IQuizListing = z.output<typeof QuizListingSchema>;
+
 export const CourseAnalyticsOutputSchema = z.object({
   totals: CourseTotalsSchema,
   /** Exactly `days` entries, oldest first, zero filled. */
   daily: z.array(CourseDaySchema),
   /** Lessons currently shown to students, in course order. */
   lessons: z.array(LessonDropOffSchema),
-  // Filled by the quiz story; empty until then.
-  quizzes: z.array(z.never()),
+  /** Quizzes currently shown to students, in course order. */
+  quizzes: z.array(QuizListingSchema),
 });
 
 export type ICourseAnalyticsOutput = z.output<
   typeof CourseAnalyticsOutputSchema
 >;
+
+export const QuizAnalyticsInputSchema = z.object({
+  contentItemId: z.string().min(1),
+});
+
+export const QuizQuestionFiguresSchema = z.object({
+  questionId: z.string(),
+  /** The question's prompt as plain text. */
+  text: z.string(),
+  attempts: CountSchema,
+  misses: CountSchema,
+  /** `misses / attempts` as a whole percent, rounded down; null with no attempts. */
+  missRate: z.number().int().min(0).max(100).nullable(),
+  /** True with 5 or more attempts. */
+  ranked: z.boolean(),
+});
+
+export const ScoreBandSchema = z.object({
+  from: z.number().int().min(0).max(90),
+  to: z.number().int().min(9).max(100),
+  students: CountSchema,
+});
+
+export const QuizAnalyticsOutputSchema = z.object({
+  /** Ranked questions first (miss rate, then attempts), then the rest in quiz order. */
+  questions: z.array(QuizQuestionFiguresSchema),
+  /** Ten bands, 0-9 through 90-100. */
+  scoreBands: z.array(ScoreBandSchema),
+  /** Students with a best score: the sum of the bands. */
+  students: CountSchema,
+});
+
+export type IQuizAnalyticsOutput = z.output<typeof QuizAnalyticsOutputSchema>;

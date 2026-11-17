@@ -56,6 +56,7 @@ const lesson = (
 const analytics = ({
   days = 90,
   lessons = [] as unknown[],
+  quizzes = [] as unknown[],
   ...totals
 }: Record<string, unknown> = {}) => ({
   totals: {
@@ -70,7 +71,7 @@ const analytics = ({
   },
   daily: dayList(days as number),
   lessons,
-  quizzes: [],
+  quizzes,
 });
 
 const renderPage = (course: (input: unknown) => unknown = () => analytics()) =>
@@ -294,6 +295,79 @@ describe('Course analytics', () => {
 
       await screen.findByText('No learners have enrolled yet');
       expect(screen.queryByText('Lesson drop-off')).toBeNull();
+    });
+  });
+
+  describe('quizzes', () => {
+    const quizzes = [
+      { contentItemId: 'q-a', lessonId: 'l1', title: 'Warm-up', students: 3 },
+      { contentItemId: 'q-b', lessonId: 'l2', title: 'Final', students: 0 },
+    ];
+
+    it('shows a panel for each quiz, in the order given', async () => {
+      renderPage(() => analytics({ quizzes }));
+
+      const section = await screen.findByLabelText('Quizzes');
+      const panels = within(section).getAllByRole('article');
+      expect(panels.map((panel) => panel.textContent)).toEqual([
+        expect.stringContaining('Warm-up'),
+        expect.stringContaining('Final'),
+      ]);
+    });
+
+    it('opens one quiz’s analysis, asking for that quiz only', async () => {
+      const { user, calls } = renderWithInstructorApi(<RouteComponent />, {
+        handlers: {
+          'analytics.course': () => analytics({ quizzes }),
+          'analytics.courseSummaries': () => [],
+          'analytics.quiz': () => ({
+            questions: [
+              {
+                questionId: 'q1',
+                text: 'What is a partition key?',
+                attempts: 6,
+                misses: 3,
+                missRate: 50,
+                ranked: true,
+              },
+            ],
+            scoreBands: Array.from({ length: 10 }, (_, band) => ({
+              from: band * 10,
+              to: band === 9 ? 100 : band * 10 + 9,
+              students: band === 7 ? 3 : 0,
+            })),
+            students: 3,
+          }),
+        },
+      });
+
+      const [first] = await screen.findAllByRole('button', {
+        name: /Show analysis/,
+      });
+      await user.click(first);
+
+      expect(
+        await screen.findByText('What is a partition key?'),
+      ).toBeInTheDocument();
+      expect(
+        calls
+          .filter(({ path }) => path === 'analytics.quiz')
+          .map(({ input }) => input),
+      ).toEqual([{ courseId: 'c1', contentItemId: 'q-a' }]);
+    });
+
+    it('has no quiz section for a course without shown quizzes', async () => {
+      renderPage(() => analytics({ quizzes: [] }));
+
+      await screen.findByText(/^Last updated /);
+      expect(screen.queryByLabelText('Quizzes')).toBeNull();
+    });
+
+    it('waits for the first enrolment, as the rest of the page does', async () => {
+      renderPage(() => analytics({ enrolments: 0, quizzes }));
+
+      await screen.findByText('No learners have enrolled yet');
+      expect(screen.queryByText('Warm-up')).toBeNull();
     });
   });
 });
