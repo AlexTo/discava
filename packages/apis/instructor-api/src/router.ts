@@ -11,7 +11,9 @@ import {
 } from './procedures/analytics.js';
 import {
   createAnnouncement,
+  deleteAnnouncement,
   listAnnouncements,
+  updateAnnouncement,
 } from './procedures/announcement.js';
 import {
   createQuizAssignment,
@@ -95,6 +97,8 @@ export const appRouter = router({
   announcement: router({
     create: createAnnouncement,
     list: listAnnouncements,
+    update: updateAnnouncement,
+    delete: deleteAnnouncement,
   }),
   course: router({
     create: createCourse,
