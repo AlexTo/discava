@@ -83,6 +83,7 @@ export {
   isShown,
 } from './helpers/curriculum.js';
 export {
+  InvalidRequestError,
   isConditionalCheckFailed,
   NotFoundError,
   VersionConflictError,
@@ -121,6 +122,7 @@ export {
   releaseEmailClaim,
   skipEmail,
 } from './helpers/notification-email.js';
+export { setNotificationPreference } from './helpers/notification-preference.js';
 export {
   MARK_ALL_CHUNK,
   markNotificationRead,
