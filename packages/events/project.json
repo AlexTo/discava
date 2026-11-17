@@ -33,6 +33,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/analytics/analytics-update.ts",
+        "name": "analytics-update",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/progress/progress-recalculation.ts",
         "name": "progress-recalculation",
         "iac": "cdk"
@@ -59,6 +65,24 @@
         "generator": "ts#lambda-function",
         "path": "src/search/search-reindex.ts",
         "name": "search-reindex",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/router/stream-router.ts",
+        "name": "stream-router",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/notifications/delivery.ts",
+        "name": "notification-delivery",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/notifications/unsubscribe.ts",
+        "name": "notification-unsubscribe",
         "iac": "cdk"
       }
     ]

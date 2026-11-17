@@ -3,6 +3,10 @@
     "nx-plugin-for-aws": {
       "command": "npx",
       "args": ["-y", "@aws/nx-plugin-mcp"]
+    },
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
     }
   }
 }

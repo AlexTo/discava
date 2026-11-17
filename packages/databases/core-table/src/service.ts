@@ -4,17 +4,27 @@
  */
 import { Service } from 'electrodb';
 import {
+  createAnalyticsMarkerEntity,
   createAssignmentSubmissionEntity,
   createCertificateEntity,
   createContentItemEntity,
   createCourseEntity,
   createCourseInstructorEntity,
+  createCourseStatsEntity,
   createEnrolmentEntity,
   createItemCompletionEntity,
   createLessonEntity,
+  createLessonStatsEntity,
   createModuleEntity,
+  createNotificationBroadcastEntity,
+  createNotificationEntity,
+  createNotificationPreferenceEntity,
+  createNotificationStateEntity,
+  createPeriodStatsEntity,
   createProgressEntity,
   createQuizAttemptEntity,
+  createQuizQuestionStatsEntity,
+  createQuizScoreStatsEntity,
   createQuizSummaryEntity,
   createUserEntity,
   createVideoPositionEntity,
@@ -24,7 +34,9 @@ import {
 // (declared on each entity's primary index), so a course's full curriculum
 // can be read with a single query: coreTableService.collections.curriculum({
 // courseId }).go(). Other entities are included for a single access point
-// but don't need to be queried alongside the curriculum.
+// but don't need to be queried alongside the curriculum. The analytics
+// aggregates share the `analytics` collection (one pk per course); markers
+// have their own pk, as they are never read, only written.
 export const createCoreTableService = async () => {
   const [
     user,
@@ -41,6 +53,16 @@ export const createCoreTableService = async () => {
     itemCompletion,
     certificate,
     videoPosition,
+    courseStats,
+    periodStats,
+    lessonStats,
+    quizQuestionStats,
+    quizScoreStats,
+    analyticsMarker,
+    notification,
+    notificationState,
+    notificationPreference,
+    notificationBroadcast,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -56,6 +78,16 @@ export const createCoreTableService = async () => {
     createItemCompletionEntity(),
     createCertificateEntity(),
     createVideoPositionEntity(),
+    createCourseStatsEntity(),
+    createPeriodStatsEntity(),
+    createLessonStatsEntity(),
+    createQuizQuestionStatsEntity(),
+    createQuizScoreStatsEntity(),
+    createAnalyticsMarkerEntity(),
+    createNotificationEntity(),
+    createNotificationStateEntity(),
+    createNotificationPreferenceEntity(),
+    createNotificationBroadcastEntity(),
   ]);
 
   return new Service({
@@ -73,5 +105,15 @@ export const createCoreTableService = async () => {
     itemCompletion,
     certificate,
     videoPosition,
+    courseStats,
+    periodStats,
+    lessonStats,
+    quizQuestionStats,
+    quizScoreStats,
+    analyticsMarker,
+    notification,
+    notificationState,
+    notificationPreference,
+    notificationBroadcast,
   });
 };

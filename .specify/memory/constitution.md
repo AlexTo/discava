@@ -36,7 +36,7 @@ All application data lives in the one `core-table` DynamoDB table, defined as El
 - Co-locate records read together under a shared partition key, with sort keys that make a parent's children a contiguous range (as `curriculum` does for course, module, lesson and content item).
 - Add an index only for an access pattern the plan names, because indexes cost writes and storage.
 - Reach the table through `@discava/core-table` (which resolves the client and table for local and deployed use alike), never through a raw DynamoDB client in an API.
-- Consider the table's stream consumers (progress, search) when it changes a record they read. Update `PROGRESS_STREAM_FILTERS` or `SEARCH_STREAM_FILTERS` if the change affects what they react to.
+- Consider the features registered with the table's stream router (`STREAM_FEATURES`) when it changes a record they read. Update the affected feature's registration if the change affects what it reacts to.
 
 Rationale: single-table design fits only if access patterns are known and keys are planned. Retrofitting keys or indexes later means migrating data.
 
@@ -77,4 +77,4 @@ Rationale: compatibility code written now is dead weight at launch. Revisit this
 
 This constitution supersedes other practices where they conflict. Amend it by pull request, with the rationale in the description. Versioning is semantic: MAJOR for removing or redefining a principle, MINOR for adding a principle or materially widening one, PATCH for clarifications. Reviewers MUST check that each PR complies.
 
-**Version**: 1.2.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-14
+**Version**: 1.2.1 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-17

@@ -69,6 +69,10 @@ const COMPONENT_FIELDS: Record<
     maxReadRequestUnits: 'number',
     maxWriteRequestUnits: 'number',
   },
+  streamRouter: {
+    enableKmsEncryption: 'boolean',
+    enableKeyRotation: 'boolean',
+  },
   studentPortal: {
     enableWaf: 'boolean',
     enableKmsEncryption: 'boolean',
@@ -115,6 +119,10 @@ const COMPONENT_FIELDS: Record<
     maxIndexingCapacityInOcu: 'number',
     maxSearchCapacityInOcu: 'number',
     retainOnDelete: 'boolean',
+  },
+  notifications: {
+    fromAddress: 'string',
+    sesIdentity: 'string',
   },
 };
 

@@ -6,8 +6,7 @@ import {
   AdminPortal,
   CoreApi,
   CoreTable,
-  EventsProgressRecalculation,
-  EventsSearchIndexing,
+  EventsNotificationUnsubscribe,
   EventsSearchReindex,
   InstructorPortal,
   LessonMediaBucket,
@@ -19,31 +18,14 @@ import {
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
-import {
-  PROGRESS_STREAM_FILTERS,
-  SEARCH_STREAM_FILTERS,
-} from '@discava/core-table';
-import {
-  CfnResource,
-  Duration,
-  RemovalPolicy,
-  Stack,
-  StackProps,
-} from 'aws-cdk-lib';
+import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
-import {
-  FilterCriteria,
-  FilterRule,
-  StartingPosition,
-} from 'aws-cdk-lib/aws-lambda';
-import {
-  DynamoEventSource,
-  SqsDlq,
-} from 'aws-cdk-lib/aws-lambda-event-sources';
-import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
+import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { apiLimits, publicThrottle } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
+import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
 type CoreApiIntegrations = ReturnType<
   ReturnType<typeof CoreApi.defaultIntegrations>['build']
@@ -55,6 +37,8 @@ export interface CoreApiStackProps extends StackProps {
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** Signs the unsubscribe links in notification emails; the unsubscribe route verifies them. */
+  readonly notificationUnsubscribeSecret: ISecret;
   /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
   readonly lessonMediaBucket: LessonMediaBucket;
   /** Where a student's submission is uploaded before it is copied across. */
@@ -65,22 +49,15 @@ export interface CoreApiStackProps extends StackProps {
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
 
-// checkov's CKV_AWS_27 only recognises a KMS key, not SQS-managed SSE, which
-// encrypts the queue just the same (as media-pipeline-stack.ts's queue).
-const suppressSqsManagedEncryption = (queue: Queue) =>
-  suppressRules(
-    queue,
-    ['CKV_AWS_27'],
-    'Encrypted with SQS-managed SSE, which this check does not recognise',
-  );
-
 /**
- * The tRPC API any authenticated user can call, plus the progress
- * recalculation that turns the item completions it records into lesson and
- * enrolment progress.
+ * The tRPC API any authenticated user can call, plus the search re-index
+ * Lambda. The stream-driven handlers (progress recalculation, search
+ * indexing) are in StreamRouterStack.
  */
 export class CoreApiStack extends Stack {
   public readonly coreApi: CoreApi<CoreApiIntegrations>;
+  /** The API's address, as clients call it: its custom domain when it has one, else the execute-api URL. No trailing slash. */
+  public readonly apiUrl: string;
 
   constructor(
     scope: Construct,
@@ -90,6 +67,7 @@ export class CoreApiStack extends Stack {
       identity,
       coreTable,
       searchCollection,
+      notificationUnsubscribeSecret,
       lessonMediaBucket,
       lessonMediaUploadBucket,
       mediaPipeline,
@@ -113,8 +91,24 @@ export class CoreApiStack extends Stack {
         )
       : undefined;
 
+    const unsubscribe = this.createNotificationUnsubscribeLambda(
+      coreTable,
+      notificationUnsubscribeSecret,
+    );
+
     this.coreApi = new CoreApi(this, 'CoreApi', {
       integrations,
+      // The link in every notification email: anyone holding a signed token
+      // may open it, so both methods are public.
+      extraRoutes: (['GET', 'POST'] as const).map((method) => ({
+        method,
+        path: 'unsubscribe/{token}',
+        integration: {
+          integration: new LambdaIntegration(unsubscribe),
+          handler: unsubscribe,
+        },
+        public: true,
+      })),
       identity,
       enableWaf: coreApiConfig?.enableWaf ?? true,
       throttle: limits.throttle,
@@ -129,6 +123,13 @@ export class CoreApiStack extends Stack {
       domainName: coreApiConfig?.domainName,
       certificate: coreApiCertificate,
     });
+    // With a custom domain the base path mapping serves the API without the
+    // deployment stage's prefix, so clients call the domain directly.
+    this.apiUrl = (
+      coreApiConfig?.domainName && coreApiCertificate
+        ? `https://${coreApiConfig.domainName}`
+        : this.coreApi.api.url
+    ).replace(/\/+$/, '');
     if (!coreApiKmsEnabled) {
       suppressRules(
         this,
@@ -172,8 +173,6 @@ export class CoreApiStack extends Stack {
       'http://localhost:4302',
     );
 
-    this.createProgressRecalculationLambda(coreTable);
-    this.createSearchIndexingLambda(coreTable, searchCollection);
     this.createSearchReindexLambda(coreTable, searchCollection);
   }
 
@@ -215,115 +214,6 @@ export class CoreApiStack extends Stack {
     return integrations[op].handler;
   }
 
-  // The single writer of lesson progress and of the enrolment's
-  // progressPercent, status and completedAt, run from the core table's
-  // stream.
-  private createProgressRecalculationLambda(coreTable: CoreTable) {
-    const recalculation = new EventsProgressRecalculation(
-      this,
-      'ProgressRecalculation',
-    );
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    recalculation.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(recalculation);
-    coreTable.grantReadWriteData(recalculation);
-
-    // A batch still failing after its retries, split down to the records
-    // that fail, lands here instead of blocking the stream. Every run
-    // recomputes from scratch, so the next change for the same students
-    // also repairs what a failed batch missed.
-    // Its messages say where in the stream a batch failed (shard and
-    // sequence numbers), not what the records held, so SQS-managed
-    // encryption is enough: no key to create or pay for.
-    const failures = new Queue(this, 'ProgressRecalculationFailures', {
-      encryption: QueueEncryption.SQS_MANAGED,
-      enforceSSL: true,
-      retentionPeriod: Duration.days(14),
-    });
-    suppressSqsManagedEncryption(failures);
-
-    // Only the records that can change progress invoke the Lambda (see
-    // PROGRESS_STREAM_FILTERS, which local dev's event runner applies too).
-    recalculation.addEventSource(
-      new DynamoEventSource(coreTable.table, {
-        startingPosition: StartingPosition.LATEST,
-        batchSize: 100,
-        // Gathers a burst of edits (an instructor publishing a module, say)
-        // into one batch, so each course is recalculated once for it.
-        maxBatchingWindow: Duration.seconds(5),
-        retryAttempts: 5,
-        bisectBatchOnError: true,
-        onFailure: new SqsDlq(failures),
-        filters: PROGRESS_STREAM_FILTERS.map(({ eventName, image, entities }) =>
-          FilterCriteria.filter({
-            eventName: FilterRule.isEqual(eventName),
-            dynamodb: {
-              [image]: { __edb_e__: { S: FilterRule.or(...entities) } },
-            },
-          }),
-        ),
-      }),
-    );
-
-    return recalculation;
-  }
-
-  // The single writer of the search collection's documents, run from the
-  // core table's stream, in a separate event source mapping (its own DLQ)
-  // from progress recalculation's. Everything it indexes is on the stream
-  // record itself, so it needs no access to the table beyond its stream
-  // (which DynamoEventSource grants).
-  private createSearchIndexingLambda(
-    coreTable: CoreTable,
-    searchCollection: SearchCollection,
-  ) {
-    const indexing = new EventsSearchIndexing(this, 'SearchIndexing');
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    indexing.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(indexing);
-    searchCollection.grantWrite(indexing.role!);
-
-    // Its messages say where in the stream a batch failed, not what the
-    // records held, so SQS-managed encryption is enough, as
-    // ProgressRecalculationFailures.
-    const failures = new Queue(this, 'SearchIndexingFailures', {
-      encryption: QueueEncryption.SQS_MANAGED,
-      enforceSSL: true,
-      retentionPeriod: Duration.days(14),
-    });
-    suppressSqsManagedEncryption(failures);
-
-    // Only the records that can change what's searchable invoke the Lambda
-    // (see SEARCH_STREAM_FILTERS, which local dev's event runner applies
-    // too).
-    indexing.addEventSource(
-      new DynamoEventSource(coreTable.table, {
-        startingPosition: StartingPosition.LATEST,
-        batchSize: 100,
-        maxBatchingWindow: Duration.seconds(5),
-        retryAttempts: 5,
-        bisectBatchOnError: true,
-        onFailure: new SqsDlq(failures),
-        filters: SEARCH_STREAM_FILTERS.map(({ eventName, image, entities }) =>
-          FilterCriteria.filter({
-            eventName: FilterRule.isEqual(eventName),
-            dynamodb: {
-              [image]: { __edb_e__: { S: FilterRule.or(...entities) } },
-            },
-          }),
-        ),
-      }),
-    );
-
-    return indexing;
-  }
-
   // Rebuilds the courses index from the core table when invoked, for after
   // the index is recreated or an indexing bug (#273). No event source and no
   // API route: only an IAM principal allowed lambda:InvokeFunction can call
@@ -344,5 +234,23 @@ export class CoreApiStack extends Stack {
     coreTable.grantReadData(reindex);
     searchCollection.grantWrite(reindex.role!);
     return reindex;
+  }
+
+  // Turns a notification type's emails off for the user a signed link names
+  // (verifying the token with the secret), from a click in an email or a mail
+  // client's one-click request. It reads and writes the table and nothing else.
+  private createNotificationUnsubscribeLambda(
+    coreTable: CoreTable,
+    unsubscribeSecret: ISecret,
+  ) {
+    const unsubscribe = new EventsNotificationUnsubscribe(
+      this,
+      'NotificationUnsubscribe',
+    );
+    coreTable.grantReadWriteData(unsubscribe);
+    const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
+    secret.grantRead(unsubscribe);
+    unsubscribe.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
+    return unsubscribe;
   }
 }

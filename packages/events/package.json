@@ -15,6 +15,7 @@
     "@aws-sdk/client-dynamodb-streams": "catalog:",
     "@aws-sdk/client-mediaconvert": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/client-sesv2": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
     "@aws-sdk/client-sqs": "catalog:",
     "@aws-sdk/client-transcribe": "catalog:",
