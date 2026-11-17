@@ -22,7 +22,7 @@ import { CourseThumbnail } from './course-thumbnail';
  */
 export function CourseCard({ course }: { course: DisplayCourse }) {
   return (
-    <Card className="group overflow-hidden pt-0 transition-[transform,border-color,box-shadow] hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/40 hover:shadow-lg">
+    <Card className="group overflow-hidden pt-0 transition-[translate,border-color,box-shadow] hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/40 hover:shadow-lg">
       <CourseThumbnail
         course={course}
         iconClassName="transition-transform group-hover:scale-110"

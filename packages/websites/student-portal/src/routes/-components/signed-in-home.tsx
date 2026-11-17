@@ -168,7 +168,7 @@ export function SignedInHome() {
             {newCourses.map((course) => (
               <Card
                 key={course.courseId}
-                className="group gap-4 overflow-hidden py-0 transition-[transform,border-color,box-shadow] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/30 hover:shadow-md"
+                className="group gap-4 overflow-hidden py-0 transition-[translate,border-color,box-shadow] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/30 hover:shadow-md"
               >
                 <CourseThumbnail course={course} iconClassName="text-4xl" />
                 <CardContent className="flex flex-1 flex-col gap-3 px-5 pb-5">
