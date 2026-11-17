@@ -26,7 +26,11 @@ pnpm nx e2e @discava/e2e -- learn            # only the scenarios whose file mat
 
 If `pnpm dev` is already running, the tests use it. Otherwise Playwright starts it, waits for every service to answer (see `src/global-setup.ts`), and stops it, and its containers, afterwards. In CI it always starts a fresh one.
 
-When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over three runners (`E2E_SHARD=2/3 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact.
+When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over four runners (`E2E_SHARD=2/4 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact.
+
+## Screenshots for the pull request
+
+A scenario for a user-visible change calls `screenshot(page, 'controls paused')` (from `helpers/screenshots.ts`) at the states a reviewer would otherwise open `pnpm dev` to look at. Files land in `dist/packages/e2e/screenshots/<scenario>/NN-name.png`. In CI each runner uploads them as an `e2e-screenshots-<n>` artifact, and the `E2E screenshots` job keeps one comment on the pull request (updated in place on every push, not a new comment each time) with a link to the run's artifacts. It lists first the pictures whose `screenshot(` call the pull request adds, matched by scenario file and literal name, and folds the pictures of scenarios that were already there. The `UI Screenshots` job in `pr-checks.yml` fails a pull request that changes portal or `common-shadcn` markup or styles without adding a `screenshot(` call to a scenario; a maintainer applies the `no-ui-screenshots` label when there is nothing to look at, then re-runs that job (it reads the labels when it runs). Take them after an `expect` on what shows, so the picture is of a settled page.
 
 ## Writing a scenario
 

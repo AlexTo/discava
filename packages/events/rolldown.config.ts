@@ -29,9 +29,31 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
+    input: 'src/media/transcribe-complete.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/transcribe-complete/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
     input: 'src/media/transcode-cleanup.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/transcode-cleanup/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/analytics/analytics-update.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/analytics-update/index.js',
       format: 'cjs',
       codeSplitting: false,
     },
@@ -87,6 +109,39 @@ export default defineConfig([
     input: 'src/search/search-reindex.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/search-reindex/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/router/stream-router.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/stream-router/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/notifications/delivery.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/notification-delivery/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/notifications/unsubscribe.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/notification-unsubscribe/index.js',
       format: 'cjs',
       codeSplitting: false,
     },

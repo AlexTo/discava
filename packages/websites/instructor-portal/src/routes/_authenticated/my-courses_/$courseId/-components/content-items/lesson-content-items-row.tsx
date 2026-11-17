@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
@@ -28,6 +29,7 @@ import {
   RemoveLessonTextButton,
 } from './edit-lesson-text-dialog';
 import { QuizBuilderDialog } from './quiz/quiz-builder-dialog';
+import { VideoCaptionsDialog } from './video-captions-dialog';
 
 export type ContentItem = {
   contentItemId: string;
@@ -38,6 +40,9 @@ export type ContentItem = {
   status: string;
   // A video's version students keep playing while it's replaced (#209).
   previousS3Key?: string;
+  // A video's automatic captioning, and how many tracks it has.
+  captionsStatus?: 'pending' | 'ready' | 'failed';
+  captionTrackCount?: number;
   visibility: 'hidden' | 'visible';
   studentActivityCount?: number;
   // A quiz's questions, to show how many it has.
@@ -45,6 +50,19 @@ export type ContentItem = {
   // A file item's file (#102).
   fileName?: string;
   fileSize?: number;
+};
+
+// What the video row says about a video's captions.
+const captionsLabel = (item: ContentItem) => {
+  if (item.captionsStatus === 'pending') {
+    return 'Captions: generating';
+  }
+  if (item.captionsStatus === 'failed' && !item.captionTrackCount) {
+    return 'Captions: failed';
+  }
+  return item.captionTrackCount || item.captionsStatus === 'ready'
+    ? 'Captions: ready'
+    : 'Captions: none';
 };
 
 const ROW_CLASS =
@@ -212,8 +230,33 @@ export function LessonContentItemsRow({
           {item.title}
         </span>
         {item.visibility === 'hidden' && <HiddenBadge />}
+        {item.status === 'ready' && (
+          <Badge variant="outline" className="font-normal">
+            {captionsLabel(item)}
+          </Badge>
+        )}
         {!readOnly && (
           <>
+            {item.status === 'ready' && (
+              <VideoCaptionsDialog
+                courseId={courseId}
+                moduleId={moduleId}
+                lessonId={lessonId}
+                contentItemId={item.contentItemId}
+                title={item.title}
+                trigger={
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    aria-label={`Captions for ${item.title}`}
+                    className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
+                  >
+                    Captions
+                  </Button>
+                }
+              />
+            )}
             <ContentItemVisibilityButton
               courseId={courseId}
               moduleId={moduleId}

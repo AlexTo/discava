@@ -1,0 +1,44 @@
+---
+title: Video player and captions
+description: How the lesson video player resumes, changes speed, responds to the keyboard and shows captions, and how captions are generated or uploaded.
+sidebar:
+  order: 6
+---
+
+Both portals play lesson videos with the same player, with its own control bar in place of the browser's.
+
+## Resume
+
+The player saves the student's position about every 10 seconds while playing, and when they pause, seek, or leave the page. Next time they open the video it jumps to that point, stays paused, and shows "Resumed at m:ss" with a **Start over** button. The instructor's preview does not save a position.
+
+## Speed, volume and preferences
+
+Speed runs from 0.5x to 2x (0.5, 0.75, 1, 1.25, 1.5, 1.75, 2). Speed, volume, mute and the captions choice are remembered in the browser; if storage is unavailable, the defaults apply silently.
+
+## Keyboard shortcuts
+
+They work while the player has focus, and are ignored in text fields and with Ctrl, Alt or Meta held.
+
+| Key | Action |
+|-----|--------|
+| Space, K | Play or pause |
+| J, L | Back, forward 10 seconds |
+| Left, Right | Back, forward 5 seconds |
+| Up, Down | Volume up, down 5% |
+| M | Mute |
+| C | Captions on or off |
+| F | Fullscreen |
+| `<`, `>` | Previous, next speed |
+| 0 to 9 | Jump to 0% to 90% of the video |
+
+## Captions
+
+When a video has caption tracks, the player shows a captions menu: **Off**, then each track by language, with the default marked. A track that fails to load is skipped with a short notice and the video keeps playing.
+
+- **Auto-generated:** when a video finishes transcoding, Amazon Transcribe generates a track in the background. This never delays the video becoming ready.
+- **Uploaded by an instructor:** an instructor can attach a WebVTT (`.vtt`) file to a ready video. Uploading for a language that already has a track replaces it and keeps its default status, so an upload that replaces the auto-generated track becomes the default. A later Transcribe result never overwrites an uploaded track.
+- **Limits:** a file can be at most 1 MB, a video has at most 10 tracks, and there is one track per language.
+
+### Caption status
+
+A video's `captionsStatus` is `pending` while Transcribe runs, then `ready` or `failed`. A job still pending after 2 hours is reported as `failed`. A failure only affects captions; the video itself stays playable. The instructor's lesson row shows the status and the track count.

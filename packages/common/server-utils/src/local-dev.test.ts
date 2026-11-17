@@ -5,8 +5,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createLocalUserSync,
+  LOCAL_QUEUES,
   localBucketName,
+  localFeatureFailureQueueName,
+  localFeatureQueueName,
   s3ClientConfig,
+  sqsClientConfig,
 } from './local-dev.js';
 
 afterEach(() => {
@@ -26,6 +30,36 @@ describe('s3ClientConfig', () => {
     expect(s3ClientConfig()).toMatchObject({
       endpoint: 'http://127.0.0.1:9090',
       forcePathStyle: true,
+    });
+  });
+});
+
+describe('local stream queues', () => {
+  it('names a feature’s queue and failure queue from its registration name', () => {
+    expect(localFeatureQueueName('search-indexing')).toBe(
+      'stream-search-indexing',
+    );
+    expect(localFeatureFailureQueueName('search-indexing')).toBe(
+      'stream-search-indexing-failures',
+    );
+    expect(localFeatureFailureQueueName('search-indexing')).not.toBe(
+      LOCAL_QUEUES.routerFailureQueue,
+    );
+  });
+
+  it('leaves a deployed Lambda’s SQS client to its defaults', () => {
+    vi.stubEnv('LOCAL_DEV', undefined);
+
+    expect(sqsClientConfig()).toEqual({});
+  });
+
+  it('points local dev at the local queue service with dummy credentials', () => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+
+    expect(sqsClientConfig()).toMatchObject({
+      endpoint: LOCAL_QUEUES.endpoint,
+      region: 'us-east-1',
+      credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
     });
   });
 });

@@ -16,6 +16,8 @@ import {
   isConditionalCheckFailed,
   TRANSCODE_PENDING_ATTRIBUTES,
 } from '@discava/core-table';
+import { stillPending } from '../lib/caption-conditions.js';
+import { startCaptionJob } from '../lib/transcribe-client.js';
 
 // S3Mock in local dev (#137).
 const s3Client = new S3Client(s3ClientConfig());
@@ -89,6 +91,45 @@ const retirePreviousVersion = async (
   }
 };
 
+// Starts the version's automatic captions, best effort: a video is playable
+// without them, so a failure here only marks the captioning failed (still
+// conditioned on the version, so it can't touch a replacement) and is logged,
+// never rethrown. A job that already exists for this version means the start
+// already happened, so it is left alone.
+const startCaptions = async (
+  logger: Logger,
+  target: Parameters<typeof startCaptionJob>[0],
+): Promise<void> => {
+  try {
+    await startCaptionJob(target);
+  } catch (error) {
+    if ((error as Error | undefined)?.name === 'ConflictException') {
+      logger.info('Caption job already started', { ...target });
+      return;
+    }
+    logger.error('Failed to start the automatic captions', {
+      error,
+      ...target,
+    });
+    const { nonce, ...ref } = target;
+    try {
+      const coreTable = await getCoreTable();
+      await coreTable.entities.contentItem
+        .patch(ref)
+        .set({ captionsStatus: 'failed' })
+        .remove(['captionsPendingSince'])
+        .where(stillPending(nonce))
+        .go();
+    } catch (patchError) {
+      // Left pending: the APIs report it as failed once it is old enough.
+      logger.error('Failed to mark captions failed', {
+        error: patchError,
+        ...target,
+      });
+    }
+  }
+};
+
 /**
  * Applies a finished transcode to its content item: on COMPLETE the new
  * version becomes ready (taking over from any previous one), on ERROR it
@@ -122,10 +163,24 @@ export const applyTranscodeOutcome = async (
     try {
       const { data } = await coreTable.entities.contentItem
         .patch({ courseId, moduleId, lessonId, contentItemId })
-        .set({ status: 'ready', s3Key: manifestKey })
+        .set({
+          status: 'ready',
+          s3Key: manifestKey,
+          // Captioning starts below; until it ends the version is waiting.
+          captionsStatus: 'pending',
+          captionsPendingSince: new Date().toISOString(),
+        })
         // This version replaces the one students kept playing meanwhile
-        // (#209); the old attributes, returned below, say which.
-        .remove(['previousS3Key', ...TRANSCODE_PENDING_ATTRIBUTES])
+        // (#209); the old attributes, returned below, say which. Every
+        // caption track belongs to an earlier version (dropOtherVersions of
+        // a version that just became ready), so they all go, and the
+        // revision moves on so a writer that read them can't land.
+        .remove([
+          'previousS3Key',
+          'captionTracks',
+          ...TRANSCODE_PENDING_ATTRIBUTES,
+        ])
+        .add({ captionTracksRev: 1 })
         // submissionNonce is persisted durably before submitTranscodeJob is
         // ever called, and gets overwritten as soon as a replacement
         // supersedes this job -- so a completion event only patches the
@@ -180,6 +235,14 @@ export const applyTranscodeOutcome = async (
       moduleId,
       lessonId,
       contentItemId,
+    });
+
+    await startCaptions(logger, {
+      courseId,
+      moduleId,
+      lessonId,
+      contentItemId,
+      nonce: submissionNonce,
     });
 
     const uploadBucketName = await resolveLessonMediaUploadBucketName();

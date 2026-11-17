@@ -37,6 +37,7 @@ export const SiteSearch = () => {
       <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         type="search"
+        autoComplete="off"
         aria-label="Search courses"
         placeholder="What do you want to learn?"
         className="h-10 rounded-full bg-muted/40 pl-10"

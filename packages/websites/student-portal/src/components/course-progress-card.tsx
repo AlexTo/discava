@@ -78,7 +78,7 @@ export function CourseProgress({ course }: { course: IMyEnrolment }) {
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground tabular-nums">
         {course.progressPercent}% complete
       </p>
       <Progress

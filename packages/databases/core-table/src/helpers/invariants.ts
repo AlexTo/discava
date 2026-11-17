@@ -3,21 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { EntityItem } from 'electrodb';
+import type { createAnnouncementEntity } from '../entities/announcement.js';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
+import type { createCourseStatsEntity } from '../entities/course-stats.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
 import type { createLessonEntity } from '../entities/lesson.js';
+import type { createLessonStatsEntity } from '../entities/lesson-stats.js';
 import type { createModuleEntity } from '../entities/module.js';
+import type { createNotificationEntity } from '../entities/notification.js';
+import type { createNotificationBroadcastEntity } from '../entities/notification-broadcast.js';
+import type { createNotificationPreferenceEntity } from '../entities/notification-preference.js';
+import type { createNotificationStateEntity } from '../entities/notification-state.js';
+import type { createPeriodStatsEntity } from '../entities/period-stats.js';
 import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
+import type { createQuizQuestionStatsEntity } from '../entities/quiz-question-stats.js';
+import type { createQuizScoreStatsEntity } from '../entities/quiz-score-stats.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
 import type { createUserEntity } from '../entities/user.js';
+import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
+import {
+  aggregatesOf,
+  contributions,
+  funnelContributions,
+  questionStatsSk,
+  SCORE_BANDS,
+  scoreStatsSk,
+  sumContributions,
+} from './analytics.js';
+import {
+  ANNOUNCEMENT_BODY_MAX,
+  ANNOUNCEMENT_TITLE_MAX,
+  uuidV7Time,
+} from './announcement.js';
+import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
+import { parseNotificationPosition } from './notification.js';
+import { NOTIFICATION_TYPES } from './notification-types.js';
 import { computeProgress } from './progress.js';
+import { isValidPosition } from './video-position.js';
 
 // Rules the core table must keep that span several records, or several
 // writers (core-api, instructor-api, the event handlers), and that no schema
@@ -69,9 +98,14 @@ export interface TableSnapshot {
     | 'publishedAt'
     | 'studentActivityCount'
     | 's3Key'
+    | 'previousS3Key'
     | 'transcodePending'
     | 'transcodePendingSince'
     | 'submissionNonce'
+    | 'captionTracks'
+    | 'captionTracksRev'
+    | 'captionsStatus'
+    | 'captionsPendingSince'
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
@@ -88,6 +122,7 @@ export interface TableSnapshot {
     | 'progressPercent'
     | 'completedAt'
     | 'lastActivityAt'
+    | 'createdAt'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -110,6 +145,8 @@ export interface TableSnapshot {
     | 'lessonId'
     | 'contentItemId'
     | 'attemptId'
+    | 'answers'
+    | 'correctQuestionIds'
     | 'scorePercent'
     | 'passed'
     | 'submittedAt'
@@ -147,7 +184,90 @@ export interface TableSnapshot {
     | 'completedAt'
     | 'issuedAt'
   >[];
+  videoPositions: Pick<
+    Item<typeof createVideoPositionEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'lessonId'
+    | 'contentItemId'
+    | 'positionSeconds'
+    | 'versionId'
+  >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
+  // The analytics aggregates (not their markers, which only guard against
+  // double counting).
+  courseStats: Pick<
+    Item<typeof createCourseStatsEntity>,
+    'courseId' | 'enrolments' | 'completed' | 'dropped'
+  >[];
+  periodStats: Pick<
+    Item<typeof createPeriodStatsEntity>,
+    'courseId' | 'periodKey' | 'enrolments' | 'activeLearners'
+  >[];
+  lessonStats: Pick<
+    Item<typeof createLessonStatsEntity>,
+    'courseId' | 'lessonId' | 'inProgress' | 'completed'
+  >[];
+  quizQuestionStats: Pick<
+    Item<typeof createQuizQuestionStatsEntity>,
+    'courseId' | 'contentItemId' | 'questionId' | 'attempts' | 'misses'
+  >[];
+  quizScoreStats: Pick<
+    Item<typeof createQuizScoreStatsEntity>,
+    | 'courseId'
+    | 'contentItemId'
+    | 'band0'
+    | 'band1'
+    | 'band2'
+    | 'band3'
+    | 'band4'
+    | 'band5'
+    | 'band6'
+    | 'band7'
+    | 'band8'
+    | 'band9'
+  >[];
+  notifications: Pick<
+    Item<typeof createNotificationEntity>,
+    | 'userId'
+    | 'occurredAt'
+    | 'id'
+    | 'type'
+    | 'link'
+    | 'readAt'
+    | 'email'
+    | 'createdAt'
+  >[];
+  notificationStates: Pick<
+    Item<typeof createNotificationStateEntity>,
+    'userId' | 'unreadCount' | 'readThrough'
+  >[];
+  notificationPreferences: Pick<
+    Item<typeof createNotificationPreferenceEntity>,
+    'userId' | 'type'
+  >[];
+  notificationBroadcasts: Pick<
+    Item<typeof createNotificationBroadcastEntity>,
+    | 'id'
+    | 'type'
+    | 'courseId'
+    | 'dedupeKey'
+    | 'occurredAt'
+    | 'status'
+    | 'completedAt'
+    | 'createdAt'
+  >[];
+  announcements: Pick<
+    Item<typeof createAnnouncementEntity>,
+    | 'courseId'
+    | 'announcementId'
+    | 'title'
+    | 'body'
+    | 'authorId'
+    | 'createdAt'
+    | 'editedAt'
+    | 'version'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -174,6 +294,16 @@ export const INVARIANTS = [
   'assignment-submission-shape',
   'certificate-shape',
   'certificate-has-completed-enrolment',
+  'video-position-valid',
+  'caption-tracks-valid',
+  'analytics-matches-records',
+  'notification-unread-count-matches',
+  'notification-shape',
+  'notification-state-exists',
+  'notification-preference-shape',
+  'notification-broadcast-done-complete',
+  'announcement-shape',
+  'announcement-has-broadcast',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -471,6 +601,9 @@ export const checkInstructorCourseUpdatedAt = (
 // 6. A video's transcode state is consistent: transcodePending and
 // transcodePendingSince are set together, and only while it's pending (they
 // put it in byTranscodePending); a ready video plays from a master.m3u8.
+// Caption attributes appear only on video items, and
+// captionsStatus: pending only with captionsPendingSince and only on a ready
+// video.
 export const checkVideoTranscodeState = (
   snapshot: TableSnapshot,
 ): InvariantViolation[] =>
@@ -498,8 +631,94 @@ export const checkVideoTranscodeState = (
     ) {
       problems.push(`a ready video's s3Key is ${item.s3Key ?? 'not set'}`);
     }
+    if (
+      item.type !== 'video' &&
+      (item.captionTracks !== undefined ||
+        item.captionTracksRev !== undefined ||
+        item.captionsStatus !== undefined ||
+        item.captionsPendingSince !== undefined)
+    ) {
+      problems.push(`caption attributes are set on a ${item.type} item`);
+    }
+    if (item.captionsStatus === 'pending') {
+      if (item.captionsPendingSince === undefined) {
+        problems.push('captionsStatus is pending without captionsPendingSince');
+      }
+      if (item.type === 'video' && item.status !== 'ready') {
+        problems.push(`captionsStatus is pending on a ${item.status} video`);
+      }
+    } else if (item.captionsPendingSince !== undefined) {
+      problems.push(
+        'captionsPendingSince is set while captions are not pending',
+      );
+    }
     return problems.map((message) =>
       violation('video-transcode-state', record, message),
+    );
+  });
+
+// 24 (captions). A video's caption tracks are valid: at most 10, one per
+// language, exactly one default when there are any, each of the item's
+// played version (the version swap drops every other nonce in the same patch
+// that sets status: ready), and each file under that version's captions
+// folder.
+export const checkCaptionTracksValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.contentItems.flatMap((item) => {
+    const tracks = item.captionTracks ?? [];
+    if (tracks.length === 0) {
+      return [];
+    }
+    const record = {
+      courseId: item.courseId,
+      contentItemId: item.contentItemId,
+    };
+    // The version students play: the ready video's own manifest, else the
+    // previous one kept while a replacement transcodes (or after it failed),
+    // whose tracks stay with it until the swap.
+    const manifest = item.status === 'ready' ? item.s3Key : item.previousS3Key;
+    // The nonce the manifest lives under (as server-utils' manifestNonce).
+    const nonce = manifest?.match(
+      /\/content-items\/[^/]+\/([^/]+)\/[^/]+$/,
+    )?.[1];
+    // The item's folder: everything before the version's nonce.
+    const folder =
+      manifest && nonce
+        ? manifest.slice(0, manifest.length - `/${nonce}/master.m3u8`.length)
+        : undefined;
+    const problems: string[] = [];
+    if (tracks.length > MAX_CAPTION_TRACKS) {
+      problems.push(
+        `${tracks.length} caption tracks, at most ${MAX_CAPTION_TRACKS}`,
+      );
+    }
+    const languages = new Set<string>();
+    for (const track of tracks) {
+      if (languages.has(track.language)) {
+        problems.push(`two caption tracks in ${track.language}`);
+      }
+      languages.add(track.language);
+      if (track.nonce !== nonce) {
+        problems.push(
+          `track ${track.trackId} is for version ${track.nonce}, not the current ${nonce}`,
+        );
+      }
+      if (
+        !folder ||
+        !track.key.startsWith(`${folder}/${track.nonce}/captions/`)
+      ) {
+        problems.push(
+          `track ${track.trackId} key ${track.key} is outside the version's captions folder`,
+        );
+      }
+    }
+    const defaults = tracks.filter((track) => track.isDefault).length;
+    if (defaults !== 1) {
+      problems.push(`${defaults} default caption tracks, expected 1`);
+    }
+    return problems.map((message) =>
+      violation('caption-tracks-valid', record, message),
     );
   });
 
@@ -1192,6 +1411,411 @@ export const checkCertificateHasCompletedEnrolment = (
   });
 };
 
+// 23 (video positions). A saved position is whole seconds from 0 to the cap,
+// for a named version of the video. Positions are deliberately not in
+// studentRecords (and so not in the targets and placement checks above): a
+// position isn't student activity, and deleting a video with watchers is
+// allowed, so a position may outlive its item (research R-6). Only its
+// shape is checked.
+export const checkVideoPositionValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.videoPositions.flatMap((position) => {
+    const { userId, courseId, lessonId, contentItemId } = position;
+    const record = { userId, courseId, lessonId, contentItemId };
+    const problems: string[] = [];
+    if (!isValidPosition(position.positionSeconds)) {
+      problems.push(
+        `position ${position.positionSeconds} is not whole seconds from 0 to 86,400`,
+      );
+    }
+    if (!position.versionId) {
+      problems.push('no versionId');
+    }
+    return problems.map((message) =>
+      violation('video-position-valid', record, message),
+    );
+  });
+
+// 26. A course's analytics aggregates equal the sums of what its records
+// contribute: `contributions` (helpers/analytics.ts) summed over its
+// enrolments, completions and quiz attempts. The stream handler keeps them
+// current a few seconds behind the records, so a check right after a change
+// may see a difference that closes (the e2e suite waits, see
+// `waitForAnalytics`). A missing item counts as zeros. The summary, period,
+// lesson and quiz items are compared. A question's counts come from the
+// attempts' `answers` and `correctQuestionIds`, a quiz's score bands from the
+// students' `bestScore` (it only rises, check 3 holding it to the best
+// attempt, and attempts are never rewritten). A lesson's counts come from each student's `progress` against their
+// enrolment (a dropped one counts nothing); the funnel markers are ignored.
+export const checkAnalyticsMatchesRecords = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const expected = aggregatesOf(
+    sumContributions([
+      ...snapshot.enrolments.map((r) => contributions('enrolment', r)),
+      ...snapshot.itemCompletions.map((r) =>
+        contributions('itemCompletion', r),
+      ),
+      ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...snapshot.quizSummaries.map((r) => contributions('quizSummary', r)),
+      ...snapshot.enrolments.map((enrolled) =>
+        funnelContributions(
+          snapshot.progress.filter(
+            (p) =>
+              p.courseId === enrolled.courseId && p.userId === enrolled.userId,
+          ),
+          enrolled,
+        ),
+      ),
+    ]),
+  );
+  const stored = [
+    ...snapshot.courseStats.map(({ courseId, ...counters }) => ({
+      courseId,
+      sk: 'SUMMARY',
+      counters: counters as Record<string, number | undefined>,
+    })),
+    ...snapshot.periodStats.map(({ courseId, periodKey, ...counters }) => ({
+      courseId,
+      sk: periodKey,
+      counters: counters as Record<string, number | undefined>,
+    })),
+    ...snapshot.lessonStats.map(({ courseId, lessonId, ...counters }) => ({
+      courseId,
+      sk: `LESSON#${lessonId}`,
+      counters: counters as Record<string, number | undefined>,
+    })),
+    ...snapshot.quizQuestionStats.map(
+      ({ courseId, contentItemId, questionId, ...counters }) => ({
+        courseId,
+        sk: questionStatsSk(contentItemId, questionId),
+        counters: counters as Record<string, number | undefined>,
+      }),
+    ),
+    ...snapshot.quizScoreStats.map(
+      ({ courseId, contentItemId, ...counters }) => ({
+        courseId,
+        sk: scoreStatsSk(contentItemId),
+        counters: counters as Record<string, number | undefined>,
+      }),
+    ),
+  ];
+
+  const items = new Map<
+    string,
+    {
+      courseId: string;
+      sk: string;
+      expected: Record<string, number>;
+      stored: Record<string, number | undefined>;
+    }
+  >();
+  const entry = (courseId: string, sk: string) => {
+    const key = `${courseId} ${sk}`;
+    const found = items.get(key) ?? { courseId, sk, expected: {}, stored: {} };
+    items.set(key, found);
+    return found;
+  };
+  for (const item of expected) {
+    entry(item.courseId, item.sk).expected = item.counters;
+  }
+  for (const item of stored) {
+    entry(item.courseId, item.sk).stored = item.counters;
+  }
+
+  return [...items.values()].flatMap(({ courseId, sk, expected, stored }) =>
+    [...new Set([...Object.keys(expected), ...Object.keys(stored)])]
+      .filter((attribute) =>
+        [
+          'enrolments',
+          'completed',
+          'dropped',
+          'activeLearners',
+          'inProgress',
+          'attempts',
+          'misses',
+          ...Array.from({ length: SCORE_BANDS }, (_, band) => `band${band}`),
+        ].includes(attribute),
+      )
+      .flatMap((attribute) => {
+        const has = stored[attribute] ?? 0;
+        const should = expected[attribute] ?? 0;
+        return has === should
+          ? []
+          : [
+              violation(
+                'analytics-matches-records',
+                { courseId, item: sk },
+                `${attribute} is ${has}, but its records add up to ${should}`,
+              ),
+            ];
+      }),
+  );
+};
+
+// 27-31 (notifications). Written only by the helpers in notification.ts,
+// notification-read.ts and notification-email.ts; these rules catch a writer
+// that went around them. The hour-long limits give delivery's retries and the
+// stream router's failure queue time to finish before anything is reported.
+const STUCK_AFTER_MS = 60 * 60 * 1000;
+const olderThanAnHour = (iso: string | undefined) =>
+  iso === undefined || Date.parse(iso) < Date.now() - STUCK_AFTER_MS;
+
+const notificationKey = (n: TableSnapshot['notifications'][number]) => ({
+  userId: n.userId,
+  occurredAt: n.occurredAt,
+  id: n.id,
+});
+
+// 27. A user's unreadCount is the number of their notifications that are
+// neither marked read nor at or before readThrough.
+export const checkNotificationUnreadCountMatches = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationStates.flatMap((state) => {
+    const unread = snapshot.notifications.filter(
+      (n) =>
+        n.userId === state.userId &&
+        n.readAt === undefined &&
+        (state.readThrough === undefined ||
+          `${n.occurredAt}#${n.id}` > state.readThrough),
+    ).length;
+    return state.unreadCount === unread
+      ? []
+      : [
+          violation(
+            'notification-unread-count-matches',
+            { userId: state.userId },
+            `unreadCount is ${state.unreadCount}, but ${unread} notifications are unread`,
+          ),
+        ];
+  });
+
+// 28. A notification has the shape its writers give it: a registered type,
+// a key made of a valid time and id, a link inside the portal, and an email
+// state that carries what its state requires and isn't stuck.
+export const checkNotificationShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notifications.flatMap((n) => {
+    const problems: string[] = [];
+    if (!Object.hasOwn(NOTIFICATION_TYPES, n.type)) {
+      problems.push(`type ${n.type} is not registered`);
+    }
+    if (!parseNotificationPosition(`${n.occurredAt}#${n.id}`)) {
+      problems.push(
+        `sort key ${n.occurredAt}#${n.id} is not <occurredAt>#<id> of a millisecond ISO time and 16 hex characters`,
+      );
+    }
+    if (!n.link?.path?.startsWith('/')) {
+      problems.push('link.path does not start with /');
+    }
+    const { email } = n;
+    if (email.state === 'sent' && !(email.sentAt && email.messageId)) {
+      problems.push('email is sent without sentAt and messageId');
+    }
+    if (
+      (email.state === 'skipped' || email.state === 'failed') &&
+      !email.reason
+    ) {
+      problems.push(`email is ${email.state} without a reason`);
+    }
+    if (email.state === 'sending' && olderThanAnHour(email.claimedAt)) {
+      problems.push('email has been sending for over an hour');
+    }
+    if (email.state === 'pending' && olderThanAnHour(n.createdAt)) {
+      problems.push('email is still pending an hour after the notification');
+    }
+    return problems.map((message) =>
+      violation('notification-shape', notificationKey(n), message),
+    );
+  });
+
+// 29. A user with notifications has a state, with a count that isn't
+// negative and a readThrough that is a valid position.
+export const checkNotificationStateExists = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const states = new Set(snapshot.notificationStates.map((s) => s.userId));
+  const missing = [
+    ...new Set(
+      snapshot.notifications
+        .map((n) => n.userId)
+        .filter((userId) => !states.has(userId)),
+    ),
+  ].map((userId) =>
+    violation(
+      'notification-state-exists',
+      { userId },
+      'user has notifications but no notificationState',
+    ),
+  );
+  const bad = snapshot.notificationStates.flatMap((state) => {
+    const problems: string[] = [];
+    if (!Number.isInteger(state.unreadCount) || state.unreadCount < 0) {
+      problems.push(`unreadCount ${state.unreadCount} is not a count`);
+    }
+    if (
+      state.readThrough !== undefined &&
+      !parseNotificationPosition(state.readThrough)
+    ) {
+      problems.push(`readThrough ${state.readThrough} is not a position`);
+    }
+    return problems.map((message) =>
+      violation('notification-state-exists', { userId: state.userId }, message),
+    );
+  });
+  return [...missing, ...bad];
+};
+
+// 30. A stored preference is for a registered type whose email can be
+// changed: a `required` type is always sent.
+export const checkNotificationPreferenceShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationPreferences.flatMap((preference) => {
+    const { userId, type } = preference;
+    const entry = Object.hasOwn(NOTIFICATION_TYPES, type)
+      ? NOTIFICATION_TYPES[type]
+      : undefined;
+    const problem = !entry
+      ? `type ${type} is not registered`
+      : entry.emailPolicy === 'required'
+        ? `type ${type} is required, so its email can't be changed`
+        : undefined;
+    return problem
+      ? [violation('notification-preference-shape', { userId, type }, problem)]
+      : [];
+  });
+
+// 31. A finished broadcast says when; one still pending after an hour is a
+// fan-out that stopped.
+export const checkNotificationBroadcastDoneComplete = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.notificationBroadcasts.flatMap((broadcast) => {
+    const record = { id: broadcast.id };
+    if (broadcast.status === 'done' && !broadcast.completedAt) {
+      return [
+        violation(
+          'notification-broadcast-done-complete',
+          record,
+          'broadcast is done without completedAt',
+        ),
+      ];
+    }
+    if (
+      broadcast.status === 'pending' &&
+      olderThanAnHour(broadcast.createdAt)
+    ) {
+      return [
+        violation(
+          'notification-broadcast-done-complete',
+          record,
+          'broadcast has been pending for over an hour',
+        ),
+      ];
+    }
+    return [];
+  });
+
+// 32. An announcement is well formed: its course exists, its id is a UUID v7
+// whose time is its createdAt, its title and body fit, it has an author, and
+// it has been edited (version above 1, editedAt not before createdAt) exactly
+// when it says so. The body's full schema is checked by the API on write; the
+// invariants import no editor code, so only its outline is checked here.
+export const checkAnnouncementShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const courseIds = new Set(snapshot.courses.map((c) => c.courseId));
+  return snapshot.announcements.flatMap((a) => {
+    const problems: string[] = [];
+    if (!courseIds.has(a.courseId)) {
+      problems.push('its course does not exist');
+    }
+    if (uuidV7Time(a.announcementId) !== a.createdAt) {
+      problems.push('announcementId is not a UUID v7 made at createdAt');
+    }
+    const title = a.title.trim();
+    if (
+      title.length < 1 ||
+      title.length > ANNOUNCEMENT_TITLE_MAX ||
+      title !== a.title
+    ) {
+      problems.push(`title is not 1 to ${ANNOUNCEMENT_TITLE_MAX} characters`);
+    }
+    if (!isDocumentText(a.body)) {
+      problems.push(
+        `body is not a document of at most ${ANNOUNCEMENT_BODY_MAX} characters`,
+      );
+    }
+    if (!a.authorId) {
+      problems.push('authorId is not set');
+    }
+    if (!(a.version >= 1)) {
+      problems.push(`version is ${a.version}, not at least 1`);
+    }
+    if ((a.editedAt !== undefined) !== a.version > 1) {
+      problems.push(
+        a.editedAt === undefined
+          ? 'version is above 1 without editedAt'
+          : 'editedAt is set at version 1',
+      );
+    } else if (a.editedAt !== undefined && a.editedAt < a.createdAt) {
+      problems.push('editedAt is before createdAt');
+    }
+    return problems.map((problem) =>
+      violation(
+        'announcement-shape',
+        { courseId: a.courseId, announcementId: a.announcementId },
+        problem,
+      ),
+    );
+  });
+};
+
+const isDocumentText = (body: string) => {
+  if (body.length < 1 || body.length > ANNOUNCEMENT_BODY_MAX) {
+    return false;
+  }
+  try {
+    return JSON.parse(body)?.type === 'doc';
+  } catch {
+    return false;
+  }
+};
+
+// 33. Every announcement has the broadcast that notified its course's
+// students, with its id as the dedupe key and its createdAt as the time. One
+// direction only: deleting an announcement leaves its broadcast.
+export const checkAnnouncementHasBroadcast = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.announcements.flatMap((a) => {
+    const broadcasts = snapshot.notificationBroadcasts.filter(
+      (b) =>
+        b.type === 'announcement.posted' &&
+        b.courseId === a.courseId &&
+        b.dedupeKey === a.announcementId,
+    );
+    const problem =
+      broadcasts.length === 0
+        ? 'no announcement.posted broadcast for it'
+        : broadcasts.every((b) => b.occurredAt !== a.createdAt)
+          ? 'its broadcast has an occurredAt other than createdAt'
+          : undefined;
+    return problem
+      ? [
+          violation(
+            'announcement-has-broadcast',
+            { courseId: a.courseId, announcementId: a.announcementId },
+            problem,
+          ),
+        ]
+      : [];
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1216,6 +1840,16 @@ const CHECKS = [
   checkAssignmentSubmissionShape,
   checkCertificateShape,
   checkCertificateHasCompletedEnrolment,
+  checkVideoPositionValid,
+  checkCaptionTracksValid,
+  checkAnalyticsMatchesRecords,
+  checkNotificationUnreadCountMatches,
+  checkNotificationShape,
+  checkNotificationStateExists,
+  checkNotificationPreferenceShape,
+  checkNotificationBroadcastDoneComplete,
+  checkAnnouncementShape,
+  checkAnnouncementHasBroadcast,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1243,7 +1877,18 @@ export const loadTableSnapshot = async (
     quizSummaries,
     assignmentSubmissions,
     certificates,
+    videoPositions,
     users,
+    courseStats,
+    periodStats,
+    lessonStats,
+    quizQuestionStats,
+    quizScoreStats,
+    notifications,
+    notificationStates,
+    notificationPreferences,
+    notificationBroadcasts,
+    announcements,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1257,7 +1902,18 @@ export const loadTableSnapshot = async (
     entities.quizSummary.scan.go(all),
     entities.assignmentSubmission.scan.go(all),
     entities.certificate.scan.go(all),
+    entities.videoPosition.scan.go(all),
     entities.user.scan.go(all),
+    entities.courseStats.scan.go(all),
+    entities.periodStats.scan.go(all),
+    entities.lessonStats.scan.go(all),
+    entities.quizQuestionStats.scan.go(all),
+    entities.quizScoreStats.scan.go(all),
+    entities.notification.scan.go(all),
+    entities.notificationState.scan.go(all),
+    entities.notificationPreference.scan.go(all),
+    entities.notificationBroadcast.scan.go(all),
+    entities.announcement.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1272,6 +1928,17 @@ export const loadTableSnapshot = async (
     quizSummaries: quizSummaries.data,
     assignmentSubmissions: assignmentSubmissions.data,
     certificates: certificates.data,
+    videoPositions: videoPositions.data,
     users: users.data,
+    courseStats: courseStats.data,
+    periodStats: periodStats.data,
+    lessonStats: lessonStats.data,
+    quizQuestionStats: quizQuestionStats.data,
+    quizScoreStats: quizScoreStats.data,
+    notifications: notifications.data,
+    notificationStates: notificationStates.data,
+    notificationPreferences: notificationPreferences.data,
+    notificationBroadcasts: notificationBroadcasts.data,
+    announcements: announcements.data,
   };
 };
