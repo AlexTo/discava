@@ -34,6 +34,14 @@ import { enrol, myEnrolment } from './procedures/enrolment.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
 import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationReadProcedure,
+  notificationPreferences,
+  notificationUnreadCount,
+  setNotificationPreference,
+} from './procedures/notification.js';
+import {
   myQuizAttempts,
   submitQuizAttempt,
   viewQuiz,
@@ -72,6 +80,14 @@ export const appRouter = router({
     videoUrl,
     saveVideoPosition,
     fileUrl,
+  }),
+  notification: router({
+    list: listNotifications,
+    unreadCount: notificationUnreadCount,
+    markRead: markNotificationReadProcedure,
+    markAllRead: markAllNotificationsRead,
+    preferences: notificationPreferences,
+    setPreference: setNotificationPreference,
   }),
   quiz: router({
     view: viewQuiz,
