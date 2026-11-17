@@ -15,6 +15,20 @@ const USER_METADATA = {
   submissionNonce: 'nonce-1',
 };
 
+const email = {
+  to: 'a@example.com',
+  from: 'notifications@discava.local',
+  subject: 'Hi <b>',
+  text: 'text',
+  html: '<p>html</p>',
+  headers: { 'List-Unsubscribe': '<https://x>' },
+};
+const stored = {
+  id: '2f1c1f0e-8c7a-4a3e-9d58-3a0a9f8f6b11',
+  receivedAt: '2026-11-17T00:00:00.000Z',
+  ...email,
+};
+
 describe('startEventRunnerServer', () => {
   let server: ReturnType<typeof startEventRunnerServer> | undefined;
   afterEach(() => {
@@ -29,6 +43,13 @@ describe('startEventRunnerServer', () => {
       submitTranscriptionJob: vi.fn(),
       scheduleTranscodeCleanup: vi.fn(),
       runPreTokenGeneration: vi.fn(async () => {}),
+      emailInbox: {
+        store: vi.fn(async () => ({ id: 'email-1' })),
+        list: vi.fn(async () => [stored]),
+        get: vi.fn(async (id: string) =>
+          id === stored.id ? stored : undefined,
+        ),
+      },
       routerQueues: vi.fn(async () => ({
         features: [
           {
@@ -282,5 +303,64 @@ describe('startEventRunnerServer', () => {
 
       expect(response.status).toBe(400);
     });
+  });
+
+  it('stores an email, as SES SendEmail takes it, and answers with its id', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/emails'), {
+      method: 'POST',
+      ...json(email),
+    });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ id: 'email-1' });
+    expect(handlers.emailInbox.store).toHaveBeenCalledWith(email);
+  });
+
+  it('refuses an email without a recipient or body', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/emails'), {
+      method: 'POST',
+      ...json({ ...email, to: undefined }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(handlers.emailInbox.store).not.toHaveBeenCalled();
+  });
+
+  it('lists the stored emails as JSON', async () => {
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/emails'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([stored]);
+  });
+
+  it('serves the inbox and a message as HTML, escaped', async () => {
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const list = await fetch(url('/inbox'));
+    expect(list.headers.get('content-type')).toContain('text/html');
+    const listHtml = await list.text();
+    expect(listHtml).toContain(`/inbox/${stored.id}`);
+    expect(listHtml).toContain('Hi &lt;b&gt;');
+
+    const one = await fetch(url(`/inbox/${stored.id}`));
+    expect(one.status).toBe(200);
+    expect(await one.text()).toContain('<iframe');
+  });
+
+  it('answers 404 for an unknown message', async () => {
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    expect((await fetch(url('/inbox/nope'))).status).toBe(404);
   });
 });

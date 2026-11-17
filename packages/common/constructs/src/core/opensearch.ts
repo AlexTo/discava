@@ -2,14 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { createHash } from 'node:crypto';
 import {
-  Aspects,
   CfnResource,
   CustomResource,
   Duration,
+  Lazy,
   RemovalPolicy,
   Stack,
-  Stage,
 } from 'aws-cdk-lib';
 import { Grant, IRole } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
@@ -27,7 +28,7 @@ import {
   CfnSecurityPolicy,
 } from 'aws-cdk-lib/aws-opensearchserverless';
 import { Provider } from 'aws-cdk-lib/custom-resources';
-import { Construct, IConstruct } from 'constructs';
+import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { RuntimeConfig } from './runtime-config.js';
 
@@ -196,27 +197,25 @@ const COLLECTION_NAME_PATTERN = new RegExp(
  * mappings in sync (never deletes one). There's no CDK L2 construct for
  * Serverless yet, only the L1 `Cfn*` resources this wraps.
  *
- * `grantRead`/`grantWrite` add the grantee to a data access policy
+ * `grantRead`/`grantWrite` add a data access policy for the grantee
  * (OpenSearch Serverless authorises by principal ARN there, not by the
  * grantee's own IAM policy) as well as granting the IAM `aoss:APIAccessAll`
  * action needed for a SigV4-signed request to reach the collection at all.
- * That policy's creation is deferred to synth time (the same technique
- * RuntimeConfig uses), because a grantee can live in a stack created after
- * this one (e.g. CoreApi, which depends on Data for the collection itself):
- * if the policy resource lived directly in this construct's own stack, a
- * cross-stack grantee's role ARN would make that stack depend back on the
- * grantee's, a cycle. By default the policy is placed in this construct's
- * own stack (safe for a same-stack grantee, e.g. the index-sync handler
- * below); call `placeAccessPolicyIn` with a stack that depends on every
- * grantee's stack (such as RuntimeConfig, which already deploys last)
- * before any cross-stack grant.
+ * Each grantee's policy is its own resource in the grantee's own stack, named
+ * from the grantee's construct path. A policy shared by every grantee would
+ * have to live in a stack that depends on all of them, and so import their
+ * role ARNs: moving a Lambda between stacks would then fail on a deployed
+ * stage (CloudFormation won't delete an export another stack still imports).
+ * Per-grantee policies leave nothing to import, and the grantee's stack
+ * already depends on this one through the collection's ARN.
  */
 export abstract class OpenSearchCollection extends Construct {
   public readonly collection: CfnCollection;
   private readonly collectionName: string;
-  private readonly statements: AccessStatement[] = [];
-  private accessPolicyStack?: Stack;
-  private accessPolicyAspectRegistered = false;
+  // One entry per grantee: the same role can be granted more than once (the
+  // shared router Lambda backs many procedures), and all its grants share
+  // its one policy.
+  private readonly grantees = new Map<string, AccessStatement[]>();
 
   constructor(
     scope: Construct,
@@ -329,41 +328,6 @@ export abstract class OpenSearchCollection extends Construct {
     );
   }
 
-  /**
-   * Where the data access policy populated by `grantRead`/`grantWrite` is
-   * created. Call this before any grant whose grantee lives in a stack this
-   * construct's own stack doesn't already depend on -- see the class doc.
-   */
-  public placeAccessPolicyIn(stack: Stack): void {
-    this.accessPolicyStack = stack;
-  }
-
-  private ensureAccessPolicy(): void {
-    if (this.accessPolicyAspectRegistered) return;
-    this.accessPolicyAspectRegistered = true;
-    let created = false;
-
-    Aspects.of(Stage.of(this) ?? Stack.of(this)).add({
-      visit: (node: IConstruct) => {
-        if (created || !(node instanceof Stack)) return;
-        created = true;
-        const stack = this.accessPolicyStack ?? Stack.of(this);
-        const accessPolicy = new CfnAccessPolicy(
-          stack,
-          `${this.node.id}AccessPolicy`,
-          {
-            name: `${this.collectionName}-access`,
-            type: 'data',
-            policy: stack.toJsonString(
-              renderAccessPolicy(this.collectionName, this.statements),
-            ),
-          },
-        );
-        accessPolicy.node.addDependency(this.collection);
-      },
-    });
-  }
-
   private grant(
     grantee: IRole,
     indexPermissions: readonly string[],
@@ -374,12 +338,41 @@ export abstract class OpenSearchCollection extends Construct {
       actions: ['aoss:APIAccessAll'],
       resourceArns: [this.collection.attrArn],
     });
-    this.statements.push({
+    const statement = {
       principalArn: grantee.roleArn,
       indexPermissions,
       collectionPermissions,
-    });
-    this.ensureAccessPolicy();
+    };
+    const existing = this.grantees.get(grantee.node.path);
+    if (existing) {
+      existing.push(statement);
+      return;
+    }
+    const statements = [statement];
+    this.grantees.set(grantee.node.path, statements);
+
+    // Policy names are capped at 32 characters and the collection name at 21
+    // (see MAX_COLLECTION_NAME_LENGTH), leaving room for `-` and 8 hex digits.
+    const suffix = createHash('sha256')
+      .update(grantee.node.path)
+      .digest('hex')
+      .slice(0, 8);
+    const stack = Stack.of(grantee);
+    const accessPolicy = new CfnAccessPolicy(
+      stack,
+      `${this.node.id}Access${suffix}`,
+      {
+        name: `${this.collectionName}-${suffix}`,
+        type: 'data',
+        policy: Lazy.string({
+          produce: () =>
+            stack.toJsonString(
+              renderAccessPolicy(this.collectionName, statements),
+            ),
+        }),
+      },
+    );
+    accessPolicy.node.addDependency(this.collection);
   }
 
   /** Lets `grantee` read (search/get) documents in every index. */

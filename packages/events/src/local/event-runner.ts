@@ -12,7 +12,10 @@ import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
 import { S3Client } from '@aws-sdk/client-s3';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import {
+  LOCAL_CORE_API_URL,
   LOCAL_EVENT_RUNNER,
+  LOCAL_NOTIFICATIONS_FROM,
+  LOCAL_PORTAL_URLS,
   LOCAL_QUEUES,
   localBucketName,
   localFeatureFailureQueueName,
@@ -36,6 +39,7 @@ import { HANDLERS } from '../router/handlers.js';
 import { createSqsQueueClient } from '../router/queue-client.js';
 import { createStreamRouter } from '../router/stream-router.js';
 import { pollStream } from './dynamodb-stream.js';
+import { createEmailInbox } from './email-inbox.js';
 import { startEventRunnerServer } from './event-runner-server.js';
 import { createFeatureRunner } from './feature-runner.js';
 import { createTranscoder, type Docker } from './transcoder.js';
@@ -63,7 +67,11 @@ import { waitForQueue } from './wait-for-queue.js';
 //   so a restart empties them), the one stand-in for SQS. GET /router/queues,
 //   POST /router/redrive/<feature> and POST /router/fail/<feature> inspect,
 //   replay and fail them; reset-local-data
-//   also wipes the local OpenSearch container's indices (#53)
+//   also wipes the local OpenSearch container's indices (#53). The
+//   notification-delivery feature's handler gets its sender and portal URLs
+//   from the environment set below, and its emails (sendEmail posts them to
+//   POST /emails; the stand-in for SES) are kept in tmp/local-dev/emails/ and
+//   shown at GET /inbox
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
@@ -80,6 +88,15 @@ import { waitForQueue } from './wait-for-queue.js';
 if (process.env.LOCAL_DEV !== 'true') {
   throw new Error('The event runner is for local dev only (LOCAL_DEV=true)');
 }
+
+// What the notification-delivery handler reads when deployed from the stacks'
+// environment variables; email counts as configured locally.
+process.env.NOTIFICATIONS_FROM_ADDRESS ??=
+  process.env.LOCAL_NOTIFICATIONS_FROM ?? LOCAL_NOTIFICATIONS_FROM;
+process.env.STUDENT_PORTAL_URL ??= LOCAL_PORTAL_URLS.student;
+process.env.INSTRUCTOR_PORTAL_URL ??= LOCAL_PORTAL_URLS.instructor;
+process.env.ADMIN_PORTAL_URL ??= LOCAL_PORTAL_URLS.admin;
+process.env.CORE_API_URL ??= LOCAL_CORE_API_URL;
 
 const outcomeLogger = new Logger({ serviceName: 'TranscribeComplete' });
 
@@ -243,6 +260,13 @@ const transcriber = createTranscriber({
   log,
 });
 
+// The sent emails, in the repo's git-ignored tmp/, removed by reset-local-data.
+const emailInbox = createEmailInbox({
+  dir: fileURLToPath(
+    new URL('../../../../tmp/local-dev/emails', import.meta.url),
+  ),
+});
+
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   submitTranscodeJob: (request) => transcoder.submit(request),
@@ -269,6 +293,7 @@ const server = startEventRunnerServer({
       );
     }
   },
+  emailInbox,
   routerQueues: async () => ({
     features: await Promise.all(
       [...routerQueues.values()].map(async (entry) => {
@@ -306,7 +331,7 @@ const server = startEventRunnerServer({
   log,
 });
 log(
-  `transcode and transcription jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
+  `transcode and transcription jobs, schedules, sign-ins and the email inbox on http://localhost:${LOCAL_EVENT_RUNNER.port} (inbox at /inbox)`,
 );
 
 const tableName = await resolveTableName();

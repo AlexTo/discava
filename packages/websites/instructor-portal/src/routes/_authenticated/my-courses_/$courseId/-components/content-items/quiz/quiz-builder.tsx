@@ -585,7 +585,7 @@ export function QuizBuilder({
             )}
             {!readOnly && (
               <Button type="button" disabled={saving} onClick={save}>
-                <Save /> {saving ? 'Saving...' : 'Save quiz'}
+                <Save /> {saving ? 'Saving…' : 'Save quiz'}
               </Button>
             )}
           </div>

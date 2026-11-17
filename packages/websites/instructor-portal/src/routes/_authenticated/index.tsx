@@ -74,7 +74,7 @@ function RouteComponent() {
             <p className="mb-2 text-sm font-medium text-primary-foreground/75">
               {today}
             </p>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
               {firstName ? `Welcome back, ${firstName}` : 'Welcome back'}
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-5 text-primary-foreground/80">
@@ -151,6 +151,9 @@ function RouteComponent() {
                       <img
                         src={imageUrl}
                         alt=""
+                        width={640}
+                        height={360}
+                        loading="lazy"
                         className="aspect-video w-full object-cover"
                       />
                     ) : (

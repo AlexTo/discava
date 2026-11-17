@@ -118,7 +118,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     env:
       E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     permissions:

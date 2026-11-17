@@ -110,7 +110,7 @@ describe('AttachLessonVideoDialog', () => {
         } as ProgressEvent);
       });
       expect(screen.getByLabelText('Upload progress')).toBeInTheDocument();
-      expect(screen.getByText('Uploading... 50%')).toBeInTheDocument();
+      expect(screen.getByText('Uploading… 50%')).toBeInTheDocument();
 
       uploads[0].finish();
       await waitFor(() =>

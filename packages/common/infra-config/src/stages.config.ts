@@ -30,6 +30,12 @@ import type { StagesConfig } from './stages.types.js';
 // callback/logout URLs. DNS records pointing each domain at its API Gateway /
 // CloudFront target aren't managed by the stack and need creating separately.
 //
+// Notification emails go out through SES. The sender address and the verified
+// SES identity (a domain or an address) it belongs to are account-specific too:
+//     DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS      notifications@example.com
+//     DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY      example.com
+// With neither set, no email is sent and each one is recorded as skipped.
+//
 // HLS video playback additionally needs a shared parent domain for signed
 // cookies, independent of the certificate/domainNames above:
 //     DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_COOKIE_DOMAIN      example.com

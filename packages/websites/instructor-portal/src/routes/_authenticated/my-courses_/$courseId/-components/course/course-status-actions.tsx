@@ -108,7 +108,7 @@ function PublishCourseDialog({
               });
             }}
           >
-            {isPending ? 'Publishing...' : 'Publish'}
+            {isPending ? 'Publishing…' : 'Publish'}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -144,7 +144,7 @@ function RestoreCourseButton({ courseId }: { courseId: string }) {
           });
         }}
       >
-        <RotateCcw /> {isPending ? 'Restoring...' : 'Restore'}
+        <RotateCcw /> {isPending ? 'Restoring…' : 'Restore'}
       </Button>
       {isError && (
         <Alert type="error" header="Couldn't restore the course">

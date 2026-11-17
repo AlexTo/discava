@@ -8,9 +8,12 @@ import { listStageNames, resolveStage } from './resolve-stage.js';
 const PROJECT_PATH = 'packages/infra';
 const STAGE = 'discava-development';
 const ENV_KEY = 'DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES';
+const NOTIFICATIONS_KEY =
+  'DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS';
 
 afterEach(() => {
   delete process.env[ENV_KEY];
+  delete process.env[NOTIFICATIONS_KEY];
 });
 
 describe('resolveStage', () => {
@@ -32,6 +35,18 @@ describe('resolveStage', () => {
     ]);
     // Unrelated static config for the stage is preserved.
     expect(withOverride?.infra?.studentPortal?.enableWaf).toBe(false);
+  });
+
+  it('has no notification sender committed, only from the env var', () => {
+    expect(
+      resolveStage(PROJECT_PATH, STAGE)?.infra?.notifications,
+    ).toBeUndefined();
+
+    process.env[NOTIFICATIONS_KEY] = 'notifications@example.com';
+
+    expect(resolveStage(PROJECT_PATH, STAGE)?.infra?.notifications).toEqual({
+      fromAddress: 'notifications@example.com',
+    });
   });
 
   it('returns undefined for a stage with no configuration at all', () => {

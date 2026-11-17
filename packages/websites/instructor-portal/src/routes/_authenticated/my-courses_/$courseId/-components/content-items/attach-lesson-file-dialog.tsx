@@ -354,7 +354,7 @@ export function AttachLessonFileDialog({
             <div className="space-y-1">
               <p className="text-sm font-medium">
                 {isUploading
-                  ? `Uploading... ${uploadProgress}%`
+                  ? `Uploading… ${uploadProgress}%`
                   : contentItemId || pendingUpload
                     ? 'Drop a file or click to replace it'
                     : 'Drop a file or click to browse'}
@@ -388,7 +388,7 @@ export function AttachLessonFileDialog({
             disabled={!canSave || isSaving}
             onClick={handleSave}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

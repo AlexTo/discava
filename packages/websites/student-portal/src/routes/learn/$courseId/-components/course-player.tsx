@@ -53,7 +53,9 @@ function Unavailable({
     return (
       <main className="mx-auto w-full max-w-3xl px-6 py-24 text-center lg:px-8">
         <Lock className="mx-auto size-8 text-muted-foreground" />
-        <h1 className="mt-4 text-xl font-semibold">Enrol to start learning</h1>
+        <h1 className="text-balance mt-4 text-xl font-semibold">
+          Enrol to start learning
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This course's lessons are for enrolled students.
         </p>
@@ -70,7 +72,9 @@ function Unavailable({
       {code === 'NOT_FOUND' ? (
         <>
           <Search className="mx-auto size-8 text-muted-foreground" />
-          <h1 className="mt-4 text-xl font-semibold">Course not found</h1>
+          <h1 className="text-balance mt-4 text-xl font-semibold">
+            Course not found
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             This course doesn't exist, or may no longer be available.
           </p>
@@ -305,12 +309,12 @@ export function CoursePlayerLayout({
       </div>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
           {course.title}
         </h1>
         {enrolment ? (
           <div className="w-full max-w-56 space-y-1.5">
-            <p className="text-right text-xs text-muted-foreground">
+            <p className="text-right text-xs text-muted-foreground tabular-nums">
               {enrolment.status === 'completed' ? (
                 <CompletedWithNew count={player.newItemIds.size} />
               ) : (
