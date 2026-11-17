@@ -2,13 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   checkTableInvariants,
   type InvariantName,
   type TableSnapshot,
   violationId,
 } from './invariants.js';
+import { NOTIFICATION_TYPES } from './notification-types.js';
 
 const INVARIANTS_UNDER_TEST: InvariantName[] = [
   'activity-count-matches-students',
@@ -148,6 +149,10 @@ const consistentTable = (): TableSnapshot => ({
   certificates: [],
   videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
+  notifications: [],
+  notificationStates: [],
+  notificationPreferences: [],
+  notificationBroadcasts: [],
 });
 
 let table: TableSnapshot;
@@ -203,6 +208,10 @@ describe('checkTableInvariants', () => {
         certificates: [],
         videoPositions: [],
         users: [],
+        notifications: [],
+        notificationStates: [],
+        notificationPreferences: [],
+        notificationBroadcasts: [],
       }),
     ).toEqual([]);
   });
@@ -1268,6 +1277,236 @@ describe('captions', () => {
       expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
         /outside the version's captions folder/,
       );
+    });
+  });
+});
+
+describe('notifications', () => {
+  const NOW = '2026-11-16T12:00:00.000Z';
+  const ID = 'a1b2c3d4e5f60718';
+  const POSITION = `2026-11-16T10:00:00.000Z#${ID}`;
+
+  const notification = (
+    over: Partial<TableSnapshot['notifications'][number]> = {},
+  ): TableSnapshot['notifications'][number] => ({
+    userId: 'student',
+    occurredAt: '2026-11-16T10:00:00.000Z',
+    id: ID,
+    type: 'assignment.returned',
+    link: { portal: 'student', path: '/learn/c1/lesson/l1' },
+    email: { state: 'skipped', reason: 'never' },
+    createdAt: '2026-11-16T10:00:00.000Z',
+    ...over,
+  });
+
+  // One unread notification and its state, which is consistent.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+    table.notifications = [notification()];
+    table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('finds nothing wrong with a clean table', () => {
+    expect(checkTableInvariants(table)).toEqual([]);
+  });
+
+  describe('25. notification-unread-count-matches', () => {
+    it('reports a count too high', () => {
+      table.notificationStates[0].unreadCount = 2;
+      expectOnly('notification-unread-count-matches', /2, but 1 notifications/);
+    });
+
+    it('reports a count too low', () => {
+      table.notificationStates[0].unreadCount = 0;
+      expectOnly('notification-unread-count-matches', /0, but 1 notifications/);
+    });
+
+    it('does not count what is read, by readAt or by readThrough', () => {
+      table.notifications = [
+        notification({ readAt: NOW }),
+        notification({
+          id: 'b'.repeat(16),
+          occurredAt: '2026-11-16T09:00:00.000Z',
+        }),
+        notification({
+          id: 'c'.repeat(16),
+          occurredAt: '2026-11-16T11:00:00.000Z',
+        }),
+      ];
+      // 09:00 is at or before readThrough, the first has readAt; only 11:00
+      // is unread.
+      table.notificationStates = [
+        {
+          userId: 'student',
+          unreadCount: 1,
+          readThrough: `2026-11-16T09:30:00.000Z#${'0'.repeat(16)}`,
+        },
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('26. notification-shape', () => {
+    it('reports a sort key that is not <occurredAt>#<id>', () => {
+      table.notifications[0].id = 'not-hex';
+      expectOnly('notification-shape', /sort key/);
+
+      table = consistentTable();
+      table.notifications = [notification({ occurredAt: '2026-11-16' })];
+      table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+      expectOnly('notification-shape', /sort key/);
+    });
+
+    it('reports an unregistered type, and a path without a leading slash', () => {
+      table.notifications[0].type = 'nope.nothing';
+      expectOnly('notification-shape', /not registered/);
+
+      table.notifications[0].type = 'assignment.returned';
+      table.notifications[0].link = { portal: 'student', path: 'learn' };
+      expectOnly('notification-shape', /does not start with/);
+    });
+
+    it('reports a sent email without a message id', () => {
+      table.notifications[0].email = { state: 'sent', sentAt: NOW };
+      expectOnly('notification-shape', /sent without sentAt and messageId/);
+    });
+
+    it('reports skipped and failed emails without a reason', () => {
+      table.notifications[0].email = { state: 'skipped' };
+      expectOnly('notification-shape', /skipped without a reason/);
+      table.notifications[0].email = { state: 'failed' };
+      expectOnly('notification-shape', /failed without a reason/);
+    });
+
+    it('reports an email sending for over an hour, not one just claimed', () => {
+      table.notifications[0].email = {
+        state: 'sending',
+        claimedAt: '2026-11-16T10:30:00.000Z',
+      };
+      expectOnly('notification-shape', /sending for over an hour/);
+
+      table.notifications[0].email = { state: 'sending', claimedAt: NOW };
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a pending email over an hour old', () => {
+      table.notifications[0].email = { state: 'pending' };
+      table.notifications[0].createdAt = '2026-11-16T10:30:00.000Z';
+      expectOnly('notification-shape', /still pending/);
+    });
+
+    it('passes a pending email that was just created', () => {
+      table.notifications[0].email = { state: 'pending' };
+      table.notifications[0].createdAt = '2026-11-16T11:59:00.000Z';
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('27. notification-state-exists', () => {
+    it('reports a user with notifications and no state', () => {
+      table.notificationStates = [];
+      expectOnly('notification-state-exists', /no notificationState/);
+    });
+
+    it('reports a negative count', () => {
+      table.notifications = [];
+      table.notificationStates[0].unreadCount = -1;
+      const { violations } = broken();
+      expect(violations.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(/-1 is not a count/),
+      );
+    });
+
+    it('reports a readThrough that is not a position', () => {
+      table.notifications[0].readAt = NOW;
+      table.notificationStates[0] = {
+        userId: 'student',
+        unreadCount: 0,
+        readThrough: 'yesterday',
+      };
+      expectOnly('notification-state-exists', /not a position/);
+    });
+
+    it('accepts a valid readThrough', () => {
+      table.notificationStates[0] = {
+        userId: 'student',
+        unreadCount: 0,
+        readThrough: POSITION,
+      };
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('28. notification-preference-shape', () => {
+    it('accepts a preference for a registered type that can change', () => {
+      table.notificationPreferences = [
+        { userId: 'student', type: 'review.received' },
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports an unregistered type', () => {
+      table.notificationPreferences = [{ userId: 'student', type: 'nope.x' }];
+      expectOnly('notification-preference-shape', /not registered/);
+    });
+
+    it('reports a preference for a required type', () => {
+      const type = 'test.required';
+      NOTIFICATION_TYPES[type] = {
+        id: type,
+        name: 'Required',
+        description: 'Always sent',
+        params: [],
+        emailPolicy: 'required',
+        build: () => ({
+          title: 't',
+          body: 'b',
+          link: { portal: 'student', path: '/' },
+        }),
+      };
+      try {
+        table.notificationPreferences = [{ userId: 'student', type }];
+        expectOnly('notification-preference-shape', /required/);
+      } finally {
+        delete NOTIFICATION_TYPES[type];
+      }
+    });
+  });
+
+  describe('29. notification-broadcast-done-complete', () => {
+    const broadcast = (
+      over: Partial<TableSnapshot['notificationBroadcasts'][number]>,
+    ): TableSnapshot['notificationBroadcasts'][number] => ({
+      id: 'b'.repeat(16),
+      type: 'announcement.posted',
+      courseId: 'c1',
+      status: 'pending',
+      createdAt: '2026-11-16T11:59:00.000Z',
+      ...over,
+    });
+
+    it('passes a done broadcast with completedAt, and a recent pending one', () => {
+      table.notificationBroadcasts = [
+        broadcast({ status: 'done', completedAt: NOW }),
+        broadcast({ id: 'c'.repeat(16) }),
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a done broadcast without completedAt', () => {
+      table.notificationBroadcasts = [broadcast({ status: 'done' })];
+      expectOnly('notification-broadcast-done-complete', /without completedAt/);
+    });
+
+    it('reports a stuck broadcast', () => {
+      table.notificationBroadcasts = [
+        broadcast({ createdAt: '2026-11-16T10:00:00.000Z' }),
+      ];
+      expectOnly('notification-broadcast-done-complete', /over an hour/);
     });
   });
 });
