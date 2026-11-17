@@ -91,6 +91,19 @@ export {
   violationId,
 } from './helpers/invariants.js';
 export {
+  matchesNotificationStreamFilters,
+  NOTIFICATION_STREAM_FILTERS,
+  type NotificationStreamRecord,
+} from './helpers/notification-stream.js';
+export {
+  buildNotification,
+  type EmailPolicy,
+  NOTIFICATION_TYPES,
+  NotificationInputError,
+  type NotificationPortal,
+  type NotificationType,
+} from './helpers/notification-types.js';
+export {
   type Curriculum,
   computeProgress,
   type LessonStatus,
