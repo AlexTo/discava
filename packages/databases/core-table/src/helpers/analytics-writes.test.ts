@@ -256,6 +256,47 @@ describe('applyAnalyticsChange', () => {
     );
   });
 
+  it('tries a transaction again when it conflicts with another, then succeeds', async () => {
+    const table = memoryTable();
+    const memoryWrite = table.write.getMockImplementation() as unknown as (
+      callback: never,
+    ) => { go: () => Promise<unknown> };
+    let conflicts = 2;
+    vi.spyOn(coreTable.transaction, 'write').mockImplementation(((
+      callback: never,
+    ) => {
+      const inner = memoryWrite(callback);
+      return {
+        go: async () =>
+          conflicts-- > 0
+            ? {
+                canceled: true,
+                data: [{ code: 'None' }, { code: 'TransactionConflict' }],
+              }
+            : inner.go(),
+      };
+    }) as never);
+
+    await expect(applyAnalyticsChange(coreTable, change())).resolves.toBe(
+      'applied',
+    );
+    expect(table.items.get('analytics#c1|summary')).toMatchObject({
+      enrolments: 1,
+    });
+  });
+
+  it('gives up on a conflict that does not clear', async () => {
+    vi.spyOn(coreTable.transaction, 'write').mockImplementation((() => ({
+      go: async () => ({
+        canceled: true,
+        data: [{ code: 'None' }, { code: 'TransactionConflict' }],
+      }),
+    })) as never);
+    await expect(applyAnalyticsChange(coreTable, change())).rejects.toThrow(
+      /cancelled/,
+    );
+  });
+
   it('throws when a transaction is cancelled for another reason', async () => {
     vi.spyOn(coreTable.transaction, 'write').mockImplementation((() => ({
       go: async () => ({

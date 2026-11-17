@@ -86,6 +86,44 @@ const itemUpdate = (
     .commit();
 };
 
+// DynamoDB cancels one of two transactions that touch an item at the same
+// moment with TransactionConflict, not a failed condition. Every change of a
+// course touches its summary, so batches running in parallel meet here; it
+// clears in milliseconds, so the transaction is tried again a few times
+// before the failure is left to the batch's retry.
+const CONFLICT_ATTEMPTS = 5;
+const CONFLICT_BACKOFF_MS = 50;
+
+const hasConflict = (reasons: ({ code?: string } | undefined)[] | undefined) =>
+  reasons?.some((reason) => reason?.code === 'TransactionConflict') ?? false;
+
+// Runs a transaction whose first write is a marker, and says whether it was
+// applied (true) or its marker was already there (false). Anything else
+// cancelling it is thrown.
+const writeOnce = async (
+  coreTable: CoreTable,
+  writes: TransactionWrites,
+  what: string,
+): Promise<boolean> => {
+  for (let attempt = 1; ; attempt++) {
+    const { canceled, data } = await coreTable.transaction.write(writes).go();
+    if (!canceled) {
+      return true;
+    }
+    if (isCancelled(data, 0)) {
+      return false;
+    }
+    if (!hasConflict(data) || attempt === CONFLICT_ATTEMPTS) {
+      throw new Error(
+        `Analytics transaction for ${what} was cancelled: ${JSON.stringify(data)}`,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, CONFLICT_BACKOFF_MS * attempt),
+    );
+  }
+};
+
 /**
  * Applies one stream change to the aggregates, once. Its counts and an
  * `EVENT#<eventID>` marker are written in one transaction, and the marker's
@@ -94,7 +132,7 @@ const itemUpdate = (
  * day or week) is a transaction of its own, with a `MEMBER#<period>#<userId>`
  * marker, so a learner's second record in a period counts nothing, whatever
  * event brought it. A cancelled part never cancels the others. Any other
- * failure is thrown, for the batch to be retried from the queue.
+ * failure, or a conflict that does not clear, is thrown, for the batch to be retried from the queue.
  */
 export const applyAnalyticsChange = async (
   coreTable: CoreTable,
@@ -104,29 +142,28 @@ export const applyAnalyticsChange = async (
 
   if (counts.length > 0) {
     const ttl = epochSeconds(now.getTime() + MARKER_GRACE_DAYS * DAY_MS);
-    const { canceled, data } = await coreTable.transaction
-      .write((entities) => [
+    const applied = await writeOnce(
+      coreTable,
+      (entities) => [
         entities.analyticsMarker
           .create({ courseId, markerId: `EVENT#${eventId}`, ttl })
           .commit(),
         ...byItem(counts).map((deltas) =>
           itemUpdate(entities, courseId, deltas, now),
         ),
-      ])
-      .go();
-    if (!canceled) {
+      ],
+      `event ${eventId}`,
+    );
+    if (applied) {
       result = 'applied';
-    } else if (!isCancelled(data, 0)) {
-      throw new Error(
-        `Analytics transaction for event ${eventId} was cancelled: ${JSON.stringify(data)}`,
-      );
     }
   }
 
   for (const { period, userId } of members) {
     const ttl = epochSeconds(periodEnd(period) + MARKER_GRACE_DAYS * DAY_MS);
-    const { canceled, data } = await coreTable.transaction
-      .write((entities) => [
+    const applied = await writeOnce(
+      coreTable,
+      (entities) => [
         entities.analyticsMarker
           .create({ courseId, markerId: `MEMBER#${period}#${userId}`, ttl })
           .commit(),
@@ -149,14 +186,11 @@ export const applyAnalyticsChange = async (
           .update({ courseId })
           .set({ updatedAt: now.toISOString() })
           .commit(),
-      ])
-      .go();
-    if (!canceled) {
+      ],
+      `${userId} in ${period}`,
+    );
+    if (applied) {
       result = 'applied';
-    } else if (!isCancelled(data, 0)) {
-      throw new Error(
-        `Analytics transaction for ${userId} in ${period} was cancelled: ${JSON.stringify(data)}`,
-      );
     }
   }
   return result;

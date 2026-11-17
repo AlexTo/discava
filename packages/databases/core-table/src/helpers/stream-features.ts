@@ -75,6 +75,10 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     handler: 'analytics-update',
     batch: { maxRecords: 100, windowSeconds: 5 },
     maxReceiveCount: 5,
+    // Every change of a course writes its summary item, so batches in
+    // parallel conflict; a few at a time keeps that rare, and the writes
+    // retry a conflict (see analytics-writes). The mapping's minimum.
+    maxConcurrency: 2,
   },
 ];
 
