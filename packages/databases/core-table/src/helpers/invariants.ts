@@ -5,6 +5,8 @@
 import type { EntityItem } from 'electrodb';
 import type { createAnnouncementEntity } from '../entities/announcement.js';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
+import type { createCategoryEntity } from '../entities/category.js';
+import type { createCategoryClaimEntity } from '../entities/category-claim.js';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
@@ -43,6 +45,15 @@ import {
   uuidV7Time,
 } from './announcement.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
+import {
+  DURATION_HOURS_MAX,
+  DURATION_HOURS_MIN,
+  LANGUAGES,
+  LEVELS,
+  MAX_TAGS,
+  normaliseCategoryName,
+  normaliseTags,
+} from './catalogue.js';
 import { parseNotificationPosition } from './notification.js';
 import { NOTIFICATION_TYPES } from './notification-types.js';
 import { computeProgress } from './progress.js';
@@ -60,7 +71,16 @@ type Item<F extends () => Promise<any>> = EntityItem<Awaited<ReturnType<F>>>;
 export interface TableSnapshot {
   courses: Pick<
     Item<typeof createCourseEntity>,
-    'courseId' | 'status' | 'publishedAt' | 'updatedAt' | 'lastChildOrder'
+    | 'courseId'
+    | 'status'
+    | 'publishedAt'
+    | 'updatedAt'
+    | 'lastChildOrder'
+    | 'categoryId'
+    | 'tags'
+    | 'level'
+    | 'language'
+    | 'durationHours'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -268,6 +288,14 @@ export interface TableSnapshot {
     | 'editedAt'
     | 'version'
   >[];
+  categories: Pick<
+    Item<typeof createCategoryEntity>,
+    'categoryId' | 'name' | 'slug' | 'status'
+  >[];
+  categoryClaims: Pick<
+    Item<typeof createCategoryClaimEntity>,
+    'claim' | 'categoryId'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -304,6 +332,9 @@ export const INVARIANTS = [
   'notification-broadcast-done-complete',
   'announcement-shape',
   'announcement-has-broadcast',
+  'course-category-exists',
+  'category-claims-consistent',
+  'course-catalogue-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1816,6 +1847,125 @@ export const checkAnnouncementHasBroadcast = (
       : [];
   });
 
+// 34. A course's category, when it has one, exists.
+export const checkCourseCategoryExists = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const categoryIds = new Set(snapshot.categories.map((c) => c.categoryId));
+  return snapshot.courses
+    .filter((c) => c.categoryId !== undefined && !categoryIds.has(c.categoryId))
+    .map((c) =>
+      violation(
+        'course-category-exists',
+        { courseId: c.courseId },
+        `categoryId ${c.categoryId} names no category`,
+      ),
+    );
+};
+
+// 35. Every category has exactly one slug claim and one name claim pointing
+// back to it, with its slug and its normalised (lower-cased) name; every claim
+// belongs to an existing category.
+export const checkCategoryClaimsConsistent = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const categoryIds = new Set(snapshot.categories.map((c) => c.categoryId));
+  const perCategory = snapshot.categories.flatMap((c) => {
+    const owned = snapshot.categoryClaims.filter(
+      (claim) => claim.categoryId === c.categoryId,
+    );
+    const slugs = owned.filter((claim) => claim.claim.startsWith('slug#'));
+    const names = owned.filter((claim) => claim.claim.startsWith('name#'));
+    const problems: string[] = [];
+    if (slugs.length !== 1) {
+      problems.push(`has ${slugs.length} slug claims, not 1`);
+    } else if (slugs[0].claim !== `slug#${c.slug}`) {
+      problems.push(`its slug claim ${slugs[0].claim} is not for its slug`);
+    }
+    if (names.length !== 1) {
+      problems.push(`has ${names.length} name claims, not 1`);
+    } else if (
+      names[0].claim !==
+      `name#${normaliseCategoryNameSafe(c.name).toLowerCase()}`
+    ) {
+      problems.push(`its name claim ${names[0].claim} is not for its name`);
+    }
+    return problems.map((problem) =>
+      violation(
+        'category-claims-consistent',
+        { categoryId: c.categoryId },
+        problem,
+      ),
+    );
+  });
+  const orphans = snapshot.categoryClaims
+    .filter((claim) => !categoryIds.has(claim.categoryId))
+    .map((claim) =>
+      violation(
+        'category-claims-consistent',
+        { claim: claim.claim },
+        `claim points to no category (${claim.categoryId})`,
+      ),
+    );
+  return [...perCategory, ...orphans];
+};
+
+// A name that fails normalisation is compared as typed, so a malformed
+// category is reported by the claim check rather than crashing the scan.
+const normaliseCategoryNameSafe = (name: string) => {
+  try {
+    return normaliseCategoryName(name);
+  } catch {
+    return name;
+  }
+};
+
+// 36. A course's catalogue fields are well formed: tags normalised, unique and
+// at most 8; level and language in their sets; duration a whole number in
+// range. A course without them is fine.
+export const checkCourseCatalogueShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.courses.flatMap((c) => {
+    const problems: string[] = [];
+    if (c.tags !== undefined) {
+      try {
+        const normalised = normaliseTags(c.tags);
+        if (
+          normalised.length !== c.tags.length ||
+          normalised.some((tag, i) => tag !== c.tags?.[i])
+        ) {
+          problems.push('tags are not normalised and unique');
+        }
+      } catch {
+        problems.push(
+          `tags are not 1 to 30 characters each, at most ${MAX_TAGS}`,
+        );
+      }
+    }
+    if (c.level !== undefined && !LEVELS.includes(c.level)) {
+      problems.push(`level ${c.level} is not allowed`);
+    }
+    if (c.language !== undefined && !LANGUAGES.includes(c.language)) {
+      problems.push(`language ${c.language} is not allowed`);
+    }
+    if (
+      c.durationHours !== undefined &&
+      !(
+        Number.isInteger(c.durationHours) &&
+        c.durationHours >= DURATION_HOURS_MIN &&
+        c.durationHours <= DURATION_HOURS_MAX
+      )
+    ) {
+      problems.push(
+        `durationHours ${c.durationHours} is not a whole number ${DURATION_HOURS_MIN} to ${DURATION_HOURS_MAX}`,
+      );
+    }
+    return problems.map((problem) =>
+      violation('course-catalogue-shape', { courseId: c.courseId }, problem),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1850,6 +2000,9 @@ const CHECKS = [
   checkNotificationBroadcastDoneComplete,
   checkAnnouncementShape,
   checkAnnouncementHasBroadcast,
+  checkCourseCategoryExists,
+  checkCategoryClaimsConsistent,
+  checkCourseCatalogueShape,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1889,6 +2042,8 @@ export const loadTableSnapshot = async (
     notificationPreferences,
     notificationBroadcasts,
     announcements,
+    categories,
+    categoryClaims,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1914,6 +2069,8 @@ export const loadTableSnapshot = async (
     entities.notificationPreference.scan.go(all),
     entities.notificationBroadcast.scan.go(all),
     entities.announcement.scan.go(all),
+    entities.category.scan.go(all),
+    entities.categoryClaim.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1940,5 +2097,7 @@ export const loadTableSnapshot = async (
     notificationPreferences: notificationPreferences.data,
     notificationBroadcasts: notificationBroadcasts.data,
     announcements: announcements.data,
+    categories: categories.data,
+    categoryClaims: categoryClaims.data,
   };
 };

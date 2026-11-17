@@ -20,6 +20,7 @@ vi.mock('@discava/core-table', () => ({
 }));
 
 const { searchReindex, BATCH_SIZE } = await import('./search-reindex.js');
+const { toCourseDocument } = await import('./course-document.js');
 
 const course = (id: string, extra: Record<string, unknown> = {}) => ({
   courseId: id,
@@ -66,6 +67,27 @@ describe('searchReindex', () => {
       imageKey: 'img/c1.png',
       status: 'published',
     });
+  });
+
+  it('indexes the catalogue fields, the same document the stream indexer writes', async () => {
+    const fields = {
+      categoryId: 'cat-1',
+      tags: ['sql'],
+      level: 'beginner',
+      language: 'en',
+      durationHours: 12,
+    };
+    go.mockResolvedValue({
+      data: [course('c1', fields), course('c2')],
+      cursor: null,
+    });
+
+    await searchReindex();
+
+    const body = client.bulk.mock.calls[0]![0].body;
+    expect(body[1]).toEqual(toCourseDocument(course('c1', fields) as never));
+    expect(body[1]).toMatchObject(fields);
+    expect(body[3].categoryId).toBeUndefined();
   });
 
   it('removes documents for courses that are no longer published', async () => {

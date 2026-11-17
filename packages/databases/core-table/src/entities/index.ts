@@ -5,6 +5,8 @@
 export { createAnalyticsMarkerEntity } from './analytics-marker.js';
 export { createAnnouncementEntity } from './announcement.js';
 export { createAssignmentSubmissionEntity } from './assignment-submission.js';
+export { createCategoryEntity } from './category.js';
+export { createCategoryClaimEntity } from './category-claim.js';
 export { createCertificateEntity } from './certificate.js';
 export { createContentItemEntity } from './content-item.js';
 export { createCourseEntity } from './course.js';

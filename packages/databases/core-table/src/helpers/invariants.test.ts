@@ -254,6 +254,8 @@ const consistentTable = (): TableSnapshot => ({
   notificationPreferences: [],
   notificationBroadcasts: [],
   announcements: [],
+  categories: [],
+  categoryClaims: [],
 });
 
 let table: TableSnapshot;
@@ -380,6 +382,8 @@ describe('checkTableInvariants', () => {
         notificationPreferences: [],
         notificationBroadcasts: [],
         announcements: [],
+        categories: [],
+        categoryClaims: [],
       }),
     ).toEqual([]);
   });
@@ -2035,6 +2039,115 @@ describe('notifications', () => {
     it('does not report a broadcast whose announcement was deleted', () => {
       table.notificationBroadcasts = [broadcast()];
       expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('34. course-category-exists', () => {
+    it('reports a course whose category does not exist', () => {
+      table.courses[0].categoryId = 'gone';
+      expectOnly('course-category-exists', /names no category/);
+    });
+
+    it('passes a course in an existing category, archived or not', () => {
+      table.categories = [
+        {
+          categoryId: 'cat',
+          name: 'Science',
+          slug: 'science',
+          status: 'archived',
+        },
+      ];
+      table.categoryClaims = [
+        { claim: 'slug#science', categoryId: 'cat' },
+        { claim: 'name#science', categoryId: 'cat' },
+      ];
+      table.courses[0].categoryId = 'cat';
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('does not report a course with no catalogue fields', () => {
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('35. category-claims-consistent', () => {
+    const category = {
+      categoryId: 'cat',
+      name: 'Data  Science',
+      slug: 'data-science',
+      status: 'active' as const,
+    };
+    const claims = [
+      { claim: 'slug#data-science', categoryId: 'cat' },
+      { claim: 'name#data science', categoryId: 'cat' },
+    ];
+    beforeEach(() => {
+      table.categories = [category];
+      table.categoryClaims = [...claims];
+    });
+
+    it('passes a category with its two claims', () => {
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a category missing its slug claim', () => {
+      table.categoryClaims = [claims[1]];
+      expectOnly('category-claims-consistent', /0 slug claims/);
+    });
+
+    it('reports a category missing its name claim', () => {
+      table.categoryClaims = [claims[0]];
+      expectOnly('category-claims-consistent', /0 name claims/);
+    });
+
+    it('reports a claim pointing to no category', () => {
+      table.categoryClaims = [
+        ...claims,
+        { claim: 'name#other', categoryId: 'missing' },
+      ];
+      expectOnly('category-claims-consistent', /points to no category/);
+    });
+
+    it('reports a claim whose slug differs from its category', () => {
+      table.categoryClaims = [
+        { claim: 'slug#other', categoryId: 'cat' },
+        claims[1],
+      ];
+      expectOnly('category-claims-consistent', /not for its slug/);
+    });
+
+    it('reports a claim whose name differs from its category', () => {
+      table.categoryClaims = [
+        claims[0],
+        { claim: 'name#other', categoryId: 'cat' },
+      ];
+      expectOnly('category-claims-consistent', /not for its name/);
+    });
+  });
+
+  describe('36. course-catalogue-shape', () => {
+    it('passes a course with valid fields', () => {
+      Object.assign(table.courses[0], {
+        tags: ['data science', 'sql'],
+        level: 'beginner',
+        language: 'en',
+        durationHours: 500,
+      });
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it.each([
+      ['an unnormalised tag', { tags: [' SQL'] }],
+      ['a duplicate tag', { tags: ['sql', 'sql'] }],
+      ['nine tags', { tags: Array.from({ length: 9 }, (_, i) => `tag${i}`) }],
+      ['a bad level', { level: 'expert' }],
+      ['a bad language', { language: 'xx' }],
+      ['a duration of 0', { durationHours: 0 }],
+      ['a duration of 501', { durationHours: 501 }],
+      ['a fractional duration', { durationHours: 2.5 }],
+    ])('reports %s', (_, over) => {
+      Object.assign(table.courses[0], over);
+      expectOnly('course-catalogue-shape');
     });
   });
 });

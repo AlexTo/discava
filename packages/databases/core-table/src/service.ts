@@ -7,6 +7,8 @@ import {
   createAnalyticsMarkerEntity,
   createAnnouncementEntity,
   createAssignmentSubmissionEntity,
+  createCategoryClaimEntity,
+  createCategoryEntity,
   createCertificateEntity,
   createContentItemEntity,
   createCourseEntity,
@@ -65,6 +67,8 @@ export const createCoreTableService = async () => {
     notificationPreference,
     notificationBroadcast,
     announcement,
+    category,
+    categoryClaim,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -91,6 +95,8 @@ export const createCoreTableService = async () => {
     createNotificationPreferenceEntity(),
     createNotificationBroadcastEntity(),
     createAnnouncementEntity(),
+    createCategoryEntity(),
+    createCategoryClaimEntity(),
   ]);
 
   return new Service({
@@ -119,5 +125,7 @@ export const createCoreTableService = async () => {
     notificationPreference,
     notificationBroadcast,
     announcement,
+    category,
+    categoryClaim,
   });
 };
