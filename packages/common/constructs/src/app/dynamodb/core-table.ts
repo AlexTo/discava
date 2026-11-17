@@ -42,6 +42,9 @@ export class CoreTable extends DynamoDBTable {
       // the old one for a removed record, and both to tell whether what
       // students see (visibility, archivedAt) changed.
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
+      // Expires the analytics markers (see core-table's analytics-writes),
+      // the only records with a `ttl` attribute.
+      timeToLiveAttribute: 'ttl',
       ...props,
       runtimeConfigKey,
     });

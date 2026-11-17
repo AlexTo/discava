@@ -2,13 +2,57 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  checkTableInvariants,
+  aggregatesOf,
+  contributions,
+  funnelContributions,
+  sumContributions,
+} from './analytics.js';
+import {
+  checkTableInvariants as checkAllInvariants,
   type InvariantName,
   type TableSnapshot,
   violationId,
 } from './invariants.js';
+import { NOTIFICATION_TYPES } from './notification-types.js';
+
+// Most tests below change a table's records to break one rule, and should not
+// also trip the analytics rule because the aggregates no longer match them.
+// This checks the table with its aggregates recomputed from its records; the
+// rule itself is tested on its own, with `checkAllInvariants`, at the end.
+const checkTableInvariants = (snapshot: TableSnapshot) => {
+  const items = aggregatesOf(
+    sumContributions([
+      ...snapshot.enrolments.map((r) => contributions('enrolment', r)),
+      ...snapshot.itemCompletions.map((r) =>
+        contributions('itemCompletion', r),
+      ),
+      ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+    ]),
+  );
+  return checkAllInvariants({
+    ...snapshot,
+    courseStats: items
+      .filter(({ kind }) => kind === 'courseStats')
+      .map(({ courseId, counters }) => ({
+        courseId,
+        enrolments: 0,
+        completed: 0,
+        dropped: 0,
+        ...counters,
+      })),
+    periodStats: items
+      .filter(({ kind }) => kind === 'periodStats')
+      .map(({ courseId, sk, counters }) => ({
+        courseId,
+        periodKey: sk,
+        enrolments: 0,
+        activeLearners: 0,
+        ...counters,
+      })),
+  });
+};
 
 const INVARIANTS_UNDER_TEST: InvariantName[] = [
   'activity-count-matches-students',
@@ -99,6 +143,7 @@ const consistentTable = (): TableSnapshot => ({
       status: 'active',
       progressPercent: 50,
       lastActivityAt: AT.a2,
+      createdAt: T,
     },
   ],
   itemCompletions: [
@@ -119,6 +164,8 @@ const consistentTable = (): TableSnapshot => ({
       userId: 'student',
       contentItemId: 'quiz',
       attemptId: 'a1',
+      answers: { q1: ['x'], q2: ['y'] },
+      correctQuestionIds: ['q1'],
       scorePercent: 40,
       passed: false,
       submittedAt: AT.a1,
@@ -128,6 +175,8 @@ const consistentTable = (): TableSnapshot => ({
       userId: 'student',
       contentItemId: 'quiz',
       attemptId: 'a2',
+      answers: { q1: ['x'], q2: ['z'] },
+      correctQuestionIds: ['q1', 'q2'],
       scorePercent: 80,
       passed: true,
       submittedAt: AT.a2,
@@ -148,6 +197,62 @@ const consistentTable = (): TableSnapshot => ({
   certificates: [],
   videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
+  // What the stream handler leaves for the records above: one enrolment on
+  // 1 January, and the student active on 2 January (week 1 of 2026).
+  courseStats: [{ courseId: 'c1', enrolments: 1, completed: 0, dropped: 0 }],
+  periodStats: [
+    {
+      courseId: 'c1',
+      periodKey: 'DAY#2026-01-01',
+      enrolments: 1,
+      activeLearners: 0,
+    },
+    {
+      courseId: 'c1',
+      periodKey: 'DAY#2026-01-02',
+      enrolments: 0,
+      activeLearners: 1,
+    },
+    {
+      courseId: 'c1',
+      periodKey: 'WEEK#2026-W01',
+      enrolments: 0,
+      activeLearners: 1,
+    },
+  ],
+  lessonStats: [
+    { courseId: 'c1', lessonId: 'l1', inProgress: 1, completed: 0 },
+  ],
+  // The two attempts answered q1 and q2; q2 was missed once. The best score
+  // of 80 is in band 8.
+  quizQuestionStats: [
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      questionId: 'q1',
+      attempts: 2,
+      misses: 0,
+    },
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      questionId: 'q2',
+      attempts: 2,
+      misses: 1,
+    },
+  ],
+  quizScoreStats: [
+    {
+      courseId: 'c1',
+      contentItemId: 'quiz',
+      ...{ band0: 0, band1: 0, band2: 0, band3: 0, band4: 0 },
+      ...{ band5: 0, band6: 0, band7: 0, band8: 1, band9: 0 },
+    },
+  ],
+  notifications: [],
+  notificationStates: [],
+  notificationPreferences: [],
+  notificationBroadcasts: [],
 });
 
 let table: TableSnapshot;
@@ -163,8 +268,69 @@ const item = (contentItemId: string) => {
   return found;
 };
 
+// The lesson figures the records add up to, as the analytics handler would
+// have left them, for a test that changes progress or an enrolment to try
+// another rule; rule 26 is tried against its own figures below.
+const settleLessonStats = () => {
+  table.lessonStats = aggregatesOf(
+    sumContributions(
+      table.enrolments.map((enrolled) =>
+        funnelContributions(
+          table.progress.filter(
+            (p) =>
+              p.courseId === enrolled.courseId && p.userId === enrolled.userId,
+          ),
+          enrolled,
+        ),
+      ),
+    ),
+  ).map(({ courseId, sk, counters }) => ({
+    courseId,
+    lessonId: sk.slice('LESSON#'.length),
+    inProgress: counters.inProgress ?? 0,
+    completed: counters.completed ?? 0,
+  }));
+};
+
+// The same for the quiz figures, for a test that changes an attempt or a
+// summary to try another rule.
+const settleQuizStats = () => {
+  const items = aggregatesOf(
+    sumContributions([
+      ...table.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...table.quizSummaries.map((r) => contributions('quizSummary', r)),
+    ]),
+  );
+  table.quizQuestionStats = items
+    .filter(({ kind }) => kind === 'quizQuestionStats')
+    .map(({ courseId, sk, counters }) => {
+      const [contentItemId, questionId] = sk.slice(5).split('#Q#');
+      return {
+        courseId,
+        contentItemId,
+        questionId,
+        attempts: counters.attempts ?? 0,
+        misses: counters.misses ?? 0,
+      };
+    });
+  table.quizScoreStats = items
+    .filter(({ kind }) => kind === 'quizScoreStats')
+    .map(({ courseId, sk, counters }) => ({
+      courseId,
+      contentItemId: sk.slice(5, -'#SCORES'.length),
+      ...Object.fromEntries(
+        Array.from({ length: 10 }, (_, b) => [
+          `band${b}`,
+          counters[`band${b}`] ?? 0,
+        ]),
+      ),
+    })) as typeof table.quizScoreStats;
+};
+
 // The invariants broken, each once, with the messages.
 const broken = () => {
+  settleLessonStats();
+  settleQuizStats();
   const violations = checkTableInvariants(table);
   return {
     invariants: [...new Set(violations.map((v) => v.invariant))],
@@ -203,6 +369,15 @@ describe('checkTableInvariants', () => {
         certificates: [],
         videoPositions: [],
         users: [],
+        courseStats: [],
+        periodStats: [],
+        lessonStats: [],
+        quizQuestionStats: [],
+        quizScoreStats: [],
+        notifications: [],
+        notificationStates: [],
+        notificationPreferences: [],
+        notificationBroadcasts: [],
       }),
     ).toEqual([]);
   });
@@ -1268,6 +1443,425 @@ describe('captions', () => {
       expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
         /outside the version's captions folder/,
       );
+    });
+  });
+});
+
+describe('26. analytics-matches-records', () => {
+  const violations = () =>
+    checkAllInvariants(table).filter(
+      (v) => v.invariant === 'analytics-matches-records',
+    );
+
+  it('passes when the aggregates equal the sums over the records', () => {
+    expect(violations()).toEqual([]);
+  });
+
+  it('passes for a course with no enrolments and no items', () => {
+    table.enrolments = [];
+    table.itemCompletions = [];
+    table.quizAttempts = [];
+    table.quizSummaries = [];
+    table.progress = [];
+    table.courseStats = [];
+    table.periodStats = [];
+    table.lessonStats = [];
+    table.quizQuestionStats = [];
+    table.quizScoreStats = [];
+    expect(violations()).toEqual([]);
+  });
+
+  it('reports an enrolments count that is off by one, with the course', () => {
+    table.courseStats = [
+      { courseId: 'c1', enrolments: 2, completed: 0, dropped: 0 },
+    ];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'enrolments is 2, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a completed count for a status nobody has', () => {
+    table.courseStats = [
+      { courseId: 'c1', enrolments: 1, completed: 1, dropped: 0 },
+    ];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'completed is 1, but its records add up to 0',
+      }),
+    ]);
+  });
+
+  it('expects a completed count for a completed enrolment', () => {
+    table.enrolments[0].status = 'completed';
+    expect(violations().map((v) => v.message)).toEqual([
+      'completed is 0, but its records add up to 1',
+    ]);
+  });
+
+  it('reports a missing summary for a course with enrolments', () => {
+    table.courseStats = [];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'enrolments is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a day with the wrong number of active learners', () => {
+    table.periodStats[1].activeLearners = 2;
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'DAY#2026-01-02' },
+        message: 'activeLearners is 2, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('expects a lesson count for a student partway through it', () => {
+    table.lessonStats = [];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'LESSON#l1' },
+        message: 'inProgress is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a lesson counted as completed that nobody completed', () => {
+    table.lessonStats = [
+      { courseId: 'c1', lessonId: 'l1', inProgress: 1, completed: 1 },
+    ];
+    expect(violations().map((v) => v.message)).toEqual([
+      'completed is 1, but its records add up to 0',
+    ]);
+  });
+
+  it('moves a lesson count with the status, and ignores not_started', () => {
+    table.progress[0].status = 'completed';
+    expect(
+      violations()
+        .map((v) => v.message)
+        .sort(),
+    ).toEqual([
+      'completed is 0, but its records add up to 1',
+      'inProgress is 1, but its records add up to 0',
+    ]);
+    table.progress[0].status = 'not_started';
+    expect(violations().map((v) => v.message)).toEqual([
+      'inProgress is 1, but its records add up to 0',
+    ]);
+  });
+
+  it('counts nothing in lessons for a dropped student', () => {
+    table.enrolments[0].status = 'dropped';
+    expect(violations().map((v) => v.record)).toContainEqual({
+      courseId: 'c1',
+      item: 'LESSON#l1',
+    });
+    table.lessonStats = [];
+    expect(
+      violations().filter(
+        (v) => (v.record as { item: string }).item === 'LESSON#l1',
+      ),
+    ).toEqual([]);
+  });
+
+  it('expects a miss count for a question answered wrongly', () => {
+    table.quizQuestionStats[1].misses = 0;
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'QUIZ#quiz#Q#q2' },
+        message: 'misses is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports an attempts count that is off for a question', () => {
+    table.quizQuestionStats[0].attempts = 3;
+    expect(violations().map((v) => v.message)).toEqual([
+      'attempts is 3, but its records add up to 2',
+    ]);
+  });
+
+  it('reports a missing item for a question that was answered', () => {
+    table.quizQuestionStats = [];
+    expect(violations().map((v) => v.record)).toEqual(
+      expect.arrayContaining([
+        { courseId: 'c1', item: 'QUIZ#quiz#Q#q1' },
+        { courseId: 'c1', item: 'QUIZ#quiz#Q#q2' },
+      ]),
+    );
+  });
+
+  it('reports a student counted in the wrong score band', () => {
+    table.quizScoreStats[0].band8 = 0;
+    table.quizScoreStats[0].band4 = 1;
+    expect(
+      violations()
+        .map((v) => v.message)
+        .sort(),
+    ).toEqual([
+      'band4 is 1, but its records add up to 0',
+      'band8 is 0, but its records add up to 1',
+    ]);
+  });
+
+  it('moves a student’s band when their best score rises', () => {
+    table.quizSummaries[0].bestScore = 100;
+    expect(violations().map((v) => v.message)).toEqual(
+      expect.arrayContaining([
+        'band8 is 1, but its records add up to 0',
+        'band9 is 0, but its records add up to 1',
+      ]),
+    );
+  });
+
+  it('reports aggregates for a course that has no records', () => {
+    table.courseStats.push({
+      courseId: 'gone',
+      enrolments: 1,
+      completed: 0,
+      dropped: 0,
+    });
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'gone', item: 'SUMMARY' },
+      }),
+    ]);
+  });
+});
+
+describe('notifications', () => {
+  const NOW = '2026-11-16T12:00:00.000Z';
+  const ID = 'a1b2c3d4e5f60718';
+  const POSITION = `2026-11-16T10:00:00.000Z#${ID}`;
+
+  const notification = (
+    over: Partial<TableSnapshot['notifications'][number]> = {},
+  ): TableSnapshot['notifications'][number] => ({
+    userId: 'student',
+    occurredAt: '2026-11-16T10:00:00.000Z',
+    id: ID,
+    type: 'assignment.returned',
+    link: { portal: 'student', path: '/learn/c1/lesson/l1' },
+    email: { state: 'skipped', reason: 'never' },
+    createdAt: '2026-11-16T10:00:00.000Z',
+    ...over,
+  });
+
+  // One unread notification and its state, which is consistent.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+    table.notifications = [notification()];
+    table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('finds nothing wrong with a clean table', () => {
+    expect(checkTableInvariants(table)).toEqual([]);
+  });
+
+  describe('27. notification-unread-count-matches', () => {
+    it('reports a count too high', () => {
+      table.notificationStates[0].unreadCount = 2;
+      expectOnly('notification-unread-count-matches', /2, but 1 notifications/);
+    });
+
+    it('reports a count too low', () => {
+      table.notificationStates[0].unreadCount = 0;
+      expectOnly('notification-unread-count-matches', /0, but 1 notifications/);
+    });
+
+    it('does not count what is read, by readAt or by readThrough', () => {
+      table.notifications = [
+        notification({ readAt: NOW }),
+        notification({
+          id: 'b'.repeat(16),
+          occurredAt: '2026-11-16T09:00:00.000Z',
+        }),
+        notification({
+          id: 'c'.repeat(16),
+          occurredAt: '2026-11-16T11:00:00.000Z',
+        }),
+      ];
+      // 09:00 is at or before readThrough, the first has readAt; only 11:00
+      // is unread.
+      table.notificationStates = [
+        {
+          userId: 'student',
+          unreadCount: 1,
+          readThrough: `2026-11-16T09:30:00.000Z#${'0'.repeat(16)}`,
+        },
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('28. notification-shape', () => {
+    it('reports a sort key that is not <occurredAt>#<id>', () => {
+      table.notifications[0].id = 'not-hex';
+      expectOnly('notification-shape', /sort key/);
+
+      table = consistentTable();
+      table.notifications = [notification({ occurredAt: '2026-11-16' })];
+      table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+      expectOnly('notification-shape', /sort key/);
+    });
+
+    it('reports an unregistered type, and a path without a leading slash', () => {
+      table.notifications[0].type = 'nope.nothing';
+      expectOnly('notification-shape', /not registered/);
+
+      table.notifications[0].type = 'assignment.returned';
+      table.notifications[0].link = { portal: 'student', path: 'learn' };
+      expectOnly('notification-shape', /does not start with/);
+    });
+
+    it('reports a sent email without a message id', () => {
+      table.notifications[0].email = { state: 'sent', sentAt: NOW };
+      expectOnly('notification-shape', /sent without sentAt and messageId/);
+    });
+
+    it('reports skipped and failed emails without a reason', () => {
+      table.notifications[0].email = { state: 'skipped' };
+      expectOnly('notification-shape', /skipped without a reason/);
+      table.notifications[0].email = { state: 'failed' };
+      expectOnly('notification-shape', /failed without a reason/);
+    });
+
+    it('reports an email sending for over an hour, not one just claimed', () => {
+      table.notifications[0].email = {
+        state: 'sending',
+        claimedAt: '2026-11-16T10:30:00.000Z',
+      };
+      expectOnly('notification-shape', /sending for over an hour/);
+
+      table.notifications[0].email = { state: 'sending', claimedAt: NOW };
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a pending email over an hour old', () => {
+      table.notifications[0].email = { state: 'pending' };
+      table.notifications[0].createdAt = '2026-11-16T10:30:00.000Z';
+      expectOnly('notification-shape', /still pending/);
+    });
+
+    it('passes a pending email that was just created', () => {
+      table.notifications[0].email = { state: 'pending' };
+      table.notifications[0].createdAt = '2026-11-16T11:59:00.000Z';
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('29. notification-state-exists', () => {
+    it('reports a user with notifications and no state', () => {
+      table.notificationStates = [];
+      expectOnly('notification-state-exists', /no notificationState/);
+    });
+
+    it('reports a negative count', () => {
+      table.notifications = [];
+      table.notificationStates[0].unreadCount = -1;
+      const { violations } = broken();
+      expect(violations.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(/-1 is not a count/),
+      );
+    });
+
+    it('reports a readThrough that is not a position', () => {
+      table.notifications[0].readAt = NOW;
+      table.notificationStates[0] = {
+        userId: 'student',
+        unreadCount: 0,
+        readThrough: 'yesterday',
+      };
+      expectOnly('notification-state-exists', /not a position/);
+    });
+
+    it('accepts a valid readThrough', () => {
+      table.notificationStates[0] = {
+        userId: 'student',
+        unreadCount: 0,
+        readThrough: POSITION,
+      };
+      expect(broken().invariants).toEqual([]);
+    });
+  });
+
+  describe('30. notification-preference-shape', () => {
+    it('accepts a preference for a registered type that can change', () => {
+      table.notificationPreferences = [
+        { userId: 'student', type: 'review.received' },
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports an unregistered type', () => {
+      table.notificationPreferences = [{ userId: 'student', type: 'nope.x' }];
+      expectOnly('notification-preference-shape', /not registered/);
+    });
+
+    it('reports a preference for a required type', () => {
+      const type = 'test.required';
+      NOTIFICATION_TYPES[type] = {
+        id: type,
+        name: 'Required',
+        description: 'Always sent',
+        params: [],
+        emailPolicy: 'required',
+        build: () => ({
+          title: 't',
+          body: 'b',
+          link: { portal: 'student', path: '/' },
+        }),
+      };
+      try {
+        table.notificationPreferences = [{ userId: 'student', type }];
+        expectOnly('notification-preference-shape', /required/);
+      } finally {
+        delete NOTIFICATION_TYPES[type];
+      }
+    });
+  });
+
+  describe('31. notification-broadcast-done-complete', () => {
+    const broadcast = (
+      over: Partial<TableSnapshot['notificationBroadcasts'][number]>,
+    ): TableSnapshot['notificationBroadcasts'][number] => ({
+      id: 'b'.repeat(16),
+      type: 'announcement.posted',
+      courseId: 'c1',
+      status: 'pending',
+      createdAt: '2026-11-16T11:59:00.000Z',
+      ...over,
+    });
+
+    it('passes a done broadcast with completedAt, and a recent pending one', () => {
+      table.notificationBroadcasts = [
+        broadcast({ status: 'done', completedAt: NOW }),
+        broadcast({ id: 'c'.repeat(16) }),
+      ];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a done broadcast without completedAt', () => {
+      table.notificationBroadcasts = [broadcast({ status: 'done' })];
+      expectOnly('notification-broadcast-done-complete', /without completedAt/);
+    });
+
+    it('reports a stuck broadcast', () => {
+      table.notificationBroadcasts = [
+        broadcast({ createdAt: '2026-11-16T10:00:00.000Z' }),
+      ];
+      expectOnly('notification-broadcast-done-complete', /over an hour/);
     });
   });
 });

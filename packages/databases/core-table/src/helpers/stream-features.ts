@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  ANALYTICS_STREAM_FILTERS,
+  matchesAnalyticsStreamFilters,
+} from './analytics-stream.js';
+import {
+  matchesNotificationStreamFilters,
+  NOTIFICATION_STREAM_FILTERS,
+} from './notification-stream.js';
+import {
   matchesProgressStreamFilters,
   PROGRESS_STREAM_FILTERS,
 } from './progress-stream.js';
@@ -65,14 +73,34 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     // The event source mapping's minimum.
     maxConcurrency: 2,
   },
+  {
+    name: 'analytics-update',
+    filters: ANALYTICS_STREAM_FILTERS,
+    handler: 'analytics-update',
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // Every change of a course writes its summary item, so batches in
+    // parallel conflict; a few at a time keeps that rare, and the writes
+    // retry a conflict (see analytics-writes). The mapping's minimum.
+    maxConcurrency: 2,
+  },
+  {
+    name: 'notification-delivery',
+    filters: NOTIFICATION_STREAM_FILTERS,
+    handler: 'notification-delivery',
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+  },
 ];
 
-// The two v1 features keep their own matchers, so they stay the one
+// The features with their own filter module keep their own matchers, so they stay the one
 // implementation of those filters; a feature registered later is matched on
 // its `filters` the same way they are.
 const MATCHERS: Readonly<Record<string, Matcher>> = {
   'progress-recalculation': matchesProgressStreamFilters,
   'search-indexing': matchesSearchStreamFilters,
+  'analytics-update': matchesAnalyticsStreamFilters,
+  'notification-delivery': matchesNotificationStreamFilters,
 };
 
 const matchesFilters = (

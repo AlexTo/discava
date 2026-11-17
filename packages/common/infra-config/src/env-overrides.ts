@@ -120,6 +120,10 @@ const COMPONENT_FIELDS: Record<
     maxSearchCapacityInOcu: 'number',
     retainOnDelete: 'boolean',
   },
+  notifications: {
+    fromAddress: 'string',
+    sesIdentity: 'string',
+  },
 };
 
 /**

@@ -72,7 +72,7 @@ describe('routeRecords', () => {
 
   it('produces nothing for a record no feature wants', () => {
     const { messages, refused } = routeRecords([
-      record('1', 'MODIFY', 'progress'),
+      record('1', 'MODIFY', 'courseStats'),
     ]);
     expect(messages.size).toBe(0);
     expect(refused).toEqual([]);
@@ -101,11 +101,11 @@ describe('routeRecords', () => {
 
   it('routes to a third registration without any change to the router', () => {
     const third: StreamFeature = {
-      name: 'notification-delivery',
+      name: 'certificate-issue',
       filters: [
         { eventName: 'INSERT', image: 'NewImage', entities: ['certificate'] },
       ],
-      handler: 'notification-delivery',
+      handler: 'certificate-issue',
       batch: { maxRecords: 10, windowSeconds: 1 },
       maxReceiveCount: 3,
     };
@@ -113,6 +113,6 @@ describe('routeRecords', () => {
       [record('1', 'INSERT', 'certificate')],
       [...STREAM_FEATURES, third],
     );
-    expect([...messages.keys()]).toEqual(['notification-delivery']);
+    expect([...messages.keys()]).toEqual(['certificate-issue']);
   });
 });

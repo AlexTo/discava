@@ -106,7 +106,7 @@ function RouteComponent() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
             <BookOpen className="size-4" /> Teaching
           </div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
             My Courses
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -173,6 +173,7 @@ function RouteComponent() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search by title"
+                autoComplete="off"
                 aria-label="Search courses"
                 className="pl-9"
               />
@@ -220,6 +221,9 @@ function RouteComponent() {
                   <img
                     src={course.imageUrl}
                     alt=""
+                    width={640}
+                    height={360}
+                    loading="lazy"
                     className="aspect-video w-full object-cover"
                   />
                 ) : (
