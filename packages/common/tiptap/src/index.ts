@@ -14,3 +14,4 @@ export {
   createContentExtensions,
 } from './extensions.js';
 export { type RenderedLatex, renderLatex } from './latex.js';
+export { plainTextExcerpt } from './text.js';
