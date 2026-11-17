@@ -29,6 +29,27 @@
         "cwd": "{projectRoot}"
       }
     },
+    "agent-review-status": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/agent-review/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "ui-screenshots": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "screenshots-comment": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/ui-screenshots/comment-main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {
@@ -43,9 +64,24 @@
         "cwd": "{projectRoot}"
       }
     },
+    "rebuild-analytics": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/analytics/rebuild-analytics.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "notify-local": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/notify-local/notify.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "local-oidc": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-local-oidc-image"],
       "options": {
         "command": "tsx src/local-oidc/start-container.ts",
         "cwd": "{projectRoot}"
@@ -54,8 +90,39 @@
     "s3mock": {
       "executor": "nx:run-commands",
       "continuous": true,
+      "dependsOn": ["pull-s3mock-image"],
       "options": {
         "command": "tsx src/s3mock/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "elasticmq": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-elasticmq-image"],
+      "options": {
+        "command": "tsx src/elasticmq/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-local-oidc-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/local-oidc/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-s3mock-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/s3mock/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-elasticmq-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/elasticmq/pull-image.ts",
         "cwd": "{projectRoot}"
       }
     },

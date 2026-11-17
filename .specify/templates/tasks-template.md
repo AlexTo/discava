@@ -11,7 +11,7 @@ description: "Task list template for feature implementation"
 
 **Tests**: The Discava constitution (principle IV) requires tests, so include them. Unit tests cover new business logic. A rule spanning records or writers needs a `core-table` helper, an invariant in `helpers/invariants.ts` and a test that breaks it. A change to a main user flow needs a `packages/e2e` scenario. Drop only the layers the feature doesn't touch.
 
-**Who runs what**: an automated agent implements these tasks without `pnpm dev` or Docker. It runs unit and component tests, lint, typecheck, `build` and `synth` locally. The e2e scenarios and concurrency tests are written by the agent but run on PR CI (`pr-checks.yml`'s `E2E tests` job); a CI failure is the feedback for those. Mark a task **(human)** when it needs a running local stack or people (manual checks, timing, screenshots); a reviewer does those before merge.
+**Who runs what**: an automated agent implements these tasks without `pnpm dev` or Docker. It runs unit and component tests, lint, typecheck, `build` and `synth` locally. The e2e scenarios and concurrency tests are written by the agent but run on PR CI (`pr-checks.yml`'s `E2E tests` job); a CI failure is the feedback for those. Mark a task **(human)** when it needs a running local stack or people (manual checks, timing, screen readers); a reviewer does those before merge.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -19,7 +19,7 @@ description: "Task list template for feature implementation"
 
 - **[P]**: Can run in parallel (different files, no dependencies)
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- **(human)**: needs a running local stack or people; not done by the agent
+- **(human)**: needs a running local stack or people; not done by the agent. Not for screenshots: a task that changes what a user sees adds `screenshot()` calls to its e2e scenario, and CI posts them on the pull request (`UI Screenshots` fails without them)
 - Include exact file paths in descriptions
 
 **Read by automation**: the Agent Issues workflow reads this file to decide which tasks to hand the implementing agent, so keep this structure (PR checks refuse a file that strays from it):

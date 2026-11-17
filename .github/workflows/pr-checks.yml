@@ -78,6 +78,31 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: pnpm nx run @discava/common-scripts:validate-tasks
 
+  # A pull request that changes portal or shared UI source must add a
+  # `screenshot(` call to an e2e scenario, so the `E2E screenshots` comment
+  # shows the reviewer the change. A maintainer waives it with the
+  # `no-ui-screenshots` label and re-runs this job (the labels are read when
+  # it runs, so labelling doesn't restart the other checks). The rules are in
+  # packages/common/scripts/src/ui-screenshots/.
+  ui-screenshots:
+    name: UI Screenshots
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: "false"
+          set-nx-shas: "false"
+
+      - name: Check the pull request
+        run: pnpm nx run @discava/common-scripts:ui-screenshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   # End-to-end tests (#3): Playwright drives the portals in Chromium against
   # the whole local stack, which it starts with `pnpm dev` (DynamoDB local,
   # S3Mock and the local OIDC server in Docker; no AWS). Only when something
@@ -93,7 +118,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     env:
       E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     permissions:
@@ -139,6 +164,18 @@ jobs:
       - name: Run e2e
         run: pnpm nx affected --target e2e --output-style=static
 
+      # Always, unlike the failure artifacts: the pictures a scenario takes of
+      # what the pull request changed (helpers/screenshots.ts), listed in the
+      # `E2E screenshots` comment. A shard with none uploads nothing.
+      - name: Upload the pull request screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-screenshots-${{ matrix.shard }}
+          path: dist/packages/e2e/screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload traces, screenshots and the report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -160,3 +197,46 @@ jobs:
         run: |
           [ "${{ needs.e2e.result }}" = "failure" ] || [ "${{ needs.e2e.result }}" = "cancelled" ] && exit 1
           exit 0
+
+  # One comment on the pull request, kept up to date, naming the screenshots
+  # the e2e scenarios took (and where to download them). Images can't be
+  # embedded: an artifact has no public URL. Only for a pull request from this
+  # repository, whose token can write; a fork's can't.
+  e2e-screenshots:
+    name: E2E screenshots
+    needs: e2e
+    if: >-
+      always() && needs.e2e.result != 'skipped' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      # The default branch's code, not the pull request's: this job can write
+      # to the pull request, so it never runs anything the pull request wrote
+      # (it only reads the diff from the API, like ui-screenshots.yml).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: e2e-screenshots-*
+          path: screenshots
+
+      # Leads with the pictures whose `screenshot(` call this pull request
+      # adds, and folds the ones from scenarios that were already there.
+      - name: Comment on the pull request
+        run: pnpm nx run @discava/common-scripts:screenshots-comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SCREENSHOTS_DIR: ${{ github.workspace }}/screenshots

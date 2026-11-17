@@ -158,7 +158,7 @@ export function CreateLessonDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Creating...' : 'Create lesson'}
+                  {isSubmitting ? 'Creating…' : 'Create lesson'}
                 </Button>
               )}
             </form.Subscribe>

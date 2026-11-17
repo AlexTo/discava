@@ -161,7 +161,7 @@ export function EditModuleDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save changes'}
+                  {isSubmitting ? 'Saving…' : 'Save changes'}
                 </Button>
               )}
             </form.Subscribe>

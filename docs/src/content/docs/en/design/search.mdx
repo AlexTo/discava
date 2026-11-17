@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+import Link from '@components/link.astro';
+
 Discava has no full-text or cross-entity search inside the core table (`packages/databases/core-table`): it's fine for key-based access, but not for "find a course whose title or description matches this text". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) is the search layer for that, kept outside the core table rather than added as more GSIs.
 
 ## Scope (v1)
@@ -50,7 +52,7 @@ stream -> index: "SEARCH_STREAM_FILTERS"
 index -> search: "index / delete"
 ```
 
-The core table's stream already feeds progress recalculation (`CoreApiStack`); search indexing is a second, independent `DynamoEventSource` on the same stream, with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`) and its own dead-letter queue, so a failure in one never blocks the other.
+The core table's stream has one reader, the <Link path="design/stream-event-router">stream router</Link>, which sends each change to the queue of every feature registered for it. Search indexing is one such feature (`search-indexing`), with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`), queue and failure queue, so a failure in it never blocks progress recalculation.
 
 `index-content.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
 
@@ -85,7 +87,7 @@ An `opensearchproject/opensearch` container (`packages/common/scripts/src/opense
 Kept here so the upstream `ts#opensearch` proposal (or a PR adopting it) can check each one:
 
 - CDK has no L2 construct for `AWS::OpenSearchServerless::*` yet, only L1 `Cfn*` resources; `OpenSearchCollection` hand-rolls the data access policy and `grantRead`/`grantWrite` on top of them.
-- A grantee's data access policy entry needs its literal principal ARN (OpenSearch Serverless authorises by ARN there, not via the grantee's own IAM policy), which can't live in a stack created before the grantee's without creating a circular stack dependency. The policy is built lazily (the same deferred-Aspect technique `RuntimeConfig` uses) and placed in a stack set by `placeAccessPolicyIn`, not always the collection's own stack.
+- A grantee's data access policy entry needs its literal principal ARN (OpenSearch Serverless authorises by ARN there, not via the grantee's own IAM policy). Each grant creates its own policy in the grantee's stack, named from the grantee's construct path, rather than one shared policy in a stack that depends on every grantee: a shared policy would import every role's ARN, and CloudFormation then refuses to deploy a stack that stops exporting a role that moved to another stack.
 - The index-sync custom resource's own data access grant is a separate, eager, same-stack policy from the one `grantRead`/`grantWrite` populate: it has to exist before the custom resource first runs, during the collection's own stack's deploy, which a deferred cross-stack policy can't guarantee.
 - Every collection is created inside its own NextGen `AWS::OpenSearchServerless::CollectionGroup` (see "Cost" above), a resource that postdates #1267; a generator written against #1267 as it stands would create a classic, always-on collection instead.
 - The target that generates the indices manifest is `generate-indices-manifest`, not `indices`: every other target in this workspace is a verb (`compile`, `bundle`, `pull-image`), and `indices` reads as if it creates or lists indices rather than writing the manifest file.

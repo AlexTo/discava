@@ -139,6 +139,30 @@ describe('submitTranscodeJob', () => {
     );
   });
 
+  // Merged with the template's output groups by position: the second is the
+  // audio-only file for Transcribe, in the upload bucket.
+  it('gives the audio-only output group its own destination for Transcribe', async () => {
+    await submitTranscodeJob({
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      objectKey: OBJECT_KEY,
+      submissionNonce: SUBMISSION_NONCE,
+    });
+
+    const [command] = mediaConvertSend.mock.calls[0]!;
+    expect(command.Settings.OutputGroups).toHaveLength(2);
+    expect(command.Settings.OutputGroups[1]).toEqual({
+      OutputGroupSettings: {
+        Type: 'FILE_GROUP_SETTINGS',
+        FileGroupSettings: {
+          Destination: `s3://${UPLOAD_BUCKET_NAME}/transcribe-input/${SUBMISSION_NONCE}`,
+        },
+      },
+    });
+  });
+
   // MediaConvert's own default is to ignore rotation metadata entirely,
   // even when present -- without this, a phone-shot portrait upload
   // transcodes sideways.
