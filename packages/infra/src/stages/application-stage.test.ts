@@ -151,6 +151,12 @@ describe("discava-development's limits", () => {
     }
   });
 
+  it('expires records by their ttl attribute (the analytics markers)', () => {
+    stack('Data').hasResourceProperties('AWS::DynamoDB::Table', {
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    });
+  });
+
   it('only lets an admin create users', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
@@ -513,7 +519,8 @@ describe('the stream router', () => {
     expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toEqual([]);
     expect(
       Object.keys(template.findResources('AWS::Lambda::Function')).filter(
-        (id) => /^(ProgressRecalculation|SearchIndexing)/.test(id),
+        (id) =>
+          /^(ProgressRecalculation|SearchIndexing|AnalyticsUpdate)/.test(id),
       ),
     ).toEqual([]);
   });
@@ -532,6 +539,29 @@ describe('the stream router', () => {
     expect(
       Object.keys(template.findResources('AWS::Lambda::EventSourceMapping')),
     ).toHaveLength(features + 1);
+  });
+
+  it('gives analytics-update a queue, a failure queue, an alarm and a handler', () => {
+    const template = stack('StreamRouter');
+    for (const type of [
+      'AWS::SQS::Queue',
+      'AWS::CloudWatch::Alarm',
+      'AWS::Lambda::Function',
+    ]) {
+      expect(
+        Object.keys(template.findResources(type)).filter(
+          (id) =>
+            id.startsWith('StreamRouterAnalyticsUpdate') ||
+            id.startsWith('AnalyticsUpdate'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterAnalyticsUpdateFailures'),
+      ),
+    ).toBe(true);
   });
 
   it("applies the stage's encryption setting to the queues", () => {
