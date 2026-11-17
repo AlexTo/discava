@@ -60,6 +60,8 @@ pnpm dev
 
 **Notifications.** `pnpm nx run @discava/common-scripts:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
 
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/common-scripts:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
+
 **Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run:
 
 ```sh
