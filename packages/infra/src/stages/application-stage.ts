@@ -10,6 +10,7 @@ import { CoreApiStack } from '../stacks/core-api-stack.js';
 import { DataStack } from '../stacks/data-stack.js';
 import { InstructorApiStack } from '../stacks/instructor-api-stack.js';
 import { MediaPipelineStack } from '../stacks/media-pipeline-stack.js';
+import { StreamRouterStack } from '../stacks/stream-router-stack.js';
 import { WebsitesStack } from '../stacks/websites-stack.js';
 
 /** Per-component settings (all default to fully hardened) plus the stage's env. */
@@ -19,7 +20,7 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> MediaPipeline -> CoreApi -> InstructorApi -> RuntimeConfig
+ *   Websites -> Data -> StreamRouter -> MediaPipeline -> CoreApi -> InstructorApi -> RuntimeConfig
  *
  * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
  * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
@@ -29,9 +30,10 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
  * whichever API stack is created first. Data's search collection (#53) is
  * stateful like the core table, so it lives there too; CoreApi depends on it
- * for the search procedure's read access and the indexing Lambda's write
- * access (its own DynamoEventSource on the core table's stream, alongside
- * progress recalculation's).
+ * for the search procedure's read access. StreamRouter holds the single
+ * reader of the core table's stream, the queues it feeds and the progress
+ * and search handlers behind them (the indexing Lambda's write access to the
+ * collection included); it depends on Data only.
  */
 export class ApplicationStage extends Stage {
   constructor(
@@ -42,6 +44,7 @@ export class ApplicationStage extends Stage {
       coreApi,
       instructorApi,
       coreTable,
+      streamRouter,
       studentPortal,
       instructorPortal,
       adminPortal,
@@ -79,6 +82,13 @@ export class ApplicationStage extends Stage {
       search,
       instructorPortal: websites.instructorPortal,
       studentPortal: websites.studentPortal,
+    });
+
+    new StreamRouterStack(this, 'StreamRouter', {
+      ...stackProps,
+      streamRouter,
+      coreTable: data.coreTable,
+      searchCollection: data.searchCollection,
     });
 
     const mediaPipeline = new MediaPipelineStack(this, 'MediaPipeline', {
@@ -124,7 +134,8 @@ export class ApplicationStage extends Stage {
       configurationStack: runtimeConfig,
     });
 
-    // CoreApi's functions are granted search access above, after Data (and
+    // CoreApi's functions and StreamRouter's indexing Lambda are granted search
+    // access above, after Data (and
     // so the collection) already exists; its data access policy needs their
     // role ARNs, so it can't live in Data (which would then depend back on
     // CoreApi, a cycle) -- RuntimeConfig, like the AppConfig content above,

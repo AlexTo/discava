@@ -7,19 +7,23 @@ import {
   computeProgress,
   type createCoreTableService,
   isConditionalCheckFailed,
+  issueCertificate,
 } from '@discava/core-table';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // A write that may lose to a completion recorded at the same moment by
 // another run: that run's result stands, since completion is permanent.
+// Returns whether this write was the one that landed.
 const unlessAlreadyCompleted = async (write: () => Promise<unknown>) => {
   try {
     await write();
+    return true;
   } catch (error) {
     if (!isConditionalCheckFailed(error)) {
       throw error;
     }
+    return false;
   }
 };
 
@@ -59,7 +63,9 @@ export const listEnrolledStudents = async (
 // lesson or course already completed is never written back to anything else,
 // and the writes that complete them are conditioned on that, so a run racing
 // another can't undo it. A student who isn't enrolled, or has dropped out,
-// is left alone.
+// is left alone. Once the enrolment is completed, the student's certificate
+// is issued if they don't have one yet (an error from that propagates, so the
+// batch is retried and a failed issue is picked up on the next pass).
 export const recalculateStudent = async (
   coreTable: CoreTable,
   courseId: string,
@@ -122,13 +128,51 @@ export const recalculateStudent = async (
         .go(),
     );
   }
+  let completedAt = enrolment.completedAt;
+  let completed = enrolment.status === 'completed';
   if (result.completed && enrolment.status === 'active') {
-    await unlessAlreadyCompleted(() =>
+    completed = true;
+    const won = await unlessAlreadyCompleted(() =>
       coreTable.entities.enrolment
         .patch({ courseId, userId })
         .set({ status: 'completed', completedAt: now })
         .where((attr, op) => op.eq(attr.status, 'active'))
         .go(),
     );
+    if (won) {
+      completedAt = now;
+    } else {
+      // Another run completed it first, or the student dropped out in the
+      // meantime: what's stored decides.
+      const { data: current } = await coreTable.entities.enrolment
+        .get({ courseId, userId })
+        .go();
+      completed = current?.status === 'completed';
+      completedAt = current?.completedAt;
+    }
   }
+  if (!completed || !completedAt) {
+    return;
+  }
+
+  const { data: certificate } = await coreTable.entities.certificate
+    .get({ userId, courseId })
+    .go();
+  if (certificate) {
+    return;
+  }
+  const [{ data: course }, { data: user }] = await Promise.all([
+    coreTable.entities.course.get({ courseId }).go(),
+    coreTable.entities.user.get({ userId }).go(),
+  ]);
+  if (!course) {
+    return;
+  }
+  await issueCertificate({
+    coreTable,
+    enrolment: { userId, courseId, status: 'completed', completedAt },
+    course,
+    user,
+    now: new Date(now),
+  });
 };

@@ -333,6 +333,7 @@ export function AttachLessonVideoDialog({
               <HlsVideo
                 url={video.url}
                 withCredentials={video.withCredentials}
+                captions={video.captions}
                 className="w-full rounded-lg border"
               />
             )

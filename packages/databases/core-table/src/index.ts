@@ -15,6 +15,29 @@ export {
   isLateSubmission,
 } from './helpers/assignment-submission.js';
 export {
+  applyCaptionChange,
+  CAPTIONS_PENDING_TIMEOUT_MS,
+  type CaptionChange,
+  type CaptionChangeResult,
+  type CaptionTrack,
+  CaptionTrackError,
+  type CaptionTrackErrorCode,
+  captionWriteCondition,
+  dropOtherVersions,
+  MAX_CAPTION_TRACKS,
+  reportedCaptionsStatus,
+  tracksForPlayback,
+} from './helpers/caption-tracks.js';
+export {
+  type Certificate,
+  formatCertificateId,
+  generateCertificateId,
+  type IssueCertificateInput,
+  issueCertificate,
+  learnerName,
+  normaliseCertificateId,
+} from './helpers/certificate.js';
+export {
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
 } from './helpers/content-item.js';
@@ -50,6 +73,13 @@ export {
   type SearchStreamRecord,
 } from './helpers/search-stream.js';
 export {
+  featuresFor,
+  STREAM_FEATURES,
+  type StreamFeature,
+  type StreamFilter,
+  type StreamRecordLike,
+} from './helpers/stream-features.js';
+export {
   type StudentActivity,
   studentActivityAt,
   studentActivityWrites,
@@ -60,4 +90,10 @@ export {
   syncUserProfile,
   userProfileFrom,
 } from './helpers/user.js';
+export {
+  isValidPosition,
+  resumeAt,
+  VIDEO_POSITION_MAX_SECONDS,
+  videoPositionToStore,
+} from './helpers/video-position.js';
 export { createCoreTableService } from './service.js';

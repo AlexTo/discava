@@ -17,7 +17,7 @@ import {
 } from '@discava/common-shadcn/components/ui/item';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CircleCheck,
   ClipboardList,
@@ -65,6 +65,35 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
     ),
   );
 
+  // Remembers where the student got to, to resume there next time. Failing
+  // to save is not worth interrupting the lesson for, so errors are ignored.
+  // The cached videoUrl response (kept for the signed cookies' sake) holds
+  // `resumeAt`, so it follows each save: coming back to the lesson within the
+  // cache's life must resume where the student got to, not where they began.
+  const queryClient = useQueryClient();
+  const savePosition = useMutation(
+    trpc.contentItem.saveVideoPosition.mutationOptions({
+      onSuccess: (result, { versionId }) => {
+        if (!result.saved || result.positionSeconds === undefined) {
+          return;
+        }
+        const { positionSeconds } = result;
+        queryClient.setQueryData(
+          trpc.contentItem.videoUrl.queryKey({
+            courseId,
+            moduleId,
+            lessonId,
+            contentItemId,
+          }),
+          (cached) =>
+            cached && cached.versionId === versionId
+              ? { ...cached, resumeAt: positionSeconds }
+              : cached,
+        );
+      },
+    }),
+  );
+
   if (item.status === 'pending') {
     return (
       <Alert header="This video is still processing">
@@ -98,6 +127,18 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
       url={videoQuery.data.url}
       withCredentials={videoQuery.data.withCredentials}
       title={item.title}
+      captions={videoQuery.data.captions}
+      resumeAt={videoQuery.data.resumeAt}
+      onPositionChange={(position) =>
+        savePosition.mutate({
+          courseId,
+          moduleId,
+          lessonId,
+          contentItemId,
+          versionId: videoQuery.data.versionId,
+          ...position,
+        })
+      }
       className="aspect-video w-full rounded-xl bg-black"
     />
   );

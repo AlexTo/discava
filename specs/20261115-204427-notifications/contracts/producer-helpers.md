@@ -31,11 +31,11 @@ Rules: `build` is pure and total over valid params; the helpers truncate title t
 | id | Params | Portal and path | Email policy |
 |----|--------|-----------------|--------------|
 | `assignment.returned` | `courseId`, `lessonId`, `assignmentTitle`, `courseTitle` | student, `/learn/<courseId>/lesson/<lessonId>` | default-on |
-| `announcement.posted` | `courseId`, `courseTitle`, `announcementTitle`, `excerpt` | student, `/learn/<courseId>` | default-on |
+| `announcement.posted` | `courseId`, `courseTitle`, `announcementTitle`, `excerpt` | student, `/learn/<courseId>/home` | default-on |
 | `discussion.reply` | `courseId`, `lessonId`, `authorName`, `excerpt` | student, `/learn/<courseId>/lesson/<lessonId>` | default-on |
-| `review.received` | `courseId`, `courseTitle`, `rating` | instructor, `/my-courses` | default-off |
+| `review.received` | `courseId`, `courseTitle`, `rating` | instructor, `/my-courses/<courseId>/reviews` | default-off |
 
-Titles, bodies and exact paths are written in the task that adds the registry and reviewed there; the paths above follow the student portal's current routes (`learn/$courseId/lesson/$lessonId`). The instructor path for `review.received` is confirmed against the instructor portal's routes when #279 lands.
+Titles, bodies and exact paths are written in the task that adds the registry and reviewed there; the paths above follow the student portal's current routes (`learn/$courseId/lesson/$lessonId`). The instructor path for `review.received` follows the reviews spec (PR #358), and is confirmed against the instructor portal's routes when #279 lands.
 
 ## `notificationWrites`
 

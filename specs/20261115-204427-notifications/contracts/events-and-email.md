@@ -8,11 +8,15 @@
 |-----------|-------|----------|
 | INSERT | NewImage | `notification`, `notificationBroadcast` |
 
-Used by `CoreApiStack`'s `DynamoEventSource` (batch 100, 5 s window, 5 retries, bisect on error, own DLQ `NotificationDeliveryFailures`, SQS-managed encryption as the other two) and by the event runner locally.
+Registered once in `STREAM_FEATURES` (`core-table/src/helpers/stream-features.ts`) as `notification-delivery`: these filters, handler `notification-delivery`, batch 100 records or 5 s, `maxReceiveCount` 5. The core table's one stream consumer, the router, sends each matching change to this feature's queue, and the `StreamRouter` construct builds the queue, its failure queue and alarm from the entry. The deployed mapping and the local feature runner both read the same entry, so there is no separate mapping, DLQ or runner batcher for this feature (see the stream event router spec (`specs/20261116-183449-stream-event-router`)).
+
+The handler reads its records through the router's `sqs-stream-records.ts`, which turns the SQS event into `{ Records }` in arrival order, so the parsing is unchanged. Delivery is at least once and unordered (router message contract).
 
 ## `notification-delivery` handler (`events/src/notifications/delivery.ts`)
 
-Receives a batch of stream records and handles each by entity. A record that throws is reported as a batch item failure (`ReportBatchItemFailures`), so one record does not retry the others.
+Receives a batch of stream records and handles each by entity. If a record throws, the handler finishes the other records of the batch, then throws, and the whole batch becomes visible again after the visibility timeout. SQS cannot bisect, and the registration has no per-item failure option. This is safe because every step is idempotent: the email claim, `publishNotification`'s dedupe key and the fan-out cursor. After five receives a message moves to the feature's failure queue, which trips its alarm. A poison record can take its batch-mates with it; a redrive of them is safe.
+
+**Handler obligations (router FR-011).** The handler must be safe to run twice with the same records and with records in any order. Its header comment says how: a repeat is absorbed by the email claim and the deterministic notification id, and the two entities are independent (a `notification` INSERT never depends on its broadcast's INSERT having been handled first, and the fan-out reads the broadcast's current `cursor` and `status`, not the record's image).
 
 ### `notificationBroadcast` INSERT: fan out
 
@@ -20,14 +24,14 @@ Receives a batch of stream records and handles each by entity. A record that thr
 2. Query `enrolment` for the course (pk `courseId`), pages of 100, resuming from `cursor`; skip `dropped`.
 3. For each student call `publishNotification` (concurrency 10) with the broadcast's type, params, `dedupeKey` and `occurredAt`; `duplicate` is fine.
 4. After each page patch `cursor`; after the last, set `status: 'done'` and `completedAt`.
-5. If the Lambda runs out of time or fails, the stream retries the record and step 2 resumes from the cursor.
+5. If the Lambda runs out of time or fails, the message becomes visible again after the queue's visibility timeout (at least six times the function timeout) and step 2 resumes from the cursor. After five receives it goes to the failure queue, and a redrive resumes it.
 
 ### `notification` INSERT: send the email
 
 1. Read the registry entry. Policy `never`: record `skipped / never`, stop.
 2. If the stage has no sender (`NOTIFICATIONS_FROM_ADDRESS` unset): `skipped / not-configured`.
 3. Read the user (`email`); none: `skipped / no-address`. Read the preference (keyed get); `emailEnabled` false, or the policy is `default-off` with no stored preference, and the policy is not `required`: `skipped / opted-out`.
-4. Claim: patch `email.state` `pending` to `sending` with `claimedAt`, condition `state = pending`. Cancelled: re-read. `sent`, `skipped`, `failed` or `unknown` return. `sending` with `claimedAt` less than 5 minutes ago: throw, so the stream retries later. Older: patch to `unknown` (condition `sending`), return.
+4. Claim: patch `email.state` `pending` to `sending` with `claimedAt`, condition `state = pending`. Cancelled: re-read. `sent`, `skipped`, `failed` or `unknown` return. `sending` with `claimedAt` less than 5 minutes ago: throw, so the queue redelivers it after the visibility timeout. Older: patch to `unknown` (condition `sending`), return.
 5. Send through `sendEmail` (below). Success: patch `sent` with `sentAt` and `messageId`. Permanent failure (`MessageRejected`, `BadRequest`, `AccountSuspended`, sandbox or unverified-identity errors): patch `failed` with a reason. Transient failure (throttling, 5xx, network): release the claim back to `pending` (condition `sending`) and throw.
 6. Every transition is a conditional patch on the previous state in `helpers/notification-email.ts`, so a late or duplicate invocation cannot move a final state.
 
@@ -58,7 +62,7 @@ Deployed: SES v2 `SendEmail` with `Content.Simple` (`Subject`, `Body.Text`, `Bod
 
 ## Local event runner additions
 
-- Applies `matchesNotificationStreamFilters` to the local stream and calls the same `delivery` handler, batched like the other consumers.
+- Nothing to add for routing: the runner's router already sends matching records to the `notification-delivery` queue (ElasticMQ) and its feature runner calls the same `delivery` handler, with the registration's batch settings. This feature adds only the email inbox routes below, and its queue shows in `GET /router/queues`.
 - `POST /emails`: store `{ id, receivedAt, to, from, subject, text, html, headers }` as JSON under `tmp/local-dev/emails/`.
 - `GET /emails`: the stored messages, newest first, as JSON. `GET /inbox`: a plain HTML list, and `GET /inbox/<id>` a message with text, an HTML preview (in an iframe `srcdoc`) and its headers.
 - `reset-local-data` deletes `tmp/local-dev/emails/`.
