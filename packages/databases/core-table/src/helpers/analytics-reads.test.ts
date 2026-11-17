@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readCourseSummaries } from './analytics-reads.js';
+import { readCourseAnalytics, readCourseSummaries } from './analytics-reads.js';
 
 type Keys = Record<string, string>[];
 
@@ -185,5 +185,99 @@ describe('readCourseSummaries', () => {
 
     expect(await readCourseSummaries(coreTable, [], NOW)).toEqual([]);
     expect(summaryGet).not.toHaveBeenCalled();
+  });
+});
+
+describe('readCourseAnalytics', () => {
+  // Answers the summary and week batch gets from `summary`/`week`, and the
+  // day range query from `days`, recording the range asked for.
+  const fakeTable = (
+    summary: Record<string, unknown> | null,
+    days: Record<string, unknown>[],
+    week: Record<string, unknown> | null = null,
+  ) => {
+    const between = vi.fn();
+    const go = vi.fn(async () => ({ data: days }));
+    between.mockReturnValue({ go });
+    const coreTable = {
+      entities: {
+        courseStats: {
+          get: () => ({
+            go: async () => ({
+              data: summary ? [{ courseId: 'c1', ...summary }] : [],
+              unprocessed: [],
+            }),
+          }),
+        },
+        periodStats: {
+          get: () => ({
+            go: async () => ({
+              data: week ? [{ courseId: 'c1', ...week }] : [],
+              unprocessed: [],
+            }),
+          }),
+          query: { primary: vi.fn(() => ({ between })) },
+        },
+      },
+    } as never;
+    return { coreTable, between, go };
+  };
+
+  it('derives active from the totals, never below 0', async () => {
+    const { coreTable } = fakeTable(
+      { enrolments: 10, completed: 4, dropped: 1 },
+      [],
+    );
+    expect((await readCourseAnalytics(coreTable, 'c1', 30, NOW)).active).toBe(
+      5,
+    );
+
+    const skewed = fakeTable({ enrolments: 2, completed: 2, dropped: 1 }, []);
+    expect(
+      (await readCourseAnalytics(skewed.coreTable, 'c1', 30, NOW)).active,
+    ).toBe(0);
+  });
+
+  it('gives exactly `days` entries, oldest first, zero filled', async () => {
+    const { coreTable } = fakeTable(
+      { enrolments: 3 },
+      [
+        { periodKey: 'DAY#2026-11-17', enrolments: 2, activeLearners: 3 },
+        { periodKey: 'DAY#2026-11-15', enrolments: 1, activeLearners: -1 },
+      ],
+      { periodKey: 'WEEK#2026-W47', activeLearners: 3 },
+    );
+
+    for (const days of [30, 90]) {
+      const result = await readCourseAnalytics(coreTable, 'c1', days, NOW);
+      expect(result.daily).toHaveLength(days);
+      expect(result.daily.at(-1)).toEqual({
+        date: '2026-11-17',
+        enrolments: 2,
+        activeLearners: 3,
+      });
+      expect(result.activeLearners).toBe(3);
+    }
+    const { daily } = await readCourseAnalytics(coreTable, 'c1', 30, NOW);
+    expect(daily[0].date).toBe('2026-10-19');
+    expect(daily.slice(-3)).toEqual([
+      { date: '2026-11-15', enrolments: 1, activeLearners: 0 },
+      { date: '2026-11-16', enrolments: 0, activeLearners: 0 },
+      { date: '2026-11-17', enrolments: 2, activeLearners: 3 },
+    ]);
+  });
+
+  it('reads the day items with one range query over the window', async () => {
+    const { coreTable, between } = fakeTable(null, []);
+
+    const result = await readCourseAnalytics(coreTable, 'c1', 90, NOW);
+
+    expect(between).toHaveBeenCalledTimes(1);
+    expect(between).toHaveBeenCalledWith(
+      { periodKey: 'DAY#2026-08-20' },
+      { periodKey: 'DAY#2026-11-17' },
+    );
+    expect(result.updatedAt).toBeNull();
+    expect(result.enrolments).toBe(0);
   });
 });

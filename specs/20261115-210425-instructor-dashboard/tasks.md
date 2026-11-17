@@ -111,14 +111,14 @@ description: "Task list for the instructor dashboard and course analytics"
 
 ### Tests for User Story 2 (write first)
 
-- [ ] T036 [P] [US2] Extend `analytics-reads.test.ts` for `readCourseAnalytics(courseId, days)`: totals (`active = enrolments - completed - dropped`, never below 0), exactly `days` daily entries oldest first, zero filled, from the `periodStats` `between` range; and `analytics.test.ts` (instructor-api) for `analytics.course` totals and `daily` with `days` 30 and 90, `BAD_REQUEST` for another value, and the authorization matrix against it.
-- [ ] T037 [P] [US2] Write `packages/websites/instructor-portal/src/routes/_authenticated/dashboard/$courseId/-route.test.tsx` (the `-` prefix, rendering `Route.options.component`): header with last updated, the 30/90 choice (default 90, kept in the search params), the totals row, the two daily charts with their text alternative tables, the empty state "No learners have enrolled yet", and the not-found page for a refused course. Extend `analytics.e2e.ts` to assert today's bars after an enrolment and a completion.
+- [x] T036 [P] [US2] Extend `analytics-reads.test.ts` for `readCourseAnalytics(courseId, days)`: totals (`active = enrolments - completed - dropped`, never below 0), exactly `days` daily entries oldest first, zero filled, from the `periodStats` `between` range; and `analytics.test.ts` (instructor-api) for `analytics.course` totals and `daily` with `days` 30 and 90, `BAD_REQUEST` for another value, and the authorization matrix against it.
+- [x] T037 [P] [US2] Write `packages/websites/instructor-portal/src/routes/_authenticated/dashboard/$courseId/-route.test.tsx` (the `-` prefix, rendering `Route.options.component`): header with last updated, the 30/90 choice (default 90, kept in the search params), the totals row, the two daily charts with their text alternative tables, the empty state "No learners have enrolled yet", and the not-found page for a refused course. Extend `analytics.e2e.ts` to assert today's bars after an enrolment and a completion.
 
 ### Implementation for User Story 2
 
-- [ ] T038 [US2] Implement `readCourseAnalytics` (totals, daily) in `helpers/analytics-reads.ts` and the `analytics.course` procedure (`days: 30 | 90`, default 90; `lessons` and `quizzes` empty until their stories) in `procedures/analytics.ts`.
-- [ ] T039 [US2] Add the course analytics route `packages/websites/instructor-portal/src/routes/_authenticated/dashboard/$courseId/route.tsx` with components under `-components/` (totals row, daily charts using the shared chart components from `@discava/common-shadcn`, range choice); link dashboard cards to it if T034 did not.
-- [ ] T040 [US2] Run the US2 tests.
+- [x] T038 [US2] Implement `readCourseAnalytics` (totals, daily) in `helpers/analytics-reads.ts` and the `analytics.course` procedure (`days: 30 | 90`, default 90; `lessons` and `quizzes` empty until their stories) in `procedures/analytics.ts`.
+- [x] T039 [US2] Add the course analytics route `packages/websites/instructor-portal/src/routes/_authenticated/dashboard/$courseId/route.tsx` with components under `-components/` (totals row, daily charts using the shared chart components from `@discava/common-shadcn`, range choice); link dashboard cards to it if T034 did not.
+- [x] T040 [US2] Run the US2 tests.
 
 **Checkpoint**: trends are visible.
 

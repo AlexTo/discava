@@ -23,7 +23,10 @@ export {
   weekKey,
 } from './helpers/analytics.js';
 export {
+  type CourseAnalytics,
+  type CourseDay,
   type CourseSummary,
+  readCourseAnalytics,
   readCourseSummaries,
 } from './helpers/analytics-reads.js';
 export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';

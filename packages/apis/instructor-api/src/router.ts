@@ -4,7 +4,10 @@
  */
 
 import { t } from './init.js';
-import { courseSummaries } from './procedures/analytics.js';
+import {
+  course as analyticsCourse,
+  courseSummaries,
+} from './procedures/analytics.js';
 import {
   createQuizAssignment,
   createUploadAssignment,
@@ -81,6 +84,7 @@ export const router = t.router;
 export const appRouter = router({
   analytics: router({
     courseSummaries,
+    course: analyticsCourse,
   }),
   course: router({
     create: createCourse,
