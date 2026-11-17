@@ -116,7 +116,7 @@ test('an instructor sees how their course is doing, and no one else can open its
     ).toHaveCount(91);
     await screenshot(instructor, 'course analytics over 90 days');
 
-    await instructor.getByRole('button', { name: '30 days' }).click();
+    await instructor.getByRole('link', { name: '30 days' }).click();
     await expect(instructor).toHaveURL(/days=30/);
     await expect(
       instructor

@@ -4,6 +4,7 @@
  */
 
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { signIn, testUser } from '../helpers/users.js';
 
@@ -33,6 +34,17 @@ test('a student signs in to the student portal', async ({ page }) => {
   await expect(
     page.getByRole('heading', { level: 1, name: 'My Learning' }),
   ).toBeVisible();
+
+  // The first Tab stop is the skip link; it jumps past the header to the page.
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to Main Content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeVisible();
+  await screenshot(page, 'skip link on first Tab');
+
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(`${PORTALS.student}/my-learning`);
+  await expect(page.locator('#main-content')).toBeFocused();
 });
 
 test('an admin signs in to the admin portal', async ({ page }) => {
