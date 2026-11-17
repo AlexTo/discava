@@ -5,6 +5,8 @@ sidebar:
   order: 4
 ---
 
+import Link from '@components/link.astro';
+
 Discava has no full-text or cross-entity search inside the core table (`packages/databases/core-table`): it's fine for key-based access, but not for "find a course whose title or description matches this text". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) is the search layer for that, kept outside the core table rather than added as more GSIs.
 
 ## Scope (v1)
@@ -50,7 +52,7 @@ stream -> index: "SEARCH_STREAM_FILTERS"
 index -> search: "index / delete"
 ```
 
-The core table's stream already feeds progress recalculation (`CoreApiStack`); search indexing is a second, independent `DynamoEventSource` on the same stream, with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`) and its own dead-letter queue, so a failure in one never blocks the other.
+The core table's stream has one reader, the <Link path="design/stream-event-router">stream router</Link>, which sends each change to the queue of every feature registered for it. Search indexing is one such feature (`search-indexing`), with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`), queue and failure queue, so a failure in it never blocks progress recalculation.
 
 `index-content.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
 
