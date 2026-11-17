@@ -16,7 +16,7 @@ export const signUnsubscribeToken = (
   userId: string,
   type: string,
 ): string => {
-  if (type === '' || type.includes('.')) {
+  if (type === '') {
     throw new Error(`Invalid notification type for a token: ${type}`);
   }
   return [
@@ -31,18 +31,16 @@ export const verifyUnsubscribeToken = (
   secret: string,
   token: string,
 ): { userId: string; type: string } | undefined => {
-  const segments = token.split('.');
-  if (segments.length !== 3) {
+  // The user and signature are base64url, which has no dot; the type, an
+  // id such as 'assignment.returned', may.
+  const first = token.indexOf('.');
+  const last = token.lastIndexOf('.');
+  if (first <= 0 || last <= first + 1 || last === token.length - 1) {
     return undefined;
   }
-  const [encodedUser, type, encodedSignature] = segments as [
-    string,
-    string,
-    string,
-  ];
-  if (!encodedUser || !type || !encodedSignature) {
-    return undefined;
-  }
+  const encodedUser = token.slice(0, first);
+  const type = token.slice(first + 1, last);
+  const encodedSignature = token.slice(last + 1);
   const userId = Buffer.from(encodedUser, 'base64url').toString();
   const expected = sign(secret, userId, type);
   const actual = Buffer.from(encodedSignature, 'base64url');

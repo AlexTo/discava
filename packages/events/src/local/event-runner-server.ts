@@ -4,11 +4,17 @@
  */
 import { createServer, type IncomingMessage } from 'node:http';
 import type {
+  LocalEmailRequest,
   LocalScheduleRequest,
   LocalSignInRequest,
   LocalTranscodeJobRequest,
   LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
+import {
+  type EmailInbox,
+  renderInboxPage,
+  renderMessagePage,
+} from './email-inbox.js';
 
 export interface LocalRouterFeatureState {
   name: string;
@@ -43,6 +49,11 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  * - `POST /triggers/pre-token-generation` (LocalSignInRequest), as Cognito
  *   running its pre token generation trigger at sign-in; answers 204 once
  *   the handler has run (400 without `userName` and `userAttributes.sub`)
+ * - `POST /emails` (LocalEmailRequest) -> `{ id }`, as SES's SendEmail; the
+ *   message is kept in the inbox
+ * - `GET /emails` -> the stored messages, newest first
+ * - `GET /inbox` -> an HTML list of them; `GET /inbox/<id>` -> one message
+ *   (404 for an unknown id)
  * - `GET /router/queues` -> each stream feature's queue and failure queue
  *   state
  * - `POST /router/redrive/<feature>` -> `{ feature, redriven }`, moving the
@@ -59,6 +70,7 @@ export const startEventRunnerServer = ({
   submitTranscriptionJob,
   scheduleTranscodeCleanup,
   runPreTokenGeneration,
+  emailInbox,
   routerQueues,
   redriveFeature,
   failFeature,
@@ -70,6 +82,7 @@ export const startEventRunnerServer = ({
   submitTranscriptionJob: (request: LocalTranscriptionJobRequest) => void;
   scheduleTranscodeCleanup: (request: LocalScheduleRequest) => void;
   runPreTokenGeneration: (request: LocalSignInRequest) => Promise<void>;
+  emailInbox: EmailInbox;
   routerQueues: () => Promise<{ features: LocalRouterFeatureState[] }>;
   /** The number moved, or undefined for an unregistered feature. */
   redriveFeature: (feature: string) => Promise<number | undefined>;
@@ -81,6 +94,12 @@ export const startEventRunnerServer = ({
     const send = (status: number, body?: unknown) => {
       response.writeHead(status, { 'content-type': 'application/json' });
       response.end(body === undefined ? '' : JSON.stringify(body));
+    };
+    const sendHtml = (status: number, body: string) => {
+      response.writeHead(status, {
+        'content-type': 'text/html; charset=utf-8',
+      });
+      response.end(body);
     };
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
@@ -145,6 +164,38 @@ export const startEventRunnerServer = ({
         // after sign-in already finds the user's record.
         await runPreTokenGeneration(signedIn);
         return send(204);
+      }
+      if (request.method === 'POST' && path === '/emails') {
+        const email = (await readJson(request)) as LocalEmailRequest;
+        if (
+          !email.to ||
+          !email.from ||
+          typeof email.subject !== 'string' ||
+          typeof email.text !== 'string' ||
+          typeof email.html !== 'string' ||
+          typeof email.headers !== 'object' ||
+          email.headers === null
+        ) {
+          return send(400, {
+            message: 'to, from, subject, text, html and headers needed',
+          });
+        }
+        const { id } = await emailInbox.store(email);
+        log(`email ${id} to ${email.to}: ${email.subject}`);
+        return send(201, { id });
+      }
+      if (request.method === 'GET' && path === '/emails') {
+        return send(200, await emailInbox.list());
+      }
+      if (request.method === 'GET' && path === '/inbox') {
+        return sendHtml(200, renderInboxPage(await emailInbox.list()));
+      }
+      const inboxed = path.match(/^\/inbox\/([^/]+)$/);
+      if (request.method === 'GET' && inboxed) {
+        const email = await emailInbox.get(decodeURIComponent(inboxed[1]));
+        return email
+          ? sendHtml(200, renderMessagePage(email))
+          : send(404, { message: 'No such email' });
       }
       if (request.method === 'GET' && path === '/router/queues') {
         return send(200, await routerQueues());
