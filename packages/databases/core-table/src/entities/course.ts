@@ -55,6 +55,12 @@ export const createCourseEntity = async () =>
         lastChildOrder: {
           type: 'number',
         },
+        // Whether finishing the course earns a certificate. Required, set to
+        // true on creation; nothing reads a missing value as on.
+        certificatesEnabled: {
+          type: 'boolean',
+          required: true,
+        },
         createdAt: {
           type: 'string',
           required: true,

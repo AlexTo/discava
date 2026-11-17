@@ -7,6 +7,7 @@ import {
   EventsTranscodeCleanup,
   EventsTranscodeComplete,
   EventsTranscodeReconciler,
+  EventsTranscribeComplete,
   LessonMediaBucket,
   LessonMediaUploadBucket,
   RuntimeConfig,
@@ -33,6 +34,12 @@ import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+
+// Keys in the lesson media bucket (see server-utils' captions.ts): where
+// Transcribe writes, outside the folder students' cookies authorise, and where
+// the finished tracks live inside it.
+const TRANSCRIBE_OUTPUT_PATTERN = 'courses/*/transcribe-output/*';
+const CAPTIONS_PATTERN = 'courses/*/captions/*';
 
 export interface MediaPipelineStackProps extends StackProps {
   readonly coreTable: CoreTable;
@@ -79,8 +86,17 @@ export class MediaPipelineStack extends Stack {
     this.scheduleGroup = scheduleGroup;
     this.schedulerRole = schedulerRole;
 
-    this.createTranscodeCompleteLambda(lessonMediaUploadBucket, coreTable);
-    this.createTranscodeReconcilerLambda(lessonMediaUploadBucket, coreTable);
+    this.createTranscodeCompleteLambda(
+      lessonMediaBucket,
+      lessonMediaUploadBucket,
+      coreTable,
+    );
+    this.createTranscodeReconcilerLambda(
+      lessonMediaBucket,
+      lessonMediaUploadBucket,
+      coreTable,
+    );
+    this.createTranscribeCompleteLambda(lessonMediaBucket, coreTable);
   }
 
   // Where an event a handler kept failing on is kept, instead of being
@@ -108,6 +124,7 @@ export class MediaPipelineStack extends Stack {
   // or superseded job's output for cleanup.
   private grantApplyTranscodeOutcome(
     handler: LambdaFunctionHandler,
+    lessonMediaBucket: LessonMediaBucket,
     lessonMediaUploadBucket: LessonMediaUploadBucket,
     coreTable: CoreTable,
   ) {
@@ -128,12 +145,33 @@ export class MediaPipelineStack extends Stack {
     // applying its outcome schedules that cleanup itself, so it needs the
     // same grants every other scheduler of that cleanup already has.
     this.grantScheduleCleanupWrite(handler);
+
+    // Starting the version's automatic captions (best effort). Transcribe
+    // reads the audio file and writes its outputs with the caller's own
+    // credentials, so the Lambda needs the S3 and KMS access itself: read of
+    // the audio file, and write to the scratch prefix only, never the
+    // captions prefix.
+    handler.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['transcribe:StartTranscriptionJob', 'transcribe:TagResource'],
+        resources: [
+          this.formatArn({
+            service: 'transcribe',
+            resource: 'transcription-job',
+            resourceName: '*',
+          }),
+        ],
+      }),
+    );
+    lessonMediaUploadBucket.grantRead(handler, 'transcribe-input/*');
+    lessonMediaBucket.grantPut(handler, TRANSCRIBE_OUTPUT_PATTERN);
   }
 
   // Settles lesson videos stuck waiting for a transcode (#125): a completion
   // event that never arrived or kept failing, or a video that never got a
   // job. Every 30 minutes; a run with nothing stuck is one empty query.
   private createTranscodeReconcilerLambda(
+    lessonMediaBucket: LessonMediaBucket,
     lessonMediaUploadBucket: LessonMediaUploadBucket,
     coreTable: CoreTable,
   ) {
@@ -143,6 +181,7 @@ export class MediaPipelineStack extends Stack {
     );
     this.grantApplyTranscodeOutcome(
       reconciler,
+      lessonMediaBucket,
       lessonMediaUploadBucket,
       coreTable,
     );
@@ -249,6 +288,7 @@ export class MediaPipelineStack extends Stack {
   }
 
   private createTranscodeCompleteLambda(
+    lessonMediaBucket: LessonMediaBucket,
     lessonMediaUploadBucket: LessonMediaUploadBucket,
     coreTable: CoreTable,
   ) {
@@ -260,6 +300,7 @@ export class MediaPipelineStack extends Stack {
     );
     this.grantApplyTranscodeOutcome(
       transcodeComplete,
+      lessonMediaBucket,
       lessonMediaUploadBucket,
       coreTable,
     );
@@ -291,6 +332,70 @@ export class MediaPipelineStack extends Stack {
     });
 
     return transcodeComplete;
+  }
+
+  // Transcribe job COMPLETED/FAILED via EventBridge -> the version's caption
+  // track (see the events package's transcribe-complete). Same failure
+  // handling as TranscodeComplete.
+  private createTranscribeCompleteLambda(
+    lessonMediaBucket: LessonMediaBucket,
+    coreTable: CoreTable,
+  ) {
+    const transcribeComplete = new EventsTranscribeComplete(
+      this,
+      'TranscribeComplete',
+    );
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    transcribeComplete.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(transcribeComplete);
+    coreTable.grantReadWriteData(transcribeComplete);
+    // The job's tags and the location of its WebVTT.
+    transcribeComplete.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['transcribe:GetTranscriptionJob'],
+        resources: [
+          this.formatArn({
+            service: 'transcribe',
+            resource: 'transcription-job',
+            resourceName: '*',
+          }),
+        ],
+      }),
+    );
+    // Reads the WebVTT from the scratch prefix, deletes what Transcribe wrote
+    // there and writes the track under the version's captions folder.
+    lessonMediaBucket.grantRead(transcribeComplete, TRANSCRIBE_OUTPUT_PATTERN);
+    lessonMediaBucket.grantDelete(
+      transcribeComplete,
+      TRANSCRIBE_OUTPUT_PATTERN,
+    );
+    lessonMediaBucket.grantPut(transcribeComplete, CAPTIONS_PATTERN);
+
+    const failures = this.failureQueue('TranscribeCompleteFailures');
+    transcribeComplete.configureAsyncInvoke({
+      retryAttempts: 2,
+      maxEventAge: Duration.hours(6),
+      onFailure: new SqsDestination(failures),
+    });
+    new Rule(this, 'TranscribeCompleteRule', {
+      eventPattern: {
+        source: ['aws.transcribe'],
+        detailType: ['Transcribe Job State Change'],
+        detail: { TranscriptionJobStatus: ['COMPLETED', 'FAILED'] },
+      },
+      targets: [
+        new LambdaFunction(transcribeComplete, {
+          deadLetterQueue: failures,
+          retryAttempts: 8,
+          maxEventAge: Duration.hours(6),
+        }),
+      ],
+    });
+
+    return transcribeComplete;
   }
 
   // bestEffortCancelTranscodeJob schedules a one-time, delayed invocation

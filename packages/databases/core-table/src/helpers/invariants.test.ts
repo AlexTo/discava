@@ -145,6 +145,8 @@ const consistentTable = (): TableSnapshot => ({
     },
   ],
   assignmentSubmissions: [],
+  certificates: [],
+  videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
 });
 
@@ -198,6 +200,8 @@ describe('checkTableInvariants', () => {
         quizAttempts: [],
         quizSummaries: [],
         assignmentSubmissions: [],
+        certificates: [],
+        videoPositions: [],
         users: [],
       }),
     ).toEqual([]);
@@ -366,6 +370,25 @@ describe('checkTableInvariants', () => {
     it("reports a courseUpdatedAt that isn't the course's updatedAt", () => {
       table.courseInstructors[0].courseUpdatedAt = '2025-12-31T23:59:59.999Z';
       expectOnly('instructor-course-updated-at');
+    });
+
+    // course.setCertificates writes certificatesEnabled, which moves the
+    // course's updatedAt; an instructor row left behind is a violation.
+    it('reports a certificatesEnabled change that did not move courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.certificatesEnabled = !course.certificatesEnabled;
+      course.updatedAt = '2025-06-01T00:00:00.000Z';
+      expectOnly('instructor-course-updated-at');
+    });
+
+    it('accepts a certificatesEnabled change that moved courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.certificatesEnabled = !course.certificatesEnabled;
+      course.updatedAt = '2025-06-01T00:00:00.000Z';
+      for (const row of table.courseInstructors) {
+        row.courseUpdatedAt = course.updatedAt;
+      }
+      expect(broken().invariants).toEqual([]);
     });
   });
 
@@ -889,6 +912,362 @@ describe('submissions (#102)', () => {
       // A late record on an item with no due date: the instructor removed it.
       (submitted() as Record<string, unknown>).late = true;
       expect(violationsOf('assignment-submission-shape')).toEqual([]);
+    });
+  });
+});
+
+describe('21. certificate-shape and 22. certificate-has-completed-enrolment', () => {
+  const COMPLETED = '2026-01-03T00:00:00.000Z';
+  const issued = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = COMPLETED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: COMPLETED,
+      issuedAt: COMPLETED,
+    });
+    return table.certificates[0];
+  };
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  it('finds nothing wrong with a certificate for a completed enrolment', () => {
+    issued();
+    expect(violationsOf('certificate-shape')).toEqual([]);
+    expect(violationsOf('certificate-has-completed-enrolment')).toEqual([]);
+  });
+
+  it.each(['0123456789ABCDE', '0123456789ABCDEI', '0123-4567-89AB-CDEF'])(
+    'reports a bad ID (%s)',
+    (id) => {
+      issued().certificateId = id;
+      expect(violationsOf('certificate-shape')[0]?.message).toMatch(
+        /not 16 Crockford/,
+      );
+    },
+  );
+
+  it('reports a duplicate ID', () => {
+    issued();
+    table.certificates.push({
+      ...table.certificates[0],
+      userId: 'other',
+    });
+    expect(violationsOf('certificate-shape').map((v) => v.message)).toEqual([
+      expect.stringMatching(/more than one/),
+      expect.stringMatching(/more than one/),
+    ]);
+  });
+
+  it.each(['learnerName', 'courseTitle', 'completedAt', 'issuedAt'] as const)(
+    'reports a missing %s',
+    (field) => {
+      (issued() as Record<string, unknown>)[field] = '';
+      expect(
+        violationsOf('certificate-shape').map((v) => v.message),
+      ).toContainEqual(`${field} is missing`);
+    },
+  );
+
+  it('reports issuedAt before completedAt', () => {
+    issued().issuedAt = '2026-01-02T00:00:00.000Z';
+    expect(violationsOf('certificate-shape')[0]?.message).toMatch(
+      /before completedAt/,
+    );
+  });
+
+  it('reports a certificate with no enrolment', () => {
+    issued();
+    table.enrolments = [];
+    expect(
+      violationsOf('certificate-has-completed-enrolment')[0]?.message,
+    ).toMatch(/not enrolled/);
+  });
+
+  it.each(['active', 'dropped'] as const)(
+    'reports a certificate for a %s enrolment',
+    (status) => {
+      issued();
+      table.enrolments[0].status = status;
+      expect(
+        violationsOf('certificate-has-completed-enrolment')[0]?.message,
+      ).toMatch(new RegExp(`is ${status}`));
+    },
+  );
+
+  it('reports a different completedAt', () => {
+    issued();
+    table.enrolments[0].completedAt = '2026-01-04T00:00:00.000Z';
+    expect(
+      violationsOf('certificate-has-completed-enrolment')[0]?.message,
+    ).toMatch(/completedAt differs/);
+  });
+
+  it('reports a missing course', () => {
+    issued();
+    table.courses = [];
+    expect(
+      violationsOf('certificate-has-completed-enrolment').map((v) => v.message),
+    ).toContainEqual(expect.stringMatching(/course that does not exist/));
+  });
+
+  it('does not report certificates off for the course', () => {
+    issued();
+    (table.courses[0] as Record<string, unknown>).certificatesEnabled = false;
+    expect(violationsOf('certificate-shape')).toEqual([]);
+    expect(violationsOf('certificate-has-completed-enrolment')).toEqual([]);
+  });
+
+  it('does not report a completed enrolment without a certificate', () => {
+    issued();
+    table.certificates = [];
+    expect(checkTableInvariants(table)).toEqual([]);
+  });
+
+  it('does not count a student whose only record is a certificate, nor trip student-records checks', () => {
+    issued();
+    table.users.push({ userId: 'someone' });
+    table.enrolments.push({
+      courseId: 'c1',
+      userId: 'someone',
+      status: 'completed',
+      progressPercent: 100,
+      completedAt: COMPLETED,
+    });
+    table.certificates.push({
+      ...table.certificates[0],
+      userId: 'someone',
+      certificateId: '89ABCDEF01234567',
+    });
+    const names = checkTableInvariants(table).map((v) => v.invariant);
+    expect(names).not.toContain('activity-count-matches-students');
+    expect(names.filter((n) => n.startsWith('student-records-'))).toEqual([]);
+  });
+});
+
+describe('video-position-valid', () => {
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  const position = () => ({
+    userId: 'student',
+    courseId: 'c1',
+    lessonId: 'l1',
+    contentItemId: 'video',
+    positionSeconds: 42,
+    versionId: 'nonce-1',
+  });
+
+  it('accepts a valid position, and 0', () => {
+    table.videoPositions.push(position(), {
+      ...position(),
+      contentItemId: 'video-2',
+      positionSeconds: 0,
+    });
+    expect(violationsOf('video-position-valid')).toEqual([]);
+  });
+
+  it.each([
+    ['a negative position', { positionSeconds: -1 }],
+    ['a fractional position', { positionSeconds: 1.5 }],
+    ['a position over the cap', { positionSeconds: 86_401 }],
+    ['a missing versionId', { versionId: '' }],
+  ])('reports %s', (_, change) => {
+    table.videoPositions.push({ ...position(), ...change });
+    expect(violationsOf('video-position-valid')).toHaveLength(1);
+  });
+
+  // A position is not a student record (research R-6): it may outlive its
+  // item, and its student needs no activity count.
+  it('is not a student record: an orphan position trips no other check', () => {
+    table.users.push({ userId: 'someone' });
+    table.videoPositions.push({
+      ...position(),
+      userId: 'someone',
+      contentItemId: 'deleted-video',
+    });
+    expect(checkTableInvariants(table)).toEqual([]);
+  });
+});
+
+describe('captions', () => {
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  const folder = `${prefix}/video`;
+  const track = (language: string, overrides = {}) => ({
+    trackId: `t-${language}`,
+    nonce: 'n1',
+    language,
+    label: language,
+    source: 'uploaded' as const,
+    key: `${folder}/n1/captions/t-${language}.vtt`,
+    isDefault: false,
+    ...overrides,
+  });
+  const withTracks = (...tracks: ReturnType<typeof track>[]) => {
+    item('video').captionTracks = tracks;
+  };
+
+  describe('6. video-transcode-state, caption attributes', () => {
+    it('accepts a ready video with tracks, a status and a revision', () => {
+      Object.assign(item('video'), {
+        captionTracks: [track('en-US', { isDefault: true })],
+        captionTracksRev: 2,
+        captionsStatus: 'ready',
+      });
+      expect(checkTableInvariants(table)).toEqual([]);
+    });
+
+    it('accepts a ready video whose captioning is pending', () => {
+      Object.assign(item('video'), {
+        captionsStatus: 'pending',
+        captionsPendingSince: T,
+      });
+      expect(checkTableInvariants(table)).toEqual([]);
+    });
+
+    it('reports a text item holding captionTracks', () => {
+      item('text').captionTracks = [track('en-US', { isDefault: true })];
+      expect(violationsOf('video-transcode-state')).toHaveLength(1);
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /caption attributes are set on a text item/,
+      );
+    });
+
+    it('reports a pending status on a pending video', () => {
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: undefined,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+        captionsStatus: 'pending',
+        captionsPendingSince: T,
+      });
+      expect(violationsOf('video-transcode-state')).toEqual([
+        expect.objectContaining({
+          message: expect.stringMatching(/pending on a pending video/),
+        }),
+      ]);
+    });
+
+    it('reports a pending status without captionsPendingSince', () => {
+      item('video').captionsStatus = 'pending';
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /without captionsPendingSince/,
+      );
+    });
+
+    it('reports captionsPendingSince without a pending status', () => {
+      Object.assign(item('video'), {
+        captionsStatus: 'ready',
+        captionsPendingSince: T,
+      });
+      expect(violationsOf('video-transcode-state')).toHaveLength(1);
+    });
+  });
+
+  describe('24. caption-tracks-valid', () => {
+    it('accepts a video with no tracks, and a valid list', () => {
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+      withTracks(track('en-US', { isDefault: true }), track('es-ES'));
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports eleven tracks', () => {
+      withTracks(
+        ...Array.from({ length: 11 }, (_, i) =>
+          track(`xx-${i}`, { isDefault: i === 0 }),
+        ),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /11 caption tracks/,
+      );
+    });
+
+    it('accepts the old version’s tracks while a replacement transcodes', () => {
+      withTracks(track('en-US', { isDefault: true }));
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('still reports a track of neither version while one is replaced', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          nonce: 'older',
+          key: `${folder}/older/captions/t.vtt`,
+        }),
+      );
+      Object.assign(item('video'), {
+        status: 'pending',
+        s3Key: `${folder}/upload.mp4`,
+        previousS3Key: `${folder}/n1/master.m3u8`,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      });
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version older, not the current n1/,
+      );
+    });
+
+    it('reports a track whose nonce is not the current one', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          nonce: 'old',
+          key: `${folder}/old/captions/t.vtt`,
+        }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version old, not the current n1/,
+      );
+    });
+
+    it('reports two tracks in one language', () => {
+      withTracks(
+        track('en-US', { isDefault: true }),
+        track('en-US', { trackId: 'other' }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /two caption tracks in en-US/,
+      );
+    });
+
+    it('reports no default, and two defaults', () => {
+      withTracks(track('en-US'));
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /0 default/,
+      );
+      withTracks(
+        track('en-US', { isDefault: true }),
+        track('es-ES', { isDefault: true }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /2 default/,
+      );
+    });
+
+    it('reports a key outside the version’s captions folder', () => {
+      withTracks(
+        track('en-US', {
+          isDefault: true,
+          key: `${prefix}/other-item/n1/captions/t.vtt`,
+        }),
+      );
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /outside the version's captions folder/,
+      );
     });
   });
 });

@@ -108,6 +108,46 @@ describe('studentsToRecalculate', () => {
     expect(enrolled).not.toHaveBeenCalled();
   });
 
+  // Captions are written to the content item, so their records pass the
+  // stream filter (every content item edit does) and are ignored here.
+  it('ignores caption writes: pending after a transcode, a track added, a failure', async () => {
+    enrolled.mockClear();
+    const track = {
+      trackId: 't1',
+      nonce: 'n1',
+      language: 'en-US',
+      label: 'English',
+      source: 'auto',
+      key: 'folder/n1/captions/t1.vtt',
+      isDefault: true,
+    };
+
+    const result = await studentsToRecalculate(
+      [
+        curriculumChange(
+          { captionsStatus: 'pending', captionsPendingSince: 'then' },
+          {
+            captionsStatus: 'ready',
+            captionTracks: [track],
+            captionTracksRev: 1,
+          },
+        ),
+        curriculumChange(
+          { captionsStatus: 'pending' },
+          { captionsStatus: 'failed' },
+        ),
+        curriculumChange(
+          { captionTracks: [track], captionTracksRev: 1 },
+          { captionTracks: [], captionTracksRev: 2 },
+        ),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+    expect(enrolled).not.toHaveBeenCalled();
+  });
+
   it('lists a course’s students once for a burst of changes, together with its completions', async () => {
     enrolled.mockClear();
 
@@ -142,5 +182,63 @@ describe('studentsToRecalculate', () => {
     );
 
     expect(asLists(result)).toEqual({});
+  });
+
+  // Queues deliver a message twice, or out of order (FR-014): what is
+  // recalculated depends on which records are in the batch, never on their
+  // order or on how often one appears.
+  describe('duplicate and reordered batches', () => {
+    const batch = [
+      completion('s1'),
+      completion('s4', 'course-2'),
+      curriculumChange({}, { visibility: 'hidden' }),
+      curriculumChange({}, { archivedAt: '2024-01-01' }, 'lesson'),
+      record('REMOVE', { __edb_e__: 'module', courseId: 'course-3' }),
+    ];
+    const asSets = (result: Map<string, Set<string>>) =>
+      Object.fromEntries(
+        [...result].map(([course, ids]) => [course, [...ids].sort()]),
+      );
+    const listStudents = async (courseId: string) =>
+      courseId === 'course-1' ? ['s1', 's2'] : ['s7'];
+
+    it('gives the same students when every record is delivered twice', async () => {
+      const once = await studentsToRecalculate(batch, listStudents);
+      const twice = await studentsToRecalculate(
+        [...batch, ...batch],
+        listStudents,
+      );
+
+      expect(asSets(twice)).toEqual(asSets(once));
+    });
+
+    it('gives the same students when the records arrive in reverse', async () => {
+      const forward = await studentsToRecalculate(batch, listStudents);
+      const backward = await studentsToRecalculate(
+        [...batch].reverse(),
+        listStudents,
+      );
+
+      expect(asSets(backward)).toEqual(asSets(forward));
+    });
+
+    it('gives the same students when a later record is delivered ahead of an earlier one', async () => {
+      const hidden = curriculumChange({}, { visibility: 'hidden' });
+      const shown = curriculumChange(
+        { visibility: 'hidden' },
+        { visibility: 'visible' },
+      );
+
+      const inOrder = await studentsToRecalculate(
+        [hidden, shown],
+        listStudents,
+      );
+      const swapped = await studentsToRecalculate(
+        [shown, hidden],
+        listStudents,
+      );
+
+      expect(asSets(swapped)).toEqual(asSets(inOrder));
+    });
   });
 });

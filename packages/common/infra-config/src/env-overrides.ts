@@ -69,6 +69,10 @@ const COMPONENT_FIELDS: Record<
     maxReadRequestUnits: 'number',
     maxWriteRequestUnits: 'number',
   },
+  streamRouter: {
+    enableKmsEncryption: 'boolean',
+    enableKeyRotation: 'boolean',
+  },
   studentPortal: {
     enableWaf: 'boolean',
     enableKmsEncryption: 'boolean',

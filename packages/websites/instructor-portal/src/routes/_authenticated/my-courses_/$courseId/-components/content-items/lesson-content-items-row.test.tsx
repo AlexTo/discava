@@ -365,4 +365,75 @@ describe('LessonContentItemsRow', () => {
       ).toBeInTheDocument();
     });
   });
+  describe('a video row', () => {
+    const readyVideo = (extra: Record<string, unknown> = {}) => ({
+      contentItemId: 'v1',
+      type: 'video',
+      title: 'Lecture',
+      status: 'ready',
+      visibility: 'visible' as const,
+      ...extra,
+    });
+
+    it.each([
+      [{ captionsStatus: 'pending' }, 'Captions: generating'],
+      [{ captionsStatus: 'ready', captionTrackCount: 1 }, 'Captions: ready'],
+      [{ captionsStatus: 'failed' }, 'Captions: failed'],
+      [{}, 'Captions: none'],
+    ])('shows the caption status for %j as "%s"', (extra, text) => {
+      renderRow({ contentItems: [readyVideo(extra)] });
+
+      expect(screen.getByText(text)).toBeInTheDocument();
+    });
+
+    it('reads as ready when an upload fixed a failed automatic captioning', () => {
+      renderRow({
+        contentItems: [
+          readyVideo({ captionsStatus: 'failed', captionTrackCount: 1 }),
+        ],
+      });
+
+      expect(screen.getByText('Captions: ready')).toBeInTheDocument();
+    });
+
+    it('opens the captions dialog from the row', async () => {
+      const { user } = renderRow(
+        { contentItems: [readyVideo()] },
+        {
+          'contentItem.createVideoUrl': () => ({
+            url: 'https://media.test/master.m3u8',
+            withCredentials: false,
+            versionId: 'v',
+            captions: [],
+          }),
+        },
+      );
+
+      await user.click(
+        screen.getByRole('button', { name: 'Captions for Lecture' }),
+      );
+
+      expect(
+        await screen.findByRole('dialog', { name: 'Captions' }),
+      ).toBeInTheDocument();
+    });
+
+    it('offers no captions before the video is ready', () => {
+      renderRow({ contentItems: [readyVideo({ status: 'pending' })] });
+
+      expect(screen.queryByText(/^Captions:/)).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Captions for Lecture' }),
+      ).toBeNull();
+    });
+
+    it('in an archived course, shows the status but offers no Captions button', () => {
+      renderRow({ contentItems: [readyVideo()], readOnly: true });
+
+      expect(screen.getByText('Captions: none')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Captions for Lecture' }),
+      ).toBeNull();
+    });
+  });
 });

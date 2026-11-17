@@ -73,7 +73,7 @@ export const localObjectUrl = (runtimeConfigKey: string, key: string): string =>
 
 /**
  * Local dev's event runner (packages/events, `src/local/event-runner.ts`),
- * which also stands in for MediaConvert and EventBridge Scheduler (#137):
+ * which also stands in for MediaConvert, Transcribe and EventBridge Scheduler (#137):
  * instructor-api and the event handlers call it instead of those services
  * in local dev.
  */
@@ -85,6 +85,56 @@ export const LOCAL_EVENT_RUNNER = {
   cleanupDelaySeconds: 60,
 };
 
+/**
+ * ElasticMQ, which stands in for SQS in local dev: the queues local dev's
+ * stream router and feature runners use. Each registered stream feature
+ * (core-table's `STREAM_FEATURES`) has a queue and a failure queue named from
+ * its registration name, and the router has a failure queue of its own for
+ * records it can't send. ElasticMQ keeps messages in memory, so a restart
+ * empties them. `endpoint`, `region` and the dummy credentials are what the
+ * SQS client uses against it.
+ */
+export const LOCAL_QUEUES = {
+  port: 9324,
+  endpoint: `http://${LOCAL_HOST}:9324`,
+  region: 'us-east-1',
+  accountId: '000000000000',
+  // Pinned (the tag is a multi-arch manifest list); see the stream event
+  // router's research.md, R-2.
+  image: 'softwaremill/elasticmq:1.7.1',
+  containerName: 'discava-elasticmq',
+  routerFailureQueue: 'stream-router-failures',
+  // Longer than a feature's 5 s batch window, so a batch being gathered isn't
+  // received a second time, and short enough that retries finish quickly.
+  visibilityTimeoutSeconds: 10,
+};
+
+/** The local queue holding a stream feature's messages. */
+export const localFeatureQueueName = (feature: string): string =>
+  `stream-${feature}`;
+
+/** The local failure queue a stream feature's messages move to. */
+export const localFeatureFailureQueueName = (feature: string): string =>
+  `stream-${feature}-failures`;
+
+/** The URL of a local queue, which the SQS client addresses it by. */
+export const localQueueUrl = (queueName: string): string =>
+  `${LOCAL_QUEUES.endpoint}/${LOCAL_QUEUES.accountId}/${queueName}`;
+
+/** SQS client settings for the local queue service; empty when deployed. */
+export const sqsClientConfig = (): {
+  endpoint?: string;
+  region?: string;
+  credentials?: { accessKeyId: string; secretAccessKey: string };
+} =>
+  isLocalDev()
+    ? {
+        endpoint: LOCAL_QUEUES.endpoint,
+        region: LOCAL_QUEUES.region,
+        credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+      }
+    : {};
+
 /** What submitTranscodeJob asks the event runner to transcode, in local dev. */
 export interface LocalTranscodeJobRequest {
   /** The raw upload, in the lesson media upload bucket. */
@@ -93,6 +143,17 @@ export interface LocalTranscodeJobRequest {
   outputPrefix: string;
   /** As MediaConvert's UserMetadata, carried into the completion event. */
   userMetadata: Record<string, string>;
+}
+
+/** What startCaptionJob asks the event runner to transcribe, in local dev. */
+export interface LocalTranscriptionJobRequest {
+  jobName: string;
+  /** As the Transcribe job's tags: the ids transcribe-complete looks up. */
+  tags: Record<string, string>;
+  /** Where the WebVTT goes: the lesson media bucket's local stand-in. */
+  outputBucket: string;
+  /** Ending in `/`; the file is `<outputKey><jobName>.vtt`. */
+  outputKey: string;
 }
 
 /** A transcode cleanup to run later, in local dev, with Scheduler's payload. */

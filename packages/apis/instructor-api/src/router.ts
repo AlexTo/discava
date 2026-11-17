@@ -10,6 +10,11 @@ import {
   updateContentItemAssignment,
 } from './procedures/assignment.js';
 import {
+  attachContentItemCaption,
+  createContentItemCaptionUploadUrl,
+  removeContentItemCaption,
+} from './procedures/content-item-captions.js';
+import {
   createContentItemFile,
   createContentItemFileUploadUrl,
   createContentItemFileUrl,
@@ -42,6 +47,7 @@ import {
   createCourse,
   publishCourse,
   restoreCourse,
+  setCourseCertificates,
   viewCourse,
 } from './procedures/course.js';
 import {
@@ -77,6 +83,7 @@ export const appRouter = router({
     archive: archiveCourse,
     publish: publishCourse,
     restore: restoreCourse,
+    setCertificates: setCourseCertificates,
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
@@ -112,6 +119,9 @@ export const appRouter = router({
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
     createVideoUrl: createContentItemVideoUrl,
+    captionUploadUrl: createContentItemCaptionUploadUrl,
+    attachCaption: attachContentItemCaption,
+    removeCaption: removeContentItemCaption,
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,

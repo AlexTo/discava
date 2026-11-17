@@ -10,10 +10,19 @@ import {
   uploadUrl,
 } from './procedures/assignment.js';
 import {
+  certificatePdf,
+  myCertificates,
+  verifyCertificate,
+} from './procedures/certificate.js';
+import {
   completeContentItem,
   myItemCompletions,
 } from './procedures/completion.js';
-import { fileUrl, videoUrl } from './procedures/content-item.js';
+import {
+  fileUrl,
+  saveVideoPosition,
+  videoUrl,
+} from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -53,9 +62,15 @@ export const appRouter = router({
     mySubmission,
     submissionFileUrl,
   }),
+  certificate: router({
+    verify: verifyCertificate,
+    myCertificates,
+    pdf: certificatePdf,
+  }),
   contentItem: router({
     complete: completeContentItem,
     videoUrl,
+    saveVideoPosition,
     fileUrl,
   }),
   quiz: router({
@@ -77,4 +92,5 @@ export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
+  'certificate.verify',
 ] as const;
