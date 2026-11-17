@@ -5,6 +5,7 @@
 import {
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsNotificationDelivery,
   EventsProgressRecalculation,
   EventsSearchIndexing,
   EventsStreamRouter,
@@ -12,17 +13,31 @@ import {
   SearchCollection,
   StreamRouter,
 } from '@discava/common-constructs';
-import type { StreamRouterComponentConfig } from '@discava/common-infra-config';
+import type {
+  NotificationsComponentConfig,
+  StreamRouterComponentConfig,
+} from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
 import { Stack, StackProps } from 'aws-cdk-lib';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import type { Function } from 'aws-cdk-lib/aws-lambda';
+import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
 export interface StreamRouterStackProps extends StackProps {
   /** Settings for the stream router's queues. @default all enabled */
   readonly streamRouter?: StreamRouterComponentConfig;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** Sender and SES identity for notification emails. @default no sender, no SES access */
+  readonly notifications?: NotificationsComponentConfig;
+  /** Signs the unsubscribe links the delivery function puts in each email. */
+  readonly notificationUnsubscribeSecret: ISecret;
+  /** The portals' addresses, which a notification's link points into. */
+  readonly portalUrls: { student: string; instructor: string; admin: string };
+  /** core-api's address, which the unsubscribe link points to. */
+  readonly coreApiUrl: string;
 }
 
 /**
@@ -43,6 +58,10 @@ export class StreamRouterStack extends Stack {
       streamRouter: streamRouterConfig,
       coreTable,
       searchCollection,
+      notifications,
+      notificationUnsubscribeSecret,
+      portalUrls,
+      coreApiUrl,
       ...props
     }: StreamRouterStackProps,
   ) {
@@ -57,6 +76,13 @@ export class StreamRouterStack extends Stack {
         searchCollection,
       ),
       'analytics-update': this.createAnalyticsUpdateLambda(coreTable),
+      'notification-delivery': this.createNotificationDeliveryLambda(
+        coreTable,
+        notifications,
+        notificationUnsubscribeSecret,
+        portalUrls,
+        coreApiUrl,
+      ),
     };
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
@@ -117,5 +143,52 @@ export class StreamRouterStack extends Stack {
     this.grantAppConfig(analytics);
     coreTable.grantReadWriteData(analytics);
     return analytics;
+  }
+
+  // Fans a broadcast out to its course's students and emails each
+  // notification, run from its feature's queue. It reads and writes the
+  // table, signs unsubscribe links with the secret, and may send mail only
+  // from the one SES identity the stage configures: with none, it gets no
+  // sender and no SES access, and records each email as not-configured.
+  private createNotificationDeliveryLambda(
+    coreTable: CoreTable,
+    notifications: NotificationsComponentConfig | undefined,
+    unsubscribeSecret: ISecret,
+    portalUrls: StreamRouterStackProps['portalUrls'],
+    coreApiUrl: string,
+  ) {
+    const delivery = new EventsNotificationDelivery(
+      this,
+      'NotificationDelivery',
+    );
+    coreTable.grantReadWriteData(delivery);
+    const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
+    secret.grantRead(delivery);
+    delivery.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
+    delivery.addEnvironment('STUDENT_PORTAL_URL', portalUrls.student);
+    delivery.addEnvironment('INSTRUCTOR_PORTAL_URL', portalUrls.instructor);
+    delivery.addEnvironment('ADMIN_PORTAL_URL', portalUrls.admin);
+    delivery.addEnvironment('CORE_API_URL', coreApiUrl);
+    if (notifications?.fromAddress) {
+      delivery.addEnvironment(
+        'NOTIFICATIONS_FROM_ADDRESS',
+        notifications.fromAddress,
+      );
+    }
+    if (notifications?.sesIdentity) {
+      delivery.addToRolePolicy(
+        new PolicyStatement({
+          actions: ['ses:SendEmail'],
+          resources: [
+            this.formatArn({
+              service: 'ses',
+              resource: 'identity',
+              resourceName: notifications.sesIdentity,
+            }),
+          ],
+        }),
+      );
+    }
+    return delivery;
   }
 }

@@ -111,6 +111,42 @@ const change = (overrides: object = {}) => ({
 });
 
 describe('applyAnalyticsChange', () => {
+  it('adds quiz question and score counters, and touches the summary', async () => {
+    const table = memoryTable();
+    const quiz = (
+      kind: Delta['kind'],
+      sk: string,
+      attribute: string,
+    ): Delta => ({
+      kind,
+      courseId: 'c1',
+      sk,
+      attribute,
+      amount: 1,
+    });
+    await applyAnalyticsChange(
+      coreTable,
+      change({
+        counts: [
+          quiz('quizQuestionStats', 'QUIZ#quiz1#Q#q1', 'attempts'),
+          quiz('quizQuestionStats', 'QUIZ#quiz1#Q#q1', 'misses'),
+          quiz('quizScoreStats', 'QUIZ#quiz1#SCORES', 'band8'),
+        ],
+      }),
+    );
+
+    expect(table.items.get('analytics#c1|quiz#quiz1#q#q1')).toMatchObject({
+      attempts: 1,
+      misses: 1,
+    });
+    expect(table.items.get('analytics#c1|quiz#quiz1#scores')).toMatchObject({
+      band8: 1,
+    });
+    expect(
+      table.transactions[0].some(({ Update }) => Update?.Key.sk === 'summary'),
+    ).toBe(true);
+  });
+
   it('writes the counts and an event marker in one transaction', async () => {
     const table = memoryTable();
     await expect(applyAnalyticsChange(coreTable, change())).resolves.toBe(

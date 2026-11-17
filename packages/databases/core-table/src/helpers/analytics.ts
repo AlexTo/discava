@@ -11,11 +11,22 @@
 // `analytics-matches-records` invariant (the same sum, compared to what is
 // stored). All pure.
 
+export type AggregateKind =
+  | 'courseStats'
+  | 'periodStats'
+  | 'lessonStats'
+  | 'quizQuestionStats'
+  | 'quizScoreStats';
+
 /** An amount to add to one counter of one aggregate item. */
 export interface Delta {
-  kind: 'courseStats' | 'periodStats' | 'lessonStats';
+  kind: AggregateKind;
   courseId: string;
-  /** The item's sort key part: `SUMMARY`, `DAY#<yyyy-mm-dd>`, `WEEK#...` or `LESSON#<lessonId>`. */
+  /**
+   * The item's sort key part: `SUMMARY`, `DAY#<yyyy-mm-dd>`, `WEEK#...`,
+   * `LESSON#<lessonId>`, `QUIZ#<contentItemId>#Q#<questionId>` or
+   * `QUIZ#<contentItemId>#SCORES`.
+   */
   sk: string;
   attribute: string;
   amount: number;
@@ -78,6 +89,74 @@ export const weekKey = (instant: string): string | undefined => {
 
 const text = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
+
+/** The number of score bands of a quiz: 0-9 up to 90-100. */
+export const SCORE_BANDS = 10;
+
+/** The band (0 to 9) a best score falls in; 100 is in the last. */
+const scoreBand = (score: number) =>
+  Math.min(SCORE_BANDS - 1, Math.floor(score / SCORE_BANDS));
+
+/** The sort key of a quiz question's item. */
+export const questionStatsSk = (contentItemId: string, questionId: string) =>
+  `QUIZ#${contentItemId}#Q#${questionId}`;
+
+/** The sort key of a quiz's score distribution item. */
+export const scoreStatsSk = (contentItemId: string) =>
+  `QUIZ#${contentItemId}#SCORES`;
+
+// Each answered question is an attempt at it, and a miss when the attempt
+// graded it incorrect; a question left unanswered isn't in `answers`.
+const questionCounts = (image: Record<string, unknown>): Delta[] => {
+  const courseId = text(image.courseId);
+  const contentItemId = text(image.contentItemId);
+  const { answers, correctQuestionIds } = image;
+  if (
+    !courseId ||
+    !contentItemId ||
+    typeof answers !== 'object' ||
+    answers === null ||
+    !Array.isArray(correctQuestionIds)
+  ) {
+    return [];
+  }
+  const correct = new Set<unknown>(correctQuestionIds);
+  return Object.keys(answers).flatMap((questionId) => {
+    const delta = (attribute: string): Delta => ({
+      kind: 'quizQuestionStats',
+      courseId,
+      sk: questionStatsSk(contentItemId, questionId),
+      attribute,
+      amount: 1,
+    });
+    return correct.has(questionId)
+      ? [delta('attempts')]
+      : [delta('attempts'), delta('misses')];
+  });
+};
+
+const scoreCounts = (image: Record<string, unknown>): Delta[] => {
+  const courseId = text(image.courseId);
+  const contentItemId = text(image.contentItemId);
+  const { bestScore } = image;
+  if (
+    !courseId ||
+    !contentItemId ||
+    typeof bestScore !== 'number' ||
+    !(bestScore >= 0)
+  ) {
+    return [];
+  }
+  return [
+    {
+      kind: 'quizScoreStats',
+      courseId,
+      sk: scoreStatsSk(contentItemId),
+      attribute: `band${scoreBand(bestScore)}`,
+      amount: 1,
+    },
+  ];
+};
 
 const memberContributions = (
   courseId: unknown,
@@ -142,11 +221,12 @@ export const contributions = (entity: string, image: Image): Contributions => {
         image.completedAt,
       );
     case 'quizAttempt':
-      return memberContributions(
-        image.courseId,
-        image.userId,
-        image.submittedAt,
-      );
+      return {
+        ...memberContributions(image.courseId, image.userId, image.submittedAt),
+        counts: questionCounts(image),
+      };
+    case 'quizSummary':
+      return { counts: scoreCounts(image), members: [] };
     default:
       return NONE;
   }
@@ -311,7 +391,7 @@ export const sumContributions = (all: Contributions[]): Contributions => ({
 
 /** One aggregate item: its key and its counters. */
 export interface ExpectedAggregate {
-  kind: 'courseStats' | 'periodStats' | 'lessonStats';
+  kind: AggregateKind;
   courseId: string;
   sk: string;
   counters: Record<string, number>;

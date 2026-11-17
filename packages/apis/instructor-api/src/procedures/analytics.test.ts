@@ -9,6 +9,7 @@ import { t } from '../init.js';
 import {
   course as analyticsCourse,
   analyticsCourseProcedure,
+  quiz as analyticsQuiz,
   courseSummaries,
 } from './analytics.js';
 
@@ -18,18 +19,21 @@ const {
   courseGet,
   readCourseSummaries,
   readCourseAnalytics,
+  readQuizAnalytics,
 } = vi.hoisted(() => ({
   courseInstructorGet: vi.fn(),
   courseInstructorByInstructor: vi.fn(),
   courseGet: vi.fn(),
   readCourseSummaries: vi.fn(),
   readCourseAnalytics: vi.fn(),
+  readQuizAnalytics: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importActual) => ({
   ...(await importActual<typeof import('@discava/core-table')>()),
   readCourseSummaries,
   readCourseAnalytics,
+  readQuizAnalytics,
   createCoreTableService: vi.fn(async () => ({
     entities: {
       course: { get: courseGet },
@@ -44,7 +48,12 @@ vi.mock('@discava/core-table', async (importActual) => ({
 // A course-scoped procedure the authorization matrix is written against once;
 // each later one is added to PROCEDURES.
 const probe = analyticsCourseProcedure.query(() => 'allowed');
-const router = t.router({ courseSummaries, course: analyticsCourse, probe });
+const router = t.router({
+  courseSummaries,
+  course: analyticsCourse,
+  quiz: analyticsQuiz,
+  probe,
+});
 const caller = t.createCallerFactory(router);
 
 const buildEvent = (sub: string, groups: string[]): APIGatewayProxyEvent =>
@@ -87,6 +96,7 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
       activeLearners: 6,
       updatedAt: '2026-11-17T09:00:00.000Z',
       lessons: [],
+      quizzes: [],
       daily: Array.from({ length: days }, (_, i) => ({
         date: `d${i}`,
         enrolments: 0,
@@ -100,6 +110,11 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
 beforeEach(() => {
   vi.clearAllMocks();
   analytics();
+  readQuizAnalytics.mockResolvedValue({
+    questions: [],
+    scoreBands: [],
+    students: 0,
+  });
   courseInstructorGet.mockImplementation(
     ({ courseId, instructorId }: Record<string, string>) => ({
       go: async () => ({
@@ -122,6 +137,11 @@ describe('analyticsCourseProcedure: who may read a course’s analytics', () => 
       name: 'analytics.course',
       call: (c: ReturnType<typeof callAs>, id: string) =>
         c.course({ courseId: id, days: 30 }).then(() => 'allowed'),
+    },
+    {
+      name: 'analytics.quiz',
+      call: (c: ReturnType<typeof callAs>, id: string) =>
+        c.quiz({ courseId: id, contentItemId: 'quiz-1' }).then(() => 'allowed'),
     },
   ];
 
@@ -410,6 +430,28 @@ describe('analytics.course', () => {
     expect(result.quizzes).toEqual([]);
   });
 
+  it('lists the course’s shown quizzes', async () => {
+    analytics({
+      quizzes: [
+        {
+          contentItemId: 'quiz-1',
+          lessonId: 'l1',
+          title: 'Checkpoint',
+          students: 7,
+        },
+      ],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.quizzes).toEqual([
+      {
+        contentItemId: 'quiz-1',
+        lessonId: 'l1',
+        title: 'Checkpoint',
+        students: 7,
+      },
+    ]);
+  });
+
   it.each([30, 90])('gives %i daily entries', async (days) => {
     const result = await callAs().course({ courseId: 'course-1', days });
 
@@ -506,5 +548,104 @@ describe('analytics.course', () => {
       'date',
       'enrolments',
     ]);
+  });
+});
+
+describe('analytics.quiz', () => {
+  const figures = (overrides: Record<string, unknown> = {}) => {
+    readQuizAnalytics.mockResolvedValue({
+      questions: [
+        {
+          questionId: 'q2',
+          text: 'Second',
+          attempts: 8,
+          misses: 6,
+          missRate: 75,
+          ranked: true,
+        },
+        {
+          questionId: 'q1',
+          text: 'First',
+          attempts: 2,
+          misses: 1,
+          missRate: 50,
+          ranked: false,
+        },
+      ],
+      scoreBands: Array.from({ length: 10 }, (_, band) => ({
+        from: band * 10,
+        to: band === 9 ? 100 : band * 10 + 9,
+        students: band === 8 ? 4 : 0,
+      })),
+      students: 4,
+      ...overrides,
+    });
+  };
+  beforeEach(figures);
+
+  it('gives the ranking and the ten score bands', async () => {
+    const result = await callAs().quiz({
+      courseId: 'course-1',
+      contentItemId: 'quiz-1',
+    });
+
+    expect(readQuizAnalytics).toHaveBeenCalledWith(
+      expect.anything(),
+      'course-1',
+      'quiz-1',
+    );
+    expect(result.questions.map(({ questionId }) => questionId)).toEqual([
+      'q2',
+      'q1',
+    ]);
+    expect(result.questions[0]).toEqual({
+      questionId: 'q2',
+      text: 'Second',
+      attempts: 8,
+      misses: 6,
+      missRate: 75,
+      ranked: true,
+    });
+    expect(result.scoreBands).toHaveLength(10);
+    expect(result.scoreBands[8]).toEqual({ from: 80, to: 89, students: 4 });
+    expect(result.students).toBe(4);
+  });
+
+  it('answers NOT_FOUND for a quiz that is not the course’s or does not exist', async () => {
+    readQuizAnalytics.mockResolvedValue(undefined);
+    await expect(
+      callAs().quiz({ courseId: 'course-1', contentItemId: 'other' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('reads nothing for a course the caller does not teach', async () => {
+    await expect(
+      callAs('instructor-2').quiz({
+        courseId: 'course-1',
+        contentItemId: 'quiz-1',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(readQuizAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed quiz id', async () => {
+    await expect(
+      callAs().quiz({ courseId: 'course-1', contentItemId: '' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('contains no student identifier', async () => {
+    const result = await callAs().quiz({
+      courseId: 'course-1',
+      contentItemId: 'quiz-1',
+    });
+    expect(Object.keys(result).sort()).toEqual([
+      'questions',
+      'scoreBands',
+      'students',
+    ]);
+    expect(Object.keys(result.questions[0]).sort()).toEqual(
+      ['attempts', 'misses', 'missRate', 'questionId', 'ranked', 'text'].sort(),
+    );
   });
 });

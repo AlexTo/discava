@@ -2,7 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { readCourseAnalytics, readCourseSummaries } from '@discava/core-table';
+import {
+  readCourseAnalytics,
+  readCourseSummaries,
+  readQuizAnalytics,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -11,6 +15,8 @@ import {
   CourseAnalyticsOutputSchema,
   CourseSummariesOutputSchema,
   type ICourseSummary,
+  QuizAnalyticsInputSchema,
+  QuizAnalyticsOutputSchema,
 } from '../schema/index.js';
 
 // Every procedure about one course's analytics starts here: the caller must
@@ -93,8 +99,8 @@ export const courseSummaries = courseProcedure
     });
   });
 
-// One course's totals, its last 30 or 90 days and its lessons' drop-off. The
-// quizzes are empty until the story that fills them.
+// One course's totals, its last 30 or 90 days, its lessons' drop-off and the
+// quizzes shown to students (the list to open with `quiz`).
 export const course = analyticsCourseProcedure
   .input(CourseAnalyticsInputSchema)
   .output(CourseAnalyticsOutputSchema)
@@ -136,6 +142,30 @@ export const course = analyticsCourseProcedure
           completionShare,
         }),
       ),
-      quizzes: [],
+      quizzes: analytics.quizzes.map(
+        ({ contentItemId, lessonId, title, students }) => ({
+          contentItemId,
+          lessonId,
+          title,
+          students,
+        }),
+      ),
     };
+  });
+
+// One quiz's most-missed questions and score distribution. A quiz that isn't
+// shown in this course answers like one that doesn't exist (NOT_FOUND).
+export const quiz = analyticsCourseProcedure
+  .input(QuizAnalyticsInputSchema)
+  .output(QuizAnalyticsOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const figures = await readQuizAnalytics(
+      ctx.coreTable!,
+      input.courseId,
+      input.contentItemId,
+    );
+    if (!figures) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+    return figures;
   });

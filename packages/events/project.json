@@ -72,6 +72,18 @@
         "path": "src/router/stream-router.ts",
         "name": "stream-router",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/notifications/delivery.ts",
+        "name": "notification-delivery",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/notifications/unsubscribe.ts",
+        "name": "notification-unsubscribe",
+        "iac": "cdk"
       }
     ]
   },

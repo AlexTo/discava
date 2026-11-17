@@ -6,6 +6,7 @@
 import { t } from './init.js';
 import {
   course as analyticsCourse,
+  quiz as analyticsQuiz,
   courseSummaries,
 } from './procedures/analytics.js';
 import {
@@ -85,6 +86,7 @@ export const appRouter = router({
   analytics: router({
     courseSummaries,
     course: analyticsCourse,
+    quiz: analyticsQuiz,
   }),
   course: router({
     create: createCourse,

@@ -14,6 +14,7 @@ import { Alert } from '../../../../components/alert';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { DailyChart } from './-components/daily-chart';
 import { LessonDropOff } from './-components/lesson-drop-off';
+import { QuizPanel } from './-components/quiz-panel';
 import { TotalsRow } from './-components/totals-row';
 
 type Days = 30 | 90;
@@ -161,6 +162,18 @@ function RouteComponent() {
           {analytics.totals.enrolments > 0 && (
             <section aria-label="Lesson drop-off">
               <LessonDropOff lessons={analytics.lessons} />
+            </section>
+          )}
+          {analytics.totals.enrolments > 0 && analytics.quizzes.length > 0 && (
+            <section aria-label="Quizzes" className="space-y-4">
+              <h2 className="text-base font-semibold">Quizzes</h2>
+              {analytics.quizzes.map((quiz) => (
+                <QuizPanel
+                  key={quiz.contentItemId}
+                  courseId={courseId}
+                  quiz={quiz}
+                />
+              ))}
             </section>
           )}
         </>

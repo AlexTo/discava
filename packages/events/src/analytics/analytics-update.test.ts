@@ -70,6 +70,40 @@ const memoryApply = (failFor?: (change: AnalyticsChange) => boolean) => {
 };
 
 describe('analyticsUpdate', () => {
+  it('counts quiz attempts per question and moves a student between score bands', async () => {
+    const { apply, counters } = memoryApply();
+    const summary = (bestScore: number) => ({
+      courseId: 'c1',
+      userId: 'u1',
+      contentItemId: 'quiz1',
+      bestScore,
+    });
+    await analyticsUpdate(
+      batch(
+        record('INSERT', 'quizAttempt', undefined, {
+          courseId: 'c1',
+          userId: 'u1',
+          contentItemId: 'quiz1',
+          answers: { q1: ['a'], q2: ['b'] },
+          correctQuestionIds: ['q1'],
+          submittedAt: '2026-11-17T08:00:00.000Z',
+        }),
+        record('INSERT', 'quizSummary', undefined, summary(50)),
+        record('MODIFY', 'quizSummary', summary(50), summary(90)),
+      ),
+      apply,
+    );
+
+    expect(counters()).toMatchObject({
+      'c1 QUIZ#quiz1#Q#q1 attempts': 1,
+      'c1 QUIZ#quiz1#Q#q2 attempts': 1,
+      'c1 QUIZ#quiz1#Q#q2 misses': 1,
+      'c1 QUIZ#quiz1#SCORES band5': 0,
+      'c1 QUIZ#quiz1#SCORES band9': 1,
+    });
+    expect(counters()['c1 QUIZ#quiz1#Q#q1 misses']).toBeUndefined();
+  });
+
   it('turns enrolment inserts and status changes into counts', async () => {
     const { apply, counters } = memoryApply();
     await analyticsUpdate(
