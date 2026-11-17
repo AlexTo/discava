@@ -3,179 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Badge } from '@discava/common-shadcn/components/ui/badge';
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@discava/common-shadcn/components/ui/chart';
+import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
-import {
-  AlertTriangle,
-  BarChart3,
-  GraduationCap,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
-import { useAuth } from 'react-oidc-context';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { BarChart3, BookOpen } from 'lucide-react';
 import { Alert } from '../../../components/alert';
-import { Spinner } from '../../../components/spinner';
-import { useCoreApi } from '../../../hooks/useCoreApi';
+import {
+  type CourseStatus,
+  courseStatusStyles,
+} from '../../../components/course-status';
+import { useInstructorApi } from '../../../hooks/useInstructorApi';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
 });
 
-// Deterministic pseudo-random helper so mock figures stay stable across
-// re-renders instead of jumping around on every refetch.
-function seededPercent(seed: string, min: number, max: number) {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  }
-  return min + (hash % (max - min + 1));
-}
+const courseStatusLabels: Record<string, CourseStatus> = {
+  draft: 'Draft',
+  published: 'Published',
+  archived: 'Archived',
+};
 
-// Validated categorical palette (see the dataviz skill's reference palette) —
-// fixed hue order, never cycled per-series within the first 8 slots.
-const seriesPalette = [
-  { light: '#2a78d6', dark: '#3987e5' }, // blue
-  { light: '#eb6834', dark: '#d95926' }, // orange
-  { light: '#1baf7a', dark: '#199e70' }, // aqua
-  { light: '#eda100', dark: '#c98500' }, // yellow
-  { light: '#e87ba4', dark: '#d55181' }, // magenta
-  { light: '#008300', dark: '#008300' }, // green
-  { light: '#4a3aa7', dark: '#9085e9' }, // violet
-  { light: '#e34948', dark: '#e66767' }, // red
-];
+const lastUpdated = new Intl.DateTimeFormat('en-AU', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
 
-const progressChartConfig = {
-  completed: {
-    label: 'Completed',
-    theme: { light: '#2a78d6', dark: '#3987e5' },
-  },
-  inProgress: {
-    label: 'In progress',
-    theme: { light: '#eb6834', dark: '#d95926' },
-  },
-  notStarted: {
-    label: 'Not started',
-    theme: { light: '#1baf7a', dark: '#199e70' },
-  },
-} satisfies ChartConfig;
-
-// Illustrative only — no enrollment or lesson-completion tracking exists in
-// the backend yet (see github issue #112), so every figure below is a
-// deterministic mock derived from the course's real id/title.
+// The figures behind each card come from the course's analytics aggregates,
+// which trail the records by a few seconds (see instructor-api's
+// analytics.courseSummaries): the card says when they last changed.
 function RouteComponent() {
-  const auth = useAuth();
-  const instructorId = auth.user?.profile.sub;
-  const trpc = useCoreApi();
-  const coursesQuery = useQuery(
-    trpc.course.listByInstructor.queryOptions(
-      { instructorId: instructorId ?? '', limit: 100 },
-      { enabled: Boolean(instructorId) },
-    ),
+  const trpc = useInstructorApi();
+  const summariesQuery = useQuery(
+    trpc.analytics.courseSummaries.queryOptions(),
   );
-
-  const courses = (coursesQuery.data?.items ?? []).map((course) => {
-    const completed = seededPercent(`${course.courseId}-completed`, 20, 65);
-    const remaining = 100 - completed;
-    const inProgress = seededPercent(
-      `${course.courseId}-inprogress`,
-      10,
-      Math.max(10, remaining - 5),
-    );
-    const notStarted = Math.max(0, remaining - inProgress);
-    const enrolled = seededPercent(`${course.courseId}-enrolled`, 8, 60);
-    const atRisk = seededPercent(`${course.courseId}-atrisk`, 0, 6);
-    return {
-      ...course,
-      completed,
-      inProgress,
-      notStarted,
-      enrolled,
-      atRisk,
-    };
-  });
-
-  const enrollmentChartConfig: ChartConfig = Object.fromEntries(
-    courses.map((course, index) => [
-      course.courseId,
-      {
-        label: course.title,
-        theme: seriesPalette[index % seriesPalette.length],
-      },
-    ]),
-  );
-
-  const weeklyEnrollmentByCourse = Array.from({ length: 8 }, (_, week) => {
-    const row: Record<string, string | number> = { week: `Wk ${week + 1}` };
-    for (const course of courses) {
-      row[course.courseId] = seededPercent(
-        `${course.courseId}-week-${week}`,
-        1,
-        12,
-      );
-    }
-    return row;
-  });
-
-  const totalStudents = courses.reduce((sum, c) => sum + c.enrolled, 0);
-  const totalAtRisk = courses.reduce((sum, c) => sum + c.atRisk, 0);
-  const avgCompletion = courses.length
-    ? Math.round(
-        courses.reduce((sum, c) => sum + c.completed, 0) / courses.length,
-      )
-    : 0;
-  const activeCourses = courses.filter((c) => c.status === 'published');
-
-  const summaryTiles = [
-    {
-      label: 'Enrolled students',
-      value: totalStudents.toLocaleString(),
-      detail: `Across ${courses.length} ${courses.length === 1 ? 'course' : 'courses'}`,
-      icon: Users,
-    },
-    {
-      label: 'Avg completion rate',
-      value: `${avgCompletion}%`,
-      detail: 'Weighted across your courses',
-      icon: GraduationCap,
-    },
-    {
-      label: 'Active courses',
-      value: activeCourses.length.toString(),
-      detail: 'Currently published',
-      icon: BarChart3,
-    },
-    {
-      label: 'At-risk students',
-      value: totalAtRisk.toString(),
-      detail: 'No activity in the last 14 days',
-      icon: AlertTriangle,
-    },
-  ];
+  const courses = summariesQuery.data ?? [];
 
   return (
     <main className="w-full space-y-6 pb-8">
@@ -187,164 +58,120 @@ function RouteComponent() {
           Dashboard
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          See how your courses and students are progressing.
+          See how your courses are doing.
         </p>
       </section>
 
-      {coursesQuery.isLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
-      ) : coursesQuery.isError ? (
-        <Alert type="error" header="Couldn't load your courses">
-          {apiErrorMessage(coursesQuery.error)}
-        </Alert>
-      ) : (
-        <>
-          <section
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            aria-label="Analytics summary"
+      {summariesQuery.isPending ? (
+        <section
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          aria-label="Loading your courses"
+        >
+          {[0, 1, 2].map((placeholder) => (
+            <Skeleton
+              key={placeholder}
+              data-testid="course-card-skeleton"
+              className="h-44 w-full rounded-xl"
+            />
+          ))}
+        </section>
+      ) : summariesQuery.isError ? (
+        <div className="space-y-3">
+          <Alert type="error" header="Couldn't load your courses">
+            {apiErrorMessage(summariesQuery.error)}
+          </Alert>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => summariesQuery.refetch()}
           >
-            {summaryTiles.map((tile) => (
-              <Card key={tile.label} className="gap-2 py-4">
-                <CardContent className="px-5">
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <tile.icon className="size-4" /> {tile.label}
-                  </div>
-                  <p className="mt-1 text-2xl font-bold">{tile.value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {tile.detail}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="size-4" /> Weekly enrollment by course
-                </CardTitle>
-                <CardDescription>
-                  New students enrolled per week, by course, last 8 weeks
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {courses.length > 0 ? (
-                  <ChartContainer
-                    config={enrollmentChartConfig}
-                    className="aspect-auto h-64 w-full"
-                  >
-                    <LineChart data={weeklyEnrollmentByCourse}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        dataKey="week"
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
+            Retry
+          </Button>
+        </div>
+      ) : courses.length === 0 ? (
+        <Card className="border-dashed py-12 text-center">
+          <CardContent>
+            <BookOpen className="mx-auto size-8 text-muted-foreground" />
+            <h2 className="mt-4 font-semibold">
+              You don't teach any courses yet
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create a course, and how it is doing will show here.
+            </p>
+            <Button className="mt-4" asChild>
+              <Link to="/my-courses">Create a course</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <section
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
+          aria-label="Your courses"
+        >
+          {courses.map((course) => {
+            const status = courseStatusLabels[course.status] ?? 'Draft';
+            return (
+              // The course analytics route arrives with the next story; until
+              // it is in the route tree a router Link to it can't type-check,
+              // so this is a plain anchor, which it becomes then.
+              <a
+                key={course.courseId}
+                href={`/dashboard/${encodeURIComponent(course.courseId)}`}
+                className="block h-full"
+              >
+                <Card className="h-full gap-4 transition-shadow hover:shadow-md">
+                  <CardHeader className="px-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <CardTitle
+                        className="text-base leading-5"
+                        role="heading"
+                        aria-level={2}
+                      >
+                        {course.title}
+                      </CardTitle>
+                      <Badge className={courseStatusStyles[status]}>
+                        {status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 px-5">
+                    <dl className="grid grid-cols-3 gap-3">
+                      <Figure label="Enrolments" value={course.enrolments} />
+                      <Figure
+                        label="Active this week"
+                        value={course.activeThisWeek}
                       />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        width={32}
-                      />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <ChartLegend content={<ChartLegendContent />} />
-                      {courses.map((course) => (
-                        <Line
-                          key={course.courseId}
-                          type="monotone"
-                          dataKey={course.courseId}
-                          stroke={`var(--color-${course.courseId})`}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      ))}
-                    </LineChart>
-                  </ChartContainer>
-                ) : (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No courses yet — create one to see enrollment trends here.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <GraduationCap className="size-4" /> Student progress by
-                  course
-                </CardTitle>
-                <CardDescription>
-                  Share of enrolled students at each stage
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {courses.length > 0 ? (
-                  <ChartContainer
-                    config={progressChartConfig}
-                    className="aspect-auto h-64 w-full"
-                  >
-                    <BarChart data={courses} layout="vertical">
-                      <CartesianGrid horizontal={false} />
-                      <XAxis
-                        type="number"
-                        domain={[0, 100]}
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        unit="%"
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="title"
-                        tickLine={false}
-                        axisLine={false}
-                        width={96}
-                        tickFormatter={(value: string) =>
-                          value.length > 14 ? `${value.slice(0, 14)}…` : value
+                      <Figure
+                        label="Completion rate"
+                        value={
+                          course.completionRate === null
+                            ? 'No data'
+                            : `${course.completionRate}%`
                         }
                       />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <ChartLegend content={<ChartLegendContent />} />
-                      <Bar
-                        dataKey="completed"
-                        stackId="progress"
-                        fill="var(--color-completed)"
-                        radius={[4, 0, 0, 4]}
-                      />
-                      <Bar
-                        dataKey="inProgress"
-                        stackId="progress"
-                        fill="var(--color-inProgress)"
-                      />
-                      <Bar
-                        dataKey="notStarted"
-                        stackId="progress"
-                        fill="var(--color-notStarted)"
-                        radius={[0, 4, 4, 0]}
-                      />
-                    </BarChart>
-                  </ChartContainer>
-                ) : (
-                  <p className="py-8 text-center text-sm text-muted-foreground">
-                    No courses yet — create one to see progress breakdowns here.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-        </>
+                    </dl>
+                    <p className="text-xs text-muted-foreground">
+                      {course.updatedAt
+                        ? `Last updated ${lastUpdated.format(new Date(course.updatedAt))}`
+                        : 'No activity yet'}
+                    </p>
+                  </CardContent>
+                </Card>
+              </a>
+            );
+          })}
+        </section>
       )}
-
-      <div className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-        <BarChart3 className="size-4 shrink-0" /> Course titles are live;
-        enrollment, completion, and trend figures shown here are illustrative
-        placeholders until enrollment and lesson-completion tracking exist.
-      </div>
     </main>
+  );
+}
+
+function Figure({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 text-xl font-bold">{value}</dd>
+    </div>
   );
 }

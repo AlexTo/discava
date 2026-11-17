@@ -4,6 +4,7 @@
  */
 import {
   CoreTable,
+  EventsAnalyticsUpdate,
   EventsProgressRecalculation,
   EventsSearchIndexing,
   EventsStreamRouter,
@@ -14,6 +15,7 @@ import {
 import type { StreamRouterComponentConfig } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
 import { Stack, StackProps } from 'aws-cdk-lib';
+import type { Function } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
 export interface StreamRouterStackProps extends StackProps {
@@ -27,7 +29,7 @@ export interface StreamRouterStackProps extends StackProps {
  * The only reader of the core table's stream and everything it feeds: the
  * router Lambda, one queue (with a failure queue and an alarm) per registered
  * feature in core-table's `STREAM_FEATURES`, and the feature handlers those
- * queues invoke (progress recalculation and search indexing). Kept apart from
+ * queues invoke (progress recalculation, search indexing and analytics). Kept apart from
  * CoreApi so a feature's queues and handler don't count against that stack's
  * resource limit, and depends on Data only.
  */
@@ -54,6 +56,7 @@ export class StreamRouterStack extends Stack {
         coreTable,
         searchCollection,
       ),
+      'analytics-update': this.createAnalyticsUpdateLambda(coreTable),
     };
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
@@ -70,7 +73,7 @@ export class StreamRouterStack extends Stack {
   // stack depends on, so the id is a plain cross-stack reference. The
   // configuration's content is in RuntimeConfig, which deploys last and
   // depends on every stack that grants here, so no cycle appears.
-  private grantAppConfig(handler: EventsProgressRecalculation) {
+  private grantAppConfig(handler: Function) {
     const runtimeConfig = RuntimeConfig.ensure(this);
     handler.addEnvironment(
       'RUNTIME_CONFIG_APP_ID',
@@ -104,5 +107,15 @@ export class StreamRouterStack extends Stack {
     coreTable.grantReadData(indexing);
     searchCollection.grantWrite(indexing.role!);
     return indexing;
+  }
+
+  // The single writer of the instructor dashboard's analytics aggregates, run
+  // from its feature's queue. It reads no other record: each change carries
+  // what it adds, so it only writes the table.
+  private createAnalyticsUpdateLambda(coreTable: CoreTable) {
+    const analytics = new EventsAnalyticsUpdate(this, 'AnalyticsUpdate');
+    this.grantAppConfig(analytics);
+    coreTable.grantReadWriteData(analytics);
+    return analytics;
   }
 }

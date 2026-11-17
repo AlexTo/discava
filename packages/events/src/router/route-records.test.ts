@@ -72,7 +72,7 @@ describe('routeRecords', () => {
 
   it('produces nothing for a record no feature wants', () => {
     const { messages, refused } = routeRecords([
-      record('1', 'MODIFY', 'progress'),
+      record('1', 'MODIFY', 'courseStats'),
     ]);
     expect(messages.size).toBe(0);
     expect(refused).toEqual([]);

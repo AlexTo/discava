@@ -8,16 +8,22 @@ import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
+import type { createCourseStatsEntity } from '../entities/course-stats.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
 import type { createLessonEntity } from '../entities/lesson.js';
+import type { createLessonStatsEntity } from '../entities/lesson-stats.js';
 import type { createModuleEntity } from '../entities/module.js';
+import type { createPeriodStatsEntity } from '../entities/period-stats.js';
 import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
+import type { createQuizQuestionStatsEntity } from '../entities/quiz-question-stats.js';
+import type { createQuizScoreStatsEntity } from '../entities/quiz-score-stats.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
 import type { createUserEntity } from '../entities/user.js';
 import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
+import { aggregatesOf, contributions, sumContributions } from './analytics.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
 import { computeProgress } from './progress.js';
 import { isValidPosition } from './video-position.js';
@@ -96,6 +102,7 @@ export interface TableSnapshot {
     | 'progressPercent'
     | 'completedAt'
     | 'lastActivityAt'
+    | 'createdAt'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -165,6 +172,28 @@ export interface TableSnapshot {
     | 'versionId'
   >[];
   users: Pick<Item<typeof createUserEntity>, 'userId'>[];
+  // The analytics aggregates (not their markers, which only guard against
+  // double counting).
+  courseStats: Pick<
+    Item<typeof createCourseStatsEntity>,
+    'courseId' | 'enrolments' | 'completed' | 'dropped'
+  >[];
+  periodStats: Pick<
+    Item<typeof createPeriodStatsEntity>,
+    'courseId' | 'periodKey' | 'enrolments' | 'activeLearners'
+  >[];
+  lessonStats: Pick<
+    Item<typeof createLessonStatsEntity>,
+    'courseId' | 'lessonId' | 'inProgress' | 'completed'
+  >[];
+  quizQuestionStats: Pick<
+    Item<typeof createQuizQuestionStatsEntity>,
+    'courseId' | 'contentItemId' | 'questionId' | 'attempts' | 'misses'
+  >[];
+  quizScoreStats: Pick<
+    Item<typeof createQuizScoreStatsEntity>,
+    'courseId' | 'contentItemId'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -193,6 +222,7 @@ export const INVARIANTS = [
   'certificate-has-completed-enrolment',
   'video-position-valid',
   'caption-tracks-valid',
+  'analytics-matches-records',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1326,6 +1356,84 @@ export const checkVideoPositionValid = (
     );
   });
 
+// 26. A course's analytics aggregates equal the sums of what its records
+// contribute: `contributions` (helpers/analytics.ts) summed over its
+// enrolments, completions and quiz attempts. The stream handler keeps them
+// current a few seconds behind the records, so a check right after a change
+// may see a difference that closes (the e2e suite waits, see
+// `waitForAnalytics`). A missing item counts as zeros. Only the summary and
+// period items are compared so far; the lesson and quiz aggregates are not
+// written yet.
+export const checkAnalyticsMatchesRecords = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const expected = aggregatesOf(
+    sumContributions([
+      ...snapshot.enrolments.map((r) => contributions('enrolment', r)),
+      ...snapshot.itemCompletions.map((r) =>
+        contributions('itemCompletion', r),
+      ),
+      ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+    ]),
+  );
+  const stored = [
+    ...snapshot.courseStats.map(({ courseId, ...counters }) => ({
+      courseId,
+      sk: 'SUMMARY',
+      counters: counters as Record<string, number | undefined>,
+    })),
+    ...snapshot.periodStats.map(({ courseId, periodKey, ...counters }) => ({
+      courseId,
+      sk: periodKey,
+      counters: counters as Record<string, number | undefined>,
+    })),
+  ];
+
+  const items = new Map<
+    string,
+    {
+      courseId: string;
+      sk: string;
+      expected: Record<string, number>;
+      stored: Record<string, number | undefined>;
+    }
+  >();
+  const entry = (courseId: string, sk: string) => {
+    const key = `${courseId} ${sk}`;
+    const found = items.get(key) ?? { courseId, sk, expected: {}, stored: {} };
+    items.set(key, found);
+    return found;
+  };
+  for (const item of expected) {
+    entry(item.courseId, item.sk).expected = item.counters;
+  }
+  for (const item of stored) {
+    entry(item.courseId, item.sk).stored = item.counters;
+  }
+
+  return [...items.values()].flatMap(({ courseId, sk, expected, stored }) =>
+    [...new Set([...Object.keys(expected), ...Object.keys(stored)])]
+      .filter((attribute) =>
+        ['enrolments', 'completed', 'dropped', 'activeLearners'].includes(
+          attribute,
+        ),
+      )
+      .flatMap((attribute) => {
+        const has = stored[attribute] ?? 0;
+        const should = expected[attribute] ?? 0;
+        return has === should
+          ? []
+          : [
+              violation(
+                'analytics-matches-records',
+                { courseId, item: sk },
+                `${attribute} is ${has}, but its records add up to ${should}`,
+              ),
+            ];
+      }),
+  );
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1352,6 +1460,7 @@ const CHECKS = [
   checkCertificateHasCompletedEnrolment,
   checkVideoPositionValid,
   checkCaptionTracksValid,
+  checkAnalyticsMatchesRecords,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1381,6 +1490,11 @@ export const loadTableSnapshot = async (
     certificates,
     videoPositions,
     users,
+    courseStats,
+    periodStats,
+    lessonStats,
+    quizQuestionStats,
+    quizScoreStats,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1396,6 +1510,11 @@ export const loadTableSnapshot = async (
     entities.certificate.scan.go(all),
     entities.videoPosition.scan.go(all),
     entities.user.scan.go(all),
+    entities.courseStats.scan.go(all),
+    entities.periodStats.scan.go(all),
+    entities.lessonStats.scan.go(all),
+    entities.quizQuestionStats.scan.go(all),
+    entities.quizScoreStats.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1412,5 +1531,10 @@ export const loadTableSnapshot = async (
     certificates: certificates.data,
     videoPositions: videoPositions.data,
     users: users.data,
+    courseStats: courseStats.data,
+    periodStats: periodStats.data,
+    lessonStats: lessonStats.data,
+    quizQuestionStats: quizQuestionStats.data,
+    quizScoreStats: quizScoreStats.data,
   };
 };

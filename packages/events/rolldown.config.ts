@@ -51,6 +51,17 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
+    input: 'src/analytics/analytics-update.ts',
+    output: {
+      file: '../../dist/packages/events/bundle/lambda/analytics-update/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
+  {
+    tsconfig: 'tsconfig.lib.json',
     input: 'src/progress/progress-recalculation.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/progress-recalculation/index.js',

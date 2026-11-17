@@ -3,12 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { beforeEach, describe, expect, it } from 'vitest';
+import { aggregatesOf, contributions, sumContributions } from './analytics.js';
 import {
-  checkTableInvariants,
+  checkTableInvariants as checkAllInvariants,
   type InvariantName,
   type TableSnapshot,
   violationId,
 } from './invariants.js';
+
+// Most tests below change a table's records to break one rule, and should not
+// also trip the analytics rule because the aggregates no longer match them.
+// This checks the table with its aggregates recomputed from its records; the
+// rule itself is tested on its own, with `checkAllInvariants`, at the end.
+const checkTableInvariants = (snapshot: TableSnapshot) => {
+  const items = aggregatesOf(
+    sumContributions([
+      ...snapshot.enrolments.map((r) => contributions('enrolment', r)),
+      ...snapshot.itemCompletions.map((r) =>
+        contributions('itemCompletion', r),
+      ),
+      ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+    ]),
+  );
+  return checkAllInvariants({
+    ...snapshot,
+    courseStats: items
+      .filter(({ kind }) => kind === 'courseStats')
+      .map(({ courseId, counters }) => ({
+        courseId,
+        enrolments: 0,
+        completed: 0,
+        dropped: 0,
+        ...counters,
+      })),
+    periodStats: items
+      .filter(({ kind }) => kind === 'periodStats')
+      .map(({ courseId, sk, counters }) => ({
+        courseId,
+        periodKey: sk,
+        enrolments: 0,
+        activeLearners: 0,
+        ...counters,
+      })),
+  });
+};
 
 const INVARIANTS_UNDER_TEST: InvariantName[] = [
   'activity-count-matches-students',
@@ -99,6 +137,7 @@ const consistentTable = (): TableSnapshot => ({
       status: 'active',
       progressPercent: 50,
       lastActivityAt: AT.a2,
+      createdAt: T,
     },
   ],
   itemCompletions: [
@@ -148,6 +187,32 @@ const consistentTable = (): TableSnapshot => ({
   certificates: [],
   videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
+  // What the stream handler leaves for the records above: one enrolment on
+  // 1 January, and the student active on 2 January (week 1 of 2026).
+  courseStats: [{ courseId: 'c1', enrolments: 1, completed: 0, dropped: 0 }],
+  periodStats: [
+    {
+      courseId: 'c1',
+      periodKey: 'DAY#2026-01-01',
+      enrolments: 1,
+      activeLearners: 0,
+    },
+    {
+      courseId: 'c1',
+      periodKey: 'DAY#2026-01-02',
+      enrolments: 0,
+      activeLearners: 1,
+    },
+    {
+      courseId: 'c1',
+      periodKey: 'WEEK#2026-W01',
+      enrolments: 0,
+      activeLearners: 1,
+    },
+  ],
+  lessonStats: [],
+  quizQuestionStats: [],
+  quizScoreStats: [],
 });
 
 let table: TableSnapshot;
@@ -203,6 +268,11 @@ describe('checkTableInvariants', () => {
         certificates: [],
         videoPositions: [],
         users: [],
+        courseStats: [],
+        periodStats: [],
+        lessonStats: [],
+        quizQuestionStats: [],
+        quizScoreStats: [],
       }),
     ).toEqual([]);
   });
@@ -1269,6 +1339,93 @@ describe('captions', () => {
         /outside the version's captions folder/,
       );
     });
+  });
+});
+
+describe('26. analytics-matches-records', () => {
+  const violations = () =>
+    checkAllInvariants(table).filter(
+      (v) => v.invariant === 'analytics-matches-records',
+    );
+
+  it('passes when the aggregates equal the sums over the records', () => {
+    expect(violations()).toEqual([]);
+  });
+
+  it('passes for a course with no enrolments and no items', () => {
+    table.enrolments = [];
+    table.itemCompletions = [];
+    table.quizAttempts = [];
+    table.quizSummaries = [];
+    table.progress = [];
+    table.courseStats = [];
+    table.periodStats = [];
+    expect(violations()).toEqual([]);
+  });
+
+  it('reports an enrolments count that is off by one, with the course', () => {
+    table.courseStats = [
+      { courseId: 'c1', enrolments: 2, completed: 0, dropped: 0 },
+    ];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'enrolments is 2, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a completed count for a status nobody has', () => {
+    table.courseStats = [
+      { courseId: 'c1', enrolments: 1, completed: 1, dropped: 0 },
+    ];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'completed is 1, but its records add up to 0',
+      }),
+    ]);
+  });
+
+  it('expects a completed count for a completed enrolment', () => {
+    table.enrolments[0].status = 'completed';
+    expect(violations().map((v) => v.message)).toEqual([
+      'completed is 0, but its records add up to 1',
+    ]);
+  });
+
+  it('reports a missing summary for a course with enrolments', () => {
+    table.courseStats = [];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'enrolments is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a day with the wrong number of active learners', () => {
+    table.periodStats[1].activeLearners = 2;
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'DAY#2026-01-02' },
+        message: 'activeLearners is 2, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports aggregates for a course that has no records', () => {
+    table.courseStats.push({
+      courseId: 'gone',
+      enrolments: 1,
+      completed: 0,
+      dropped: 0,
+    });
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'gone', item: 'SUMMARY' },
+      }),
+    ]);
   });
 });
 

@@ -9,6 +9,39 @@ export {
 } from './client.js';
 export * from './entities/index.js';
 export {
+  aggregatesOf,
+  type Contributions,
+  contributions,
+  contributionsOfChange,
+  type Delta,
+  dayKey,
+  diffContributions,
+  type ExpectedAggregate,
+  type Member,
+  mergeCounts,
+  sumContributions,
+  weekKey,
+} from './helpers/analytics.js';
+export {
+  type CourseSummary,
+  readCourseSummaries,
+} from './helpers/analytics-reads.js';
+export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';
+export {
+  ANALYTICS_STREAM_FILTERS,
+  type AnalyticsStreamRecord,
+  matchesAnalyticsStreamFilters,
+} from './helpers/analytics-stream.js';
+export {
+  type WaitForAnalyticsOptions,
+  waitForAnalytics,
+} from './helpers/analytics-wait.js';
+export {
+  type AnalyticsChange,
+  type AnalyticsChangeResult,
+  applyAnalyticsChange,
+} from './helpers/analytics-writes.js';
+export {
   type AssignmentSubmissionFile,
   type AssignmentSubmissionWrite,
   assignmentSubmissionWrites,
@@ -48,6 +81,7 @@ export {
 } from './helpers/curriculum.js';
 export { isConditionalCheckFailed } from './helpers/errors.js';
 export {
+  checkAnalyticsMatchesRecords,
   checkTableInvariants,
   INVARIANTS,
   type InvariantName,
