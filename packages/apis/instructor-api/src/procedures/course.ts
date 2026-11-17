@@ -26,6 +26,8 @@ import {
   PublishCourseOutputSchema,
   RestoreCourseInputSchema,
   RestoreCourseOutputSchema,
+  SetCourseCertificatesInputSchema,
+  SetCourseCertificatesOutputSchema,
   ViewCourseInputSchema,
   ViewCourseOutputSchema,
 } from '../schema/index.js';
@@ -49,7 +51,9 @@ export const createCourse = courseProcedure
     // written attributes, so fetch the course back once the write commits.
     const { canceled } = await coreTable.transaction
       .write((entities) => [
-        entities.course.create({ courseId, title, description }).commit(),
+        entities.course
+          .create({ courseId, title, description, certificatesEnabled: true })
+          .commit(),
         entities.courseInstructor
           .create({ courseId, instructorId: currentUser, courseUpdatedAt })
           .commit(),
@@ -283,6 +287,32 @@ export const restoreCourse = courseProcedure
       }
       throw courseChanged();
     }
+  });
+
+// Whether completing the course issues a certificate. It only decides what
+// happens from now on: certificates already issued are neither read nor
+// written. Allowed in any course status.
+export const setCourseCertificates = courseProcedure
+  .input(SetCourseCertificatesInputSchema)
+  .output(SetCourseCertificatesOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable!;
+    const { courseId, enabled } = input;
+
+    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+
+    const { data: course } = await coreTable.entities.course
+      .patch({ courseId })
+      .set({ certificatesEnabled: enabled })
+      .go({ response: 'all_new' });
+
+    await refreshInstructorCourseUpdatedAt(
+      coreTable,
+      courseId,
+      course.updatedAt,
+    );
+
+    return course;
   });
 
 // The course editor's view: the whole curriculum, including hidden and

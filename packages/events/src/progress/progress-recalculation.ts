@@ -16,6 +16,7 @@ import {
 } from '@discava/core-table';
 import middy from '@middy/core';
 import { z } from 'zod';
+import { sqsToStreamRecords } from '../router/sqs-stream-records.js';
 import {
   listEnrolledStudents,
   loadCurriculum,
@@ -152,5 +153,6 @@ export const handler = middy()
   .use(captureLambdaHandler(tracer))
   .use(injectLambdaContext(logger))
   .use(logMetrics(metrics))
+  .use(sqsToStreamRecords())
   .use(parser({ schema: DynamoDBStreamSchema }))
   .handler(progressRecalculation);

@@ -92,3 +92,77 @@ describe('byTranscodePending', () => {
     expect(UpdateExpression).not.toContain('gsi1');
   });
 });
+
+describe('caption attributes', () => {
+  const track = {
+    trackId: 'track-1',
+    nonce: 'n1',
+    language: 'en-US',
+    label: 'English',
+    source: 'auto' as const,
+    key: 'courses/c/modules/m/lessons/l/content-items/i/n1/captions/track-1.vtt',
+    isDefault: true,
+  };
+
+  it('stores tracks, status and revision on a video', () => {
+    const { Item } = contentItem
+      .create({
+        ...item,
+        type: 'video',
+        status: 'ready',
+        captionTracks: [track],
+        captionTracksRev: 1,
+        captionsStatus: 'ready',
+      })
+      .params();
+
+    expect(Item).toMatchObject({
+      captionTracks: [track],
+      captionTracksRev: 1,
+      captionsStatus: 'ready',
+    });
+  });
+
+  it('indexes nothing for them', () => {
+    const { Item } = contentItem
+      .create({
+        ...item,
+        type: 'video',
+        status: 'ready',
+        captionsStatus: 'pending',
+        captionsPendingSince: SINCE.toISOString(),
+      })
+      .params();
+
+    expect(Item).not.toHaveProperty('gsi1pk');
+  });
+
+  it('refuses a track whose source is neither auto nor uploaded', () => {
+    expect(() =>
+      contentItem
+        .create({
+          ...item,
+          type: 'video',
+          status: 'ready',
+          captionTracks: [{ ...track, source: 'other' as never }],
+        })
+        .params(),
+    ).toThrow();
+  });
+
+  it('patches the list with a revision condition', () => {
+    const { UpdateExpression, ConditionExpression } = contentItem
+      .patch(key)
+      .set({ captionTracks: [track] })
+      .add({ captionTracksRev: 1 })
+      .where(
+        (attr, op) =>
+          `${op.eq(attr.captionTracksRev, 0)} AND ${op.contains(attr.s3Key, '/n1/')}`,
+      )
+      .params();
+
+    expect(UpdateExpression).toContain('captionTracks');
+    expect(UpdateExpression).toContain('ADD');
+    expect(ConditionExpression).toContain('contains');
+  });
+});

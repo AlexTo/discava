@@ -6,51 +6,71 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { Logger } from '@aws-lambda-powertools/logger';
 import { DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBStreamsClient } from '@aws-sdk/client-dynamodb-streams';
 import { S3Client } from '@aws-sdk/client-s3';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import {
   LOCAL_EVENT_RUNNER,
+  LOCAL_QUEUES,
   localBucketName,
+  localFeatureFailureQueueName,
+  localFeatureQueueName,
+  localQueueUrl,
   s3ClientConfig,
+  sqsClientConfig,
 } from '@discava/common-server-utils/local-dev';
 import {
   dynamoDBClientConfig,
   getDynamoDBClient,
-  matchesProgressStreamFilters,
-  matchesSearchStreamFilters,
   resolveTableName,
+  STREAM_FEATURES,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
 import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
-import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
-import { handler as searchIndexing } from '../search/index-content.js';
-import { createBatcher, pollStream } from './dynamodb-stream.js';
+import { applyTranscribeOutcome } from '../media/transcribe-outcome.js';
+import { HANDLERS } from '../router/handlers.js';
+import { createSqsQueueClient } from '../router/queue-client.js';
+import { createStreamRouter } from '../router/stream-router.js';
+import { pollStream } from './dynamodb-stream.js';
 import { startEventRunnerServer } from './event-runner-server.js';
+import { createFeatureRunner } from './feature-runner.js';
 import { createTranscoder, type Docker } from './transcoder.js';
+import { createTranscriber } from './transcriber.js';
 import {
   preTokenGenerationEvent,
   transcodeCompletionEvent,
 } from './trigger-events.js';
+import { waitForQueue } from './wait-for-queue.js';
 
 // Local dev's event runner (#137): what AWS does to trigger the event handlers
 // when deployed, done locally, so local changes reach the same handler logic.
 // Each trigger gets the event shape it delivers; most call the real exported
-// handler. Failures are logged, not retried; AWS's retries, batch bisecting
-// and failure queues are only on dev.
+// handler. Failures are logged, not retried (the stream features below have
+// their own retries and failure queues); AWS's batch bisecting is only on dev.
 //
 // Triggers so far:
-// - the core table's stream -> progress-recalculation, filtered and batched
-//   like its event source mapping (PROGRESS_STREAM_FILTERS, 100 records or
-//   5 s)
-// - the core table's stream -> search-indexing, filtered and batched the
-//   same way (SEARCH_STREAM_FILTERS); reset-local-data also wipes the local
-//   OpenSearch container's indices (#53)
+// - the core table's stream -> the stream router (the deployed router's
+//   code, over the same STREAM_FEATURES registry) -> one queue per feature ->
+//   one feature runner per feature, which batches by the registration (100
+//   records or 5 s), runs the handler (progress-recalculation,
+//   search-indexing) and retries a failed batch after the queue's visibility
+//   timeout, moving a message to the feature's failure queue after its
+//   maxReceiveCount receives. The queues are ElasticMQ's (Docker, in memory,
+//   so a restart empties them), the one stand-in for SQS. GET /router/queues,
+//   POST /router/redrive/<feature> and POST /router/fail/<feature> inspect,
+//   replay and fail them; reset-local-data
+//   also wipes the local OpenSearch container's indices (#53)
 // - a local transcode finishing -> transcode-complete, with the EventBridge
 //   event MediaConvert would emit (the transcoder stands in for MediaConvert;
 //   instructor-api submits and cancels jobs on LOCAL_EVENT_RUNNER.port)
+// - a transcription job (POST /transcription-jobs; the transcriber stands in
+//   for Transcribe, writing a placeholder WebVTT) finishing ->
+//   applyTranscribeOutcome, called directly as transcribe-complete does after
+//   it looks the job up
 // - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
 //   payload, the schedule's delaySeconds (default LOCAL_EVENT_RUNNER.cleanupDelaySeconds)
 //   after it's scheduled
@@ -60,6 +80,8 @@ import {
 if (process.env.LOCAL_DEV !== 'true') {
   throw new Error('The event runner is for local dev only (LOCAL_DEV=true)');
 }
+
+const outcomeLogger = new Logger({ serviceName: 'TranscribeComplete' });
 
 const log = (message: string, details?: unknown) =>
   console.log(
@@ -96,23 +118,71 @@ const invoke = async (
   }
 };
 
-const progressBatches = createBatcher<DynamoDBRecord>({
-  maxRecords: 100,
-  windowMs: 5000,
-  deliver: async (Records) => {
-    log(`progress-recalculation <- ${Records.length} stream record(s)`);
-    await invoke('progress-recalculation', progressRecalculation, { Records });
-  },
-});
+// A stream feature's handler, run as a failed Lambda invocation would: a throw
+// is for the feature runner to retry.
+const runFeatureHandler = async (
+  name: string,
+  handler: (event: never, context: Context) => Promise<unknown>,
+  event: unknown,
+) => {
+  await handler(event as never, lambdaContext(name));
+};
 
-const searchBatches = createBatcher<DynamoDBRecord>({
-  maxRecords: 100,
-  windowMs: 5000,
-  deliver: async (Records) => {
-    log(`search-indexing <- ${Records.length} stream record(s)`);
-    await invoke('search-indexing', searchIndexing, { Records });
-  },
+// ElasticMQ, whose queues (and visibility timeout, which outlasts a feature's
+// 5 s batch window so a batch being gathered isn't received a second time) are
+// created from the registry when its container starts.
+const queue = createSqsQueueClient(new SQSClient(sqsClientConfig()));
+const routerQueues = new Map(
+  STREAM_FEATURES.map((feature) => [
+    feature.name,
+    {
+      feature,
+      queueName: localQueueUrl(localFeatureQueueName(feature.name)),
+      failureQueueName: localQueueUrl(
+        localFeatureFailureQueueName(feature.name),
+      ),
+    },
+  ]),
+);
+const streamRouter = createStreamRouter({
+  queue,
+  queueFor: (feature) => localQueueUrl(localFeatureQueueName(feature)),
+  failureQueue: localQueueUrl(LOCAL_QUEUES.routerFailureQueue),
 });
+const featureRunners = new Map(
+  [...routerQueues].map(([name, { feature, queueName, failureQueueName }]) => {
+    const handler = HANDLERS[feature.handler as keyof typeof HANDLERS];
+    return [
+      name,
+      createFeatureRunner({
+        feature,
+        queue,
+        queueName,
+        failureQueueName,
+        run: (event) => runFeatureHandler(name, handler, event),
+        log,
+      }),
+    ] as const;
+  }),
+);
+
+// The router retries the records it reports, as the stream mapping would.
+const ROUTER_ATTEMPTS = 3;
+const routeRecordsLocally = async (records: DynamoDBRecord[]) => {
+  let pending = records;
+  for (let attempt = 1; pending.length > 0; attempt++) {
+    const { batchItemFailures } = await streamRouter({ Records: pending });
+    if (batchItemFailures.length === 0) return;
+    const failed = new Set(batchItemFailures.map((f) => f.itemIdentifier));
+    pending = pending.filter((r) =>
+      failed.has(r.dynamodb?.SequenceNumber ?? ''),
+    );
+    if (attempt >= ROUTER_ATTEMPTS) {
+      log(`stream router gave up on ${pending.length} record(s)`, pending);
+      return;
+    }
+  }
+};
 
 // The ffmpeg image (#137 has the comparison): /ffmpeg is its entrypoint,
 // /ffprobe beside it. Pinned, at least 2 weeks old when chosen.
@@ -167,10 +237,17 @@ const transcoder = createTranscoder({
   log,
 });
 
+const transcriber = createTranscriber({
+  s3: new S3Client(s3ClientConfig()),
+  onFinished: (outcome) => applyTranscribeOutcome(outcomeLogger, outcome),
+  log,
+});
+
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
+  submitTranscriptionJob: (request) => transcriber.submit(request),
   scheduleTranscodeCleanup: ({ payload, delaySeconds }) => {
     const delay = delaySeconds ?? LOCAL_EVENT_RUNNER.cleanupDelaySeconds;
     log(
@@ -192,14 +269,60 @@ const server = startEventRunnerServer({
       );
     }
   },
+  routerQueues: async () => ({
+    features: await Promise.all(
+      [...routerQueues.values()].map(async (entry) => {
+        const [main, failed] = await Promise.all([
+          queue.depth(entry.queueName),
+          queue.depth(entry.failureQueueName),
+        ]);
+        return {
+          name: entry.feature.name,
+          queue: main,
+          failures: { count: failed.waiting + failed.inFlight },
+        };
+      }),
+    ),
+  }),
+  redriveFeature: async (name) => {
+    const entry = routerQueues.get(name);
+    if (!entry) return undefined;
+    let redriven = 0;
+    for (;;) {
+      const messages = await queue.receive(entry.failureQueueName, 10, 0);
+      if (messages.length === 0) return redriven;
+      for (const message of messages) {
+        await queue.move(entry.failureQueueName, entry.queueName, message);
+        redriven += 1;
+      }
+    }
+  },
+  failFeature: (name, batches) => {
+    const runner = featureRunners.get(name);
+    if (!runner) return undefined;
+    runner.failNext(batches);
+    return batches;
+  },
   log,
 });
 log(
-  `transcode jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
+  `transcode and transcription jobs, schedules and sign-ins on http://localhost:${LOCAL_EVENT_RUNNER.port}`,
 );
 
 const tableName = await resolveTableName();
 const abort = new AbortController();
+// ElasticMQ starts alongside this and takes a few seconds: until it answers,
+// the feature runners would only log errors and the router would drop records.
+const [firstQueue] = routerQueues.values();
+await waitForQueue({
+  queue,
+  queueUrl: firstQueue.queueName,
+  signal: abort.signal,
+  log,
+});
+const runners = Promise.all(
+  [...featureRunners.values()].map((runner) => runner.start(abort.signal)),
+);
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     abort.abort();
@@ -219,8 +342,9 @@ for (let attempt = 1; ; attempt++) {
           new DescribeTableCommand({ TableName: tableName }),
         ),
       onRecords: (records) => {
-        progressBatches.add(records.filter(matchesProgressStreamFilters));
-        searchBatches.add(records.filter(matchesSearchStreamFilters));
+        routeRecordsLocally(records).catch((error) =>
+          log('stream router failed', error),
+        );
       },
       signal: abort.signal,
     });
@@ -231,4 +355,4 @@ for (let attempt = 1; ; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 }
-await Promise.all([progressBatches.flush(), searchBatches.flush()]);
+await runners;

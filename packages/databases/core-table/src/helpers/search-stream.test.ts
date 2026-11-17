@@ -38,11 +38,34 @@ describe('matchesSearchStreamFilters', () => {
     }
   });
 
+  it('ignores a caption write: a contentItem change, and no course document depends on it', () => {
+    const captionWrite = {
+      eventName: 'MODIFY',
+      dynamodb: {
+        OldImage: {
+          __edb_e__: { S: 'contentItem' },
+          captionsStatus: { S: 'pending' },
+        },
+        NewImage: {
+          __edb_e__: { S: 'contentItem' },
+          captionsStatus: { S: 'ready' },
+        },
+      },
+    };
+    expect(matchesSearchStreamFilters(captionWrite)).toBe(false);
+  });
+
   it('ignores records that cannot affect search, like a new item completion', () => {
     expect(
       matchesSearchStreamFilters(
         record('INSERT', 'NewImage', 'itemCompletion'),
       ),
+    ).toBe(false);
+  });
+
+  it('ignores a new certificate: the courses index does not depend on it', () => {
+    expect(
+      matchesSearchStreamFilters(record('INSERT', 'NewImage', 'certificate')),
     ).toBe(false);
   });
 

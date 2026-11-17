@@ -2,8 +2,147 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import {
+  createPositionReporter,
+  type PlayerPosition,
+} from '@discava/common-web-utils/video-player';
 import Hls from 'hls.js';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Button } from './ui/button';
+import {
+  formatTime,
+  type LoadedCaption,
+  VideoControls,
+} from './video-controls';
+
+// Where cues sit, in lines up from the bottom of the video: the browser draws
+// them on the last line, under the control bar while it shows. Applied only to
+// cues that don't place themselves (a `line` setting in an uploaded file wins).
+const CAPTION_LINE_FROM_BOTTOM = -4;
+
+const liftCues = (track: TextTrack): void => {
+  for (const cue of Array.from(track.cues ?? [])) {
+    if ('line' in cue && cue.line === 'auto') {
+      (cue as VTTCue).line = CAPTION_LINE_FROM_BOTTOM;
+    }
+  }
+};
+
+// A `<track>` that lifts its cues once the browser has loaded them. React has
+// no onLoad for it, so the native event is listened to.
+const CaptionTrack = ({ caption }: { caption: LoadedCaption }) => {
+  const ref = useRef<HTMLTrackElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    const lift = () => liftCues(element.track);
+    element.addEventListener('load', lift);
+    return () => element.removeEventListener('load', lift);
+  }, []);
+  return (
+    <track
+      ref={ref}
+      data-track-id={caption.trackId}
+      kind="captions"
+      srcLang={caption.language}
+      label={caption.label}
+      src={caption.src}
+    />
+  );
+};
+
+// How long the "Resumed at" notice stays, unless the viewer plays first.
+const RESUME_NOTICE_MS = 8000;
+
+/** A caption track as the API lists it (core-api's `videoUrl`). */
+export interface PlayerCaption {
+  trackId: string;
+  language: string;
+  label: string;
+  isDefault: boolean;
+  // Plain CloudFront URL, authorised by the signed cookies.
+  url: string;
+}
+
+// Fetches each caption file and holds it as a blob URL, which a `<track>` can
+// load whatever the page's origin and cookies. The fetch sends the signed
+// cookies only with `withCredentials`, as hls.js does (a native `<track src>`
+// across origins applies `crossorigin` unevenly between browsers, and S3Mock
+// refuses credentialed requests locally). A file that fails to load is
+// skipped and named in the notice; it never affects playback. Tracks appear
+// as their files arrive, in the API's order. The blob URLs are revoked when
+// the tracks change and on unmount.
+function useCaptionFiles(
+  captions: PlayerCaption[] | undefined,
+  withCredentials: boolean,
+) {
+  const [files, setFiles] = useState<Record<string, string | null>>({});
+  const signature = (captions ?? []).map((c) => `${c.trackId}@${c.url}`).join();
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `signature` stands for `captions`, which a refetch replaces with equal tracks
+  useEffect(() => {
+    setFiles({});
+    if (!captions?.length) {
+      return;
+    }
+    let cancelled = false;
+    const blobUrls: string[] = [];
+    for (const caption of captions) {
+      fetch(
+        caption.url,
+        withCredentials ? { credentials: 'include' } : undefined,
+      )
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return response.text();
+        })
+        .then((text) => {
+          // Typed by us, not by the server: the player needs text/vtt.
+          const src = URL.createObjectURL(
+            new Blob([text], { type: 'text/vtt' }),
+          );
+          if (cancelled) {
+            URL.revokeObjectURL(src);
+            return;
+          }
+          blobUrls.push(src);
+          setFiles((current) => ({ ...current, [caption.trackId]: src }));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFiles((current) => ({ ...current, [caption.trackId]: null }));
+          }
+        });
+    }
+    return () => {
+      cancelled = true;
+      for (const src of blobUrls) {
+        URL.revokeObjectURL(src);
+      }
+    };
+  }, [signature, withCredentials]);
+
+  const loaded: LoadedCaption[] = [];
+  const failed: string[] = [];
+  for (const caption of captions ?? []) {
+    const src = files[caption.trackId];
+    if (src) {
+      loaded.push({ ...caption, src });
+    } else if (src === null) {
+      failed.push(caption.label);
+    }
+  }
+  return {
+    loaded,
+    notice: failed.length
+      ? `Couldn't load captions: ${failed.join(', ')}.`
+      : undefined,
+  };
+}
 
 /**
  * Plays a lesson video's HLS stream (master.m3u8) from the lesson media
@@ -18,12 +157,31 @@ import { useEffect, useRef } from 'react';
  * hides casting (Chromecast, AirPlay): the receiving device would fetch the
  * stream itself, without the viewer's signed cookies, and fail.
  * Picture-in-picture stays available, for watching while taking notes.
+ *
+ * The browser's native controls are replaced by `VideoControls`, for speed,
+ * volume and keyboard shortcuts that work the same in every browser.
+ * `className` styles the player as a whole, not just the `<video>`.
+ *
+ * With `captions`, the player offers a captions menu (see
+ * `useCaptionFiles` for how the files load); without any, it has no such
+ * control. The browser shows the cue text as plain text, a few lines up so
+ * the control bar doesn't cover it.
+ *
+ * With `resumeAt` above 0 the video seeks there once it loads, stays paused,
+ * and says "Resumed at m:ss" with a "Start over" button until it plays or
+ * 8 seconds pass. With `onPositionChange` the player reports where the viewer
+ * is (every 10 seconds while playing, and on pause, seek end and leaving the
+ * page) so it can be saved; without it, as in the instructor's preview,
+ * nothing is reported.
  */
 export function HlsVideo({
   url,
   withCredentials,
   title,
   className,
+  captions,
+  resumeAt = 0,
+  onPositionChange,
 }: {
   url: string;
   // The API's `withCredentials` for this `url`.
@@ -31,8 +189,23 @@ export function HlsVideo({
   // What the player is called to assistive technology.
   title?: string;
   className?: string;
+  // The video's caption tracks, from the API.
+  captions?: PlayerCaption[];
+  // Seconds to start from; 0 starts at the beginning.
+  resumeAt?: number;
+  onPositionChange?: (position: PlayerPosition) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [resumedAt, setResumedAt] = useState<number>();
+  const captionFiles = useCaptionFiles(captions, withCredentials);
+  // The latest callback, so a new one each render doesn't restart playback
+  // or the reporter.
+  const onPositionChangeRef = useRef(onPositionChange);
+  onPositionChangeRef.current = onPositionChange;
+  // Read when the video loads, not a reason to resume again: the saved
+  // position the caller holds moves on while the viewer watches.
+  const resumeAtRef = useRef(resumeAt);
+  resumeAtRef.current = resumeAt;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -63,15 +236,123 @@ export function HlsVideo({
     return () => hls.destroy();
   }, [url, withCredentials]);
 
+  // Resume where the viewer left off: seek once the video knows its length,
+  // without playing, and report the position from there on.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    const resumeAt = resumeAtRef.current;
+    setResumedAt(undefined);
+    const reporter = createPositionReporter(
+      (position) => onPositionChangeRef.current?.(position),
+      { initialPosition: resumeAt },
+    );
+    const tick = () => {
+      if (!video.paused && onPositionChangeRef.current) {
+        reporter.tick(video.currentTime, video.duration);
+      }
+    };
+    const flush = () => {
+      if (onPositionChangeRef.current) {
+        reporter.flush(video.currentTime, video.duration);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flush();
+      }
+    };
+    const dismissNotice = () => setResumedAt(undefined);
+
+    let resumed = resumeAt <= 0;
+    const resume = () => {
+      if (resumed) {
+        return;
+      }
+      resumed = true;
+      // Not onto the very end, where there is nothing left to watch.
+      const target = Number.isFinite(video.duration)
+        ? Math.min(resumeAt, Math.max(0, video.duration - 1))
+        : resumeAt;
+      video.currentTime = target;
+      setResumedAt(target);
+    };
+    if (video.readyState >= 1) {
+      resume();
+    }
+
+    video.addEventListener('loadedmetadata', resume);
+    video.addEventListener('timeupdate', tick);
+    video.addEventListener('pause', flush);
+    video.addEventListener('seeked', flush);
+    video.addEventListener('play', dismissNotice);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      video.removeEventListener('loadedmetadata', resume);
+      video.removeEventListener('timeupdate', tick);
+      video.removeEventListener('pause', flush);
+      video.removeEventListener('seeked', flush);
+      video.removeEventListener('play', dismissNotice);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [url]);
+
+  useEffect(() => {
+    if (resumedAt === undefined) {
+      return;
+    }
+    const timer = setTimeout(() => setResumedAt(undefined), RESUME_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [resumedAt]);
+
+  const startOver = () => {
+    const video = videoRef.current;
+    if (video) {
+      video.currentTime = 0;
+    }
+    setResumedAt(undefined);
+  };
+
   return (
-    <video
-      ref={videoRef}
-      data-slot="hls-video"
-      controls
-      controlsList="nodownload noremoteplayback"
-      onContextMenu={(event) => event.preventDefault()}
-      aria-label={title}
+    <VideoControls
       className={className}
-    />
+      captions={captionFiles.loaded}
+      captionNotice={captionFiles.notice}
+    >
+      <video
+        ref={videoRef}
+        data-slot="hls-video"
+        controlsList="nodownload noremoteplayback"
+        onContextMenu={(event) => event.preventDefault()}
+        aria-label={title}
+        className="size-full"
+      >
+        {captionFiles.loaded.map((caption) => (
+          <CaptionTrack key={caption.trackId} caption={caption} />
+        ))}
+      </video>
+      {resumedAt !== undefined && (
+        <div
+          role="status"
+          className="absolute top-2 left-2 flex items-center gap-2 rounded-md bg-black/80 px-3 py-1.5 text-sm text-white"
+        >
+          <span>Resumed at {formatTime(resumedAt)}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={startOver}
+            className="hover:bg-white/20 hover:text-white"
+          >
+            Start over
+          </Button>
+        </div>
+      )}
+    </VideoControls>
   );
 }

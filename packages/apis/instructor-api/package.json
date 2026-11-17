@@ -17,6 +17,7 @@
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/common-tiptap": "workspace:*",
+    "@discava/common-web-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",

@@ -18,6 +18,7 @@ import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
 import { Spinner } from '../../components/spinner';
 import { useCoreApi } from '../../hooks/useCoreApi';
 import { requireSignIn } from '../../lib/require-sign-in';
+import { CertificateActions } from './-components/certificate-actions';
 
 // The student's courses, in progress and completed, as on Coursera's
 // /my-learning: each with its progress and what's next.
@@ -40,6 +41,14 @@ function MyLearning() {
   const enrolments = enrolmentsQuery.data?.items ?? [];
   const inProgress = enrolments.filter((e) => e.status === 'active');
   const completed = enrolments.filter((e) => e.status === 'completed');
+  // A failed read just means no Certificate controls: the rest of the page
+  // doesn't depend on it.
+  const certificatesQuery = useQuery(
+    trpc.certificate.myCertificates.queryOptions(),
+  );
+  const certificateIds = new Map(
+    (certificatesQuery.data ?? []).map((c) => [c.courseId, c.certificateId]),
+  );
 
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-6 pt-8 pb-10 lg:px-8">
@@ -87,9 +96,20 @@ function MyLearning() {
               <Empty>Courses you complete show up here.</Empty>
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {completed.map((course) => (
-                  <CourseProgressCard key={course.courseId} course={course} />
-                ))}
+                {completed.map((course) => {
+                  const certificateId = certificateIds.get(course.courseId);
+                  return (
+                    <div key={course.courseId} className="flex flex-col gap-3">
+                      <CourseProgressCard course={course} className="flex-1" />
+                      {certificateId ? (
+                        <CertificateActions
+                          courseId={course.courseId}
+                          certificateId={certificateId}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

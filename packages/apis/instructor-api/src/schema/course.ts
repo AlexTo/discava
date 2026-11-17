@@ -23,6 +23,7 @@ export const CourseSchema = z.object({
   status: CourseStatusSchema,
   publishedAt: z.string().optional(),
   imageKey: z.string().optional(),
+  certificatesEnabled: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -103,6 +104,21 @@ export const UpdateCourseImageOutputSchema = CourseSchema;
 
 export type IUpdateCourseImageOutput = z.output<
   typeof UpdateCourseImageOutputSchema
+>;
+
+export const SetCourseCertificatesInputSchema = z.object({
+  courseId: z.string(),
+  enabled: z.boolean(),
+});
+
+export type ISetCourseCertificatesInput = z.output<
+  typeof SetCourseCertificatesInputSchema
+>;
+
+export const SetCourseCertificatesOutputSchema = CourseSchema;
+
+export type ISetCourseCertificatesOutput = z.output<
+  typeof SetCourseCertificatesOutputSchema
 >;
 
 export const ViewCourseInputSchema = z.object({
