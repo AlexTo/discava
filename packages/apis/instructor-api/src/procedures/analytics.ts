@@ -93,8 +93,8 @@ export const courseSummaries = courseProcedure
     });
   });
 
-// One course's totals and its last 30 or 90 days. The lessons and quizzes
-// are empty until the stories that fill them.
+// One course's totals, its last 30 or 90 days and its lessons' drop-off. The
+// quizzes are empty until the story that fills them.
 export const course = analyticsCourseProcedure
   .input(CourseAnalyticsInputSchema)
   .output(CourseAnalyticsOutputSchema)
@@ -119,7 +119,23 @@ export const course = analyticsCourseProcedure
         updatedAt: analytics.updatedAt,
       },
       daily: analytics.daily,
-      lessons: [],
+      lessons: analytics.lessons.map(
+        ({
+          lessonId,
+          moduleId,
+          title,
+          started,
+          completed,
+          completionShare,
+        }) => ({
+          lessonId,
+          moduleId,
+          title,
+          started,
+          completed,
+          completionShare,
+        }),
+      ),
       quizzes: [],
     };
   });

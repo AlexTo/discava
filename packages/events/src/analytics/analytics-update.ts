@@ -16,6 +16,10 @@ import {
   applyAnalyticsChange,
   contributionsOfChange,
   createCoreTableService,
+  type FunnelTask,
+  funnelTasksOfChange,
+  moveLessonFunnel,
+  moveStudentFunnels,
 } from '@discava/core-table';
 import middy from '@middy/core';
 import { z } from 'zod';
@@ -56,16 +60,33 @@ type Image = Record<string, unknown> | undefined;
 //   status and -1 to the old), so the sum is the same in any order. A counter
 //   may dip below zero while a later event is still on its way; reads clamp
 //   it to zero.
+// - Lesson funnel: drop-off counts are not deltas of record images. A
+//   `progress` change, and an enrolment that starts or stops counting (a
+//   drop), only name a student's lesson; `moveLessonFunnel` then moves the
+//   count from the status its `FUNNEL#` marker holds to the one the current
+//   records give, so any order, repeat or redrive ends at the rebuild's result.
 // - Failure: a record that fails does not stop the others in the batch; the
 //   batch then throws, the queue delivers it again, and what was applied is
 //   skipped by its markers.
 export const analyticsUpdate = async (
   event: z.infer<typeof DynamoDBStreamSchema>,
   apply: (change: AnalyticsChange) => Promise<AnalyticsChangeResult>,
+  settle: (task: FunnelTask) => Promise<boolean> = async () => false,
 ): Promise<{ applied: number; skipped: number }> => {
   // Records of one course are applied one after the other: they update the
   // same few items, and concurrent transactions on one item cancel each other.
-  const byCourse = new Map<string, AnalyticsChange[]>();
+  const byCourse = new Map<
+    string,
+    { changes: AnalyticsChange[]; tasks: Map<string, FunnelTask> }
+  >();
+  const course = (courseId: string) => {
+    const found = byCourse.get(courseId) ?? {
+      changes: [],
+      tasks: new Map<string, FunnelTask>(),
+    };
+    byCourse.set(courseId, found);
+    return found;
+  };
   let skipped = 0;
   for (const record of event.Records) {
     const before: Image = record.dynamodb.OldImage;
@@ -82,14 +103,22 @@ export const analyticsUpdate = async (
       continue;
     }
     const { counts, members } = contributionsOfChange(entity, before, after);
+    const tasks = funnelTasksOfChange(entity, before, after);
+    for (const task of tasks) {
+      course(courseId).tasks.set(`${task.userId} ${task.lessonId ?? ''}`, task);
+    }
     if (counts.length === 0 && members.length === 0) {
-      skipped++;
+      if (tasks.length === 0) {
+        skipped++;
+      }
       continue;
     }
-    byCourse.set(courseId, [
-      ...(byCourse.get(courseId) ?? []),
-      { eventId: record.eventID, courseId, counts, members },
-    ]);
+    course(courseId).changes.push({
+      eventId: record.eventID,
+      courseId,
+      counts,
+      members,
+    });
   }
 
   let applied = 0;
@@ -99,9 +128,21 @@ export const analyticsUpdate = async (
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, courses.length) }, async () => {
       while (next < courses.length) {
-        for (const change of courses[next++]) {
+        const { changes, tasks } = courses[next++];
+        for (const change of changes) {
           try {
             if ((await apply(change)) === 'applied') {
+              applied++;
+            } else {
+              skipped++;
+            }
+          } catch (error) {
+            failures.push(error);
+          }
+        }
+        for (const task of tasks.values()) {
+          try {
+            if (await settle(task)) {
               applied++;
             } else {
               skipped++;
@@ -136,7 +177,16 @@ export const handler = middy()
   .use(parser({ schema: DynamoDBStreamSchema }))
   .handler(async (event) => {
     const coreTable = await getCoreTable();
-    await analyticsUpdate(event, (change) =>
-      applyAnalyticsChange(coreTable, change),
+    await analyticsUpdate(
+      event,
+      (change) => applyAnalyticsChange(coreTable, change),
+      async ({ courseId, userId, lessonId }) =>
+        lessonId
+          ? (await moveLessonFunnel(coreTable, {
+              courseId,
+              userId,
+              lessonId,
+            })) === 'moved'
+          : (await moveStudentFunnels(coreTable, { courseId, userId })) > 0,
     );
   });

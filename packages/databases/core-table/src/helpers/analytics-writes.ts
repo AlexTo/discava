@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
-import type { Delta, Member } from './analytics.js';
+import {
+  type Delta,
+  type FunnelStatus,
+  funnelStatus,
+  type Member,
+} from './analytics.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
@@ -66,7 +71,7 @@ type Entities = Parameters<TransactionWrites>[0];
 // ever `add`, so concurrent and reordered updates all count. `updatedAt` is
 // the summary's "last updated".
 const itemUpdate = (
-  { courseStats, periodStats }: Entities,
+  { courseStats, periodStats, lessonStats }: Entities,
   courseId: string,
   deltas: Delta[],
   now: Date,
@@ -77,6 +82,12 @@ const itemUpdate = (
       .update({ courseId })
       .add(counters(deltas))
       .set({ updatedAt: now.toISOString() })
+      .commit();
+  }
+  if (kind === 'lessonStats') {
+    return lessonStats
+      .update({ courseId, lessonId: sk.slice('LESSON#'.length) })
+      .add(counters(deltas))
       .commit();
   }
   return periodStats
@@ -194,4 +205,127 @@ export const applyAnalyticsChange = async (
     }
   }
   return result;
+};
+
+export interface FunnelMove {
+  courseId: string;
+  userId: string;
+  lessonId: string;
+  now?: Date;
+}
+
+export type FunnelMoveResult = 'moved' | 'unchanged';
+
+// Reads that settle again when another writer moved the same student's
+// lesson between our read and our write.
+const FUNNEL_ATTEMPTS = 8;
+
+/**
+ * Makes a student's lesson count as what their current records say it should
+ * (`funnelStatus`: none, in progress or completed), whatever the delivery
+ * order, repeats and redrives of the stream changes that brought it here.
+ *
+ * The status counted so far is kept in the student's `FUNNEL#<userId>#<lessonId>`
+ * marker. The move is from that status to the one the current `progress` and
+ * enrolment records give, written in one transaction conditioned on the
+ * marker still holding what was read; a lost race re-reads and tries again.
+ * Nothing in it depends on which change woke it up, so a drop and a lesson's
+ * progress records can arrive in any order and end at the rebuild's result.
+ */
+export const moveLessonFunnel = async (
+  coreTable: CoreTable,
+  { courseId, userId, lessonId, now = new Date() }: FunnelMove,
+): Promise<FunnelMoveResult> => {
+  const { progress, enrolment, analyticsMarker } = coreTable.entities;
+  const markerId = `FUNNEL#${userId}#${lessonId}`;
+  for (let attempt = 1; attempt <= FUNNEL_ATTEMPTS; attempt++) {
+    const [{ data: record }, { data: enrolled }, { data: marker }] =
+      await Promise.all([
+        progress.get({ userId, courseId, lessonId }).go(),
+        enrolment.get({ courseId, userId }).go(),
+        analyticsMarker.get({ courseId, markerId }).go(),
+      ]);
+    const target = funnelStatus(record ?? undefined, enrolled ?? undefined);
+    const counted: FunnelStatus | undefined = marker?.status;
+    if (counted === target) {
+      return 'unchanged';
+    }
+    const { canceled, data } = await coreTable.transaction
+      .write(({ analyticsMarker, lessonStats, courseStats }) => {
+        const owed: Partial<Record<FunnelStatus, number>> = {};
+        if (counted) {
+          owed[counted] = -1;
+        }
+        if (target) {
+          owed[target] = 1;
+        }
+        const markerWrite = !marker
+          ? analyticsMarker
+              .create({ courseId, markerId, status: target })
+              .commit()
+          : target
+            ? analyticsMarker
+                .patch({ courseId, markerId })
+                .set({ status: target })
+                .where(({ status }, { eq }) => eq(status, counted))
+                .commit()
+            : analyticsMarker
+                .delete({ courseId, markerId })
+                .where(({ status }, { eq }) => eq(status, counted))
+                .commit();
+        return [
+          markerWrite,
+          lessonStats.update({ courseId, lessonId }).add(owed).commit(),
+          courseStats
+            .update({ courseId })
+            .set({ updatedAt: now.toISOString() })
+            .commit(),
+        ];
+      })
+      .go();
+    if (!canceled) {
+      return 'moved';
+    }
+    // The marker changed under us, or a transaction on the same items met
+    // ours: look again at the records and the marker.
+    if (!isCancelled(data, 0) && !hasConflict(data)) {
+      throw new Error(
+        `Analytics funnel move for ${userId} in ${lessonId} was cancelled: ${JSON.stringify(data)}`,
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, CONFLICT_BACKOFF_MS * attempt),
+    );
+  }
+  throw new Error(
+    `Analytics funnel for ${userId} in ${lessonId} kept changing underneath the move`,
+  );
+};
+
+/**
+ * Settles every lesson of one student's progress in a course, one after the
+ * other (they share the course's items), for a drop or a return from one.
+ */
+export const moveStudentFunnels = async (
+  coreTable: CoreTable,
+  { courseId, userId, now }: { courseId: string; userId: string; now?: Date },
+): Promise<number> => {
+  const { data: records } = await coreTable.entities.progress.query
+    .primary({ userId })
+    .begins({ courseId })
+    .go({ pages: 'all' });
+  let moved = 0;
+  for (const { lessonId } of records) {
+    if (
+      (await moveLessonFunnel(coreTable, {
+        courseId,
+        userId,
+        lessonId,
+        now,
+      })) === 'moved'
+    ) {
+      moved++;
+    }
+  }
+  return moved;
 };

@@ -27,7 +27,12 @@ import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
 import type { createUserEntity } from '../entities/user.js';
 import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
-import { aggregatesOf, contributions, sumContributions } from './analytics.js';
+import {
+  aggregatesOf,
+  contributions,
+  funnelContributions,
+  sumContributions,
+} from './analytics.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
 import { parseNotificationPosition } from './notification.js';
 import { NOTIFICATION_TYPES } from './notification-types.js';
@@ -1395,9 +1400,10 @@ export const checkVideoPositionValid = (
 // enrolments, completions and quiz attempts. The stream handler keeps them
 // current a few seconds behind the records, so a check right after a change
 // may see a difference that closes (the e2e suite waits, see
-// `waitForAnalytics`). A missing item counts as zeros. Only the summary and
-// period items are compared so far; the lesson and quiz aggregates are not
-// written yet.
+// `waitForAnalytics`). A missing item counts as zeros. The summary, period and
+// lesson items are compared so far; the quiz aggregates are not written yet.
+// A lesson's counts come from each student's `progress` against their
+// enrolment (a dropped one counts nothing); the funnel markers are ignored.
 export const checkAnalyticsMatchesRecords = (
   snapshot: TableSnapshot,
 ): InvariantViolation[] => {
@@ -1408,6 +1414,15 @@ export const checkAnalyticsMatchesRecords = (
         contributions('itemCompletion', r),
       ),
       ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...snapshot.enrolments.map((enrolled) =>
+        funnelContributions(
+          snapshot.progress.filter(
+            (p) =>
+              p.courseId === enrolled.courseId && p.userId === enrolled.userId,
+          ),
+          enrolled,
+        ),
+      ),
     ]),
   );
   const stored = [
@@ -1419,6 +1434,11 @@ export const checkAnalyticsMatchesRecords = (
     ...snapshot.periodStats.map(({ courseId, periodKey, ...counters }) => ({
       courseId,
       sk: periodKey,
+      counters: counters as Record<string, number | undefined>,
+    })),
+    ...snapshot.lessonStats.map(({ courseId, lessonId, ...counters }) => ({
+      courseId,
+      sk: `LESSON#${lessonId}`,
       counters: counters as Record<string, number | undefined>,
     })),
   ];
@@ -1448,9 +1468,13 @@ export const checkAnalyticsMatchesRecords = (
   return [...items.values()].flatMap(({ courseId, sk, expected, stored }) =>
     [...new Set([...Object.keys(expected), ...Object.keys(stored)])]
       .filter((attribute) =>
-        ['enrolments', 'completed', 'dropped', 'activeLearners'].includes(
-          attribute,
-        ),
+        [
+          'enrolments',
+          'completed',
+          'dropped',
+          'activeLearners',
+          'inProgress',
+        ].includes(attribute),
       )
       .flatMap((attribute) => {
         const has = stored[attribute] ?? 0;
