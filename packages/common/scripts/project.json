@@ -71,6 +71,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "notify-local": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/notify-local/notify.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "local-oidc": {
       "executor": "nx:run-commands",
       "continuous": true,

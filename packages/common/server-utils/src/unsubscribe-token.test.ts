@@ -61,8 +61,15 @@ describe('unsubscribe tokens', () => {
     expect(verifyUnsubscribeToken('other', token)).toBeUndefined();
   });
 
-  it('refuses to sign a type containing a dot', () => {
-    expect(() => signUnsubscribeToken(SECRET, 'user-1', 'a.b')).toThrow();
+  it('round trips a dotted type, as the registry ids are', () => {
+    const token = signUnsubscribeToken(SECRET, 'user-1', 'assignment.returned');
+    expect(verifyUnsubscribeToken(SECRET, token)).toEqual({
+      userId: 'user-1',
+      type: 'assignment.returned',
+    });
+    expect(
+      verifyUnsubscribeToken(SECRET, token.replace('returned', 'posted')),
+    ).toBeUndefined();
   });
 });
 
