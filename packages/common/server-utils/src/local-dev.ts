@@ -163,6 +163,33 @@ export interface LocalScheduleRequest {
   delaySeconds?: number;
 }
 
+/** What sendEmail posts to the event runner's local inbox, in local dev. */
+export interface LocalEmailRequest {
+  to: string;
+  from: string;
+  subject: string;
+  text: string;
+  html: string;
+  headers: Record<string, string>;
+}
+
+/**
+ * Where local dev's portals and core-api listen, for the links in notification
+ * emails. Deployed, the stacks set these through environment variables.
+ */
+export const LOCAL_PORTAL_URLS = {
+  student: 'http://localhost:4201',
+  instructor: 'http://localhost:4200',
+  admin: 'http://localhost:4202',
+};
+export const LOCAL_CORE_API_URL = 'http://localhost:2022';
+
+/** The sender local dev's notification emails come from, so email counts as configured. */
+export const LOCAL_NOTIFICATIONS_FROM = 'notifications@discava.local';
+
+/** The unsubscribe-token secret in local dev, where there is no Secrets Manager. */
+export const LOCAL_UNSUBSCRIBE_SECRET = 'local-dev-unsubscribe-secret';
+
 /** A sign-in to run the pre token generation trigger for, in local dev. */
 export interface LocalSignInRequest {
   userName: string;
