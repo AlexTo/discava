@@ -7,7 +7,7 @@ import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { BarChart3, Users } from 'lucide-react';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import { Alert } from '../../../../components/alert';
@@ -41,7 +41,6 @@ const lastUpdated = new Intl.DateTimeFormat('en-AU', {
 function RouteComponent() {
   const { courseId } = Route.useParams();
   const { days } = Route.useSearch();
-  const navigate = Route.useNavigate();
   const trpc = useInstructorApi();
   const analyticsQuery = useQuery(
     trpc.analytics.course.queryOptions({ courseId, days }),
@@ -90,7 +89,7 @@ function RouteComponent() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
             <BarChart3 className="size-4" /> Course analytics
           </div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
             {title ?? 'Course analytics'}
           </h1>
           {analytics && (
@@ -105,13 +104,17 @@ function RouteComponent() {
           {RANGES.map((range) => (
             <Button
               key={range}
-              type="button"
+              asChild
               size="sm"
               variant={range === days ? 'default' : 'outline'}
-              aria-pressed={range === days}
-              onClick={() => navigate({ search: { days: range } })}
             >
-              {range} days
+              <Link
+                to="."
+                search={{ days: range }}
+                aria-current={range === days ? 'true' : undefined}
+              >
+                {range} days
+              </Link>
             </Button>
           ))}
         </div>

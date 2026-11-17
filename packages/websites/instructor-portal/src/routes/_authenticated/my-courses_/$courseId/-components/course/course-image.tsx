@@ -86,7 +86,13 @@ function CourseImagePreview({
       )}
     >
       {src ? (
-        <img src={src} alt="" className="size-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          width={640}
+          height={360}
+          className="size-full object-cover"
+        />
       ) : (
         <span className="flex flex-col items-center gap-1 text-xs">
           <ImageIcon className="size-6" aria-hidden="true" />
@@ -302,7 +308,7 @@ function CourseImageDialog({
                   onClick={remove}
                   disabled={busy !== undefined}
                 >
-                  {busy === 'removing' ? 'Removing...' : 'Remove image'}
+                  {busy === 'removing' ? 'Removing…' : 'Remove image'}
                 </Button>
               )
             )}
@@ -312,7 +318,7 @@ function CourseImageDialog({
             onClick={save}
             disabled={!source || !area || busy !== undefined}
           >
-            {busy === 'saving' ? 'Saving...' : 'Save'}
+            {busy === 'saving' ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

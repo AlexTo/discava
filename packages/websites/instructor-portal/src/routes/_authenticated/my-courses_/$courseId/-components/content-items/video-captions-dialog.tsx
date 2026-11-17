@@ -235,7 +235,7 @@ export function VideoCaptionsDialog({
                           }
                         }}
                       >
-                        {isRemoving ? 'Removing...' : 'Remove caption'}
+                        {isRemoving ? 'Removing…' : 'Remove caption'}
                       </Button>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -291,7 +291,7 @@ export function VideoCaptionsDialog({
             onClick={handleUpload}
           >
             {isUploading
-              ? 'Uploading...'
+              ? 'Uploading…'
               : replacing
                 ? 'Replace caption'
                 : 'Upload caption'}

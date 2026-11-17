@@ -124,10 +124,10 @@ export function DeleteModuleDialog({
           >
             {archive
               ? isPending
-                ? 'Archiving...'
+                ? 'Archiving…'
                 : 'Archive module'
               : isPending
-                ? 'Deleting...'
+                ? 'Deleting…'
                 : 'Delete module'}
           </Button>
         </AlertDialogFooter>

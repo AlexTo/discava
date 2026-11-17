@@ -53,7 +53,7 @@ function MyLearning() {
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-6 pt-8 pb-10 lg:px-8">
       <PageBreadcrumbs crumbs={[{ label: 'My Learning' }]} />
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+      <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
         My Learning
       </h1>
       {enrolmentsQuery.isPending ? (
