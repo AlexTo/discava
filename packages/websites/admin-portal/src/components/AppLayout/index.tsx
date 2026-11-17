@@ -4,6 +4,10 @@
  */
 
 import {
+  MAIN_CONTENT_ID,
+  SkipLink,
+} from '@discava/common-shadcn/components/skip-link';
+import {
   Avatar,
   AvatarFallback,
 } from '@discava/common-shadcn/components/ui/avatar';
@@ -90,6 +94,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <SidebarProvider>
+      <SkipLink />
       <AppSidebar />
       <SidebarInset>
         <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
@@ -98,6 +103,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             <Separator orientation="vertical" className="h-6" />
             <div className="flex items-center gap-2">
               <img
+                width={40}
+                height={40}
                 alt={`${Config.applicationName} logo`}
                 className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
                 src={Config.logo}
@@ -140,7 +147,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             </DropdownMenu>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-6 p-6 pt-4">
+        <div
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
+        >
           <Breadcrumb>
             <BreadcrumbList>
               {activeBreadcrumbs.map((crumb, index) => (

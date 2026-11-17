@@ -26,6 +26,9 @@ export function CourseThumbnail({
       <img
         src={src}
         alt=""
+        width={640}
+        height={360}
+        loading="lazy"
         className={cn('aspect-video w-full object-cover', className)}
       />
     );

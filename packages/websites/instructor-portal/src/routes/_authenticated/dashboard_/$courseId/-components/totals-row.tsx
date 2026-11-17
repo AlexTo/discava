@@ -35,7 +35,7 @@ export function TotalsRow({ totals }: { totals: Totals }) {
         <Card key={label} className="py-4">
           <CardContent className="px-5">
             <dt className="text-xs text-muted-foreground">{label}</dt>
-            <dd className="mt-1 text-2xl font-bold">{value}</dd>
+            <dd className="mt-1 text-2xl font-bold tabular-nums">{value}</dd>
           </CardContent>
         </Card>
       ))}

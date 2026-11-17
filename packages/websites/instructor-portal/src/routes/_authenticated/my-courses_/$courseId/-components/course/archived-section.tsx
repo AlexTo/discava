@@ -262,7 +262,7 @@ function ArchivedRow({
               });
             }}
           >
-            <RotateCcw /> {restore.isPending ? 'Restoring...' : 'Restore'}
+            <RotateCcw /> {restore.isPending ? 'Restoring…' : 'Restore'}
           </Button>
         )}
         <DeletePermanentlyDialog
@@ -375,7 +375,7 @@ function DeletePermanentlyDialog({
               setOpen(false);
             }}
           >
-            {isPending ? 'Deleting...' : 'Delete permanently'}
+            {isPending ? 'Deleting…' : 'Delete permanently'}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

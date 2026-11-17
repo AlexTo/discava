@@ -62,7 +62,9 @@ export function CoursePage({ courseId }: { courseId: string }) {
         {notFound ? (
           <>
             <Search className="mx-auto size-8 text-muted-foreground" />
-            <h1 className="mt-4 text-xl font-semibold">Course not found</h1>
+            <h1 className="text-balance mt-4 text-xl font-semibold">
+              Course not found
+            </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               This course doesn't exist, or may no longer be available.
             </p>
@@ -98,7 +100,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
           />
           <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_20rem] md:items-start">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              <h1 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
                 {course.title}
               </h1>
               <div className="mt-6 max-w-sm space-y-3">

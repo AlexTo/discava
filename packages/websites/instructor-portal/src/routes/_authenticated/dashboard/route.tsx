@@ -54,7 +54,7 @@ function RouteComponent() {
         <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
           <BarChart3 className="size-4" /> Insights
         </div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
           Dashboard
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -170,7 +170,7 @@ function Figure({ label, value }: { label: string; value: number | string }) {
   return (
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-xl font-bold">{value}</dd>
+      <dd className="mt-1 text-xl font-bold tabular-nums">{value}</dd>
     </div>
   );
 }
