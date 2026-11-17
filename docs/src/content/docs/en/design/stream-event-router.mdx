@@ -5,7 +5,7 @@ sidebar:
   order: 7
 ---
 
-The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation and search indexing today) adds a registration and a handler, and nothing else.
+The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation and search indexing today) adds a registration, a handler and the handler's wiring (below), and no queue, alarm or stream mapping of its own.
 
 ```d2 title="One stream reader, one queue and failure queue per feature"
 table: "Core table"
@@ -47,9 +47,11 @@ sq -> sf: "after maxReceiveCount"
 
 1. Add an entry to `STREAM_FEATURES`.
 2. Write the handler in `packages/events` and its `events-*` wrapper with `ts#lambda-function`. Read its records through `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), which unwraps the queue's messages into stream records.
-3. Nothing else: the `StreamRouter` construct builds the queue, failure queue, alarm and event source mapping from the entry, and the local runner builds its equivalent.
-4. Write the handler's duplicate and reordered delivery tests (below).
-5. Add the feature's queue metrics to the [list below](#metrics-to-watch).
+3. Add the handler to `HANDLERS` in `packages/events/src/router/handlers.ts`, which the local runner dispatches through. `handlers.test.ts` fails when a registration's `handler` is missing from it.
+4. Build the handler's Lambda in `StreamRouterStack` (`packages/infra/src/stacks/stream-router-stack.ts`), the way `createProgressRecalculationLambda` and `createSearchIndexingLambda` do: create the `events-*` function, give it what it reads and writes (the core table, AppConfig and so on), and add it to the `handlers` object passed to `StreamRouter`, keyed by the feature's name. Without it, `StreamRouter` throws `No handler given for stream feature '<name>'` at synth.
+5. With the handler passed in, the `StreamRouter` construct builds the queue, failure queue, alarm and event source mapping from the entry, and the local runner builds its equivalent.
+6. Write the handler's duplicate and reordered delivery tests (below).
+7. Add the feature's queue metrics to the [list below](#metrics-to-watch).
 
 ## What the construct builds per feature
 
