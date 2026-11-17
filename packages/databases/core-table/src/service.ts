@@ -13,6 +13,10 @@ import {
   createItemCompletionEntity,
   createLessonEntity,
   createModuleEntity,
+  createNotificationBroadcastEntity,
+  createNotificationEntity,
+  createNotificationPreferenceEntity,
+  createNotificationStateEntity,
   createProgressEntity,
   createQuizAttemptEntity,
   createQuizSummaryEntity,
@@ -41,6 +45,10 @@ export const createCoreTableService = async () => {
     itemCompletion,
     certificate,
     videoPosition,
+    notification,
+    notificationState,
+    notificationPreference,
+    notificationBroadcast,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -56,6 +64,10 @@ export const createCoreTableService = async () => {
     createItemCompletionEntity(),
     createCertificateEntity(),
     createVideoPositionEntity(),
+    createNotificationEntity(),
+    createNotificationStateEntity(),
+    createNotificationPreferenceEntity(),
+    createNotificationBroadcastEntity(),
   ]);
 
   return new Service({
@@ -73,5 +85,9 @@ export const createCoreTableService = async () => {
     itemCompletion,
     certificate,
     videoPosition,
+    notification,
+    notificationState,
+    notificationPreference,
+    notificationBroadcast,
   });
 };
