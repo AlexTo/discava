@@ -9,11 +9,8 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
-import {
-  PROGRESS_STREAM_FILTERS,
-  SEARCH_STREAM_FILTERS,
-} from '@discava/core-table';
-import { App, type Stack } from 'aws-cdk-lib';
+import { STREAM_FEATURES } from '@discava/core-table';
+import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { ApplicationStage } from './application-stage.js';
@@ -154,6 +151,12 @@ describe("discava-development's limits", () => {
     }
   });
 
+  it('expires records by their ttl attribute (the analytics markers)', () => {
+    stack('Data').hasResourceProperties('AWS::DynamoDB::Table', {
+      TimeToLiveSpecification: { AttributeName: 'ttl', Enabled: true },
+    });
+  });
+
   it('only lets an admin create users', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
@@ -165,22 +168,23 @@ describe("core-api's functions", () => {
   const template = synth({})('CoreApi');
 
   it('give only the video URL function the CloudFront signing key', () => {
-    const roles = Object.values(
-      template.findResources('AWS::IAM::Policy'),
-    ).flatMap((resource) => {
-      const { PolicyDocument, Roles } = (
-        resource as {
-          Properties: {
-            PolicyDocument: { Statement: { Action: string | string[] }[] };
-            Roles: { Ref: string }[];
-          };
-        }
-      ).Properties;
-      const readsSecrets = PolicyDocument.Statement.some((statement) =>
-        [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
-      );
-      return readsSecrets ? Roles.map((role) => role.Ref) : [];
-    });
+    const roles = Object.values(template.findResources('AWS::IAM::Policy'))
+      .flatMap((resource) => {
+        const { PolicyDocument, Roles } = (
+          resource as {
+            Properties: {
+              PolicyDocument: { Statement: { Action: string | string[] }[] };
+              Roles: { Ref: string }[];
+            };
+          }
+        ).Properties;
+        const readsSecrets = PolicyDocument.Statement.some((statement) =>
+          [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
+        );
+        return readsSecrets ? Roles.map((role) => role.Ref) : [];
+        // The unsubscribe function reads its own secret, not the signing key.
+      })
+      .filter((role) => !role.startsWith('NotificationUnsubscribe'));
 
     expect(roles).toHaveLength(1);
     expect(roles[0]).toMatch(/^CoreApiMediaUrlHandlerServiceRole/);
@@ -479,51 +483,328 @@ describe("the portals' addresses (#235)", () => {
   });
 });
 
-// A DynamoEventSource's filter patterns, for the mapping whose target
-// function's logical id starts with `functionPrefix`. CoreApi has two such
-// mappings on the core table's stream (progress recalculation, search
-// indexing), each with its own filters, so a bare `findResources` across all
-// of them isn't enough to test either in isolation.
-const streamFilterPatterns = (template: Template, functionPrefix: string) => {
-  const functionId = Object.keys(
-    template.findResources('AWS::Lambda::Function'),
-  ).find((id) => id.startsWith(functionPrefix))!;
-  const mappings = Object.values(
-    template.findResources('AWS::Lambda::EventSourceMapping', {
-      Properties: { FunctionName: { Ref: functionId } },
-    }),
-  ) as {
-    Properties: { FilterCriteria?: { Filters: { Pattern: string }[] } };
-  }[];
-  return mappings.flatMap(
-    ({ Properties }) =>
-      Properties.FilterCriteria?.Filters.map(({ Pattern }) =>
-        JSON.parse(Pattern),
-      ) ?? [],
-  );
+// Every stack in the stage, by name, with its synthesized template.
+const stackTemplates = (components: StageComponents) => {
+  const stage = new ApplicationStage(new App(), 'discava-test', {
+    env: { account: '111122223333', region: 'ap-southeast-2' },
+    ...components,
+  });
+  return stage.node.children
+    .filter((child): child is Stack => child instanceof Stack)
+    .map((child) => [child.node.id, Template.fromStack(child)] as const);
 };
 
-const asPatterns = (
-  filters: readonly {
-    eventName: string;
-    image: string;
-    entities: readonly string[];
-  }[],
-) =>
-  filters.map(({ eventName, image, entities }) => ({
-    eventName: [eventName],
-    dynamodb: { [image]: { __edb_e__: { S: [...entities] } } },
-  }));
-
-describe('progress recalculation', () => {
+describe('the stream router', () => {
   const stack = synth({});
 
-  // Local dev's event runner filters the stream with the same definition
-  // (#137), so what triggers a recalculation can't differ between the two.
-  it('is triggered by exactly the shared progress stream filters', () => {
+  // The mappings on the core table's stream: its stream ARN is exported from
+  // Data, so a mapping on it refers to that export.
+  const streamMappings = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::Lambda::EventSourceMapping'))
+        .filter((m) =>
+          JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+        )
+        .map(() => name),
+    );
+
+  it('is the only reader of the core table stream', () => {
+    expect(streamMappings({})).toEqual(['StreamRouter']);
+  });
+
+  it('keeps the old per-feature mappings and handlers out of CoreApi', () => {
+    const template = stack('CoreApi');
+    expect(template.findResources('AWS::Lambda::EventSourceMapping')).toEqual(
+      {},
+    );
+    expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toEqual([]);
     expect(
-      streamFilterPatterns(stack('CoreApi'), 'ProgressRecalculation'),
-    ).toEqual(asPatterns(PROGRESS_STREAM_FILTERS));
+      Object.keys(template.findResources('AWS::Lambda::Function')).filter(
+        (id) =>
+          /^(ProgressRecalculation|SearchIndexing|AnalyticsUpdate)/.test(id),
+      ),
+    ).toEqual([]);
+  });
+
+  it('has a queue, failure queue, alarm and mapping per registered feature', () => {
+    const template = stack('StreamRouter');
+    const features = STREAM_FEATURES.length;
+    // Each feature's queue and failure queue, and the router's failures.
+    expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toHaveLength(
+      features * 2 + 1,
+    );
+    expect(
+      Object.keys(template.findResources('AWS::CloudWatch::Alarm')),
+    ).toHaveLength(features + 1);
+    // Each feature's, and the router's from the stream.
+    expect(
+      Object.keys(template.findResources('AWS::Lambda::EventSourceMapping')),
+    ).toHaveLength(features + 1);
+  });
+
+  it('gives analytics-update a queue, a failure queue, an alarm and a handler', () => {
+    const template = stack('StreamRouter');
+    for (const type of [
+      'AWS::SQS::Queue',
+      'AWS::CloudWatch::Alarm',
+      'AWS::Lambda::Function',
+    ]) {
+      expect(
+        Object.keys(template.findResources(type)).filter(
+          (id) =>
+            id.startsWith('StreamRouterAnalyticsUpdate') ||
+            id.startsWith('AnalyticsUpdate'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterAnalyticsUpdateFailures'),
+      ),
+    ).toBe(true);
+  });
+
+  it("applies the stage's encryption setting to the queues", () => {
+    const development = synth(
+      resolveStage('packages/infra', 'discava-development')?.infra ?? {},
+    )('StreamRouter');
+    expect(Object.keys(development.findResources('AWS::KMS::Key'))).toEqual([]);
+    expect(
+      Object.keys(stack('StreamRouter').findResources('AWS::KMS::Key')),
+    ).toHaveLength(1);
+  });
+
+  it('keeps every stack under 450 resources (the cap is 500)', () => {
+    for (const [name, template] of stackTemplates({})) {
+      expect(
+        Object.keys(template.toJSON().Resources ?? {}).length,
+        name,
+      ).toBeLessThan(450);
+    }
+  });
+});
+
+describe('the unsubscribe route', () => {
+  const template = synth({})('CoreApi');
+  const resourceIds = (pathPart: string) =>
+    Object.entries(template.findResources('AWS::ApiGateway::Resource'))
+      .filter(([, r]) => r.Properties.PathPart === pathPart)
+      .map(([id]) => id);
+  const methodsOn = (httpMethod: string, pathPart: string) =>
+    Object.values(template.findResources('AWS::ApiGateway::Method')).filter(
+      (m) =>
+        m.Properties.HttpMethod === httpMethod &&
+        resourceIds(pathPart).some((id) =>
+          JSON.stringify(m.Properties.ResourceId).includes(id),
+        ),
+    );
+
+  it('serves a public GET and POST on unsubscribe/{token} from the unsubscribe function', () => {
+    const [functionId] = Object.keys(
+      template.findResources('AWS::Lambda::Function'),
+    ).filter((id) => id.startsWith('NotificationUnsubscribe'));
+    expect(functionId).toBeDefined();
+    for (const httpMethod of ['GET', 'POST']) {
+      const [method] = methodsOn(httpMethod, '{token}');
+      expect(method.Properties.AuthorizationType).toBe('NONE');
+      expect(JSON.stringify(method.Properties.Integration.Uri)).toContain(
+        functionId,
+      );
+    }
+  });
+
+  it('adds exactly those two routes to the API', () => {
+    const operations = Object.values(
+      template.findResources('AWS::ApiGateway::Method'),
+    ).filter((m) => m.Properties.HttpMethod !== 'OPTIONS');
+    const onToken = ['GET', 'POST'].flatMap((m) => methodsOn(m, '{token}'));
+    expect(onToken).toHaveLength(2);
+    // The router's operations are the rest.
+    expect(operations.length - onToken.length).toBeGreaterThan(0);
+  });
+
+  it('gives it the table and the secret, and not the shared router function', () => {
+    const roleStatements = (prefix: string) =>
+      JSON.stringify(
+        Object.entries(template.findResources('AWS::IAM::Policy'))
+          .filter(([id]) => id.startsWith(prefix))
+          .map(([, p]) => p.Properties.PolicyDocument),
+      );
+    const own = roleStatements(
+      'NotificationUnsubscribeServiceRoleDefaultPolicy',
+    );
+    expect(own).toContain('secretsmanager:GetSecretValue');
+    expect(own).toContain('dynamodb:');
+    expect(roleStatements('CoreApiRouterHandler')).not.toContain(
+      'secretsmanager:GetSecretValue',
+    );
+  });
+});
+
+describe('notification delivery', () => {
+  const SES_IDENTITY = 'example.com';
+  const configured: StageComponents = {
+    notifications: {
+      fromAddress: 'notifications@example.com',
+      sesIdentity: SES_IDENTITY,
+    },
+  };
+
+  // Every IAM policy statement's actions of `type`, by the stack's role.
+  const sesStatements = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+        (policy) =>
+          (
+            policy.Properties.PolicyDocument.Statement as {
+              Action: string | string[];
+              Resource: unknown;
+            }[]
+          )
+            .filter((statement) =>
+              JSON.stringify(statement.Action).includes('ses:'),
+            )
+            .map((statement) => ({ name, statement })),
+      ),
+    );
+
+  const secretReaders = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.entries(template.findResources('AWS::IAM::Policy'))
+        .filter(([, policy]) =>
+          JSON.stringify(policy.Properties.PolicyDocument).includes(
+            'NotificationUnsubscribeSecret',
+          ),
+        )
+        .map(([id]) => `${name}/${id}`),
+    );
+
+  const deliveryFunction = (components: StageComponents) => {
+    const template = synth(components)('StreamRouter');
+    const [fn] = resources(
+      template,
+      'AWS::Lambda::Function',
+      'NotificationDelivery',
+    );
+    return fn as { Timeout: number; Environment: { Variables: object } };
+  };
+
+  it('has a queue, failure queue and alarm of its own, and still one stream mapping', () => {
+    const template = synth({})('StreamRouter');
+    for (const type of ['AWS::SQS::Queue', 'AWS::CloudWatch::Alarm']) {
+      expect(
+        Object.keys(template.findResources(type)).filter((id) =>
+          id.startsWith('StreamRouterNotificationDelivery'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterNotificationDeliveryFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      stackTemplates({}).flatMap(([name, t]) =>
+        Object.values(t.findResources('AWS::Lambda::EventSourceMapping'))
+          .filter((m) =>
+            JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+          )
+          .map(() => name),
+      ),
+    ).toEqual(['StreamRouter']);
+  });
+
+  it('gives the queue a visibility timeout of six times the function timeout', () => {
+    const template = synth({})('StreamRouter');
+    const { Timeout } = deliveryFunction({});
+    expect(Timeout).toBe(120);
+    const queues = resources(
+      template,
+      'AWS::SQS::Queue',
+      'StreamRouterNotificationDelivery',
+    ).filter((queue) => queue.RedrivePolicy);
+    expect(queues).toHaveLength(1);
+    expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
+  });
+
+  it('is told where the portals and the API are, and where its secret is', () => {
+    const { Environment } = deliveryFunction(configured);
+    expect(Object.keys(Environment.Variables).sort()).toEqual(
+      [
+        'ADMIN_PORTAL_URL',
+        'CORE_API_URL',
+        'INSTRUCTOR_PORTAL_URL',
+        'NOTIFICATIONS_FROM_ADDRESS',
+        'STUDENT_PORTAL_URL',
+        'UNSUBSCRIBE_SECRET_ARN',
+      ].sort(),
+    );
+    expect(Environment.Variables).toMatchObject({
+      NOTIFICATIONS_FROM_ADDRESS: 'notifications@example.com',
+    });
+  });
+
+  it('points at the custom domains when the stage has them', () => {
+    const { Environment } = deliveryFunction({
+      studentPortal: {
+        domainNames: ['learn.example.com'],
+        certificateArn:
+          'arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+      coreApi: {
+        domainName: 'api.example.com',
+        certificateArn:
+          'arn:aws:acm:ap-southeast-2:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+    });
+    expect(Environment.Variables).toMatchObject({
+      STUDENT_PORTAL_URL: 'https://learn.example.com',
+      CORE_API_URL: 'https://api.example.com',
+    });
+  });
+
+  it('is given no sender and no SES access when the stage configures none', () => {
+    expect(deliveryFunction({}).Environment.Variables).not.toHaveProperty(
+      'NOTIFICATIONS_FROM_ADDRESS',
+    );
+    expect(sesStatements({})).toEqual([]);
+  });
+
+  it('may send only from the configured identity, and no other function may send', () => {
+    const statements = sesStatements(configured);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].name).toBe('StreamRouter');
+    expect(statements[0].statement.Action).toBe('ses:SendEmail');
+    expect(statements[0].statement.Resource).toEqual({
+      'Fn::Join': [
+        '',
+        [
+          'arn:',
+          { Ref: 'AWS::Partition' },
+          ':ses:ap-southeast-2:111122223333:identity/example.com',
+        ],
+      ],
+    });
+  });
+
+  it('is read by the delivery and unsubscribe functions only', () => {
+    const readers = secretReaders({});
+    expect(readers).toHaveLength(2);
+    expect(readers.sort()).toEqual([
+      expect.stringMatching(/^CoreApi\/NotificationUnsubscribe/),
+      expect.stringMatching(/^StreamRouter\/NotificationDelivery/),
+    ]);
+  });
+
+  it('keeps the stage under the resource cap', () => {
+    for (const [name, template] of stackTemplates(configured)) {
+      expect(
+        Object.keys(template.toJSON().Resources ?? {}).length,
+        name,
+      ).toBeLessThan(450);
+    }
   });
 });
 
@@ -580,18 +861,10 @@ describe('search collection (#53)', () => {
 describe('search indexing (#53)', () => {
   const stack = synth({});
 
-  // Local dev's event runner filters the stream with the same definition,
-  // the same as progress recalculation above.
-  it('is triggered by exactly the shared search stream filters', () => {
-    expect(streamFilterPatterns(stack('CoreApi'), 'SearchIndexing')).toEqual(
-      asPatterns(SEARCH_STREAM_FILTERS),
-    );
-  });
-
-  // Everything it indexes is on the stream record itself, so it reads the
-  // core table's stream but never the table.
-  it('gives the indexing function write access to the search collection, and only stream access to the core table', () => {
-    const template = stack('CoreApi');
+  // It re-reads each changed course from the table (R-3), so it reads the
+  // table, and still never writes it.
+  it('gives the indexing function write access to the search collection, and read-only access to the core table', () => {
+    const template = stack('StreamRouter');
     const policies = Object.values(
       template.findResources('AWS::IAM::Policy', {
         Properties: {
@@ -613,8 +886,10 @@ describe('search indexing (#53)', () => {
 
     expect(actions).toContain('aoss:APIAccessAll');
     expect(actions).toContain('dynamodb:GetRecords');
-    expect(actions).not.toContain('dynamodb:GetItem');
+    expect(actions).toContain('dynamodb:GetItem');
     expect(actions).not.toContain('dynamodb:PutItem');
+    expect(actions).not.toContain('dynamodb:UpdateItem');
+    expect(actions).not.toContain('dynamodb:DeleteItem');
   });
 });
 
@@ -788,6 +1063,97 @@ describe('the media pipeline’s safety nets (#125, #185)', () => {
   });
 });
 
+describe('automatic captions (US4)', () => {
+  const media = synth({})('MediaPipeline');
+  const functionIdOf = (prefix: string) =>
+    Object.keys(media.findResources('AWS::Lambda::Function')).find((id) =>
+      id.startsWith(prefix),
+    )!;
+  const statementsFor = (rolePrefix: string) =>
+    Object.values(media.findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        (
+          policy as { Properties: { Roles: { Ref: string }[] } }
+        ).Properties.Roles.some(({ Ref }) => Ref.startsWith(rolePrefix)),
+      )
+      .flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                PolicyDocument: {
+                  Statement: { Action: string | string[]; Resource: unknown }[];
+                };
+              };
+            }
+          ).Properties.PolicyDocument.Statement,
+      );
+  const allows = (rolePrefix: string, action: string, resource?: string) =>
+    statementsFor(rolePrefix).some(
+      (s) =>
+        [s.Action].flat().some((a) => a === action) &&
+        (resource === undefined ||
+          JSON.stringify(s.Resource).includes(resource)),
+    );
+
+  it('routes Transcribe completions and failures to its own Lambda, keeping what it fails on', () => {
+    media.hasResourceProperties('AWS::Events::Rule', {
+      EventPattern: {
+        source: ['aws.transcribe'],
+        'detail-type': ['Transcribe Job State Change'],
+        detail: { TranscriptionJobStatus: ['COMPLETED', 'FAILED'] },
+      },
+      Targets: [
+        Match.objectLike({
+          Arn: { 'Fn::GetAtt': [functionIdOf('TranscribeComplete'), 'Arn'] },
+          DeadLetterConfig: {
+            Arn: {
+              'Fn::GetAtt': [
+                Match.stringLikeRegexp('^TranscribeCompleteFailures'),
+                'Arn',
+              ],
+            },
+          },
+        }),
+      ],
+    });
+    media.hasResourceProperties('AWS::Lambda::EventInvokeConfig', {
+      FunctionName: { Ref: functionIdOf('TranscribeComplete') },
+      MaximumRetryAttempts: 2,
+    });
+  });
+
+  it('lets transcribe-complete read the job, use the table, and move the WebVTT into captions only', () => {
+    const role = 'TranscribeCompleteServiceRole';
+    expect(allows(role, 'transcribe:GetTranscriptionJob')).toBe(true);
+    expect(allows(role, 'dynamodb:PutItem')).toBe(true);
+    expect(
+      allows(role, 's3:DeleteObject*', '/courses/*/transcribe-output/*'),
+    ).toBe(true);
+    expect(
+      allows(role, 's3:GetObject*', '/courses/*/transcribe-output/*'),
+    ).toBe(true);
+    expect(allows(role, 's3:PutObject', '/courses/*/captions/*')).toBe(true);
+    expect(allows(role, 's3:PutObject', '/courses/*/transcribe-output/*')).toBe(
+      false,
+    );
+  });
+
+  it.each(['TranscodeComplete', 'TranscodeReconciler'])(
+    'lets %s start Transcribe jobs, read the audio file and write the scratch prefix only',
+    (name) => {
+      const role = `${name}ServiceRole`;
+      expect(allows(role, 'transcribe:StartTranscriptionJob')).toBe(true);
+      expect(allows(role, 'transcribe:TagResource')).toBe(true);
+      expect(allows(role, 's3:GetObject*', '/transcribe-input/*')).toBe(true);
+      expect(
+        allows(role, 's3:PutObject', '/courses/*/transcribe-output/*'),
+      ).toBe(true);
+      expect(allows(role, 's3:PutObject', '/courses/*/captions/*')).toBe(false);
+    },
+  );
+});
+
 describe('limits a stage leaves out', () => {
   const stack = synth({});
 
@@ -834,5 +1200,46 @@ describe('limits a stage leaves out', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: false },
     });
+  });
+});
+
+describe('the notification unsubscribe secret', () => {
+  const secrets = (components: StageComponents) =>
+    synth(components)('Data').findResources('AWS::SecretsManager::Secret');
+  const unsubscribeSecrets = (components: StageComponents) =>
+    Object.entries(secrets(components)).filter(([id]) =>
+      id.startsWith('NotificationUnsubscribeSecret'),
+    );
+
+  it('is a generated 64-character value', () => {
+    const [[, secret]] = unsubscribeSecrets({});
+    expect(secret.Properties.GenerateSecretString).toMatchObject({
+      PasswordLength: 64,
+      ExcludePunctuation: true,
+    });
+  });
+
+  it('is encrypted with a customer-managed key unless the stage turns that off', () => {
+    const [[, encrypted]] = unsubscribeSecrets({});
+    expect(encrypted.Properties.KmsKeyId).toBeDefined();
+
+    const [[, plain]] = unsubscribeSecrets({
+      coreTable: { enableKmsEncryption: false },
+    });
+    expect(plain.Properties.KmsKeyId).toBeUndefined();
+  });
+
+  it('is retained on delete unless the stage opts out, like the table', () => {
+    const [[, retained]] = unsubscribeSecrets({});
+    expect(retained.DeletionPolicy).toBe('Retain');
+
+    const [[, removed]] = unsubscribeSecrets({
+      coreTable: { retainOnDelete: false },
+    });
+    expect(removed.DeletionPolicy).toBe('Delete');
+  });
+
+  it('is the only notification secret in Data', () => {
+    expect(unsubscribeSecrets({})).toHaveLength(1);
   });
 });

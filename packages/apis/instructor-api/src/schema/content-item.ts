@@ -5,6 +5,8 @@
 
 import { LESSON_FILE_MAX_BYTES } from '@discava/common-server-utils/lesson-files';
 import { isValidTiptapDocument } from '@discava/common-tiptap';
+import { isCaptionLanguage } from '@discava/common-web-utils/caption-languages';
+import { reportedCaptionsStatus } from '@discava/core-table';
 import { z } from 'zod';
 import {
   QuizAnswerKeySchema,
@@ -16,6 +18,35 @@ import {
 import { CurriculumVisibilitySchema } from './visibility.js';
 
 export const ContentItemStatusSchema = z.enum(['pending', 'ready', 'failed']);
+
+export const CaptionsStatusSchema = z.enum(['pending', 'ready', 'failed']);
+
+// A video record as stored holds its caption tracks (with S3 keys) and the
+// raw status; its output carries only the summary the row needs. Wrapped
+// around the schemas that can return a video, ahead of their parse.
+const withCaptionSummary = <S extends z.ZodType>(schema: S) =>
+  z.preprocess((item) => {
+    if (
+      typeof item !== 'object' ||
+      item === null ||
+      (item as { type?: unknown }).type !== 'video'
+    ) {
+      return item;
+    }
+    const video = item as {
+      captionTracks?: unknown[];
+      captionsStatus?: string;
+      captionsPendingSince?: string;
+    };
+    const captionsStatus = reportedCaptionsStatus(video);
+    return {
+      ...video,
+      ...(captionsStatus && { captionsStatus }),
+      ...(video.captionTracks && {
+        captionTrackCount: video.captionTracks.length,
+      }),
+    };
+  }, schema);
 
 const ContentItemBaseSchema = {
   contentItemId: z.string(),
@@ -43,6 +74,12 @@ export const VideoContentItemSchema = z.object({
   previousS3Key: z.string().optional(),
   mimeType: z.string(),
   durationSeconds: z.number().optional(),
+  // For the row's caption badge: the automatic captioning's status (a
+  // pending one older than two hours is reported failed) and how many tracks
+  // there are (both absent on a video never captioned). The tracks themselves, with their S3 keys, are never returned
+  // here; createVideoUrl lists them.
+  captionsStatus: CaptionsStatusSchema.optional(),
+  captionTrackCount: z.number().int().min(0).optional(),
 });
 
 export const TextContentItemSchema = z.object({
@@ -87,13 +124,15 @@ export const AssignmentContentItemSchema = z.object({
   maxPoints: z.number(),
 });
 
-export const ContentItemSchema = z.discriminatedUnion('type', [
+const ContentItemUnionSchema = z.discriminatedUnion('type', [
   VideoContentItemSchema,
   TextContentItemSchema,
   QuizContentItemSchema,
   FileContentItemSchema,
   AssignmentContentItemSchema,
 ]);
+
+export const ContentItemSchema = withCaptionSummary(ContentItemUnionSchema);
 
 export type IContentItem = z.output<typeof ContentItemSchema>;
 
@@ -139,7 +178,9 @@ export type ICreateContentItemVideoInput = z.output<
   typeof CreateContentItemVideoInputSchema
 >;
 
-export const CreateContentItemVideoOutputSchema = VideoContentItemSchema;
+export const CreateContentItemVideoOutputSchema = withCaptionSummary(
+  VideoContentItemSchema,
+);
 
 export type ICreateContentItemVideoOutput = z.output<
   typeof CreateContentItemVideoOutputSchema
@@ -183,7 +224,9 @@ export type IUpdateContentItemVideoInput = z.output<
   typeof UpdateContentItemVideoInputSchema
 >;
 
-export const UpdateContentItemVideoOutputSchema = VideoContentItemSchema;
+export const UpdateContentItemVideoOutputSchema = withCaptionSummary(
+  VideoContentItemSchema,
+);
 
 export type IUpdateContentItemVideoOutput = z.output<
   typeof UpdateContentItemVideoOutputSchema
@@ -280,11 +323,74 @@ export const CreateContentItemVideoUrlOutputSchema = z.object({
   // cookies set alongside. Not in local dev, where S3Mock serves the video
   // unsigned and refuses credentialed cross-origin requests (#137).
   withCredentials: z.boolean(),
+  // The played manifest's nonce: the version the tracks belong to.
+  versionId: z.string(),
+  // The automatic captioning's status; absent before the video's first
+  // captioning starts. A pending one older than two hours reads as failed.
+  captionsStatus: CaptionsStatusSchema.optional(),
+  // The tracks of this version, default first.
+  captions: z.array(
+    z.object({
+      trackId: z.string(),
+      language: z.string(),
+      label: z.string(),
+      isDefault: z.boolean(),
+      source: z.enum(['auto', 'uploaded']),
+      // Plain CloudFront URL under the version's folder, authorised by the
+      // signed cookies set with this response.
+      url: z.string(),
+    }),
+  ),
 });
 
 export type ICreateContentItemVideoUrlOutput = z.output<
   typeof CreateContentItemVideoUrlOutputSchema
 >;
+
+const CaptionItemRefSchema = {
+  courseId: z.string(),
+  moduleId: z.string(),
+  lessonId: z.string(),
+  contentItemId: z.string(),
+};
+
+export const CaptionTrackOutputSchema = z.object({
+  trackId: z.string(),
+  language: z.string(),
+  label: z.string(),
+  isDefault: z.boolean(),
+  source: z.enum(['auto', 'uploaded']),
+});
+
+// A video's tracks, with no S3 keys.
+export const CaptionTracksOutputSchema = z.object({
+  captions: z.array(CaptionTrackOutputSchema),
+});
+
+export type ICaptionTracksOutput = z.output<typeof CaptionTracksOutputSchema>;
+
+export const CaptionUploadUrlInputSchema = z.object(CaptionItemRefSchema);
+
+export const CaptionUploadUrlOutputSchema = z.object({
+  uploadId: z.string(),
+  url: z.string(),
+  headers: z.record(z.string(), z.string()),
+});
+
+export const AttachCaptionInputSchema = z.object({
+  ...CaptionItemRefSchema,
+  uploadId: z.uuid(),
+  language: z.string().refine(isCaptionLanguage, 'Choose a listed language'),
+  // Plain text, shown in the player's captions menu.
+  label: z.string().trim().min(1).max(40).optional(),
+});
+
+export type IAttachCaptionInput = z.output<typeof AttachCaptionInputSchema>;
+
+export const RemoveCaptionInputSchema = z.object({
+  ...CaptionItemRefSchema,
+  trackId: z.string(),
+});
 
 export const DeleteContentItemInputSchema = z.object({
   courseId: z.string(),

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { t } from './init.js';
+import { listAnnouncements } from './procedures/announcement.js';
 import {
   mySubmission,
   submissionFileUrl,
@@ -18,7 +19,11 @@ import {
   completeContentItem,
   myItemCompletions,
 } from './procedures/completion.js';
-import { fileUrl, videoUrl } from './procedures/content-item.js';
+import {
+  fileUrl,
+  saveVideoPosition,
+  videoUrl,
+} from './procedures/content-item.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -29,6 +34,14 @@ import {
 import { enrol, myEnrolment } from './procedures/enrolment.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
+import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationReadProcedure,
+  notificationPreferences,
+  notificationUnreadCount,
+  setNotificationPreferenceProcedure,
+} from './procedures/notification.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -52,6 +65,9 @@ export const appRouter = router({
     publicView: publicViewCourse,
     view: viewCourse,
   }),
+  announcement: router({
+    list: listAnnouncements,
+  }),
   assignment: router({
     uploadUrl,
     submit,
@@ -66,7 +82,16 @@ export const appRouter = router({
   contentItem: router({
     complete: completeContentItem,
     videoUrl,
+    saveVideoPosition,
     fileUrl,
+  }),
+  notification: router({
+    list: listNotifications,
+    unreadCount: notificationUnreadCount,
+    markRead: markNotificationReadProcedure,
+    markAllRead: markAllNotificationsRead,
+    preferences: notificationPreferences,
+    setPreference: setNotificationPreferenceProcedure,
   }),
   quiz: router({
     view: viewQuiz,

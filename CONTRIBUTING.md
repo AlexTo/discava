@@ -50,12 +50,17 @@ pnpm dev
 | core-api / instructor-api | 2022 / 2023 | API Gateway and Lambda |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
-| Event runner | 2024 | MediaConvert (ffmpeg in Docker), EventBridge, Scheduler, the table's stream, and Cognito's pre token generation trigger (which keeps user records in step) |
+| ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
+| Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step) |
 | Local OIDC server | 9400 | Cognito |
 
 **Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.
 
-**Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Course progress updates a few seconds after a change, as when deployed.
+**Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Each finished video also gets a placeholder caption track, written by the local Transcribe stand-in and handled by the same completion code as the real event, so the captions menu can be tried without Transcribe. Course progress updates a few seconds after a change, as when deployed.
+
+**Notifications.** `pnpm nx run @discava/common-scripts:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
+
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/common-scripts:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
 
 **Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run:
 
@@ -63,7 +68,7 @@ pnpm dev
 pnpm nx run @discava/common-scripts:reset-local-data
 ```
 
-**What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, and the stuck-video reconciler. Check changes to those after deploying.
+**What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding and its extra audio output, real Transcribe output and the Transcribe completion event, caption access through CloudFront cookies, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, and the stuck-video reconciler. Check changes to those after deploying.
 
 ### Adding a New Project or Component
 

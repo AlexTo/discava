@@ -144,15 +144,16 @@ export class UploadBucket extends Construct {
     );
   }
 
-  public grantPut(grantee: IGrantable): Grant {
-    return this.bucket.grantPut(grantee);
+  /** `objectsKeyPattern` limits the grant to matching keys (e.g. `prefix/*`). */
+  public grantPut(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantPut(grantee, objectsKeyPattern);
   }
 
-  public grantRead(grantee: IGrantable): Grant {
-    return this.bucket.grantRead(grantee);
+  public grantRead(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantRead(grantee, objectsKeyPattern);
   }
 
-  public grantDelete(grantee: IGrantable): Grant {
-    return this.bucket.grantDelete(grantee);
+  public grantDelete(grantee: IGrantable, objectsKeyPattern?: string): Grant {
+    return this.bucket.grantDelete(grantee, objectsKeyPattern);
   }
 }

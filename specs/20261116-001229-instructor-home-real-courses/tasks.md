@@ -54,7 +54,7 @@ description: "Task list for real courses on the instructor home page"
 
 - [x] T007 Add `packages/e2e/src/scenarios/instructor-home.e2e.ts` using `packages/e2e/src/helpers/` (see `course-lifecycle.e2e.ts`): a new instructor (own user via the local OIDC "Someone else" form) opens the home page and sees the empty state and none of the sample strings from T003; creates a course with a uniquely named title from the home page's "Create a course"; returns to the home page and sees that title listed; opens it from the card and the editor loads with no "You don't have permission" message. Keep the invariant check after the test and never reset local data (constitution IV). If the course does not appear on return, invalidate `listByInstructor` in `packages/websites/instructor-portal/src/components/create-course-dialog.tsx` on success (plan R5) with a component test in `create-course-dialog.test.tsx`.
 - [x] T008 Run `pnpm nx affected --target lint`, `--target test` and `--target build` and fix what they report in files this feature touched. Do not weaken or skip any test.
-- [ ] T009 (human) Walk through [quickstart.md](./quickstart.md)'s manual steps against `pnpm dev`, also checking that courses appear within about 3 seconds (SC-003), saving a screenshot of each step, including the error state, to `tmp/screenshots/pr-<number>/` (constitution VIII).
+- [x] T009 (human) Walk through [quickstart.md](./quickstart.md)'s manual steps against `pnpm dev`, also checking that courses appear within about 3 seconds (SC-003), saving a screenshot of each step, including the error state, to `tmp/screenshots/pr-<number>/` (constitution VIII).
 
 ---
 

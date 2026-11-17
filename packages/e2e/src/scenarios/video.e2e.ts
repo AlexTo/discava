@@ -4,6 +4,14 @@
  */
 
 import {
+  AUTO_CAPTION_CUE,
+  CAPTION_CUE,
+  closeDialog,
+  removeCaption,
+  shownCue,
+  uploadCaption,
+} from '../helpers/captions.js';
+import {
   addLesson,
   addModule,
   addVideoItem,
@@ -12,15 +20,17 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
   expectCourseCompleted,
+  lessonItem,
   lessonVideo,
   markItemDone,
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
-import { test } from '../helpers/table-invariants.js';
+import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 
@@ -49,6 +59,16 @@ test('an instructor uploads a video, and a student watches it', async ({
       file: THREE_SECOND_VIDEO,
     });
     await expectVideoPreviewToPlay(instructor, 'Video one');
+    // A second video, for checking that the viewer's preferences carry over.
+    await addVideoItem(instructor, {
+      title: 'Video two',
+      file: THREE_SECOND_VIDEO,
+    });
+    await expectVideoPreviewToPlay(instructor, 'Video two');
+    await expect(
+      instructor.getByRole('button', { name: 'Playback speed' }),
+    ).toBeVisible();
+    await screenshot(instructor, 'instructor video preview with controls');
     await publishCourse(instructor);
   });
 
@@ -56,8 +76,426 @@ test('an instructor uploads a video, and a student watches it', async ({
     await openCourse(student, course);
     await enrol(student, newUser('Sam', ['student']));
     await startFirstLesson(student);
-    await expectToPlay(lessonVideo(student, 'Video one'));
+
+    const video = lessonVideo(student, 'Video one');
+    const player = (title: string) =>
+      lessonItem(student, title).getByRole('group', { name: 'Video player' });
+    const bar = (title: string) =>
+      lessonItem(student, title).getByRole('group', {
+        name: 'Video controls',
+      });
+    const state = (title: string) =>
+      lessonVideo(student, title).evaluate((v: HTMLVideoElement) => ({
+        paused: v.paused,
+        muted: v.muted,
+        volume: v.volume,
+        speed: v.playbackRate,
+        time: v.currentTime,
+      }));
+
+    // The bar is on show while the video is paused.
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    await expect(bar('Video one')).toHaveAttribute('data-visible', 'true');
+    // The bar is at the bottom of the player: bring it into the picture.
+    await player('Video one').scrollIntoViewIfNeeded();
+    await screenshot(student, 'control bar on a paused video');
+
+    await expectToPlay(video);
+
+    const speed = lessonItem(student, 'Video one').getByRole('button', {
+      name: 'Playback speed',
+    });
+    await speed.click();
+    await expect(
+      student.getByRole('menuitemradio', { name: '1.5x' }),
+    ).toBeVisible();
+    await screenshot(student, 'speed menu');
+    await student.getByRole('menuitemradio', { name: '1.5x' }).click();
+    await expect(speed).toHaveText('1.5x');
+    expect((await state('Video one')).speed).toBe(1.5);
+    await screenshot(student, 'control bar at 1.5x');
+
+    // Mute and volume. The player is muted by `expectToPlay`, so the first M
+    // unmutes. The Mute button keeps its name and shows its state as pressed.
+    const mute = lessonItem(student, 'Video one').getByRole('button', {
+      name: 'Mute',
+    });
+    await player('Video one').press('m');
+    await expect(mute).toHaveAttribute('aria-pressed', 'false');
+    expect((await state('Video one')).muted).toBe(false);
+    await player('Video one').press('m');
+    await expect(mute).toHaveAttribute('aria-pressed', 'true');
+    expect((await state('Video one')).muted).toBe(true);
+    await screenshot(student, 'muted');
+    // Lowering the volume unmutes, as in other players.
+    for (let i = 0; i < 3; i++) {
+      await player('Video one').press('ArrowDown');
+    }
+    await expect(mute).toHaveAttribute('aria-pressed', 'false');
+    const lowered = await state('Video one');
+    expect(lowered.muted).toBe(false);
+    expect(lowered.volume).toBeCloseTo(0.85, 2);
+    await expect(
+      lessonItem(student, 'Video one').getByRole('slider', { name: 'Volume' }),
+    ).toHaveAttribute('aria-valuetext', '85%');
+    await screenshot(student, 'volume lowered to 85 percent');
+
+    // Shortcuts: K plays and pauses, 5 jumps to half way, the right arrow
+    // seeks on, and < and > step the speed (1.5x to 1.25x, then up to 1.75x).
+    // The video has ended by now (a K on an ended video plays it again), so
+    // go back to the start and check K starts it and then stops it.
+    await player('Video one').press('0');
+    await expect.poll(async () => (await state('Video one')).time).toBe(0);
+    await player('Video one').press('k');
+    await expect
+      .poll(async () => (await state('Video one')).paused)
+      .toBe(false);
+    await player('Video one').press('k');
+    await expect.poll(async () => (await state('Video one')).paused).toBe(true);
+    await expect(bar('Video one')).toHaveAttribute('data-visible', 'true');
+    await screenshot(student, 'paused with the K shortcut');
+    await player('Video one').press('5');
+    await expect
+      .poll(async () => (await state('Video one')).time)
+      .toBeGreaterThan(1);
+    expect((await state('Video one')).time).toBeLessThan(2);
+    const half = (await state('Video one')).time;
+    await player('Video one').press('ArrowRight');
+    await expect
+      .poll(async () => (await state('Video one')).time)
+      .toBeGreaterThan(half + 0.5);
+    await player('Video one').press('<');
+    await expect.poll(async () => (await state('Video one')).speed).toBe(1.25);
+    await player('Video one').press('>');
+    await player('Video one').press('>');
+    await expect.poll(async () => (await state('Video one')).speed).toBe(1.75);
+    await expect(speed).toHaveText('1.75x');
+    await screenshot(student, 'speed stepped to 1.75x with the shortcuts');
+
+    // Fullscreen, where headless Chromium allows it.
+    await player('Video one').press('f');
+    const fullscreen = await expect
+      .poll(() => student.evaluate(() => document.fullscreenElement !== null), {
+        timeout: 3_000,
+      })
+      .toBe(true)
+      .then(
+        () => true,
+        () => false,
+      );
+    if (fullscreen) {
+      await screenshot(student, 'fullscreen');
+      await player('Video one').press('f');
+      await expect
+        .poll(() => student.evaluate(() => document.fullscreenElement))
+        .toBeNull();
+    }
+
+    // The preferences outlive the page and apply to another video.
+    await student.reload();
+    const second = lessonVideo(student, 'Video two');
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    await expect.poll(async () => (await state('Video two')).speed).toBe(1.75);
+    const restored = await state('Video two');
+    expect(restored.volume).toBeCloseTo(0.85, 2);
+    expect(restored.muted).toBe(false);
+    await expect(
+      lessonItem(student, 'Video two').getByRole('button', {
+        name: 'Playback speed',
+      }),
+    ).toHaveText('1.75x');
+    await player('Video two').scrollIntoViewIfNeeded();
+    await screenshot(student, 'second video with the saved speed and volume');
+
+    // Reduced motion: the bar shows while paused, hides once activity stops
+    // while playing, and never fades.
+    const transition = () =>
+      bar('Video two').evaluate(
+        (el) => getComputedStyle(el).transitionProperty,
+      );
+    expect(await transition()).toBe('opacity');
+    await student.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await transition()).toBe('none');
+    await expect(bar('Video two')).toHaveAttribute('data-visible', 'true');
+    await player('Video two').scrollIntoViewIfNeeded();
+    await screenshot(student, 'reduced motion, bar on a paused video');
+    // Slow enough to outlast the 3 seconds before the bar hides, and with
+    // focus out of the player, which keeps the bar on.
+    await second.evaluate(async (v: HTMLVideoElement) => {
+      v.playbackRate = 0.5;
+      (document.activeElement as HTMLElement | null)?.blur();
+      await v.play();
+    });
+    await expect(bar('Video two')).toHaveAttribute('data-visible', 'false', {
+      timeout: 8_000,
+    });
+    expect((await state('Video two')).paused).toBe(false);
+    await screenshot(student, 'reduced motion, bar hidden while playing');
+
+    // Resuming. The test video is 3 seconds long, so "about where it
+    // stopped" is a seek to half way, and the whole video counts as watched
+    // only at its very end. Saves go out on a seek, a pause and every 10 seconds of playing.
+    await student.emulateMedia({ reducedMotion: 'no-preference' });
+    const saved = () =>
+      student.waitForResponse(
+        (response) =>
+          response.url().includes('contentItem.saveVideoPosition') &&
+          response.ok(),
+      );
+    await second.evaluate((v: HTMLVideoElement) => v.pause());
+    const halfSaved = saved();
+    await player('Video two').press('5');
+    await halfSaved;
+
+    await student.reload();
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    // Within 10 seconds before where it stopped, and not playing.
+    await expect
+      .poll(async () => (await state('Video two')).time)
+      .toBeGreaterThan(0.5);
+    expect((await state('Video two')).paused).toBe(true);
+    await expect(lessonItem(student, 'Video two')).toContainText('Resumed at');
+    await player('Video two').scrollIntoViewIfNeeded();
+    await screenshot(student, 'resumed where the video stopped');
+
+    // Watching to the end clears the position: the next visit starts over.
+    const nearEndSaved = saved();
+    await second.evaluate((v: HTMLVideoElement) => {
+      v.playbackRate = 2;
+      v.currentTime = Math.max(0, v.duration - 1);
+    });
+    await nearEndSaved;
+    const endSaved = saved();
+    await second.evaluate((v: HTMLVideoElement) => v.play());
+    await endSaved;
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.ended))
+      .toBe(true);
+    await student.reload();
+    await expect
+      .poll(() => second.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    expect((await state('Video two')).time).toBe(0);
+    await expect(lessonItem(student, 'Video two')).not.toContainText(
+      'Resumed at',
+    );
+    await screenshot(student, 'a finished video starts at the beginning');
+
     await markItemDone(student, 'Video one');
+    await markItemDone(student, 'Video two');
+  });
+
+  await test.step('a student sees the automatic captions of a new video', async () => {
+    // Nobody uploaded a track for Video two: once it was ready, the event
+    // runner's stand-in for Transcribe made the default one, with its
+    // placeholder cue (deployed, Amazon Transcribe writes the real text).
+    await student.reload();
+    const item = lessonItem(student, 'Video two');
+    const video = lessonVideo(student, 'Video two');
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    const captions = item.getByRole('button', { name: /^Captions/ });
+    await expect(captions).toBeVisible({ timeout: 30_000 });
+    await expect(captions).toHaveAccessibleName('Captions: off');
+    await item
+      .getByRole('group', { name: 'Video player' })
+      .scrollIntoViewIfNeeded();
+    await captions.click();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+    await screenshot(student, 'automatic captions listed as the default track');
+
+    await student
+      .getByRole('menuitemradio', { name: 'English (default)' })
+      .click();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+    await expect
+      .poll(() =>
+        video.evaluate((v: HTMLVideoElement) => {
+          v.currentTime = 1;
+          const cues = v.textTracks[0]?.activeCues;
+          return cues && cues.length > 0 ? (cues[0] as VTTCue).text : '';
+        }),
+      )
+      .toBe(AUTO_CAPTION_CUE);
+    await screenshot(student, 'the automatic captions placeholder shown');
+
+    // The choice survives a reload.
+    await student.reload();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+
+    // Turn them off again, so the next step starts from the default.
+    await item.getByRole('group', { name: 'Video player' }).focus();
+    await student.keyboard.press('c');
+    await expect(captions).toHaveAccessibleName('Captions: off');
+  });
+
+  await test.step('a student reads along with captions', async () => {
+    // The instructor uploads an English track, replacing the automatic one
+    // in the same language.
+    const dialog = await uploadCaption(instructor, 'Video one', {
+      tag: 'en-US',
+      cue: CAPTION_CUE,
+    });
+    await expect(
+      dialog.getByRole('listitem', { name: 'English' }),
+    ).toContainText('uploaded');
+    await screenshot(
+      instructor,
+      'captions dialog with an uploaded English track',
+    );
+    await closeDialog(instructor);
+    await student.reload();
+    const video = lessonVideo(student, 'Video one');
+    await expect
+      .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+        timeout: 30_000,
+      })
+      .toBeGreaterThan(0);
+    const item = lessonItem(student, 'Video one');
+    const captions = item.getByRole('button', { name: /^Captions/ });
+    await expect(captions).toBeVisible();
+    await expect(captions).toHaveAccessibleName('Captions: off');
+    await item
+      .getByRole('group', { name: 'Video player' })
+      .scrollIntoViewIfNeeded();
+    await captions.click();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+    await screenshot(student, 'captions menu with the default track');
+
+    await student
+      .getByRole('menuitemradio', { name: 'English (default)' })
+      .click();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+    await expect
+      .poll(() =>
+        video.evaluate((v: HTMLVideoElement) => {
+          v.currentTime = 1;
+          const cues = v.textTracks[0]?.activeCues;
+          return cues && cues.length > 0 ? (cues[0] as VTTCue).text : '';
+        }),
+      )
+      .toBe(CAPTION_CUE);
+    // The cue is lifted off the last line, so the control bar doesn't cover it.
+    await expect
+      .poll(() =>
+        video.evaluate(
+          (v: HTMLVideoElement) =>
+            (v.textTracks[0]?.activeCues?.[0] as VTTCue).line,
+        ),
+      )
+      .toBe(-4);
+    await screenshot(student, 'a caption shown above the control bar');
+
+    // The choice survives a reload, and the C shortcut turns it off and on.
+    await student.reload();
+    await expect(captions).toHaveAccessibleName('Captions: English');
+    await item.getByRole('group', { name: 'Video player' }).focus();
+    await student.keyboard.press('c');
+    await expect(captions).toHaveAccessibleName('Captions: off');
+    await student.keyboard.press('c');
+    await expect(captions).toHaveAccessibleName('Captions: English');
+  });
+
+  await test.step('an instructor adds, replaces and removes a second language', async () => {
+    const SPANISH_CUE = 'Los subtítulos están en español.';
+    const SPANISH_CUE_2 = 'Estos subtítulos reemplazan a los anteriores.';
+
+    // The student's view of Video one, after a reload: its captions menu.
+    const openMenu = async () => {
+      await student.reload();
+      const item = lessonItem(student, 'Video one');
+      const video = lessonVideo(student, 'Video one');
+      await expect
+        .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration || 0), {
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(0);
+      const captions = item.getByRole('button', { name: /^Captions/ });
+      await item
+        .getByRole('group', { name: 'Video player' })
+        .scrollIntoViewIfNeeded();
+      await captions.click();
+      return { video, captions };
+    };
+
+    // A second language, which the student's menu lists.
+    const added = await uploadCaption(instructor, 'Video one', {
+      tag: 'es-ES',
+      cue: SPANISH_CUE,
+    });
+    await expect(
+      added.getByRole('listitem', { name: 'Spanish' }),
+    ).toContainText('uploaded');
+    await screenshot(instructor, 'captions dialog with a second language');
+    await closeDialog(instructor);
+
+    let { video, captions } = await openMenu();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toBeVisible();
+    await screenshot(student, 'captions menu listing the second language');
+    await student.getByRole('menuitemradio', { name: 'Spanish' }).click();
+    await expect(captions).toHaveAccessibleName('Captions: Spanish');
+    await expect.poll(() => shownCue(video)).toBe(SPANISH_CUE);
+    await screenshot(student, 'a second-language caption shown over the video');
+
+    // Uploading the same language again replaces the track.
+    const replaced = await uploadCaption(instructor, 'Video one', {
+      tag: 'es-ES',
+      cue: SPANISH_CUE_2,
+    });
+    await expect(
+      replaced.getByRole('listitem', { name: 'Spanish' }),
+    ).toHaveCount(1);
+    await screenshot(instructor, 'captions dialog after replacing a language');
+    await closeDialog(instructor);
+
+    ({ video, captions } = await openMenu());
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toHaveCount(1);
+    await student.getByRole('menuitemradio', { name: 'Spanish' }).click();
+    await expect.poll(() => shownCue(video)).toBe(SPANISH_CUE_2);
+
+    // Removing it takes it off the student's menu on the next load.
+    const removed = await removeCaption(instructor, 'Video one', 'Spanish');
+    await screenshot(instructor, 'captions dialog after removing a language');
+    await expect(
+      removed.getByRole('listitem', { name: 'English' }),
+    ).toBeVisible();
+    await closeDialog(instructor);
+
+    ({ captions } = await openMenu());
+    await expect(
+      student.getByRole('menuitemradio', { name: 'English (default)' }),
+    ).toBeVisible();
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toHaveCount(0);
+    await screenshot(student, 'captions menu after the language was removed');
+    await student.keyboard.press('Escape');
+    await expect(captions).toBeVisible();
   });
 
   await test.step('the course shows as completed', async () => {

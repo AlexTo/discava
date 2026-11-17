@@ -156,7 +156,7 @@ export function CreateModuleDialog({
             >
               {([canSubmit, isSubmitting]) => (
                 <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Creating...' : 'Create module'}
+                  {isSubmitting ? 'Creating…' : 'Create module'}
                 </Button>
               )}
             </form.Subscribe>

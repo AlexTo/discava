@@ -45,6 +45,13 @@ describe('PUBLIC_OPERATIONS', () => {
     expect(all).toEqual(expect.arrayContaining([...PUBLIC_OPERATIONS]));
   });
 
+  it('does not list the unsubscribe route, which is served beside the router', () => {
+    expect(all.filter((path) => /unsubscribe/i.test(path))).toEqual([]);
+    expect(
+      PUBLIC_OPERATIONS.filter((path) => /unsubscribe/i.test(path)),
+    ).toEqual([]);
+  });
+
   it.each(all)('matches how %s treats an anonymous caller', async (path) => {
     // A public procedure listed here is served without a Cognito token, and
     // a protected one must not be: API Gateway's authorizer is the first

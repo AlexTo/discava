@@ -46,7 +46,7 @@ function RouteComponent() {
       ) : query.isError ? (
         isNotFound(query.error) ? (
           <div className="space-y-4 text-center">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-balance text-2xl font-bold tracking-tight">
               Certificate not found
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -74,7 +74,7 @@ function RouteComponent() {
           <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
             Certificate of completion
           </p>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-balance text-3xl font-bold tracking-tight">
             {query.data.learnerName}
           </h1>
           <p className="text-sm text-muted-foreground">

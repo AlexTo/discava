@@ -5,10 +5,24 @@
 
 import { t } from './init.js';
 import {
+  course as analyticsCourse,
+  quiz as analyticsQuiz,
+  courseSummaries,
+} from './procedures/analytics.js';
+import {
+  createAnnouncement,
+  listAnnouncements,
+} from './procedures/announcement.js';
+import {
   createQuizAssignment,
   createUploadAssignment,
   updateContentItemAssignment,
 } from './procedures/assignment.js';
+import {
+  attachContentItemCaption,
+  createContentItemCaptionUploadUrl,
+  removeContentItemCaption,
+} from './procedures/content-item-captions.js';
 import {
   createContentItemFile,
   createContentItemFileUploadUrl,
@@ -73,6 +87,15 @@ import {
 export const router = t.router;
 
 export const appRouter = router({
+  analytics: router({
+    courseSummaries,
+    course: analyticsCourse,
+    quiz: analyticsQuiz,
+  }),
+  announcement: router({
+    create: createAnnouncement,
+    list: listAnnouncements,
+  }),
   course: router({
     create: createCourse,
     archive: archiveCourse,
@@ -114,6 +137,9 @@ export const appRouter = router({
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
     createVideoUrl: createContentItemVideoUrl,
+    captionUploadUrl: createContentItemCaptionUploadUrl,
+    attachCaption: attachContentItemCaption,
+    removeCaption: removeContentItemCaption,
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,

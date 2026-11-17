@@ -179,7 +179,7 @@ export function EditLessonTextDialog({
             disabled={!canSave || isSaving}
             onClick={handleSave}
           >
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -303,10 +303,10 @@ export function RemoveLessonTextButton({
           >
             {archive
               ? isPending
-                ? 'Archiving...'
+                ? 'Archiving…'
                 : `Archive ${noun}`
               : isPending
-                ? 'Removing...'
+                ? 'Removing…'
                 : `Remove ${noun}`}
           </Button>
         </AlertDialogFooter>
