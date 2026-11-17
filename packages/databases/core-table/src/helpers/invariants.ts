@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { EntityItem } from 'electrodb';
+import type { createAnnouncementEntity } from '../entities/announcement.js';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
@@ -36,6 +37,11 @@ import {
   scoreStatsSk,
   sumContributions,
 } from './analytics.js';
+import {
+  ANNOUNCEMENT_BODY_MAX,
+  ANNOUNCEMENT_TITLE_MAX,
+  uuidV7Time,
+} from './announcement.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
 import { parseNotificationPosition } from './notification.js';
 import { NOTIFICATION_TYPES } from './notification-types.js';
@@ -242,7 +248,25 @@ export interface TableSnapshot {
   >[];
   notificationBroadcasts: Pick<
     Item<typeof createNotificationBroadcastEntity>,
-    'id' | 'type' | 'courseId' | 'status' | 'completedAt' | 'createdAt'
+    | 'id'
+    | 'type'
+    | 'courseId'
+    | 'dedupeKey'
+    | 'occurredAt'
+    | 'status'
+    | 'completedAt'
+    | 'createdAt'
+  >[];
+  announcements: Pick<
+    Item<typeof createAnnouncementEntity>,
+    | 'courseId'
+    | 'announcementId'
+    | 'title'
+    | 'body'
+    | 'authorId'
+    | 'createdAt'
+    | 'editedAt'
+    | 'version'
   >[];
 }
 
@@ -278,6 +302,8 @@ export const INVARIANTS = [
   'notification-state-exists',
   'notification-preference-shape',
   'notification-broadcast-done-complete',
+  'announcement-shape',
+  'announcement-has-broadcast',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1694,6 +1720,102 @@ export const checkNotificationBroadcastDoneComplete = (
     return [];
   });
 
+// 32. An announcement is well formed: its course exists, its id is a UUID v7
+// whose time is its createdAt, its title and body fit, it has an author, and
+// it has been edited (version above 1, editedAt not before createdAt) exactly
+// when it says so. The body's full schema is checked by the API on write; the
+// invariants import no editor code, so only its outline is checked here.
+export const checkAnnouncementShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const courseIds = new Set(snapshot.courses.map((c) => c.courseId));
+  return snapshot.announcements.flatMap((a) => {
+    const problems: string[] = [];
+    if (!courseIds.has(a.courseId)) {
+      problems.push('its course does not exist');
+    }
+    if (uuidV7Time(a.announcementId) !== a.createdAt) {
+      problems.push('announcementId is not a UUID v7 made at createdAt');
+    }
+    const title = a.title.trim();
+    if (
+      title.length < 1 ||
+      title.length > ANNOUNCEMENT_TITLE_MAX ||
+      title !== a.title
+    ) {
+      problems.push(`title is not 1 to ${ANNOUNCEMENT_TITLE_MAX} characters`);
+    }
+    if (!isDocumentText(a.body)) {
+      problems.push(
+        `body is not a document of at most ${ANNOUNCEMENT_BODY_MAX} characters`,
+      );
+    }
+    if (!a.authorId) {
+      problems.push('authorId is not set');
+    }
+    if (!(a.version >= 1)) {
+      problems.push(`version is ${a.version}, not at least 1`);
+    }
+    if ((a.editedAt !== undefined) !== a.version > 1) {
+      problems.push(
+        a.editedAt === undefined
+          ? 'version is above 1 without editedAt'
+          : 'editedAt is set at version 1',
+      );
+    } else if (a.editedAt !== undefined && a.editedAt < a.createdAt) {
+      problems.push('editedAt is before createdAt');
+    }
+    return problems.map((problem) =>
+      violation(
+        'announcement-shape',
+        { courseId: a.courseId, announcementId: a.announcementId },
+        problem,
+      ),
+    );
+  });
+};
+
+const isDocumentText = (body: string) => {
+  if (body.length < 1 || body.length > ANNOUNCEMENT_BODY_MAX) {
+    return false;
+  }
+  try {
+    return JSON.parse(body)?.type === 'doc';
+  } catch {
+    return false;
+  }
+};
+
+// 33. Every announcement has the broadcast that notified its course's
+// students, with its id as the dedupe key and its createdAt as the time. One
+// direction only: deleting an announcement leaves its broadcast.
+export const checkAnnouncementHasBroadcast = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.announcements.flatMap((a) => {
+    const broadcasts = snapshot.notificationBroadcasts.filter(
+      (b) =>
+        b.type === 'announcement.posted' &&
+        b.courseId === a.courseId &&
+        b.dedupeKey === a.announcementId,
+    );
+    const problem =
+      broadcasts.length === 0
+        ? 'no announcement.posted broadcast for it'
+        : broadcasts.every((b) => b.occurredAt !== a.createdAt)
+          ? 'its broadcast has an occurredAt other than createdAt'
+          : undefined;
+    return problem
+      ? [
+          violation(
+            'announcement-has-broadcast',
+            { courseId: a.courseId, announcementId: a.announcementId },
+            problem,
+          ),
+        ]
+      : [];
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1726,6 +1848,8 @@ const CHECKS = [
   checkNotificationStateExists,
   checkNotificationPreferenceShape,
   checkNotificationBroadcastDoneComplete,
+  checkAnnouncementShape,
+  checkAnnouncementHasBroadcast,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1764,6 +1888,7 @@ export const loadTableSnapshot = async (
     notificationStates,
     notificationPreferences,
     notificationBroadcasts,
+    announcements,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1788,6 +1913,7 @@ export const loadTableSnapshot = async (
     entities.notificationState.scan.go(all),
     entities.notificationPreference.scan.go(all),
     entities.notificationBroadcast.scan.go(all),
+    entities.announcement.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1813,5 +1939,6 @@ export const loadTableSnapshot = async (
     notificationStates: notificationStates.data,
     notificationPreferences: notificationPreferences.data,
     notificationBroadcasts: notificationBroadcasts.data,
+    announcements: announcements.data,
   };
 };

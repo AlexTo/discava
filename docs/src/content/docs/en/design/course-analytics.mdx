@@ -1,0 +1,31 @@
+---
+title: Course analytics
+description: What the instructor portal's dashboard and course analytics page show, how each figure is defined, and why the figures lag the records by a few seconds.
+sidebar:
+  order: 8
+---
+
+import Link from '@components/link.astro';
+
+The instructor portal's dashboard shows one summary card per course, and each card opens that course's analytics page. Both read figures that are kept up to date from the core table's stream, not counted from the records on every request, so they load quickly however many students are enrolled.
+
+## Definitions
+
+| Figure | Definition |
+|---|---|
+| **Enrolments** | Every enrolment the course has had, including students who dropped. The history chart counts each on the UTC day the student enrolled |
+| **Dropped** | Enrolments whose status is dropped. They stay in the enrolment history but leave every other figure below |
+| **Active learner** | An enrolled student who completed an item (which includes submitting an assignment) or submitted a quiz attempt. Signing in or opening a page doesn't count, because neither is recorded |
+| **Active this week** | Distinct active learners in the current calendar week, Monday to Sunday, UTC. The analytics page also shows distinct active learners per UTC day, for the last 30 or 90 days |
+| **Completion rate** | Completed enrolments divided by all enrolments that haven't dropped. A course with no such enrolments shows "No data", not 0% |
+| **Drop-off** | For each lesson currently shown to students, in course order: how many learners started it, how many completed it, and the completed share of those who started. Hidden or archived lessons, and lessons of hidden or archived modules, are left out |
+| **Score bands** | Each student's best score per quiz, in ten-point bands (0-9, 10-19, ... 90-100), so a student counts once however many attempts they made |
+| **Most-missed questions** | Ranked by miss rate across every attempt. A question needs at least 5 attempts to be ranked, so one bad attempt can't put it first |
+
+## Freshness
+
+The figures lag the records by a few seconds, like course progress. A change (an enrolment, a completion, a quiz attempt) normally shows on the next load within 30 seconds. Both the cards and the analytics page show when the figures were last updated.
+
+## How the figures are kept
+
+The `analytics-update` handler is a <Link path="design/stream-event-router">stream event router</Link> feature. It applies each change once, and a redelivered message leaves the figures unchanged. If the figures ever drift from the records, the `analytics-matches-records` invariant finds it, and `rebuild-analytics` recomputes a course's figures from its records (see the contributor guide).

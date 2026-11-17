@@ -11,23 +11,36 @@ import {
 
 // The page reads its params and search from the router, and sets its
 // breadcrumb from the location; neither has a router here.
-const navigate = vi.fn();
 let search: { days: 30 | 90 } = { days: 90 };
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@tanstack/react-router')>();
-  return { ...actual, useLocation: () => ({ pathname: '/dashboard/c1' }) };
+  return {
+    ...actual,
+    useLocation: () => ({ pathname: '/dashboard/c1' }),
+    // A real Link needs a router; render the target it would link to.
+    Link: ({
+      search,
+      children,
+      ...props
+    }: {
+      search: { days: number };
+      children: React.ReactNode;
+    } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={`?days=${search.days}`} {...props}>
+        {children}
+      </a>
+    ),
+  };
 });
 
 const { Route } = await import('./route');
 const RouteComponent = Route.options.component!;
 
 beforeEach(() => {
-  navigate.mockClear();
   search = { days: 90 };
   vi.spyOn(Route, 'useParams').mockReturnValue({ courseId: 'c1' });
   vi.spyOn(Route, 'useSearch').mockImplementation(() => search as never);
-  vi.spyOn(Route, 'useNavigate').mockReturnValue(navigate as never);
 });
 
 const dayList = (days: number) =>
@@ -133,22 +146,17 @@ describe('Course analytics', () => {
     ).toEqual({ courseId: 'c1', days: 30 });
   });
 
-  it('marks the chosen range, and changes it in the search params', async () => {
-    const { user } = renderPage();
+  it('marks the chosen range, and links the others through the search params', async () => {
+    renderPage();
 
     await screen.findByText(/^Last updated /);
-    expect(screen.getByRole('button', { name: '90 days' })).toHaveAttribute(
-      'aria-pressed',
+    expect(screen.getByRole('link', { name: '90 days' })).toHaveAttribute(
+      'aria-current',
       'true',
     );
-    expect(screen.getByRole('button', { name: '30 days' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-
-    await user.click(screen.getByRole('button', { name: '30 days' }));
-
-    expect(navigate).toHaveBeenCalledWith({ search: { days: 30 } });
+    const other = screen.getByRole('link', { name: '30 days' });
+    expect(other).not.toHaveAttribute('aria-current');
+    expect(other).toHaveAttribute('href', '?days=30');
   });
 
   it('charts new enrolments and active learners per day, with tables as text alternatives', async () => {

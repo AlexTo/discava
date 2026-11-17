@@ -6,6 +6,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Link } from '@tanstack/react-router';
 import { BookOpen, CircleCheck } from 'lucide-react';
+import { Announcements } from './announcements';
 import { type CoursePlayer, CoursePlayerLayout } from './course-player';
 
 function NextUp({
@@ -101,6 +102,7 @@ export function CourseHome({ courseId }: { courseId: string }) {
       {(player) => (
         <div className="space-y-6">
           <NextUp courseId={courseId} player={player} />
+          <Announcements courseId={courseId} />
           {player.course?.description ? (
             <div>
               <h2 className="text-sm font-semibold">About this course</h2>

@@ -115,10 +115,10 @@ export function DeleteLessonDialog({
           >
             {archive
               ? isPending
-                ? 'Archiving...'
+                ? 'Archiving…'
                 : 'Archive lesson'
               : isPending
-                ? 'Deleting...'
+                ? 'Deleting…'
                 : 'Delete lesson'}
           </Button>
         </AlertDialogFooter>
