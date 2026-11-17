@@ -107,6 +107,8 @@ describe('NotificationBell (student portal)', () => {
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith({ to: '/here/student' }),
     );
+    // The list closes on select, so it doesn't sit over the next page.
+    expect(screen.queryByText('Title c')).toBeNull();
     expect(
       await screen.findByRole('button', { name: 'Notifications, 2 unread' }),
     ).toBeInTheDocument();
@@ -125,6 +127,7 @@ describe('NotificationBell (student portal)', () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalled());
     expect(callsTo(calls, 'notification.markRead')).toHaveLength(0);
+    expect(screen.queryByText('Title c')).toBeNull();
   });
 
   it("opens another portal's address for a cross-portal link", async () => {

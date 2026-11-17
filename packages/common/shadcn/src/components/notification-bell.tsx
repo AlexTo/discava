@@ -24,6 +24,8 @@ export interface NotificationBellProps {
   isLoading: boolean;
   isError: boolean;
   hasMore: boolean;
+  // Controlled by the portal, which closes the list when an item is selected.
+  open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (item: NotificationBellItem) => void;
   onMarkAllRead: () => void;
@@ -60,6 +62,7 @@ export function NotificationBell({
   isLoading,
   isError,
   hasMore,
+  open,
   onOpenChange,
   onSelect,
   onMarkAllRead,
@@ -70,7 +73,7 @@ export function NotificationBell({
     unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications';
 
   return (
-    <Popover onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"

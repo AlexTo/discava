@@ -111,6 +111,7 @@ export const NotificationBell = () => {
       isLoading={open && listQuery.isPending}
       isError={open && listQuery.isError}
       hasMore={listQuery.hasNextPage}
+      open={open}
       onOpenChange={setOpen}
       onSelect={onSelect}
       onMarkAllRead={onMarkAllRead}

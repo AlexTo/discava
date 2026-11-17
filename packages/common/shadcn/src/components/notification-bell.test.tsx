@@ -4,6 +4,7 @@
  */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   NotificationBell,
@@ -33,17 +34,27 @@ const renderBell = (props: Partial<NotificationBellProps> = {}) => {
     onLoadMore: vi.fn(),
     onRetry: vi.fn(),
   };
-  render(
-    <NotificationBell
-      unreadCount={0}
-      items={[]}
-      isLoading={false}
-      isError={false}
-      hasMore={false}
-      {...handlers}
-      {...props}
-    />,
-  );
+  // The portal owns the open state; this stands in for it.
+  const Portal = () => {
+    const [open, setOpen] = useState(false);
+    return (
+      <NotificationBell
+        unreadCount={0}
+        items={[]}
+        isLoading={false}
+        isError={false}
+        hasMore={false}
+        {...handlers}
+        {...props}
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          handlers.onOpenChange(next);
+        }}
+      />
+    );
+  };
+  render(<Portal />);
   return handlers;
 };
 
@@ -174,5 +185,25 @@ describe('NotificationBell', () => {
     expect(await screen.findByRole('alert')).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it('stays closed when the portal says it is closed', async () => {
+    render(
+      <NotificationBell
+        unreadCount={1}
+        items={[item('a')]}
+        isLoading={false}
+        isError={false}
+        hasMore={false}
+        open={false}
+        onOpenChange={vi.fn()}
+        onSelect={vi.fn()}
+        onMarkAllRead={vi.fn()}
+        onLoadMore={vi.fn()}
+        onRetry={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Title a')).toBeNull();
   });
 });
