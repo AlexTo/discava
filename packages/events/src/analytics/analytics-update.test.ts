@@ -269,4 +269,86 @@ describe('analyticsUpdate', () => {
     expect(apply).not.toHaveBeenCalled();
     expect(result).toEqual({ applied: 0, skipped: 3 });
   });
+
+  describe('lesson funnel', () => {
+    const progress = (status: string, lessonId = 'l1') => ({
+      courseId: 'c1',
+      userId: 'u1',
+      lessonId,
+      status,
+    });
+
+    it('settles the lesson of a progress record, not applying its image as counts', async () => {
+      const { apply } = memoryApply();
+      const settle = vi.fn(async () => true);
+      const result = await analyticsUpdate(
+        batch(
+          record('INSERT', 'progress', undefined, progress('in_progress')),
+          record(
+            'MODIFY',
+            'progress',
+            progress('in_progress'),
+            progress('completed'),
+          ),
+        ),
+        apply,
+        settle,
+      );
+      expect(apply).not.toHaveBeenCalled();
+      // The same lesson is settled once for the batch.
+      expect(settle.mock.calls).toEqual([
+        [{ courseId: 'c1', userId: 'u1', lessonId: 'l1' }],
+      ]);
+      expect(result).toEqual({ applied: 1, skipped: 0 });
+    });
+
+    it('settles all of a student’s lessons when their enrolment drops', async () => {
+      const { apply } = memoryApply();
+      const settle = vi.fn(async () => true);
+      await analyticsUpdate(
+        batch(
+          record(
+            'MODIFY',
+            'enrolment',
+            enrolment(),
+            enrolment({ status: 'dropped' }),
+          ),
+        ),
+        apply,
+        settle,
+      );
+      expect(settle.mock.calls).toEqual([[{ courseId: 'c1', userId: 'u1' }]]);
+      // The drop still counts on the summary.
+      expect(apply).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries the batch when settling fails, and still settles the rest', async () => {
+      const { apply } = memoryApply();
+      const settle = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('conflict'))
+        .mockResolvedValue(true);
+      await expect(
+        analyticsUpdate(
+          batch(
+            record(
+              'INSERT',
+              'progress',
+              undefined,
+              progress('completed', 'l1'),
+            ),
+            record(
+              'INSERT',
+              'progress',
+              undefined,
+              progress('completed', 'l2'),
+            ),
+          ),
+          apply,
+          settle,
+        ),
+      ).rejects.toThrow('conflict');
+      expect(settle).toHaveBeenCalledTimes(2);
+    });
+  });
 });

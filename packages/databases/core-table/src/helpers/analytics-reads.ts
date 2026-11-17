@@ -4,6 +4,7 @@
  */
 import type { createCoreTableService } from '../service.js';
 import { dayKey, weekKey } from './analytics.js';
+import { filterEffectivelyVisible } from './curriculum.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
@@ -107,9 +108,75 @@ export interface CourseAnalytics extends CourseSummary {
   active: number;
   /** Exactly the days asked for, oldest first, zero filled. */
   daily: CourseDay[];
+  /** The lessons currently shown to students, in course order. */
+  lessons: LessonFunnel[];
+}
+
+export interface LessonFunnel {
+  lessonId: string;
+  title: string;
+  moduleId: string;
+  moduleTitle: string;
+  inProgress: number;
+  completed: number;
+  /** Students who have started the lesson: in progress or completed. */
+  started: number;
+  /** `completed / started` as a whole percent, rounded down; null when none started. */
+  completionShare: number | null;
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * The lessons shown to students (neither they nor their module hidden or
+ * archived), in course order, with their funnel figures: one query of the
+ * course's aggregates joined with one of its curriculum. A hidden lesson's
+ * counts stay stored and come back when it is shown again; a lesson with no
+ * item shows zeros.
+ */
+export const readLessonFunnel = async (
+  coreTable: CoreTable,
+  courseId: string,
+): Promise<LessonFunnel[]> => {
+  const [{ data: aggregates }, { data: curriculum }] = await Promise.all([
+    coreTable.collections.analytics({ courseId }).go({ pages: 'all' }),
+    coreTable.collections.curriculum({ courseId }).go({ pages: 'all' }),
+  ]);
+  const { modules, lessons } = filterEffectivelyVisible({
+    modules: curriculum.module,
+    lessons: curriculum.lesson,
+    contentItems: [],
+  });
+  const statsOf = new Map(
+    aggregates.lessonStats.map((item) => [item.lessonId, item]),
+  );
+  return [...modules]
+    .sort((a, b) => a.order - b.order)
+    .flatMap((module) =>
+      lessons
+        .filter((lesson) => lesson.moduleId === module.moduleId)
+        .sort((a, b) => a.order - b.order)
+        .map((lesson) => {
+          const stats = statsOf.get(lesson.lessonId);
+          const inProgress = counter(stats?.inProgress);
+          const completed = counter(stats?.completed);
+          const started = inProgress + completed;
+          return {
+            lessonId: lesson.lessonId,
+            title: lesson.title,
+            moduleId: module.moduleId,
+            moduleTitle: module.title,
+            inProgress,
+            completed,
+            started,
+            completionShare:
+              started > 0
+                ? Math.min(100, Math.floor((completed * 100) / started))
+                : null,
+          };
+        }),
+    );
+};
 
 /**
  * One course's totals and its last `days` UTC days (today included), from the
@@ -126,7 +193,7 @@ export const readCourseAnalytics = async (
       .toISOString()
       .slice(0, 10),
   );
-  const [[summary], { data: items }] = await Promise.all([
+  const [[summary], { data: items }, lessons] = await Promise.all([
     readCourseSummaries(coreTable, [courseId], now),
     coreTable.entities.periodStats.query
       .primary({ courseId })
@@ -135,6 +202,7 @@ export const readCourseAnalytics = async (
         { periodKey: dayKey(dates[days - 1]) as string },
       )
       .go({ pages: 'all' }),
+    readLessonFunnel(coreTable, courseId),
   ]);
 
   const dayOf = new Map(items.map((item) => [item.periodKey, item]));
@@ -144,6 +212,7 @@ export const readCourseAnalytics = async (
       0,
       summary.enrolments - summary.completed - summary.dropped,
     ),
+    lessons,
     daily: dates.map((date) => {
       const item = dayOf.get(`DAY#${date}`);
       return {

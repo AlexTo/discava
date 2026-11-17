@@ -8,6 +8,9 @@ import {
   contributions,
   contributionsOfChange,
   dayKey,
+  funnelContributions,
+  funnelStatus,
+  funnelTasksOfChange,
   mergeCounts,
   sumContributions,
   weekKey,
@@ -236,6 +239,117 @@ describe('contributions of activity', () => {
   });
 });
 
+describe('lesson funnel', () => {
+  const progress = (status: string, lessonId = 'l1') => ({
+    courseId: 'c1',
+    userId: 'u1',
+    lessonId,
+    status,
+  });
+
+  it('counts in_progress and completed lessons, and not_started nothing', () => {
+    expect(funnelStatus(progress('in_progress'), enrolment())).toBe(
+      'inProgress',
+    );
+    expect(funnelStatus(progress('completed'), enrolment())).toBe('completed');
+    expect(funnelStatus(progress('not_started'), enrolment())).toBeUndefined();
+  });
+
+  it('counts a completed enrolment’s lessons, but not a dropped one’s', () => {
+    expect(
+      funnelStatus(progress('completed'), enrolment({ status: 'completed' })),
+    ).toBe('completed');
+    expect(
+      funnelStatus(progress('completed'), enrolment({ status: 'dropped' })),
+    ).toBeUndefined();
+    expect(funnelStatus(progress('completed'), undefined)).toBeUndefined();
+    expect(funnelStatus(undefined, enrolment())).toBeUndefined();
+  });
+
+  it('is not part of a progress record’s delta contributions', () => {
+    expect(contributions('progress', progress('completed'))).toEqual({
+      counts: [],
+      members: [],
+    });
+  });
+
+  it('sums a student’s lessons on their lesson items', () => {
+    const sum = funnelContributions(
+      [
+        progress('completed', 'l1'),
+        progress('in_progress', 'l2'),
+        progress('not_started', 'l3'),
+      ],
+      enrolment(),
+    );
+    expect(amount(sum, 'LESSON#l1', 'completed')).toBe(1);
+    expect(amount(sum, 'LESSON#l2', 'inProgress')).toBe(1);
+    expect(sum.counts).toHaveLength(2);
+    expect(aggregatesOf(sum)).toContainEqual({
+      kind: 'lessonStats',
+      courseId: 'c1',
+      sk: 'LESSON#l1',
+      counters: { completed: 1 },
+    });
+  });
+
+  it('gives nothing for a dropped student’s lessons', () => {
+    expect(
+      funnelContributions(
+        [progress('completed')],
+        enrolment({ status: 'dropped' }),
+      ).counts,
+    ).toEqual([]);
+  });
+
+  describe('funnelTasksOfChange', () => {
+    it('names the lesson of a progress change, created, changed or removed', () => {
+      const task = { courseId: 'c1', userId: 'u1', lessonId: 'l1' };
+      expect(
+        funnelTasksOfChange('progress', undefined, progress('in_progress')),
+      ).toEqual([task]);
+      expect(
+        funnelTasksOfChange(
+          'progress',
+          progress('in_progress'),
+          progress('completed'),
+        ),
+      ).toEqual([task]);
+      expect(
+        funnelTasksOfChange('progress', progress('completed'), undefined),
+      ).toEqual([task]);
+    });
+
+    it('names the whole student when an enrolment drops, returns, appears or goes', () => {
+      const student = [{ courseId: 'c1', userId: 'u1' }];
+      const dropped = enrolment({ status: 'dropped' });
+      expect(funnelTasksOfChange('enrolment', enrolment(), dropped)).toEqual(
+        student,
+      );
+      expect(funnelTasksOfChange('enrolment', dropped, enrolment())).toEqual(
+        student,
+      );
+      expect(funnelTasksOfChange('enrolment', undefined, enrolment())).toEqual(
+        student,
+      );
+      expect(funnelTasksOfChange('enrolment', enrolment(), undefined)).toEqual(
+        student,
+      );
+    });
+
+    it('names nothing for an enrolment change that keeps it counting', () => {
+      expect(
+        funnelTasksOfChange(
+          'enrolment',
+          enrolment(),
+          enrolment({ status: 'completed' }),
+        ),
+      ).toEqual([]);
+      expect(funnelTasksOfChange('quizAttempt', undefined, {})).toEqual([]);
+    });
+  });
+});
+
 describe('aggregatesOf', () => {
   it('turns contributions into the items they amount to', () => {
     const sum = sumContributions([
@@ -269,6 +383,8 @@ const fakeCoreTable = (records: {
   enrolments: Record<string, unknown>[];
   itemCompletions?: Record<string, unknown>[];
   quizAttempts?: Record<string, unknown>[];
+  progress?: Record<string, unknown>[];
+  funnelMarkers?: Record<string, unknown>[];
   stored?: Record<string, Record<string, unknown>[]>;
 }) => {
   const deletes: unknown[] = [];
@@ -308,9 +424,20 @@ const fakeCoreTable = (records: {
       },
       itemCompletion: ofUser(records.itemCompletions),
       quizAttempt: ofUser(records.quizAttempts),
+      progress: ofUser(records.progress),
+      analyticsMarker: {
+        ...putter('analyticsMarker'),
+        query: {
+          primary: () => ({
+            begins: () => ({
+              go: async () => ({ data: records.funnelMarkers ?? [] }),
+            }),
+          }),
+        },
+      },
       courseStats: putter('courseStats'),
       periodStats: putter('periodStats'),
-      lessonStats: deleter('lessonStats'),
+      lessonStats: putter('lessonStats'),
       quizQuestionStats: deleter('quizQuestionStats'),
       quizScoreStats: deleter('quizScoreStats'),
     },
@@ -368,6 +495,52 @@ describe('rebuildCourseAnalytics', () => {
         }),
       ]),
     );
+  });
+
+  it('writes lesson counts and funnel markers, leaving out dropped students', async () => {
+    const { coreTable, puts } = fakeCoreTable({
+      enrolments: [enrolment(), enrolment({ userId: 'u2', status: 'dropped' })],
+      progress: [
+        { courseId: 'c1', userId: 'u1', lessonId: 'l1', status: 'completed' },
+        { courseId: 'c1', userId: 'u1', lessonId: 'l2', status: 'in_progress' },
+        { courseId: 'c1', userId: 'u1', lessonId: 'l3', status: 'not_started' },
+        { courseId: 'c1', userId: 'u2', lessonId: 'l1', status: 'completed' },
+      ],
+    });
+    await rebuildCourseAnalytics(coreTable, 'c1');
+
+    const lessons = puts.filter(({ kind }) => kind === 'lessonStats');
+    expect(lessons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ lessonId: 'l1', completed: 1 }),
+        expect.objectContaining({ lessonId: 'l2', inProgress: 1 }),
+      ]),
+    );
+    expect(lessons).toHaveLength(2);
+    expect(puts.filter(({ kind }) => kind === 'analyticsMarker')).toEqual([
+      expect.objectContaining({
+        markerId: 'FUNNEL#u1#l1',
+        status: 'completed',
+      }),
+      expect.objectContaining({
+        markerId: 'FUNNEL#u1#l2',
+        status: 'inProgress',
+      }),
+    ]);
+  });
+
+  it('replaces the old funnel markers with the new ones', async () => {
+    const { coreTable, deletes } = fakeCoreTable({
+      enrolments: [],
+      funnelMarkers: [{ courseId: 'c1', markerId: 'FUNNEL#u1#l1' }],
+    });
+    await rebuildCourseAnalytics(coreTable, 'c1');
+    expect(deletes).toEqual([
+      {
+        kind: 'analyticsMarker',
+        key: { courseId: 'c1', markerId: 'FUNNEL#u1#l1' },
+      },
+    ]);
   });
 
   it('deletes the stored aggregate items first', async () => {
