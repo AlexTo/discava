@@ -1,0 +1,113 @@
+---
+title: Stream event router
+description: "How a feature reacts to changes in the core table: the registration, its queue and failure queue, the handler's obligations, local behaviour and redrive."
+sidebar:
+  order: 7
+---
+
+The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation and search indexing today) adds a registration and a handler, and nothing else.
+
+```d2 title="One stream reader, one queue and failure queue per feature"
+table: "Core table"
+stream: "DynamoDB Stream"
+router: "Stream router"
+pq: "progress-recalculation queue"
+sq: "search-indexing queue"
+pf: "progress failure queue"
+sf: "search failure queue"
+ph: "progress handler"
+sh: "search handler"
+
+table -> stream
+stream -> router
+router -> pq: "filters match"
+router -> sq: "filters match"
+pq -> ph
+sq -> sh
+pq -> pf: "after maxReceiveCount"
+sq -> sf: "after maxReceiveCount"
+```
+
+## The registration
+
+`STREAM_FEATURES` in `packages/databases/core-table/src/helpers/stream-features.ts` is the one definition the deployed stack and the local event runner both read.
+
+| Field | Meaning |
+|---|---|
+| `name` | Unique, kebab-case. Names the queue, failure queue, alarm and handler |
+| `filters` | Which records the feature wants: an `eventName` (`INSERT`, `MODIFY` or `REMOVE`), the `image` to look at (`NewImage` or `OldImage`) and the `entities` (ElectroDB entity names). A record passing any filter goes to the feature |
+| `handler` | The `events-*` function that reads the feature's queue |
+| `batch` | `maxRecords` and `windowSeconds`: how many changes, and how long to wait to gather them, per handler run |
+| `maxReceiveCount` | How many times a message is received before it goes to the failure queue |
+| `maxConcurrency` | Optional cap on concurrent handler runs (at least 2, an event source mapping minimum) |
+
+`featuresFor(record)` is the only matching logic, and both the router and the local runner call it, so they can't disagree. A record goes to every feature with a matching filter, as its own copy, and to no other; a record matching none produces nothing. Filters reuse the existing helpers (`matchesProgressStreamFilters`, `matchesSearchStreamFilters`). A test fails when a name repeats, a `handler` names no function, a filter names an entity the core table doesn't define, or a filter matches nothing in the sample records.
+
+## Adding a feature
+
+1. Add an entry to `STREAM_FEATURES`.
+2. Write the handler in `packages/events` and its `events-*` wrapper with `ts#lambda-function`. Read its records through `sqsToStreamRecords` (`src/router/sqs-stream-records.ts`), which unwraps the queue's messages into stream records.
+3. Nothing else: the `StreamRouter` construct builds the queue, failure queue, alarm and event source mapping from the entry, and the local runner builds its equivalent.
+4. Write the handler's duplicate and reordered delivery tests (below).
+5. Add the feature's queue metrics to the [list below](#metrics-to-watch).
+
+## What the construct builds per feature
+
+- A **queue**, with a visibility timeout of six times the handler's timeout.
+- A **failure queue**, which holds a message after `maxReceiveCount` receives, keeps it for 14 days, and is encrypted with a customer-managed KMS key with rotation (switchable per stage with `enableKmsEncryption`, like the core table). The messages hold whole table records, so treat them as table data.
+- An **alarm** that is in the alarm state whenever the failure queue holds any message. It has no notification target: it shows in the CloudWatch console.
+- An **event source mapping** from the queue to the handler, using the registration's batch settings.
+
+The router has a failure queue and alarm of its own (`StreamRouterFailures`) for a record it can never send: too large for the queue, or unroutable. It holds a description of the record (its identity, not its contents) so it can be found in the table. The stream mapping's own failed batches (shard and sequence numbers) go there too.
+
+## Handler obligations
+
+The router doesn't promise per-record order or exactly-once delivery. Every handler MUST be safe to run twice with the same records, and with records in any order, and MUST say in its file's header comment how:
+
+- **Derive the result from current data** where order matters, never from the record alone. Search indexing reads only the course's identity from the change and re-reads the course from the core table, then indexes it if published and removes it if not published or gone. Progress recalculation recomputes each student's progress from the curriculum and completions on every run.
+- A change that can't be handled (it names no course, say) **fails** rather than being skipped, so it ends up in the failure queue where someone can see it.
+- Counters and other values that accumulate from the records themselves (applying a change twice or out of order drifts them) need their own check that duplicate and reordered delivery give the same result, or they must be recomputed from the table.
+
+A new feature's tests include a duplicate delivery and a reordered one.
+
+## Failures and redrive
+
+A handler that throws returns its messages to the queue after the visibility timeout. After `maxReceiveCount` receives, a message moves to that feature's failure queue and no longer blocks later changes. Other features are unaffected.
+
+Once the cause is fixed, replay the messages with the queue service's own redrive. No replay tool is built, because handlers are safe to run again.
+
+For a deployed stage, in the SQS console open the failure queue and choose **Start DLQ redrive** to the feature's queue (or use `aws sqs start-message-move-task --source-arn <failure queue ARN> --destination-arn <feature queue ARN>`). Check the failure queue's alarm returns to OK.
+
+## Metrics to watch
+
+Every SQS queue publishes depth and age metrics under the `AWS/SQS` namespace, with a `QueueName` dimension:
+
+- **`ApproximateNumberOfMessagesVisible`** on a feature's queue: changes waiting. It should return to near zero between bursts.
+- **`ApproximateAgeOfOldestMessage`** on a feature's queue: how far behind the handler is. A rising age with a flat depth means a handler that is stuck or throttled.
+- **`ApproximateNumberOfMessagesVisible`** on a feature's failure queue: anything above zero is work set aside, and trips the feature's alarm.
+
+| Feature | Queue | Failure queue |
+|---|---|---|
+| `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
+| `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+
+The names are the construct's logical ids (the deployed queue names carry the stack's prefix and a suffix). A new feature adds a row here.
+
+## Local behaviour
+
+`pnpm dev` runs the same router in the event runner (`packages/events/src/local`), with ElasticMQ as the queue (SQS API compatible, in Docker, in memory) and one feature runner per registration. It uses the same `STREAM_FEATURES` and `featuresFor` as the deployed router, keeps each feature's batch size and window, retries by receive count, and moves a message to the feature's failure queue after `maxReceiveCount` receives, logging it. Nothing needs an AWS account.
+
+The runner (port 2024) has routes to look at and replay local queues:
+
+```sh
+# queue and failure queue counts per feature
+curl http://localhost:2024/router/queues
+
+# move a feature's failed messages back to its queue
+curl -X POST http://localhost:2024/router/redrive/search-indexing
+
+# make a feature's next 5 batches fail, to reproduce a failure end to end
+curl -X POST http://localhost:2024/router/fail/search-indexing -d '{"batches": 5}'
+```
+
+The redrive is a small runner helper, not the queue service's redrive, which ElasticMQ doesn't document. `reset-local-data` and a restart clear the queues.
