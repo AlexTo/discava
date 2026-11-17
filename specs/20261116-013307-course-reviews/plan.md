@@ -11,7 +11,7 @@ Two new core-table entities: `review` (one per student per course, keyed by cour
 What the code showed that the spec could not:
 
 1. **The rating cannot live on the `course` record.** `course.updatedAt` is moved by every write to the record (`watch: '*'`), and the `instructor-course-updated-at` invariant requires each instructor's `courseUpdatedAt` to equal it. A counter on `course` would break that invariant on every review and re-index the course on every vote. A separate `courseRating` record avoids both (research R-1).
-2. **Search documents are whole-document `index` calls built from the stream image** (`events/src/search/index-content.ts`, `toCourseDocument`). A rating change must therefore re-index the course from fresh reads of both records, and a course change must read the rating, or one write would overwrite the other's fields (research R-5).
+2. **Search documents are whole-document `index` calls built from fresh reads, not the stream image** (`events/src/search/index-content.ts` `courseIdsOf`/`syncCourse`, `toCourseDocument`). A rating change must therefore re-index the course from fresh reads of both records, and a course change must read the rating, or one write would overwrite the other's fields (research R-5).
 3. **The admin portal has no backend.** Only core-api and instructor-api exist. The catalogue categories spec (#333) plans the first `admin-api`; this feature needs the same one (research R-7).
 4. **`gsi2` is free for a second pattern.** Only `assignmentSubmission.byUser` uses it; ElectroDB prefixes each entity's key values, so a review index can share it (research R-3).
 5. **`course.publicList` already returns up to 100 courses by key**; a `BatchGet` of that page's `courseRating` records (at most 100 keys) adds ratings to cards without a read per card beyond one call.
@@ -138,7 +138,7 @@ docs/src/content/docs/en/                         # learner and instructor page
 - **R1: counters going negative or drifting.** A decrement carries a `stars<N> >= 1` condition in the transaction, and the invariant compares counters with the tally of reviews.
 - **R2: `gsi2` shared by two entities.** A test with ElectroDB's `.params()` proves a review's course query cannot return an `assignmentSubmission` and the reverse.
 - **R3: index lag.** Cards read the table (immediate); search follows the stream within seconds (SC-002 allows 60).
-- **R4: search overwrite race.** Two stream events for one course each rebuild the document from fresh reads, so the last one written has read the latest state (research R-5).
+- **R4: search overwrite race.** Every batch rebuilds the document from consistent reads, so reordered or duplicate delivery converges. Only two batches for one course running at the same moment can leave an older document until the next change or a re-index; the stream event router spec accepts this narrow overlap (research R-5).
 - **R5: merge order with #333 and #331.** The shared admin API, the shared search document and procedure, and the notification registry's instructor path are called out in tasks as "reuse if present, else create" steps, each with a check for both orders.
 - **R6: removed reviews in paged lists.** Filtering after the page can shorten it; the list loops until the page is full or the index is exhausted.
 

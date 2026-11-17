@@ -11,13 +11,13 @@ Four optional numeric fields, mapped additively on the existing `courses` index 
 | `ratingScore` | weighted rating `(count x average + 5 x 3.5) / (count + 5)`; absent when unrated |
 | `ratingBoost` | `1 + 0.1 x (ratingScore - 3.5)`; `1` when unrated |
 
-`toCourseDocument(course, rating?)` is the one builder (stream indexer and re-index Lambda). The indexer:
+`toCourseDocument(course, rating?)` is the one builder (search-indexing handler and re-index Lambda). Search changes reach the handler through the stream event router's standard queue, which does not keep order, so the handler never indexes from the stream image. It extends the existing `index-content.ts` (`courseIdsOf`, `syncCourse`):
 
-- on a `course` INSERT or MODIFY: keyed get of `courseRating`, then `index`;
-- on a `courseRating` INSERT or MODIFY: keyed get of `course`; index it if published, otherwise do nothing;
-- on a `course` REMOVE: delete, as today.
+- `courseIdsOf` collects the distinct course ids of the batch's `course` records and now also its `courseRating` records (both carry `courseId`); a record without one fails the batch, as today.
+- `syncCourse` reads the `course` by key with a consistent read and, if it is published, also reads its `courseRating` by key (consistent) and indexes `toCourseDocument(course, rating)`. An unpublished or missing course is deleted from the index, as today. A rating change for a draft course therefore deletes a document that does not exist, which is a no-op.
+- A `course` REMOVE still leads to a delete, because the keyed read finds no course.
 
-`SEARCH_STREAM_FILTERS` lists `courseRating` for INSERT and MODIFY, in addition to `course`; the deployed event source mapping and the local event runner both read it.
+`SEARCH_STREAM_FILTERS` lists `courseRating` for INSERT and MODIFY, in addition to `course`. The router's `featuresFor` and the local event runner both read it, so `courseRating` records reach the `search-indexing` feature with no separate event source mapping.
 
 ## `course.publicSearch` (changed; builds on the current procedure and on #333's version if it merged first)
 
