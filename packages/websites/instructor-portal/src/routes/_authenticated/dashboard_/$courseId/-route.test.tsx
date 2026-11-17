@@ -99,10 +99,13 @@ describe('Course analytics', () => {
     renderPage();
 
     expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'Intro to DynamoDB',
-      }),
+      // The title comes from a second request; CI runs every project's tests
+      // at once, so it can take longer than findBy's default second.
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: 'Intro to DynamoDB' },
+        { timeout: 5_000 },
+      ),
     ).toBeInTheDocument();
     expect(await screen.findByText(/^Last updated /)).toBeInTheDocument();
     const totals = within(screen.getByLabelText('Totals'));
