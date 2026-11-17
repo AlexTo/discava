@@ -1585,13 +1585,26 @@ EOF
     {
       "Sid": "EventSourceMappingsForDiscava",
       "Effect": "Allow",
-      "Action": "lambda:*EventSourceMapping",
+      "Action": [
+        "lambda:CreateEventSourceMapping",
+        "lambda:UpdateEventSourceMapping",
+        "lambda:DeleteEventSourceMapping"
+      ],
       "Resource": "*",
       "Condition": {
         "ArnLike": {
           "lambda:FunctionArn": "arn:$AWS_PARTITION:lambda:$AWS_REGION:$ACCOUNT_ID:function:$RESOURCE_PREFIX*"
         }
       }
+    },
+    {
+      "Sid": "ReadEventSourceMappings",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:GetEventSourceMapping",
+        "lambda:ListEventSourceMappings"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "SqsQueuesForDiscava",
@@ -1810,8 +1823,11 @@ upsert_boundary_policy() {
       "Sid": "StageQueues",
       "Effect": "Allow",
       "Action": [
+        "sqs:ChangeMessageVisibility",
+        "sqs:DeleteMessage",
         "sqs:GetQueueAttributes",
         "sqs:GetQueueUrl",
+        "sqs:ReceiveMessage",
         "sqs:SendMessage"
       ],
       "Resource": "arn:$AWS_PARTITION:sqs:$AWS_REGION:$ACCOUNT_ID:$RESOURCE_PREFIX*"

@@ -366,7 +366,10 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     expect(executionStatements).toContainEqual(
       expect.objectContaining({
         Effect: 'Allow',
-        Action: 'lambda:*EventSourceMapping',
+        Action: expect.arrayContaining([
+          'lambda:CreateEventSourceMapping',
+          'lambda:DeleteEventSourceMapping',
+        ]),
         Resource: '*',
         Condition: {
           ArnLike: {
@@ -376,6 +379,16 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
         },
       }),
     );
+    // Reads carry no function ARN to match, so a condition would deny them.
+    expect(executionStatements).toContainEqual({
+      Sid: 'ReadEventSourceMappings',
+      Effect: 'Allow',
+      Action: [
+        'lambda:GetEventSourceMapping',
+        'lambda:ListEventSourceMappings',
+      ],
+      Resource: '*',
+    });
   });
 
   it("allows managing the stage's search collection, which is named by a generated id", () => {
@@ -499,7 +512,7 @@ describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
     );
   });
 
-  it("lets the stage's functions read table streams and send to its queues", () => {
+  it("lets the stage's functions read table streams and send to or consume from its queues", () => {
     const { status, policyDocument } = runSetup({
       kind: 'response',
       useDefault: true,
@@ -531,7 +544,12 @@ describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
     expect(boundary.Statement).toContainEqual(
       expect.objectContaining({
         Effect: 'Allow',
-        Action: expect.arrayContaining(['sqs:SendMessage']),
+        Action: expect.arrayContaining([
+          'sqs:SendMessage',
+          'sqs:ReceiveMessage',
+          'sqs:DeleteMessage',
+          'sqs:ChangeMessageVisibility',
+        ]),
         Resource:
           'arn:aws:sqs:ap-southeast-2:111122223333:discava-development-*',
       }),
