@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  MAIN_CONTENT_ID,
+  SkipLink,
+} from '@discava/common-shadcn/components/skip-link';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { TooltipProvider } from '@discava/common-shadcn/components/ui/tooltip';
 import { isInGroup } from '@discava/common-web-utils/groups';
@@ -31,6 +35,7 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex min-h-screen flex-col">
+        <SkipLink />
         <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b bg-background/90 px-6 backdrop-blur lg:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <img
@@ -71,7 +76,13 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
             </Button>
           )}
         </header>
-        <div className="flex flex-1 flex-col">{children}</div>
+        <div
+          id={MAIN_CONTENT_ID}
+          tabIndex={-1}
+          className="flex flex-1 flex-col focus-visible:outline-none"
+        >
+          {children}
+        </div>
       </div>
     </TooltipProvider>
   );

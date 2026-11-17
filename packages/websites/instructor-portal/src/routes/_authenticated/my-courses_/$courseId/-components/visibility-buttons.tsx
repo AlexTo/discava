@@ -147,8 +147,8 @@ function VisibilityDialog({
           >
             {isPending
               ? publish
-                ? 'Publishing...'
-                : 'Hiding...'
+                ? 'Publishing…'
+                : 'Hiding…'
               : `${action} ${noun}`}
           </Button>
         </AlertDialogFooter>

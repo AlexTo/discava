@@ -4,6 +4,10 @@
  */
 
 import {
+  MAIN_CONTENT_ID,
+  SkipLink,
+} from '@discava/common-shadcn/components/skip-link';
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -111,6 +115,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
       <SidebarProvider>
+        <SkipLink />
         <AppSidebar />
         <SidebarInset>
           <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
@@ -139,7 +144,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               <UserMenu />
             </div>
           </header>
-          <div className="flex flex-1 flex-col gap-6 p-6 pt-4">
+          <div
+            id={MAIN_CONTENT_ID}
+            tabIndex={-1}
+            className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
+          >
             <Breadcrumb>
               <BreadcrumbList>
                 {activeBreadcrumbs.map((crumb, index) => (

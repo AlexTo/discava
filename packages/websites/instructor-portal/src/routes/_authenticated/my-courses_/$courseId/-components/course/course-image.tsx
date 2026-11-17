@@ -302,7 +302,7 @@ function CourseImageDialog({
                   onClick={remove}
                   disabled={busy !== undefined}
                 >
-                  {busy === 'removing' ? 'Removing...' : 'Remove image'}
+                  {busy === 'removing' ? 'Removing…' : 'Remove image'}
                 </Button>
               )
             )}
@@ -312,7 +312,7 @@ function CourseImageDialog({
             onClick={save}
             disabled={!source || !area || busy !== undefined}
           >
-            {busy === 'saving' ? 'Saving...' : 'Save'}
+            {busy === 'saving' ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
       </DialogContent>

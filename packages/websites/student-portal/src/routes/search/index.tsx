@@ -122,7 +122,7 @@ function RouteComponent() {
                     onClick={() => searchQuery.fetchNextPage()}
                   >
                     {searchQuery.isFetchingNextPage
-                      ? 'Loading...'
+                      ? 'Loading…'
                       : 'Load more results'}
                   </Button>
                 </div>
