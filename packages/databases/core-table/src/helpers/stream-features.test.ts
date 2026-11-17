@@ -30,16 +30,36 @@ const SAMPLE = [
   record('REMOVE', 'OldImage', 'course'),
   record('REMOVE', 'OldImage', 'lesson'),
   record('MODIFY', 'NewImage', 'progress'),
+  record('INSERT', 'NewImage', 'progress'),
+  record('REMOVE', 'OldImage', 'progress'),
+  record('INSERT', 'NewImage', 'enrolment'),
+  record('MODIFY', 'NewImage', 'enrolment'),
+  record('REMOVE', 'OldImage', 'enrolment'),
+  record('INSERT', 'NewImage', 'quizAttempt'),
+  record('INSERT', 'NewImage', 'quizSummary'),
+  record('MODIFY', 'NewImage', 'quizSummary'),
 ];
 
 describe('featuresFor', () => {
   it('routes a record to exactly the matching feature', () => {
-    expect(featuresFor(record('INSERT', 'NewImage', 'itemCompletion'))).toEqual(
-      ['progress-recalculation'],
-    );
     expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
       'search-indexing',
     ]);
+    expect(featuresFor(record('INSERT', 'NewImage', 'enrolment'))).toEqual([
+      'analytics-update',
+    ]);
+  });
+
+  it('sends a new item completion to progress and to analytics', () => {
+    expect(featuresFor(record('INSERT', 'NewImage', 'itemCompletion'))).toEqual(
+      ['progress-recalculation', 'analytics-update'],
+    );
+  });
+
+  it('keeps the analytics aggregates and markers from every feature', () => {
+    for (const entity of ['courseStats', 'periodStats', 'analyticsMarker']) {
+      expect(featuresFor(record('MODIFY', 'NewImage', entity))).toEqual([]);
+    }
   });
 
   it('routes a record matching two features to both', () => {
@@ -56,7 +76,9 @@ describe('featuresFor', () => {
   });
 
   it('returns an empty list for a record matching none', () => {
-    expect(featuresFor(record('MODIFY', 'NewImage', 'progress'))).toEqual([]);
+    expect(featuresFor(record('MODIFY', 'NewImage', 'courseStats'))).toEqual(
+      [],
+    );
     expect(featuresFor({})).toEqual([]);
   });
 });

@@ -10,6 +10,7 @@ import {
   violationId,
 } from '@discava/core-table';
 import { test as base, expect } from '@playwright/test';
+import { waitForAnalytics } from './wait-for-analytics.js';
 
 // The local table, as `pnpm dev`'s APIs see it.
 process.env.LOCAL_DEV = 'true';
@@ -34,6 +35,15 @@ export const test = base.extend<{ tableInvariants: void }>({
       if (testInfo.status !== testInfo.expectedStatus) {
         return;
       }
+      // The analytics trail the records by the router's batching, the queue
+      // hop and the handler, so they have their own, longer wait.
+      const analyticsDrift = (await waitForAnalytics())
+        .filter((violation) => !before.has(violationId(violation)))
+        .map(describe);
+      expect(
+        analyticsDrift,
+        'The scenario left the analytics not matching their records',
+      ).toEqual([]);
       await expect
         .poll(
           async () =>

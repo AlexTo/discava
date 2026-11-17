@@ -33,6 +33,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/analytics/analytics-update.ts",
+        "name": "analytics-update",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/progress/progress-recalculation.ts",
         "name": "progress-recalculation",
         "iac": "cdk"

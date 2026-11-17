@@ -64,6 +64,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "rebuild-analytics": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/analytics/rebuild-analytics.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "local-oidc": {
       "executor": "nx:run-commands",
       "continuous": true,
