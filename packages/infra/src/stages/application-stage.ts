@@ -103,6 +103,7 @@ export class ApplicationStage extends Stage {
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
       mediaPipeline,
+      studentPortalUrl: websites.portalUrls.student,
       portals: [
         websites.studentPortal,
         websites.instructorPortal,
@@ -140,13 +141,5 @@ export class ApplicationStage extends Stage {
       applicationStack: data,
       configurationStack: runtimeConfig,
     });
-
-    // CoreApi's functions and StreamRouter's indexing Lambda are granted search
-    // access above, after Data (and
-    // so the collection) already exists; its data access policy needs their
-    // role ARNs, so it can't live in Data (which would then depend back on
-    // CoreApi, a cycle) -- RuntimeConfig, like the AppConfig content above,
-    // already deploys last, depending on every stack that could grant here.
-    data.searchCollection.placeAccessPolicyIn(runtimeConfig);
   }
 }

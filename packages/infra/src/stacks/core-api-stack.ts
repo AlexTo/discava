@@ -45,6 +45,8 @@ export interface CoreApiStackProps extends StackProps {
   readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
   /** Schedules the cleanups of a student's submission folders. */
   readonly mediaPipeline: MediaPipelineStack;
+  /** Where the unsubscribe route's CORS allows the student portal's fetch from. */
+  readonly studentPortalUrl: string;
   /** Every portal calls core-api, so all three are allowed CORS origins. */
   readonly portals: [StudentPortal, InstructorPortal, AdminPortal];
 }
@@ -71,6 +73,7 @@ export class CoreApiStack extends Stack {
       lessonMediaBucket,
       lessonMediaUploadBucket,
       mediaPipeline,
+      studentPortalUrl,
       portals,
       ...props
     }: CoreApiStackProps,
@@ -94,6 +97,7 @@ export class CoreApiStack extends Stack {
     const unsubscribe = this.createNotificationUnsubscribeLambda(
       coreTable,
       notificationUnsubscribeSecret,
+      studentPortalUrl,
     );
 
     this.coreApi = new CoreApi(this, 'CoreApi', {
@@ -242,6 +246,7 @@ export class CoreApiStack extends Stack {
   private createNotificationUnsubscribeLambda(
     coreTable: CoreTable,
     unsubscribeSecret: ISecret,
+    studentPortalUrl: string,
   ) {
     const unsubscribe = new EventsNotificationUnsubscribe(
       this,
@@ -251,6 +256,7 @@ export class CoreApiStack extends Stack {
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(unsubscribe);
     unsubscribe.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
+    unsubscribe.addEnvironment('STUDENT_PORTAL_URL', studentPortalUrl);
     return unsubscribe;
   }
 }
