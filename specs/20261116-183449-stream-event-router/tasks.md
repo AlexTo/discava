@@ -98,7 +98,7 @@ description: "Task list for the core table stream event router"
 ## Phase 7: Polish (PR 7, may be folded into Phase 6)
 
 - [ ] T032 **(human)** [US2] Deploy to `discava-development` (`pnpm nx deploy @discava/infra "discava-development/*"`) and check: the core table's stream has one consumer (`aws dynamodbstreams describe-stream`); a student completing an item updates progress; publishing then unpublishing a course updates search and leaves it out; forcing a handler to fail puts messages in that feature's failure queue and trips its alarm while the other feature keeps working; a redrive from the failure queue replays them with the same result; a change reaches its handler within a few seconds of today's delay (SC-006). Save screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/` as the repository's convention says *Covers: SC-006.*
-- [ ] T033 [US2] Run `pnpm build`, `pnpm lint` and `pnpm test` (or `pnpm nx affected --target build,lint,test`), fix any failure by fixing the code and never by weakening a test, then run `graphify update .` so the knowledge graph matches the change, as CLAUDE.md asks
+- [x] T033 [US2] Run `pnpm build`, `pnpm lint` and `pnpm test` (or `pnpm nx affected --target build,lint,test`), fix any failure by fixing the code and never by weakening a test, then run `graphify update .` so the knowledge graph matches the change, as CLAUDE.md asks
 
 ---
 
