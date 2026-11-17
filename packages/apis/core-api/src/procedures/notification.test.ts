@@ -12,7 +12,7 @@ import {
   markNotificationReadProcedure,
   notificationPreferences,
   notificationUnreadCount,
-  setNotificationPreference,
+  setNotificationPreferenceProcedure,
 } from './notification.js';
 
 const { db, queries, puts, markRead, markAllRead } = vi.hoisted(() => ({
@@ -74,7 +74,7 @@ const caller = t.createCallerFactory(
     markRead: markNotificationReadProcedure,
     markAllRead: markAllNotificationsRead,
     preferences: notificationPreferences,
-    setPreference: setNotificationPreference,
+    setPreference: setNotificationPreferenceProcedure,
   }),
 );
 

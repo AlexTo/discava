@@ -4,11 +4,13 @@
  */
 import {
   type createCoreTableService,
+  InvalidRequestError,
   markNotificationRead,
   markNotificationsRead,
   NOTIFICATION_TYPES,
   NotFoundError,
   notificationPosition,
+  setNotificationPreference,
   VersionConflictError,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -37,6 +39,9 @@ const asTrpcError = async <T>(run: () => Promise<T>): Promise<T> => {
   } catch (error) {
     if (error instanceof NotFoundError) {
       throw new TRPCError({ code: 'NOT_FOUND', message: error.message });
+    }
+    if (error instanceof InvalidRequestError) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
     }
     if (error instanceof VersionConflictError) {
       throw new TRPCError({ code: 'CONFLICT', message: error.message });
@@ -153,31 +158,17 @@ export const notificationPreferences = courseProcedure
     return settableTypes().map((type) => preferenceFor(type, stored));
   });
 
-export const setNotificationPreference = courseProcedure
+export const setNotificationPreferenceProcedure = courseProcedure
   .input(NotificationSetPreferenceInputSchema)
   .output(NotificationPreferenceSchema)
   .mutation(async ({ ctx, input }) => {
-    const type = Object.hasOwn(NOTIFICATION_TYPES, input.type)
-      ? NOTIFICATION_TYPES[input.type]
-      : undefined;
-    if (!type) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Unknown notification type',
-      });
-    }
-    if (type.emailPolicy === 'required' || type.emailPolicy === 'never') {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'This notification type has no email setting',
-      });
-    }
-    await ctx
-      .coreTable!.entities.notificationPreference.put({
-        userId: ctx.user.sub,
-        type: type.id,
-        emailEnabled: input.emailEnabled,
-      })
-      .go();
+    const type = await asTrpcError(() =>
+      setNotificationPreference(
+        ctx.coreTable!,
+        ctx.user.sub,
+        input.type,
+        input.emailEnabled,
+      ),
+    );
     return preferenceFor(type, new Map([[type.id, input.emailEnabled]]));
   });

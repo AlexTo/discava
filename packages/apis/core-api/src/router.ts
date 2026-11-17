@@ -39,7 +39,7 @@ import {
   markNotificationReadProcedure,
   notificationPreferences,
   notificationUnreadCount,
-  setNotificationPreference,
+  setNotificationPreferenceProcedure,
 } from './procedures/notification.js';
 import {
   myQuizAttempts,
@@ -87,7 +87,7 @@ export const appRouter = router({
     markRead: markNotificationReadProcedure,
     markAllRead: markAllNotificationsRead,
     preferences: notificationPreferences,
-    setPreference: setNotificationPreference,
+    setPreference: setNotificationPreferenceProcedure,
   }),
   quiz: router({
     view: viewQuiz,

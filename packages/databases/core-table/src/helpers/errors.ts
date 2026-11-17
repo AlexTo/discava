@@ -30,3 +30,12 @@ export class NotFoundError extends Error {
     this.name = 'NotFoundError';
   }
 }
+
+// The request names something that can't be done, as opposed to something
+// missing: callers map it to a BAD_REQUEST.
+export class InvalidRequestError extends Error {
+  constructor(message = 'Invalid request') {
+    super(message);
+    this.name = 'InvalidRequestError';
+  }
+}
