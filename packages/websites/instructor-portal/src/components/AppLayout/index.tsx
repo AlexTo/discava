@@ -124,6 +124,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               <Separator orientation="vertical" className="h-6" />
               <div className="flex items-center gap-2">
                 <img
+                  width={40}
+                  height={40}
                   alt={`${Config.applicationName} logo`}
                   className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
                   src={Config.logo}

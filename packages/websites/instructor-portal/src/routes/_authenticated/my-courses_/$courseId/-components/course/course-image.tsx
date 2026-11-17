@@ -86,7 +86,13 @@ function CourseImagePreview({
       )}
     >
       {src ? (
-        <img src={src} alt="" className="size-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          width={640}
+          height={360}
+          className="size-full object-cover"
+        />
       ) : (
         <span className="flex flex-col items-center gap-1 text-xs">
           <ImageIcon className="size-6" aria-hidden="true" />

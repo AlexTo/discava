@@ -39,6 +39,8 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
         <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b bg-background/90 px-6 backdrop-blur lg:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <img
+              width={40}
+              height={40}
               alt={`${Config.applicationName} logo`}
               className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
               src={Config.logo}

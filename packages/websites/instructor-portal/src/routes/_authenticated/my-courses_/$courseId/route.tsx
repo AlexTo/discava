@@ -123,7 +123,7 @@ function RouteComponent() {
             />
             <div className="min-w-0 flex-1">
               <Badge className={courseStatusStyles[status]}>{status}</Badge>
-              <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              <h1 className="text-balance mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
                 {course.title}
               </h1>
               {course.description && (

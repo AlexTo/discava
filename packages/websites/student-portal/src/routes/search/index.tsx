@@ -55,14 +55,16 @@ function RouteComponent() {
       {!query ? (
         <div className="py-16 text-center">
           <Search className="mx-auto size-8 text-muted-foreground" />
-          <h1 className="mt-4 text-xl font-semibold">Search for a course</h1>
+          <h1 className="text-balance mt-4 text-xl font-semibold">
+            Search for a course
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Type what you want to learn in the search box above.
           </p>
         </div>
       ) : (
         <>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-balance text-2xl font-bold tracking-tight">
             Results for &ldquo;{query}&rdquo;
           </h1>
           {searchQuery.isLoading ? (
