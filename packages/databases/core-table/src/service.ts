@@ -5,6 +5,7 @@
 import { Service } from 'electrodb';
 import {
   createAnalyticsMarkerEntity,
+  createAnnouncementEntity,
   createAssignmentSubmissionEntity,
   createCertificateEntity,
   createContentItemEntity,
@@ -63,6 +64,7 @@ export const createCoreTableService = async () => {
     notificationState,
     notificationPreference,
     notificationBroadcast,
+    announcement,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -88,6 +90,7 @@ export const createCoreTableService = async () => {
     createNotificationStateEntity(),
     createNotificationPreferenceEntity(),
     createNotificationBroadcastEntity(),
+    createAnnouncementEntity(),
   ]);
 
   return new Service({
@@ -115,5 +118,6 @@ export const createCoreTableService = async () => {
     notificationState,
     notificationPreference,
     notificationBroadcast,
+    announcement,
   });
 };

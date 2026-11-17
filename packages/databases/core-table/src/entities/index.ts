@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 export { createAnalyticsMarkerEntity } from './analytics-marker.js';
+export { createAnnouncementEntity } from './announcement.js';
 export { createAssignmentSubmissionEntity } from './assignment-submission.js';
 export { createCertificateEntity } from './certificate.js';
 export { createContentItemEntity } from './content-item.js';

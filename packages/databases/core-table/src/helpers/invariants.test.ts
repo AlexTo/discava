@@ -253,6 +253,7 @@ const consistentTable = (): TableSnapshot => ({
   notificationStates: [],
   notificationPreferences: [],
   notificationBroadcasts: [],
+  announcements: [],
 });
 
 let table: TableSnapshot;
@@ -378,6 +379,7 @@ describe('checkTableInvariants', () => {
         notificationStates: [],
         notificationPreferences: [],
         notificationBroadcasts: [],
+        announcements: [],
       }),
     ).toEqual([]);
   });
@@ -1839,6 +1841,8 @@ describe('notifications', () => {
       id: 'b'.repeat(16),
       type: 'announcement.posted',
       courseId: 'c1',
+      dedupeKey: 'k',
+      occurredAt: '2026-11-16T11:59:00.000Z',
       status: 'pending',
       createdAt: '2026-11-16T11:59:00.000Z',
       ...over,
@@ -1862,6 +1866,175 @@ describe('notifications', () => {
         broadcast({ createdAt: '2026-11-16T10:00:00.000Z' }),
       ];
       expectOnly('notification-broadcast-done-complete', /over an hour/);
+    });
+  });
+
+  describe('32. announcement-shape', () => {
+    const AT = '2026-11-15T10:00:00.000Z';
+    const ID = `${new Date(AT)
+      .getTime()
+      .toString(16)
+      .padStart(12, '0')
+      .replace(/^(.{8})(.{4})$/, '$1-$2')}-7000-8000-000000000001`;
+    const announcement = (
+      over: Partial<TableSnapshot['announcements'][number]> = {},
+    ): TableSnapshot['announcements'][number] => ({
+      courseId: 'c1',
+      announcementId: ID,
+      title: 'Welcome',
+      body: '{"type":"doc","content":[{"type":"paragraph"}]}',
+      authorId: 'instructor',
+      createdAt: AT,
+      version: 1,
+      ...over,
+    });
+    const broadcastFor = (a: TableSnapshot['announcements'][number]) => ({
+      id: 'b'.repeat(16),
+      type: 'announcement.posted',
+      courseId: a.courseId,
+      dedupeKey: a.announcementId,
+      occurredAt: a.createdAt,
+      status: 'done' as const,
+      completedAt: NOW,
+      createdAt: a.createdAt,
+    });
+    const hold = (a: TableSnapshot['announcements'][number]) => {
+      table.announcements = [a];
+      table.notificationBroadcasts = [broadcastFor(a)];
+    };
+
+    it('passes a well-formed announcement, edited or not', () => {
+      hold(announcement());
+      expect(broken().invariants).toEqual([]);
+      hold(announcement({ version: 3, editedAt: '2026-11-15T11:00:00.000Z' }));
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it.each([
+      [
+        'its course does not exist',
+        { courseId: 'gone' },
+        /course does not exist/,
+      ],
+      ['an id that is not a UUID v7', { announcementId: 'nope' }, /UUID v7/],
+      [
+        'a createdAt other than the id time',
+        { createdAt: '2026-11-15T10:00:01.000Z' },
+        /UUID v7/,
+      ],
+      ['an empty title', { title: '  ' }, /title/],
+      ['a title over 120 characters', { title: 'x'.repeat(121) }, /title/],
+      ['a body that is not JSON', { body: 'plain' }, /body/],
+      [
+        'a body that is not a document',
+        { body: '{"type":"paragraph"}' },
+        /body/,
+      ],
+      [
+        'a body over 20,000 characters',
+        { body: `{"type":"doc","pad":"${'x'.repeat(20_000)}"}` },
+        /body/,
+      ],
+      ['no author', { authorId: '' }, /authorId/],
+      ['a version below 1', { version: 0 }, /version/],
+      [
+        'a version above 1 without editedAt',
+        { version: 2 },
+        /without editedAt/,
+      ],
+      [
+        'editedAt at version 1',
+        { editedAt: '2026-11-15T11:00:00.000Z' },
+        /at version 1/,
+      ],
+      [
+        'editedAt before createdAt',
+        { version: 2, editedAt: '2026-11-15T09:00:00.000Z' },
+        /before createdAt/,
+      ],
+    ])('reports %s', (_, over, message) => {
+      const a = announcement(over as never);
+      table.announcements = [a];
+      table.notificationBroadcasts = [broadcastFor(announcement())];
+      table.notificationBroadcasts[0].courseId = a.courseId;
+      table.notificationBroadcasts[0].dedupeKey = a.announcementId;
+      table.notificationBroadcasts[0].occurredAt = a.createdAt;
+      const { violations } = broken();
+
+      expect(violations.map((v) => v.invariant)).toContain(
+        'announcement-shape',
+      );
+      expect(violations.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(message),
+      );
+      expect(
+        violations.find((v) => v.invariant === 'announcement-shape')?.record,
+      ).toEqual({ courseId: a.courseId, announcementId: a.announcementId });
+    });
+  });
+
+  describe('33. announcement-has-broadcast', () => {
+    const AT = '2026-11-15T10:00:00.000Z';
+    const ID = `${new Date(AT)
+      .getTime()
+      .toString(16)
+      .padStart(12, '0')
+      .replace(/^(.{8})(.{4})$/, '$1-$2')}-7000-8000-000000000001`;
+    const announcement: TableSnapshot['announcements'][number] = {
+      courseId: 'c1',
+      announcementId: ID,
+      title: 'Welcome',
+      body: '{"type":"doc","content":[{"type":"paragraph"}]}',
+      authorId: 'instructor',
+      createdAt: AT,
+      version: 1,
+    };
+    const broadcast = (
+      over: Partial<TableSnapshot['notificationBroadcasts'][number]> = {},
+    ): TableSnapshot['notificationBroadcasts'][number] => ({
+      id: 'b'.repeat(16),
+      type: 'announcement.posted',
+      courseId: 'c1',
+      dedupeKey: ID,
+      occurredAt: AT,
+      status: 'done',
+      completedAt: NOW,
+      createdAt: AT,
+      ...over,
+    });
+
+    it('passes an announcement with its broadcast', () => {
+      table.announcements = [announcement];
+      table.notificationBroadcasts = [broadcast()];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports an announcement whose broadcast was deleted', () => {
+      table.announcements = [announcement];
+      expectOnly('announcement-has-broadcast', /no announcement.posted/);
+    });
+
+    it.each([
+      ['another dedupe key', { dedupeKey: 'other' }],
+      ['another type', { type: 'review.received' }],
+      ['another course', { courseId: 'c2' }],
+    ])('reports a broadcast with %s', (_, over) => {
+      table.announcements = [announcement];
+      table.notificationBroadcasts = [broadcast(over)];
+      expectOnly('announcement-has-broadcast', /no announcement.posted/);
+    });
+
+    it('reports a broadcast with another time', () => {
+      table.announcements = [announcement];
+      table.notificationBroadcasts = [
+        broadcast({ occurredAt: '2026-11-15T10:00:01.000Z' }),
+      ];
+      expectOnly('announcement-has-broadcast', /occurredAt/);
+    });
+
+    it('does not report a broadcast whose announcement was deleted', () => {
+      table.notificationBroadcasts = [broadcast()];
+      expect(broken().invariants).toEqual([]);
     });
   });
 });
