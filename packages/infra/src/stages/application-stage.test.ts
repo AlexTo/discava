@@ -584,6 +584,169 @@ describe('the stream router', () => {
   });
 });
 
+describe('notification delivery', () => {
+  const SES_IDENTITY = 'example.com';
+  const configured: StageComponents = {
+    notifications: {
+      fromAddress: 'notifications@example.com',
+      sesIdentity: SES_IDENTITY,
+    },
+  };
+
+  // Every IAM policy statement's actions of `type`, by the stack's role.
+  const sesStatements = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+        (policy) =>
+          (
+            policy.Properties.PolicyDocument.Statement as {
+              Action: string | string[];
+              Resource: unknown;
+            }[]
+          )
+            .filter((statement) =>
+              JSON.stringify(statement.Action).includes('ses:'),
+            )
+            .map((statement) => ({ name, statement })),
+      ),
+    );
+
+  const secretReaders = (components: StageComponents) =>
+    stackTemplates(components).flatMap(([name, template]) =>
+      Object.entries(template.findResources('AWS::IAM::Policy'))
+        .filter(([, policy]) =>
+          JSON.stringify(policy.Properties.PolicyDocument).includes(
+            'NotificationUnsubscribeSecret',
+          ),
+        )
+        .map(([id]) => `${name}/${id}`),
+    );
+
+  const deliveryFunction = (components: StageComponents) => {
+    const template = synth(components)('StreamRouter');
+    const [fn] = resources(
+      template,
+      'AWS::Lambda::Function',
+      'NotificationDelivery',
+    );
+    return fn as { Timeout: number; Environment: { Variables: object } };
+  };
+
+  it('has a queue, failure queue and alarm of its own, and still one stream mapping', () => {
+    const template = synth({})('StreamRouter');
+    for (const type of ['AWS::SQS::Queue', 'AWS::CloudWatch::Alarm']) {
+      expect(
+        Object.keys(template.findResources(type)).filter((id) =>
+          id.startsWith('StreamRouterNotificationDelivery'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterNotificationDeliveryFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      stackTemplates({}).flatMap(([name, t]) =>
+        Object.values(t.findResources('AWS::Lambda::EventSourceMapping'))
+          .filter((m) =>
+            JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+          )
+          .map(() => name),
+      ),
+    ).toEqual(['StreamRouter']);
+  });
+
+  it('gives the queue a visibility timeout of six times the function timeout', () => {
+    const template = synth({})('StreamRouter');
+    const { Timeout } = deliveryFunction({});
+    expect(Timeout).toBe(120);
+    const queues = resources(
+      template,
+      'AWS::SQS::Queue',
+      'StreamRouterNotificationDelivery',
+    ).filter((queue) => queue.RedrivePolicy);
+    expect(queues).toHaveLength(1);
+    expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
+  });
+
+  it('is told where the portals and the API are, and where its secret is', () => {
+    const { Environment } = deliveryFunction(configured);
+    expect(Object.keys(Environment.Variables).sort()).toEqual(
+      [
+        'ADMIN_PORTAL_URL',
+        'CORE_API_URL',
+        'INSTRUCTOR_PORTAL_URL',
+        'NOTIFICATIONS_FROM_ADDRESS',
+        'STUDENT_PORTAL_URL',
+        'UNSUBSCRIBE_SECRET_ARN',
+      ].sort(),
+    );
+    expect(Environment.Variables).toMatchObject({
+      NOTIFICATIONS_FROM_ADDRESS: 'notifications@example.com',
+    });
+  });
+
+  it('points at the custom domains when the stage has them', () => {
+    const { Environment } = deliveryFunction({
+      studentPortal: {
+        domainNames: ['learn.example.com'],
+        certificateArn:
+          'arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+      coreApi: {
+        domainName: 'api.example.com',
+        certificateArn:
+          'arn:aws:acm:ap-southeast-2:111122223333:certificate/00000000-0000-0000-0000-000000000000',
+      },
+    });
+    expect(Environment.Variables).toMatchObject({
+      STUDENT_PORTAL_URL: 'https://learn.example.com',
+      CORE_API_URL: 'https://api.example.com',
+    });
+  });
+
+  it('is given no sender and no SES access when the stage configures none', () => {
+    expect(deliveryFunction({}).Environment.Variables).not.toHaveProperty(
+      'NOTIFICATIONS_FROM_ADDRESS',
+    );
+    expect(sesStatements({})).toEqual([]);
+  });
+
+  it('may send only from the configured identity, and no other function may send', () => {
+    const statements = sesStatements(configured);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].name).toBe('StreamRouter');
+    expect(statements[0].statement.Action).toBe('ses:SendEmail');
+    expect(statements[0].statement.Resource).toEqual({
+      'Fn::Join': [
+        '',
+        [
+          'arn:',
+          { Ref: 'AWS::Partition' },
+          ':ses:ap-southeast-2:111122223333:identity/example.com',
+        ],
+      ],
+    });
+  });
+
+  it('is the only function that reads the unsubscribe secret', () => {
+    const readers = secretReaders({});
+    expect(readers).toHaveLength(1);
+    expect(readers[0]).toMatch(/^StreamRouter\/NotificationDelivery/);
+  });
+
+  it('keeps the stage under the resource cap', () => {
+    for (const [name, template] of stackTemplates(configured)) {
+      expect(
+        Object.keys(template.toJSON().Resources ?? {}).length,
+        name,
+      ).toBeLessThan(450);
+    }
+  });
+});
+
 // Stages may share an account and region (see StageIsolationSynthesizer),
 // where collection and policy names must be unique.
 describe('search collection (#53)', () => {

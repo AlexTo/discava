@@ -38,6 +38,8 @@ const SAMPLE = [
   record('INSERT', 'NewImage', 'quizAttempt'),
   record('INSERT', 'NewImage', 'quizSummary'),
   record('MODIFY', 'NewImage', 'quizSummary'),
+  record('INSERT', 'NewImage', 'notification'),
+  record('INSERT', 'NewImage', 'notificationBroadcast'),
 ];
 
 describe('featuresFor', () => {
@@ -60,6 +62,23 @@ describe('featuresFor', () => {
     for (const entity of ['courseStats', 'periodStats', 'analyticsMarker']) {
       expect(featuresFor(record('MODIFY', 'NewImage', entity))).toEqual([]);
     }
+  });
+
+  it('sends a new notification or broadcast to notification delivery only', () => {
+    for (const entity of ['notification', 'notificationBroadcast']) {
+      expect(featuresFor(record('INSERT', 'NewImage', entity))).toEqual([
+        'notification-delivery',
+      ]);
+    }
+  });
+
+  it('ignores a changed notification, so an email state patch cannot loop back', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'notification'))).toEqual(
+      [],
+    );
+    expect(featuresFor(record('REMOVE', 'OldImage', 'notification'))).toEqual(
+      [],
+    );
   });
 
   it('routes a record matching two features to both', () => {

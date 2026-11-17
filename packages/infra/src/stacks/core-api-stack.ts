@@ -50,6 +50,8 @@ export interface CoreApiStackProps extends StackProps {
  */
 export class CoreApiStack extends Stack {
   public readonly coreApi: CoreApi<CoreApiIntegrations>;
+  /** The API's address, as clients call it: its custom domain when it has one, else the execute-api URL. No trailing slash. */
+  public readonly apiUrl: string;
 
   constructor(
     scope: Construct,
@@ -98,6 +100,13 @@ export class CoreApiStack extends Stack {
       domainName: coreApiConfig?.domainName,
       certificate: coreApiCertificate,
     });
+    // With a custom domain the base path mapping serves the API without the
+    // deployment stage's prefix, so clients call the domain directly.
+    this.apiUrl = (
+      coreApiConfig?.domainName && coreApiCertificate
+        ? `https://${coreApiConfig.domainName}`
+        : this.coreApi.api.url
+    ).replace(/\/+$/, '');
     if (!coreApiKmsEnabled) {
       suppressRules(
         this,

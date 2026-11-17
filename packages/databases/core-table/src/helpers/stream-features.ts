@@ -7,6 +7,10 @@ import {
   matchesAnalyticsStreamFilters,
 } from './analytics-stream.js';
 import {
+  matchesNotificationStreamFilters,
+  NOTIFICATION_STREAM_FILTERS,
+} from './notification-stream.js';
+import {
   matchesProgressStreamFilters,
   PROGRESS_STREAM_FILTERS,
 } from './progress-stream.js';
@@ -80,6 +84,13 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     // retry a conflict (see analytics-writes). The mapping's minimum.
     maxConcurrency: 2,
   },
+  {
+    name: 'notification-delivery',
+    filters: NOTIFICATION_STREAM_FILTERS,
+    handler: 'notification-delivery',
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+  },
 ];
 
 // The features with their own filter module keep their own matchers, so they stay the one
@@ -89,6 +100,7 @@ const MATCHERS: Readonly<Record<string, Matcher>> = {
   'progress-recalculation': matchesProgressStreamFilters,
   'search-indexing': matchesSearchStreamFilters,
   'analytics-update': matchesAnalyticsStreamFilters,
+  'notification-delivery': matchesNotificationStreamFilters,
 };
 
 const matchesFilters = (
