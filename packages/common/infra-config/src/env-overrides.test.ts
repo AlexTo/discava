@@ -28,6 +28,8 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_IDENTITY_ENABLE_SELF_SIGN_UP',
   'DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KMS_ENCRYPTION',
   'DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KEY_ROTATION',
+  'DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_FROM_ADDRESS',
+  'DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_SES_IDENTITY',
 ];
 
 afterEach(() => {
@@ -83,6 +85,26 @@ describe('applyEnvOverrides', () => {
     ).toEqual({
       infra: {
         streamRouter: { enableKmsEncryption: false, enableKeyRotation: true },
+      },
+    });
+  });
+
+  it('overrides the notification sender and SES identity', () => {
+    process.env.DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_FROM_ADDRESS =
+      'notifications@example.com';
+    process.env.DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_SES_IDENTITY =
+      'example.com';
+
+    expect(
+      applyEnvOverrides(STAGE, {
+        infra: { notifications: { fromAddress: 'old@example.com' } },
+      }),
+    ).toEqual({
+      infra: {
+        notifications: {
+          fromAddress: 'notifications@example.com',
+          sesIdentity: 'example.com',
+        },
       },
     });
   });
