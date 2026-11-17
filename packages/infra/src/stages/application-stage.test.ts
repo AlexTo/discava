@@ -978,3 +978,44 @@ describe('limits a stage leaves out', () => {
     });
   });
 });
+
+describe('the notification unsubscribe secret', () => {
+  const secrets = (components: StageComponents) =>
+    synth(components)('Data').findResources('AWS::SecretsManager::Secret');
+  const unsubscribeSecrets = (components: StageComponents) =>
+    Object.entries(secrets(components)).filter(([id]) =>
+      id.startsWith('NotificationUnsubscribeSecret'),
+    );
+
+  it('is a generated 64-character value', () => {
+    const [[, secret]] = unsubscribeSecrets({});
+    expect(secret.Properties.GenerateSecretString).toMatchObject({
+      PasswordLength: 64,
+      ExcludePunctuation: true,
+    });
+  });
+
+  it('is encrypted with a customer-managed key unless the stage turns that off', () => {
+    const [[, encrypted]] = unsubscribeSecrets({});
+    expect(encrypted.Properties.KmsKeyId).toBeDefined();
+
+    const [[, plain]] = unsubscribeSecrets({
+      coreTable: { enableKmsEncryption: false },
+    });
+    expect(plain.Properties.KmsKeyId).toBeUndefined();
+  });
+
+  it('is retained on delete unless the stage opts out, like the table', () => {
+    const [[, retained]] = unsubscribeSecrets({});
+    expect(retained.DeletionPolicy).toBe('Retain');
+
+    const [[, removed]] = unsubscribeSecrets({
+      coreTable: { retainOnDelete: false },
+    });
+    expect(removed.DeletionPolicy).toBe('Delete');
+  });
+
+  it('is the only notification secret in Data', () => {
+    expect(unsubscribeSecrets({})).toHaveLength(1);
+  });
+});
