@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { aggregatesOf, contributions, sumContributions } from './analytics.js';
+import {
+  aggregatesOf,
+  contributions,
+  funnelContributions,
+  sumContributions,
+} from './analytics.js';
 import {
   checkTableInvariants as checkAllInvariants,
   type InvariantName,
@@ -211,7 +216,9 @@ const consistentTable = (): TableSnapshot => ({
       activeLearners: 1,
     },
   ],
-  lessonStats: [],
+  lessonStats: [
+    { courseId: 'c1', lessonId: 'l1', inProgress: 1, completed: 0 },
+  ],
   quizQuestionStats: [],
   quizScoreStats: [],
   notifications: [],
@@ -233,8 +240,33 @@ const item = (contentItemId: string) => {
   return found;
 };
 
+// The lesson figures the records add up to, as the analytics handler would
+// have left them, for a test that changes progress or an enrolment to try
+// another rule; rule 26 is tried against its own figures below.
+const settleLessonStats = () => {
+  table.lessonStats = aggregatesOf(
+    sumContributions(
+      table.enrolments.map((enrolled) =>
+        funnelContributions(
+          table.progress.filter(
+            (p) =>
+              p.courseId === enrolled.courseId && p.userId === enrolled.userId,
+          ),
+          enrolled,
+        ),
+      ),
+    ),
+  ).map(({ courseId, sk, counters }) => ({
+    courseId,
+    lessonId: sk.slice('LESSON#'.length),
+    inProgress: counters.inProgress ?? 0,
+    completed: counters.completed ?? 0,
+  }));
+};
+
 // The invariants broken, each once, with the messages.
 const broken = () => {
+  settleLessonStats();
   const violations = checkTableInvariants(table);
   return {
     invariants: [...new Set(violations.map((v) => v.invariant))],
@@ -1369,6 +1401,7 @@ describe('26. analytics-matches-records', () => {
     table.progress = [];
     table.courseStats = [];
     table.periodStats = [];
+    table.lessonStats = [];
     expect(violations()).toEqual([]);
   });
 
@@ -1421,6 +1454,55 @@ describe('26. analytics-matches-records', () => {
         message: 'activeLearners is 2, but its records add up to 1',
       }),
     ]);
+  });
+
+  it('expects a lesson count for a student partway through it', () => {
+    table.lessonStats = [];
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'LESSON#l1' },
+        message: 'inProgress is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a lesson counted as completed that nobody completed', () => {
+    table.lessonStats = [
+      { courseId: 'c1', lessonId: 'l1', inProgress: 1, completed: 1 },
+    ];
+    expect(violations().map((v) => v.message)).toEqual([
+      'completed is 1, but its records add up to 0',
+    ]);
+  });
+
+  it('moves a lesson count with the status, and ignores not_started', () => {
+    table.progress[0].status = 'completed';
+    expect(
+      violations()
+        .map((v) => v.message)
+        .sort(),
+    ).toEqual([
+      'completed is 0, but its records add up to 1',
+      'inProgress is 1, but its records add up to 0',
+    ]);
+    table.progress[0].status = 'not_started';
+    expect(violations().map((v) => v.message)).toEqual([
+      'inProgress is 1, but its records add up to 0',
+    ]);
+  });
+
+  it('counts nothing in lessons for a dropped student', () => {
+    table.enrolments[0].status = 'dropped';
+    expect(violations().map((v) => v.record)).toContainEqual({
+      courseId: 'c1',
+      item: 'LESSON#l1',
+    });
+    table.lessonStats = [];
+    expect(
+      violations().filter(
+        (v) => (v.record as { item: string }).item === 'LESSON#l1',
+      ),
+    ).toEqual([]);
   });
 
   it('reports aggregates for a course that has no records', () => {

@@ -168,7 +168,7 @@ export const addQuiz = async (
 
 // What the course editor calls each kind of content item in its controls'
 // names, e.g. "Hide text Reading one".
-export type ItemKind = 'text' | 'video' | 'quiz' | 'file';
+export type ItemKind = 'text' | 'video' | 'quiz' | 'file' | 'lesson';
 
 // Hides a published item from students, confirming in the dialog.
 export const hideItem = async (page: Page, kind: ItemKind, title: string) => {

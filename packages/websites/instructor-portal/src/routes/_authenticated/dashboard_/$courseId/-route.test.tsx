@@ -52,7 +52,25 @@ const dayList = (days: number) =>
     activeLearners: i === days - 1 ? 3 : 0,
   }));
 
-const analytics = ({ days = 90, ...totals }: Record<string, unknown> = {}) => ({
+const lesson = (
+  lessonId: string,
+  started: number,
+  completed: number,
+  completionShare: number | null,
+) => ({
+  lessonId,
+  moduleId: 'm1',
+  title: `Lesson ${lessonId}`,
+  started,
+  completed,
+  completionShare,
+});
+
+const analytics = ({
+  days = 90,
+  lessons = [] as unknown[],
+  ...totals
+}: Record<string, unknown> = {}) => ({
   totals: {
     enrolments: 10,
     active: 5,
@@ -64,7 +82,7 @@ const analytics = ({ days = 90, ...totals }: Record<string, unknown> = {}) => ({
     ...totals,
   },
   daily: dayList(days as number),
-  lessons: [],
+  lessons,
   quizzes: [],
 });
 
@@ -207,5 +225,83 @@ describe('Course analytics', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText(/^Last updated /)).toBeInTheDocument();
+  });
+
+  describe('lesson drop-off', () => {
+    const lessons = [
+      lesson('a', 4, 4, 100),
+      lesson('b', 4, 1, 25),
+      lesson('c', 0, 0, null),
+    ];
+
+    it('shows a bar per lesson in course order, with its share or No data', async () => {
+      renderPage(() => analytics({ lessons }));
+
+      const list = await screen.findByRole('list', {
+        name: 'Lessons in course order',
+      });
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows.map((row) => row.textContent)).toEqual([
+        expect.stringContaining('Lesson a'),
+        expect.stringContaining('Lesson b'),
+        expect.stringContaining('Lesson c'),
+      ]);
+      expect(rows[0]).toHaveTextContent('100%');
+      expect(rows[1]).toHaveTextContent('25%');
+      expect(rows[2]).toHaveTextContent('No data');
+    });
+
+    it('gives the numbers of a lesson, which can be focused', async () => {
+      const { user } = renderPage(() => analytics({ lessons }));
+
+      const list = await screen.findByRole('list', {
+        name: 'Lessons in course order',
+      });
+      const [first, second, third] = within(list).getAllByRole('listitem');
+      expect(second).toHaveTextContent('4 started, 1 completed');
+      expect(third).toHaveTextContent('Nobody has started this lesson');
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      expect([first, second, third]).toContain(document.activeElement);
+    });
+
+    it('marks the lowest share, and only that', async () => {
+      renderPage(() => analytics({ lessons }));
+
+      const list = await screen.findByRole('list', {
+        name: 'Lessons in course order',
+      });
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows[1]).toHaveTextContent('Lowest completion');
+      expect(within(list).getAllByText('Lowest completion')).toHaveLength(1);
+    });
+
+    it('marks nothing when only one lesson has a share', async () => {
+      renderPage(() =>
+        analytics({
+          lessons: [lesson('a', 2, 1, 50), lesson('c', 0, 0, null)],
+        }),
+      );
+
+      await screen.findByRole('list', { name: 'Lessons in course order' });
+      expect(screen.queryByText('Lowest completion')).toBeNull();
+    });
+
+    it('says so when no lesson is shown', async () => {
+      renderPage(() => analytics({ lessons: [] }));
+
+      expect(
+        await screen.findByText('No lessons are shown to learners yet.'),
+      ).toBeInTheDocument();
+    });
+
+    it('waits for the first enrolment, as the rest of the page does', async () => {
+      renderPage(() => analytics({ enrolments: 0, lessons }));
+
+      await screen.findByText('No learners have enrolled yet');
+      expect(screen.queryByText('Lesson drop-off')).toBeNull();
+    });
   });
 });

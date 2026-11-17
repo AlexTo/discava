@@ -66,12 +66,26 @@ export const CourseDaySchema = z.object({
   activeLearners: CountSchema,
 });
 
+export const LessonDropOffSchema = z.object({
+  lessonId: z.string(),
+  moduleId: z.string(),
+  title: z.string(),
+  /** Students in progress or completed. */
+  started: CountSchema,
+  completed: CountSchema,
+  /** `completed / started` as a whole percent, rounded down; null when `started` is 0. */
+  completionShare: z.number().int().min(0).max(100).nullable(),
+});
+
+export type ILessonDropOff = z.output<typeof LessonDropOffSchema>;
+
 export const CourseAnalyticsOutputSchema = z.object({
   totals: CourseTotalsSchema,
   /** Exactly `days` entries, oldest first, zero filled. */
   daily: z.array(CourseDaySchema),
-  // Filled by the drop-off and quiz stories; empty until then.
-  lessons: z.array(z.never()),
+  /** Lessons currently shown to students, in course order. */
+  lessons: z.array(LessonDropOffSchema),
+  // Filled by the quiz story; empty until then.
   quizzes: z.array(z.never()),
 });
 

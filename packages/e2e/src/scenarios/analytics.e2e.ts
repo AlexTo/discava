@@ -4,7 +4,11 @@
  */
 
 import { completeCourse } from '../helpers/certificate.js';
-import { createPublishedCourse } from '../helpers/instructor-portal.js';
+import {
+  createPublishedCourse,
+  hideItem,
+  publishItem,
+} from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expectAfterReloads } from '../helpers/student-portal.js';
@@ -124,6 +128,38 @@ test('an instructor sees how their course is doing, and no one else can open its
         .getByRole('row'),
     ).toHaveCount(31);
     await screenshot(instructor, 'course analytics over 30 days');
+  });
+
+  await test.step('the lesson drop-off lists the lesson, drops it while hidden and brings it back', async () => {
+    const lessons = instructor.getByRole('list', {
+      name: 'Lessons in course order',
+    });
+    await expectAfterReloads(instructor, async () => {
+      await expect(
+        lessons.getByRole('listitem').filter({ hasText: 'Lesson one' }),
+      ).toContainText('100%', { timeout: 2_000 });
+    });
+    await expect(
+      lessons.getByRole('listitem').filter({ hasText: 'Lesson one' }),
+    ).toContainText('1 started, 1 completed');
+    await screenshot(instructor, 'lesson drop-off with a completed lesson');
+
+    await instructor.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+    await hideItem(instructor, 'lesson', 'Lesson one');
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expect(
+      instructor.getByText('No lessons are shown to learners yet.'),
+    ).toBeVisible();
+    await expect(lessons).toHaveCount(0);
+    await screenshot(instructor, 'lesson drop-off with the lesson hidden');
+
+    await instructor.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+    await publishItem(instructor, 'lesson', 'Lesson one');
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expect(
+      lessons.getByRole('listitem').filter({ hasText: 'Lesson one' }),
+    ).toContainText('1 started, 1 completed');
+    await screenshot(instructor, 'lesson drop-off with the lesson shown again');
   });
 
   await test.step('a second instructor does not see the course, nor can open its analytics page', async () => {

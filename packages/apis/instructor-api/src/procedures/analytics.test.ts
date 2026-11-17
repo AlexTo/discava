@@ -86,6 +86,7 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
       active: 5,
       activeLearners: 6,
       updatedAt: '2026-11-17T09:00:00.000Z',
+      lessons: [],
       daily: Array.from({ length: days }, (_, i) => ({
         date: `d${i}`,
         enrolments: 0,
@@ -319,6 +320,53 @@ describe('analytics.courseSummaries', () => {
     });
   });
 
+  it('lists the lessons with their started, completed and share', async () => {
+    analytics({
+      lessons: [
+        {
+          lessonId: 'l1',
+          moduleId: 'm1',
+          moduleTitle: 'Basics',
+          title: 'Intro',
+          inProgress: 1,
+          completed: 3,
+          started: 4,
+          completionShare: 75,
+        },
+        {
+          lessonId: 'l2',
+          moduleId: 'm1',
+          moduleTitle: 'Basics',
+          title: 'Next',
+          inProgress: 0,
+          completed: 0,
+          started: 0,
+          completionShare: null,
+        },
+      ],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+
+    expect(result.lessons).toEqual([
+      {
+        lessonId: 'l1',
+        moduleId: 'm1',
+        title: 'Intro',
+        started: 4,
+        completed: 3,
+        completionShare: 75,
+      },
+      {
+        lessonId: 'l2',
+        moduleId: 'm1',
+        title: 'Next',
+        started: 0,
+        completed: 0,
+        completionShare: null,
+      },
+    ]);
+  });
+
   it('contains no student identifier', async () => {
     memberships('c1');
     courses(course('c1'));
@@ -396,6 +444,53 @@ describe('analytics.course', () => {
       callAs('instructor-2').course({ courseId: 'course-1', days: 30 }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(readCourseAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('lists the lessons with their started, completed and share', async () => {
+    analytics({
+      lessons: [
+        {
+          lessonId: 'l1',
+          moduleId: 'm1',
+          moduleTitle: 'Basics',
+          title: 'Intro',
+          inProgress: 1,
+          completed: 3,
+          started: 4,
+          completionShare: 75,
+        },
+        {
+          lessonId: 'l2',
+          moduleId: 'm1',
+          moduleTitle: 'Basics',
+          title: 'Next',
+          inProgress: 0,
+          completed: 0,
+          started: 0,
+          completionShare: null,
+        },
+      ],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+
+    expect(result.lessons).toEqual([
+      {
+        lessonId: 'l1',
+        moduleId: 'm1',
+        title: 'Intro',
+        started: 4,
+        completed: 3,
+        completionShare: 75,
+      },
+      {
+        lessonId: 'l2',
+        moduleId: 'm1',
+        title: 'Next',
+        started: 0,
+        completed: 0,
+        completionShare: null,
+      },
+    ]);
   });
 
   it('contains no student identifier', async () => {

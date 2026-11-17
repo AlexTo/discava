@@ -13,6 +13,7 @@ import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-
 import { Alert } from '../../../../components/alert';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { DailyChart } from './-components/daily-chart';
+import { LessonDropOff } from './-components/lesson-drop-off';
 import { TotalsRow } from './-components/totals-row';
 
 type Days = 30 | 90;
@@ -155,6 +156,11 @@ function RouteComponent() {
                 label="Active learners"
                 days={analytics.daily}
               />
+            </section>
+          )}
+          {analytics.totals.enrolments > 0 && (
+            <section aria-label="Lesson drop-off">
+              <LessonDropOff lessons={analytics.lessons} />
             </section>
           )}
         </>

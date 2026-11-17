@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readCourseAnalytics, readCourseSummaries } from './analytics-reads.js';
+import {
+  readCourseAnalytics,
+  readCourseSummaries,
+  readLessonFunnel,
+} from './analytics-reads.js';
 
 type Keys = Record<string, string>[];
 
@@ -188,6 +192,131 @@ describe('readCourseSummaries', () => {
   });
 });
 
+// The analytics and curriculum collections, answering with the given items.
+const collectionsOf = (
+  lessonStats: Record<string, unknown>[] = [],
+  curriculum: Record<string, Record<string, unknown>[]> = {},
+) => ({
+  analytics: () => ({ go: async () => ({ data: { lessonStats } }) }),
+  curriculum: () => ({
+    go: async () => ({
+      data: { module: [], lesson: [], contentItem: [], ...curriculum },
+    }),
+  }),
+});
+
+const shown = { visibility: 'visible' };
+
+describe('readLessonFunnel', () => {
+  const module = (moduleId: string, order: number, extra = {}) => ({
+    moduleId,
+    order,
+    title: moduleId,
+    ...shown,
+    ...extra,
+  });
+  const lesson = (
+    lessonId: string,
+    moduleId: string,
+    order: number,
+    extra = {},
+  ) => ({ lessonId, moduleId, order, title: lessonId, ...shown, ...extra });
+  const table = (
+    lessonStats: Record<string, unknown>[],
+    curriculum: Record<string, Record<string, unknown>[]>,
+  ) => ({ collections: collectionsOf(lessonStats, curriculum) }) as never;
+
+  it('lists shown lessons in course order with started and share', async () => {
+    const result = await readLessonFunnel(
+      table(
+        [
+          { lessonId: 'a2', inProgress: 1, completed: 1 },
+          { lessonId: 'b1', inProgress: 0, completed: 3 },
+        ],
+        {
+          module: [module('m2', 2), module('m1', 1)],
+          lesson: [
+            lesson('b1', 'm2', 1),
+            lesson('a2', 'm1', 2),
+            lesson('a1', 'm1', 1),
+          ],
+        },
+      ),
+      'c1',
+    );
+
+    expect(result.map(({ lessonId }) => lessonId)).toEqual(['a1', 'a2', 'b1']);
+    expect(result[1]).toMatchObject({
+      started: 2,
+      completed: 1,
+      completionShare: 50,
+    });
+    expect(result[2]).toMatchObject({ started: 3, completionShare: 100 });
+  });
+
+  it('shows zeros and no share for a lesson without stats', async () => {
+    const [only] = await readLessonFunnel(
+      table([], { module: [module('m1', 1)], lesson: [lesson('a1', 'm1', 1)] }),
+      'c1',
+    );
+    expect(only).toMatchObject({
+      inProgress: 0,
+      completed: 0,
+      started: 0,
+      completionShare: null,
+    });
+  });
+
+  it('leaves out hidden and archived lessons and those in hidden or archived modules', async () => {
+    const result = await readLessonFunnel(
+      table([{ lessonId: 'hid', inProgress: 2, completed: 2 }], {
+        module: [
+          module('m1', 1),
+          module('mh', 2, { visibility: 'hidden' }),
+          module('ma', 3, { archivedAt: '2026-11-01T00:00:00Z' }),
+        ],
+        lesson: [
+          lesson('ok', 'm1', 1),
+          lesson('hid', 'm1', 2, { visibility: 'hidden' }),
+          lesson('arc', 'm1', 3, { archivedAt: '2026-11-01T00:00:00Z' }),
+          lesson('inh', 'mh', 1),
+          lesson('ina', 'ma', 1),
+        ],
+      }),
+      'c1',
+    );
+    expect(result.map(({ lessonId }) => lessonId)).toEqual(['ok']);
+  });
+
+  it('gives a hidden lesson its stored counts back when shown again', async () => {
+    const stats = [{ lessonId: 'a1', inProgress: 1, completed: 2 }];
+    const curriculum = (extra = {}) => ({
+      module: [module('m1', 1)],
+      lesson: [lesson('a1', 'm1', 1, extra)],
+    });
+    expect(
+      await readLessonFunnel(
+        table(stats, curriculum({ visibility: 'hidden' })),
+        'c1',
+      ),
+    ).toEqual([]);
+    expect(
+      (await readLessonFunnel(table(stats, curriculum()), 'c1'))[0],
+    ).toMatchObject({ started: 3, completed: 2 });
+  });
+
+  it('never shows a negative count', async () => {
+    const [only] = await readLessonFunnel(
+      table([{ lessonId: 'a1', inProgress: -1, completed: 1 }], {
+        module: [module('m1', 1)],
+        lesson: [lesson('a1', 'm1', 1)],
+      }),
+      'c1',
+    );
+    expect(only).toMatchObject({ inProgress: 0, started: 1 });
+  });
+});
+
 describe('readCourseAnalytics', () => {
   // Answers the summary and week batch gets from `summary`/`week`, and the
   // day range query from `days`, recording the range asked for.
@@ -200,6 +329,7 @@ describe('readCourseAnalytics', () => {
     const go = vi.fn(async () => ({ data: days }));
     between.mockReturnValue({ go });
     const coreTable = {
+      collections: collectionsOf(),
       entities: {
         courseStats: {
           get: () => ({

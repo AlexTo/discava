@@ -13,9 +13,9 @@
 
 /** An amount to add to one counter of one aggregate item. */
 export interface Delta {
-  kind: 'courseStats' | 'periodStats';
+  kind: 'courseStats' | 'periodStats' | 'lessonStats';
   courseId: string;
-  /** The item's sort key part: `SUMMARY`, `DAY#<yyyy-mm-dd>` or `WEEK#...`. */
+  /** The item's sort key part: `SUMMARY`, `DAY#<yyyy-mm-dd>`, `WEEK#...` or `LESSON#<lessonId>`. */
   sk: string;
   attribute: string;
   amount: number;
@@ -152,6 +152,104 @@ export const contributions = (entity: string, image: Image): Contributions => {
   }
 };
 
+/** What a student's lesson counts as in the funnel. */
+export type FunnelStatus = 'inProgress' | 'completed';
+
+/**
+ * The status a student's `progress` record should be counted as in its
+ * lesson's figures: nothing when it is `not_started` or missing, or when the
+ * student's enrolment is missing or `dropped` (drop-off figures exclude
+ * dropped enrolments). Read from the current records, never from a stream image, so
+ * any delivery order converges (research R-3).
+ */
+export const funnelStatus = (
+  progress: Image,
+  enrolment: Image,
+): FunnelStatus | undefined => {
+  if (!progress || !enrolment || enrolment.status === 'dropped') {
+    return undefined;
+  }
+  if (progress.status === 'completed') {
+    return 'completed';
+  }
+  return progress.status === 'in_progress' ? 'inProgress' : undefined;
+};
+
+/** One student's lesson (or all their lessons) whose funnel status to settle. */
+export interface FunnelTask {
+  courseId: string;
+  userId: string;
+  /** Absent: every lesson the student has progress in. */
+  lessonId?: string;
+}
+
+/**
+ * The funnel work a stream change asks for. A `progress` change settles that
+ * lesson; an enrolment that starts or stops counting (created, removed,
+ * dropped or back from a drop) settles all the student's lessons. Which
+ * status is counted is decided from current records, not from the images.
+ */
+export const funnelTasksOfChange = (
+  entity: string,
+  before: Image,
+  after: Image,
+): FunnelTask[] => {
+  const image = after ?? before;
+  const courseId = text(image?.courseId);
+  const userId = text(image?.userId);
+  if (!courseId || !userId) {
+    return [];
+  }
+  if (entity === 'progress') {
+    const lessonId = text(image?.lessonId);
+    return lessonId ? [{ courseId, userId, lessonId }] : [];
+  }
+  if (entity === 'enrolment') {
+    const counts = (enrolment: Image) =>
+      enrolment !== undefined && enrolment.status !== 'dropped';
+    return counts(before) !== counts(after) ? [{ courseId, userId }] : [];
+  }
+  return [];
+};
+
+/** The count a student in `status` adds to the lesson's item (none for none). */
+export const funnelCounts = (
+  courseId: string,
+  lessonId: string,
+  status: FunnelStatus | undefined,
+): Delta[] =>
+  status
+    ? [
+        {
+          kind: 'lessonStats',
+          courseId,
+          sk: `LESSON#${lessonId}`,
+          attribute: status,
+          amount: 1,
+        },
+      ]
+    : [];
+
+/**
+ * What the lesson funnel adds up to for one student's records in a course:
+ * each of their lessons' `progress` against their enrolment. The stream
+ * handler does not use it (it moves counts from the funnel marker); the
+ * rebuild and the invariant do.
+ */
+export const funnelContributions = (
+  progress: Image[],
+  enrolment: Image,
+): Contributions => ({
+  counts: progress.flatMap((record) =>
+    funnelCounts(
+      text(record?.courseId) ?? '',
+      text(record?.lessonId) ?? '',
+      funnelStatus(record, enrolment),
+    ).filter(({ courseId, sk }) => courseId !== '' && sk !== 'LESSON#'),
+  ),
+  members: [],
+});
+
 const countKey = ({ kind, courseId, sk, attribute }: Delta) =>
   `${kind} ${courseId} ${sk} ${attribute}`;
 
@@ -213,7 +311,7 @@ export const sumContributions = (all: Contributions[]): Contributions => ({
 
 /** One aggregate item: its key and its counters. */
 export interface ExpectedAggregate {
-  kind: 'courseStats' | 'periodStats';
+  kind: 'courseStats' | 'periodStats' | 'lessonStats';
   courseId: string;
   sk: string;
   counters: Record<string, number>;

@@ -17,6 +17,8 @@ export {
   dayKey,
   diffContributions,
   type ExpectedAggregate,
+  type FunnelTask,
+  funnelTasksOfChange,
   type Member,
   mergeCounts,
   sumContributions,
@@ -26,8 +28,10 @@ export {
   type CourseAnalytics,
   type CourseDay,
   type CourseSummary,
+  type LessonFunnel,
   readCourseAnalytics,
   readCourseSummaries,
+  readLessonFunnel,
 } from './helpers/analytics-reads.js';
 export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';
 export {
@@ -43,6 +47,9 @@ export {
   type AnalyticsChange,
   type AnalyticsChangeResult,
   applyAnalyticsChange,
+  type FunnelMove,
+  moveLessonFunnel,
+  moveStudentFunnels,
 } from './helpers/analytics-writes.js';
 export {
   type AssignmentSubmissionFile,
