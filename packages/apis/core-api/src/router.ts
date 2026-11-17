@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { t } from './init.js';
+import { listAnnouncements } from './procedures/announcement.js';
 import {
   mySubmission,
   submissionFileUrl,
@@ -63,6 +64,9 @@ export const appRouter = router({
     publicSearch: publicSearchCourses,
     publicView: publicViewCourse,
     view: viewCourse,
+  }),
+  announcement: router({
+    list: listAnnouncements,
   }),
   assignment: router({
     uploadUrl,

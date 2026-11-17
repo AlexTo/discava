@@ -195,6 +195,7 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'course.myItemCompletions': () => ({ items: [] }),
   'course.myLessonProgress': () => ({ lessons: [] }),
   'course.myEnrolment': () => enrolment,
+  'announcement.list': () => ({ items: [] }),
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
     withCredentials: false,
@@ -240,6 +241,38 @@ describe('CourseHome', () => {
       'href',
       '/learn/course-1/lesson/lesson-1',
     );
+  });
+
+  it('shows the course announcements after where to pick up', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({
+        'announcement.list': () => ({
+          items: [
+            {
+              announcementId: 'a-1',
+              courseId: 'course-1',
+              title: 'Welcome',
+              body: doc('Glad you are here'),
+              authorName: 'Alice Smith',
+              createdAt: AT,
+            },
+          ],
+        }),
+      }),
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Announcements' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Glad you are here')).toBeInTheDocument();
+    // Beside where to pick up, in the course's main content.
+    expect(
+      screen
+        .getByRole('link', { name: /^Start/ })
+        .compareDocumentPosition(
+          screen.getByRole('heading', { name: 'Announcements' }),
+        ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('places the course under My Learning, and links its course page', async () => {
