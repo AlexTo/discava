@@ -16,11 +16,7 @@ All three procedures are in `PUBLIC_OPERATIONS` (`packages/apis/core-api/src/rou
   requirements: string[];              // [] when unset
   category?: { slug: string; name: string };   // when the course has an active category
   preview?: {                          // only when FR-003 holds right now
-    moduleId: string;
-    lessonId: string;
-    contentItemId: string;
-    title: string;
-    durationSeconds?: number;
+    durationSeconds: number;
   };
   instructors: Array<{                 // ordered by courseInstructor.createdAt
     handle: string;
@@ -31,14 +27,14 @@ All three procedures are in `PUBLIC_OPERATIONS` (`packages/apis/core-api/src/rou
 }
 ```
 
-- `previewContentItemId`, `createdAt`/`updatedAt` of instructors, and any `instructorId` MUST NOT appear in the output (the zod output schema strips them; a test checks).
+- Preview internals (`s3Key`, `previousS3Key`, `submissionNonce`, `mediaConvertJobId`, `uploadedBy`, caption keys), `createdAt`/`updatedAt` of instructors, and any `instructorId` MUST NOT appear in the output (the zod output schema strips them; a test checks). `publicView` reads `coursePreview` with one keyed get beside the curriculum query.
 - `lastChildOrder` and other authoring fields already present stay as today.
 
 ## `course.previewVideoUrl` (new; dedicated `MediaUrl` function)
 
 **Input**: `{ courseId: string }`
 
-**Behavior**: Reads the course's curriculum (one collection query). It succeeds only if the course is `published`, `previewContentItemId` is set and names a `video` item for which `playableManifest(item)` is defined, and the item, its lesson and its module are all shown (`isShown` on each). Otherwise it returns `NOT_FOUND` with the message "This preview is not available". It is identical for signed-in and anonymous callers.
+**Behavior**: Reads `course` and `coursePreview` (two keyed gets, in parallel). It succeeds only if the course is `published` and `playableManifest(preview)` is defined (its own version once ready, otherwise the previous version kept while a replacement processes). Otherwise it returns `NOT_FOUND` with the message "This preview is not available". It is identical for signed-in and anonymous callers.
 
 **Output**: The same shape as `contentItem.videoUrl` minus `resumeAt`:
 
@@ -47,9 +43,9 @@ All three procedures are in `PUBLIC_OPERATIONS` (`packages/apis/core-api/src/rou
   captions: Array<{ trackId: string; language: string; label: string; isDefault: boolean; url: string }> }
 ```
 
-**Side effect**: `Set-Cookie` with CloudFront signed cookies scoped to the preview transcode's directory only (`prefixKey` from the manifest), with the same lifetime as `contentItem.videoUrl`.
+**Side effect**: `Set-Cookie` with CloudFront signed cookies scoped to the played version's folder only (`courses/<courseId>/preview/<submissionNonce>/`), with the same lifetime as `contentItem.videoUrl`.
 
-**Tests**: anonymous success; each failing condition gives `NOT_FOUND`; the cookie policy resource equals the preview's directory; any other video item of the same course is refused by `contentItem.videoUrl` for anonymous and non-enrolled callers (unchanged).
+**Tests**: anonymous success; no preview, a first upload still processing, a failed first upload, and a draft or archived course each give `NOT_FOUND`; a replacement in progress plays the previous version; the cookie policy resource equals the played version's folder; every lesson video of the same course is still refused by `contentItem.videoUrl` for anonymous and non-enrolled callers (unchanged).
 
 `CORE_API_DEDICATED_FUNCTIONS.MediaUrl` gains `'course.previewVideoUrl'`.
 

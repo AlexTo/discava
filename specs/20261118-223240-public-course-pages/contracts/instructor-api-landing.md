@@ -11,27 +11,34 @@ All procedures build on `courseProcedure`, which requires the `instructor` group
   courseId: string;
   learningOutcomes: string[];        // replaces the list; [] clears it
   requirements: string[];            // replaces the list; [] clears it
-  previewContentItemId: string | null;   // null clears it
 }
 ```
 
 **Validation** (zod, before any read): each list has at most 10 items. Each item is trimmed and must then be 1 to 160 characters. A violation returns `BAD_REQUEST` with a message naming the field and position.
 
-**Behavior**: One `courseLandingWrites.set` transaction: the course patch, the `courseInstructor.courseUpdatedAt` sync for every instructor, and (when the preview is non-null) a condition check that a `contentItem` with that ID exists under this course with `type = video`. If that check fails, the result is `BAD_REQUEST`, "Choose a video from this course". It works in any course status, including `archived`, since the page is just not public then.
+**Behavior**: One `courseLandingWrites.set` transaction: the course patch and the `courseInstructor.courseUpdatedAt` sync for every instructor. It works in any course status, including `archived`, since the page is just not public then.
 
 **Output**: The updated course, in the same shape as `course.view`.
 
 ## `course.view` (extended)
 
-The output gains `learningOutcomes`, `requirements` and `previewContentItemId`, so the portal can show and edit them and work out the checklist.
-
-## `contentItem.deletePermanently` (changed)
-
-Its transaction gains `courseLandingWrites.clearPreviewIfMatches`. Deleting the current preview clears it and keeps `courseUpdatedAt` in sync. Tests: deleting the preview clears it; deleting another item leaves it.
+The output gains `learningOutcomes`, `requirements` and `preview` (`{ status, failureReason?, durationSeconds, hasPlayableVersion }` or absent), so the portal can show and edit them and work out the checklist.
 
 ## `course.create` (changed)
 
 It calls `ensureInstructorProfile(caller)` just before its transaction (idempotent; the handle retry loop cannot run inside a transaction). The test pins that a first course creates exactly one profile and claim, and that a second course creates none.
+
+## `coursePreview.*` (new): the course's preview video
+
+These mirror the lesson-video procedures in `content-item-video.ts` (`createVideoUploadUrl`, `createVideo`, `updateVideo`) and share their helpers. Each requires the caller to be an instructor of the course (`FORBIDDEN` otherwise), and works in any course status.
+
+- **`coursePreview.createUploadUrl({ courseId, fileName, contentType, contentLength })`**: same type allowlist and size limit as lesson videos. It returns a presigned upload for a raw key under `courses/<courseId>/preview/uploads/`.
+- **`coursePreview.create({ courseId, rawKey, durationSeconds })`**: refuses `durationSeconds > 300` with `BAD_REQUEST` "A preview can be at most 5 minutes long". It creates the `coursePreview` record (condition: none exists, else `CONFLICT` "This course already has a preview") with `status: processing`, a new `submissionNonce` and `transcodePending`, then submits the transcode job with metadata `{ target: 'coursePreview', courseId, submissionNonce }`. It follows `createContentItemVideo`'s steps for job id, ETag and failure handling.
+- **`coursePreview.replace({ courseId, rawKey, durationSeconds, expectedSubmissionNonce })`**: has the same 300-second check. On a `ready` preview it moves `s3Key` to `previousS3Key` and starts a new attempt, conditioned on `expectedSubmissionNonce` (`CONFLICT` "The preview changed; reload and try again" otherwise), following `updateContentItemVideo`.
+- **`coursePreview.remove({ courseId, expectedSubmissionNonce })`**: deletes the record (same condition) and schedules cleanup of every version folder and raw upload, through the existing cleanup scheduler.
+- **`coursePreview.createVideoUrl({ courseId })`**: lets an instructor watch their own preview in any course status, including while processing (the previous version) or before publishing. It works like `contentItem.createVideoUrl`.
+
+The first four go in instructor-api's `Media` dedicated function and `createVideoUrl` in its `MediaUrl` function (`INSTRUCTOR_API_DEDICATED_FUNCTIONS` in `common/constructs/src/app/apis/instructor-api.ts`), so no new permissions land on the router.
 
 ## `profile.get` (new)
 

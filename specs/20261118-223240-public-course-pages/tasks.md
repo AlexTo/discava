@@ -16,11 +16,11 @@ description: "Task list for public course landing pages and instructor profiles"
 - portal component tests;
 - a `packages/e2e` scenario and a concurrency test.
 
-Write each phase's tests first and watch them fail. Never weaken an existing test to make it pass (constitution IV). Where a task changes an existing assertion on purpose (the `StaticWebsite` snapshot in Phase 6), it says which behavior changed, and the PR description repeats it.
+Write each phase's tests first and watch them fail. Never weaken an existing test to make it pass (constitution IV). Where a task changes an existing assertion on purpose (the `StaticWebsite` snapshot in Phase 7), it says which behavior changed, and the PR description repeats it.
 
 **Who runs what**: An automated agent implements these tasks without `pnpm dev` or Docker. It runs unit and component tests, lint, typecheck, `build` and `synth` locally. The agent writes the e2e scenario and concurrency test, but PR CI runs them (`pr-checks.yml`'s `E2E tests` job). Tasks marked **(human)** need a running local stack, a deployed stage or people, and a reviewer does them before merging.
 
-**Organization**: Seven phases. Each phase is one agent PR, merged in order, and leaves `main` green and working, so no phase needs a later one to pass.
+**Organization**: Eight phases. Each phase is one agent PR, merged in order, and leaves `main` green and working, so no phase needs a later one to pass.
 
 | Label | Story | Priority |
 |-------|-------|----------|
@@ -40,57 +40,59 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 ---
 
-## Phase 1: User Story 3 - Instructors store outcomes, requirements and a preview (P1) 🎯 MVP
+## Phase 1: User Story 3 - Instructors store outcomes and requirements, and the preview record exists (P1) 🎯 MVP
 
 **PR title**: `feat(public-pages): landing page fields on courses, the shared writer and invariants (#287)`
 
-**Goal**: The data layer and instructor-api for the three new course attributes, so instructors can save them through the API. The portals do not read them yet, so nothing users see changes.
+**Goal**: The data layer and instructor-api for the two new course attributes, so instructors can save them through the API, plus the `coursePreview` record and its invariants (nothing writes it yet). The portals do not read any of it yet, so nothing users see changes.
 
-**Independent test**: Procedure tests for `course.updateLanding` and `contentItem.deletePermanently`; invariant breaking tests.
+**Independent test**: Procedure tests for `course.updateLanding`; entity and invariant breaking tests.
 
 - [ ] T001 [US3] Tests first, then extend `packages/databases/core-table/src/entities/course.ts` with:
   - `learningOutcomes`: list of string, optional;
-  - `requirements`: list of string, optional;
-  - `previewContentItemId`: string, optional; removed, never set to empty, when cleared.
+  - `requirements`: list of string, optional.
 
-  Entity tests in `entities/course.test.ts` (create the file if absent, following `entities/review.test.ts`): a course round-trips the three attributes, and the existing course tests stay unchanged.
+  Entity tests in `entities/course.test.ts` (create the file if absent, following `entities/review.test.ts`): a course round-trips both attributes, and the existing course tests stay unchanged.
 - [ ] T002 [US3] Tests first, then add `packages/databases/core-table/src/helpers/course-landing.ts`, exported from `src/index.ts`, with:
   - `normaliseLandingList(items)`: trims each item, refuses more than 10 items, and refuses any item outside "1 to 160 characters after trimming";
-  - `courseLandingWrites.set({ courseId, learningOutcomes, requirements, previewContentItemId, now })`: returns the transaction items for the course patch (an empty list or `null` preview *removes* the attribute) and one `courseInstructor` patch per instructor, setting `courseUpdatedAt` to the course's new `updatedAt`, as `helpers/course-catalogue.ts` does. A non-null preview adds a condition check that `contentItem` with that ID exists under the course with `type = 'video'`;
-  - `courseLandingWrites.clearPreviewIfMatches({ courseId, contentItemId, course, instructors, now })`: returns no items unless `course.previewContentItemId === contentItemId`, in which case it returns the remove and the `courseUpdatedAt` syncs;
-  - `classifyLandingCancellation`, which maps a failed preview condition to `not-a-course-video`.
+  - `courseLandingWrites.set({ courseId, learningOutcomes, requirements, now })`: returns the transaction items for the course patch (an empty list *removes* the attribute) and one `courseInstructor` patch per instructor, setting `courseUpdatedAt` to the course's new `updatedAt`, as `helpers/course-catalogue.ts` does.
 
-  Tests in `helpers/course-landing.test.ts` (mock entity calls as `helpers/course-catalogue.test.ts` does) cover every item and condition for each case:
+  Tests in `helpers/course-landing.test.ts` (mock entity calls as `helpers/course-catalogue.test.ts` does) cover every item for each case:
   - an 11th item; a 161-character item; a whitespace-only item; trimming;
-  - a clear and a set; a match and a non-match for `clearPreviewIfMatches`;
+  - setting and clearing each list;
   - no two items for the same key.
-- [ ] T003 [US3] Impact-check invariants, tests first. In `packages/databases/core-table/src/helpers/invariants.ts`, add to `INVARIANTS` and `checkTableInvariants`:
-  - `course-landing-shape`: each list is at most 10 items, each item is 1 to 160 characters and equal to its trimmed form;
-  - `course-preview-is-course-video`: when `previewContentItemId` is set, a `contentItem` with that ID exists under the same `courseId` with `type = 'video'`, whatever its status, visibility or archive state.
+- [ ] T003 [US3] Impact-check invariants, tests first. In `packages/databases/core-table/src/helpers/invariants.ts`, add `course-landing-shape` to `INVARIANTS` and `checkTableInvariants`: each list is at most 10 items, each item is 1 to 160 characters and equal to its trimmed form.
 
-  Breaking tests in `invariants.test.ts`: an 11-item list, a padded item, an empty item, a preview naming a text item, a preview naming a missing item, a preview naming another course's video. Non-violations: an archived preview item, a hidden one, a still-transcoding one.
+  Breaking tests in `invariants.test.ts`: an 11-item list, a padded item, an empty item.
 
-  Extend the `instructor-course-updated-at` tests with a snapshot written by `courseLandingWrites.set` and one by `clearPreviewIfMatches`, both satisfying it, and one where the sync was left out, which violates it.
-- [ ] T004 [P] [US3] Stream-consumer confirmation (constitution V). In `packages/databases/core-table/src/helpers/progress-stream.test.ts`, assert that a `course` MODIFY changing only the three new attributes matches no entry of `PROGRESS_STREAM_FILTERS`. In `search-stream.test.ts`, pin the existing behavior that it matches `SEARCH_STREAM_FILTERS`, which is harmless because the document ignores the fields. Change the filters only if a test shows a need, and record the outcome in the PR description.
+  Extend the `instructor-course-updated-at` tests with a snapshot written by `courseLandingWrites.set` that satisfies it, and one where the sync was left out, which violates it.
+- [ ] T004 [P] [US3] Stream-consumer confirmation (constitution V). In `packages/databases/core-table/src/helpers/progress-stream.test.ts`, assert that a `course` MODIFY changing only the two new attributes matches no entry of `PROGRESS_STREAM_FILTERS`. In `search-stream.test.ts`, pin the existing behavior that it matches `SEARCH_STREAM_FILTERS`, which is harmless because the document ignores the fields. Also assert that `coursePreview` INSERT, MODIFY and REMOVE records match no entry of either filter list. Change the filters only if a test shows a need, and record the outcome in the PR description.
 - [ ] T005 [US3] Tests first, then add `packages/apis/instructor-api/src/procedures/course-landing.ts` with `updateLanding` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
   - a `courseProcedure` whose zod input enforces "at most 10 items" and "1 to 160 characters after trimming" with messages that name the field and the 1-based position;
   - the caller must be an instructor of the course (`FORBIDDEN` otherwise);
-  - one transaction from `courseLandingWrites.set`;
-  - a failed preview condition maps to `BAD_REQUEST` "Choose a video from this course".
+  - one transaction from `courseLandingWrites.set`.
 
-  Register it as `course.updateLanding` in `src/router.ts`. Extend `course.view`'s output schema with the three attributes.
+  Register it as `course.updateLanding` in `src/router.ts`. Extend `course.view`'s output schema with `learningOutcomes` and `requirements` (`preview` is added in T052).
 
   Tests in `procedures/course-landing.test.ts` (pattern: `procedures/course.test.ts`):
   - success in draft, published and archived courses;
   - each validation error;
   - a non-instructor is refused;
-  - a text item and another course's video are refused as previews;
-  - `null` and `[]` clear the fields.
-- [ ] T006 [US3] Tests first, then add `courseLandingWrites.clearPreviewIfMatches` to the transaction in `deleteContentItemPermanently` (`packages/apis/instructor-api/src/procedures/content-item-shared.ts`). Tests (extend `content-item-shared.test.ts` without weakening it):
-  - deleting the preview item removes `previewContentItemId` and syncs every instructor's `courseUpdatedAt`;
-  - deleting another item leaves the preview alone;
-  - archiving the preview item (not a permanent delete) leaves the reference.
+  - `[]` clears a list.
+- [ ] T006 [US2] Tests first, then add `packages/databases/core-table/src/entities/course-preview.ts`, registered in `entities/index.ts` and `service.ts` (not in `curriculum`), per [data-model.md](./data-model.md) "New: `coursePreview`":
+  - pk `courseId`, sk constant;
+  - `status` `processing` | `ready` | `failed` (required);
+  - `s3Key`, `previousS3Key`, `submissionNonce` (required), `mimeType`, `mediaConvertJobId`, `rawObjectETag`;
+  - `transcodePending` (`'pending'`) and `transcodePendingSince`;
+  - `failureReason` `too-long` | `transcode-error`;
+  - `durationSeconds` (required, "1 to 300");
+  - the four caption attributes, typed as on `contentItem` (share the schema rather than copy it);
+  - `uploadedBy` (required), `createdAt`, `updatedAt`;
+  - sparse index `byTranscodePending` on `gsi1pk-gsi1sk-index`, defined exactly as `contentItem`'s.
 
+  Entity tests: out-of-range duration and unknown status refused; `.params()` shows the `byTranscodePending` query cannot return a `contentItem` and the reverse.
+
+  Invariants, tests first: add `course-preview-shape` (data-model.md table) and extend `video-transcode-state` and `caption-tracks-valid` to check `coursePreview` records with the same rules as lesson videos (load `coursePreviews` into `TableSnapshot` in `loadTableSnapshot`). Breaking tests: a preview with no course; 301 seconds; `ready` without `s3Key`; an `s3Key` under another course; `failureReason` while `processing`; `transcodePending` without its timestamp; a caption track for a version not played.
 ---
 
 ## Phase 2: User Story 1 - The landing page shows outcomes, requirements, facts and instructors (P1)
@@ -144,12 +146,12 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - `category`: `{ slug, name }` when the course's category exists and is active;
   - `instructors[]`: a `courseInstructor` query by course, sorted by `createdAt`, then one batch get of `instructorProfile`, mapped to `{ handle, displayName, headline?, photoKey? }`. An instructor without a profile is skipped and logged as a warning (the invariant makes that impossible).
 
-  The output schema must strip `previewContentItemId` and any instructor or user ID.
+  The output schema must strip any instructor or user ID (preview fields come in T018).
 
   Tests (extend `procedures/course.test.ts`, do not weaken):
   - the new fields;
   - instructor order;
-  - the output has no `instructorId`, `userId` or `previewContentItemId` even when the stored records have them;
+  - the output has no `instructorId` or `userId` even when the stored records have them;
   - draft, archived and unknown courses still give `NOT_FOUND`;
   - a hidden module is still filtered out.
 - [ ] T013 [US1] Tests first, then update `packages/websites/student-portal/src/routes/learn/$courseId/-components/course-page.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md):
@@ -173,51 +175,75 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **PR title**: `feat(public-pages): landing page editor and checklist in the instructor portal (#287)`
 
-**Goal**: The instructor portal UI for Phase 1's API. Depends on Phases 1 and 2.
+**Goal**: The instructor portal UI for Phase 1's API (outcomes and requirements; the preview area comes in Phase 5). Depends on Phases 1 and 2.
 
-**Independent test**: An instructor edits outcomes, requirements and the preview on a course, sees the checklist, and the public page reflects the edits.
+**Independent test**: An instructor edits outcomes and requirements on a course, sees the checklist, and the public page reflects the edits.
 
 - [ ] T015 [US3] Tests first, then add a "Landing page" card to the course settings area under `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/`, next to the catalogue fields card (find where `updateCourseCatalogue` is edited and follow that structure), in `-components/landing-page-card.tsx`:
   - **Lists**: one editable list each for outcomes and requirements, with an "Add" button, "Move up", "Move down" and "Remove" text buttons (no arrow icons), a character counter at "160", and "Add" disabled at "10" items.
-  - **Preview select**: lists the course's video items as "Module › Lesson › Item", plus "None". When the chosen item is hidden, archived or not ready, a note says "Students can't see this video right now, so the page shows the course image".
   - **Save and Cancel**: Save calls `course.updateLanding`, and server errors show inline.
 
   Component tests cover editing, reordering, the limits, error display and the preview note.
-- [ ] T016 [US3] Tests first, then add `-components/landing-page-checklist.tsx` with five lines (outcomes, requirements, preview shown, course image, profile has a headline and photo). Each line shows a tick or an empty mark and links to its fix. It is computed in the client from `course.view` and `profile.get`; until Phase 5, the profile line reads "Coming soon", and Phase 5 wires it. Show it on the course overview, and add a "View public page" link when the course is published. Component tests: each line in both states; Publish is never disabled by the checklist.
-- [ ] T017 [US3] Change `packages/e2e/src/scenarios/public-landing-page.e2e.ts` so the instructor sets outcomes, requirements and (in Phase 4) the preview through the new card, not the API helper. Add a `screenshot()` of the card and the checklist.
+- [ ] T016 [US3] Tests first, then add `-components/landing-page-checklist.tsx` with five lines (outcomes, requirements, preview ready, course image, profile has a headline and photo). Each line shows a tick or an empty mark and links to its fix. It is computed in the client from `course.view` and `profile.get`; until the phases that add them, the preview line (Phase 5) and the profile line (Phase 6) read "Coming soon", and those phases wire them. Show it on the course overview, and add a "View public page" link when the course is published. Component tests: each line in both states; Publish is never disabled by the checklist.
+- [ ] T017 [US3] Change `packages/e2e/src/scenarios/public-landing-page.e2e.ts` so the instructor sets outcomes and requirements through the new card, not the API helper. Add a `screenshot()` of the card and the checklist.
+---
+
+## Phase 4: User Story 2 - The media pipeline processes preview videos (P1)
+
+**PR title**: `feat(public-pages): transcode and caption course preview videos in the media pipeline (#287)`
+
+**Goal**: Every media pipeline handler and local stand-in handles a second target, `coursePreview`, beside lesson videos. Nothing creates preview jobs yet, so behavior is unchanged. Depends on Phase 1 (T006).
+
+**Independent test**: Handler unit tests drive a preview job through complete, failed, too long, stuck, transcribed and cleaned up; every existing lesson-video test passes unchanged, and a regression test per handler shows a job with no `target` behaves exactly as before (plan risk P8).
+
+- [ ] T051 [US2] Tests first, then let `submitTranscodeJob` in `packages/apis/instructor-api/src/lib/mediaconvert-client.ts` take a target: `{ target: 'contentItem', courseId, moduleId, lessonId, contentItemId, submissionNonce }` (the current shape, sent *without* a `target` field so in-flight jobs and handlers agree) or `{ target: 'coursePreview', courseId, submissionNonce }`, writing output to `courses/<courseId>/preview/<submissionNonce>/` for a preview. Tests: the lesson job's request is byte-for-byte unchanged; a preview job's metadata and output prefix.
+- [ ] T046 [US2] Tests first, then make `packages/databases/core-table/src/helpers/caption-tracks.ts` target-aware: every exported writer takes a key that is either a content item's or `{ courseId }` for a `coursePreview`, and patches the matching entity with the same conditions. Tests: each writer for both targets; the lesson-video tests unchanged.
+- [ ] T047 [US2] Tests first, then make `packages/events/src/media/transcode-complete.ts` and `transcode-outcome.ts` target-aware. The event's `userMetadata` schema accepts both shapes (no `target` means `contentItem`), and `applyTranscodeOutcome` dispatches to the matching record with the same `submissionNonce` and `mediaConvertJobId` conditions, the previous-version cleanup scheduling and the start of automatic captions. For a preview, a transcoded duration over 300 s marks the attempt `failed` with `failureReason: 'too-long'`, keeps `previousS3Key` playable and schedules the over-long output for cleanup. A normal failure sets `failureReason: 'transcode-error'`. Tests: preview ready, replaced-then-ready, failed, too long, stale event; the lesson-video regression test.
+- [ ] T048 [US2] Tests first, then make `packages/events/src/media/transcode-reconciler.ts` also query `coursePreview.byTranscodePending({ transcodePending: 'pending' })` and handle stuck previews exactly as stuck lesson videos, and `transcode-cleanup.ts` accept a preview payload (`{ target: 'coursePreview', courseId, submissionNonce }`) that deletes `courses/<courseId>/preview/<submissionNonce>/` unless that nonce's version is the record's `s3Key` or `previousS3Key`. Tests for both targets and the lesson regression.
+- [ ] T049 [US2] Tests first, then make `packages/events/src/media/transcribe-complete.ts` and `transcribe-outcome.ts` resolve the job's target from its tags and write the WebVTT track through the target-aware `caption-tracks.ts` (T046). Tests for both targets and the lesson regression.
+- [ ] T050 [US2] Tests first, then make the local stand-ins in `packages/events/src/local/transcoder.ts` and `transcriber.ts` carry the target through job metadata and output paths, and report the transcoded duration from the ffprobe call the transcoder already makes, as MediaConvert's output details do, so the too-long check runs locally. Tests in the existing local stand-in test files.
 
 ---
 
-## Phase 4: User Story 2 - Preview video for everyone (P1)
+## Phase 5: User Story 2 - Instructors upload a preview and anyone can watch it (P1)
 
-**PR title**: `feat(public-pages): anonymous course preview video (#287)`
+**PR title**: `feat(public-pages): course preview upload and anonymous preview playback (#287)`
 
-**Goal**: `course.previewVideoUrl` and the header player. Depends on Phase 2.
+**Goal**: The instructor procedures and editor for uploading, replacing and removing a course's preview, `course.previewVideoUrl`, and the landing page player. Depends on Phases 2 and 4 (and Phase 3 for the editor card).
 
-**Independent test**: Signed out, the preview plays with captions. Any other video of the course is still refused signed out.
+**Independent test**: An instructor uploads a preview under 5 minutes; signed out, it plays with captions; a lesson video is still refused signed out; a preview over 5 minutes is refused; removing it brings back the course image.
 
-- [ ] T018 [US2] Tests first, then add `previewVideoUrl` to `packages/apis/core-api/src/procedures/course.ts` (schemas in `src/schema/course.ts`) per [contracts/core-api-public.md](./contracts/core-api-public.md):
-  - a `publicCourseProcedure` that reads the curriculum collection (all pages) and requires every condition of FR-003: course `published`; `previewContentItemId` set; the item `type = 'video'`; `playableManifest(item)` defined; `isShown` for the item, its lesson and its module;
-  - otherwise `NOT_FOUND` "This preview is not available";
-  - signs as `contentItem.videoUrl` does: `getCloudFrontVideoUrl(manifest)` plus `getSignedCloudFrontCookies(prefixKey)` for the transcode directory, plus caption tracks for the played version, with no `resumeAt`.
+- [ ] T052 [US2] Tests first, then add `packages/apis/instructor-api/src/procedures/course-preview.ts` with `createUploadUrl`, `create`, `replace`, `remove` and `createVideoUrl` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md) `coursePreview.*`, reusing the lesson-video helpers in `content-item-video.ts` (type allowlist, size limit, ETag retry detection, job submission through T051, failure handling) rather than copying them:
+  - "A preview can be at most 5 minutes long" for a declared `durationSeconds > 300`;
+  - `CONFLICT` "This course already has a preview" from `create`;
+  - `CONFLICT` "The preview changed; reload and try again" on a stale `expectedSubmissionNonce`;
+  - `remove` schedules cleanup of every version folder and raw upload.
 
-  Also add `preview` (`{ moduleId, lessonId, contentItemId, title, durationSeconds? }`) to `publicView`'s output only when the same conditions hold. Factor the eligibility check into one function in `src/helpers/course-preview.ts`, used by both.
+  Register them under `coursePreview` in `src/router.ts`. Add the first four to `INSTRUCTOR_API_DEDICATED_FUNCTIONS.Media` and `createVideoUrl` to `MediaUrl` in `packages/common/constructs/src/app/apis/instructor-api.ts`, and run `pnpm nx run @discava/infra:synth`. Add `preview` (`{ status, failureReason?, durationSeconds, hasPlayableVersion }`) to `course.view`'s output.
+
+  Tests in `procedures/course-preview.test.ts`: every success and error; a non-instructor is refused for each procedure; two concurrent `create`s leave one record; `replace` keeps the previous version; no write touches `course.updatedAt`.
+- [ ] T018 [US2] Tests first, then add `previewVideoUrl` to `packages/apis/core-api/src/procedures/course.ts` (schemas in `src/schema/course.ts`) per [contracts/core-api-public.md](./contracts/core-api-public.md): a `publicCourseProcedure` that reads `course` and `coursePreview` in parallel and requires course `published` and `playableManifest(preview)` defined; otherwise `NOT_FOUND` "This preview is not available". It signs as `contentItem.videoUrl` does: `getCloudFrontVideoUrl(manifest)` plus `getSignedCloudFrontCookies(prefixKey)` for the played version's folder, plus caption tracks for that version (`tracksForPlayback`), with no `resumeAt`.
+
+  Also add `preview: { durationSeconds }` to `publicView`'s output only when the same conditions hold (one keyed get beside the curriculum query). Put the eligibility check in one function in `src/helpers/course-preview.ts`, used by both.
 
   Tests:
   - anonymous success;
-  - each failing condition, including an archived module and a replacement still transcoding (the previous version plays);
-  - the cookie prefix equals the preview's directory;
-  - `publicView` has `preview` exactly when `previewVideoUrl` would succeed.
+  - no preview, first upload processing, first upload failed, draft course and archived course each give `NOT_FOUND`;
+  - a replacement in progress plays the previous version;
+  - the cookie prefix equals the played version's folder;
+  - `publicView` has `preview` exactly when `previewVideoUrl` would succeed, and never exposes keys, nonces or `uploadedBy`.
 - [ ] T019 [US2] Add `'course.previewVideoUrl'` to `PUBLIC_OPERATIONS` in `packages/apis/core-api/src/router.ts`, and to `CORE_API_DEDICATED_FUNCTIONS.MediaUrl` in `packages/common/constructs/src/app/apis/core-api.ts`. Extend `router.test.ts` so it passes with no user. Run `pnpm nx run @discava/infra:synth` and the core-api stack test so every operation keeps an integration.
-- [ ] T020 [US2] Tests first, then in `course-page.tsx`, when `preview` is present, render the shared `HlsVideo` (`packages/common/shadcn/src/components/hls-video.tsx`) in the header in place of `CourseThumbnail`. It shows the course image as the poster and a "Preview this course" label. The video URL loads from `course.previewVideoUrl` only after the visitor presses play, with captions and the usual controls. Component tests: the poster shows without a query; pressing play triggers exactly one query; with no `preview`, the image shows.
-- [ ] T021 [US2] Extend `public-landing-page.e2e.ts`. The instructor uploads a short video (reuse `src/helpers` from `video.e2e.ts`), waits for the local transcode, and chooses the video as the preview: through the Landing page card if Phase 3 is on `main`, otherwise through `course.updateLanding` with the API helper from T014 (Phase 3's T017 switches it to the card either way). Then:
+- [ ] T053 [US2] Tests first, then add the **Preview video** area to the Landing page card (`-components/landing-page-card.tsx` from T015) per [contracts/portal-ui.md](./contracts/portal-ui.md), built from the lesson-video upload component: upload with progress, processing and failed states ("This video is longer than 5 minutes" for `too-long`), Replace and Remove text buttons (no arrow icons), a player through `coursePreview.createVideoUrl`, and the help text from the contract. Wire the checklist's preview line (T016) to `preview.status === 'ready'`. Component tests cover each state, the too-long message, and Remove asking for confirmation.
+- [ ] T020 [US2] Tests first, then in `course-page.tsx`, when `preview` is present, render the shared `HlsVideo` (`packages/common/shadcn/src/components/hls-video.tsx`) in the header in place of `CourseThumbnail`. It shows the course image as the poster, a "Preview this course" label and the duration. The video URL loads from `course.previewVideoUrl` only after the visitor presses play, with captions and the usual controls. Component tests: the poster shows without a query; pressing play triggers exactly one query; with no `preview`, the image shows.
+- [ ] T021 [US2] Extend `public-landing-page.e2e.ts`. The instructor uploads a short video as the preview through the Landing page card (reuse the upload helpers from `video.e2e.ts`) and waits for the local transcode. Then:
   1. Signed out, press play and wait for `playing`. Take a `screenshot()`.
-  2. Signed out, call `contentItem.videoUrl` for the same item and get `UNAUTHORIZED`.
-  3. Hide the lesson. The header shows the image, and `course.previewVideoUrl` gives `NOT_FOUND`.
+  2. Signed out, call `contentItem.videoUrl` for a lesson video of the same course and get `UNAUTHORIZED`.
+  3. Upload a video over 5 minutes as a replacement and see it refused, with the current preview still playing (generate the long file with the existing ffmpeg test helper, or declare its duration through the API helper if generation is too slow for CI).
+  4. Remove the preview. The header shows the image, and `course.previewVideoUrl` gives `NOT_FOUND`.
 
 ---
 
-## Phase 5: User Story 5 - Instructor public profiles (P2)
+## Phase 6: User Story 5 - Instructor public profiles (P2)
 
 **PR title**: `feat(public-pages): instructor public profiles and the profile editor (#287)`
 
@@ -261,11 +287,11 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 ---
 
-## Phase 6: User Story 4 - Crawlers, social cards, site map and indexing (P2)
+## Phase 7: User Story 4 - Crawlers, social cards, site map and indexing (P2)
 
 **PR title**: `feat(public-pages): server-rendered landing pages for crawlers, site map and robots (#287)`
 
-**Goal**: The page renderer, the CloudFront wiring, the SPA rewrite, the per-stage indexing setting and the portal seeding. Depends on Phases 2, 4 and 5.
+**Goal**: The page renderer, the CloudFront wiring, the SPA rewrite, the per-stage indexing setting and the portal seeding. Depends on Phases 2, 5 and 6.
 
 **Independent test**: Fetching a published course or profile without JavaScript returns its content, tags and structured data. Unknown, draft and archived addresses return 404 with `noindex`. Outside production, everything carries `noindex`.
 
@@ -340,7 +366,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 ---
 
-## Phase 7: Polish and cross-cutting
+## Phase 8: Polish and cross-cutting
 
 **PR title**: `docs(public-pages): document landing pages and profiles; final checks (closes #287)`
 
@@ -355,18 +381,19 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 ## Dependencies and order
 
 ```text
-Phase 1 (US3 data/API) ──► Phase 2 (US1 page, profiles data) ──┬─► Phase 3 (US3 UI)
-                                                                ├─► Phase 4 (US2 preview)
-                                                                └─► Phase 5 (US5 profiles)
-Phases 2, 4 and 5 ──► Phase 6 (US4 crawlers) ──► Phase 7 (polish)
+Phase 1 (US3 data/API, preview record) ──► Phase 2 (US1 page, profile records) ──┬─► Phase 3 (US3 editor) ──┐
+                                                                                 ├─► Phase 6 (US5 profiles) │
+Phase 1 ──► Phase 4 (US2 pipeline) ─────────────────────────────────────────────┴──────► Phase 5 (US2 upload + playback)
+Phases 2, 5 and 6 ──► Phase 7 (US4 crawlers) ──► Phase 8 (polish)
 ```
 
-- Phases 3, 4 and 5 are independent of each other after Phase 2 and can be implemented in parallel PRs. Tests that set landing fields use the card when Phase 3 is on `main` and the API helper otherwise (T014, T017, T021), so none waits on another. They all touch `public-landing-page.e2e.ts`, so each later PR rebases and appends its own `test()` block rather than editing another's.
-- Inside a phase, `[P]` tasks touch different files and can run together. For example, in Phase 2, T010 runs alongside T008. In Phase 5, T025 and T026 run together once T023 and T024 are done. In Phase 6, T038 runs alongside T031 to T034.
+- Phase 4 needs only Phase 1, so it can run alongside Phases 2 and 3. Phase 5 needs Phases 2, 3 (the editor card it extends) and 4. Phase 6 needs only Phase 2.
+- Phases that touch `public-landing-page.e2e.ts` append their own `test()` blocks; a later PR rebases rather than editing another phase's block. Tests that set landing fields use the card when Phase 3 is on `main` and the API helper otherwise (T014, T017).
+- Inside a phase, `[P]` tasks touch different files and can run together. For example, in Phase 2, T010 runs alongside T008. In Phase 4, T048, T049 and T050 can run together once T046 and T047 are done. In Phase 6, T025 and T026 run together once T023 and T024 are done. In Phase 7, T038 runs alongside T031 to T034.
 
 ## Implementation strategy
 
 - **MVP**: Phases 1 and 2. Signed-out visitors see outcomes, requirements, facts and instructors on the existing public page, and instructors can set them through the API.
-- **Next**: Phase 3 (editor), then Phase 4 (preview) for the biggest visible gain.
-- **Then**: Phase 5 (profiles), and Phase 6, which turns all of it into indexable, shareable HTML.
-- Each phase is one PR that leaves `main` green. Only Phase 7 closes #287.
+- **Next**: Phase 3 (editor), then Phases 4 and 5 (preview video), the biggest visible gain.
+- **Then**: Phase 6 (profiles), and Phase 7, which turns all of it into indexable, shareable HTML.
+- Each phase is one PR that leaves `main` green. Only Phase 8 closes #287.

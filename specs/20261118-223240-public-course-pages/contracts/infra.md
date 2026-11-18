@@ -41,6 +41,8 @@ Checkov: the Function URL with `AWS_IAM` auth satisfies the public-URL rules. Su
 - **`WebsitesStack`** passes `pageRenderer` props from stage config. `runtimeConfigAppName` is computed the same way `RuntimeConfig` names its application (the shared helper is exported from `core/runtime-config.ts` so both use one function).
 - **`DataStack`** calls `coreTable.grantReadData(websites.studentPortal.pageRendererGrantable)` and grants `appconfig:StartConfigurationSession` and `appconfig:GetLatestConfiguration` on the runtime config application (the existing `RuntimeConfig` grant helper).
 - **`CoreApiStack`**: `CORE_API_DEDICATED_FUNCTIONS.MediaUrl` gains `course.previewVideoUrl`. The synth test that every operation has an integration covers it.
+- **`InstructorApiStack`**: `INSTRUCTOR_API_DEDICATED_FUNCTIONS.Media` gains `coursePreview.createUploadUrl`, `create`, `replace` and `remove`; `MediaUrl` gains `coursePreview.createVideoUrl`. Their existing grants already cover `courses/*` in the lesson media bucket and MediaConvert; a synth test confirms no new statement is needed.
+- **`MediaPipeline` and `StreamRouter`**: no new resources. The existing MediaConvert completion rule, Transcribe rule, reconciler schedule and cleanup scheduler carry preview jobs, told apart by job metadata.
 
 ## Not changed
 

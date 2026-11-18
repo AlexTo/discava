@@ -62,16 +62,32 @@ On boot, the student portal reads that element (once, then removes it) and seeds
 
 **Alternatives considered**: `hydrateRoot` against the static markup. Rejected: it requires the markup to match React's output exactly, and that is only reliable with true SSR (R-1).
 
-## R-6: Preview video
+## R-6: Preview video (an instructor upload, maintainer decision)
 
-**Decision**: `course.previewContentItemId` names one of the course's video content items. A new public procedure, `course.previewVideoUrl({ courseId })`, is served by the existing `MediaUrl` dedicated function, the only holder of the signing key. It loads the course and its curriculum and checks FR-003: published, the item is the current preview, it is a playable video (`playableManifest`) and it is effectively visible (`filterEffectivelyVisible`). It then returns the manifest URL, captions and signed cookies scoped to that transcode's directory, exactly as `contentItem.videoUrl` does. It is added to `PUBLIC_OPERATIONS`, so it gets the API's `publicThrottle`.
+**Decision**: Each course can have one dedicated preview video, uploaded by an instructor. It lives in a new `coursePreview` record (one per course), and its files go in the lesson media bucket under `courses/<courseId>/preview/<submissionNonce>/`. Its lifecycle copies a lesson video's:
+- upload through a presigned URL;
+- a transcode job per attempt, scoped by `submissionNonce`;
+- `status` of `processing`, `ready` or `failed`;
+- `previousS3Key` keeps the old version playing while a replacement transcodes (#209);
+- automatic captions through Transcribe, written with `helpers/caption-tracks.ts`;
+- delayed cleanup of old versions.
 
-**Rationale**: This reuses the transcoding, captions and cookie scoping from #277. Cookies scoped to one transcode directory cannot open another item's files (FR-015).
+The media pipeline handlers (`transcode-complete`, `transcode-outcome`, `transcode-reconciler`, which also queries the preview's sparse `byTranscodePending` index, `transcode-cleanup`, `transcribe-complete`, `transcribe-outcome`) and the local stand-ins (`local/transcoder.ts`, `local/transcriber.ts`) gain a second *target*. Job metadata carries `target: 'contentItem' | 'coursePreview'` (absent means `contentItem`, so lesson jobs are unchanged), and each handler dispatches to the matching record. `transcode-cleanup` already serves two owners (lesson videos and assignment submissions), so this follows an existing shape.
+
+**Playback** is unchanged from the earlier design. A public `course.previewVideoUrl({ courseId })` in the `MediaUrl` dedicated function checks that the course is `published` and that `playableManifest(preview)` is defined. It returns the manifest URL and captions, and sets signed cookies scoped to that version's folder only, with the same lifetime as `contentItem.videoUrl`. It joins `PUBLIC_OPERATIONS`, so it gets the public throttle.
+
+**Length**: at most 5 minutes (300 s). The upload procedure refuses a declared `durationSeconds > 300`, as lesson uploads already declare one. `transcode-outcome` checks the transcoded duration (MediaConvert output details; the local transcoder reports it through ffprobe) and marks an over-long attempt `failed` with reason `too-long`, keeping any previous version.
+
+**Rationale**:
+- A separate record, rather than attributes on `course`, because every transcode and caption status change would otherwise move `course.updatedAt` (`watch: '*'`). That forces a `courseInstructor.courseUpdatedAt` sync and a search re-index on each step, the same reason ratings got their own record (#279, research R-1 there).
+- Reusing the lesson-video lifecycle and signing keeps one tested path for processing, replacement, captions and cleanup.
+- Signed cookies keep FR-005 exact: a course that is archived or back to draft stops serving its preview at once.
 
 **Alternatives considered**:
-- *A separate promo upload per course*. Deferred (spec Assumptions): it needs a second upload and transcode path.
-- *Flagging several items as "free preview"*. Deferred.
-- *Storing the item's full key* (module, lesson, item). Rejected: moving an item between lessons would leave the reference stale. Storing the ID and resolving it from the curriculum (already read for the outline) never goes stale.
+- *Choosing a lesson video as the preview* (the earlier design). Rejected by the maintainer: the preview should be made for the landing page.
+- *Transcoding into the public media bucket, unsigned*. Rejected: the pipeline would write to a second bucket, cached files stay reachable after archive, and it would need a cookie-free path the player does not have.
+- *Attributes on `course`*. Rejected for the `updatedAt` churn above.
+- *Instructor caption upload for the preview*. Deferred (maintainer decision); the caption procedures from #277 are content-item specific.
 
 ## R-7: Instructor profiles and handles
 

@@ -18,9 +18,18 @@ Resolved without asking, using the recommended answers below (non-interactive ru
 
 - Q: Which deployed stages may search engines index? → A: Only stages whose config turns search engine indexing on, which by default is `discava-production` alone. Every other stage (and local dev) answers with a do-not-index marker on every page and a robots file that disallows everything, so a development stage never competes with production in search results.
 - Q: Can an instructor keep themselves off public pages? → A: No. Every instructor of a published course is shown on its landing page, and their profile is public while they teach one. Teaching a published course is a public act on every course marketplace; an opt-out would leave landing pages without a teacher.
-- Q: How is anonymous preview playback kept from opening up the rest of a course? → A: An anonymous playback address covers only the preview item's own renditions and caption tracks, lasts no longer than an enrolled student's, and is issued only while the item is the course's preview. Anonymous requests for it get the same protection as the other public procedures: the stage's web firewall where enabled and the public request limits on the API.
+- Q: How is anonymous preview playback kept from opening up the rest of a course? → A: An anonymous playback address covers only the preview video's own renditions and caption tracks, lasts no longer than an enrolled student's, and is issued only while the course is published and the preview is ready. Anonymous requests for it get the same protection as the other public procedures: the stage's web firewall where enabled and the public request limits on the API.
 - Q: What does an enrolled student see at an archived course's landing address? → A: The same "course not found" page as everyone else, as today. They reach the archived course from My Learning and the course home, which are unchanged; the public address never shows an archived course.
 - Q: Does publishing require outcomes, requirements or a preview? → A: No. The instructor portal shows a short "landing page" checklist (outcomes, requirements, preview, image, profile) on the course, but it never blocks publishing.
+
+Maintainer decisions in PR review (#477):
+
+- Q: Only production indexable? → A: Confirmed: only stages with `allowSearchEngineIndexing` on, which is `discava-production` alone.
+- Q: Can an instructor opt out of appearing on a published course's page? → A: Confirmed: no opt-out. Today every course has exactly one instructor (its creator) and none can be added. A per-course "listed" choice belongs to whichever feature adds co-instructors.
+- Q: Where does the preview video come from? → A: The instructor uploads a dedicated preview video for the course. It is not one of the course's lesson videos, and choosing a lesson video is not offered.
+- Q: How do signed-out visitors stream it? → A: Like lesson videos: stored beside them and streamed with a short-lived playback permission that covers the preview's files only.
+- Q: How long may a preview be? → A: At most 5 minutes; the editor recommends 1 to 2 minutes.
+- Q: Can instructors upload or edit the preview's captions? → A: Not in this feature. The preview is captioned automatically like lesson videos; uploading or editing its caption tracks is a follow-up.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -46,34 +55,35 @@ A visitor, signed in or not, opens a published course's page from a search resul
 
 ### User Story 2 - Watch a preview before enrolling (Priority: P1)
 
-An instructor picks one of the course's own videos as its preview. A visitor, signed in or not, plays it from the top of the landing page without enrolling. Every other video in the course stays enrolled-only.
+An instructor uploads a short preview video for the course, separate from its lessons. A visitor, signed in or not, plays it from the top of the landing page without enrolling. Every lesson video stays enrolled-only.
 
-**Why this priority**: The issue names the preview video, and it is the strongest single signal on a landing page. Choosing an existing course video reuses the video and caption pipeline already built.
+**Why this priority**: The issue names the preview video, and it is the strongest single signal on a landing page.
 
-**Independent Test**: As an instructor, choose a ready video as the preview. Signed out, play it from the landing page with captions. Ask for any other video of the course signed out and be refused. Unpublish the video's lesson (hide it) and check the preview disappears.
+**Independent Test**: As an instructor, upload a preview video and wait for it to be ready. Signed out, play it from the landing page with its automatic captions. Ask for any lesson video signed out and be refused. Remove the preview and check the header shows the course image again. Try a preview over 5 minutes and be refused.
 
 **Acceptance Scenarios**:
 
-1. **Given** a published course whose instructor chose a ready video as its preview, **When** a visitor opens the landing page, **Then** the header shows the video in place of the course image and anyone can play it, with its captions and the usual player controls.
-2. **Given** no preview chosen, or the chosen video is not ready, hidden, archived or deleted, **Then** the header shows the course image and no player.
-3. **Given** any video of the course other than its current preview, **When** someone not enrolled asks to play it, **Then** it is refused exactly as today.
-4. **Given** the instructor changes or clears the preview, **Then** the landing page follows, and the old video is no longer playable without enrolling.
-5. **Given** a user who is not an instructor of the course, **When** they try to set its preview, **Then** it is refused.
+1. **Given** a published course with a ready preview, **When** a visitor opens the landing page, **Then** the header shows the video in place of the course image and anyone can play it, with its automatic captions (once made) and the usual player controls.
+2. **Given** no preview, or a first preview upload still processing or failed, **Then** the header shows the course image and no player, and the instructor portal shows the processing or failed state.
+3. **Given** any lesson video of the course, **When** someone not enrolled asks to play it, **Then** it is refused exactly as today.
+4. **Given** the instructor replaces the preview, **Then** the previous preview keeps playing until the new one is ready, and then the new one plays. **Given** they remove it, **Then** the header shows the course image, and the removed video is no longer playable.
+5. **Given** a video longer than 5 minutes, **When** the instructor uploads it as the preview, **Then** it is refused with a message giving the limit, and any current preview stays.
+6. **Given** a user who is not an instructor of the course, **When** they try to upload, replace or remove its preview, **Then** it is refused.
 
 ---
 
 ### User Story 3 - Instructor writes the landing page (Priority: P1)
 
-An instructor of a course edits its outcomes, requirements and preview video in the instructor portal, at any time, including after publishing, and the published page reflects the change.
+An instructor of a course edits its outcomes and requirements and uploads, replaces or removes its preview video in the instructor portal, at any time, including after publishing, and the published page reflects the change.
 
 **Why this priority**: Without a way to enter them, US1 and US2 have nothing to show.
 
-**Independent Test**: As an instructor, add, reorder and remove outcomes and requirements, and choose a preview, on a draft course; publish and check the landing page. Edit again after publishing and check the page updates. Try invalid input and be refused.
+**Independent Test**: As an instructor, add, reorder and remove outcomes and requirements, and upload a preview, on a draft course; publish and check the landing page. Edit again after publishing and check the page updates. Try invalid input and be refused.
 
 **Acceptance Scenarios**:
 
 1. **Given** an instructor of a course, **When** they save outcomes and requirements, **Then** they are stored in the order given and shown back.
-2. **Given** invalid input (an eleventh outcome or requirement, a blank item, an item over 160 characters, a preview that is not a video of this course), **When** they save, **Then** it is refused with a clear message and nothing changes.
+2. **Given** invalid input (an eleventh outcome or requirement, a blank item, an item over 160 characters, a preview file that is not a supported video type), **When** they save, **Then** it is refused with a clear message and nothing changes.
 3. **Given** a published course, **When** its instructor changes the landing page fields, **Then** the landing page shows the change on the next visit, and link previews and search engines get the change within 5 minutes.
 4. **Given** a user who is not an instructor of the course, **When** they try to change these fields, **Then** it is refused.
 5. **Given** a course missing outcomes, requirements, a preview, an image, or an instructor profile, **When** its instructor views it, **Then** a landing page checklist shows what is missing, and publishing is still allowed.
@@ -123,9 +133,10 @@ An instructor fills in a public profile in the instructor portal: display name, 
 
 - A course with several instructors: one card per instructor, in the order they were added to the course; each links to that instructor's profile. No instructor can hide from a published course's page.
 - An enrolled student of an archived course opens its landing address: "course not found", as for everyone; My Learning and the course home still take them into it.
-- The preview video's lesson or module is hidden, or the video item is archived or deleted: the preview is treated as unset for everyone at once (it is not served from a stale address), and the instructor portal shows that the preview needs choosing again.
-- The preview video is still transcoding: a first upload is not shown until it is ready; a replacement keeps the previous version playing until the new one is ready, as for enrolled students.
-- A video is the preview and someone already holds its playback address: the address lasts no longer than today's enrolled playback addresses, and a new one is refused once the video stops being the preview.
+- The preview is still processing: a first upload is not shown until it is ready; a replacement keeps the previous version playing until the new one is ready, as lesson videos do for enrolled students. A failed replacement keeps the previous version and shows the failure to the instructor.
+- Someone already holds a playback address for a preview that is then replaced or removed: the address lasts no longer than today's enrolled playback addresses, and no new one is issued for the old version. Old versions' files are deleted later, as for lesson videos.
+- The course is archived: the preview stops being playable for everyone at once, like the landing page (FR-005); its files stay so it plays again if the course is restored.
+- Two instructors of the course upload a preview at the same moment: one upload wins and the other is told the preview changed; there is never more than one preview per course.
 - An instructor changes their handle: the profile moves to the new address at once and the old address returns "not found" (Discava has not launched; see Assumptions). Handles are unique: a taken handle is refused with a clear message, including when two instructors claim it at the same moment.
 - Text with markup or links in outcomes, requirements, headline or bio is shown as plain text, never as markup, in the page and in the crawler response.
 - A course image or instructor photo is missing: the social card uses the site's default image.
@@ -139,8 +150,8 @@ An instructor fills in a public profile in the instructor portal: display name, 
 ### Functional Requirements
 
 - **FR-001**: A course MUST be able to hold up to 10 learning outcomes and up to 10 requirements, each plain text of 1 to 160 characters after trimming, in an instructor-chosen order. Both are optional and not needed to publish.
-- **FR-002**: A course MUST be able to name one of its own video content items as its preview. Only an instructor of the course may set, change or clear it, at any time, and only to a video item of that course.
-- **FR-003**: Anyone, signed in or not, MUST be able to play a course's preview video, with its captions, if and only if the course is published, the item is still the course's preview, the item is ready, and the item, its lesson and its module are all visible. No other video, file or content of the course MUST become reachable without enrolment.
+- **FR-002**: A course MUST be able to have one preview video, uploaded by an instructor of the course as its own file (not one of its lesson videos), at most 5 minutes long, in the same file types and size limits as lesson videos. Only an instructor of the course may upload, replace or remove it, at any time. It is processed and captioned automatically like lesson videos; a replacement keeps the previous version playing until the new one is ready.
+- **FR-003**: Anyone, signed in or not, MUST be able to play a course's preview video, with its captions, if and only if the course is published and the preview has a playable version. No other video, file or content of the course MUST become reachable without enrolment.
 - **FR-004**: The course landing page MUST show, for a published course: title, image or preview video, description, outcomes, requirements, key facts (level, language and estimated hours where set, and module and lesson counts), the curriculum outline of visible modules and lessons, the rating summary and reviews, one instructor card per instructor (photo, display name, headline, link to profile), and the enrol action. Empty optional sections MUST be left out.
 - **FR-005**: For a draft, archived or unknown course, the public landing page and every public response for it (crawler page, social card, site map, preview video) MUST behave as for a course that does not exist, for every caller including enrolled students. Enrolled students' existing access to archived courses through My Learning and the course home MUST NOT change.
 - **FR-006**: An instructor MUST be able to keep a public profile: display name (1 to 60 characters, defaulting to their account name), headline (up to 100), bio (up to 2,000, plain text with paragraph breaks), photo (an image cropped square in the portal) and a public handle. The handle MUST be unique across instructors, 3 to 30 characters of lower-case letters, digits and single hyphens, generated from the name when first needed and changeable by the instructor; uniqueness MUST hold under concurrent claims.
@@ -152,19 +163,19 @@ An instructor fills in a public profile in the instructor portal: display name, 
 - **FR-011a**: Search engine indexing MUST be a per-stage setting that defaults to off and is on only for `discava-production`. On a stage with search engine indexing off, every page MUST carry a do-not-index marker and the robots file MUST disallow everything; crawler content and social cards are still served there so they can be tested.
 - **FR-012**: In a browser, the landing page and profile MUST behave as one interactive page with the rest of the student portal (signed-in state, enrol action, reviews paging), with no visible flash from the crawler content to the interactive page.
 - **FR-013**: Outcomes, requirements, display name, headline and bio MUST be shown as plain text everywhere, including in crawler responses and social card tags.
-- **FR-014**: The instructor portal MUST let an instructor edit a course's outcomes, requirements and preview on the course's settings, and edit their own profile on a profile page, with a link to view the public page. It MUST show a landing page checklist (outcomes, requirements, preview, image, instructor profile) for each course, which never blocks publishing.
-- **FR-015**: Every endpoint this feature adds that anonymous callers can reach MUST be protected by the same per-stage security controls as the existing public course procedures (the web firewall where the stage enables it, and the API's public request limits), and the crawler page service MUST have a per-stage cap on concurrent work so a flood cannot run up cost without bound. Per-visitor rate limits are a platform-wide follow-up, not part of this feature. An anonymous playback address MUST cover only the preview item's own renditions and caption tracks, MUST last no longer than an enrolled student's playback address, and MUST be issued only while the item is the course's preview (FR-003).
+- **FR-014**: The instructor portal MUST let an instructor edit a course's outcomes and requirements and upload, replace or remove its preview video (showing its processing, ready or failed state) on the course's settings, and edit their own profile on a profile page, with a link to view the public page. It MUST show a landing page checklist (outcomes, requirements, preview, image, instructor profile) for each course, which never blocks publishing.
+- **FR-015**: Every endpoint this feature adds that anonymous callers can reach MUST be protected by the same per-stage security controls as the existing public course procedures (the web firewall where the stage enables it, and the API's public request limits), and the crawler page service MUST have a per-stage cap on concurrent work so a flood cannot run up cost without bound. Per-visitor rate limits are a platform-wide follow-up, not part of this feature. An anonymous playback address MUST cover only the preview's own renditions and caption tracks for the version being played, MUST last no longer than an enrolled student's playback address, and MUST be issued only while FR-003 holds.
 - **FR-015a**: Every instructor of a published course MUST appear on its landing page; there is no opt-out.
 - **FR-016**: The feature MUST work end to end in local development without an AWS account, including preview playback, profile photos and fetching the crawler response of a course and a profile.
-- **FR-017**: The feature MUST NOT add course address slugs, instructor follower counts, messaging instructors, multiple preview videos, free preview lessons beyond the one video, promotional pricing or paid-course display (see Assumptions).
+- **FR-017**: The feature MUST NOT add course address slugs, instructor follower counts, messaging instructors, multiple preview videos, free preview lessons, choosing a lesson video as the preview, uploading or editing the preview's caption tracks, promotional pricing or paid-course display (see Assumptions).
 
 ### Key Entities
 
-- **Course** (existing): gains its learning outcomes, requirements and preview video choice.
+- **Course** (existing): gains its learning outcomes and requirements.
+- **Course preview**: At most one per course. The uploaded preview video: its processing state, the playable version and the previous version kept while a replacement processes, its duration, and its automatic caption tracks.
 - **Instructor profile**: One per instructor who has one. Display name, headline, bio, photo, public handle, and when it was last changed.
 - **Handle claim**: Reserves a public handle for one instructor, so two instructors can never hold the same handle.
 - **Course instructor** (existing): decides which instructors' cards a course shows and which courses a profile lists.
-- **Content item** (existing): the video chosen as the preview; its readiness and visibility decide whether the preview shows.
 - **Rating summary**, **Category** (existing): read for the landing page, profile course list and site map.
 
 ## Success Criteria *(mandatory)*
@@ -172,10 +183,10 @@ An instructor fills in a public profile in the instructor portal: display name, 
 ### Measurable Outcomes
 
 - **SC-001**: 100% of published course pages and public profiles, fetched without running scripts, contain the page's title, description, outline (for courses), social card tags and structured data; validated by automated checks on every pull request.
-- **SC-002**: 0 responses, in tests and the data-consistency check, that expose a draft course, an archived course on a public address, a non-preview video to someone not enrolled, or an email or account identifier on a public page.
+- **SC-002**: 0 responses, in tests and the data-consistency check, that expose a draft course, an archived course on a public address, a lesson video to someone not enrolled, or an email or account identifier on a public page.
 - **SC-003**: Changes to a course or profile reach crawler responses and the site map within 5 minutes in 95% of cases, and an archived course leaves them within 5 minutes in 100% of cases.
 - **SC-004**: A visitor on an ordinary connection sees the landing page's title and header within 2 seconds of opening a shared link.
-- **SC-005**: An instructor can fill in a course's outcomes, requirements and preview, and their own profile, in under 5 minutes in total.
+- **SC-005**: An instructor can fill in a course's outcomes and requirements, start a preview upload, and fill in their own profile, in under 5 minutes in total (not counting upload and processing time).
 - **SC-006**: Link previews of a course in common messaging and social apps show its title, description and image (checked by hand before merge for at least two apps).
 - **SC-007**: 0 pages on a stage closed to search engines served without a do-not-index marker.
 
@@ -183,12 +194,12 @@ An instructor fills in a public profile in the instructor portal: display name, 
 
 - The existing public course page at `/learn/<courseId>` becomes the landing page; addresses keep the course identifier. Readable course address slugs are a follow-up, since every learning route uses the identifier.
 - Instructor profiles live at a new public address using the handle (for example `/instructors/<handle>`). Handles may change freely before launch; old addresses are not redirected (constitution VII).
-- The preview is one of the course's existing video content items, not a separate upload, so it reuses the transcoding, captions and playback already built (#277). A dedicated promo upload and multiple free preview lessons are follow-ups.
+- The preview is a dedicated upload per course (maintainer decision), processed, captioned and played the way lesson videos are (#277), so the pipeline gains a second kind of video to process rather than a new one. Multiple previews, free preview lessons and editing the preview's captions are follow-ups.
 - Instructor names are public: they appear on landing pages and profiles. Students' names stay as the reviews feature shows them (#279) and are not affected.
 - Outcomes and requirements are plain text lists, not rich text, matching the plain-text course description.
 - Category pages (#283) are already public; this feature adds them to the site map and gives them social card tags, but does not change them otherwise.
 - Paid courses (#284, spec in review) will add a price to the landing page and crawler data when they land; this feature leaves a place for it but shows none.
 - 5 minutes is acceptable staleness for search engines and link previews; people in a browser always see live data.
-- Out of scope: course address slugs, a separate promo video upload, free preview lessons, "who this course is for", instructor statistics (total students, total reviews), following or messaging instructors, localised landing pages (#292), and paid-course display (#284).
+- Out of scope: course address slugs, choosing a lesson video as the preview, uploading or editing the preview's captions, free preview lessons, "who this course is for", instructor statistics (total students, total reviews), following or messaging instructors, localised landing pages (#292), and paid-course display (#284).
 - Discava has not launched: no old data or addresses to preserve, so attributes, entities and routes are added outright.
 - Only the final implementation PR may close #287.

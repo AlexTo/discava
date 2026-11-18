@@ -21,7 +21,7 @@ Prerequisites: Docker running, then `pnpm dev`.
 
 1. Sign in to the instructor portal as Alice. Open a course with a video lesson and, on **Landing page**:
    - add 3 outcomes and 2 requirements;
-   - choose the video as the preview;
+   - upload a preview video under 5 minutes and wait for it to show as ready (try one over 5 minutes first and check it is refused);
    - save, and check that the checklist ticks outcomes, requirements and preview.
 2. Publish the course if it is a draft. Open **Public profile**, set a headline, a bio and a photo, and save.
 3. Signed out, in a private window, open `http://localhost:4201/learn/<courseId>` (student portal), and check:
