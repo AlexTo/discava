@@ -6,6 +6,7 @@ import { filterEffectivelyVisible } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import { asStudentContentItem } from '../lib/playback.js';
+import { ratingFigures } from '../lib/rating.js';
 import {
   type IViewCourseOutput,
   ListCoursesByInstructorInputSchema,
@@ -19,6 +20,10 @@ import {
   ViewCourseOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
+
+// How often a page's ratings are asked for again when DynamoDB leaves some
+// unprocessed, before the call fails rather than show them as unrated.
+const RATING_READ_ATTEMPTS = 3;
 
 export const listCoursesByInstructor = courseProcedure
   .input(ListCoursesByInstructorInputSchema)
@@ -89,7 +94,34 @@ export const publicListCourses = publicCourseProcedure
         .byStatus({ status: 'published' })
         .go({ cursor, limit, order: 'desc' });
 
-    return { items: courses, cursor: nextCursor };
+    if (courses.length === 0) {
+      return { items: [], cursor: nextCursor };
+    }
+
+    // One batch get for the whole page (at most 100 courses). A course
+    // nobody has rated has no record.
+    const ratings = new Map<string, Parameters<typeof ratingFigures>[0]>();
+    let pending = courses.map(({ courseId }) => ({ courseId }));
+    for (let attempt = 0; pending.length > 0; attempt++) {
+      if (attempt === RATING_READ_ATTEMPTS) {
+        throw new Error('Ratings could not be read: throttled');
+      }
+      const { data, unprocessed } = await coreTable.entities.courseRating
+        .get(pending)
+        .go();
+      for (const rating of data) {
+        ratings.set(rating.courseId, rating);
+      }
+      pending = unprocessed;
+    }
+
+    return {
+      items: courses.map((course) => {
+        const { count, average } = ratingFigures(ratings.get(course.courseId));
+        return { ...course, ratingAverage: average, ratingCount: count };
+      }),
+      cursor: nextCursor,
+    };
   });
 
 // Anonymous course preview for the public landing page's "Learn more" link.
