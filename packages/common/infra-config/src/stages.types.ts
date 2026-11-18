@@ -425,6 +425,12 @@ export type NotificationsComponentConfig = {
 };
 
 /**
+ * Per-stage settings for the admin API construct, which takes the same
+ * settings as the instructor API.
+ */
+export type AdminApiComponentConfig = InstructorApiComponentConfig;
+
+/**
  * Component-level settings consuming apps use to configure their constructs
  * per stage, keyed by component name. Omitted components/flags fall back to
  * whatever default the app itself chooses.
@@ -433,6 +439,7 @@ export type StageComponents = {
   identity?: IdentityComponentConfig;
   coreApi?: CoreApiComponentConfig;
   instructorApi?: InstructorApiComponentConfig;
+  adminApi?: AdminApiComponentConfig;
   coreTable?: CoreTableComponentConfig;
   streamRouter?: StreamRouterComponentConfig;
   studentPortal?: StudentPortalComponentConfig;

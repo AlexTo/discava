@@ -83,14 +83,23 @@ describe('course.publicSearch', () => {
     ]);
     // Not every word has to match: the default `or` operator ranks by how
     // many do.
-    expect(request.body.query.bool.must.multi_match).toMatchObject({
+    expect(
+      request.body.query.bool.must.function_score.query.multi_match,
+    ).toMatchObject({
       type: 'cross_fields',
     });
-    expect(request.body.query.bool.must.multi_match).not.toHaveProperty(
-      'operator',
-    );
+    expect(
+      request.body.query.bool.must.function_score.query.multi_match,
+    ).not.toHaveProperty('operator');
     expect(result).toEqual({
-      items: [{ courseId: 'c1', title: 'Intro to DynamoDB', tags: [] }],
+      items: [
+        {
+          courseId: 'c1',
+          title: 'Intro to DynamoDB',
+          ratingCount: 0,
+          tags: [],
+        },
+      ],
       cursor: null,
       facets: noFacets,
     });
@@ -118,9 +127,10 @@ describe('course.publicSearch', () => {
         courseId: 'c1',
         title: 'With image',
         imageKey: 'courses/c1/image.png',
+        ratingCount: 0,
         tags: [],
       },
-      { courseId: 'c2', title: 'No image', tags: [] },
+      { courseId: 'c2', title: 'No image', ratingCount: 0, tags: [] },
     ]);
   });
 
@@ -203,6 +213,104 @@ describe('course.publicSearch', () => {
       level: 'beginner',
       language: 'en',
       durationHours: 12,
+      ratingCount: 0,
+    });
+  });
+
+  it('returns a hit’s rating when it has one, and a count of 0 when not', async () => {
+    searchMock.mockResolvedValue(
+      esResponse([
+        {
+          _source: {
+            courseId: 'c1',
+            title: 'A',
+            ratingCount: 128,
+            ratingAverage: 4.6,
+            ratingScore: 4.5,
+            ratingBoost: 1.1,
+          },
+        },
+        { _source: { courseId: 'c2', title: 'B', ratingBoost: 1 } },
+      ]),
+    );
+
+    const { items } = await callAnonymously().publicSearch({});
+
+    expect(items[0]).toMatchObject({ ratingAverage: 4.6, ratingCount: 128 });
+    expect(items[0]).not.toHaveProperty('ratingScore');
+    expect(items[0]).not.toHaveProperty('ratingBoost');
+    expect(items[1]).toMatchObject({ ratingCount: 0 });
+    expect(items[1]).not.toHaveProperty('ratingAverage');
+  });
+
+  describe('sort and minRating', () => {
+    const bodyOf = async (input: Record<string, unknown>) => {
+      searchMock.mockResolvedValue(esResponse([]));
+      await callAnonymously().publicSearch(input as never);
+      return searchMock.mock.calls[0][0].body;
+    };
+
+    it('multiplies a text query’s score by the rating boost by default', async () => {
+      const body = await bodyOf({ q: 'sql' });
+
+      expect(body.query.bool.must).toEqual({
+        function_score: {
+          query: expect.objectContaining({ multi_match: expect.anything() }),
+          field_value_factor: { field: 'ratingBoost', missing: 1 },
+          boost_mode: 'multiply',
+        },
+      });
+      expect(body.sort).toBeUndefined();
+    });
+
+    it('sorts by rating score, unrated last, then newest, then id', async () => {
+      const body = await bodyOf({ q: 'sql', sort: 'rating' });
+
+      expect(body.sort).toEqual([
+        { ratingScore: { order: 'desc', missing: '_last' } },
+        { publishedAt: 'desc' },
+        { courseId: 'asc' },
+      ]);
+      expect(body.query.bool.must.function_score).toBeUndefined();
+    });
+
+    it('sorts by newest then id', async () => {
+      const body = await bodyOf({ q: 'sql', sort: 'newest' });
+
+      expect(body.sort).toEqual([{ publishedAt: 'desc' }, { courseId: 'asc' }]);
+      expect(body.query.bool.must.function_score).toBeUndefined();
+    });
+
+    it.each([4.5, 4, 3.5, 3])(
+      'filters to an average of at least %s beside the published filter',
+      async (minRating) => {
+        const body = await bodyOf({ minRating });
+
+        expect(body.query.bool.filter).toEqual([
+          { term: { status: 'published' } },
+          { range: { ratingAverage: { gte: minRating } } },
+        ]);
+      },
+    );
+
+    it('has no rating filter without minRating', async () => {
+      const body = await bodyOf({});
+
+      expect(body.query.bool.filter).toEqual([
+        { term: { status: 'published' } },
+      ]);
+    });
+
+    it.each([
+      { sort: 'popular' },
+      { minRating: 5 },
+      { minRating: 2 },
+      { minRating: '4' },
+    ])('refuses %o', async (input) => {
+      await expect(
+        callAnonymously().publicSearch(input as never),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(searchMock).not.toHaveBeenCalled();
     });
   });
 

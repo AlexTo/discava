@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@discava/admin-api": "workspace:*",
     "@discava/common-shadcn": "workspace:*",
     "@discava/common-web-utils": "workspace:*",
     "@discava/core-api": "workspace:*",

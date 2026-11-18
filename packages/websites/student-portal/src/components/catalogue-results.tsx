@@ -38,19 +38,28 @@ export function CatalogueResults({
   filters,
   onFiltersChange,
   emptyMessage = 'No courses match. Try fewer or different words, or clear the filters.',
+  fixedCategoryId,
 }: {
   query?: string;
   filters: CatalogueFilters;
   onFiltersChange: (filters: CatalogueFilters) => void;
   emptyMessage?: string;
+  // A landing page's category: results stay inside it and the panel has no
+  // category group.
+  fixedCategoryId?: string;
 }) {
   const trpc = useCoreApi();
   // A category's address names its slug; the API filters by its id.
-  const categoriesQuery = useQuery(trpc.category.list.queryOptions());
-  const categoryId = filters.category
-    ? (categoriesQuery.data?.find(({ slug }) => slug === filters.category)
-        ?.id ?? filters.category)
-    : undefined;
+  const categoriesQuery = useQuery({
+    ...trpc.category.list.queryOptions(),
+    enabled: !fixedCategoryId,
+  });
+  const categoryId = fixedCategoryId
+    ? fixedCategoryId
+    : filters.category
+      ? (categoriesQuery.data?.find(({ slug }) => slug === filters.category)
+          ?.id ?? filters.category)
+      : undefined;
 
   const searchQuery = useInfiniteQuery(
     trpc.course.publicSearch.infiniteQueryOptions(
@@ -61,7 +70,8 @@ export function CatalogueResults({
       },
       {
         // Wait for the categories to resolve a slug to its id.
-        enabled: !filters.category || !categoriesQuery.isPending,
+        enabled:
+          !!fixedCategoryId || !filters.category || !categoriesQuery.isPending,
         getNextPageParam: (lastPage) => lastPage.cursor,
         // A cold collection's first request times out server-side (#267);
         // the wake it triggered keeps going, so the same query a few
@@ -83,6 +93,7 @@ export function CatalogueResults({
           facets={facets}
           filters={filters}
           onChange={onFiltersChange}
+          showCategory={!fixedCategoryId}
         />
       )}
       <div className={facets ? '' : 'lg:col-span-2'}>

@@ -6,6 +6,7 @@ import { RuntimeConfig } from '@discava/common-constructs';
 import type { StageComponents } from '@discava/common-infra-config';
 import { Stack, Stage, StageProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { AdminApiStack } from '../stacks/admin-api-stack.js';
 import { CoreApiStack } from '../stacks/core-api-stack.js';
 import { DataStack } from '../stacks/data-stack.js';
 import { InstructorApiStack } from '../stacks/instructor-api-stack.js';
@@ -20,7 +21,7 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> RuntimeConfig
+ *   Websites -> Data -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> AdminApi -> RuntimeConfig
  *
  * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
  * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
@@ -28,7 +29,8 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * portal's runtime-config.json) collects values from all of them.
  * InstructorApi also depends on CoreApi only because the stage's single
  * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
- * whichever API stack is created first. Data's search collection (#53) is
+ * whichever API stack is created first. AdminApi reads from Data and Websites
+ * only (the table, the user pool and the admin portal's address for CORS). Data's search collection (#53) is
  * stateful like the core table, so it lives there too; CoreApi depends on it
  * for the search procedure's read access. StreamRouter holds the single
  * reader of the core table's stream, the queues it feeds and the progress
@@ -44,6 +46,7 @@ export class ApplicationStage extends Stage {
       identity,
       coreApi,
       instructorApi,
+      adminApi,
       coreTable,
       streamRouter,
       studentPortal,
@@ -132,6 +135,14 @@ export class ApplicationStage extends Stage {
       publicMediaBucket: data.publicMediaBucket,
       mediaPipeline,
       instructorPortal: websites.instructorPortal,
+    });
+
+    new AdminApiStack(this, 'AdminApi', {
+      ...stackProps,
+      adminApi,
+      identity: data.identity,
+      coreTable: data.coreTable,
+      adminPortal: websites.adminPortal,
     });
 
     // Every consumer references the AppConfig application, so it lives in

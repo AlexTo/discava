@@ -32,6 +32,24 @@ export const createCategory = async (name: string) => {
   return categoryWrites.create(service, { categoryId: uuidV7(), name });
 };
 
+/** The category with this name, created when there is none yet. */
+export const ensureCategory = async (name: string) => {
+  const service = await createCoreTableService();
+  const { data } = await service.entities.category.query
+    .primary({})
+    .go({ pages: 'all' });
+  const existing = data.find(
+    (category) => category.name.toLowerCase() === name.toLowerCase(),
+  );
+  return existing ?? createCategory(name);
+};
+
+/** Archives a category; its courses keep pointing at it. */
+export const archiveCategory = async (categoryId: string) => {
+  const service = await createCoreTableService();
+  return categoryWrites.archive(service, { categoryId });
+};
+
 /** Replaces a course's catalogue fields. */
 export const setCourseCatalogue = async (
   courseId: string,

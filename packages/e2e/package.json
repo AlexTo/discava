@@ -7,6 +7,7 @@
     "@aws-sdk/client-dynamodb": "catalog:",
     "@discava/core-api": "workspace:*",
     "@discava/core-table": "workspace:*",
+    "@discava/admin-api": "workspace:*",
     "@discava/instructor-api": "workspace:*",
     "@libpdf/core": "catalog:",
     "@trpc/client": "catalog:",

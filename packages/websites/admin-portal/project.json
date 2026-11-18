@@ -29,6 +29,13 @@
         "name": "CoreApi",
         "auth": "cognito",
         "isRestApi": true
+      },
+      {
+        "generator": "ts#trpc-api#react-connection",
+        "path": "src/components/AdminApiClientProvider",
+        "name": "AdminApi",
+        "auth": "cognito",
+        "isRestApi": true
       }
     ]
   },
@@ -57,6 +64,10 @@
         },
         {
           "projects": ["@discava/core-api"],
+          "target": "dev"
+        },
+        {
+          "projects": ["@discava/admin-api"],
           "target": "dev"
         }
       ],

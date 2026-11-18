@@ -24,6 +24,18 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(true);
   });
 
+  it('matches an inserted or modified course rating, but not a removed one', () => {
+    expect(
+      matchesSearchStreamFilters(record('INSERT', 'NewImage', 'courseRating')),
+    ).toBe(true);
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'courseRating')),
+    ).toBe(true);
+    expect(
+      matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'courseRating')),
+    ).toBe(false);
+  });
+
   it('matches a removed course, by its old image', () => {
     expect(
       matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'course')),
@@ -32,6 +44,19 @@ describe('matchesSearchStreamFilters', () => {
 
   it('ignores a category or a category claim: documents hold only the categoryId', () => {
     for (const entity of ['category', 'categoryClaim']) {
+      for (const eventName of ['INSERT', 'MODIFY']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, 'NewImage', entity)),
+        ).toBe(false);
+      }
+      expect(
+        matchesSearchStreamFilters(record('REMOVE', 'OldImage', entity)),
+      ).toBe(false);
+    }
+  });
+
+  it('ignores discussion posts and votes: the courses index does not hold them', () => {
+    for (const entity of ['discussionPost', 'discussionVote']) {
       for (const eventName of ['INSERT', 'MODIFY']) {
         expect(
           matchesSearchStreamFilters(record(eventName, 'NewImage', entity)),
