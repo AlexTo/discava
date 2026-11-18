@@ -29,6 +29,8 @@ export const CourseSchema = z.object({
   level: z.enum(LEVELS).optional(),
   language: z.enum(LANGUAGES).optional(),
   durationHours: z.number().optional(),
+  learningOutcomes: z.array(z.string()).optional(),
+  requirements: z.array(z.string()).optional(),
   certificatesEnabled: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),

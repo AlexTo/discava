@@ -242,6 +242,7 @@ const violations = (table: Table) =>
     modules: [],
     lessons: [],
     contentItems: [],
+    coursePreviews: [],
     courseInstructors: rows(table, 'courseInstructor'),
     itemCompletions: [],
     progress: [],

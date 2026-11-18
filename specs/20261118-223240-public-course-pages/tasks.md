@@ -48,12 +48,12 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: Procedure tests for `course.updateLanding`; entity and invariant breaking tests.
 
-- [ ] T001 [US3] Tests first, then extend `packages/databases/core-table/src/entities/course.ts` with:
+- [x] T001 [US3] Tests first, then extend `packages/databases/core-table/src/entities/course.ts` with:
   - `learningOutcomes`: list of string, optional;
   - `requirements`: list of string, optional.
 
   Entity tests in `entities/course.test.ts` (create the file if absent, following `entities/review.test.ts`): a course round-trips both attributes, and the existing course tests stay unchanged.
-- [ ] T002 [US3] Tests first, then add `packages/databases/core-table/src/helpers/course-landing.ts`, exported from `src/index.ts`, with:
+- [x] T002 [US3] Tests first, then add `packages/databases/core-table/src/helpers/course-landing.ts`, exported from `src/index.ts`, with:
   - `normaliseLandingList(items)`: trims each item, refuses more than 10 items, and refuses any item outside "1 to 160 characters after trimming";
   - `courseLandingWrites.set({ courseId, learningOutcomes, requirements, now })`: returns the transaction items for the course patch (an empty list *removes* the attribute) and one `courseInstructor` patch per instructor, setting `courseUpdatedAt` to the course's new `updatedAt`, as `helpers/course-catalogue.ts` does.
 
@@ -61,13 +61,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - an 11th item; a 161-character item; a whitespace-only item; trimming;
   - setting and clearing each list;
   - no two items for the same key.
-- [ ] T003 [US3] Impact-check invariants, tests first. In `packages/databases/core-table/src/helpers/invariants.ts`, add `course-landing-shape` to `INVARIANTS` and `checkTableInvariants`: each list is at most 10 items, each item is 1 to 160 characters and equal to its trimmed form.
+- [x] T003 [US3] Impact-check invariants, tests first. In `packages/databases/core-table/src/helpers/invariants.ts`, add `course-landing-shape` to `INVARIANTS` and `checkTableInvariants`: each list is at most 10 items, each item is 1 to 160 characters and equal to its trimmed form.
 
   Breaking tests in `invariants.test.ts`: an 11-item list, a padded item, an empty item.
 
   Extend the `instructor-course-updated-at` tests with a snapshot written by `courseLandingWrites.set` that satisfies it, and one where the sync was left out, which violates it.
-- [ ] T004 [P] [US3] Stream-consumer confirmation (constitution V). In `packages/databases/core-table/src/helpers/progress-stream.test.ts`, assert that a `course` MODIFY changing only the two new attributes matches no entry of `PROGRESS_STREAM_FILTERS`. In `search-stream.test.ts`, pin the existing behavior that it matches `SEARCH_STREAM_FILTERS`, which is harmless because the document ignores the fields. Also assert that `coursePreview` INSERT, MODIFY and REMOVE records match no entry of either filter list. Change the filters only if a test shows a need, and record the outcome in the PR description.
-- [ ] T005 [US3] Tests first, then add `packages/apis/instructor-api/src/procedures/course-landing.ts` with `updateLanding` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
+- [x] T004 [P] [US3] Stream-consumer confirmation (constitution V). In `packages/databases/core-table/src/helpers/progress-stream.test.ts`, assert that a `course` MODIFY changing only the two new attributes matches no entry of `PROGRESS_STREAM_FILTERS`. In `search-stream.test.ts`, pin the existing behavior that it matches `SEARCH_STREAM_FILTERS`, which is harmless because the document ignores the fields. Also assert that `coursePreview` INSERT, MODIFY and REMOVE records match no entry of either filter list. Change the filters only if a test shows a need, and record the outcome in the PR description.
+- [x] T005 [US3] Tests first, then add `packages/apis/instructor-api/src/procedures/course-landing.ts` with `updateLanding` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
   - a `courseProcedure` whose zod input enforces "at most 10 items" and "1 to 160 characters after trimming" with messages that name the field and the 1-based position;
   - the caller must be an instructor of the course (`FORBIDDEN` otherwise);
   - one transaction from `courseLandingWrites.set`.
@@ -79,7 +79,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - each validation error;
   - a non-instructor is refused;
   - `[]` clears a list.
-- [ ] T006 [US2] Tests first, then add `packages/databases/core-table/src/entities/course-preview.ts`, registered in `entities/index.ts` and `service.ts` (not in `curriculum`), per [data-model.md](./data-model.md) "New: `coursePreview`":
+- [x] T006 [US2] Tests first, then add `packages/databases/core-table/src/entities/course-preview.ts`, registered in `entities/index.ts` and `service.ts` (not in `curriculum`), per [data-model.md](./data-model.md) "New: `coursePreview`":
   - pk `courseId`, sk constant;
   - `status` `processing` | `ready` | `failed` (required);
   - `s3Key`, `previousS3Key`, `submissionNonce` (required), `mimeType`, `mediaConvertJobId`, `rawObjectETag`;

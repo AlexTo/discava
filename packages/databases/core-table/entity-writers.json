@@ -45,7 +45,8 @@
   },
   "course": {
     "core-table": [
-      "packages/databases/core-table/src/helpers/course-catalogue.ts"
+      "packages/databases/core-table/src/helpers/course-catalogue.ts",
+      "packages/databases/core-table/src/helpers/course-landing.ts"
     ],
     "instructor-api": [
       "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
@@ -55,13 +56,15 @@
   },
   "courseInstructor": {
     "core-table": [
-      "packages/databases/core-table/src/helpers/course-catalogue.ts"
+      "packages/databases/core-table/src/helpers/course-catalogue.ts",
+      "packages/databases/core-table/src/helpers/course-landing.ts"
     ],
     "instructor-api": [
       "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
       "packages/apis/instructor-api/src/procedures/course.ts"
     ]
   },
+  "coursePreview": {},
   "courseRating": {
     "core-table": ["packages/databases/core-table/src/helpers/review.ts"]
   },

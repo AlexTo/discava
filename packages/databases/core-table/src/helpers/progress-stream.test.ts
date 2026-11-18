@@ -39,6 +39,11 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    // A landing-page edit changes only learningOutcomes and requirements.
+    ['a course landing edit', record('MODIFY', 'NewImage', 'course')],
+    ['a new preview', record('INSERT', 'NewImage', 'coursePreview')],
+    ['an edited preview', record('MODIFY', 'NewImage', 'coursePreview')],
+    ['a removed preview', record('REMOVE', 'OldImage', 'coursePreview')],
     ['a new category', record('INSERT', 'NewImage', 'category')],
     ['a category change', record('MODIFY', 'NewImage', 'category')],
     ['a new category claim', record('INSERT', 'NewImage', 'categoryClaim')],

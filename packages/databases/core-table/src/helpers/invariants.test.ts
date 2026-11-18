@@ -89,6 +89,7 @@ const consistentTable = (): TableSnapshot => ({
   ],
   modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
   lessons: [{ ...ids, ...shown, kind: 'lesson', order: 1, lastChildOrder: 4 }],
+  coursePreviews: [],
   contentItems: [
     {
       ...ids,
@@ -367,6 +368,7 @@ describe('checkTableInvariants', () => {
         modules: [],
         lessons: [],
         contentItems: [],
+        coursePreviews: [],
         courseInstructors: [],
         enrolments: [],
         itemCompletions: [],
@@ -580,6 +582,55 @@ describe('checkTableInvariants', () => {
         row.courseUpdatedAt = course.updatedAt;
       }
       expect(broken().invariants).toEqual([]);
+    });
+
+    it('accepts a landing write that synced courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.learningOutcomes = ['Build a thing'];
+      course.updatedAt = '2026-02-01T00:00:00.000Z';
+      for (const row of table.courseInstructors) {
+        row.courseUpdatedAt = course.updatedAt;
+      }
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a landing write that left the sync out', () => {
+      const course = table.courses[0];
+      course.requirements = ['A laptop'];
+      course.updatedAt = '2026-02-01T00:00:00.000Z';
+      expectOnly('instructor-course-updated-at');
+    });
+  });
+
+  describe('course-landing-shape', () => {
+    it('accepts lists of ten trimmed items', () => {
+      table.courses[0].learningOutcomes = Array.from(
+        { length: 10 },
+        (_, i) => `Outcome ${i}`,
+      );
+      table.courses[0].requirements = ['a'.repeat(160)];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports an 11-item list', () => {
+      table.courses[0].learningOutcomes = Array.from(
+        { length: 11 },
+        (_, i) => `Outcome ${i}`,
+      );
+      expectOnly('course-landing-shape', /11 items/);
+    });
+
+    it('reports a padded item', () => {
+      table.courses[0].requirements = [' padded '];
+      expectOnly('course-landing-shape', /not trimmed/);
+    });
+
+    it('reports an empty item and a 161-character item', () => {
+      table.courses[0].requirements = [''];
+      expectOnly('course-landing-shape', /item 1 is 0 characters/);
+      table = consistentTable();
+      table.courses[0].learningOutcomes = ['a'.repeat(161)];
+      expectOnly('course-landing-shape', /161 characters/);
     });
   });
 
@@ -2830,5 +2881,167 @@ describe('violationId', () => {
     expect(violationId({ ...first, record: { courseId: 'c2' } })).not.toBe(
       violationId(first),
     );
+  });
+});
+
+describe('course previews', () => {
+  const nonce = 'n1';
+  const manifest = `courses/c1/preview/${nonce}/master.m3u8`;
+  const preview = (overrides = {}) => ({
+    courseId: 'c1',
+    status: 'ready' as const,
+    s3Key: manifest,
+    submissionNonce: nonce,
+    durationSeconds: 120,
+    ...overrides,
+  });
+  const track = (language: string, overrides = {}) => ({
+    trackId: `t-${language}`,
+    nonce,
+    language,
+    label: language,
+    source: 'auto' as const,
+    key: `courses/c1/preview/${nonce}/captions/t-${language}.vtt`,
+    isDefault: true,
+    ...overrides,
+  });
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  it('accepts a ready preview, one processing, and one that failed', () => {
+    table.coursePreviews = [preview()];
+    expect(broken().invariants).toEqual([]);
+    table.coursePreviews = [
+      preview({
+        status: 'processing',
+        s3Key: undefined,
+        previousS3Key: manifest,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      }),
+    ];
+    expect(broken().invariants).toEqual([]);
+    table.coursePreviews = [
+      preview({
+        status: 'failed',
+        s3Key: undefined,
+        failureReason: 'too-long',
+      }),
+    ];
+    expect(broken().invariants).toEqual([]);
+  });
+
+  describe('course-preview-shape', () => {
+    it.each([
+      ['has no course', { courseId: 'gone' }, /course does not exist/],
+      ['is 301 seconds', { durationSeconds: 301 }, /301/],
+      ['is 0 seconds', { durationSeconds: 0 }, /not 1 to 300/],
+      ['is ready without an s3Key', { s3Key: undefined }, /s3Key is not set/],
+      [
+        'is ready under another course',
+        { s3Key: `courses/c2/preview/${nonce}/master.m3u8` },
+        /s3Key/,
+      ],
+      [
+        'is ready under another attempt',
+        { s3Key: 'courses/c1/preview/other/master.m3u8' },
+        /own/,
+      ],
+      [
+        'is processing with a failureReason',
+        { status: 'processing', s3Key: undefined, failureReason: 'too-long' },
+        /failureReason is set on a processing/,
+      ],
+      [
+        'failed without a failureReason',
+        { status: 'failed', s3Key: undefined },
+        /no failureReason/,
+      ],
+      [
+        'keeps a previous version of another course',
+        { previousS3Key: 'courses/c2/preview/x/master.m3u8' },
+        /previousS3Key/,
+      ],
+    ])('reports a preview that %s', (_, overrides, message) => {
+      table.coursePreviews = [preview(overrides)];
+      const found = violationsOf('course-preview-shape');
+      expect(found.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(message),
+      );
+    });
+  });
+
+  describe('video-transcode-state', () => {
+    it('reports transcodePending without its timestamp', () => {
+      table.coursePreviews = [
+        preview({
+          status: 'processing',
+          s3Key: undefined,
+          transcodePending: 'pending',
+        }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /not set together/,
+      );
+    });
+
+    it('reports transcodePending on a ready preview', () => {
+      table.coursePreviews = [
+        preview({ transcodePending: 'pending', transcodePendingSince: T }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /on a ready preview/,
+      );
+    });
+
+    it('reports a ready preview whose key is not a manifest', () => {
+      table.coursePreviews = [
+        preview({ s3Key: `courses/c1/preview/${nonce}/x` }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /ready preview's s3Key/,
+      );
+    });
+
+    it('reports captionsStatus pending without its timestamp', () => {
+      table.coursePreviews = [preview({ captionsStatus: 'pending' })];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /without captionsPendingSince/,
+      );
+    });
+  });
+
+  describe('caption-tracks-valid', () => {
+    it('accepts a track of the played version', () => {
+      table.coursePreviews = [preview({ captionTracks: [track('en-US')] })];
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports a track for a version that is not played', () => {
+      table.coursePreviews = [
+        preview({
+          captionTracks: [
+            track('en-US', {
+              nonce: 'old',
+              key: 'courses/c1/preview/old/captions/t.vtt',
+            }),
+          ],
+        }),
+      ];
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version old/,
+      );
+    });
+
+    it('reports two tracks in one language', () => {
+      table.coursePreviews = [
+        preview({
+          captionTracks: [track('en-US'), track('en-US', { trackId: 'b' })],
+        }),
+      ];
+      expect(
+        violationsOf('caption-tracks-valid').map((v) => v.message),
+      ).toContainEqual(expect.stringMatching(/two caption tracks/));
+    });
   });
 });
