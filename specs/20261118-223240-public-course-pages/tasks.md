@@ -270,7 +270,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 **Independent test**: Fetching a published course or profile without JavaScript returns its content, tags and structured data. Unknown, draft and archived addresses return 404 with `noindex`. Outside production, everything carries `noindex`.
 
 - [ ] T029 Tests first, then add to `packages/common/infra-config/src/stages.types.ts`, `stages.config.ts` and `env-overrides.ts` the `studentPortal` settings:
-  - `enableIndexing`: default `false`; `true` only under `discava-production`;
+  - `allowSearchEngineIndexing`: default `false`; `true` only under `discava-production`;
   - `siteName`: default `"Discava"`;
   - `pageRendererReservedConcurrency`: default `20`, and `5` under `discava-development`.
 
@@ -285,13 +285,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   Tests feed `</script><script>alert(1)</script>`, quotes and `&` through every helper. Add a test that reads `packages/websites/student-portal/index.html` and asserts both markers exist.
 - [ ] T032 Tests first, then add `page-renderer/render-course.ts` and `render-profile.ts`, which build the head and root per [contracts/page-renderer.md](./contracts/page-renderer.md):
   - the title, description, canonical, `og:*` and `twitter:*` tags;
-  - `robots noindex` when indexing is off;
+  - `robots noindex` when search engine indexing is off;
   - JSON-LD `Course` (with `aggregateRating` only when `ratingCount >= 1`) or `ProfilePage`;
   - the static semantic markup, using the same Tailwind classes as the React header;
   - the page data keyed by tRPC path.
 
   Snapshot and assertion tests cover a full course, a bare course, a profile, and a hostile string in every field.
-- [ ] T033 Tests first, then add `packages/apis/core-api/src/helpers/sitemap.ts` with `sitemapEntries(coreTable)`. It reads published courses (`byStatus`, all pages), runs `courseInstructor` queries in parallel with at most 10 in flight, batch-gets profiles, and reads active categories (reuse the category list procedure's query). It returns unique paths with `lastmod`. Also add `page-renderer/robots.ts`, which builds `robots.txt` exactly as the contract gives for indexing on and off. Tests cover a draft course left out, an instructor of two courses listed once, an archived category left out, and both robots variants.
+- [ ] T033 Tests first, then add `packages/apis/core-api/src/helpers/sitemap.ts` with `sitemapEntries(coreTable)`. It reads published courses (`byStatus`, all pages), runs `courseInstructor` queries in parallel with at most 10 in flight, batch-gets profiles, and reads active categories (reuse the category list procedure's query). It returns unique paths with `lastmod`. Also add `page-renderer/robots.ts`, which builds `robots.txt` exactly as the contract gives for search engine indexing on and off. Tests cover a draft course left out, an instructor of two courses listed once, an archived category left out, and both robots variants.
 - [ ] T034 Tests first, then implement `page-renderer/handler.ts`:
   - **Routing**: route per the contract's table; method other than GET or HEAD → 405.
   - **Procedure calls**: call procedures through `appRouter.createCaller` with an anonymous context built the way `local-server.ts` builds one without a token.
@@ -308,7 +308,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a mixed-case handle and a trailing slash render, with a lower-case canonical;
   - a foreign host is ignored;
   - 503 is not cached;
-  - `X-Robots-Tag` follows `INDEXING`;
+  - `X-Robots-Tag` follows `ALLOW_SEARCH_ENGINE_INDEXING`;
   - no response reads cookies or `Authorization`.
 - [ ] T035 Tests first, then change `packages/common/constructs/src/core/static-website.ts` per [contracts/infra.md](./contracts/infra.md):
   - remove the 404/403 `errorResponses`;
@@ -317,7 +317,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
   A unit test runs `spa-rewrite.js` against `/`, `/learn/x`, `/learn/x/lesson/y`, `/assets/a.js`, `/runtime-config.json` and `/foo.bar/baz`. Update the construct snapshot on purpose, and name in the PR the behavior change: unknown asset paths now 404 instead of returning `index.html`.
 - [ ] T036 Tests first, then extend `packages/common/constructs/src/app/static-websites/student-portal.ts` with optional `pageRenderer` props, and add a generator-owned-style wrapper in `src/app/lambda-functions/` for the `page-renderer` bundle. The construct sets up:
-  - **Function**: Node 22, 512 MB, 10 s, tracing as the APIs do, reserved concurrency from props; env `RUNTIME_CONFIG_APP_ID` (the app *name*), `WEBSITE_BUCKET`, `INDEXING`, `SITE_NAME`, `ALLOWED_HOSTS`.
+  - **Function**: Node 22, 512 MB, 10 s, tracing as the APIs do, reserved concurrency from props; env `RUNTIME_CONFIG_APP_ID` (the app *name*), `WEBSITE_BUCKET`, `ALLOW_SEARCH_ENGINE_INDEXING`, `SITE_NAME`, `ALLOWED_HOSTS`.
   - **Function URL and origin**: `AuthType.AWS_IAM` with `FunctionUrlOrigin.withOriginAccessControl`.
   - **Behaviors**: `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. Each allows GET and HEAD, uses a cache policy keyed on path only that honours origin TTLs up to 300 s, and an origin request policy forwarding `x-discava-host`. Each has a viewer-request function (new `core/forward-host.js`) setting `x-discava-host` from `Host`, and uses the distribution's response headers policy.
   - **Permission**: `s3:GetObject` on `index.html` only, with KMS decrypt when the bucket is encrypted.
@@ -326,12 +326,12 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   Export from `core/runtime-config.ts` the function that names the AppConfig application, and use it in both places. Construct tests use assertions, not only snapshots. Run `checkov` through `build`, and add only justified `suppressRules`.
 - [ ] T037 Tests first, then wire it into `packages/infra/src/stacks/websites-stack.ts`:
   - pass `pageRenderer` props from stage config, with `allowedHosts` set to the configured student portal domains;
-  - when indexing is off, pass `extraResponseHeaders: { 'X-Robots-Tag': 'noindex' }` for the student portal.
+  - when search engine indexing is off, pass `extraResponseHeaders: { 'X-Robots-Tag': 'noindex' }` for the student portal.
 
-  In `packages/infra/src/stacks/data-stack.ts`, grant `coreTable` read and the AppConfig session and read to `websites.studentPortal.pageRendererGrantable`. Infra tests: production has no `X-Robots-Tag` header and `INDEXING=true`; development has both noindex and `INDEXING=false`; the Data stack holds the grants. `pnpm nx run @discava/infra:synth` passes for both stages.
+  In `packages/infra/src/stacks/data-stack.ts`, grant `coreTable` read and the AppConfig session and read to `websites.studentPortal.pageRendererGrantable`. Infra tests: production has no `X-Robots-Tag` header and `ALLOW_SEARCH_ENGINE_INDEXING=true`; development has both noindex and `ALLOW_SEARCH_ENGINE_INDEXING=false`; the Data stack holds the grants. `pnpm nx run @discava/infra:synth` passes for both stages.
 - [ ] T038 [P] Tests first, then add `packages/websites/student-portal/src/lib/page-data.ts` with `seedFromPageData(queryClient, trpc)`. It reads `#discava-page-data` once, calls `setQueryData` for `course.publicView`, `review.summary`, `review.list` and `instructorProfile.publicView` with the exact keys the components use, and removes the element. Call it in `main.tsx` before the first render. Add `public/og-default.png` (1200×630, the Discava wordmark on a plain background). Component tests: a seeded course page renders with no spinner and no network call; a malformed element is ignored.
 - [ ] T039 Extend `public-landing-page.e2e.ts` to fetch `LOCAL_PAGE_RENDERER_URL` with Playwright's `request` (no JavaScript):
-  - the published course's HTML contains its title, an outcome, a lesson title, the instructor's name, `og:title`, `application/ld+json` and `noindex` (local is non-indexing);
+  - the published course's HTML contains its title, an outcome, a lesson title, the instructor's name, `og:title`, `application/ld+json` and `noindex` (local is closed to search engines);
   - the profile's HTML contains the display name;
   - a draft course gives 404;
   - `/sitemap.xml` lists the course and profile;

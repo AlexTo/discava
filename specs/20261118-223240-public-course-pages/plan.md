@@ -12,7 +12,7 @@ The course page at `/learn/<courseId>` becomes the landing page. It gains outcom
 - **core-api**: `course.publicView` grows; two public procedures are added: `course.previewVideoUrl` in the existing `MediaUrl` signing function, and `instructorProfile.publicView`.
 - **instructor-api**: gains `course.updateLanding` and `profile.*`. `course.create` now creates the caller's profile, and permanently deleting a content item clears the preview if that item was it.
 - **Crawler HTML**: a page renderer, a second Lambda handler in core-api, sits behind the student portal's CloudFront distribution for `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. It calls the same public procedures in-process, injects head tags, a static rendering and seed data into the built `index.html`, and is cached at the edge for 5 minutes.
-- **Indexing**: a per-stage `enableIndexing`, on only in production.
+- **Search engine indexing**: a per-stage `allowSearchEngineIndexing`, on only in production.
 
 What the code showed that the spec could not:
 
@@ -60,7 +60,7 @@ What the code showed that the spec could not:
 | III. Everything runs locally | Pass | A local renderer on port 2026 (R-13); preview playback, photos (S3Mock) and profiles run locally. CloudFront Functions have no local stand-in; that is a documented exception, since their only job (SPA rewrite and host copy) is covered by unit tests of the function source, and Vite does the SPA fallback locally |
 | IV. Layered tests | Pass, planned | Unit tests for the helpers, procedures, renderer (escaping, statuses, noindex) and constructs; five new invariants and one extended invariant, each with breaking tests; a new e2e scenario; an impact check below; a concurrency test for handle claims |
 | V. Single-table via ElectroDB | Pass | Access patterns AP1 to AP6 in [data-model.md](./data-model.md): keys, the existing gsi1 and batch gets. No new index. No scans in requests. `STREAM_FEATURES` considered: search re-indexes on `course` modifications (harmless); progress ignores the new records (tested) |
-| VI. Secure by default | Pass | `enableIndexing` defaults off; the Function URL uses `AWS_IAM` with OAC; the renderer behaviors share the portal's WAF and headers policy; the renderer's role reads only `index.html`, the table (read) and AppConfig; anonymous preview cookies cover one directory |
+| VI. Secure by default | Pass | `allowSearchEngineIndexing` defaults off; the Function URL uses `AWS_IAM` with OAC; the renderer behaviors share the portal's WAF and headers policy; the renderer's role reads only `index.html`, the table (read) and AppConfig; anonymous preview cookies cover one directory |
 | VII. Change freely before launch | Pass | Attributes, entities and routes are added outright; handle changes do not redirect; development instructors get profiles from the seed script or by hand |
 | VIII. Repo conventions | Pass | `helpers/course-landing.ts`, `helpers/instructor-profile.ts` and `core-api/src/helpers/sitemap.ts`; text-only buttons ("Move up"/"Move down"); screenshots in e2e; English docs page with translations pending noted in the PR |
 
@@ -85,7 +85,7 @@ What the code showed that the spec could not:
 5. **Static markup plus seed data** (R-5), so the app's first render is the full page.
 6. **Preview equals one existing video item** (R-6), signed by `MediaUrl` with cookies for one directory, and checked for visibility on every request.
 7. **Profiles with claimed handles** (R-7), created with an instructor's first course; visibility is derived, not stored.
-8. **Host allowlist for canonicals** (R-8); **indexing off by default** (R-9); **on-request site map** (R-10).
+8. **Host allowlist for canonicals** (R-8); **search engine indexing off by default** (R-9); **on-request site map** (R-10).
 
 ## Project Structure
 
@@ -139,7 +139,7 @@ packages/
 │   ├── constructs/src/app/static-websites/student-portal.ts   # renderer origin and behaviors
 │   ├── constructs/src/app/lambda-functions/      # generator-owned wrapper for page-renderer
 │   ├── constructs/src/app/apis/core-api.ts       # MediaUrl += course.previewVideoUrl
-│   ├── infra-config/src/                         # studentPortal.enableIndexing, siteName, pageRendererReservedConcurrency
+│   ├── infra-config/src/                         # studentPortal.allowSearchEngineIndexing, siteName, pageRendererReservedConcurrency
 │   └── server-utils/src/local-dev.ts             # LOCAL_PAGE_RENDERER_URL
 ├── infra/src/stacks/                             # websites-stack.ts (props), data-stack.ts (grants)
 ├── websites/

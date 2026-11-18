@@ -31,11 +31,11 @@ Prerequisites: Docker running, then `pnpm dev`.
 4. Check what crawlers get:
 
    ```sh
-   curl -si http://localhost:2026/learn/<courseId> | head -40   # 200, X-Robots-Tag: noindex (local is non-indexing), title, og:*, ld+json
+   curl -si http://localhost:2026/learn/<courseId> | head -40   # 200, X-Robots-Tag: noindex (local is closed to search engines), title, og:*, ld+json
    curl -s  http://localhost:2026/learn/<courseId> | grep -c "<li"   # outline and outcomes present without JS
    curl -si http://localhost:2026/learn/<draftCourseId> | head -5  # 404, noindex
    curl -s  http://localhost:2026/sitemap.xml                    # course, profile and category URLs
-   curl -s  http://localhost:2026/robots.txt                     # Disallow: / (indexing off)
+   curl -s  http://localhost:2026/robots.txt                     # Disallow: / (search engine indexing off)
    ```
 
 5. Archive the course. `curl` the renderer again and check for a 404 (locally there is no CDN cache, so this is immediate). Open the student portal address as Alice, who is enrolled, and check that it shows "Course not found" and that My Learning still opens the course.

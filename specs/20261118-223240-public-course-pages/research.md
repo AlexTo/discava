@@ -99,13 +99,15 @@ The handle is generated from the account name: lower-cased, ASCII-folded, non-al
 
 ## R-9: Indexing per stage
 
-**Decision**: A new stage setting, `studentPortal.enableIndexing`, defaults to `false` and is `true` for `discava-production` only. When it is off:
+**Decision**: A new stage setting, `studentPortal.allowSearchEngineIndexing`, defaults to `false` and is `true` for `discava-production` only. When it is off:
 
 - the renderer adds `<meta name="robots" content="noindex">` and `X-Robots-Tag: noindex` to every response;
 - `robots.txt` is `Disallow: /`;
 - the student portal's response headers policy adds `X-Robots-Tag: noindex` to every S3-served response.
 
 When it is on, only not-found responses and non-landing `/learn/*` shells carry `noindex`.
+
+**Naming**: the setting is called `allowSearchEngineIndexing`, not `enableIndexing`, because "indexing" already means OpenSearch indexing in Discava (the `courses` search index, the indexing Lambda and the re-index job). The words "search engine" and "allow" match what it controls: whether external crawlers may index the student portal, as `robots.txt` puts it.
 
 **Rationale**: This implements FR-011a and SC-007. Following constitution VI's spirit, the safe value (not indexed) is the default and only production opts in.
 
@@ -140,6 +142,6 @@ It is cached for 5 minutes at CloudFront. Each `<url>` has a `<lastmod>` taken f
 
 ## R-13: Local development
 
-**Decision**: core-api's `dev` target starts a second local server, `src/local-page-renderer.ts`, on port 2026, exported as `LOCAL_PAGE_RENDERER_URL` from `common-server-utils/local-dev` beside `LOCAL_CORE_API_URL` (2022; 2023 to 2025 are taken). It serves the same routes, taking `index.html` from the student portal's Vite dev server (`LOCAL_PORTAL_URLS.student`). Browsers keep using Vite directly, and crawler responses are fetched from the renderer port (quickstart, e2e). `enableIndexing` is off locally, as on every non-production stage.
+**Decision**: core-api's `dev` target starts a second local server, `src/local-page-renderer.ts`, on port 2026, exported as `LOCAL_PAGE_RENDERER_URL` from `common-server-utils/local-dev` beside `LOCAL_CORE_API_URL` (2022; 2023 to 2025 are taken). It serves the same routes, taking `index.html` from the student portal's Vite dev server (`LOCAL_PORTAL_URLS.student`). Browsers keep using Vite directly, and crawler responses are fetched from the renderer port (quickstart, e2e). `allowSearchEngineIndexing` is off locally, as on every non-production stage.
 
 **Rationale**: This meets FR-016 and constitution III with no CloudFront locally. The end-to-end test fetches the renderer port directly.

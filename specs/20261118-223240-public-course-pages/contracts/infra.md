@@ -6,22 +6,22 @@
 
 | Field | Type | Default | `discava-development` | `discava-production` |
 |-------|------|---------|-----------------------|----------------------|
-| `enableIndexing` | boolean | `false` | `false` | `true` |
+| `allowSearchEngineIndexing` | boolean | `false` | `false` | `true` |
 | `siteName` | string | `"Discava"` | default | default |
 | `pageRendererReservedConcurrency` | number | `20` | `5` | default |
 
-These fields are added to `stages.types.ts` and env overrides (`<STAGE>_INFRA_STUDENT_PORTAL_ENABLE_INDEXING`, and the others) following `env-overrides.ts`, with tests.
+These fields are added to `stages.types.ts` and env overrides (`<STAGE>_INFRA_STUDENT_PORTAL_ALLOW_SEARCH_ENGINE_INDEXING`, and the others) following `env-overrides.ts`, with tests.
 
 ## `common/constructs/src/core/static-website.ts` (all three portals)
 
 - Remove the 404/403 → `/index.html` `errorResponses`.
 - Add a CloudFront Function (`cloudfront.FunctionRuntime.JS_2_0`, viewer request) to the default behavior. When the last path segment contains no `.`, it rewrites the URI to `/index.html`. The function source lives in `core/spa-rewrite.js`, with a unit test of the rewrite table: `/`, `/learn/x`, `/assets/a.js`, `/runtime-config.json` and `/foo.bar/baz`.
-- A new optional prop, `extraResponseHeaders`, carries custom headers into the existing `ResponseHeadersPolicy`. It is used for `X-Robots-Tag: noindex` when indexing is off.
+- A new optional prop, `extraResponseHeaders`, carries custom headers into the existing `ResponseHeadersPolicy`. It is used for `X-Robots-Tag: noindex` when search engine indexing is off.
 - Snapshot tests are updated deliberately, and the PR names the behavior change (constitution IV).
 
 ## `common/constructs/src/app/static-websites/student-portal.ts`
 
-New props are `pageRenderer?: { enableIndexing, siteName, reservedConcurrency, runtimeConfigAppName, allowedHosts }`. When set, the construct:
+New props are `pageRenderer?: { allowSearchEngineIndexing, siteName, reservedConcurrency, runtimeConfigAppName, allowedHosts }`. When set, the construct:
 
 - creates the renderer `Function` (a generator-owned wrapper in `lambda-functions/`, using core-api's `page-renderer` bundle, Node 22, 512 MB, 10 s timeout, X-Ray as the APIs do), with reserved concurrency from config;
 - adds a Function URL with `AuthType.AWS_IAM`, and a `FunctionUrlOrigin.withOriginAccessControl` origin;

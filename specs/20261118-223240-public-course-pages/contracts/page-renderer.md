@@ -28,11 +28,11 @@ A handle given in a different case or with a trailing slash still renders. The c
 
 - `Content-Type: text/html; charset=utf-8`
 - `Cache-Control: public, max-age=0, s-maxage=300`. Browsers always revalidate, and CloudFront keeps the response for 5 minutes.
-- `X-Robots-Tag: noindex` only when indexing is off for the stage.
+- `X-Robots-Tag: noindex` only when search engine indexing is off for the stage.
 - The body is the current `index.html` with:
   - `<title>`: `<course title> | <site name>`, or `<display name> | <site name>` for a profile.
   - `<meta name="description">`, `<link rel="canonical">`, and the Open Graph and Twitter tags (research R-11).
-  - `<meta name="robots" content="noindex">` when indexing is off.
+  - `<meta name="robots" content="noindex">` when search engine indexing is off.
   - `<script type="application/ld+json">` with the structured data.
   - Inside `#root`, static semantic HTML.
     - **Course**: `h1` title; image; a key facts list; "What you'll learn" `ul`; "Requirements" `ul`; description paragraphs; curriculum as nested `ol` of module and lesson titles; rating summary; the first page of reviews (display name, rating, text); and an instructor card for each instructor, linking to `/instructors/<handle>`.
@@ -49,7 +49,7 @@ A handle given in a different case or with a trailing slash still renders. The c
 
 ## `/robots.txt`
 
-- **Indexing on**:
+- **Search engine indexing on**:
 
   ```text
   User-agent: *
@@ -63,14 +63,14 @@ A handle given in a different case or with a trailing slash still renders. The c
 
   `Disallow: /learn/*/` keeps the course home and lessons out of the index, while `/learn/<id>` stays allowed.
 
-- **Indexing off**: `User-agent: *` and `Disallow: /`.
+- **Search engine indexing off**: `User-agent: *` and `Disallow: /`.
 - `Cache-Control: public, max-age=300, s-maxage=300`.
 
 ## `/sitemap.xml`
 
 - A standard `urlset` built from `sitemapEntries`: `/learn/<courseId>` for each published course, `/instructors/<handle>` for each public profile, and `/category/<slug>` for each active category. Each entry has a `lastmod`.
 - `Cache-Control: public, max-age=300, s-maxage=300`.
-- With indexing off it is still served, so it can be tested, but `robots.txt` does not list it.
+- With search engine indexing off it is still served, so it can be tested, but `robots.txt` does not list it.
 
 ## Failure
 

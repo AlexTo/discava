@@ -16,7 +16,7 @@
 
 Resolved without asking, using the recommended answers below (non-interactive run).
 
-- Q: Which deployed stages may search engines index? → A: Only stages whose config turns indexing on, which by default is `discava-production` alone. Every other stage (and local dev) answers with a do-not-index marker on every page and a robots file that disallows everything, so a development stage never competes with production in search results.
+- Q: Which deployed stages may search engines index? → A: Only stages whose config turns search engine indexing on, which by default is `discava-production` alone. Every other stage (and local dev) answers with a do-not-index marker on every page and a robots file that disallows everything, so a development stage never competes with production in search results.
 - Q: Can an instructor keep themselves off public pages? → A: No. Every instructor of a published course is shown on its landing page, and their profile is public while they teach one. Teaching a published course is a public act on every course marketplace; an opt-out would leave landing pages without a teacher.
 - Q: How is anonymous preview playback kept from opening up the rest of a course? → A: An anonymous playback address covers only the preview item's own renditions and caption tracks, lasts no longer than an enrolled student's, and is issued only while the item is the course's preview. Anonymous requests for it get the same protection as the other public procedures: the stage's web firewall where enabled and the public request limits on the API.
 - Q: What does an enrolled student see at an archived course's landing address? → A: The same "course not found" page as everyone else, as today. They reach the archived course from My Learning and the course home, which are unchanged; the public address never shows an archived course.
@@ -96,7 +96,7 @@ A person searches the web or receives a link to a course or instructor. The sear
 4. **Given** a course is archived or a profile stops being public, **Then** within 5 minutes its address returns "not found" to everyone not enrolled, and it leaves the site map.
 5. **Given** the site, **Then** it publishes a site map listing every published course page, every public instructor profile and every active category page, and a robots file that points to it and keeps signed-in-only areas (learning, my learning, certificates other than shared ones, sign-in) out of the index.
 6. **Given** a person then opens the page in a browser, **Then** they get the same full interactive page as today, including the enrol action and their signed-in state.
-7. **Given** a stage other than one configured for indexing (by default every stage except production, and local dev), **When** anything fetches any page or the robots file, **Then** every page carries a do-not-index marker and the robots file disallows everything.
+7. **Given** a stage other than one configured to allow search engine indexing (by default every stage except production, and local dev), **When** anything fetches any page or the robots file, **Then** every page carries a do-not-index marker and the robots file disallows everything.
 
 ---
 
@@ -149,7 +149,7 @@ An instructor fills in a public profile in the instructor portal: display name, 
 - **FR-009**: The content served to crawlers MUST reflect a course or profile change, and stop serving an archived course or a no-longer-public profile, within 5 minutes. A draft course's content MUST never be served to crawlers.
 - **FR-010**: Not-found public addresses MUST answer with a not-found status and a do-not-index marker, never a success status with an empty page.
 - **FR-011**: The site MUST publish a site map of every published course page, public instructor profile and active category page, kept within 5 minutes of changes, and a robots file that references it and excludes signed-in-only areas from indexing.
-- **FR-011a**: Indexing MUST be a per-stage setting that defaults to off and is on only for `discava-production`. On a stage with indexing off, every page MUST carry a do-not-index marker and the robots file MUST disallow everything; crawler content and social cards are still served there so they can be tested.
+- **FR-011a**: Search engine indexing MUST be a per-stage setting that defaults to off and is on only for `discava-production`. On a stage with search engine indexing off, every page MUST carry a do-not-index marker and the robots file MUST disallow everything; crawler content and social cards are still served there so they can be tested.
 - **FR-012**: In a browser, the landing page and profile MUST behave as one interactive page with the rest of the student portal (signed-in state, enrol action, reviews paging), with no visible flash from the crawler content to the interactive page.
 - **FR-013**: Outcomes, requirements, display name, headline and bio MUST be shown as plain text everywhere, including in crawler responses and social card tags.
 - **FR-014**: The instructor portal MUST let an instructor edit a course's outcomes, requirements and preview on the course's settings, and edit their own profile on a profile page, with a link to view the public page. It MUST show a landing page checklist (outcomes, requirements, preview, image, instructor profile) for each course, which never blocks publishing.
@@ -177,7 +177,7 @@ An instructor fills in a public profile in the instructor portal: display name, 
 - **SC-004**: A visitor on an ordinary connection sees the landing page's title and header within 2 seconds of opening a shared link.
 - **SC-005**: An instructor can fill in a course's outcomes, requirements and preview, and their own profile, in under 5 minutes in total.
 - **SC-006**: Link previews of a course in common messaging and social apps show its title, description and image (checked by hand before merge for at least two apps).
-- **SC-007**: 0 pages on a non-indexing stage served without a do-not-index marker.
+- **SC-007**: 0 pages on a stage closed to search engines served without a do-not-index marker.
 
 ## Assumptions
 
