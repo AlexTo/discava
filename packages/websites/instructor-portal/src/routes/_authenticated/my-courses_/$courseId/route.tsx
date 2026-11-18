@@ -11,7 +11,7 @@ import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Card } from '@discava/common-shadcn/components/ui/card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CalendarDays, Info, Megaphone, Tags } from 'lucide-react';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import { Alert } from '../../../../components/alert';
@@ -147,6 +147,13 @@ function RouteComponent() {
                 dateStyle: 'medium',
               })}
             </span>
+            <Link
+              to="/my-courses/$courseId/reviews"
+              params={{ courseId: course.courseId }}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Reviews
+            </Link>
           </div>
           <div className="mt-4 border-t pt-4">
             <CourseCertificatesSwitch
