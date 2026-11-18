@@ -43,6 +43,19 @@ describe('matchesSearchStreamFilters', () => {
     }
   });
 
+  it('ignores discussion posts and votes: the courses index does not hold them', () => {
+    for (const entity of ['discussionPost', 'discussionVote']) {
+      for (const eventName of ['INSERT', 'MODIFY']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, 'NewImage', entity)),
+        ).toBe(false);
+      }
+      expect(
+        matchesSearchStreamFilters(record('REMOVE', 'OldImage', entity)),
+      ).toBe(false);
+    }
+  });
+
   it('ignores a review: the search document holds only the rating tally', () => {
     for (const eventName of ['INSERT', 'MODIFY']) {
       expect(

@@ -15,6 +15,8 @@ import {
   createCourseInstructorEntity,
   createCourseRatingEntity,
   createCourseStatsEntity,
+  createDiscussionPostEntity,
+  createDiscussionVoteEntity,
   createEnrolmentEntity,
   createItemCompletionEntity,
   createLessonEntity,
@@ -71,6 +73,9 @@ export const createCoreTableService = async () => {
     announcement,
     category,
     categoryClaim,
+    discussionPost,
+    discussionVote,
+
     review,
     courseRating,
   ] = await Promise.all([
@@ -101,6 +106,9 @@ export const createCoreTableService = async () => {
     createAnnouncementEntity(),
     createCategoryEntity(),
     createCategoryClaimEntity(),
+    createDiscussionPostEntity(),
+    createDiscussionVoteEntity(),
+
     createReviewEntity(),
     createCourseRatingEntity(),
   ]);
@@ -133,6 +141,9 @@ export const createCoreTableService = async () => {
     announcement,
     category,
     categoryClaim,
+    discussionPost,
+    discussionVote,
+
     review,
     courseRating,
   });

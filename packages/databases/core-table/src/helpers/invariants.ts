@@ -13,6 +13,8 @@ import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
 import type { createCourseRatingEntity } from '../entities/course-rating.js';
 import type { createCourseStatsEntity } from '../entities/course-stats.js';
+import type { createDiscussionPostEntity } from '../entities/discussion-post.js';
+import type { createDiscussionVoteEntity } from '../entities/discussion-vote.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
 import type { createLessonEntity } from '../entities/lesson.js';
@@ -61,6 +63,13 @@ import {
   normaliseCategoryName,
   normaliseTags,
 } from './catalogue.js';
+import {
+  answeredState,
+  DISCUSSION_BODY_MAX,
+  DISCUSSION_MAX_REPORTERS,
+  DISCUSSION_MAX_VISIBLE_REPLIES,
+  DISCUSSION_TITLE_MAX,
+} from './discussion.js';
 import { parseNotificationPosition } from './notification.js';
 import { NOTIFICATION_TYPES } from './notification-types.js';
 import { computeProgress } from './progress.js';
@@ -296,6 +305,33 @@ export interface TableSnapshot {
     | 'editedAt'
     | 'version'
   >[];
+  discussionPosts: Pick<
+    Item<typeof createDiscussionPostEntity>,
+    | 'courseId'
+    | 'lessonId'
+    | 'moduleId'
+    | 'kind'
+    | 'threadId'
+    | 'postId'
+    | 'authorId'
+    | 'authorName'
+    | 'authorIsInstructor'
+    | 'title'
+    | 'body'
+    | 'state'
+    | 'replyCount'
+    | 'instructorReplyCount'
+    | 'voteCount'
+    | 'acceptedPostId'
+    | 'reportedBy'
+    | 'unanswered'
+    | 'reported'
+    | 'createdAt'
+  >[];
+  discussionVotes: Pick<
+    Item<typeof createDiscussionVoteEntity>,
+    'courseId' | 'userId' | 'lessonId' | 'threadId' | 'postId'
+  >[];
   categories: Pick<
     Item<typeof createCategoryEntity>,
     'categoryId' | 'name' | 'slug' | 'status'
@@ -364,6 +400,14 @@ export const INVARIANTS = [
   'course-category-exists',
   'category-claims-consistent',
   'course-catalogue-shape',
+  'discussion-post-shape',
+  'discussion-thread-links',
+  'discussion-counts-match',
+  'discussion-accepted-valid',
+  'discussion-unanswered-matches',
+  'discussion-votes-valid',
+  'discussion-reports-valid',
+
   'review-shape',
   'review-has-enrolment',
   'course-rating-matches-reviews',
@@ -1998,9 +2042,324 @@ export const checkCourseCatalogueShape = (
     );
   });
 
+const discussionKey = (p: {
+  courseId: string;
+  lessonId: string;
+  threadId: string;
+  postId: string;
+}) => ({
+  courseId: p.courseId,
+  lessonId: p.lessonId,
+  threadId: p.threadId,
+  postId: p.postId,
+});
+
+const DISCUSSION_STATES = ['shown', 'hidden', 'deleted'];
+
+// 37. A discussion post is well formed: a question has a title of 1 to 120
+// characters and `postId = threadId`; a reply has none of the question-only
+// attributes; the body is 1 to 4,000 characters, or gone (with the title and
+// reports) once the post is deleted; the id is a UUID v7 made at createdAt;
+// the author is named; and at most 20 reporters, none of them the author.
+export const checkDiscussionPostShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.discussionPosts.flatMap((p) => {
+    const problems: string[] = [];
+    const deleted = p.state === 'deleted';
+    if (!DISCUSSION_STATES.includes(p.state)) {
+      problems.push(`state ${p.state} is not allowed`);
+    }
+    if (p.kind === 'question') {
+      if (p.postId !== p.threadId) {
+        problems.push("a question's postId is not its threadId");
+      }
+      if (deleted) {
+        if (p.title !== undefined) {
+          problems.push('a deleted question still has a title');
+        }
+      } else if (
+        p.title === undefined ||
+        [...p.title].length < 1 ||
+        [...p.title].length > DISCUSSION_TITLE_MAX
+      ) {
+        problems.push(
+          `a question's title is not 1 to ${DISCUSSION_TITLE_MAX} characters`,
+        );
+      }
+    } else if (p.kind === 'reply') {
+      if (p.title !== undefined) {
+        problems.push('a reply has a title');
+      }
+      if (p.acceptedPostId !== undefined) {
+        problems.push('a reply has an acceptedPostId');
+      }
+      if (p.unanswered !== undefined) {
+        problems.push('a reply is marked unanswered');
+      }
+      if ((p.replyCount ?? 0) !== 0 || (p.instructorReplyCount ?? 0) !== 0) {
+        problems.push('a reply has reply counts');
+      }
+    } else {
+      problems.push(`kind ${p.kind} is not allowed`);
+    }
+    if (deleted) {
+      if (p.body !== undefined) {
+        problems.push('a deleted post still has a body');
+      }
+      if (p.reportedBy !== undefined || p.reported !== undefined) {
+        problems.push('a deleted post still has reports');
+      }
+    } else if (
+      p.body === undefined ||
+      [...p.body].length < 1 ||
+      [...p.body].length > DISCUSSION_BODY_MAX
+    ) {
+      problems.push(`body is not 1 to ${DISCUSSION_BODY_MAX} characters`);
+    }
+    if (uuidV7Time(p.postId) !== p.createdAt) {
+      problems.push('postId is not a UUID v7 made at createdAt');
+    }
+    if (!p.authorName) {
+      problems.push('authorName is not set');
+    }
+    const reporters = p.reportedBy ?? [];
+    if (reporters.length > DISCUSSION_MAX_REPORTERS) {
+      problems.push(
+        `${reporters.length} reporters, more than ${DISCUSSION_MAX_REPORTERS}`,
+      );
+    }
+    if (reporters.includes(p.authorId)) {
+      problems.push('the author is among the reporters');
+    }
+    return problems.map((problem) =>
+      violation('discussion-post-shape', discussionKey(p), problem),
+    );
+  });
+
+// 38. A reply belongs to a question of the same course, lesson and thread,
+// and every post's lesson exists (an archived lesson is fine) with the
+// moduleId the post carries.
+export const checkDiscussionThreadLinks = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const questions = new Set(
+    snapshot.discussionPosts
+      .filter((p) => p.kind === 'question')
+      .map((p) => `${p.courseId}/${p.lessonId}/${p.postId}`),
+  );
+  const lessons = new Map(
+    snapshot.lessons.map((l) => [`${l.courseId}/${l.lessonId}`, l]),
+  );
+  return snapshot.discussionPosts.flatMap((p) => {
+    const problems: string[] = [];
+    if (
+      p.kind === 'reply' &&
+      !questions.has(`${p.courseId}/${p.lessonId}/${p.threadId}`)
+    ) {
+      problems.push('its question does not exist');
+    }
+    const lesson = lessons.get(`${p.courseId}/${p.lessonId}`);
+    if (lesson === undefined) {
+      problems.push('its lesson does not exist');
+    } else if (lesson.moduleId !== p.moduleId) {
+      problems.push(
+        `moduleId is ${p.moduleId}, but the lesson is in ${lesson.moduleId}`,
+      );
+    }
+    return problems.map((problem) =>
+      violation('discussion-thread-links', discussionKey(p), problem),
+    );
+  });
+};
+
+// 39. A question's replyCount and instructorReplyCount equal its shown
+// replies (and those by instructors), at most 500; a post's voteCount equals
+// its votes.
+export const checkDiscussionCountsMatch = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const shownReplies = groupBy(
+    snapshot.discussionPosts.filter(
+      (p) => p.kind === 'reply' && p.state === 'shown',
+    ),
+    (p) => `${p.courseId}/${p.lessonId}/${p.threadId}`,
+  );
+  const votes = groupBy(
+    snapshot.discussionVotes,
+    (v) => `${v.courseId}/${v.lessonId}/${v.threadId}/${v.postId}`,
+  );
+  return snapshot.discussionPosts.flatMap((p) => {
+    const problems: string[] = [];
+    if (p.kind === 'question') {
+      const replies =
+        shownReplies.get(`${p.courseId}/${p.lessonId}/${p.postId}`) ?? [];
+      const instructors = replies.filter((r) => r.authorIsInstructor);
+      const replyCount = p.replyCount ?? 0;
+      const instructorReplyCount = p.instructorReplyCount ?? 0;
+      if (replyCount !== replies.length) {
+        problems.push(
+          `replyCount is ${replyCount}, but it has ${replies.length} shown replies`,
+        );
+      }
+      if (instructorReplyCount !== instructors.length) {
+        problems.push(
+          `instructorReplyCount is ${instructorReplyCount}, but ${instructors.length} shown replies are by instructors`,
+        );
+      }
+      if (
+        replyCount > DISCUSSION_MAX_VISIBLE_REPLIES ||
+        instructorReplyCount > DISCUSSION_MAX_VISIBLE_REPLIES
+      ) {
+        problems.push(
+          `more than ${DISCUSSION_MAX_VISIBLE_REPLIES} shown replies`,
+        );
+      }
+    }
+    const voteCount = p.voteCount ?? 0;
+    const actual = (
+      votes.get(`${p.courseId}/${p.lessonId}/${p.threadId}/${p.postId}`) ?? []
+    ).length;
+    if (voteCount !== actual) {
+      problems.push(`voteCount is ${voteCount}, but it has ${actual} votes`);
+    }
+    return problems.map((problem) =>
+      violation('discussion-counts-match', discussionKey(p), problem),
+    );
+  });
+};
+
+// 40. A question's acceptedPostId, if set, names a shown reply of that
+// question, and the question is not deleted.
+export const checkDiscussionAcceptedValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const replies = new Map(
+    snapshot.discussionPosts
+      .filter((p) => p.kind === 'reply')
+      .map((p) => [`${p.courseId}/${p.lessonId}/${p.postId}`, p]),
+  );
+  return snapshot.discussionPosts
+    .filter((p) => p.kind === 'question' && p.acceptedPostId !== undefined)
+    .flatMap((p) => {
+      const accepted = replies.get(
+        `${p.courseId}/${p.lessonId}/${p.acceptedPostId}`,
+      );
+      const problem =
+        p.state === 'deleted'
+          ? 'a deleted question still has an accepted answer'
+          : accepted === undefined
+            ? 'its accepted answer does not exist'
+            : accepted.threadId !== p.postId
+              ? 'its accepted answer is a reply of another question'
+              : accepted.state !== 'shown'
+                ? `its accepted answer is ${accepted.state}`
+                : undefined;
+      return problem
+        ? [violation('discussion-accepted-valid', discussionKey(p), problem)]
+        : [];
+    });
+};
+
+// 41. `unanswered` is set exactly when answeredState says the question is
+// unanswered, and on questions only.
+export const checkDiscussionUnansweredMatches = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.discussionPosts.flatMap((p) => {
+    const expected = p.kind === 'question' && answeredState(p) === 'unanswered';
+    const set = p.unanswered !== undefined;
+    if (set && expected && p.unanswered !== p.courseId) {
+      return [
+        violation(
+          'discussion-unanswered-matches',
+          discussionKey(p),
+          `unanswered is ${p.unanswered}, not its courseId`,
+        ),
+      ];
+    }
+    if (set === expected) {
+      return [];
+    }
+    return [
+      violation(
+        'discussion-unanswered-matches',
+        discussionKey(p),
+        p.kind === 'reply'
+          ? 'a reply is marked unanswered'
+          : set
+            ? 'is marked unanswered, but is not unanswered'
+            : 'is unanswered, but is not marked',
+      ),
+    ];
+  });
+
+// 42. A vote is for a post that exists, by someone other than its author,
+// with the lesson and thread the post has.
+export const checkDiscussionVotesValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const posts = new Map(
+    snapshot.discussionPosts.map((p) => [`${p.courseId}/${p.postId}`, p]),
+  );
+  return snapshot.discussionVotes.flatMap((v) => {
+    const post = posts.get(`${v.courseId}/${v.postId}`);
+    const problem =
+      post === undefined
+        ? 'its post does not exist'
+        : post.lessonId !== v.lessonId || post.threadId !== v.threadId
+          ? "its lessonId or threadId differs from its post's"
+          : post.authorId === v.userId
+            ? "the voter is the post's author"
+            : undefined;
+    return problem
+      ? [
+          violation(
+            'discussion-votes-valid',
+            {
+              courseId: v.courseId,
+              userId: v.userId,
+              postId: v.postId,
+            },
+            problem,
+          ),
+        ]
+      : [];
+  });
+};
+
+// 43. `reported` is set exactly while reportedBy is non-empty.
+export const checkDiscussionReportsValid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.discussionPosts.flatMap((p) => {
+    const reporters = (p.reportedBy ?? []).length > 0;
+    if (reporters && p.reported !== undefined && p.reported !== p.courseId) {
+      return [
+        violation(
+          'discussion-reports-valid',
+          discussionKey(p),
+          `reported is ${p.reported}, not its courseId`,
+        ),
+      ];
+    }
+    if (reporters === (p.reported !== undefined)) {
+      return [];
+    }
+    return [
+      violation(
+        'discussion-reports-valid',
+        discussionKey(p),
+        reporters
+          ? 'has reporters but is not marked reported'
+          : 'is marked reported without reporters',
+      ),
+    ];
+  });
+
 const present = (value: unknown) => value !== undefined && value !== null;
 
-// 37. A review is well formed: a rating of 1 to 5, a known status, a version
+// 44. A review is well formed: a rating of 1 to 5, a known status, a version
 // of at least 1, text and response within their limits, a reviewer name, the
 // response's four attributes all set or all absent, and the removal's three
 // all set exactly when it is removed.
@@ -2065,7 +2424,7 @@ export const checkReviewShape = (
     );
   });
 
-// 38. A review's student has an enrolment in its course, in any status
+// 45. A review's student has an enrolment in its course, in any status
 // (dropping keeps the record, and a review outlives it), and the course
 // exists (an archived course still does).
 export const checkReviewHasEnrolment = (
@@ -2100,7 +2459,7 @@ export const checkReviewHasEnrolment = (
   });
 };
 
-// 39. A course's rating tally counts its visible reviews: each stars<n> is
+// 46. A course's rating tally counts its visible reviews: each stars<n> is
 // the number of visible reviews rated n, a missing record meaning none of
 // each, and every tally belongs to an existing course. reviewWrites changes
 // the review and the tally in one transaction.
@@ -2180,6 +2539,14 @@ const CHECKS = [
   checkCourseCategoryExists,
   checkCategoryClaimsConsistent,
   checkCourseCatalogueShape,
+  checkDiscussionPostShape,
+  checkDiscussionThreadLinks,
+  checkDiscussionCountsMatch,
+  checkDiscussionAcceptedValid,
+  checkDiscussionUnansweredMatches,
+  checkDiscussionVotesValid,
+  checkDiscussionReportsValid,
+
   checkReviewShape,
   checkReviewHasEnrolment,
   checkCourseRatingMatchesReviews,
@@ -2224,6 +2591,9 @@ export const loadTableSnapshot = async (
     announcements,
     categories,
     categoryClaims,
+    discussionPosts,
+    discussionVotes,
+
     reviews,
     courseRatings,
   ] = await Promise.all([
@@ -2253,6 +2623,9 @@ export const loadTableSnapshot = async (
     entities.announcement.scan.go(all),
     entities.category.scan.go(all),
     entities.categoryClaim.scan.go(all),
+    entities.discussionPost.scan.go(all),
+    entities.discussionVote.scan.go(all),
+
     entities.review.scan.go(all),
     entities.courseRating.scan.go(all),
   ]);
@@ -2283,6 +2656,9 @@ export const loadTableSnapshot = async (
     announcements: announcements.data,
     categories: categories.data,
     categoryClaims: categoryClaims.data,
+    discussionPosts: discussionPosts.data,
+    discussionVotes: discussionVotes.data,
+
     reviews: reviews.data,
     courseRatings: courseRatings.data,
   };
