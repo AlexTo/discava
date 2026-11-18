@@ -137,6 +137,8 @@ const withLessonTitles = async (
   );
   return posts.map((post) => ({
     ...toPost(post, userId),
+    moduleId: post.moduleId,
+    lessonId: post.lessonId,
     lessonTitle: titles.get(post.lessonId) ?? '',
   }));
 };

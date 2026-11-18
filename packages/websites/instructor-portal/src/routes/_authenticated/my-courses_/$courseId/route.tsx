@@ -154,6 +154,13 @@ function RouteComponent() {
             >
               Reviews
             </Link>
+            <Link
+              to="/my-courses/$courseId/questions"
+              params={{ courseId: course.courseId }}
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Questions
+            </Link>
           </div>
           <div className="mt-4 border-t pt-4">
             <CourseCertificatesSwitch

@@ -236,6 +236,12 @@ describe('unanswered and reported', () => {
       ['q2', 'Title of l2'],
       ['q3', 'Title of l1'],
     ]);
+    // The rows carry their lesson's ids for the moderation calls.
+    expect(page.items.map((p) => [p.moduleId, p.lessonId])).toEqual([
+      ['m1', 'l1'],
+      ['m2', 'l2'],
+      ['m1', 'l1'],
+    ]);
     expect(page.cursor).toBe('next');
     // One get per distinct lesson.
     expect(lessonGet).toHaveBeenCalledTimes(2);
