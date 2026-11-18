@@ -62,6 +62,10 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import {
+  listActiveCategories,
+  updateCourseCatalogue,
+} from './procedures/course-catalogue.js';
+import {
   createCourseImageUploadUrl,
   updateCourseImage,
 } from './procedures/course-image.js';
@@ -109,6 +113,10 @@ export const appRouter = router({
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
+    updateCatalogue: updateCourseCatalogue,
+  }),
+  category: router({
+    listActive: listActiveCategories,
   }),
   module: router({
     create: createModule,

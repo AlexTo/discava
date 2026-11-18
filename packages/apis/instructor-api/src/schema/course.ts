@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { LANGUAGES, LEVELS } from '@discava/core-table';
 import { z } from 'zod';
 import { ContentItemSchema } from './content-item.js';
 import { LessonSchema } from './lesson.js';
@@ -23,6 +24,11 @@ export const CourseSchema = z.object({
   status: CourseStatusSchema,
   publishedAt: z.string().optional(),
   imageKey: z.string().optional(),
+  categoryId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  level: z.enum(LEVELS).optional(),
+  language: z.enum(LANGUAGES).optional(),
+  durationHours: z.number().optional(),
   certificatesEnabled: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -131,6 +137,11 @@ export type IViewCourseInput = z.output<typeof ViewCourseInputSchema>;
 // and archived records (with their visibility/archivedAt), which the
 // student-facing core-api course.view filters out.
 export const ViewCourseOutputSchema = CourseSchema.extend({
+  // The course's category by name, archived or not, so the editor can show
+  // one that is no longer in the active list.
+  category: z
+    .object({ id: z.string(), name: z.string(), archived: z.boolean() })
+    .optional(),
   modules: z.array(
     ModuleSchema.extend({
       lessons: z.array(
