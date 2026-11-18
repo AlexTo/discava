@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
 import Config from '../config';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
+import { NotificationBell } from './NotificationBell';
 import { SiteSearch } from './SiteSearch';
 import { UserMenu } from './UserMenu';
 
@@ -70,6 +71,7 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
                   My Learning
                 </Link>
               </Button>
+              <NotificationBell />
               <UserMenu />
             </div>
           ) : (

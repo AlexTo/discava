@@ -158,12 +158,36 @@ const WRITE_COLLECTION_PERMISSIONS = [
   'aoss:DescribeCollectionItems',
 ];
 
+// One statement per distinct permission set, listing every principal that
+// holds it. A grantee can be granted many times (the shared router Lambda gets
+// one grant per procedure), and a statement per grant repeats the same rules
+// until the policy outgrows OpenSearch Serverless's 20KB limit.
 const renderAccessPolicy = (
   collectionName: string,
   statements: readonly AccessStatement[],
-): unknown[] =>
-  statements.map(
-    ({ principalArn, indexPermissions, collectionPermissions }) => ({
+): unknown[] => {
+  const grouped = new Map<
+    string,
+    { statement: AccessStatement; principals: Set<string> }
+  >();
+  for (const statement of statements) {
+    const key = JSON.stringify([
+      statement.indexPermissions,
+      statement.collectionPermissions,
+    ]);
+    const group = grouped.get(key);
+    if (group) group.principals.add(statement.principalArn);
+    else
+      grouped.set(key, {
+        statement,
+        principals: new Set([statement.principalArn]),
+      });
+  }
+  return [...grouped.values()].map(
+    ({
+      statement: { indexPermissions, collectionPermissions },
+      principals,
+    }) => ({
       Rules: [
         {
           ResourceType: 'index',
@@ -176,9 +200,10 @@ const renderAccessPolicy = (
           Permission: collectionPermissions,
         },
       ],
-      Principal: [principalArn],
+      Principal: [...principals],
     }),
   );
+};
 
 // OpenSearch Serverless caps security/access policy and collection group
 // names at 32 characters; the longest suffix this construct appends to the

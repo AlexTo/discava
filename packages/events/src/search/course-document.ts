@@ -12,6 +12,11 @@ export interface CourseSource {
   imageKey?: unknown;
   publishedAt?: unknown;
   updatedAt?: unknown;
+  categoryId?: unknown;
+  tags?: unknown;
+  level?: unknown;
+  language?: unknown;
+  durationHours?: unknown;
 }
 
 /**
@@ -27,4 +32,9 @@ export const toCourseDocument = (course: CourseSource): ICourseDocument =>
     status: 'published',
     publishedAt: course.publishedAt ?? course.updatedAt,
     updatedAt: course.updatedAt,
+    categoryId: course.categoryId,
+    tags: course.tags,
+    level: course.level,
+    language: course.language,
+    durationHours: course.durationHours,
   });
