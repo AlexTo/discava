@@ -19,6 +19,7 @@ import {
 } from '../lib/catalogue-filters';
 import type { DisplayCourse } from '../lib/course-display';
 import { CourseThumbnail } from './course-thumbnail';
+import { RatingSummary } from './rating-summary';
 
 /**
  * A course in a grid of courses: its thumbnail, category, duration, title,
@@ -43,6 +44,10 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
           )}
         </div>
         <CardTitle className="mt-2">{course.title}</CardTitle>
+        <RatingSummary
+          average={course.ratingAverage}
+          count={course.ratingCount}
+        />
         <CardDescription className="leading-6">
           {course.description}
         </CardDescription>

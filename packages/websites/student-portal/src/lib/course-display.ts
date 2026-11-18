@@ -43,6 +43,9 @@ export interface DisplayCourse {
   surface: string;
   // Its display image (#76); the icon and surface stand in until it has one.
   imageKey?: string;
+  // Its ratings, from the catalogue; absent where the source has none.
+  ratingAverage?: number;
+  ratingCount?: number;
 }
 
 export function toDisplayCourse(course: {
@@ -54,6 +57,8 @@ export function toDisplayCourse(course: {
   level?: string;
   language?: string;
   durationHours?: number;
+  ratingAverage?: number;
+  ratingCount?: number;
 }): DisplayCourse {
   const seed = hashString(course.courseId);
   return {
@@ -67,5 +72,7 @@ export function toDisplayCourse(course: {
     icon: pick(ICONS, seed, 3),
     surface: pick(SURFACES, seed, 4),
     imageKey: course.imageKey,
+    ratingAverage: course.ratingAverage,
+    ratingCount: course.ratingCount,
   };
 }

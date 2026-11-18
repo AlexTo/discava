@@ -43,7 +43,17 @@ const renderPreview = (
 ) =>
   renderWithCoreApi(<CoursePage courseId="course-1" />, {
     signedIn,
-    handlers: { 'course.publicView': () => course, ...handlers },
+    handlers: {
+      'course.publicView': () => course,
+      // The page's Reviews section reads these; these tests are not about it.
+      'review.summary': () => ({
+        count: 0,
+        stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      }),
+      'review.list': () => ({ items: [], cursor: null }),
+      'review.mine': () => null,
+      ...handlers,
+    },
   });
 
 const enrolButton = () => screen.findByRole('button', { name: 'Enrol now' });
@@ -60,7 +70,12 @@ describe('EnrolmentActions', () => {
     expect(
       within(dialog).getByRole('link', { name: 'Continue to sign in' }),
     ).toHaveAttribute('href', `/signin?redirect=${encodeURIComponent('/')}`);
-    expect(calls.map(({ path }) => path)).toEqual(['course.publicView']);
+    // The page's public review calls aside, nothing else is called.
+    expect(
+      calls
+        .map(({ path }) => path)
+        .filter((path) => !path.startsWith('review.')),
+    ).toEqual(['course.publicView']);
   });
 
   it('enrols a signed-in student who is not enrolled yet', async () => {
