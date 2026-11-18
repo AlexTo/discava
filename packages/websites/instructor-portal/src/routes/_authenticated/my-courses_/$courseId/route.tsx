@@ -12,7 +12,7 @@ import { Card } from '@discava/common-shadcn/components/ui/card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { BookOpen, CalendarDays, Info, Megaphone } from 'lucide-react';
+import { BookOpen, CalendarDays, Info, Megaphone, Tags } from 'lucide-react';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import { Alert } from '../../../../components/alert';
 import {
@@ -23,6 +23,7 @@ import { Spinner } from '../../../../components/spinner';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
+import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
 import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
@@ -153,6 +154,32 @@ function RouteComponent() {
               certificatesEnabled={course.certificatesEnabled}
             />
           </div>
+        </Card>
+      </section>
+
+      <section aria-labelledby="catalogue-heading" className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Tags className="size-5 text-primary" />
+            <h2 id="catalogue-heading" className="text-xl font-semibold">
+              Catalogue details
+            </h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How students find this course when they browse and filter the
+            catalogue.
+          </p>
+        </div>
+        <Card className="p-5 sm:p-6">
+          <CourseCatalogueForm
+            courseId={course.courseId}
+            category={course.category}
+            tags={course.tags}
+            level={course.level}
+            language={course.language}
+            durationHours={course.durationHours}
+            readOnly={readOnly}
+          />
         </Card>
       </section>
 
