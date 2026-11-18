@@ -10,6 +10,11 @@ import {
   listCategories,
   renameCategory,
 } from './procedures/category.js';
+import {
+  listAdminReviews,
+  listReviewCourses,
+  removeReview,
+} from './procedures/review.js';
 
 export const router = t.router;
 
@@ -19,6 +24,11 @@ export const appRouter = router({
     create: createCategory,
     rename: renameCategory,
     archive: archiveCategory,
+  }),
+  review: router({
+    courses: listReviewCourses,
+    list: listAdminReviews,
+    remove: removeReview,
   }),
 });
 

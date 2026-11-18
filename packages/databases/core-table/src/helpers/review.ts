@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { REVIEW_RESPONSE_MAX, REVIEW_TEXT_MAX } from '../entities/review.js';
+import {
+  REVIEW_REMOVED_REASON_MAX,
+  REVIEW_RESPONSE_MAX,
+  REVIEW_TEXT_MAX,
+} from '../entities/review.js';
 import type { createCoreTableService } from '../service.js';
 import { starField } from './review-rating.js';
 
@@ -75,6 +79,17 @@ export interface ReviewDelete extends ReviewWriteBase {
   existing: { version: number; rating: number };
 }
 
+/** An admin's removal of a review; the review stays, marked removed. */
+export interface ReviewRemove extends ReviewWriteBase {
+  action: 'remove';
+  /** The review as read. */
+  existing: { version: number; rating: number };
+  /** The admin's `sub`. */
+  removedBy: string;
+  /** Why; trimmed, 1 to REVIEW_REMOVED_REASON_MAX characters. */
+  reason: string;
+}
+
 /** An instructor's answer to a review; replaces any earlier answer. */
 export interface ReviewRespond extends ReviewWriteBase {
   action: 'respond';
@@ -94,6 +109,7 @@ export type ReviewWrite =
   | ReviewPost
   | ReviewEdit
   | ReviewDelete
+  | ReviewRemove
   | ReviewRespond
   | ReviewDeleteResponse;
 
@@ -105,6 +121,20 @@ export const responseText = (text: string): string => {
   }
   if (trimmed.length > REVIEW_RESPONSE_MAX) {
     throw new RangeError(`response is over ${REVIEW_RESPONSE_MAX} characters`);
+  }
+  return trimmed;
+};
+
+/** A removal reason as stored: trimmed, 1 to REVIEW_REMOVED_REASON_MAX characters. */
+export const removalReason = (reason: string): string => {
+  const trimmed = reason.trim();
+  if (trimmed === '') {
+    throw new RangeError('removal reason is empty');
+  }
+  if (trimmed.length > REVIEW_REMOVED_REASON_MAX) {
+    throw new RangeError(
+      `removal reason is over ${REVIEW_REMOVED_REASON_MAX} characters`,
+    );
   }
   return trimmed;
 };
@@ -122,9 +152,9 @@ export const reviewText = (text: string | undefined): string | undefined => {
 };
 
 /**
- * The checks and writes of one post, edit or delete. The items are in a fixed
+ * The checks and writes of one post, edit, delete or removal. The items are in a fixed
  * order, which classifyReviewCancellation reads: a post's are the review,
- * the enrolment, the course and the tally; an edit's and a delete's are the
+ * the enrolment, the course and the tally; an edit's, a delete's and a removal's are the
  * review, then the tally when it changes. A failed condition cancels the
  * whole transaction; the caller reads again and decides.
  */
@@ -210,6 +240,27 @@ export const reviewWrites = (
     const field = starField(existing.rating);
     return [
       review.delete(key).where(unchanged).commit(),
+      courseRating
+        .update({ courseId })
+        .add({ [field]: -1 })
+        .where((attr, op) => op.gte(attr[field], 1))
+        .commit(),
+    ];
+  }
+
+  if (write.action === 'remove') {
+    const field = starField(existing.rating);
+    return [
+      review
+        .patch(key)
+        .set({
+          status: 'removed',
+          removedAt: at,
+          removedBy: write.removedBy,
+          removedReason: removalReason(write.reason),
+        })
+        .where(unchanged)
+        .commit(),
       courseRating
         .update({ courseId })
         .add({ [field]: -1 })

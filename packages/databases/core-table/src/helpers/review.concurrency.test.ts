@@ -485,6 +485,114 @@ describe('concurrent review writes', () => {
     expect(violations(table)).toEqual([]);
   });
 
+  describe('admin removal', () => {
+    const removal = (version = 1, rating = 4): ReviewWrite => ({
+      action: 'remove',
+      courseId: 'c1',
+      userId: 'a',
+      at: AT,
+      existing: { version, rating },
+      removedBy: 'admin-1',
+      reason: 'Abusive language',
+    });
+    const edit: ReviewWrite = {
+      action: 'edit',
+      courseId: 'c1',
+      userId: 'a',
+      at: AT,
+      rating: 2,
+      existing: { version: 1, rating: 4 },
+    };
+
+    it('marks the review removed and takes it out of the tally', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+
+      expect(succeeds(table, removal())).toBe(true);
+
+      expect(review(table, 'a')).toMatchObject({
+        status: 'removed',
+        removedAt: AT,
+        removedBy: 'admin-1',
+        removedReason: 'Abusive language',
+        rating: 4,
+      });
+      expect(tally(table)).toMatchObject({ stars4: 0 });
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('lets exactly one of an edit and a removal from one version succeed', () => {
+      for (const order of [0, 1]) {
+        const table = newTable(['a']);
+        run(table, post('a', 4));
+
+        const writes = order === 0 ? [edit, removal()] : [removal(), edit];
+        const results = writes.map((w) => succeeds(table, w));
+
+        expect(results.filter(Boolean)).toHaveLength(1);
+        expect(violations(table)).toEqual([]);
+      }
+    });
+
+    it('removes the edited review, and its new rating, when retried after a lost race', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+      run(table, edit);
+
+      expect(succeeds(table, removal())).toBe(false);
+      expect(succeeds(table, removal(2, 2))).toBe(true);
+
+      expect(review(table, 'a')).toMatchObject({
+        status: 'removed',
+        rating: 2,
+        version: 2,
+      });
+      expect(tally(table)).toMatchObject({ stars4: 0, stars2: 0 });
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('cancels a post by the same student afterwards', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+      run(table, removal());
+
+      expect(succeeds(table, post('a', 5))).toBe(false);
+      expect(review(table, 'a')).toMatchObject({ status: 'removed' });
+      expect(tally(table)?.stars5).toBeUndefined();
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('decrements once for a double removal', () => {
+      const table = newTable(['a', 'b']);
+      run(table, post('a', 4));
+      run(table, post('b', 4));
+
+      expect(succeeds(table, removal())).toBe(true);
+      expect(succeeds(table, removal())).toBe(false);
+
+      expect(tally(table)).toMatchObject({ stars4: 1 });
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('refuses a student edit or delete of a removed review', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+      run(table, removal());
+
+      expect(succeeds(table, edit)).toBe(false);
+      expect(
+        succeeds(table, {
+          action: 'delete',
+          courseId: 'c1',
+          userId: 'a',
+          at: AT,
+          existing: { version: 1, rating: 4 },
+        }),
+      ).toBe(false);
+      expect(review(table, 'a')).toMatchObject({ status: 'removed' });
+    });
+  });
+
   describe('instructor responses', () => {
     const respond = (text = 'Thank you'): ReviewWrite => ({
       action: 'respond',

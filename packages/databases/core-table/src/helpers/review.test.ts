@@ -265,6 +265,48 @@ describe('a delete', () => {
   });
 });
 
+describe('a removal', () => {
+  const removal: ReviewWrite = {
+    ...base,
+    action: 'remove',
+    existing: { version: 2, rating: 4 },
+    removedBy: 'admin-1',
+    reason: '  Abusive language  ',
+  };
+
+  it('marks the review removed under the version it read, and takes one off its counter', () => {
+    const [review, counter, ...rest] = itemsFor(removal);
+
+    expect(rest).toEqual([]);
+    expect(updateOf(review!)).toContain('status = removed');
+    expect(updateOf(review!)).toContain(`removedAt = ${AT}`);
+    expect(updateOf(review!)).toContain('removedBy = admin-1');
+    expect(updateOf(review!)).toContain('removedReason = Abusive language');
+    expect(updateOf(review!)).not.toContain('version =');
+    expect(conditionOf(review!)).toContain('version = 2');
+    expect(conditionOf(review!)).toContain('status = visible');
+    expect(updateOf(counter!)).toMatch(/ADD .*stars4 -1/);
+    expect(conditionOf(counter!)).toContain('stars4 >= 1');
+  });
+
+  it('refuses an empty or over-long reason', () => {
+    expect(() => itemsFor({ ...removal, reason: '  ' } as ReviewWrite)).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      itemsFor({ ...removal, reason: 'x'.repeat(201) } as ReviewWrite),
+    ).toThrow(RangeError);
+    expect(() =>
+      itemsFor({ ...removal, reason: 'x'.repeat(200) } as ReviewWrite),
+    ).not.toThrow();
+  });
+
+  it('writes no two items for one key', () => {
+    const keys = keysOf(itemsFor(removal));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
 const respond: ReviewWrite = {
   ...base,
   action: 'respond',
@@ -367,7 +409,7 @@ describe('classifyReviewCancellation', () => {
     expect(classifyReviewCancellation('post', reasons)).toBe(expected);
   });
 
-  it.each(['edit', 'delete'] as const)(
+  it.each(['edit', 'delete', 'remove'] as const)(
     'an %s on a changed review, or one with no count to move, is stale',
     (action) => {
       expect(classifyReviewCancellation(action, [failed, none])).toBe('stale');
