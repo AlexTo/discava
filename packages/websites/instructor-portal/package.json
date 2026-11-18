@@ -30,6 +30,7 @@
     "react-oidc-context": "catalog:",
     "recharts": "catalog:",
     "tailwindcss": "catalog:",
+    "uuid": "catalog:",
     "zod": "catalog:",
     "@discava/common-web-utils": "workspace:*"
   },
