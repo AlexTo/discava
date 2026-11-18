@@ -46,7 +46,7 @@ describe('planCi', () => {
       action: 'send-back',
       attempt: 1,
       label: 'ci-fix-1',
-      description: 'CI failed (fix attempt 1 of 3): Checks (test), E2E tests',
+      description: 'CI failed (fix attempt 1 of 5): Checks (test), E2E tests',
     });
   });
 
@@ -71,7 +71,7 @@ describe('planCi', () => {
 
   it('says to see the run when no failing job could be named', () => {
     expect(planCi(run(), pr(), [])).toMatchObject({
-      description: 'CI failed (fix attempt 1 of 3): see the run',
+      description: 'CI failed (fix attempt 1 of 5): see the run',
     });
   });
 
