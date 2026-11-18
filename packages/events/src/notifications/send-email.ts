@@ -105,6 +105,7 @@ export const sendNotificationEmail = async (
       link: notification.link,
       portalUrl: config.portalUrls[notification.link.portal],
       unsubscribeUrl: `${trim(config.coreApiUrl)}/unsubscribe/${token}`,
+      unsubscribePageUrl: `${trim(config.portalUrls.student)}/unsubscribe?token=${encodeURIComponent(token)}`,
       settingsUrl: `${trim(config.portalUrls.student)}/settings/notifications`,
       typeName: entry.name,
     }),

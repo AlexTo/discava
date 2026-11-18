@@ -51,7 +51,7 @@ Deployed: SES v2 `SendEmail` with `Content.Simple` (`Subject`, `Body.Text`, `Bod
 
 ## Email content (`events/src/notifications/email-template.ts`)
 
-- Subject: the notification's title. Text and HTML bodies: title, body, a button and plain link to `<portal URL><link.path>`, a line "You get this because you have <name> emails on. Stop these emails: <unsubscribe URL>", and a link to settings.
+- Subject: the notification's title. Text and HTML bodies: title, body, a button and plain link to `<portal URL><link.path>`, a line "You get this because you have <name> emails on. Stop these emails: <student portal URL>/unsubscribe?token=<token>" (the portal page, since a `GET` on the API shows JSON), and a link to settings.
 - All user-supplied text is HTML-escaped in the HTML part; the text part is verbatim. Newlines in the title are removed (header injection).
 - Headers: `List-Unsubscribe: <https://…/unsubscribe/<token>>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
 - Portal URLs and the API URL come from environment variables the stacks set (R-8); locally from `local-dev` (student 4201, instructor 4200, admin 4202, core-api 2022).

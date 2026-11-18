@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { PORTALS } from '../helpers/portals.js';
+import { PORTALS, SERVICES } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { newUser, signIn } from '../helpers/users.js';
+import { unsubscribePageUrl } from '../helpers/unsubscribe-link.js';
+import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
 // Which notification emails someone gets is set on a settings page in each
 // portal, reached from the user menu; a switch saves as it is flipped.
@@ -72,4 +73,50 @@ test('an unsubscribe link that is not valid offers nothing to press', async ({
     page.getByRole('button', { name: 'Stop these emails' }),
   ).toHaveCount(0);
   await screenshot(page, 'unsubscribe link that is not valid');
+});
+
+// The link in an email opens the page without signing in; only its button
+// switches the emails off, and the page can switch them back on.
+test('an unsubscribe link stops a type of email only when the button is pressed', async ({
+  page,
+}) => {
+  const link = unsubscribePageUrl(
+    uniqueName('e2e-unsubscribe').replace(/ /g, '-'),
+    'assignment.returned',
+  );
+
+  await page.goto(link);
+  await expect(
+    page.getByRole('heading', { name: 'Stop Assignment returned emails?' }),
+  ).toBeVisible();
+  await screenshot(page, 'unsubscribe link that is valid');
+
+  await page.getByRole('button', { name: 'Stop these emails' }).click();
+  await expect(
+    page.getByText("You won't get Assignment returned emails any more."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Notification settings' }),
+  ).toBeVisible();
+  await screenshot(page, 'emails stopped');
+
+  await page.getByRole('button', { name: 'Turn them back on' }).click();
+  await expect(
+    page.getByText('Assignment returned emails are back on.'),
+  ).toBeVisible();
+  await screenshot(page, 'emails turned back on');
+});
+
+test('an unsubscribe link says so when the API cannot be reached', async ({
+  page,
+}) => {
+  await page.route(`${SERVICES.coreApi}unsubscribe/**`, (route) =>
+    route.fulfill({ status: 500, body: '{}' }),
+  );
+  await page.goto(
+    unsubscribePageUrl('e2e-unsubscribe-error', 'assignment.returned'),
+  );
+
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await screenshot(page, 'unsubscribe link with an error and Try again');
 });
