@@ -52,6 +52,21 @@ describe('featuresFor', () => {
     ]);
   });
 
+  it('routes a course rating insert or modify to search indexing only', () => {
+    for (const eventName of ['INSERT', 'MODIFY']) {
+      expect(
+        featuresFor(record(eventName, 'NewImage', 'courseRating')),
+      ).toEqual(['search-indexing']);
+    }
+  });
+
+  it('routes a review to no feature: only the tally it maintains is indexed', () => {
+    for (const eventName of ['INSERT', 'MODIFY']) {
+      expect(featuresFor(record(eventName, 'NewImage', 'review'))).toEqual([]);
+    }
+    expect(featuresFor(record('REMOVE', 'OldImage', 'review'))).toEqual([]);
+  });
+
   it('sends a new item completion to progress and to analytics', () => {
     expect(featuresFor(record('INSERT', 'NewImage', 'itemCompletion'))).toEqual(
       ['progress-recalculation', 'analytics-update'],

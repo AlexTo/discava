@@ -154,6 +154,10 @@ export const publicSearchCourses = publicSearchProcedure
           ...(doc.durationHours !== undefined && {
             durationHours: doc.durationHours,
           }),
+          ...(doc.ratingAverage !== undefined && {
+            ratingAverage: doc.ratingAverage,
+          }),
+          ratingCount: doc.ratingCount ?? 0,
         };
       }),
       cursor: from + hits.length < total ? from + hits.length : null,
