@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
+import { lessonHasDiscussion } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -552,6 +553,16 @@ export const deleteLessonPermanently = courseProcedure
         code: 'PRECONDITION_FAILED',
         message:
           'Students have activity in this lesson, so it can stay archived but cannot be deleted permanently',
+      });
+    }
+
+    // Questions are student data too. None can be asked once the lesson is
+    // archived, so one read here is enough.
+    if (await lessonHasDiscussion(coreTable, key)) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'This lesson has questions, so it can stay archived but cannot be deleted permanently',
       });
     }
 
