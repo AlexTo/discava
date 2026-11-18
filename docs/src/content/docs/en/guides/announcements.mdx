@@ -1,0 +1,28 @@
+---
+title: Announcements
+description: Posting, editing and deleting announcements to a course's students, who can read them and who gets notified.
+sidebar:
+  order: 2
+---
+
+An announcement is a short message from an instructor to the students enrolled in a course. It has a title (up to 120 characters) and formatted text.
+
+## For instructors
+
+On a course's page in the instructor portal, the **Announcements** section, after the course content, lets you:
+
+- **Post** an announcement with a title and formatted text. Only a published course can take a new one.
+- **Edit** the title or text. Students see the new text with an "edited" mark.
+- **Delete** an announcement. It disappears from the course home.
+
+Posting notifies the students enrolled in the course, once each, through the bell and, by their preferences, email. Editing sends nothing. Deleting doesn't take back the notification students already received. Posting the same announcement twice, for example by double clicking, still posts it once.
+
+In an archived course you can still edit and delete announcements, but not post new ones.
+
+## Who can read them
+
+Students enrolled in the course read announcements in the course home, newest first, including after the course is archived. A student who dropped the course, a student of another course and visitors can't. The instructors teaching the course read them in the instructor portal.
+
+## For developers
+
+Announcements add no delivery of their own: posting writes the announcement and a request to notify the course's students in one transaction, through the notifications producer contract (`notifyCourseStudents`, the type `announcement.posted`), which the notification fan-out then delivers. See the notifications producer documentation for how that works.
