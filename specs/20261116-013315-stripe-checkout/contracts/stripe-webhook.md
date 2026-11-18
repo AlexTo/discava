@@ -33,3 +33,7 @@ The body of every response is empty or `{ "received": true }`. Nothing in a resp
 ## Tests
 
 `stripe-webhook.test.ts`, with signed fixtures: every row above; a replay of the same event twice and twice at once yields one fulfilment (the order helper's fake enforces the conditions); `expired` after `completed` changes nothing; a bad signature, a missing header and a body altered after signing are 400 with no writes; an unmatched order and an amount mismatch are 200 with an error logged and no writes; a table error is 500 and the retry succeeds; the automatic refund is requested once with the idempotency key and the order ends `refunded` with the right reason. `stripe-webhook-handler.test.ts`: base64 bodies, header case, the proxy event shape.
+
+## When payments are not connected
+
+The signing secret comes from the secrets service, written by an administrator's save (research R-14). With nothing connected there is no registration at Stripe, so no message arrives; if one still does (a registration removed late, a replayed old message), it fails signature verification and is a 400 like any bad signature. After a switch to another account, a late message signed for the old registration is rejected the same way (spec edge case); it is the cost of the open-checkout rule, which keeps that window to deliveries Stripe retries after a payment that completed in the last hour. The handler does not read the connection record: the signature is the only gate, as before.

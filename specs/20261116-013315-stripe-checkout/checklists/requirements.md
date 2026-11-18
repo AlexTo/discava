@@ -32,4 +32,5 @@
 ## Notes
 
 - FR-019 names `core-table` and invariants because the constitution requires it; it is a repository rule, not a design choice. FR-017 and FR-018 name the platform's secrets service and a local stand-in for the same reason (constitution I and III).
+- FR-023 to FR-030 (2026-11-18) name the secrets service, the admin portal and Stripe's registration of a confirmation address because the amendment is about exactly those; they describe behaviour, not code.
 - The payment provider (Stripe) is named in Assumptions because the issue names it; the requirements describe behaviour.

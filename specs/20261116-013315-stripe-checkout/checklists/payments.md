@@ -40,6 +40,16 @@
 - [ ] CHK019 Is the amount the payer is charged defined as coming only from the course, never from the request? [Clarity, Spec FR-005]
 - [ ] CHK020 Are the hardening and isolation requirements for the public endpoint stated without naming a fixed design? [Clarity, Spec FR-021]
 
+## Administrator-Managed Connection (added 2026-11-18)
+
+- [ ] CHK029 Is it defined that the key and signing secret are never readable after saving, by whom, and what the page may show instead? [Clarity, Spec FR-023, SC-009]
+- [ ] CHK030 Is a failed or concurrent save defined to leave either the old or the new connection fully working, with no mixed state? [Completeness, Spec FR-025, Edge Cases]
+- [ ] CHK031 Are rotation and switching to a different account distinguished, with the rule for open checkouts and for orders paid under an earlier account stated? [Clarity, Spec FR-026, FR-028]
+- [ ] CHK032 Is the behaviour for students, instructors and existing prices defined while nothing is connected or a change is in progress? [Coverage, Spec FR-027]
+- [ ] CHK033 Is it stated that only one administrator-only function may write credentials and that every change is recorded without the values? [Completeness, Spec FR-029]
+- [ ] CHK034 Is the effect of saving a test-mode key on a stage with real students stated as a visible choice rather than silently allowed? [Risk, Spec Edge Cases, Assumptions]
+- [ ] CHK035 Does the local-development requirement keep the writing path identical to a deployed stage, with no pre-connected shortcut? [Consistency, Spec FR-030]
+
 ## Refunds and Failed Payments
 
 - [ ] CHK021 Is the difference between a full and a partial refund defined, with the effect of each on access and on the order? [Clarity, Spec FR-015, US4]

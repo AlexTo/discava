@@ -46,13 +46,13 @@
 
 **Generators**: `ts#lambda-function` generates the handler wrapper in `packages/events`; nothing generates this API Gateway shape (Constitution II, plan table).
 
-## R-6: Secrets
+## R-6: Secrets (amended 2026-11-18: written by an administrator at run time)
 
-**Decision**: Two Secrets Manager secrets in the `Data` stack: `StripeApiKey` (the restricted secret key) and `StripeWebhookSigningSecret`. CDK creates them empty; an operator sets the values once per stage (a `(human)` task, documented). KMS-encrypted per stage config. Read at runtime with the AWS SDK and cached in the Lambda for its lifetime (about 5 minutes with a refresh on a signature failure, so a rotated webhook secret is picked up). The checkout function reads only the API key; the webhook function reads both. Secret names reach functions as environment variables holding ARNs, never values.
+**Decision**: Two Secrets Manager secrets in the `Data` stack, as before: `StripeApiKey` and `StripeWebhookSigningSecret`. The deployment creates them but no operator fills them: an administrator's save does (R-14). They are KMS-encrypted per stage config. Read at runtime with the AWS SDK and cached in the Lambda for about 5 minutes; a signature failure drops the webhook secret cache and retries once, and a Stripe authentication error drops the key cache and retries once, so a rotated value is picked up at once. The checkout function reads only the API key; the webhook function reads both; only the admin-only connect function (R-14) may write either, and it also reads the API key to remove the old registration. Secret ARNs reach functions as environment variables, never values. CDK's default generated value in a new secret is never used: readers check the connection record (R-15) before they trust a secret, and a webhook verified against the generated value fails its signature.
 
-**Rationale**: Issue requirement; two secrets give least privilege. Reading at runtime (not resolving into CloudFormation or Lambda environment values) keeps values out of templates and logs.
+**Rationale**: Issue requirement and FR-017: values stay out of code, config, templates and logs. Two secrets keep the signing secret away from the checkout function: a function that could read it could forge a paid confirmation and enrol a student for free.
 
-**Alternatives**: one JSON secret (the checkout function could read the webhook secret); SSM SecureString parameters (cheaper, but the issue names Secrets Manager); `SecretValue.unsafePlainText` or env vars (values in the template or console).
+**Alternatives**: one JSON secret (the checkout function could read the signing secret); SSM SecureString parameters (cheaper, but the issue names Secrets Manager); storing the key in the table (a table read would expose it to every function with table access, including signed-in APIs); `SecretValue.unsafePlainText` or env vars (values in the template or console); an operator setting the values at deploy time (the original design, replaced because the owner wants administrators to manage Stripe without a deployment).
 
 ## R-7: The local Stripe stand-in
 
@@ -103,3 +103,55 @@
 **Decision**: `course.enrol` on a published priced course throws `PRECONDITION_FAILED` "This course must be purchased". Draft, archived or missing stays `NOT_FOUND`. `payment.checkout` on a free course throws `BAD_REQUEST` "This course is free; enrol instead"; for an already-enrolled student, `CONFLICT` "You are already enrolled in this course".
 
 **Rationale**: The portal can tell "buy instead" from "not found" by code, as `enrolErrorMessage` already does for other codes.
+
+## R-14: The administrator's connect flow
+
+**Decision**: `payment.connect({ secretKey })` on admin-api (R-19), served by a dedicated function that alone may write the two secrets. In order: (1) check the key's shape (`sk_` or `rk_` with `test_` or `live_`; a `pk_` key gets its own message) and read the mode from the prefix; (2) call Stripe `accounts.retrieve()` with it, which fails for a bad key and gives the account ID and name; (3) read the connection record (R-15) and decide: **same account** (rotation) writes only the new key and updates the record (the existing registration and signing secret stay valid, so rotation is one atomic write); **new account or first connection** takes the change lease (R-16), deletes any leftover endpoint of ours at the same URL (a crashed earlier attempt), calls `webhookEndpoints.create` with the platform's public webhook URL, the API version the SDK is pinned to, exactly `checkout.session.completed`, `checkout.session.expired` and `charge.refunded`, and metadata naming the stage, writes the returned signing secret then the key, then marks the record active and releases the lease; (4) for a switch, deletes the old endpoint with the old key (best effort: failure is logged and shown as a warning, never undoes the change). `payment.disconnect` takes the lease (same open-checkout rule), deletes the endpoint with the stored key (best effort), overwrites both secrets with a placeholder, marks the record `disconnected`. Every outcome writes a `paymentChange` row (R-16). Stripe's error text is mapped to a short message for the page ("Stripe rejected this key", "This key lacks permission to create webhook endpoints", "Couldn't register the confirmation address") and never echoes the key.
+
+**Rationale**: One pasted value (FR-024). Registering ourselves removes the dashboard step that the signing secret needed, and `webhookEndpoints.create` is the only moment Stripe reveals the signing secret. Rotation touching one secret keeps FR-026 free of ordering problems.
+
+**Alternatives**: the administrator pastes the key and the signing secret (two values, a dashboard step, and no way to check the endpoint is registered); storing the key and re-registering on every save (the signing secret changes under in-flight confirmations, breaking FR-026); Stripe's OAuth-style Connect onboarding for the platform account (not offered for an account's own keys).
+
+**Open point for implementation**: whether a *restricted* key can call `accounts.retrieve()` and `webhookEndpoints.create`. The save treats a permission error as "this key lacks permission" without guessing; T-tasks confirm against Stripe's test mode with a restricted key and document the permission list.
+
+## R-15: Connection record and the open-checkout window
+
+**Decision**: A singleton `paymentConnection` record in the core table holds the non-secret facts: `status` (`active`, `changing`, `disconnected`; absent until the first save), `mode`, `accountId`, `accountName`, `keyLast4`, `webhookEndpointId`, `webhookUrl`, `latestCheckoutExpiresAt`, `leaseUntil`, `changedBy`, `changedAt`. Starting a checkout is one transaction: a condition that the record is `active`, the order Put, and an update of `latestCheckoutExpiresAt` to the larger of itself and the new order's `expiresAt` (conditioned on the value read, retried up to 3 times on contention). The new order stores the record's `accountId`. "Any checkout open" is `now < latestCheckoutExpiresAt`. Taking the change lease for a switch or disconnect is one conditional update: `status = active`, `latestCheckoutExpiresAt <= now`, set `status = changing` and `leaseUntil = now + 2 minutes`. A `changing` record whose lease has passed may be taken over by the next save. While `changing`, checkout and `setPrice` refuse as if unconnected (FR-027).
+
+**Rationale**: "Is any checkout open" has no cheap query (orders are indexed by student, not globally, and the constitution forbids scans in a request). A running maximum answers it conservatively: the block can outlast an early payment or cancellation, which only delays a rare admin action by at most an hour, and the page says exactly when. Doing the check and the flip in one conditional write means a checkout cannot slip in between "no open checkouts" and "changing". The lease makes a crash during the multi-step switch recoverable instead of leaving payments stuck.
+
+**Alternatives**: a global index of pending orders (a new index for a rare admin action); counting open orders on the record (an expiry event can be lost, so the count can stay wrong forever); a scan of orders (forbidden, and grows); allowing a switch while checkouts are open and keeping the old signing secret too (two live signing secrets, verification against both, and a second account's refunds that the new key cannot issue).
+
+## R-16: Consistency of key and signing secret, concurrency, audit
+
+**Decision**: The pair is made consistent by sequence plus the lease, not by an atomic write across two secrets: rotation writes one secret; a switch writes the signing secret and then the key only while the record is `changing`, during which no checkout starts and (because the switch needed no open checkout) none is in flight. Two administrators saving at once: the second finds the lease taken and gets "Another change is in progress, try again in a minute". A rotation does not need the lease but is conditioned on the record's `revision` (an integer incremented by each write), so a rotation racing a switch loses cleanly. Each change appends a `paymentChange` row (kind `connected`, `replaced`, `switched`, `disconnected`, `failed`; who, when, mode, account ID and last four characters; never a value). A failed save also appends a `failed` row with the step that failed, so an operator can see attempts.
+
+**Rationale**: FR-025 and FR-029 without a second secrets-service feature. The lease window is short and only affects a rare action.
+
+**Alternatives**: one JSON secret holding both (atomic, but loses the least-privilege split of R-6); Secrets Manager version staging labels to flip both secrets together (they are two secrets, and labels are per secret).
+
+## R-17: The registered confirmation address
+
+**Decision**: The Payments stack exports the webhook API's URL (its custom domain when the stage has one). The admin-api connect function receives it as the environment variable `STRIPE_WEBHOOK_URL`, which creates a stack order of `Data`, `Payments`, `AdminApi`. The URL used is stored on the record as `webhookUrl`; `payment.status` reports `addressChanged: true` when the stored value differs from the current one (a custom domain was added later), and the page says to save the key again to re-register (a save for the same account then re-registers instead of only rotating, because the URL changed).
+
+**Rationale**: Registering the address is only correct while it is current; a deployment that changes it must not leave payments silently dead.
+
+**Alternatives**: re-register on every deploy (needs a custom resource holding the key); ignore the change (silent failure).
+
+## R-18: Local development without Secrets Manager
+
+**Decision**: Locally the "secrets service" is a git-ignored directory, `tmp/local-dev/secrets/`, holding one file per secret. `common-server-utils/stripe/secrets.ts` reads and writes it when `isLocalDev()` and Secrets Manager otherwise, behind the same functions. `reset-local-data` deletes the directory with the table (otherwise the record would say active with no key). Nothing is pre-connected: `pnpm dev` starts disconnected, and the quickstart, the e2e helper and a documented one-liner connect through admin-api with the stand-in's key `sk_test_local`. The stand-in gains accounts (`sk_test_local` is `acct_local`, `sk_test_local_2` is `acct_local_2`, any other key is a 401), and `webhookEndpoints` create, list and delete, with a signing secret per endpoint and delivery to each registered endpoint's URL (contracts/stripe-stand-in.md).
+
+`LOCAL_CHECKOUT_TTL_SECONDS` (read through `common-server-utils/local-dev`, ignored unless `LOCAL_DEV=true`) shortens a checkout's life so a contributor and the e2e switch scenario need not wait an hour for the open-checkout window to close.
+
+**Rationale**: The writing path must be the real one (FR-030), so it needs a writable local store. A file is shared by the three dev servers on one machine and needs no new Docker service.
+
+**Alternatives**: a local table item (puts a secret into the table the whole stack can read, against R-6); pre-connecting at `pnpm dev` start (a path a deployed stage does not have, so the admin flow would go untested); environment variables (cannot be written at run time).
+
+## R-19: Which API serves the Payments page
+
+**Decision**: The shared `admin-api` that the catalogue categories spec (#283) scaffolds with `ts#trpc-api` and connects to the admin portal with `connection`, as the course reviews spec (#279) also assumes; if it is not on `main` when this feature's admin phase starts, that phase runs the same generators and records what they produced, and #283 reuses the result. `payment.status` runs on the shared admin router (reads the table only). `payment.connect` and `payment.disconnect` run on one dedicated function, `PaymentsConnect`, using a dedicated-function mechanism for admin-api like core-api's `CORE_API_DEDICATED_FUNCTIONS` (the task confirms the generated admin-api offers it, and adds the same mechanism by hand if not). That function holds the only write access to both secrets.
+
+**Rationale**: The admin API is already planned and admin-only, so no extra API is created; keeping the write permission on its own function means the categories and reviews procedures, which share the router, cannot write credentials, and nothing open to students or instructors can (FR-029).
+
+**Alternatives**: an admin-group-checked procedure in core-api (puts a credential-writing permission in or beside a function every signed-in user reaches, and mixes authorisation models, the reason instructor-api exists); a second, payments-only admin API (more infrastructure for one page); letting the shared admin router write the secrets (broader than FR-029 allows).

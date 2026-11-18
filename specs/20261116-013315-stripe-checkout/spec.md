@@ -8,6 +8,8 @@
 
 **Input**: User description: "Issue #284: Stripe checkout for paid courses. Needed for a marketplace model; today enrolment is free only. Price and currency on a course (instructor sets it; free stays supported). Stripe Checkout session creation, and a webhook handler (Lambda) that creates the enrolment on successful payment; refunds revoke or flag access. A payment/order record; secrets in Secrets Manager. Local dev with Stripe test mode or CLI forwarding. Acceptance: enrolment is created exactly once per paid order (webhook retries, duplicates); unpaid users cannot access paid content, with an invariant added."
 
+**Amendment (2026-11-18)**: "For the platform, I want an admin to be able to set up the Stripe details, not something fixed during deployment." The payment provider connection is configured by an administrator in the admin portal at run time instead of being set by an operator per stage; see User Story 6 and FR-023 to FR-030.
+
 **Parent issue**: #284
 
 ## Clarifications
@@ -22,6 +24,19 @@ Resolved without asking, using the recommended defaults below (non-interactive r
 - Q: When the student returns from the payment page, does the system ask the payment provider whether it was paid, to enrol them sooner? → A: No. The only way an order becomes paid is the confirmation message (FR-008), so there is one path to test and to keep exactly-once. The return page waits and polls the enrolment (FR-013); the confirmation normally arrives within seconds.
 - Q: Can a student buy a course for someone else, or buy several courses in one payment? → A: No. One payment buys one course for the signed-in student; gifts and carts are out of scope.
 - Q: Does a student who is refunded lose their certificate? → A: No. Issued certificates stay verifiable (certificates spec #276, FR-011). Revoking them is the maintainer's call and out of scope.
+
+### Session 2026-11-18
+
+Amendment: administrators connect Stripe from the admin portal. Resolved without asking, using the recommended defaults below (non-interactive run).
+
+- Q: What does the administrator enter: every Stripe credential, or one? → A: One, the secret key. The platform registers its own confirmation address with Stripe and keeps the signing secret Stripe returns, so there is no second value to copy and no step in Stripe's dashboard (FR-024). A hosted checkout needs no publishable key.
+- Q: Where do the credentials live now that an administrator sets them? → A: Still only in the platform's secrets service (FR-017 stands). What changes is who writes them: an administrator through the admin portal, not an operator by hand. Only non-secret facts (mode, account, last four characters, who changed it and when) are kept in the table and shown.
+- Q: May an administrator read a saved key back? → A: No. The page is write-only: it shows that a key is saved, its mode (test or live), the account it belongs to, its last four characters, and who saved it and when (FR-023).
+- Q: What happens if Stripe is not connected? → A: Students cannot start a checkout, and instructors cannot give a course a price, until an administrator connects it. Courses that already have a price keep it and show it, and Buy now says payments are unavailable right now (FR-027).
+- Q: Can an administrator switch to a different Stripe account, or disconnect? → A: Yes, but only while no checkout is open. A checkout is open for at most an hour, and the page says when the last one ends. Replacing the key with another key for the same account (rotation) is allowed at any time (FR-028). A switch from a test account to a live one is the main case; orders paid under the earlier account keep their record, but later refunds in that account are not seen by the platform, so an operator ends such enrolments by hand.
+- Q: What if saving fails halfway (Stripe rejects the key, or the confirmation address cannot be registered)? → A: Nothing changes: the previous connection, if any, keeps working, and the page says what failed (FR-025, FR-026).
+- Q: Which administrators? → A: Anyone in the existing administrator group (Carol locally). There is no separate "payments administrator" role.
+- Q: Which API serves the settings page, a new administrator-only API or a procedure on the shared signed-in API? → A: Left to the plan, where it is decided as a design question. The spec only requires that the ability to write credentials is held by one administrator-only function and by none of the functions that read them (FR-029).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -116,6 +131,27 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 
 ---
 
+### User Story 6 - An administrator connects Stripe (Priority: P1)
+
+An administrator opens the Payments page of the admin portal, pastes the Stripe secret key, and saves. The platform checks the key with Stripe, registers itself to receive payment confirmations, and shows the connection as active with its mode (test or live). Later the administrator can replace the key or disconnect. Nobody has to edit deployment settings, touch a secrets console or visit Stripe's webhook settings.
+
+**Why this priority**: Nothing can be bought until Stripe is connected, and on a deployed stage this is now the only way to connect it. It is also where money safety is decided: a key must never be readable again, and a half-saved connection must never leave payments silently broken.
+
+**Independent Test**: As an administrator, save a key against the (local) stand-in and see the connection active in test mode; as a student, buy a course; replace the key and buy again; disconnect with a checkout open (refused) and again after it expires (allowed); as a non-administrator, try and fail at every step.
+
+**Acceptance Scenarios**:
+
+1. **Given** an administrator on the Payments page with nothing connected, **When** they save a valid secret key, **Then** the platform verifies it, registers its confirmation address with Stripe, stores the key and the signing secret Stripe returns, and the page shows the connection as active with the mode, the account's name, the last four characters of the key, and who saved it and when.
+2. **Given** a connected platform, **When** anyone (including an administrator) views the page, loads any page or calls any API, **Then** the key and the signing secret are never returned, logged or placed in a page.
+3. **Given** a key that Stripe rejects, or a key whose confirmation address cannot be registered, **When** the administrator saves it, **Then** it is refused with a message that says which step failed, and any earlier connection keeps working unchanged.
+4. **Given** an active connection with no open checkout, **When** the administrator saves a key for a different Stripe account, or disconnects, **Then** it takes effect, the old registration is removed from Stripe as far as it can be, and the page shows the new state.
+5. **Given** at least one checkout is open, **When** the administrator saves a key for a different account, or disconnects, **Then** it is refused and the page says when the last open checkout ends.
+6. **Given** an active connection, **When** the administrator saves a new key for the same account, **Then** payments keep working throughout, including for checkouts that are open.
+7. **Given** a user who is not an administrator, **When** they try to view or change the connection, **Then** it is refused.
+8. **Given** nothing connected, **When** a student starts a checkout, or an instructor gives a course a non-zero price, **Then** it is refused with a message that payments are not set up (to the student: unavailable right now; to the instructor: ask an administrator), and a free course is unaffected.
+
+---
+
 ### Edge Cases
 
 - The provider's confirmation arrives twice at once, or before the student's browser returns, or after a long delay: the outcome is one paid order and one enrolment, whatever the order.
@@ -131,6 +167,11 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - A refund of a payment whose order is already refunded, or whose enrolment is already ended: no change.
 - A dispute or chargeback: not handled in this feature (see Assumptions); an operator acts in the provider's dashboard.
 - A student who is enrolled for free in a course that becomes paid is never asked to pay, and the consistency check does not flag them.
+- Two administrators save at the same moment: the saves take effect one after the other, and the stored key and signing secret always belong to the same registration, never one from each.
+- The administrator saves a test-mode key on a stage that real students use: it is allowed, and the page shows "Test mode" prominently so it is not missed; students then "pay" with test cards and are enrolled. The platform does not guess a stage's intent.
+- The platform is disconnected while a course still has a price: the course keeps and shows its price, Buy now says payments are unavailable, and students who already paid keep their access.
+- A confirmation arrives signed with a signing secret from a connection that has since been replaced: it is rejected like any message that fails verification.
+- Saving fails after the key was verified but before everything was stored: nothing is left half-written, and the earlier connection, if any, still works.
 
 ## Requirements *(mandatory)*
 
@@ -152,18 +193,27 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **FR-014**: A student who has not paid MUST NOT be able to read a paid course's content. Students enrolled while the course was free MUST keep access after it gets a price.
 - **FR-015**: A full refund MUST mark the order refunded and end the student's enrolment, keeping their completions, progress and issued certificates. Buying the course again MUST restore the same enrolment with its progress. A partial refund MUST be recorded on the order without changing access. Repeated refund notices MUST have the same effect as one.
 - **FR-016**: A checkout MUST expire one hour after it is started if unpaid. A checkout that is cancelled or expires MUST leave no enrolment and no charge. A cancelled checkout stays open (the student may return to it) until it expires; an expired one MUST close its order as expired, and the student MUST be able to start a new checkout.
-- **FR-017**: All payment provider credentials and the signing secret MUST be held only in the platform's secrets service, MUST NOT appear in code, configuration, logs, runtime config files or anything sent to a browser, and MUST be readable only by the functions that need them.
-- **FR-018**: The feature MUST work end to end in local development without an AWS account and without a payment provider account: a local stand-in MUST offer a hosted payment page to pay, fail or cancel, send correctly signed confirmations (including deliberate duplicates and refunds) to the same confirmation endpoint code the deployed stage runs, and be selected by the same local-dev switch the other stand-ins use. Testing against the provider's own test mode, with its command-line forwarding, MUST be documented as an option for a deployed stage.
+- **FR-017**: All payment provider credentials and the signing secret MUST be held only in the platform's secrets service, MUST NOT appear in code, configuration (including per-stage deployment configuration), logs, runtime config files or anything sent to a browser, and MUST be readable only by the functions that need them. They are written at run time by an administrator through the admin portal (FR-023 to FR-030), never set at deployment.
+- **FR-018**: The feature MUST work end to end in local development without an AWS account and without a payment provider account: a local stand-in MUST offer a hosted payment page to pay, fail or cancel, send correctly signed confirmations (including deliberate duplicates and refunds) to the same confirmation endpoint code the deployed stage runs, and be selected by the same local-dev switch the other stand-ins use. The administrator's Payments page MUST work against the stand-in the same way as against Stripe (FR-030). Testing against the provider's own test mode MUST be documented as an option for a deployed stage: with a test-mode key saved through the Payments page, and no command-line forwarding needed because the platform registers its own confirmation address.
 - **FR-019**: Order and enrolment writes MUST go through shared `core-table` helpers that every writer calls, and invariant checks that a test can break MUST cover: at most one paid order per enrolment and one enrolment per student and course; every course has a valid price (zero, or within the stated bounds, with a supported currency); every paid order has a matching enrolment (not ended unless the order is refunded); every enrolment made by payment points to a paid or refunded order for the same student and course; no enrolment without a paid order in a course that has had a price since before the enrolment; an order's amounts and currency are valid and its status matches its recorded times.
 - **FR-020**: Orders MUST carry the list price and the amount charged separately, and fulfilment (marking an order paid and enrolling the student) MUST NOT depend on the payment provider, so that coupons (#285) can discount an order and can enrol directly for a fully discounted one, and payouts (#286) can read amounts and refunds, without reshaping the records.
 - **FR-021**: The confirmation endpoint MUST be reachable by the payment provider without signing in, MUST sit behind the platform's default hardening (WAF and throttling per stage config), and MUST NOT share a function with the signed-in APIs.
-- **FR-022**: The feature MUST NOT add gifts, carts, delayed payment methods, taxes, invoices, subscriptions or bundles, multiple currencies on one course, coupons, instructor payouts or earnings reports, dispute handling, or emailed receipts of its own (see Assumptions and Out of scope).
+- **FR-022**: The feature MUST NOT add gifts, carts, delayed payment methods, taxes, invoices, subscriptions or bundles, multiple currencies on one course, coupons, instructor payouts or earnings reports, dispute handling, or emailed receipts of its own, and no admin portal view other than the Payments settings page (see Assumptions and Out of scope).
+- **FR-023**: An administrator MUST be able to view the payment connection and to save, replace and remove it from the admin portal's Payments page. The page MUST show whether a connection exists, its mode (test or live), the account's name, the last four characters of the saved key, and who last changed it and when. It MUST NOT show, return or log the key or the signing secret at any time, including to the administrator who saved it. Only administrators MUST be able to see or change it.
+- **FR-024**: Saving MUST need only the secret key. The platform MUST verify the key with Stripe, register its own public confirmation address with Stripe for exactly the events it uses (paid, expired, refunded), and store the signing secret Stripe returns, with no step for the administrator in Stripe's dashboard. The mode MUST be read from the key, and the account from Stripe.
+- **FR-025**: A save MUST succeed or change nothing. If the key is rejected, lacks a permission the platform needs, or the registration fails, the earlier connection (if any) MUST keep working, nothing half-written MUST remain, and the message MUST say which step failed without echoing the key. The stored key and signing secret MUST always belong to the same registration, including when two administrators save at once.
+- **FR-026**: Saving a key for the same account (rotation) MUST NOT interrupt payments: checkouts and confirmations in flight when it happens MUST still complete. Confirmations verified against a connection that has since been replaced MAY be rejected.
+- **FR-027**: While nothing is connected, starting a checkout and giving a course a non-zero price MUST be refused with a clear message that payments are not set up. Free courses, free enrolment, existing prices, and the access of students who already paid MUST be unaffected.
+- **FR-028**: Saving a key for a different account, and disconnecting, MUST be refused while any checkout is open (a checkout counts as open until its one hour ends, even if it was paid or cancelled sooner, so the platform needs no list of open checkouts), and the refusal MUST say when the last open checkout ends. When allowed, the platform MUST remove its old registration from Stripe on a best-effort basis, and a failure to do so MUST NOT block or undo the change. Orders paid under an earlier connection keep their record; the order MUST record which account took the payment.
+- **FR-029**: The ability to write the key and signing secret MUST belong to one administrator-only function. The functions that start checkouts and handle confirmations MUST hold read access only, and no function open to students or instructors MUST be able to write them. Each change MUST be recorded (who, when, what kind: saved, replaced, removed), without the values.
+- **FR-030**: In local development the Payments page MUST work against the local stand-in with no payment provider account: the stand-in MUST accept a documented local key, register the confirmation address, and sign confirmations with the secret it returns. The connection MUST be made through the same page or API a deployed stage uses, and the quickstart MUST say so. Local data MUST NOT start pre-connected by a path a deployed stage lacks.
 
 ### Key Entities
 
 - **Price**: Part of a course: an amount (zero is free) and a currency. Set by the course's instructors.
-- **Order**: One checkout attempt by one student for one course. Has the student, course, title as it was, list price, amount charged, currency, status (pending, paid, expired, refunded), times, the provider's references, and any refund amount and reason. A paid order is what entitles a student to the course.
+- **Order**: One checkout attempt by one student for one course. Has the student, the account that took the payment, course, title as it was, list price, amount charged, currency, status (pending, paid, expired, refunded), times, the provider's references, and any refund amount and reason. A paid order is what entitles a student to the course.
 - **Enrolment**: Existing. Gains a link to the order that paid for it (absent for free enrolments). An ended enrolment (refund) keeps its progress.
+- **Payment connection**: One per platform. The administrator's Stripe setup: whether it is active, its mode (test or live), the account's identity and name, the last four characters of the key, the registration Stripe holds, and who changed it and when. The key and the signing secret are not part of it: they live only in the secrets service.
 - **Payment confirmation**: A message from the payment provider (paid, expired, refunded). Not stored as such: its effect is the change to an order and an enrolment, made so repeating it changes nothing.
 
 ## Success Criteria *(mandatory)*
@@ -176,10 +226,16 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **SC-004**: 100% of full refunds end the student's access, and 100% of the progress they had is back after they buy again.
 - **SC-005**: 100% of undeliverable payments (duplicates, unavailable course) are refunded automatically and explained on the order.
 - **SC-006**: A contributor can run the whole purchase, cancel, expiry and refund flows locally with no payment provider account, and the secrets service holds the only copy of every credential on a deployed stage.
+- **SC-008**: An administrator can connect Stripe from the admin portal in under two minutes with one pasted value, with no deployment, no secrets console and no Stripe dashboard step, and a student can then buy a course.
+- **SC-009**: 0 occasions on which a key or signing secret is returned by any API, shown on any page or written to any log, and 100% of failed or concurrent saves leave either the earlier connection or the new one fully working, never a mix.
+- **SC-010**: 100% of attempts to view or change the connection by anyone who is not an administrator are refused, and 100% of attempts to start a checkout or price a course while nothing is connected are refused with a message that says why.
 - **SC-007**: An instructor can set or clear a price in under a minute and every visitor sees it, or "Free", on the course page.
 
 ## Assumptions
 
+- **Connection is run-time configuration, not deployment configuration.** The stage config holds no Stripe value. The secrets service entries are created empty by the deployment and filled by the administrator's save. Functions cache what they read for a few minutes, so a new key is used within minutes, and at once if the old key is rejected (the function drops its cache and tries again).
+- **One platform account.** There is one Stripe connection per platform, not per instructor or per course. The instructor payouts spec (#286) uses the same key for Connect, and any extra permission or Connect setting it needs is checked when it ships.
+- **Test mode is allowed anywhere.** A stage's seriousness is the administrator's call, so the platform shows the mode but does not forbid test keys on a stage with real students.
 - **Money is whole numbers.** Amounts are integers in the currency's smallest unit, never floating point. The supported currencies are USD, EUR, GBP, AUD and CAD (all two-decimal), a fixed list in one place. A paid amount is at least 1.00 and at most 10,000.00 (100 to 1,000,000 smallest units): above the provider's own minimum and below an amount nobody should type by accident.
 - **Free is the zero price, and the attribute is required.** Like the certificate setting, the price is a required attribute of every course, set to zero when a course is created. Existing courses are backfilled by hand before this ships, so no code treats a missing price as free.
 - **One price, one currency, per course.** No regional pricing, no sales, no price history beyond what orders snapshot.
@@ -192,6 +248,6 @@ A student who closes the payment page, cancels, or lets it expire is not enrolle
 - **Taxes and invoices are the platform operator's business** (tax settings and receipts in the provider's dashboard). Prices are what the student pays.
 - **Disputes and chargebacks are handled by hand** in the provider's dashboard; an operator refunds, which revokes access as above.
 - **Dependencies on in-flight specs, none blocking.** Instructor dashboard (#278): paid enrolments count like any other, and revenue figures are #286's. Catalogue categories (#283): both specs add fields to what a catalogue card shows and what the search index stores; this one adds only the price and no price filter. Notifications (#281): purchase and refund notices could use the pipeline later; this feature sends none of its own. Announcements (#282): an ended enrolment loses announcements through the same enrolled-student rule.
-- **Out of scope here, left to the sibling issues.** Coupons and discount codes, their redemption counts, and enrolling directly for a fully discounted order (#285). Stripe Connect onboarding, the platform fee, instructor earnings reports, payout status and refund adjustments in earnings (#286). Also out of scope: gifts and carts, delayed payment methods (bank debits, vouchers), taxes, invoices, subscriptions, bundles, multiple currencies per course, dispute handling, emailed receipts, a purchase history page, admin portal views, and a deliberate backfill of orders.
+- **Out of scope here, left to the sibling issues.** Coupons and discount codes, their redemption counts, and enrolling directly for a fully discounted order (#285). Stripe Connect onboarding, the platform fee, instructor earnings reports, payout status and refund adjustments in earnings (#286). Also out of scope: gifts and carts, delayed payment methods (bank debits, vouchers), taxes, invoices, subscriptions, bundles, multiple currencies per course, dispute handling, emailed receipts, a purchase history page, admin portal views other than the Payments settings page (no order list, no refund button, no revenue figures), and a deliberate backfill of orders.
 - Discava has not launched: no old data or URLs to preserve, so the price attributes, routes and records are added outright.
 - Only the final implementation PR may close #284.
