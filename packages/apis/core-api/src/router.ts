@@ -48,6 +48,14 @@ import {
   submitQuizAttempt,
   viewQuiz,
 } from './procedures/quiz.js';
+import {
+  deleteReview,
+  editReview,
+  listReviews,
+  myReview,
+  postReview,
+  reviewSummary,
+} from './procedures/review.js';
 import { publicSearchCourses } from './procedures/search.js';
 
 export const router = t.router;
@@ -98,6 +106,14 @@ export const appRouter = router({
     preferences: notificationPreferences,
     setPreference: setNotificationPreferenceProcedure,
   }),
+  review: router({
+    mine: myReview,
+    post: postReview,
+    edit: editReview,
+    delete: deleteReview,
+    summary: reviewSummary,
+    list: listReviews,
+  }),
   quiz: router({
     view: viewQuiz,
     submitAttempt: submitQuizAttempt,
@@ -117,6 +133,8 @@ export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
+  'review.summary',
+  'review.list',
   'category.list',
   'category.bySlug',
   'certificate.verify',
