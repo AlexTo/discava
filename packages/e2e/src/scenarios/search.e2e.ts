@@ -227,12 +227,22 @@ test('search sorts and filters courses by their ratings', async ({ page }) => {
         ...params,
       })}`,
     );
-  const titles = () => page.locator('h3').allInnerTexts();
+  // The result cards in order, by their preview links.
+  const titles = () =>
+    page
+      .getByRole('link', { name: /^Preview / })
+      .evaluateAll((links) =>
+        links.map((link) =>
+          (link.getAttribute('aria-label') ?? '').replace(/^Preview /, ''),
+        ),
+      );
 
   await test.step('every course shows its rating or that it has none', async () => {
     await expectAfterReloads(page, async () => {
       await open();
-      await expect(page.getByText('4.5')).toBeVisible({ timeout: 2_000 });
+      await expect(page.getByText('4.5', { exact: true })).toBeVisible({
+        timeout: 2_000,
+      });
     });
     await expect(page.getByText('(2 ratings)')).toBeVisible();
     await expect(page.getByText('(1 rating)')).toBeVisible();
@@ -243,9 +253,7 @@ test('search sorts and filters courses by their ratings', async ({ page }) => {
   await test.step('Highest rated puts the best first and the unrated last', async () => {
     await open({ sort: 'rating' });
     await expect(page.getByLabel('Sort by')).toHaveValue('rating');
-    await expect
-      .poll(async () => (await titles()).map((t) => t.trim()))
-      .toEqual([best.title, poor.title, unrated.title]);
+    await expect.poll(titles).toEqual([best.title, poor.title, unrated.title]);
     await screenshot(page, 'search-sorted-by-highest-rated');
   });
 
