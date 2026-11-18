@@ -157,12 +157,32 @@ const WRITE_COLLECTION_PERMISSIONS = [
   'aoss:DescribeCollectionItems',
 ];
 
+// One statement per distinct permission set, listing every principal that
+// holds it: a statement per principal repeats the same rules for each one, and
+// the policy then outgrows OpenSearch Serverless's 20KB limit as handlers are
+// added.
 const renderAccessPolicy = (
   collectionName: string,
   statements: readonly AccessStatement[],
-): unknown[] =>
-  statements.map(
-    ({ principalArn, indexPermissions, collectionPermissions }) => ({
+): unknown[] => {
+  const grouped = new Map<
+    string,
+    { statement: AccessStatement; principals: string[] }
+  >();
+  for (const statement of statements) {
+    const key = JSON.stringify([
+      statement.indexPermissions,
+      statement.collectionPermissions,
+    ]);
+    const group = grouped.get(key);
+    if (group) group.principals.push(statement.principalArn);
+    else grouped.set(key, { statement, principals: [statement.principalArn] });
+  }
+  return [...grouped.values()].map(
+    ({
+      statement: { indexPermissions, collectionPermissions },
+      principals,
+    }) => ({
       Rules: [
         {
           ResourceType: 'index',
@@ -175,9 +195,10 @@ const renderAccessPolicy = (
           Permission: collectionPermissions,
         },
       ],
-      Principal: [principalArn],
+      Principal: principals,
     }),
   );
+};
 
 // OpenSearch Serverless caps security/access policy and collection group
 // names at 32 characters; the longest suffix this construct appends to the

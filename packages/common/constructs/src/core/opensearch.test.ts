@@ -6,6 +6,7 @@
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Code } from 'aws-cdk-lib/aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { OpenSearchCollection } from './opensearch.js';
@@ -45,6 +46,35 @@ describe('OpenSearchCollection', { timeout: 30_000 }, () => {
         SyncedAt: Match.stringLikeRegexp('^\\d{4}-\\d{2}-\\d{2}T'),
       },
     );
+  });
+
+  it('lists every principal with the same permissions in one access policy statement', () => {
+    // A statement per principal repeats the same rules each time, and the
+    // policy outgrows OpenSearch Serverless's 20KB limit as handlers are added.
+    const collection = create('discava-test');
+    const stack = Stack.of(collection);
+    const role = (id: string) =>
+      new Role(stack, id, {
+        assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+      });
+    collection.grantRead(role('ReaderA'));
+    collection.grantRead(role('ReaderB'));
+    collection.grantWrite(role('Writer'));
+
+    const [policy] = Object.values(
+      Template.fromStack(stack).findResources(
+        'AWS::OpenSearchServerless::AccessPolicy',
+      ),
+    ).filter((r) => r.Properties.Name === 'discava-test-access');
+    const statements = JSON.parse(
+      JSON.stringify(policy?.Properties.Policy),
+    ) as unknown;
+    expect(JSON.stringify(statements)).toContain('ReaderA');
+    const rendered = JSON.stringify(statements);
+    expect(
+      rendered.match(/aoss:DescribeCollectionItems/g)?.length,
+    ).toBeLessThanOrEqual(2);
+    expect(rendered.match(/Principal/g)?.length).toBe(2);
   });
 
   it('accepts a name whose every derived policy name fits in 32 characters', () => {
