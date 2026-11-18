@@ -2236,6 +2236,15 @@ export const checkDiscussionUnansweredMatches = (
   snapshot.discussionPosts.flatMap((p) => {
     const expected = p.kind === 'question' && answeredState(p) === 'unanswered';
     const set = p.unanswered !== undefined;
+    if (set && expected && p.unanswered !== p.courseId) {
+      return [
+        violation(
+          'discussion-unanswered-matches',
+          discussionKey(p),
+          `unanswered is ${p.unanswered}, not its courseId`,
+        ),
+      ];
+    }
     if (set === expected) {
       return [];
     }
@@ -2292,6 +2301,15 @@ export const checkDiscussionReportsValid = (
 ): InvariantViolation[] =>
   snapshot.discussionPosts.flatMap((p) => {
     const reporters = (p.reportedBy ?? []).length > 0;
+    if (reporters && p.reported !== undefined && p.reported !== p.courseId) {
+      return [
+        violation(
+          'discussion-reports-valid',
+          discussionKey(p),
+          `reported is ${p.reported}, not its courseId`,
+        ),
+      ];
+    }
     if (reporters === (p.reported !== undefined)) {
       return [];
     }

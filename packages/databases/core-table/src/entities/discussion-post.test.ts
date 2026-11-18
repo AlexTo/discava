@@ -94,7 +94,7 @@ describe('discussionPost', () => {
 
   it('queries byUnanswered on gsi2 with a key no other entity can equal', () => {
     const params = post.query
-      .byUnanswered({ courseId: 'course-1' })
+      .byUnanswered({ unanswered: 'course-1' })
       .params() as Params;
     expect(params.IndexName).toBe('gsi2pk-gsi2sk-index');
     const [key] = Object.values(params.ExpressionAttributeValues);
@@ -103,7 +103,7 @@ describe('discussionPost', () => {
 
   it('queries byReported on gsi1 with a key no content item can equal', () => {
     const params = post.query
-      .byReported({ courseId: 'course-1' })
+      .byReported({ reported: 'course-1' })
       .params() as Params;
     expect(params.IndexName).toBe('gsi1pk-gsi1sk-index');
     const [key] = Object.values(params.ExpressionAttributeValues);
@@ -125,7 +125,11 @@ describe('discussionPost', () => {
 
   it('indexes a question written with `unanswered`, but not by byReported', () => {
     const { Item } = post
-      .create({ ...question, unanswered: 'unanswered' })
+      .create({
+        ...question,
+        unanswered: 'c1',
+        unansweredSince: question.createdAt,
+      })
       .params() as Params;
     expect(Item.gsi2pk).toBeDefined();
     expect(Item.gsi1pk).toBeUndefined();
@@ -135,11 +139,70 @@ describe('discussionPost', () => {
     const { Item } = post
       .create({
         ...question,
-        reported: 'reported',
+        reported: 'c1',
+        reportedSince: question.createdAt,
         reportedBy: new Set(['user-2']),
       } as never)
       .params() as Params;
     expect(Item.gsi1pk).toBeDefined();
     expect(Item.gsi2pk).toBeUndefined();
+  });
+
+  // ElectroDB re-evaluates a sparse index's condition when an update provides
+  // one of its composites. Neither queue may lose its keys to a write that
+  // does not touch its flag (the writer of Phase 2 relies on this).
+  describe('an update of a flagged post', () => {
+    const key = {
+      courseId: 'course-1',
+      kind: 'question',
+      lessonId: 'lesson-1',
+      threadId: 'post-1',
+      postId: 'post-1',
+    } as const;
+    const expression = (params: unknown) =>
+      (params as { UpdateExpression: string }).UpdateExpression;
+    const keyFields = /#gsi[12]p?k|#gsi[12]sk/;
+
+    it.each([
+      ['a counter', () => post.update(key).add({ replyCount: 1 })],
+      ['the body', () => post.patch(key).set({ body: 'edited' })],
+      ['the state', () => post.patch(key).set({ state: 'hidden' })],
+      [
+        'accepting an answer',
+        () => post.patch(key).set({ acceptedPostId: 'r' }),
+      ],
+    ])("leaves both queues' keys alone for %s", (_, build) => {
+      expect(expression(build().params())).not.toMatch(keyFields);
+    });
+
+    it("sets only its own queue's keys when a flag is set", () => {
+      const params = expression(
+        post
+          .patch(key)
+          .set({
+            unanswered: 'course-1',
+            unansweredSince: question.createdAt,
+          })
+          .params(),
+      );
+      expect(params).toMatch(/#gsi2pk/);
+      expect(params).not.toMatch(/#gsi1/);
+    });
+
+    it("clears only its own queue's keys when a flag is removed", () => {
+      const unanswered = expression(
+        post.patch(key).remove(['unanswered', 'unansweredSince']).params(),
+      );
+      expect(unanswered).toMatch(/REMOVE.*#gsi2pk/);
+      expect(unanswered).not.toMatch(/#gsi1/);
+      const reported = expression(
+        post
+          .patch(key)
+          .remove(['reported', 'reportedSince', 'reportedBy'])
+          .params(),
+      );
+      expect(reported).toMatch(/REMOVE.*#gsi1pk/);
+      expect(reported).not.toMatch(/#gsi2/);
+    });
   });
 });

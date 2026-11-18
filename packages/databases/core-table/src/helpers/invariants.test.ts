@@ -2215,7 +2215,7 @@ describe('discussion', () => {
 
   // An unanswered question with one reply (by a student) and one vote.
   beforeEach(() => {
-    table.discussionPosts = [question({ unanswered: 'unanswered' }), reply()];
+    table.discussionPosts = [question({ unanswered: 'c1' }), reply()];
     table.discussionVotes = [vote()];
   });
 
@@ -2237,7 +2237,7 @@ describe('discussion', () => {
         authorId: 'stranger',
         replyCount: 0,
         voteCount: 1,
-        unanswered: 'unanswered',
+        unanswered: 'c1',
       }),
     );
     table.discussionVotes.push(
@@ -2326,13 +2326,13 @@ describe('discussion', () => {
         'more than 20 reporters',
         question({
           reportedBy: Array.from({ length: 21 }, (_, i) => `u${i}`),
-          reported: 'reported',
+          reported: 'c1',
         }),
         /21 reporters/,
       ],
       [
         'the author among the reporters',
-        question({ reportedBy: ['asker'], reported: 'reported' }),
+        question({ reportedBy: ['asker'], reported: 'c1' }),
         /author is among/,
       ],
     ])('reports %s', (_, post, message) => {
@@ -2351,14 +2351,10 @@ describe('discussion', () => {
     it.each([
       ['a title', { title: 'Hello' }, /reply has a title/],
       ['an acceptedPostId', { acceptedPostId: RID }, /acceptedPostId/],
-      [
-        'an unanswered mark',
-        { unanswered: 'unanswered' as const },
-        /unanswered/,
-      ],
+      ['an unanswered mark', { unanswered: 'c1' }, /unanswered/],
       ['a reply count', { replyCount: 1 }, /reply counts/],
     ])('reports a reply with %s', (_, over, message) => {
-      hold([question({ unanswered: 'unanswered' }), reply(over)]);
+      hold([question({ unanswered: 'c1' }), reply(over)]);
       const { violations } = broken();
       expect(violations.map((v) => v.message)).toContainEqual(
         expect.stringMatching(message),
@@ -2368,7 +2364,7 @@ describe('discussion', () => {
     it('passes a deleted reply with no text, and 4,000 characters', () => {
       hold([
         question({
-          unanswered: 'unanswered',
+          unanswered: 'c1',
           body: 'a'.repeat(4000),
           replyCount: 0,
         }),
@@ -2387,7 +2383,7 @@ describe('discussion', () => {
     it('reports a post whose lesson is missing', () => {
       table.lessons = table.lessons.filter((l) => l.lessonId !== 'l1');
       table.discussionPosts = [
-        question({ unanswered: 'unanswered', lessonId: 'gone' }),
+        question({ unanswered: 'c1', lessonId: 'gone' }),
         reply({ lessonId: 'gone' }),
       ];
       table.discussionVotes = [vote({ lessonId: 'gone' })];
@@ -2408,10 +2404,7 @@ describe('discussion', () => {
     });
 
     it('reports a wrong moduleId', () => {
-      hold([
-        question({ unanswered: 'unanswered', moduleId: 'other' }),
-        reply(),
-      ]);
+      hold([question({ unanswered: 'c1', moduleId: 'other' }), reply()]);
       expectOnly('discussion-thread-links', /moduleId is other/);
     });
   });
@@ -2428,7 +2421,7 @@ describe('discussion', () => {
       ['voteCount too high', { voteCount: 2 }, /voteCount is 2/],
       ['voteCount too low', { voteCount: 0 }, /voteCount is 0/],
     ])('reports %s', (_, over, message) => {
-      hold([question({ unanswered: 'unanswered', ...over }), reply()]);
+      hold([question({ unanswered: 'c1', ...over }), reply()]);
       const { violations } = broken();
       expect(violations.map((v) => v.invariant)).toContain(
         'discussion-counts-match',
@@ -2455,10 +2448,7 @@ describe('discussion', () => {
       const replies = Array.from({ length: 501 }, (_, i) =>
         reply({ postId: v7(AT2, 100 + i) }),
       );
-      hold([
-        question({ unanswered: 'unanswered', replyCount: 501 }),
-        ...replies,
-      ]);
+      hold([question({ unanswered: 'c1', replyCount: 501 }), ...replies]);
       const { messages } = broken();
       expect(messages).toContainEqual(expect.stringMatching(/more than 500/));
     });
@@ -2494,7 +2484,7 @@ describe('discussion', () => {
           question({
             postId: v7(AT1, 7),
             threadId: v7(AT1, 7),
-            unanswered: 'unanswered',
+            unanswered: 'c1',
             replyCount: 1,
             voteCount: 0,
           }),
@@ -2529,7 +2519,7 @@ describe('discussion', () => {
   describe('41. discussion-unanswered-matches', () => {
     it('reports `unanswered` on an answered question', () => {
       hold([
-        question({ unanswered: 'unanswered', instructorReplyCount: 1 }),
+        question({ unanswered: 'c1', instructorReplyCount: 1 }),
         reply({ authorIsInstructor: true }),
       ]);
       expectOnly('discussion-unanswered-matches', /not unanswered/);
@@ -2542,16 +2532,20 @@ describe('discussion', () => {
       expectOnly('discussion-unanswered-matches', /is not marked/);
     });
 
+    it('reports an `unanswered` flag that is not the courseId', () => {
+      hold([question({ unanswered: 'other' }), reply()]);
+      table.discussionPosts[1].state = 'hidden';
+      table.discussionPosts[0].replyCount = 0;
+      expectOnly('discussion-unanswered-matches', /not its courseId/);
+    });
+
     it('reports `unanswered` on a hidden question', () => {
-      hold([question({ state: 'hidden', unanswered: 'unanswered' }), reply()]);
+      hold([question({ state: 'hidden', unanswered: 'c1' }), reply()]);
       expectOnly('discussion-unanswered-matches', /not unanswered/);
     });
 
     it('reports `unanswered` on a reply', () => {
-      hold([
-        question({ unanswered: 'unanswered' }),
-        reply({ unanswered: 'unanswered' }),
-      ]);
+      hold([question({ unanswered: 'c1' }), reply({ unanswered: 'c1' })]);
       expect(broken().violations.map((v) => v.invariant)).toContain(
         'discussion-unanswered-matches',
       );
@@ -2601,28 +2595,34 @@ describe('discussion', () => {
     it('passes a reported post', () => {
       hold([
         question({
-          unanswered: 'unanswered',
+          unanswered: 'c1',
           reportedBy: ['u1'],
-          reported: 'reported',
+          reported: 'c1',
         }),
         reply(),
       ]);
       expect(broken().invariants).toEqual([]);
     });
 
-    it('reports `reported` without reporters', () => {
+    it('reports a `reported` flag that is not the courseId', () => {
       hold([
-        question({ unanswered: 'unanswered', reported: 'reported' }),
+        question({
+          unanswered: 'c1',
+          reportedBy: ['u1'],
+          reported: 'other',
+        }),
         reply(),
       ]);
+      expectOnly('discussion-reports-valid', /not its courseId/);
+    });
+
+    it('reports `reported` without reporters', () => {
+      hold([question({ unanswered: 'c1', reported: 'c1' }), reply()]);
       expectOnly('discussion-reports-valid', /without reporters/);
     });
 
     it('reports reporters without the flag', () => {
-      hold([
-        question({ unanswered: 'unanswered', reportedBy: ['u1'] }),
-        reply(),
-      ]);
+      hold([question({ unanswered: 'c1', reportedBy: ['u1'] }), reply()]);
       expectOnly('discussion-reports-valid', /not marked reported/);
     });
   });

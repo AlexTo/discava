@@ -110,16 +110,30 @@ export const createDiscussionPostEntity = async () =>
           type: 'set',
           items: 'string',
         },
-        // Questions only: set exactly while the question is shown, has no
-        // acceptedPostId and no instructor reply (answeredState). It puts the
-        // question in byUnanswered. Only `discussionWrites` writes this.
+        // Questions only: the courseId, set exactly while the question is
+        // shown, has no acceptedPostId and no instructor reply
+        // (answeredState); absent otherwise. It puts the question in
+        // byUnanswered. It holds the courseId rather than a marker so the
+        // index key is built from this attribute alone (see byUnanswered).
+        // Only `discussionWrites` writes this.
         unanswered: {
-          type: ['unanswered'] as const,
+          type: 'string',
         },
-        // Set exactly while reportedBy is non-empty. It puts the post in
-        // byReported. Only `discussionWrites` writes this.
+        // Set and removed with `unanswered`: the question's createdAt, which
+        // orders byUnanswered oldest first.
+        unansweredSince: {
+          type: 'string',
+        },
+        // The courseId, set exactly while reportedBy is non-empty; absent
+        // otherwise. It puts the post in byReported, as `unanswered` does for
+        // byUnanswered. Only `discussionWrites` writes this.
         reported: {
-          type: ['reported'] as const,
+          type: 'string',
+        },
+        // Set and removed with `reported`: when the post was first reported,
+        // which orders byReported oldest first.
+        reportedSince: {
+          type: 'string',
         },
         // The time part of postId.
         createdAt: {
@@ -149,39 +163,40 @@ export const createDiscussionPostEntity = async () =>
           },
         },
         // A course's unanswered questions, oldest first. Sparse: only
-        // questions with `unanswered` are indexed. Both sparse indexes use a
-        // key template with a `condition` rather than composites that name
-        // `unanswered`/`reported`: courseId is a key of every write, so
-        // ElectroDB would otherwise demand both flags on every create, and a
-        // reply (or any unflagged post) could not be written. The flag's
-        // writer must also clear gsi2pk/gsi2sk when it removes `unanswered`
-        // (ElectroDB's `remove` does not know the template depends on it).
+        // questions with `unanswered` are indexed. Like
+        // contentItem.byTranscodePending, each index is built only from
+        // attributes that are not part of the primary key (the flag holds the
+        // courseId; unansweredSince orders it). ElectroDB re-evaluates an index's
+        // `condition` only when an update provides one of its composites, so
+        // an update of anything else (a counter, the body, the state) leaves
+        // both queues' keys alone. A write that sets `unanswered` sets
+        // `unansweredSince` with it; removing both clears the index keys.
         byUnanswered: {
           index: 'gsi2pk-gsi2sk-index',
           condition: (attr) => attr.unanswered !== undefined,
           pk: {
             field: 'gsi2pk',
-            composite: ['courseId'],
-            template: '$discussionpost_unanswered#${courseId}',
+            composite: ['unanswered'],
+            template: '$discussionpost_unanswered#${unanswered}',
           },
           sk: {
             field: 'gsi2sk',
-            composite: ['threadId'],
+            composite: ['unansweredSince'],
           },
         },
-        // A course's reported posts, oldest first. Sparse: only posts with
-        // `reported` are indexed (a template, as for byUnanswered).
+        // A course's reported posts, oldest first. Sparse and built as
+        // byUnanswered is, from `reported`.
         byReported: {
           index: 'gsi1pk-gsi1sk-index',
           condition: (attr) => attr.reported !== undefined,
           pk: {
             field: 'gsi1pk',
-            composite: ['courseId'],
-            template: '$discussionpost_reported#${courseId}',
+            composite: ['reported'],
+            template: '$discussionpost_reported#${reported}',
           },
           sk: {
             field: 'gsi1sk',
-            composite: ['postId'],
+            composite: ['reportedSince'],
           },
         },
       },
