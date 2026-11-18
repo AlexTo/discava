@@ -19,6 +19,7 @@ import {
   createDiscussionPostEntity,
   createDiscussionVoteEntity,
   createEnrolmentEntity,
+  createInstructorProfileEntity,
   createItemCompletionEntity,
   createLessonEntity,
   createLessonStatsEntity,
@@ -28,6 +29,7 @@ import {
   createNotificationPreferenceEntity,
   createNotificationStateEntity,
   createPeriodStatsEntity,
+  createProfileHandleClaimEntity,
   createProgressEntity,
   createQuizAttemptEntity,
   createQuizQuestionStatsEntity,
@@ -80,6 +82,8 @@ export const createCoreTableService = async () => {
 
     review,
     courseRating,
+    instructorProfile,
+    profileHandleClaim,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -114,6 +118,8 @@ export const createCoreTableService = async () => {
 
     createReviewEntity(),
     createCourseRatingEntity(),
+    createInstructorProfileEntity(),
+    createProfileHandleClaimEntity(),
   ]);
 
   return new Service({
@@ -150,5 +156,7 @@ export const createCoreTableService = async () => {
 
     review,
     courseRating,
+    instructorProfile,
+    profileHandleClaim,
   });
 };

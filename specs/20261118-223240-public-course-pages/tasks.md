@@ -103,7 +103,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: Signed out, a published course's page shows the new sections and an instructor card. A draft or archived course shows "Course not found" for everyone, including an enrolled student.
 
-- [ ] T007 [US1] Tests first, then add `packages/databases/core-table/src/entities/instructor-profile.ts` and `entities/profile-handle-claim.ts`, registered in `entities/index.ts` and `service.ts` (neither joins `curriculum`), per [data-model.md](./data-model.md).
+- [x] T007 [US1] Tests first, then add `packages/databases/core-table/src/entities/instructor-profile.ts` and `entities/profile-handle-claim.ts`, registered in `entities/index.ts` and `service.ts` (neither joins `curriculum`), per [data-model.md](./data-model.md).
 
   `instructorProfile` (pk and sk both `instructorId`) has:
   - `instructorId`: required;
@@ -118,7 +118,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   `profileHandleClaim` (pk and sk both `handle`) has `handle` and `instructorId` (both required) and a read-only `createdAt`.
 
   Entity tests refuse each out-of-range field and an invalid handle.
-- [ ] T008 [US1] Tests first, then add `packages/databases/core-table/src/helpers/instructor-profile.ts`, exported from `src/index.ts`, with:
+- [x] T008 [US1] Tests first, then add `packages/databases/core-table/src/helpers/instructor-profile.ts`, exported from `src/index.ts`, with:
   - `handleFromName(given, family)`: lower-cases, folds to ASCII (NFKD, strips marks), collapses runs of other characters to one `-`, trims hyphens, cuts to 30 characters without a trailing hyphen, pads names under 3 characters to `instructor`, and never returns a reserved handle (export `RESERVED_HANDLES` with the list in data-model.md "Reserved handles"; the instructor-api validation in T023 imports it);
   - `handleCandidates(base)`: the base, then `-2` to `-9`, then four `base-<4 random [a-z0-9]>` candidates;
   - `defaultDisplayName(user)`: `"<given> <family>"` trimmed, or "Discava instructor";
@@ -126,7 +126,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - `ensureInstructorProfile(coreTable, instructorId, { fields?, handle? } = {})`: does nothing if a profile exists (returns `exists`). Otherwise it creates one with `fields` (display name, headline, bio; display name defaulting to `defaultDisplayName(user)`). With no `handle` it tries `handleCandidates` in order and retries only when the claim was taken; with an explicit `handle` it tries only that one and returns `handle-taken` if it is claimed. It is idempotent when the profile was created concurrently.
 
   Tests in `helpers/instructor-profile.test.ts` cover accented names, emoji, empty names, 40-character names, reserved words, collisions up to the random step, an existing profile, and an explicit handle that is taken (no fallback to a generated one).
-- [ ] T009 [US1] Impact-check invariants, tests first, in `packages/databases/core-table/src/helpers/invariants.ts`. Add `instructorProfiles` and `profileHandleClaims` to `TableSnapshot` and `loadTableSnapshot` (a scan is allowed in invariant tooling, outside any user request), and add three checks:
+- [x] T009 [US1] Impact-check invariants, tests first, in `packages/databases/core-table/src/helpers/invariants.ts`. Add `instructorProfiles` and `profileHandleClaims` to `TableSnapshot` and `loadTableSnapshot` (a scan is allowed in invariant tooling, outside any user request), and add three checks:
   - `instructor-has-profile`: every `courseInstructor.instructorId` has an `instructorProfile`;
   - `profile-handle-claims-consistent`: each profile's handle has exactly one claim, owned by it, and each claim's owner has a profile with that handle;
   - `instructor-profile-shape`: the field rules from T007, plus `version >= 1`.
@@ -134,14 +134,14 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   Breaking tests in `invariants.test.ts`: a `courseInstructor` with no profile; an orphan claim; a claim owned by someone else; a profile whose handle has no claim; a 61-character display name; a handle of `a--b`.
 
   Confirm that `packages/e2e/src/helpers/table-invariants.ts` needs no change.
-- [ ] T010 [P] [US1] Add assertions to `progress-stream.test.ts` and `search-stream.test.ts` that `instructorProfile` and `profileHandleClaim` INSERT, MODIFY and REMOVE records match no filter.
-- [ ] T011 [US1] Tests first, then call `ensureInstructorProfile` for the caller in `createCourse` (`packages/apis/instructor-api/src/procedures/course.ts`). It runs before the course transaction and is idempotent, so the order is safe: a profile without a course breaks no invariant. Tests:
+- [x] T010 [P] [US1] Add assertions to `progress-stream.test.ts` and `search-stream.test.ts` that `instructorProfile` and `profileHandleClaim` INSERT, MODIFY and REMOVE records match no filter.
+- [x] T011 [US1] Tests first, then call `ensureInstructorProfile` for the caller in `createCourse` (`packages/apis/instructor-api/src/procedures/course.ts`). It runs before the course transaction and is idempotent, so the order is safe: a profile without a course breaks no invariant. Tests:
   - the first course creates exactly one profile and claim;
   - a second course creates none;
   - two instructors named alike get `name` and `name-2`.
 
   In `packages/common/scripts/src/local-data/`, make the seed create profiles for seeded instructors (Alice). Note in the PR that existing local data is fixed by `reset-local-data` (constitution VII).
-- [ ] T012 [US1] Tests first, then extend `publicViewCourse` in `packages/apis/core-api/src/procedures/course.ts` and `PublicViewCourseOutputSchema` in `src/schema/course.ts` per [contracts/core-api-public.md](./contracts/core-api-public.md):
+- [x] T012 [US1] Tests first, then extend `publicViewCourse` in `packages/apis/core-api/src/procedures/course.ts` and `PublicViewCourseOutputSchema` in `src/schema/course.ts` per [contracts/core-api-public.md](./contracts/core-api-public.md):
   - `learningOutcomes` and `requirements`, as `[]` when unset;
   - `category`: `{ slug, name }` when the course's category exists and is active;
   - `instructors[]`: a `courseInstructor` query by course, sorted by `createdAt`, then one batch get of `instructorProfile`, mapped to `{ handle, displayName, headline?, photoKey? }`. An instructor without a profile is skipped and logged as a warning (the invariant makes that impossible).
@@ -154,7 +154,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - the output has no `instructorId` or `userId` even when the stored records have them;
   - draft, archived and unknown courses still give `NOT_FOUND`;
   - a hidden module is still filtered out.
-- [ ] T013 [US1] Tests first, then update `packages/websites/student-portal/src/routes/learn/$courseId/-components/course-page.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md):
+- [x] T013 [US1] Tests first, then update `packages/websites/student-portal/src/routes/learn/$courseId/-components/course-page.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md):
   - the facts card gains level, language and "<n> hours" when set;
   - a "What you'll learn" section (two-column checked list), placed first;
   - "Requirements" after About;
@@ -162,7 +162,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - `SECTIONS` built from the sections present.
 
   User text renders as text, never HTML. Component tests in `course-page.test.tsx` cover all sections, the empty sections left out, nav entries matching the sections, and a `<script>` in an outcome rendering as text.
-- [ ] T014 [US1] Extend or add `packages/e2e/src/scenarios/public-landing-page.e2e.ts` (helpers in `src/helpers/public-pages.ts`):
+- [x] T014 [US1] Extend or add `packages/e2e/src/scenarios/public-landing-page.e2e.ts` (helpers in `src/helpers/public-pages.ts`):
   1. An instructor (new user via the local OIDC "Someone else" form) creates a uniquely named course and sets outcomes and requirements through `course.updateLanding`, using an API helper since the UI comes in Phase 3. They publish it.
   2. Signed out, open the course page: the sections and the instructor card are visible.
   3. Archive the course: signed out and as an enrolled student, the page shows "Course not found".

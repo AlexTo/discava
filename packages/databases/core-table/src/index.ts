@@ -10,6 +10,15 @@ export {
 export { PREVIEW_MAX_SECONDS } from './entities/course-preview.js';
 export * from './entities/index.js';
 export {
+  BIO_MAX,
+  DISPLAY_NAME_MAX,
+  HANDLE_MAX,
+  HANDLE_MIN,
+  HANDLE_PATTERN,
+  HEADLINE_MAX,
+  isValidHandle,
+} from './entities/instructor-profile.js';
+export {
   aggregatesOf,
   type Contributions,
   contributions,
@@ -171,6 +180,15 @@ export {
   SlugUnavailableError,
   VersionConflictError,
 } from './helpers/errors.js';
+export {
+  defaultDisplayName,
+  type EnsureInstructorProfileResult,
+  ensureInstructorProfile,
+  handleCandidates,
+  handleFromName,
+  instructorProfileWrites,
+  RESERVED_HANDLES,
+} from './helpers/instructor-profile.js';
 export {
   checkAnalyticsMatchesRecords,
   checkTableInvariants,

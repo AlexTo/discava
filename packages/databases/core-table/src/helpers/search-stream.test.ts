@@ -33,6 +33,21 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(false);
   });
 
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)(
+    'ignores a %s of an instructor profile or handle claim',
+    (eventName, image) => {
+      for (const entity of ['instructorProfile', 'profileHandleClaim']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, image, entity)),
+        ).toBe(false);
+      }
+    },
+  );
+
   it('matches an inserted or modified course', () => {
     expect(
       matchesSearchStreamFilters(record('INSERT', 'NewImage', 'course')),

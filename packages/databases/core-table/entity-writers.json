@@ -87,6 +87,11 @@
     ],
     "events": ["packages/events/src/progress/recalculate.ts"]
   },
+  "instructorProfile": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/instructor-profile.ts"
+    ]
+  },
   "itemCompletion": {
     "core-api": [
       "packages/apis/core-api/src/procedures/completion.ts",
@@ -142,6 +147,11 @@
     "core-table": [
       "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
       "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "profileHandleClaim": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/instructor-profile.ts"
     ]
   },
   "progress": {
