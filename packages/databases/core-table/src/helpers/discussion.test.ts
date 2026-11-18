@@ -801,6 +801,18 @@ describe('report and dismiss', () => {
     expect(condition).toContain('size(reportedBy) < 20');
   });
 
+  it('uses every attribute name it sends, which DynamoDB insists on', () => {
+    for (const item of items(REPORT)) {
+      const request = requestOf(item) as Conditional & {
+        UpdateExpression?: string;
+      };
+      const text = `${request.ConditionExpression ?? ''} ${request.UpdateExpression ?? ''}`;
+      for (const name of Object.keys(request.ExpressionAttributeNames)) {
+        expect(text, name).toMatch(new RegExp(`${name}(?!\\w)`));
+      }
+    }
+  });
+
   it('keeps the time of the first report', () => {
     const since = '2026-11-16T09:00:00.000Z';
 
