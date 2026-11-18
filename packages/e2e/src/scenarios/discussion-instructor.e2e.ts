@@ -91,9 +91,13 @@ test.describe('lesson questions in the instructor portal', () => {
 
     await page.getByRole('button', { name: 'Hide', exact: true }).click();
     await page.getByRole('tab', { name: 'By lesson' }).click();
-    await page.getByLabel('Lesson').selectOption({ label: 'Lesson one' });
+    await page
+      .getByLabel('Lesson', { exact: true })
+      .selectOption({ label: 'Lesson one' });
     await page.getByRole('button', { name: 'Open thread' }).click();
-    await expect(page.getByRole('dialog').getByText('Hidden')).toBeVisible();
+    await expect(
+      page.getByRole('dialog').getByText('Hidden', { exact: true }),
+    ).toBeVisible();
     await screenshot(page, 'a hidden reply in the thread');
   });
 });
