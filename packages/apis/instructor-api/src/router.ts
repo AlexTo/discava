@@ -70,6 +70,14 @@ import {
   updateCourseImage,
 } from './procedures/course-image.js';
 import {
+  dismissReports,
+  hide as hideDiscussionPost,
+  remove as removeDiscussionPost,
+  reported,
+  unanswered,
+  unhide as unhideDiscussionPost,
+} from './procedures/discussion.js';
+import {
   createLesson,
   deleteLesson,
   deleteLessonPermanently,
@@ -124,6 +132,14 @@ export const appRouter = router({
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
     updateCatalogue: updateCourseCatalogue,
+  }),
+  discussion: router({
+    unanswered,
+    reported,
+    hide: hideDiscussionPost,
+    unhide: unhideDiscussionPost,
+    remove: removeDiscussionPost,
+    dismissReports,
   }),
   category: router({
     listActive: listActiveCategories,
