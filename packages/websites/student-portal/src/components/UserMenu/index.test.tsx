@@ -6,6 +6,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthContext, type AuthContextProps } from 'react-oidc-context';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Link needs a router context this test doesn't set up; the menu's sign-out is
+// what's under test.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
+}));
+
 import { RuntimeConfigContext } from '../RuntimeConfig';
 import { UserMenu } from './index';
 
