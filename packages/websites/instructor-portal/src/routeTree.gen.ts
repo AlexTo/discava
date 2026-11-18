@@ -16,6 +16,7 @@ import { Route as AuthenticatedDashboardRouteRouteImport } from './routes/_authe
 import { Route as AuthenticatedMyCoursesRouteRouteImport } from './routes/_authenticated/my-courses/route'
 import { Route as AuthenticatedDashboardCourseIdRouteRouteImport } from './routes/_authenticated/dashboard_/$courseId/route'
 import { Route as AuthenticatedMyCoursesCourseIdRouteRouteImport } from './routes/_authenticated/my-courses_/$courseId/route'
+import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedMyCoursesCourseIdReviewsRouteImport } from './routes/_authenticated/my-courses_/$courseId_/reviews'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -56,6 +57,12 @@ const AuthenticatedMyCoursesCourseIdRouteRoute =
     path: '/my-courses/$courseId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedSettingsNotificationsRoute =
+  AuthenticatedSettingsNotificationsRouteImport.update({
+    id: '/settings/notifications',
+    path: '/settings/notifications',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMyCoursesCourseIdReviewsRoute =
   AuthenticatedMyCoursesCourseIdReviewsRouteImport.update({
     id: '/my-courses_/$courseId_/reviews',
@@ -70,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/my-courses': typeof AuthenticatedMyCoursesRouteRoute
   '/dashboard/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
 }
 export interface FileRoutesByTo {
@@ -79,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/dashboard/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
+  '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
 }
 export interface FileRoutesById {
@@ -90,6 +99,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/dashboard_/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/_authenticated/my-courses_/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
+  '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/my-courses_/$courseId_/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
 }
 export interface FileRouteTypes {
@@ -101,6 +111,7 @@ export interface FileRouteTypes {
     | '/my-courses'
     | '/dashboard/$courseId'
     | '/my-courses/$courseId'
+    | '/settings/notifications'
     | '/my-courses/$courseId/reviews'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -110,6 +121,7 @@ export interface FileRouteTypes {
     | '/'
     | '/dashboard/$courseId'
     | '/my-courses/$courseId'
+    | '/settings/notifications'
     | '/my-courses/$courseId/reviews'
   id:
     | '__root__'
@@ -120,6 +132,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/dashboard_/$courseId'
     | '/_authenticated/my-courses_/$courseId'
+    | '/_authenticated/settings/notifications'
     | '/_authenticated/my-courses_/$courseId_/reviews'
   fileRoutesById: FileRoutesById
 }
@@ -179,6 +192,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMyCoursesCourseIdRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/settings/notifications': {
+      id: '/_authenticated/settings/notifications'
+      path: '/settings/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/my-courses_/$courseId_/reviews': {
       id: '/_authenticated/my-courses_/$courseId_/reviews'
       path: '/my-courses/$courseId/reviews'
@@ -195,6 +215,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDashboardCourseIdRouteRoute: typeof AuthenticatedDashboardCourseIdRouteRoute
   AuthenticatedMyCoursesCourseIdRouteRoute: typeof AuthenticatedMyCoursesCourseIdRouteRoute
+  AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedMyCoursesCourseIdReviewsRoute: typeof AuthenticatedMyCoursesCourseIdReviewsRoute
 }
 
@@ -206,6 +227,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedDashboardCourseIdRouteRoute,
   AuthenticatedMyCoursesCourseIdRouteRoute:
     AuthenticatedMyCoursesCourseIdRouteRoute,
+  AuthenticatedSettingsNotificationsRoute:
+    AuthenticatedSettingsNotificationsRoute,
   AuthenticatedMyCoursesCourseIdReviewsRoute:
     AuthenticatedMyCoursesCourseIdReviewsRoute,
 }

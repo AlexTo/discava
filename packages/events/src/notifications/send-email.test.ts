@@ -104,6 +104,11 @@ describe('sendNotificationEmail', () => {
     expect(message.headers['List-Unsubscribe']).toContain(
       'https://api.example.com/unsubscribe/',
     );
+    // What people open is the student portal's page, not the API's JSON.
+    expect(message.text).toContain(
+      'https://student.example.com/unsubscribe?token=',
+    );
+    expect(message.text).not.toContain('https://api.example.com');
     expect(n.email).toMatchObject({
       state: 'sent',
       messageId: 'm1',
