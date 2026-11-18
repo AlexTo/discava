@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useQuery } from '@tanstack/react-query';
+import { type UseQueryResult, useQuery } from '@tanstack/react-query';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
 export interface LessonRef {
@@ -24,11 +24,20 @@ export interface CourseLesson {
 // The course's lessons with their state, and whether the course is archived,
 // from the instructor's course read. Questions are still readable for a
 // lesson students cannot open, but cannot be answered.
-export function useCourseLessons(courseId: string) {
+export interface CourseLessons {
+  courseArchived: boolean;
+  lessons: CourseLesson[];
+}
+
+// Spelled out so the declaration emit doesn't have to name the API router's
+// inferred types.
+export function useCourseLessons(
+  courseId: string,
+): UseQueryResult<CourseLessons, Error> {
   const trpc = useInstructorApi();
   return useQuery({
     ...trpc.course.view.queryOptions({ courseId }),
-    select: (course) => ({
+    select: (course): CourseLessons => ({
       courseArchived: course.status === 'archived',
       lessons: course.modules.flatMap((module): CourseLesson[] =>
         module.lessons.map((lesson) => ({

@@ -24,9 +24,23 @@ export interface PostRef extends LessonRef {
   postId: string;
 }
 
+interface PostAction {
+  mutate: (ref: PostRef) => void;
+}
+
+// Spelled out so the declaration emit doesn't have to name the API router's
+// inferred types.
+export interface Moderation {
+  hide: PostAction;
+  unhide: PostAction;
+  remove: PostAction;
+  dismissReports: PostAction;
+  busy: boolean;
+}
+
 // Hide, unhide, delete and dismiss reports. Whatever changes refreshes the
 // queues and the open threads and lists, which are core-api's.
-export function useModeration(onError: (error: unknown) => void) {
+export function useModeration(onError: (error: unknown) => void): Moderation {
   const instructorApi = useInstructorApi();
   const coreApi = useCoreApi();
   const queryClient = useQueryClient();
