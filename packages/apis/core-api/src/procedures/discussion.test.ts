@@ -572,6 +572,13 @@ describe('reply', () => {
     expect(discussionWrites.mock.calls[0][1].author.isInstructor).toBe(true);
   });
 
+  it("refuses a postId equal to the question's id, writing nothing", async () => {
+    await expect(
+      as(ME).reply({ ...input, postId: 'q1' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it('returns the existing reply for a retry by its author', async () => {
     created();
     await as(ME).reply(input);

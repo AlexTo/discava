@@ -357,6 +357,11 @@ const reply = (
   entities: TransactionEntities,
   op: Extract<DiscussionOperation, { type: 'reply' }>,
 ): Items => {
+  // A question's postId is its threadId, which is how later calls tell the
+  // two kinds apart: a reply may not take it.
+  if (op.postId === op.threadId) {
+    throw new DiscussionInputError("postId must not be the question's id");
+  }
   const post = newPost(op, op);
   const instructor = op.author.isInstructor;
   const patch = entities.discussionPost

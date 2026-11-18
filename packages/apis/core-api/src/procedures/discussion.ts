@@ -428,6 +428,14 @@ export const reply = courseProcedure
     const coreTable = ctx.coreTable!;
     const { threadId, postId, body, ...ref } = input;
     const user = ctx.user;
+    // The question's own id would make later calls take the reply for the
+    // question (see kindOf).
+    if (postId === threadId) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: "postId must not be the question's id",
+      });
+    }
 
     return writeWithRetry(coreTable, async () => {
       const access = await requireDiscussionAccess(coreTable, user, ref);
