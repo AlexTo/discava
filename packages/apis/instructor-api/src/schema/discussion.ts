@@ -28,7 +28,10 @@ export const DiscussionPostSchema = z.object({
 
 export type IDiscussionPost = z.output<typeof DiscussionPostSchema>;
 
+// The queue's rows carry their lesson's ids, which the moderation calls need.
 export const QueuePostSchema = DiscussionPostSchema.extend({
+  moduleId: z.string(),
+  lessonId: z.string(),
   lessonTitle: z.string(),
 });
 
