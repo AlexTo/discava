@@ -8,7 +8,7 @@ Four optional numeric fields, mapped additively on the existing `courses` index 
 |-------|---------|
 | `ratingCount` | number of visible ratings; 0 or absent when unrated |
 | `ratingAverage` | plain average; absent when unrated |
-| `ratingScore` | weighted rating `(count x average + 5 x 3.5) / (count + 5)`; absent when unrated |
+| `ratingScore` | weighted rating `(count x average + PRIOR_WEIGHT x PRIOR_MEAN) / (count + PRIOR_WEIGHT)` (5 and 3.5, constants in `review-rating.ts`); absent when unrated |
 | `ratingBoost` | `1 + 0.1 x (ratingScore - 3.5)`; `1` when unrated |
 
 `toCourseDocument(course, rating?)` is the one builder (search-indexing handler and re-index Lambda). Search changes reach the handler through the stream event router's standard queue, which does not keep order, so the handler never indexes from the stream image. It extends the existing `index-content.ts` (`courseIdsOf`, `syncCourse`):

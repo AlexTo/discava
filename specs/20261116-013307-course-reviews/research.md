@@ -42,7 +42,7 @@
 
 ## R-6: Weighted rating and boost
 
-**Decision**: `ratingScore = (count x average + 5 x 3.5) / (count + 5)`; for ordering by rating, sort by `ratingScore` descending, unrated last, then newest. For relevance, multiply the text score by `ratingBoost = 1 + 0.1 x (ratingScore - 3.5)`, which stays within (0.75, 1.15) (ratingScore lies strictly between 1 and 5, so ten 1-star ratings give about 0.833 and no tally reaches 0.75 or 1.15) and is `1` for unrated courses. There is no clamp.
+**Decision**: `ratingScore = (count x average + PRIOR_WEIGHT x PRIOR_MEAN) / (count + PRIOR_WEIGHT)`, with `PRIOR_WEIGHT = 5` and `PRIOR_MEAN = 3.5` defined once in `helpers/review-rating.ts` (tuning them needs a re-index); for ordering by rating, sort by `ratingScore` descending, unrated last, then newest. For relevance, multiply the text score by `ratingBoost = 1 + 0.1 x (ratingScore - 3.5)`, which stays within (0.75, 1.15) (ratingScore lies strictly between 1 and 5, so ten 1-star ratings give about 0.833 and no tally reaches 0.75 or 1.15) and is `1` for unrated courses. There is no clamp.
 
 **Rationale**: a Bayesian average with a prior of five ratings at 3.5 keeps one 5-star rating (3.75) below a course with twenty 4.5 ratings (4.3) while still moving courses with a handful of good ratings up. The boost is modest so text relevance still dominates; unrated courses are neither promoted nor penalised relative to a middling course.
 
