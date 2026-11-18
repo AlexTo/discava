@@ -24,6 +24,18 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(true);
   });
 
+  it('matches an inserted or modified course rating, but not a removed one', () => {
+    expect(
+      matchesSearchStreamFilters(record('INSERT', 'NewImage', 'courseRating')),
+    ).toBe(true);
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'courseRating')),
+    ).toBe(true);
+    expect(
+      matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'courseRating')),
+    ).toBe(false);
+  });
+
   it('matches a removed course, by its old image', () => {
     expect(
       matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'course')),
