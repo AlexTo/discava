@@ -71,6 +71,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "seed-categories": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/seed-categories/seed.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "notify-local": {
       "executor": "nx:run-commands",
       "options": {

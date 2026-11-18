@@ -9,6 +9,8 @@ import { z } from 'zod';
 // nothing, so a stale link shows an empty result rather than an error.
 const filterValues = (max: number) => z.array(z.string().max(60)).max(max);
 
+export const SEARCH_SORTS = ['relevance', 'rating', 'newest'] as const;
+
 export const DURATION_BANDS = ['lt2', '2to10', '10to40', 'gt40'] as const;
 
 export const SearchCoursesInputSchema = z.object({
@@ -19,6 +21,14 @@ export const SearchCoursesInputSchema = z.object({
   levels: filterValues(10).optional(),
   languages: filterValues(20).optional(),
   durationBands: filterValues(10).optional(),
+  // Relevance is the text query's score times the course's rating boost; with
+  // no text it is the same as newest.
+  sort: z.enum(SEARCH_SORTS).optional().default('relevance'),
+  // Keeps courses whose average is at least this; an unrated course never
+  // matches.
+  minRating: z
+    .union([z.literal(4.5), z.literal(4), z.literal(3.5), z.literal(3)])
+    .optional(),
   // An offset into the result set (OpenSearch's `from`), not an opaque
   // cursor token: unlike core-table's DynamoDB-backed lists, a search result
   // set isn't a stable ordered scan, so there's nothing to encode beyond a
@@ -41,6 +51,8 @@ export const SearchCourseHitSchema = z.object({
   level: z.string().optional(),
   language: z.string().optional(),
   durationHours: z.number().optional(),
+  ratingAverage: z.number().optional(),
+  ratingCount: z.number(),
 });
 
 export type ISearchCourseHit = z.output<typeof SearchCourseHitSchema>;

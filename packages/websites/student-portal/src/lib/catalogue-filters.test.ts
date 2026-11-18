@@ -26,6 +26,34 @@ describe('catalogue filters', () => {
     );
   });
 
+  it('round-trips the sort and minimum rating, and sends them to the search', () => {
+    const filters = { ...NO_FILTERS, sort: 'rating', minRating: 4.5 } as const;
+
+    expect(catalogueFiltersToSearch(filters)).toEqual({
+      sort: 'rating',
+      minRating: 4.5,
+    });
+    expect(parseCatalogueFilters(catalogueFiltersToSearch(filters))).toEqual(
+      filters,
+    );
+    expect(catalogueFiltersToInput(filters)).toEqual({
+      sort: 'rating',
+      minRating: 4.5,
+    });
+  });
+
+  it('ignores a sort or minimum rating the API does not know', () => {
+    // 'relevance' is the default, so it is never in the address.
+    for (const search of [
+      { sort: 'relevance', minRating: 5 },
+      { sort: 'popular', minRating: 'high' },
+      { minRating: 2 },
+    ]) {
+      expect(parseCatalogueFilters(search)).toEqual(NO_FILTERS);
+    }
+    expect(parseCatalogueFilters({ minRating: '3.5' }).minRating).toBe(3.5);
+  });
+
   it('leaves unset filters out of the params', () => {
     expect(catalogueFiltersToSearch(NO_FILTERS)).toEqual({});
     expect(

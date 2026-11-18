@@ -1,0 +1,36 @@
+---
+title: Catalogue categories
+description: "The category taxonomy admins manage, the catalogue fields on a course, and how they feed search facets."
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+Courses can be organised by a **category** (one per course, from a taxonomy admins manage) and described by four other optional fields. Students filter the catalogue by all of them.
+
+## Course catalogue fields
+
+| Field | Rule |
+|---|---|
+| `categoryId` | An existing, **active** category when set or changed |
+| `tags` | At most 8, each 1 to 30 characters, normalised, no duplicates |
+| `level` | `beginner`, `intermediate` or `advanced` |
+| `language` | A code from a fixed list |
+| `durationHours` | A whole number from 1 to 500 |
+
+All five are optional, so existing courses stay valid. Instructors set them from the instructor portal, through instructor-api's course procedures.
+
+## The category taxonomy
+
+A category has a `name` (1 to 60 characters, unique ignoring case and spacing), an immutable URL-safe `slug` derived from the name at creation, and a `status` of `active` or `archived`. The whole taxonomy lives in one core-table partition, so listing it is one query. Categories are never deleted: archiving hides one from the choices for new assignments while courses that already use it keep it.
+
+Uniqueness is enforced by `categoryClaim` records written in the same transaction as the category, one for the slug and one for the normalised name. A rename moves the name claim and leaves the slug, so a category's landing page URL never changes.
+
+## The admin portal and `admin-api`
+
+Admins (the `admin` Cognito group) manage categories in the admin portal, which calls **`admin-api`**: a separate tRPC API with its own Lambda and API Gateway, built like instructor-api, so only admins can reach its procedures. Students and visitors read categories through core-api's public catalogue procedures, including the category landing pages.
+
+## Search facets
+
+The category, tags, level, language and duration are indexed in the `courses` search index, and search returns a facet count for each. See <Link path="design/search">Search</Link> for the facet query and for the one-off re-index to run after deploying.

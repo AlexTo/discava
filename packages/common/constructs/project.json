@@ -18,6 +18,7 @@
         "@discava/instructor-portal:assemble",
         "@discava/admin-portal:assemble",
         "@discava/instructor-api:assemble",
+        "@discava/admin-api:assemble",
         "@discava/search:assemble"
       ]
     },
@@ -33,6 +34,7 @@
         "@discava/instructor-portal:build",
         "@discava/admin-portal:build",
         "@discava/instructor-api:build",
+        "@discava/admin-api:build",
         "@discava/search:build"
       ]
     },

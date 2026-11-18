@@ -55,6 +55,7 @@ const API_FUNCTIONS = {
     'InstructorApiMediaHandler',
     'InstructorApiCourseImageHandler',
   ],
+  AdminApi: ['AdminApiRouterHandler'],
 };
 
 describe("discava-development's limits", () => {
@@ -87,6 +88,16 @@ describe("discava-development's limits", () => {
 
   it('throttles each instructor-api method', () => {
     expect(methodSettings(stack('InstructorApi'))).toContainEqual(
+      expect.objectContaining({
+        ResourcePath: '/*',
+        ThrottlingRateLimit: 2,
+        ThrottlingBurstLimit: 5,
+      }),
+    );
+  });
+
+  it('throttles each admin-api method', () => {
+    expect(methodSettings(stack('AdminApi'))).toContainEqual(
       expect.objectContaining({
         ResourcePath: '/*',
         ThrottlingRateLimit: 2,
@@ -367,6 +378,7 @@ describe('Lambda functions', () => {
     'MediaPipeline',
     'CoreApi',
     'InstructorApi',
+    'AdminApi',
     'RuntimeConfig',
   ])('all run on ARM in %s', (name) => {
     const functions = Object.entries(

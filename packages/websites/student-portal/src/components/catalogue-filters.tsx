@@ -11,7 +11,9 @@ import {
   hasCatalogueFilters,
   LANGUAGE_LABELS,
   LEVEL_LABELS,
+  MIN_RATING_OPTIONS,
   NO_FILTERS,
+  SORT_OPTIONS,
 } from '../lib/catalogue-filters';
 
 export interface CatalogueFacets {
@@ -70,6 +72,71 @@ function Group({
   );
 }
 
+const selectClass =
+  'border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs';
+
+// A native select: the choice is in the address, and a screen reader and the
+// keyboard get it for free.
+function SortAndRating({
+  filters,
+  onChange,
+}: {
+  filters: CatalogueFilters;
+  onChange: (filters: CatalogueFilters) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="catalogue-sort" className="text-sm font-semibold">
+          Sort by
+        </Label>
+        <select
+          id="catalogue-sort"
+          className={selectClass}
+          value={filters.sort ?? 'relevance'}
+          onChange={(event) => {
+            const { sort: _, ...rest } = filters;
+            const sort = event.target.value;
+            onChange(
+              sort === 'rating' || sort === 'newest' ? { ...rest, sort } : rest,
+            );
+          }}
+        >
+          {SORT_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="catalogue-min-rating" className="text-sm font-semibold">
+          Minimum rating
+        </Label>
+        <select
+          id="catalogue-min-rating"
+          className={selectClass}
+          value={filters.minRating ?? ''}
+          onChange={(event) => {
+            const { minRating: _, ...rest } = filters;
+            const found = MIN_RATING_OPTIONS.find(
+              ({ value }) => String(value) === event.target.value,
+            );
+            onChange(found ? { ...rest, minRating: found.value } : rest);
+          }}
+        >
+          <option value="">Any</option>
+          {MIN_RATING_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The catalogue's filter panel, shared by the home page and search: one group
  * each for category, level, language, duration and tags, every value with its
@@ -99,6 +166,7 @@ export function CatalogueFilterPanel({
           Clear filters
         </Button>
       )}
+      <SortAndRating filters={filters} onChange={onChange} />
       {showCategory && (
         <Group
           name="Category"

@@ -21,11 +21,13 @@ describe('buildSearchRequest', () => {
   it('searches text by relevance, with no explicit sort', () => {
     const body = build({ q: 'dynamodb' });
 
-    expect(body.query.bool.must.multi_match).toMatchObject({
-      query: 'dynamodb',
-      fields: ['title', 'description'],
-      type: 'cross_fields',
-    });
+    expect(body.query.bool.must.function_score.query.multi_match).toMatchObject(
+      {
+        query: 'dynamodb',
+        fields: ['title', 'description'],
+        type: 'cross_fields',
+      },
+    );
     expect(body.sort).toBeUndefined();
   });
 

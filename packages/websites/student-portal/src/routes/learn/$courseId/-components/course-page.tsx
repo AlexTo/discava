@@ -22,6 +22,7 @@ import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
 import { EnrolmentActions } from './enrolment-actions';
+import { CourseReviews } from './reviews';
 
 const count = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
@@ -30,6 +31,7 @@ const count = (n: number, one: string, many: string) =>
 const SECTIONS = [
   { id: 'about', label: 'About' },
   { id: 'modules', label: 'Modules' },
+  { id: 'reviews', label: 'Reviews' },
 ] as const;
 
 // A course's page, as on Coursera's /learn/<course>: a header with the
@@ -255,6 +257,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
             <Badge variant="secondary">Content is on its way</Badge>
           ) : null}
         </section>
+
+        <CourseReviews courseId={courseId} />
       </div>
     </main>
   );

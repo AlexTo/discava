@@ -16,6 +16,7 @@ export const PORTALS = {
 export const SERVICES = {
   coreApi: 'http://localhost:2022/',
   instructorApi: 'http://localhost:2023/',
+  adminApi: 'http://localhost:2025/',
   eventRunner: 'http://localhost:2024/',
   s3Mock: 'http://localhost:9090/',
   localOidc: 'http://localhost:9400/discava/.well-known/openid-configuration',

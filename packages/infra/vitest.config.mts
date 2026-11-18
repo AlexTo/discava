@@ -14,6 +14,9 @@ export default defineConfig(() => ({
     globalSetup: ['./tests/global-setup.ts'],
     passWithNoTests: true,
     name: '@discava/infra',
+    // Most tests synthesize the whole stage, which takes seconds on a CI
+    // runner and grows with every stack.
+    testTimeout: 30_000,
     watch: false,
     globals: true,
     environment: 'jsdom',

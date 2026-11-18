@@ -13,6 +13,8 @@ export { createCourseEntity } from './course.js';
 export { createCourseInstructorEntity } from './course-instructor.js';
 export { createCourseRatingEntity } from './course-rating.js';
 export { createCourseStatsEntity } from './course-stats.js';
+export { createDiscussionPostEntity } from './discussion-post.js';
+export { createDiscussionVoteEntity } from './discussion-vote.js';
 export { createEnrolmentEntity } from './enrolment.js';
 export { createItemCompletionEntity } from './item-completion.js';
 export { createLessonEntity } from './lesson.js';

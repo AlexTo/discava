@@ -60,17 +60,19 @@ const entityOf = (record: StreamRecord): string | undefined => {
   return image?.__edb_e__ as string | undefined;
 };
 
-// The distinct courses the batch's course records name. A record without a
-// course id fails the batch: it can't be skipped without hiding a change.
+// The distinct courses the batch's course and course rating records name
+// (both carry `courseId`). A record without a course id fails the batch: it
+// can't be skipped without hiding a change.
 const courseIdsOf = (records: StreamRecord[]) => {
   const courseIds = new Set<string>();
   for (const record of records) {
-    if (entityOf(record) !== 'course') {
+    const entity = entityOf(record);
+    if (entity !== 'course' && entity !== 'courseRating') {
       continue;
     }
     const image: Image = record.dynamodb.NewImage ?? record.dynamodb.OldImage;
     if (typeof image?.courseId !== 'string' || image.courseId === '') {
-      throw new Error('A course record names no course');
+      throw new Error(`A ${entity} record names no course`);
     }
     courseIds.add(image.courseId);
   }
@@ -94,10 +96,14 @@ const syncCourse = async (
   if (course?.status !== 'published') {
     return deleteDoc(client, 'courses', courseId);
   }
+  // An unrated course has no record.
+  const { data: rating } = await coreTable.entities.courseRating
+    .get({ courseId })
+    .go({ consistent: true });
   await client.index({
     index: resolveIndexName('courses'),
     id: courseId,
-    body: toCourseDocument(course),
+    body: toCourseDocument(course, rating ?? undefined),
   });
 };
 

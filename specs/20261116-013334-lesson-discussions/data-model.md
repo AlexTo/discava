@@ -21,8 +21,8 @@ One record per question and per reply. Questions and replies share an entity so 
 | `voteCount` | number, default 0 | upvotes on this post |
 | `acceptedPostId` | string | questions only; a shown reply of this question; removed when the question is deleted (kept while it is hidden) |
 | `reportedBy` | string set | at most 20 user ids; absent when no open reports |
-| `unanswered` | `unanswered` | questions only; set exactly while the question is `shown`, has no `acceptedPostId` and `instructorReplyCount = 0` |
-| `reported` | `reported` | set exactly while `reportedBy` is non-empty |
+| `unanswered`, `unansweredSince` | string | questions only; `unanswered` is the `courseId`, set exactly while the question is `shown`, has no `acceptedPostId` and `instructorReplyCount = 0` |
+| `reported`, `reportedSince` | string | `reported` is the `courseId`, set exactly while `reportedBy` is non-empty; `reportedSince` is when it was first reported |
 | `createdAt` | string (ISO), required, read-only | the time part of `postId` |
 | `updatedAt` | as other entities | |
 
@@ -34,10 +34,10 @@ One record per question and per reply. Questions and replies share an entity so 
 | A lesson's questions, newest first, paged | primary, `kind = question`, `lessonId`, descending | `discussion.listQuestions`, instructors' By lesson |
 | A thread's replies, oldest first, paged | primary, `kind = reply`, `lessonId`, `threadId`, ascending | `discussion.thread` |
 | Does a lesson have any post (delete guard) | primary, `kind = question`, `lessonId`, limit 1 | instructor-api permanent lesson delete |
-| A course's unanswered questions, oldest first | `byUnanswered` on `gsi2pk-gsi2sk-index`, sparse: pk `courseId`, `unanswered`; sk `threadId` | `discussion.unanswered` |
-| A course's reported posts, oldest first | `byReported` on `gsi1pk-gsi1sk-index`, sparse: pk `courseId`, `reported`; sk `postId` | `discussion.reported` |
+| A course's unanswered questions, oldest first | `byUnanswered` on `gsi2pk-gsi2sk-index`, sparse: pk `unanswered` (the courseId); sk `unansweredSince` | `discussion.unanswered` |
+| A course's reported posts, oldest first | `byReported` on `gsi1pk-gsi1sk-index`, sparse: pk `reported` (the courseId); sk `reportedSince` | `discussion.reported` |
 
-Both indexes use `condition` so only flagged records are written to them, as `contentItem.byTranscodePending` does. No scans. The table stream sees post writes; none matches `PROGRESS_STREAM_FILTERS` or `SEARCH_STREAM_FILTERS` (a test pins that).
+Both indexes use `condition` so only flagged records are written to them, as `contentItem.byTranscodePending` does. Each index is built only from attributes that are not part of the primary key, as `byTranscodePending` is: `unanswered` and `reported` hold the `courseId` (not a marker), and `unansweredSince` / `reportedSince` (set and removed with them) order the queue oldest first. ElectroDB re-evaluates an index's `condition` only when a write provides one of that index's composites, so updating a counter, the body or the state leaves both queues' keys alone; a test pins this. Putting `courseId` or `threadId` in these keys instead makes every update drop a flagged post from both queues, and every create demand both flags. The writer sets a flag and its `...Since` together, and removes both together (which clears that queue's keys).
 
 ## `discussionVote` (new entity, `.../entities/discussion-vote.ts`)
 

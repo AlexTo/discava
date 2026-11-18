@@ -19,6 +19,9 @@
   ],
   "references": [
     {
+      "path": "../apis/admin-api/tsconfig.lib.json"
+    },
+    {
       "path": "../apis/instructor-api/tsconfig.lib.json"
     },
     {

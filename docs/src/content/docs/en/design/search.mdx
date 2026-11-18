@@ -72,6 +72,22 @@ pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
 
 It prints how many courses were indexed and how many stale documents were removed, and running it twice leaves the same documents. A catalogue too big for one invocation's 5-minute timeout would need the Lambda to hand off to itself. Locally, `pnpm nx run @discava/e2e:seed-local-courses` seeds the index instead.
 
+### Rolling out the catalogue fields
+
+Courses carry five optional catalogue fields (`categoryId`, `tags`, `level`, `language`, `durationHours`), and the `courses` index maps them as `keyword`, `keyword` (an array), `keyword`, `keyword` and `integer`. The change is additive: it only adds properties, so index-sync's `putMapping` applies it to the live index in place on deploy, with no new index. Changing or removing an existing property would be a breaking change and needs the versioned index of #270 instead.
+
+The document stores `categoryId`, not the category's name or slug. A rename then touches no document, and a response resolves names and slugs from the `category` records when it is built.
+
+Facets are `filter` aggregations in one search request (see `buildSearchRequest` in `core-api`): every selected filter goes in `post_filter` so the hits are fully filtered, and each facet's aggregation applies every filter except its own, so its counts show what picking another value would give.
+
+A course published before the deploy has no document with these fields until it is next written, so after deploying the change **invoke the re-index Lambda once**:
+
+```sh
+pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
+```
+
+It rebuilds every published course's document, with the fields, from the course records. Running it again leaves the same documents.
+
 ## The search procedure
 
 `core-api`'s `course.publicSearch` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
