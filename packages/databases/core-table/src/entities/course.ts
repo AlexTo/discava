@@ -4,6 +4,7 @@
  */
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
+import { LANGUAGES, LEVELS } from '../helpers/catalogue.js';
 
 // Primary key attribute is named `courseId`, not `id`, so it matches the
 // composite attribute name Module/Lesson use for their own pk. ElectroDB
@@ -60,6 +61,25 @@ export const createCourseEntity = async () =>
         certificatesEnabled: {
           type: 'boolean',
           required: true,
+        },
+        // How the catalogue files and filters the course. All optional: a
+        // course without them is simply under no facet value. Written only by
+        // courseCatalogueWrites, which normalises and validates them.
+        categoryId: {
+          type: 'string',
+        },
+        tags: {
+          type: 'list',
+          items: { type: 'string' },
+        },
+        level: {
+          type: LEVELS,
+        },
+        language: {
+          type: LANGUAGES,
+        },
+        durationHours: {
+          type: 'number',
         },
         createdAt: {
           type: 'string',

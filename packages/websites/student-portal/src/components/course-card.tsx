@@ -12,12 +12,17 @@ import {
 } from '@discava/common-shadcn/components/ui/card';
 import { Link } from '@tanstack/react-router';
 import { BarChart3, Clock3 } from 'lucide-react';
+import {
+  formatDuration,
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '../lib/catalogue-filters';
 import type { DisplayCourse } from '../lib/course-display';
 import { CourseThumbnail } from './course-thumbnail';
 
 /**
  * A course in a grid of courses: its thumbnail, category, duration, title,
- * description and level, linking to its page. Shared by the catalogue on the
+ * description, level and language (those it has), linking to its page. Shared by the catalogue on the
  * home page and the search results, so a course looks the same in both.
  */
 export function CourseCard({ course }: { course: DisplayCourse }) {
@@ -30,9 +35,12 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-medium text-primary">{course.category}</p>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Clock3 className="size-3.5" /> {course.duration}
-          </span>
+          {course.durationHours !== undefined && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock3 className="size-3.5" />{' '}
+              {formatDuration(course.durationHours)}
+            </span>
+          )}
         </div>
         <CardTitle className="mt-2">{course.title}</CardTitle>
         <CardDescription className="leading-6">
@@ -41,7 +49,15 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
       </CardHeader>
       <CardContent className="mt-auto flex items-center justify-between border-t pt-5">
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <BarChart3 className="size-4" /> {course.level}
+          {course.level && (
+            <>
+              <BarChart3 className="size-4" />{' '}
+              {LEVEL_LABELS[course.level] ?? course.level}
+            </>
+          )}
+          {course.language && (
+            <span>{LANGUAGE_LABELS[course.language] ?? course.language}</span>
+          )}
         </span>
         <Button variant="ghost" size="sm" asChild>
           <Link

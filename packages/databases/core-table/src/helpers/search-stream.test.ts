@@ -30,6 +30,33 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(true);
   });
 
+  it('ignores a category or a category claim: documents hold only the categoryId', () => {
+    for (const entity of ['category', 'categoryClaim']) {
+      for (const eventName of ['INSERT', 'MODIFY']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, 'NewImage', entity)),
+        ).toBe(false);
+      }
+      expect(
+        matchesSearchStreamFilters(record('REMOVE', 'OldImage', entity)),
+      ).toBe(false);
+    }
+  });
+
+  it('matches a course change that only touches catalogue fields', () => {
+    const catalogueWrite = {
+      eventName: 'MODIFY',
+      dynamodb: {
+        OldImage: { __edb_e__: { S: 'course' } },
+        NewImage: {
+          __edb_e__: { S: 'course' },
+          level: { S: 'beginner' },
+        },
+      },
+    };
+    expect(matchesSearchStreamFilters(catalogueWrite)).toBe(true);
+  });
+
   it('ignores a curriculum change: the courses index does not depend on it', () => {
     for (const entity of ['module', 'lesson', 'contentItem']) {
       expect(

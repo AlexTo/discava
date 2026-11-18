@@ -39,6 +39,9 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    ['a new category', record('INSERT', 'NewImage', 'category')],
+    ['a category change', record('MODIFY', 'NewImage', 'category')],
+    ['a new category claim', record('INSERT', 'NewImage', 'categoryClaim')],
     // The recalculation's own write when it issues a certificate.
     // A student's saved video position, written every few seconds.
     ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
