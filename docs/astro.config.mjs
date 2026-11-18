@@ -59,6 +59,10 @@ export default defineConfig({
       },
       sidebar: [
         {
+          label: 'Guides',
+          items: ['guides/announcements'],
+        },
+        {
           label: 'Design',
           items: [{ autogenerate: { directory: 'design' } }],
         },

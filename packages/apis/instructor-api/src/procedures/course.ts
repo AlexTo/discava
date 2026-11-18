@@ -347,6 +347,12 @@ export const viewCourse = courseProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
+    const { data: category } = course.categoryId
+      ? await coreTable.entities.category
+          .get({ categoryId: course.categoryId })
+          .go()
+      : { data: null };
+
     const byOrder = (a: { order: number }, b: { order: number }) =>
       a.order - b.order;
 
@@ -355,6 +361,13 @@ export const viewCourse = courseProcedure
     // output type, and the zod output schema validates the shape at runtime.
     return {
       ...course,
+      ...(category && {
+        category: {
+          id: category.categoryId,
+          name: category.name,
+          archived: category.status === 'archived',
+        },
+      }),
       modules: modules
         .slice()
         .sort(byOrder)

@@ -39,6 +39,9 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    ['a new category', record('INSERT', 'NewImage', 'category')],
+    ['a category change', record('MODIFY', 'NewImage', 'category')],
+    ['a new category claim', record('INSERT', 'NewImage', 'categoryClaim')],
     // The recalculation's own write when it issues a certificate.
     // A student's saved video position, written every few seconds.
     ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
@@ -47,6 +50,12 @@ describe('matchesProgressStreamFilters', () => {
     // A submission's own change; its completion is what drives progress.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
     ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],
+    // Reviews and the rating tally change no item, so no progress.
+    ...['review', 'courseRating'].flatMap((entity) => [
+      [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
+      [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
+      [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
+    ]),
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);

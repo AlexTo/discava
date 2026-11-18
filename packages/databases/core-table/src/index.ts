@@ -95,6 +95,22 @@ export {
   tracksForPlayback,
 } from './helpers/caption-tracks.js';
 export {
+  CATEGORY_NAME_MAX_LENGTH,
+  categoryNameKey,
+  categorySlug,
+  DURATION_HOURS_MAX,
+  DURATION_HOURS_MIN,
+  LANGUAGES,
+  type Language,
+  LEVELS,
+  type Level,
+  MAX_TAGS,
+  normaliseCategoryName,
+  normaliseTags,
+  TAG_MAX_LENGTH,
+} from './helpers/catalogue.js';
+export { type CategoryCreate, categoryWrites } from './helpers/category.js';
+export {
   type Certificate,
   formatCertificateId,
   generateCertificateId,
@@ -108,6 +124,10 @@ export {
   transcodePendingFrom,
 } from './helpers/content-item.js';
 export {
+  type CourseCatalogue,
+  courseCatalogueWrites,
+} from './helpers/course-catalogue.js';
+export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,
   isShown,
@@ -115,7 +135,9 @@ export {
 export {
   InvalidRequestError,
   isConditionalCheckFailed,
+  NameConflictError,
   NotFoundError,
+  SlugUnavailableError,
   VersionConflictError,
 } from './helpers/errors.js';
 export {
@@ -182,6 +204,29 @@ export {
   PROGRESS_STREAM_FILTERS,
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
+export {
+  classifyReviewCancellation,
+  type ReviewCancellation,
+  type ReviewDelete,
+  type ReviewEdit,
+  type ReviewPost,
+  type ReviewWrite,
+  reviewerName,
+  reviewText,
+  reviewWrites,
+} from './helpers/review.js';
+export {
+  PRIOR_MEAN,
+  PRIOR_WEIGHT,
+  ratingAverage,
+  ratingBoost,
+  ratingCount,
+  type StarField,
+  type Stars,
+  starCounts,
+  starField,
+  weightedRating,
+} from './helpers/review-rating.js';
 export {
   matchesSearchStreamFilters,
   SEARCH_STREAM_FILTERS,

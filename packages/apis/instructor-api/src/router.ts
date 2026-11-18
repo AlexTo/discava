@@ -11,7 +11,9 @@ import {
 } from './procedures/analytics.js';
 import {
   createAnnouncement,
+  deleteAnnouncement,
   listAnnouncements,
+  updateAnnouncement,
 } from './procedures/announcement.js';
 import {
   createQuizAssignment,
@@ -60,6 +62,10 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import {
+  listActiveCategories,
+  updateCourseCatalogue,
+} from './procedures/course-catalogue.js';
+import {
   createCourseImageUploadUrl,
   updateCourseImage,
 } from './procedures/course-image.js';
@@ -95,6 +101,8 @@ export const appRouter = router({
   announcement: router({
     create: createAnnouncement,
     list: listAnnouncements,
+    update: updateAnnouncement,
+    delete: deleteAnnouncement,
   }),
   course: router({
     create: createCourse,
@@ -105,6 +113,10 @@ export const appRouter = router({
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
+    updateCatalogue: updateCourseCatalogue,
+  }),
+  category: router({
+    listActive: listActiveCategories,
   }),
   module: router({
     create: createModule,

@@ -39,3 +39,22 @@ export class InvalidRequestError extends Error {
     this.name = 'InvalidRequestError';
   }
 }
+
+// The write names a value another record already holds (a category name
+// another category has): nothing was changed, and callers map it to a
+// CONFLICT.
+export class NameConflictError extends Error {
+  constructor(message = 'That name is already taken') {
+    super(message);
+    this.name = 'NameConflictError';
+  }
+}
+
+// A category's slug stayed taken through every retry, because of other
+// creates racing on the same slug. Nothing was changed and a retry is safe.
+export class SlugUnavailableError extends Error {
+  constructor(message = 'No free slug for that name; try again') {
+    super(message);
+    this.name = 'SlugUnavailableError';
+  }
+}
