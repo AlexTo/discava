@@ -2,29 +2,33 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-// The entities v1's search index (courses) is built from. A course's
-// document depends only on its own record, so no curriculum edit (module,
-// lesson or content item) can change it.
+// The entities the courses index is built from: the course's own record and
+// its rating tally. No curriculum edit (module, lesson or content item) and
+// no individual review can change a document, only the tally the review
+// writer keeps, which is why `review` is not here.
 const SEARCHABLE_ENTITIES = ['course'] as const;
+const RATED_ENTITIES = ['course', 'courseRating'] as const;
 
 /**
  * Which of the core table's stream records can change what's searchable: a
- * course's. Every INSERT/MODIFY (the indexing Lambda decides whether the new
- * image is still published) and REMOVE (the doc is always deleted then,
- * since a removed course can never be published).
+ * course's or its rating's. Every INSERT/MODIFY (the indexing Lambda reads
+ * the course and its rating, and decides whether the course is still
+ * published) and, for a course only, REMOVE (the doc is always deleted then,
+ * since a removed course can never be published; a rating is never removed
+ * on its own).
  * ElectroDB stores each record's entity name in `__edb_e__`.
  *
- * The one definition both the deployed event source mapping's filters
- * (CoreApiStack) and local dev's event runner (#137) are built from, the
- * same pattern as PROGRESS_STREAM_FILTERS.
+ * The one definition both the deployed stream router's `search-indexing`
+ * feature and local dev's event runner (#137) are built from, the same
+ * pattern as PROGRESS_STREAM_FILTERS.
  */
 export const SEARCH_STREAM_FILTERS: readonly {
   eventName: 'INSERT' | 'MODIFY' | 'REMOVE';
   image: 'NewImage' | 'OldImage';
   entities: readonly string[];
 }[] = [
-  { eventName: 'INSERT', image: 'NewImage', entities: SEARCHABLE_ENTITIES },
-  { eventName: 'MODIFY', image: 'NewImage', entities: SEARCHABLE_ENTITIES },
+  { eventName: 'INSERT', image: 'NewImage', entities: RATED_ENTITIES },
+  { eventName: 'MODIFY', image: 'NewImage', entities: RATED_ENTITIES },
   { eventName: 'REMOVE', image: 'OldImage', entities: SEARCHABLE_ENTITIES },
 ];
 

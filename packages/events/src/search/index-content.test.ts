@@ -6,12 +6,17 @@ import type { DynamoDBStreamSchema } from '@aws-lambda-powertools/parser/schemas
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { z } from 'zod';
 
-const { getOpenSearchClientMock, createCoreTableServiceMock, courseGet } =
-  vi.hoisted(() => ({
-    getOpenSearchClientMock: vi.fn(),
-    createCoreTableServiceMock: vi.fn(),
-    courseGet: vi.fn(),
-  }));
+const {
+  getOpenSearchClientMock,
+  createCoreTableServiceMock,
+  courseGet,
+  ratingGet,
+} = vi.hoisted(() => ({
+  getOpenSearchClientMock: vi.fn(),
+  createCoreTableServiceMock: vi.fn(),
+  courseGet: vi.fn(),
+  ratingGet: vi.fn(),
+}));
 
 vi.mock('@discava/search', async (importActual) => {
   const actual = await importActual<typeof import('@discava/search')>();
@@ -87,8 +92,12 @@ describe('searchIndexing', () => {
     vi.clearAllMocks();
     getOpenSearchClientMock.mockResolvedValue(client);
     createCoreTableServiceMock.mockResolvedValue({
-      entities: { course: { get: courseGet } },
+      entities: {
+        course: { get: courseGet },
+        courseRating: { get: ratingGet },
+      },
     });
+    ratingGet.mockReturnValue({ go: async () => ({ data: null }) });
     courseGet.mockReturnValue({ go: async () => ({ data: stored() }) });
     client.index.mockResolvedValue({});
     client.delete.mockResolvedValue({});
@@ -141,6 +150,100 @@ describe('searchIndexing', () => {
     courseGet.mockReturnValue({ go: async () => ({ data: stored() }) });
     await searchIndexing(event(courseChange()));
     expect(client.index.mock.calls[1]![0].body.categoryId).toBeUndefined();
+  });
+
+  const ratingChange = (courseId = 'c1') =>
+    record('MODIFY', undefined, {
+      __edb_e__: 'courseRating',
+      courseId,
+      stars5: 1,
+    });
+
+  it('indexes the rating the table holds when a course and its rating changed together', async () => {
+    ratingGet.mockReturnValue({
+      go: async () => ({ data: { courseId: 'c1', stars5: 1 } }),
+    });
+
+    await searchIndexing(event(courseChange(), ratingChange()));
+
+    expect(client.index).toHaveBeenCalledTimes(1);
+    expect(ratingGet).toHaveBeenCalledTimes(1);
+    expect(ratingGet).toHaveBeenCalledWith({ courseId: 'c1' });
+    const body = client.index.mock.calls[0]![0].body;
+    expect(body).toMatchObject({ ratingCount: 1, ratingAverage: 5 });
+    expect(body.ratingScore).toBeCloseTo(3.75);
+  });
+
+  it('reads the rating consistently', async () => {
+    const go = vi.fn(async () => ({ data: null }));
+    ratingGet.mockReturnValue({ go });
+
+    await searchIndexing(event(ratingChange()));
+
+    expect(go).toHaveBeenCalledWith({ consistent: true });
+  });
+
+  it('indexes a course with no rating record with a boost of 1 only', async () => {
+    await searchIndexing(event(courseChange()));
+
+    const body = client.index.mock.calls[0]![0].body;
+    expect(body.ratingBoost).toBe(1);
+    expect(body.ratingCount).toBeUndefined();
+  });
+
+  it.each(['draft', 'archived', null])(
+    'deletes and does not index when a rating changes for a course the table holds as %s',
+    async (status) => {
+      stub({ c1: status === null ? null : stored({ status }) });
+
+      await searchIndexing(event(ratingChange()));
+
+      expect(client.delete).toHaveBeenCalledWith({
+        index: 'courses',
+        id: 'c1',
+      });
+      expect(client.index).not.toHaveBeenCalled();
+      expect(ratingGet).not.toHaveBeenCalled();
+    },
+  );
+
+  it('ends with the same document whichever order the course and rating records arrive in', async () => {
+    const docs = fakeIndex();
+    ratingGet.mockReturnValue({
+      go: async () => ({ data: { courseId: 'c1', stars4: 3 } }),
+    });
+
+    await searchIndexing(event(courseChange(), ratingChange()));
+    const first = docs.get('c1');
+    docs.clear();
+    await searchIndexing(event(ratingChange(), courseChange()));
+
+    expect(docs.get('c1')).toEqual(first);
+    expect(first).toMatchObject({ ratingCount: 3, ratingAverage: 4 });
+  });
+
+  it('fails the batch when a rating record names no course', async () => {
+    await expect(
+      searchIndexing(
+        event(record('MODIFY', undefined, { __edb_e__: 'courseRating' })),
+      ),
+    ).rejects.toThrow(/courseRating/);
+    expect(client.index).not.toHaveBeenCalled();
+  });
+
+  it('ignores a review record', async () => {
+    await searchIndexing(
+      event(
+        record('INSERT', undefined, {
+          __edb_e__: 'review',
+          courseId: 'c1',
+          userId: 'u1',
+        }),
+      ),
+    );
+
+    expect(courseGet).not.toHaveBeenCalled();
+    expect(client.index).not.toHaveBeenCalled();
   });
 
   it('reads the course consistently, so it sees the write that triggered the batch', async () => {
