@@ -190,6 +190,7 @@ function Lesson({
       )}
 
       <QuestionsSection
+        key={lesson.lessonId}
         courseId={courseId}
         moduleId={module.moduleId}
         lessonId={lesson.lessonId}

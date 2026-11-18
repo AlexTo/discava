@@ -2,7 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -441,6 +443,58 @@ describe('LessonPage', () => {
         lessonId: 'lesson-1',
       }),
     );
+  });
+
+  it('starts the next lesson’s questions fresh, without the open thread or drafts', async () => {
+    const question = {
+      postId: 'q-1',
+      threadId: 'q-1',
+      kind: 'question',
+      state: 'shown',
+      authorName: 'Ada L.',
+      title: 'What is a basis?',
+      body: 'I am lost.',
+      createdAt: AT,
+      voteCount: 0,
+      replyCount: 0,
+    };
+    const Harness = () => {
+      const [lessonId, setLessonId] = useState('lesson-1');
+      return (
+        <>
+          <button type="button" onClick={() => setLessonId('lesson-2')}>
+            Go to lesson 2
+          </button>
+          <LessonPage courseId="course-1" lessonId={lessonId} />
+        </>
+      );
+    };
+    const { user, calls } = renderWithCoreApi(<Harness />, {
+      handlers: handlers({
+        'discussion.listQuestions': (input) => ({
+          items:
+            (input as { lessonId: string }).lessonId === 'lesson-1'
+              ? [question]
+              : [],
+        }),
+        'discussion.thread': () => ({ question, replies: [] }),
+      }),
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Open question' }),
+    );
+    await screen.findByRole('button', { name: 'Back to questions' });
+    await user.type(await screen.findByLabelText('Your reply'), 'draft');
+
+    await user.click(screen.getByRole('button', { name: 'Go to lesson 2' }));
+
+    expect(await screen.findByText(/No questions yet/)).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load the question")).toBeNull();
+    expect(screen.queryByLabelText('Your reply')).toBeNull();
+    expect(
+      calls.filter((call) => call.path === 'discussion.thread'),
+    ).toHaveLength(1);
   });
 
   it('keeps the lesson working when the questions call fails', async () => {
