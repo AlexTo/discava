@@ -1,0 +1,29 @@
+{
+  "name": "@discava/admin-api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-lambda-powertools/logger": "catalog:",
+    "@aws-lambda-powertools/metrics": "catalog:",
+    "@aws-lambda-powertools/parameters": "catalog:",
+    "@aws-lambda-powertools/tracer": "catalog:",
+    "@aws-sdk/client-dynamodb": "catalog:",
+    "@aws-sdk/credential-providers": "catalog:",
+    "@discava/common-server-utils": "workspace:*",
+    "@discava/core-table": "workspace:*",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "aws-xray-sdk-core": "catalog:",
+    "electrodb": "catalog:",
+    "tslib": "^2.3.0",
+    "uuid": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "catalog:",
+    "@types/cors": "catalog:",
+    "cors": "catalog:"
+  },
+  "license": "Apache-2.0"
+}

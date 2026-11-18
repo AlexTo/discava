@@ -87,6 +87,7 @@
     "@discava/admin-portal",
     "@discava/core-api",
     "@discava/instructor-api",
+    "@discava/admin-api",
     "@discava/events",
     "@discava/common-scripts"
   ]

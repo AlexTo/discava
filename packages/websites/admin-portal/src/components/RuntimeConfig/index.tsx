@@ -41,6 +41,7 @@ const LOCAL_DEV_CONFIG: IRuntimeConfig = {
   },
   apis: {
     CoreApi: 'http://localhost:2022/',
+    AdminApi: 'http://localhost:2025/',
   },
 };
 
