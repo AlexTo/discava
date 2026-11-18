@@ -48,8 +48,12 @@ test('an instructor posts, edits and deletes an announcement', async ({
     page.getByRole('button', { name: 'Save changes' }),
   ).toBeVisible();
   await screenshot(page, 'editing the announcement');
-  await page.getByLabel('Announcement text').fill('Welcome, and good luck.');
-  await page.getByRole('button', { name: 'Save changes' }).click();
+  // The post form is still on the page above the list: edit within the item.
+  const editing = page.getByRole('listitem').filter({
+    has: page.getByRole('button', { name: 'Save changes' }),
+  });
+  await editing.getByLabel('Announcement text').fill('Welcome, and good luck.');
+  await editing.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByText('Welcome, and good luck.')).toBeVisible();
   await expect(page.getByText(/edited/)).toBeVisible();
 
