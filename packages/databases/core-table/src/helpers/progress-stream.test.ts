@@ -47,6 +47,13 @@ describe('matchesProgressStreamFilters', () => {
     ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
     ['a saved video position', record('MODIFY', 'NewImage', 'videoPosition')],
     ['a new certificate', record('INSERT', 'NewImage', 'certificate')],
+    // Discussion records: nothing in progress depends on them.
+    ['a new post', record('INSERT', 'NewImage', 'discussionPost')],
+    ['an edited post', record('MODIFY', 'NewImage', 'discussionPost')],
+    ['a removed post', record('REMOVE', 'OldImage', 'discussionPost')],
+    ['a new vote', record('INSERT', 'NewImage', 'discussionVote')],
+    ['a changed vote', record('MODIFY', 'NewImage', 'discussionVote')],
+    ['a removed vote', record('REMOVE', 'OldImage', 'discussionVote')],
     // A submission's own change; its completion is what drives progress.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
     ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],

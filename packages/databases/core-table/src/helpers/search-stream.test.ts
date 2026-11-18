@@ -43,6 +43,19 @@ describe('matchesSearchStreamFilters', () => {
     }
   });
 
+  it('ignores discussion posts and votes: the courses index does not hold them', () => {
+    for (const entity of ['discussionPost', 'discussionVote']) {
+      for (const eventName of ['INSERT', 'MODIFY']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, 'NewImage', entity)),
+        ).toBe(false);
+      }
+      expect(
+        matchesSearchStreamFilters(record('REMOVE', 'OldImage', entity)),
+      ).toBe(false);
+    }
+  });
+
   it('matches a course change that only touches catalogue fields', () => {
     const catalogueWrite = {
       eventName: 'MODIFY',

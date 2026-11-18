@@ -37,7 +37,7 @@ One record per question and per reply. Questions and replies share an entity so 
 | A course's unanswered questions, oldest first | `byUnanswered` on `gsi2pk-gsi2sk-index`, sparse: pk `courseId`, `unanswered`; sk `threadId` | `discussion.unanswered` |
 | A course's reported posts, oldest first | `byReported` on `gsi1pk-gsi1sk-index`, sparse: pk `courseId`, `reported`; sk `postId` | `discussion.reported` |
 
-Both indexes use `condition` so only flagged records are written to them, as `contentItem.byTranscodePending` does. No scans. The table stream sees post writes; none matches `PROGRESS_STREAM_FILTERS` or `SEARCH_STREAM_FILTERS` (a test pins that).
+Both indexes use `condition` so only flagged records are written to them, as `contentItem.byTranscodePending` does. Their partition keys are templates over `courseId` alone (`$discussionpost_unanswered#<courseId>`, `$discussionpost_reported#<courseId>`) rather than composites that name the flag: courseId is a key of every write, so ElectroDB would otherwise require both flags on every create. The writer that removes a flag must also clear the index's key fields, which ElectroDB's `remove` does not do for a template. No scans. The table stream sees post writes; none matches `PROGRESS_STREAM_FILTERS` or `SEARCH_STREAM_FILTERS` (a test pins that).
 
 ## `discussionVote` (new entity, `.../entities/discussion-vote.ts`)
 
