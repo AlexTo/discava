@@ -47,6 +47,9 @@
       "path": "../../apis/core-api/tsconfig.lib.json"
     },
     {
+      "path": "../../apis/admin-api/tsconfig.lib.json"
+    },
+    {
       "path": "../../common/shadcn/tsconfig.lib.json"
     }
   ]

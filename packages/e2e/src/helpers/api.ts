@@ -4,6 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import type { AppRouter as AdminApi } from '@discava/admin-api';
 import type { AppRouter as CoreApi } from '@discava/core-api';
 import { createCoreTableService } from '@discava/core-table';
 import type { AppRouter as InstructorApi } from '@discava/instructor-api';
@@ -92,6 +93,9 @@ export const apiClients = (accessToken: string) => {
     }),
     instructor: createTRPCClient<InstructorApi>({
       links: [httpLink({ url: SERVICES.instructorApi, headers })],
+    }),
+    admin: createTRPCClient<AdminApi>({
+      links: [httpLink({ url: SERVICES.adminApi, headers })],
     }),
   };
 };

@@ -56,6 +56,17 @@ describe('matchesSearchStreamFilters', () => {
     }
   });
 
+  it('ignores a review: the search document holds only the rating tally', () => {
+    for (const eventName of ['INSERT', 'MODIFY']) {
+      expect(
+        matchesSearchStreamFilters(record(eventName, 'NewImage', 'review')),
+      ).toBe(false);
+    }
+    expect(
+      matchesSearchStreamFilters(record('REMOVE', 'OldImage', 'review')),
+    ).toBe(false);
+  });
+
   it('matches a course change that only touches catalogue fields', () => {
     const catalogueWrite = {
       eventName: 'MODIFY',

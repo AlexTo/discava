@@ -57,6 +57,12 @@ describe('matchesProgressStreamFilters', () => {
     // A submission's own change; its completion is what drives progress.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
     ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],
+    // Reviews and the rating tally change no item, so no progress.
+    ...['review', 'courseRating'].flatMap((entity) => [
+      [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
+      [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
+      [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
+    ]),
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);

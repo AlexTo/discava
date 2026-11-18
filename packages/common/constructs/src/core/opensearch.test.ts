@@ -6,6 +6,7 @@
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
+import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Code } from 'aws-cdk-lib/aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { OpenSearchCollection } from './opensearch.js';
@@ -45,6 +46,34 @@ describe('OpenSearchCollection', { timeout: 30_000 }, () => {
         SyncedAt: Match.stringLikeRegexp('^\\d{4}-\\d{2}-\\d{2}T'),
       },
     );
+  });
+
+  it('keeps one statement per permission set however often a role is granted', () => {
+    // The shared router Lambda is granted once per procedure; repeating the
+    // same rules each time pushes the policy past OpenSearch Serverless's 20KB.
+    const stack = new Stack(new App(), 'Stack');
+    const collection = new TestCollection(stack, 'Collection', {
+      collectionName: 'discava-test',
+      runtimeConfigKey: 'Test',
+      indices: [],
+      manifestHash: 'hash',
+      indexSyncHandlerCode: Code.fromInline('exports.handler = () => {}'),
+    });
+    const role = new Role(stack, 'Router', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+    });
+    for (let i = 0; i < 40; i++) collection.grantRead(role);
+    collection.grantWrite(role);
+
+    const policies = Template.fromStack(stack).findResources(
+      'AWS::OpenSearchServerless::AccessPolicy',
+      { Properties: { Name: Match.stringLikeRegexp('-[0-9a-f]{8}$') } },
+    );
+    const [policy] = Object.values(policies);
+    const rendered = JSON.stringify(policy?.Properties.Policy);
+    // Read + write: two statements, one principal each.
+    expect(rendered.match(/Rules/g)).toHaveLength(2);
+    expect(rendered.match(/Router/g)).toHaveLength(2);
   });
 
   it('accepts a name whose every derived policy name fits in 32 characters', () => {
