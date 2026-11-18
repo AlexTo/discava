@@ -12,7 +12,7 @@
 // request, so the agent is sent back with the failing checks.
 
 export const REVIEW_STATUS_CONTEXT = 'software-factory/review';
-export const MAX_CI_FIX_ATTEMPTS = 3;
+export const MAX_CI_FIX_ATTEMPTS = 5;
 export const ATTEMPT_LABEL_PREFIX = 'ci-fix-';
 export const EXHAUSTED_LABEL = 'ci-fix-exhausted';
 

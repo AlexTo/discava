@@ -114,7 +114,7 @@ describe('a failed run on an agent pull request', () => {
         fields: [
           'state=failure',
           'context=software-factory/review',
-          'description=CI failed (fix attempt 1 of 3): Checks (test), E2E tests',
+          'description=CI failed (fix attempt 1 of 5): Checks (test), E2E tests',
           'target_url=https://github.com/AlexTo/discava/actions/runs/99',
         ].join(' | '),
       },
@@ -140,13 +140,15 @@ describe('a failed run on an agent pull request', () => {
 
   it('gives up with a label and one comment after the attempt limit', () => {
     const { written, comments } = runScenario({
-      pr: { labels: ['ci-fix-1', 'ci-fix-2', 'ci-fix-3'] },
+      pr: {
+        labels: ['ci-fix-1', 'ci-fix-2', 'ci-fix-3', 'ci-fix-4', 'ci-fix-5'],
+      },
     });
     expect(
       written.map(({ path }) => path.split('/').slice(-2).join('/')),
     ).toEqual(['312/labels', '312/comments']);
     expect(written[0].fields).toBe('labels[]=ci-fix-exhausted');
-    expect(comments[0]).toContain('after 3 automatic fix attempts');
+    expect(comments[0]).toContain('after 5 automatic fix attempts');
   });
 
   it('writes nothing for a run on a commit that is no longer the head', () => {
