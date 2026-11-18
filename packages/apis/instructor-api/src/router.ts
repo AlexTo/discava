@@ -89,6 +89,11 @@ import {
   restoreModule,
   updateModule,
 } from './procedures/module.js';
+import {
+  deleteReviewResponse,
+  listReviews,
+  respondToReview,
+} from './procedures/review.js';
 
 export const router = t.router;
 
@@ -103,6 +108,11 @@ export const appRouter = router({
     list: listAnnouncements,
     update: updateAnnouncement,
     delete: deleteAnnouncement,
+  }),
+  review: router({
+    list: listReviews,
+    respond: respondToReview,
+    deleteResponse: deleteReviewResponse,
   }),
   course: router({
     create: createCourse,
