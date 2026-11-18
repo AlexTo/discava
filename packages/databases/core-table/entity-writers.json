@@ -1,0 +1,174 @@
+{
+  "analyticsMarker": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "announcement": {
+    "core-table": ["packages/databases/core-table/src/helpers/announcement.ts"]
+  },
+  "assignmentSubmission": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/assignment-submission.ts"
+    ]
+  },
+  "category": {
+    "core-table": ["packages/databases/core-table/src/helpers/category.ts"]
+  },
+  "categoryClaim": {
+    "core-table": ["packages/databases/core-table/src/helpers/category.ts"]
+  },
+  "certificate": {
+    "core-table": ["packages/databases/core-table/src/helpers/certificate.ts"]
+  },
+  "contentItem": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/student-activity.ts"
+    ],
+    "events": [
+      "packages/events/src/media/transcode-outcome.ts",
+      "packages/events/src/media/transcode-reconciler.ts",
+      "packages/events/src/media/transcribe-outcome.ts"
+    ],
+    "instructor-api": [
+      "packages/apis/instructor-api/src/procedures/assignment.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-captions.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-file.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-quiz.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-shared.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-text.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-video.ts",
+      "packages/apis/instructor-api/src/procedures/lesson.ts",
+      "packages/apis/instructor-api/src/procedures/module.ts"
+    ]
+  },
+  "course": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/course-catalogue.ts"
+    ],
+    "instructor-api": [
+      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/procedures/course-image.ts",
+      "packages/apis/instructor-api/src/procedures/course.ts"
+    ]
+  },
+  "courseInstructor": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/course-catalogue.ts"
+    ],
+    "instructor-api": [
+      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/procedures/course.ts"
+    ]
+  },
+  "courseRating": {
+    "core-table": ["packages/databases/core-table/src/helpers/review.ts"]
+  },
+  "courseStats": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "discussionPost": {
+    "core-table": ["packages/databases/core-table/src/helpers/discussion.ts"]
+  },
+  "discussionVote": {
+    "core-table": ["packages/databases/core-table/src/helpers/discussion.ts"]
+  },
+  "enrolment": {
+    "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
+    "core-table": [
+      "packages/databases/core-table/src/helpers/student-activity.ts"
+    ],
+    "events": ["packages/events/src/progress/recalculate.ts"]
+  },
+  "itemCompletion": {
+    "core-api": [
+      "packages/apis/core-api/src/procedures/completion.ts",
+      "packages/apis/core-api/src/procedures/quiz.ts"
+    ],
+    "core-table": [
+      "packages/databases/core-table/src/helpers/assignment-submission.ts"
+    ]
+  },
+  "lesson": {
+    "instructor-api": [
+      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/procedures/assignment.ts",
+      "packages/apis/instructor-api/src/procedures/lesson.ts",
+      "packages/apis/instructor-api/src/procedures/module.ts"
+    ]
+  },
+  "lessonStats": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "module": {
+    "instructor-api": [
+      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/procedures/module.ts"
+    ]
+  },
+  "notification": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/notification-email.ts",
+      "packages/databases/core-table/src/helpers/notification-read.ts",
+      "packages/databases/core-table/src/helpers/notification.ts"
+    ]
+  },
+  "notificationBroadcast": {
+    "core-table": ["packages/databases/core-table/src/helpers/notification.ts"],
+    "events": ["packages/events/src/notifications/fan-out.ts"]
+  },
+  "notificationPreference": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/notification-preference.ts"
+    ]
+  },
+  "notificationState": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/notification-read.ts",
+      "packages/databases/core-table/src/helpers/notification.ts"
+    ]
+  },
+  "periodStats": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "progress": {
+    "events": ["packages/events/src/progress/recalculate.ts"]
+  },
+  "quizAttempt": {
+    "core-api": ["packages/apis/core-api/src/procedures/quiz.ts"]
+  },
+  "quizQuestionStats": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "quizScoreStats": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
+      "packages/databases/core-table/src/helpers/analytics-writes.ts"
+    ]
+  },
+  "quizSummary": {
+    "core-api": ["packages/apis/core-api/src/procedures/quiz.ts"]
+  },
+  "review": {
+    "core-table": ["packages/databases/core-table/src/helpers/review.ts"]
+  },
+  "user": {
+    "core-table": ["packages/databases/core-table/src/helpers/user.ts"]
+  },
+  "videoPosition": {
+    "core-api": ["packages/apis/core-api/src/procedures/content-item.ts"]
+  }
+}
