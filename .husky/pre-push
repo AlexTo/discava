@@ -1,0 +1,34 @@
+# Keeps core-table's entity-writers.json in step with the code, which the
+# `Invariant coverage` PR check requires: when the branch changes code that
+# could write the core table, regenerate the map and stop the push if it
+# changed, so it's committed before CI finds it out of date. Same paths as
+# that job in .github/workflows/pr-checks.yml. Skip with `git push --no-verify`.
+
+MAP=packages/databases/core-table/entity-writers.json
+PATHS="packages/apis packages/events packages/databases packages/common/scripts"
+BASE="$(git merge-base HEAD origin/main 2>/dev/null)" || exit 0
+
+# shellcheck disable=SC2086
+if git diff --quiet "$BASE" HEAD -- $PATHS; then
+  exit 0
+fi
+
+RED='\033[0;31m'
+NC='\033[0m'
+
+# The scan reads the working tree, not the commits being pushed.
+# shellcheck disable=SC2086
+if ! git diff --quiet HEAD -- $PATHS; then
+  echo "${RED}pre-push: uncommitted changes under ${PATHS}; not checking ${MAP} (the Invariant coverage check will)${NC}"
+  exit 0
+fi
+
+echo "pre-push: checking ${MAP} is up to date…"
+pnpm nx run @discava/common-scripts:entity-writers --output-style=static >/dev/null || exit 1
+
+if ! git diff --quiet -- "$MAP"; then
+  echo "${RED}pre-push: ${MAP} was out of date with the code, and has been regenerated.${NC}"
+  echo "${RED}Commit it and push again.${NC}"
+  git --no-pager diff --stat -- "$MAP"
+  exit 1
+fi

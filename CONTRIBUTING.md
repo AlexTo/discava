@@ -93,7 +93,7 @@ Two checks make sure a change that could need a new rule gets one:
   pnpm nx run @discava/common-scripts:entity-writers
   ```
 
-  The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds to `helpers/invariants.ts` name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
+  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/common/scripts`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds to `helpers/invariants.ts` name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
 
 ### Testing Portal Components
 
