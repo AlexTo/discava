@@ -1,0 +1,64 @@
+---
+title: Notifications
+description: How a feature notifies people (the bell and email), the producer helpers, dedupe keys, preferences and unsubscribe, the local inbox and the stage config for email.
+sidebar:
+  order: 3
+---
+
+A notification is a short message for one person: it shows in the bell in every portal's header and, by their preferences, is sent as an email. Features publish notifications through helpers in `@discava/core-table`. Nothing else may write the notification records.
+
+## Add an event type
+
+Each kind of notification is one entry in `NOTIFICATION_TYPES` (`packages/databases/core-table/src/helpers/notification-types.ts`):
+
+- `id`: stable, `<area>.<event>`, for example `announcement.posted`.
+- `name` and `description`: what the settings page shows.
+- `params`: the flat string params the notification is built from.
+- `emailPolicy`: `default-on`, `default-off`, `required` (always sent) or `never` (bell only).
+- `build(params)`: pure; returns the `title` (cut to 120 characters), `body` (cut to 500) and the `link` (`portal` and a `path` starting with `/`, with no secret in it).
+
+Add a test for the entry in `notification-types.test.ts`. Nothing else changes: settings, the bell and the email pick it up.
+
+## Publish
+
+Every helper takes the same input: `type`, `params`, `dedupeKey`, `occurredAt`, and `userId` (or `courseId` for a course audience).
+
+- `notificationWrites(service, input)` validates the input and returns the transaction items (the notification and the user's unread count). Add them to your own `service.transaction.write`, beside the write the notification is about, so both commit or neither does. A cancelled transaction is handled as for any other condition failure.
+- `publishNotification(service, input)` does the same in its own transaction and returns `'created'` or `'duplicate'`. Use it when the notification isn't part of another write.
+- `notifyCourseStudents(service, input)` returns one item that asks for every student enrolled in the course (not dropped) to be notified. Add it to your transaction. The pipeline then creates each student's notification with your `dedupeKey`, so a retry is safe. Only students are covered; for instructors call `notificationWrites` for each.
+
+Invalid input (an unregistered type, a missing param, an empty key, a bad instant) throws `NotificationInputError` before anything is read or written. The helpers don't check that the user exists or has an email address.
+
+Don't call `markNotificationRead`, `markNotificationsRead` or `notificationEmailTransitions`: they belong to the API and the delivery.
+
+## The dedupe key and `occurredAt`
+
+The dedupe key names the event, for example `${contentItemId}:${version}`. A notification's id comes from its type and key, so publishing the same event twice, from a retry or from ten requests at once, is one notification. Use something that is the same every time the event is retried and different for every new event; never a random value or the current time.
+
+`occurredAt` is an ISO instant in UTC with milliseconds (`2026-11-18T21:55:47.000Z`) taken from your own record (when the post was created, not when the code ran), so a retry gives the same value. It orders the bell's list.
+
+## Preferences and unsubscribe
+
+Someone can switch each type's email off in **Notification settings**, from the user menu in each portal. A `required` type has no switch, and a `never` type sends no email. The bell is unaffected by preferences.
+
+Every email carries an unsubscribe link, signed so it can't be changed, and the `List-Unsubscribe` headers for a mail client's one-click button. The link opens a page in the student portal that changes nothing until its button is pressed, and the page can switch the emails back on. The signing secret is generated per stage by the Data stack.
+
+## Try it locally
+
+With `pnpm dev` running, publish with the `notify-local` target:
+
+```sh
+pnpm nx run @discava/common-scripts:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/common-scripts:notify-local -- --course <courseId> --type announcement.posted
+```
+
+Repeat the command with the same `--key` to see a duplicate do nothing. Emails don't leave your machine: they are kept in the local inbox at `http://localhost:2024/inbox` (`GET /emails` lists them as JSON), which `reset-local-data` empties.
+
+## Email on a stage
+
+Email is sent with Amazon SES and is off until the stage is configured. Under `infra.notifications` in the stage's config (or the `<STAGE>_INFRA_NOTIFICATIONS_*` environment overrides):
+
+- `fromAddress`: the address emails are sent from.
+- `sesIdentity`: the verified SES domain or address the delivery function may send from, and nothing else. `fromAddress` must belong to it.
+
+Without `fromAddress`, notifications still reach the bell and each email is recorded as skipped. In the SES sandbox, recipients must be verified too. Failed deliveries go to the `notification-delivery` failure queue, which has an alarm.
