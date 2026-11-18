@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../../../../test/fake-trpc-fetch';
 import {
@@ -61,6 +61,38 @@ describe('UnansweredView', () => {
     });
 
     expect(await screen.findByText(/Lesson l2 \(archived\)/)).toBeVisible();
+  });
+
+  it('keeps the thread open when answering takes the question out of the queue', async () => {
+    let answered = false;
+    const rendered = renderQuestions(<UnansweredView courseId="c1" />, {
+      instructor: {
+        'course.view': () => lessonsView([{ lessonId: 'l1' }]),
+        'discussion.unanswered': () => ({ items: answered ? [] : [row(1)] }),
+      },
+      core: {
+        'discussion.thread': () => ({
+          question: { ...row(1), replyCount: 0 },
+          replies: [],
+        }),
+      },
+    });
+
+    await rendered.user.click(
+      await screen.findByRole('button', { name: /^Open question/ }),
+    );
+    expect(await screen.findByRole('dialog')).toBeVisible();
+    // The portal's two API clients share one query cache, so a reply's refresh
+    // reaches the queue too.
+    answered = true;
+    await rendered.queryClient.invalidateQueries({
+      queryKey: rendered.optionsProxy.discussion.unanswered.pathKey(),
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('All questions are answered.')).toBeVisible(),
+    );
+    expect(screen.getByRole('dialog')).toBeVisible();
   });
 
   it('shows the empty state', async () => {

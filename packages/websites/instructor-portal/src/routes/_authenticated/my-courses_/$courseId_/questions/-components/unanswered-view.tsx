@@ -16,7 +16,6 @@ import { ThreadDialog } from './thread-dialog';
 export function UnansweredView({ courseId }: { courseId: string }) {
   const trpc = useInstructorApi();
   const lessons = useCourseLessons(courseId);
-  const [open, setOpen] = useState<string>();
   const query = useInfiniteQuery(
     trpc.discussion.unanswered.infiniteQueryOptions(
       { courseId },
@@ -24,7 +23,9 @@ export function UnansweredView({ courseId }: { courseId: string }) {
     ),
   );
   const rows = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const opened = rows.find((row) => row.postId === open);
+  // The row is kept, not looked up in the list: answering the question takes
+  // it out of the queue, which must not close the thread being answered.
+  const [opened, setOpened] = useState<(typeof rows)[number]>();
   const stateOf = (lessonId: string) =>
     lessons.data?.lessons.find((l) => l.lessonId === lessonId)?.state;
 
@@ -57,7 +58,7 @@ export function UnansweredView({ courseId }: { courseId: string }) {
                   size="sm"
                   variant="outline"
                   aria-label={`Open question ${row.title ?? ''}`}
-                  onClick={() => setOpen(row.postId)}
+                  onClick={() => setOpened(row)}
                 >
                   Open
                 </Button>
@@ -76,7 +77,7 @@ export function UnansweredView({ courseId }: { courseId: string }) {
           threadId={opened.threadId}
           lessonState={stateOf(opened.lessonId)}
           courseArchived={lessons.data?.courseArchived ?? false}
-          onClose={() => setOpen(undefined)}
+          onClose={() => setOpened(undefined)}
         />
       ) : null}
     </>
