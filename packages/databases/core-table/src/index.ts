@@ -7,6 +7,7 @@ export {
   getDynamoDBClient,
   resolveTableName,
 } from './client.js';
+export { PREVIEW_MAX_SECONDS } from './entities/course-preview.js';
 export * from './entities/index.js';
 export {
   aggregatesOf,
@@ -127,6 +128,13 @@ export {
   type CourseCatalogue,
   courseCatalogueWrites,
 } from './helpers/course-catalogue.js';
+export {
+  type CourseLandingSet,
+  courseLandingWrites,
+  LANDING_ITEM_MAX_LENGTH,
+  LANDING_LIST_MAX_ITEMS,
+  normaliseLandingList,
+} from './helpers/course-landing.js';
 export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,

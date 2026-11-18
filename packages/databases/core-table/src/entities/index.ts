@@ -11,6 +11,7 @@ export { createCertificateEntity } from './certificate.js';
 export { createContentItemEntity } from './content-item.js';
 export { createCourseEntity } from './course.js';
 export { createCourseInstructorEntity } from './course-instructor.js';
+export { createCoursePreviewEntity } from './course-preview.js';
 export { createCourseRatingEntity } from './course-rating.js';
 export { createCourseStatsEntity } from './course-stats.js';
 export { createDiscussionPostEntity } from './discussion-post.js';

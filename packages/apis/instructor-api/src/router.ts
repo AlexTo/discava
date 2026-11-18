@@ -69,6 +69,7 @@ import {
   createCourseImageUploadUrl,
   updateCourseImage,
 } from './procedures/course-image.js';
+import { updateCourseLanding } from './procedures/course-landing.js';
 import {
   dismissReports,
   hide as hideDiscussionPost,
@@ -132,6 +133,7 @@ export const appRouter = router({
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
     updateCatalogue: updateCourseCatalogue,
+    updateLanding: updateCourseLanding,
   }),
   discussion: router({
     unanswered,
