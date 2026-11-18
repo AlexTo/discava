@@ -165,10 +165,14 @@ export function ReviewForm({ courseId }: { courseId: string }) {
     ),
   );
   const enrolment = enrolmentQuery.data;
-  const mayReview =
-    isAuthenticated && !!enrolment && enrolment.status !== 'dropped';
+  const dropped = enrolment?.status === 'dropped';
+  // A student who dropped the course keeps, and may edit or delete, the review
+  // they wrote; they just can't post a new one.
   const mineQuery = useQuery(
-    trpc.review.mine.queryOptions({ courseId }, { enabled: mayReview }),
+    trpc.review.mine.queryOptions(
+      { courseId },
+      { enabled: isAuthenticated && !!enrolment },
+    ),
   );
 
   const refresh = () =>
@@ -202,6 +206,9 @@ export function ReviewForm({ courseId }: { courseId: string }) {
         setConfirmingDelete(false);
         void refresh();
       },
+      // Close the dialog so the error (or the reload prompt for a CONFLICT)
+      // shows on the page instead of behind the overlay.
+      onError: () => setConfirmingDelete(false),
     }),
   );
 
@@ -240,9 +247,6 @@ export function ReviewForm({ courseId }: { courseId: string }) {
       </p>
     );
   }
-  if (!mayReview) {
-    return null;
-  }
   if (mineQuery.isPending) {
     return <Spinner />;
   }
@@ -272,6 +276,9 @@ export function ReviewForm({ courseId }: { courseId: string }) {
   }
 
   if (!mine) {
+    if (dropped) {
+      return null;
+    }
     return (
       <ReviewFields
         submitLabel="Post review"

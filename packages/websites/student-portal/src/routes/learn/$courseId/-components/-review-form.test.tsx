@@ -67,16 +67,32 @@ describe('ReviewForm', () => {
     expect(callsTo(calls, 'review.mine')).toEqual([]);
   });
 
-  it('offers no form to a student whose enrolment was dropped', async () => {
+  it('offers no form to a student whose enrolment was dropped and who has no review', async () => {
     const { calls } = render({
       'course.myEnrolment': () => enrolment('dropped'),
     });
 
-    await waitFor(() =>
-      expect(callsTo(calls, 'course.myEnrolment')).toHaveLength(1),
-    );
+    await waitFor(() => expect(callsTo(calls, 'review.mine')).toHaveLength(1));
     expect(screen.queryByRole('button', { name: 'Post review' })).toBeNull();
-    expect(callsTo(calls, 'review.mine')).toEqual([]);
+  });
+
+  it('lets a student who dropped the course edit and delete the review they wrote', async () => {
+    const { user, calls } = render({
+      'course.myEnrolment': () => enrolment('dropped'),
+      'review.mine': () => own(),
+      'review.edit': () => own({ rating: 5, version: 4 }),
+    });
+
+    expect(await screen.findByText('Good course.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Delete review' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('radio', { name: '5 stars' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(callsTo(calls, 'review.edit')).toHaveLength(1));
+    expect(screen.queryByRole('button', { name: 'Post review' })).toBeNull();
   });
 
   it('shows the form with five labelled radios and a counter', async () => {
@@ -236,5 +252,51 @@ describe('ReviewForm', () => {
 
     expect(await screen.findByText('Changed.')).toBeInTheDocument();
     expect(callsTo(calls, 'review.mine')).toHaveLength(2);
+  });
+
+  it('closes the delete dialog and shows a CONFLICT with a reload prompt', async () => {
+    const { user } = render({
+      'review.mine': () => own(),
+      'review.delete': () => {
+        throw new ApiError('CONFLICT', 'stale');
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete review' }),
+    );
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Delete review',
+      }),
+    );
+
+    expect(
+      await screen.findByText('Your review changed; reload it'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeVisible();
+  });
+
+  it('closes the delete dialog and shows any other delete error', async () => {
+    const { user } = render({
+      'review.mine': () => own(),
+      'review.delete': () => {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Delete is down');
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Delete review' }),
+    );
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Delete review',
+      }),
+    );
+
+    expect(await screen.findByText('Delete is down')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByText('Good course.')).toBeInTheDocument();
   });
 });
