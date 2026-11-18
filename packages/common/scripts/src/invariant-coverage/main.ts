@@ -6,10 +6,13 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import {
+  addedLines,
   checkInvariantCoverage,
   failureMessage,
   findTriggers,
+  INVARIANTS_PATH,
   sameWriterMap,
+  snapshotKeys,
   WRITER_MAP_PATH,
   type WriterMap,
 } from './check.js';
@@ -19,7 +22,8 @@ import { scanEntityWriters, WORKSPACE_ROOT } from './scan.js';
 // for the `Invariant coverage` job in .github/workflows/pr-checks.yml, and
 // locally against origin/main. First, the committed entity-writers.json must
 // match the code; then the writers it gained over the base branch's copy
-// must come with an invariants.ts change or the waiver label.
+// must come with an invariants.ts change naming each entity, or the waiver
+// label.
 const baseRef = process.env.BASE_REF || 'main';
 
 const run = (command: string, args: string[]) =>
@@ -52,13 +56,12 @@ try {
   process.exit(0);
 }
 
-const changedFiles = run('git', [
-  'diff',
-  '--name-only',
-  `origin/${baseRef}...HEAD`,
-])
-  .split('\n')
-  .filter(Boolean);
+const keys = snapshotKeys(
+  readFileSync(path.join(WORKSPACE_ROOT, INVARIANTS_PATH), 'utf8'),
+);
+const added = addedLines(
+  run('git', ['diff', `origin/${baseRef}...HEAD`, '--', INVARIANTS_PATH]),
+);
 
 // Read from the API when it runs, not the event's, so a waiver label takes
 // effect when the job is re-run. None locally.
@@ -85,7 +88,7 @@ const labels = (() => {
 
 const verdict = checkInvariantCoverage(
   findTriggers(before, scanned),
-  changedFiles,
+  { added, snapshotKeys: keys },
   labels,
 );
 if (verdict.ok) {
@@ -93,8 +96,8 @@ if (verdict.ok) {
 } else {
   // A multi-line annotation needs its newlines escaped.
   console.log(
-    `::error::${failureMessage(verdict.triggers).replaceAll('\n', '%0A')}`,
+    `::error::${failureMessage(verdict.triggers, keys).replaceAll('\n', '%0A')}`,
   );
-  console.log(failureMessage(verdict.triggers));
+  console.log(failureMessage(verdict.triggers, keys));
   process.exit(1);
 }

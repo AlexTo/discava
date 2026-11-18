@@ -32,11 +32,14 @@ export const WRITER_PACKAGES: Record<string, string> = {
   search: 'packages/databases/search',
 };
 
-const ENTITIES_DIR = path.join(
-  WORKSPACE_ROOT,
-  WRITER_PACKAGES['core-table'],
-  'src/entities',
-);
+// The package holding the entities (under src/entities) and the helpers.
+export const ENTITIES_PACKAGE = 'core-table';
+
+export interface ScanOptions {
+  root: string;
+  /** Writer name → package directory, relative to `root`. */
+  packages: Record<string, string>;
+}
 
 const WRITE_METHODS = new Set([
   'put',
@@ -49,7 +52,10 @@ const WRITE_METHODS = new Set([
 ]);
 
 // `entity: '<name>'` inside an entity file's `model: { … }`.
-const entityNameOf = (node: ts.Node): string | undefined => {
+const entityNameOf = (
+  node: ts.Node,
+  entitiesDir: string,
+): string | undefined => {
   if (
     ts.isPropertyAssignment(node) &&
     node.name.getText() === 'entity' &&
@@ -57,7 +63,7 @@ const entityNameOf = (node: ts.Node): string | undefined => {
     ts.isObjectLiteralExpression(node.parent) &&
     ts.isPropertyAssignment(node.parent.parent) &&
     node.parent.parent.name.getText() === 'model' &&
-    path.dirname(node.getSourceFile().fileName) === ENTITIES_DIR
+    path.dirname(node.getSourceFile().fileName) === entitiesDir
   ) {
     return node.initializer.text;
   }
@@ -69,6 +75,7 @@ const entityNameOf = (node: ts.Node): string | undefined => {
 const receiverEntities = (
   checker: ts.TypeChecker,
   receiver: ts.Expression,
+  entitiesDir: string,
 ): string[] => {
   const type = checker.getTypeAtLocation(receiver);
   const types = type.isUnion() ? type.types : [type];
@@ -81,14 +88,13 @@ const receiverEntities = (
       model &&
       checker.getTypeOfSymbolAtLocation(model, receiver).getProperty('entity');
     const name = entity?.declarations
-      ?.map(entityNameOf)
+      ?.map((declaration) => entityNameOf(declaration, entitiesDir))
       .find((found) => found !== undefined);
     return name ? [name] : [];
   });
 };
 
-const programFor = (packageDir: string): ts.Program => {
-  const configPath = path.join(WORKSPACE_ROOT, packageDir, 'tsconfig.lib.json');
+const programFor = (configPath: string): ts.Program => {
   const config = ts.getParsedCommandLineOfConfigFile(
     configPath,
     {},
@@ -108,14 +114,14 @@ const programFor = (packageDir: string): ts.Program => {
 };
 
 // Every entity's name, from its file, so one nothing writes is still listed.
-const allEntities = (program: ts.Program): string[] =>
+const allEntities = (program: ts.Program, entitiesDir: string): string[] =>
   program
     .getSourceFiles()
-    .filter((file) => path.dirname(file.fileName) === ENTITIES_DIR)
+    .filter((file) => path.dirname(file.fileName) === entitiesDir)
     .flatMap((file) => {
       const names: string[] = [];
       const visit = (node: ts.Node) => {
-        const name = entityNameOf(node);
+        const name = entityNameOf(node, entitiesDir);
         if (name) {
           names.push(name);
         }
@@ -125,22 +131,34 @@ const allEntities = (program: ts.Program): string[] =>
       return names;
     });
 
-export const scanEntityWriters = (): WriterMap => {
+export const scanEntityWriters = (
+  { root, packages }: ScanOptions = {
+    root: WORKSPACE_ROOT,
+    packages: WRITER_PACKAGES,
+  },
+): WriterMap => {
+  const entitiesDir = path.join(
+    root,
+    packages[ENTITIES_PACKAGE],
+    'src/entities',
+  );
   const writes = new Map<string, Map<string, Set<string>>>();
-  for (const [writer, packageDir] of Object.entries(WRITER_PACKAGES)) {
-    const program = programFor(packageDir);
+  for (const [writer, packageDir] of Object.entries(packages)) {
+    const program = programFor(
+      path.join(root, packageDir, 'tsconfig.lib.json'),
+    );
     const checker = program.getTypeChecker();
-    if (writer === 'core-table') {
-      for (const entity of allEntities(program)) {
+    if (writer === ENTITIES_PACKAGE) {
+      for (const entity of allEntities(program, entitiesDir)) {
         writes.set(entity, writes.get(entity) ?? new Map());
       }
     }
-    const sourceRoot = path.join(WORKSPACE_ROOT, packageDir, 'src') + path.sep;
+    const sourceRoot = path.join(root, packageDir, 'src') + path.sep;
     for (const file of program.getSourceFiles()) {
       if (!file.fileName.startsWith(sourceRoot)) {
         continue;
       }
-      const relative = path.relative(WORKSPACE_ROOT, file.fileName);
+      const relative = path.relative(root, file.fileName);
       const visit = (node: ts.Node) => {
         if (
           ts.isCallExpression(node) &&
@@ -150,6 +168,7 @@ export const scanEntityWriters = (): WriterMap => {
           for (const entity of receiverEntities(
             checker,
             node.expression.expression,
+            entitiesDir,
           )) {
             const byWriter = writes.get(entity) ?? new Map();
             writes.set(entity, byWriter);

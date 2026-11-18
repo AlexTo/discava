@@ -2,16 +2,22 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  addedLines,
   checkInvariantCoverage,
   failureMessage,
   findTriggers,
   INVARIANTS_PATH,
   sameWriterMap,
+  snapshotKeys,
   WAIVER_LABEL,
+  WRITER_MAP_PATH,
   type WriterMap,
 } from './check.js';
+import { WORKSPACE_ROOT } from './scan.js';
 
 const before: WriterMap = {
   enrolment: {
@@ -117,31 +123,115 @@ describe('findTriggers', () => {
 });
 
 describe('checkInvariantCoverage', () => {
-  const triggers = [{ entity: 'lesson', reason: 'is now written by events' }];
+  const triggers = [
+    { entity: 'enrolment', reason: 'is now written by events' },
+    { entity: 'category', reason: 'is now written by core-api' },
+  ];
+  const snapshotKeys = { enrolment: 'enrolments', category: 'categories' };
+  const change = (added: string[]) => ({ added, snapshotKeys });
 
   it('passes when nothing triggered', () => {
-    expect(checkInvariantCoverage([], [], [])).toEqual({
+    expect(checkInvariantCoverage([], change([]), [])).toEqual({
       ok: true,
       reason: 'no entity gained a writer',
     });
   });
 
-  it('passes when invariants.ts changed', () => {
+  it('passes when the invariants.ts change names every entity', () => {
     expect(
-      checkInvariantCoverage(triggers, ['a.ts', INVARIANTS_PATH], []).ok,
+      checkInvariantCoverage(
+        triggers,
+        change([
+          '  for (const e of snapshot.enrolments) {',
+          '// 30. A category is only written by its helper.',
+        ]),
+        [],
+      ),
+    ).toEqual({
+      ok: true,
+      reason: `${INVARIANTS_PATH} changes for enrolment, category`,
+    });
+  });
+
+  it('counts the factory name, capitalised', () => {
+    expect(
+      checkInvariantCoverage(
+        triggers,
+        change(['Item<typeof createEnrolmentEntity>', 'snapshot.categories']),
+        [],
+      ).ok,
     ).toBe(true);
   });
 
-  it('passes when waived', () => {
-    expect(checkInvariantCoverage(triggers, [], [WAIVER_LABEL]).ok).toBe(true);
+  it('fails for the entities the change does not name', () => {
+    expect(
+      checkInvariantCoverage(triggers, change(['snapshot.enrolments']), []),
+    ).toEqual({ ok: false, triggers: [triggers[1]] });
   });
 
-  it('fails otherwise, naming what triggered it', () => {
-    const verdict = checkInvariantCoverage(triggers, ['a.ts'], ['other']);
-    expect(verdict).toEqual({ ok: false, triggers });
-    expect(failureMessage(triggers)).toContain(
-      '  - lesson is now written by events',
+  it('does not count a longer word containing the name', () => {
+    expect(
+      checkInvariantCoverage(
+        [{ entity: 'user', reason: 'is now written by events' }],
+        { added: ['const { userId } = enrolment;'], snapshotKeys: {} },
+        [],
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('fails when invariants.ts did not change', () => {
+    expect(checkInvariantCoverage(triggers, change([]), ['other'])).toEqual({
+      ok: false,
+      triggers,
+    });
+  });
+
+  it('passes when waived', () => {
+    expect(
+      checkInvariantCoverage(triggers, change([]), [WAIVER_LABEL]).ok,
+    ).toBe(true);
+  });
+
+  it('names what triggered it and the snapshot key to use', () => {
+    const message = failureMessage(triggers, snapshotKeys);
+    expect(message).toContain('  - enrolment is now written by events');
+    expect(message).toContain('category: `snapshot.categories`');
+  });
+});
+
+describe('snapshotKeys', () => {
+  it("reads each entity's key from TableSnapshot", () => {
+    expect(
+      snapshotKeys(`export interface TableSnapshot {
+  categories: Pick<Item<typeof createCategoryEntity>, 'categoryId'>[];
+  quizSummaries: Pick<
+    Item<typeof createQuizSummaryEntity>,
+    'userId'
+  >[];
+}`),
+    ).toEqual({ category: 'categories', quizSummary: 'quizSummaries' });
+  });
+
+  it('finds every entity but the markers in the real invariants.ts', () => {
+    const keys = snapshotKeys(
+      readFileSync(path.join(WORKSPACE_ROOT, INVARIANTS_PATH), 'utf8'),
     );
+    const entities = Object.keys(
+      JSON.parse(
+        readFileSync(path.join(WORKSPACE_ROOT, WRITER_MAP_PATH), 'utf8'),
+      ),
+    );
+    expect(entities.filter((entity) => !keys[entity])).toEqual([
+      'analyticsMarker',
+    ]);
+  });
+});
+
+describe('addedLines', () => {
+  it('keeps only the lines a diff adds', () => {
+    expect(
+      addedLines('--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n-old\n+new\n same'),
+    ).toEqual(['new']);
   });
 });
 

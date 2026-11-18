@@ -78,9 +78,64 @@ export type Verdict =
   | { ok: true; reason: string }
   | { ok: false; triggers: Trigger[] };
 
+/**
+ * entity → its key in invariants.ts's TableSnapshot (`categories` for
+ * `category`), read from the `Item<typeof create<Entity>Entity>` it holds.
+ */
+export const snapshotKeys = (
+  invariantsSource: string,
+): Record<string, string> =>
+  Object.fromEntries(
+    [
+      ...invariantsSource.matchAll(
+        /^\s*(\w+):\s*Pick<\s*Item<\s*typeof\s+create(\w+)Entity\s*>/gm,
+      ),
+    ].map(([, key, entity]) => [
+      entity[0].toLowerCase() + entity.slice(1),
+      key,
+    ]),
+  );
+
+/** The lines a unified diff adds, without the `+`. */
+export const addedLines = (diff: string): string[] =>
+  diff
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1));
+
+// An invariants.ts change answers for an entity when a line it adds names
+// the entity or its snapshot key as a whole word, or as the middle of an
+// entity factory's name: `snapshot.enrolments`, a comment about `enrolment`
+// records, `Item<typeof createEnrolmentEntity>`. Not `userId` for `user`.
+const answersFor = (
+  entity: string,
+  keys: Record<string, string>,
+  lines: string[],
+): boolean => {
+  const names = [entity, keys[entity]].filter((name): name is string =>
+    Boolean(name),
+  );
+  const word = new RegExp(
+    names
+      .map(
+        (name) =>
+          `((?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])|\\bcreate${name[0].toUpperCase()}${name.slice(1)}Entity\\b)`,
+      )
+      .join('|'),
+  );
+  return lines.some((line) => word.test(line));
+};
+
+export interface InvariantsChange {
+  /** The lines the pull request adds to invariants.ts. */
+  added: string[];
+  /** entity → TableSnapshot key, from the pull request's invariants.ts. */
+  snapshotKeys: Record<string, string>;
+}
+
 export const checkInvariantCoverage = (
   triggers: Trigger[],
-  changedFiles: string[],
+  invariants: InvariantsChange,
   labels: string[],
 ): Verdict => {
   if (triggers.length === 0) {
@@ -89,17 +144,29 @@ export const checkInvariantCoverage = (
   if (labels.includes(WAIVER_LABEL)) {
     return { ok: true, reason: `waived by the \`${WAIVER_LABEL}\` label` };
   }
-  if (changedFiles.includes(INVARIANTS_PATH)) {
-    return { ok: true, reason: `${INVARIANTS_PATH} changed` };
+  const unanswered = triggers.filter(
+    ({ entity }) =>
+      !answersFor(entity, invariants.snapshotKeys, invariants.added),
+  );
+  if (unanswered.length === 0) {
+    return {
+      ok: true,
+      reason: `${INVARIANTS_PATH} changes for ${triggers.map(({ entity }) => entity).join(', ')}`,
+    };
   }
-  return { ok: false, triggers };
+  return { ok: false, triggers: unanswered };
 };
 
-export const failureMessage = (triggers: Trigger[]): string =>
+export const failureMessage = (
+  triggers: Trigger[],
+  keys: Record<string, string>,
+): string =>
   [
     'This pull request changes who writes the core table:',
     ...triggers.map(({ entity, reason }) => `  - ${entity} ${reason}`),
-    `If a rule now spans these writers, keep it in a core-table helper every writer calls and add a check to ${INVARIANTS_PATH} (CONTRIBUTING.md, "Rules That Span Records").`,
+    `If a rule now spans these writers, keep it in a core-table helper every writer calls and add a check for it to ${INVARIANTS_PATH} (CONTRIBUTING.md, "Rules That Span Records"). The lines it adds must name each entity above, or its snapshot key (${triggers
+      .map(({ entity }) => `${entity}: \`snapshot.${keys[entity] ?? '?'}\``)
+      .join(', ')}).`,
     `If no such rule is at stake, a maintainer adds the \`${WAIVER_LABEL}\` label and re-runs this job.`,
   ].join('\n');
 
