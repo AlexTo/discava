@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  checkPostId,
   type createCoreTableService,
   DISCUSSION_MAX_REPORTERS,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DiscussionInputError,
+  type DiscussionNotificationPost,
   type DiscussionOperation,
+  discussionNotificationWrites,
   discussionWrites,
   isShown,
   learnerName,
@@ -87,6 +90,18 @@ const getVote = async (
       })
       .go()
   ).data;
+
+const asNotificationPost = (post: StoredPost): DiscussionNotificationPost => ({
+  courseId: post.courseId,
+  lessonId: post.lessonId,
+  threadId: post.threadId,
+  postId: post.postId,
+  authorId: post.authorId,
+  authorName: post.authorName,
+  body: post.body,
+  state: post.state,
+  createdAt: post.createdAt,
+});
 
 const placeholder = (
   post: Pick<StoredPost, 'postId' | 'threadId' | 'kind' | 'state'>,
@@ -185,6 +200,8 @@ interface Step<T> {
   op?: DiscussionOperation;
   /** The result, read after the write (transactions return nothing). */
   result: () => Promise<T>;
+  /** Notification items for the same transaction (at most two). */
+  notify?: () => ReturnType<typeof discussionNotificationWrites>;
 }
 
 // Reads, decides and writes. A cancelled transaction is run again from the
@@ -195,14 +212,21 @@ const writeWithRetry = async <T>(
   step: () => Promise<Step<T>>,
 ): Promise<T> => {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const { op, result } = await step();
+    const { op, result, notify } = await step();
     if (!op) {
       return result();
     }
+    // Built fresh on every attempt: they pin the user's notification state.
+    // A cancellation from a notification that already exists (a retry)
+    // runs the step again, which finds the post or answer already written.
+    const notifications = (await notify?.()) ?? [];
     let canceled: boolean;
     try {
       ({ canceled } = await coreTable.transaction
-        .write((entities) => discussionWrites(entities, op) ?? [])
+        .write((entities) => {
+          const items = discussionWrites(entities, op);
+          return items ? [...items, ...notifications] : [];
+        })
         .go());
     } catch (error) {
       if (error instanceof DiscussionInputError) {
@@ -458,15 +482,36 @@ export const reply = courseProcedure
           message: 'This question has reached its reply limit',
         });
       }
+      const author = await authorOf(coreTable, user, access);
+      const now = new Date();
       return {
         op: {
           type: 'reply',
           ...ref,
           threadId,
           postId,
-          author: await authorOf(coreTable, user, access),
+          author,
           body,
-          now: new Date(),
+          now,
+        },
+        // An unusable postId is refused by discussionWrites, before any use.
+        notify: async () => {
+          const createdAt = checkPostId(postId, now).time;
+          return createdAt === undefined
+            ? []
+            : discussionNotificationWrites(coreTable, {
+                kind: 'reply',
+                question: asNotificationPost(question),
+                reply: {
+                  ...asNotificationPost(question),
+                  postId,
+                  authorId: author.userId,
+                  authorName: author.name,
+                  body,
+                  state: 'shown',
+                  createdAt,
+                },
+              });
         },
         result: async () =>
           readOne(
@@ -576,13 +621,25 @@ export const accept = courseProcedure
       if (postId === null) {
         return { op: { type: 'unaccept', ...scope }, result };
       }
-      shownPost(await getPost(coreTable, ref, 'reply', threadId, postId));
+      const accepted = shownPost(
+        await getPost(coreTable, ref, 'reply', threadId, postId),
+      );
       // Accepting the accepted reply again writes nothing.
+      if (question.acceptedPostId === postId) {
+        return { result };
+      }
+      const at = new Date().toISOString();
       return {
-        op:
-          question.acceptedPostId === postId
-            ? undefined
-            : ({ type: 'accept', ...scope, replyId: postId } as const),
+        op: { type: 'accept', ...scope, replyId: postId } as const,
+        notify: async () =>
+          discussionNotificationWrites(coreTable, {
+            kind: 'accepted',
+            question: asNotificationPost(question),
+            reply: asNotificationPost(accepted),
+            acceptedBy: user.sub,
+            acceptedByName: (await authorOf(coreTable, user, access)).name,
+            at,
+          }),
         result,
       };
     });

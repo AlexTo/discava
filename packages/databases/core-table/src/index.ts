@@ -164,6 +164,13 @@ export {
   postIdTime,
 } from './helpers/discussion.js';
 export {
+  DISCUSSION_EXCERPT_MAX,
+  type DiscussionNotificationEvent,
+  type DiscussionNotificationPost,
+  discussionExcerpt,
+  discussionNotificationWrites,
+} from './helpers/discussion-notifications.js';
+export {
   InvalidRequestError,
   isConditionalCheckFailed,
   NameConflictError,
