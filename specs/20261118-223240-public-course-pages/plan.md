@@ -19,7 +19,7 @@ What the code showed that the spec could not:
 
 1. **A public course page already exists.** `course.publicView` is public, returns `NOT_FOUND` for drafts and archived courses, and filters hidden modules. `CoursePage` renders it signed out. This feature extends both and adds no second page (research R-4).
 2. **The SPA fallback would swallow 404s.** `StaticWebsite` maps every 403 and 404 to `/index.html` with 200, distribution-wide. That would turn the renderer's 404s into soft 404s. It is replaced by a CloudFront Function rewrite for all three portals (research R-2).
-3. **Websites deploys before everything.** The renderer must live in the Websites stack and late-bind the table through AppConfig, by an application name that is fixed at synth time. The Data stack then grants it read access (research R-3).
+3. **Websites deploys before everything.** The renderer must live in the Websites stack and late-bind the table through AppConfig, by an application name that is fixed at synth time. The Data stack then grants it read access through a mutable import of its role, so the policy lives in Data and no reference runs from Websites to Data (research R-3).
 4. **Video playback already uses directory-scoped signed cookies** (`contentItem.videoUrl`). An anonymous preview can reuse that mechanism scoped to one transcode, so no other file opens up (research R-6).
 7. **The media pipeline is wired to lesson videos** (job metadata, output paths and every outcome handler use content item keys), but `transcode-cleanup` already serves a second owner (assignment submissions). The uploaded preview becomes a third owner rather than a new pipeline, and it lives in its own record so processing updates never touch `course.updatedAt` (research R-6).
 5. **`instructorId` is a Cognito sub.** It cannot go in public URLs or outputs, hence handles and their claim records (research R-7).
@@ -39,7 +39,7 @@ What the code showed that the spec could not:
 
 **Project Type**: Web application: a serverless backend plus React portals.
 
-**Performance Goals**: A cache miss renders in under 500 ms at p95: 3 to 4 keyed reads plus one batch, and the `index.html` template is cached for 60 s. Cache hits are served by CloudFront. The landing page's first paint needs no API call (SC-004).
+**Performance Goals**: A cache miss renders in under 500 ms at p95: 3 to 4 keyed reads plus one batch, and the `index.html` template is revalidated with a conditional `GetObject` (usually a `304`). Cache hits are served by CloudFront. The landing page's first paint needs no API call (SC-004).
 
 **Constraints**:
 - Public outputs carry no IDs of people.
@@ -83,7 +83,7 @@ What the code showed that the spec could not:
 
 1. **Render on request, cache at the edge** (R-1). A miss costs one Lambda run; a hit costs nothing. Freshness is bounded by `s-maxage=300`, and archiving needs no invalidation.
 2. **Real 404s** (R-2) via a CloudFront Function SPA rewrite in the shared construct, replacing the distribution-wide error responses.
-3. **The renderer lives in Websites and late-binds** (R-3): AppConfig by application name; the table grant comes from the Data stack.
+3. **The renderer lives in Websites and late-binds** (R-3): AppConfig by application name; the table grant comes from the Data stack, on a mutable import of the renderer's role so the policy is Data's.
 4. **The renderer reuses the public procedures** (R-4) through `createCaller`, so the crawler sees exactly what the API exposes.
 5. **Static markup plus seed data** (R-5), so the app's first render is the full page.
 6. **The preview is its own uploaded video** (R-6, maintainer decision), at most 5 minutes, processed and captioned like lesson videos by a target-aware pipeline, and signed by `MediaUrl` with cookies for one version's folder.
@@ -166,7 +166,7 @@ docs/src/content/docs/en/                         # design/public-pages.mdx; ins
 ## Risks
 
 - **P1: The SPA rewrite changes all three portals.** A path with a dot in its last segment that is really a route (none today) would 404. The rewrite table's unit test lists every route pattern, and the deployed check in quickstart step 2 covers it.
-- **P2: Late binding across stacks** (R-3). If AppConfig rejects the name or the cross-stack grant lags on first deploy, the renderer returns 503 (never cached) and pages still boot. This is verified on `discava-development` before merge (human task).
+- **P2: Late binding across stacks** (R-3). If AppConfig rejects the name or the Data-owned policy on the Websites role lags on first deploy, the renderer returns 503 (never cached) and pages still boot. This is verified on `discava-development` before merge (human task).
 - **P3: Cache poisoning through Host.** Only allow-listed hosts reach canonicals. The cache key excludes headers and cookies, and responses never vary by user.
 - **P8: Regressing lesson-video processing.** Making every pipeline handler target-aware touches a working, tested path. Lesson jobs carry no `target` and must behave exactly as before: each handler gets a regression test for that, and the existing handler tests stay unchanged.
 - **P4: Anonymous preview abuse.** The public throttle and WAF apply, and cookies cover one directory with today's lifetime. Cost is bounded by the existing media CloudFront and its WAF.

@@ -8,7 +8,7 @@ Each entry records a decision, why, and what was rejected. Code references are t
 
 **Decision**: Render on request. A Lambda function (the *page renderer*) sits behind the student portal's CloudFront distribution as the origin for `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. For a course landing page or a profile it reads the built `index.html`, injects the head tags, a static rendering of the page into `#root`, and the page data as JSON, and returns it. CloudFront caches each response for at most 5 minutes (`s-maxage=300` on a page, `60` on a not-found), which bounds staleness (FR-009, SC-003) with no invalidation. Every other `/learn/*` path (course home, lessons) gets the plain `index.html` with `noindex`.
 
-**Rationale**: The renderer always reads the current `index.html`, so a portal redeploy can never leave pages pointing at pruned, hashed assets. Status codes come out right (200 for a public page, 404 for anything else), and an archived course disappears when its cached copy expires. The work happens only on full page loads, and in-app navigation never reaches it.
+**Rationale**: The renderer revalidates `index.html` against the bucket on every cache miss (a conditional `GetObject` with `If-None-Match`), so it never renders from a template older than the bucket's. A portal deploy prunes old hashed assets, uploads the new `index.html` and then invalidates the whole distribution (`/*`, which includes the renderer's behaviors). Every page rendered after that invalidation uses the new template, so a redeploy does not leave cached pages pointing at pruned assets. Status codes come out right (200 for a public page, 404 for anything else), and an archived course disappears when its cached copy expires. The work happens only on full page loads, and in-app navigation never reaches it.
 
 **Alternatives considered**:
 - *Prerender to S3 on change*, as a `STREAM_FEATURES` consumer writing `learn/<id>` objects. Rejected: every portal deploy changes asset hashes and `BucketDeployment` prunes the old ones, so every prerendered page breaks until a full re-render runs. Deleting a page on archive races with the stream, and a missing object falls into the SPA's 200 fallback (R-2).
@@ -29,7 +29,7 @@ Each entry records a decision, why, and what was rejected. Code references are t
 **Decision**: The renderer's function, its Function URL (auth `AWS_IAM`) and an origin access control live in the **Websites** stack, attached to the student portal distribution as a `FunctionUrlOrigin.withOriginAccessControl` origin (available in `aws-cdk-lib` 2.275). It needs nothing from later stacks at deploy time:
 
 - It resolves the table name through `resolveTableName()`, which reads AppConfig. The AppConfig application lives in the Data stack, but its name is fixed at synth time (`Names.uniqueResourceName` in `core/runtime-config.ts`). The renderer gets that *name* as `RUNTIME_CONFIG_APP_ID`, and AppConfig's `StartConfigurationSession` accepts a name or an ID. This avoids a CloudFormation reference to the Data stack.
-- Read permissions (table read and AppConfig session) are granted to the renderer's role from the **Data** stack, which already depends on Websites, so the reference runs in the existing direction.
+- Read permissions (table read, the table's KMS key when encrypted, and the AppConfig session) are granted from the **Data** stack, on a mutable `Role.fromRoleArn` import of the renderer's role. Grants on a role normally add to its default policy in the role's own stack; that would make Websites reference Data's ARNs and create a cycle, since Data already depends on Websites. On the import, the policy is created in Data and attached to the role, so the only reference is Data reading the role ARN from Websites, the existing direction.
 - The public media domain (for image URLs) is read from the same runtime config namespace the APIs use.
 
 **Rationale**: Websites deploys first, because Data needs portal domains for Cognito callbacks. A CloudFront origin pointing at anything in a later stack would create a cycle.
@@ -38,7 +38,7 @@ Each entry records a decision, why, and what was rejected. Code references are t
 - *API Gateway origin* (a core-api extra route). Rejected: the distribution would need the API's domain from a later stack, and custom domains are optional per stage.
 - *A late stack plus `cf.updateRequestOrigin` from a CloudFront Function reading a KeyValueStore*. Rejected: it has more moving parts (a KeyValueStore, a custom resource to write it, OAC configured at run time) for the same result.
 
-To verify on a deployed stage (plan risk P2): a role from the Websites stack granted from the Data stack is honoured on the first deploy, and AppConfig resolves by name.
+Synth catches the cycle, so the infra tests check where the policy lives (contracts/infra.md). To verify on a deployed stage (plan risk P2): the Data-owned policy on the Websites role is honoured on the first deploy, and AppConfig resolves by name.
 
 ## R-4: One source of truth for "what is public"
 

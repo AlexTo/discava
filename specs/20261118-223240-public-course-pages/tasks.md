@@ -321,7 +321,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 - [ ] T034 Tests first, then implement `page-renderer/handler.ts`:
   - **Routing**: route per the contract's table; method other than GET or HEAD → 405.
   - **Procedure calls**: call procedures through `appRouter.createCaller` with an anonymous context built the way `local-server.ts` builds one without a token.
-  - **Template**: fetch `index.html` from the website bucket (env `WEBSITE_BUCKET`, cached for 60 s).
+  - **Template**: fetch `index.html` from the website bucket (env `WEBSITE_BUCKET`), revalidated on every request with `If-None-Match` against the cached `ETag` (`304` reuses the body), per the contract's template section. No fixed-time cache.
   - **Host**: from `x-discava-host` only when it matches `ALLOWED_HOSTS` (a comma list, where `*.cloudfront.net` is allowed only when `ALLOWED_HOSTS` is empty), else the first allowed host.
   - **Responses**: status codes and `Cache-Control` per the contract. A dependency failure gives `503` with `no-store` and the plain template.
 
@@ -334,6 +334,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a mixed-case handle and a trailing slash render, with a lower-case canonical;
   - a foreign host is ignored;
   - 503 is not cached;
+  - a changed `ETag` between two requests on one warm handler renders the new template; a `304` reuses the cached body; a failed template read gives `503`, not the cached body;
   - `X-Robots-Tag` follows `ALLOW_SEARCH_ENGINE_INDEXING`;
   - no response reads cookies or `Authorization`.
 - [ ] T035 Tests first, then change `packages/common/constructs/src/core/static-website.ts` per [contracts/infra.md](./contracts/infra.md):
@@ -347,14 +348,14 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - **Function URL and origin**: `AuthType.AWS_IAM` with `FunctionUrlOrigin.withOriginAccessControl`.
   - **Behaviors**: `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. Each allows GET and HEAD, uses a cache policy keyed on path only that honours origin TTLs up to 300 s, and an origin request policy forwarding `x-discava-host`. Each has a viewer-request function (new `core/forward-host.js`) setting `x-discava-host` from `Host`, and uses the distribution's response headers policy.
   - **Permission**: `s3:GetObject` on `index.html` only, with KMS decrypt when the bucket is encrypted.
-  - **Grant hook**: `pageRendererGrantable`.
+  - **Grant hook**: `pageRendererRoleArn` (the role's ARN, not an `IGrantable`; see T037).
 
   Export from `core/runtime-config.ts` the function that names the AppConfig application, and use it in both places. Construct tests use assertions, not only snapshots. Run `checkov` through `build`, and add only justified `suppressRules`.
 - [ ] T037 Tests first, then wire it into `packages/infra/src/stacks/websites-stack.ts`:
   - pass `pageRenderer` props from stage config, with `allowedHosts` set to the configured student portal domains;
   - when search engine indexing is off, pass `extraResponseHeaders: { 'X-Robots-Tag': 'noindex' }` for the student portal.
 
-  In `packages/infra/src/stacks/data-stack.ts`, grant `coreTable` read and the AppConfig session and read to `websites.studentPortal.pageRendererGrantable`. Infra tests: production has no `X-Robots-Tag` header and `ALLOW_SEARCH_ENGINE_INDEXING=true`; development has both noindex and `ALLOW_SEARCH_ENGINE_INDEXING=false`; the Data stack holds the grants. `pnpm nx run @discava/infra:synth` passes for both stages.
+  In `packages/infra/src/stacks/data-stack.ts`, import the renderer's role with `iam.Role.fromRoleArn(this, 'PageRendererRole', websites.studentPortal.pageRendererRoleArn, { mutable: true })`, then call `coreTable.grantReadData(role)` and `runtimeConfig.grantReadAppConfig(role)` on the import, so the policy is created in Data (granting on the Websites role itself makes Websites reference Data, a cycle). Infra tests: production has no `X-Robots-Tag` header and `ALLOW_SEARCH_ENGINE_INDEXING=true`; development has both noindex and `ALLOW_SEARCH_ENGINE_INDEXING=false`; the Data template has an `AWS::IAM::Policy` attached to the renderer role with the table, KMS key (production, where the table is encrypted) and AppConfig statements; the Websites template has no `Fn::ImportValue`. `pnpm nx run @discava/infra:synth` passes for both stages.
 - [ ] T038 [P] Tests first, then add `packages/websites/student-portal/src/lib/page-data.ts` with `seedFromPageData(queryClient, trpc)`. It reads `#discava-page-data` once, calls `setQueryData` for `course.publicView`, `review.summary`, `review.list` and `instructorProfile.publicView` with the exact keys the components use, and removes the element. Call it in `main.tsx` before the first render. Add `public/og-default.png` (1200×630, the Discava wordmark on a plain background). Component tests: a seeded course page renders with no spinner and no network call; a malformed element is ignored.
 - [ ] T039 Extend `public-landing-page.e2e.ts` to fetch `LOCAL_PAGE_RENDERER_URL` with Playwright's `request` (no JavaScript):
   - the published course's HTML contains its title, an outcome, a lesson title, the instructor's name, `og:title`, `application/ld+json` and `noindex` (local is closed to search engines);
@@ -362,7 +363,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a draft course gives 404;
   - `/sitemap.xml` lists the course and profile;
   - `/robots.txt` is `Disallow: /`.
-- [ ] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the cross-stack grant works on a first deploy (plan risk P2). Time a landing page with `curl -o /dev/null -s -w '%{time_starttransfer}\n'` on a cache miss (first request after an edit) and on a hit, and check the miss against the plan's p95 goal (under 500 ms) and SC-004 (title and header within 2 seconds on an ordinary connection, checked in a browser with network throttling set to "Fast 4G"). Record the results in the PR.
+- [ ] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the Data-owned policy on the renderer role works on a first deploy (plan risk P2). Redeploy the student portal with a changed bundle and, within a minute, load a landing page: it must reference the new `/assets/*` files. Time a landing page with `curl -o /dev/null -s -w '%{time_starttransfer}\n'` on a cache miss (first request after an edit) and on a hit, and check the miss against the plan's p95 goal (under 500 ms) and SC-004 (title and header within 2 seconds on an ordinary connection, checked in a browser with network throttling set to "Fast 4G"). Record the results in the PR.
 
 ---
 

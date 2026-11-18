@@ -32,14 +32,16 @@ New props are `pageRenderer?: { allowSearchEngineIndexing, siteName, reservedCon
   - a viewer-request CloudFront Function that sets `x-discava-host` from `Host` (and skips the SPA rewrite);
   - the same response headers policy and the same WAF as the distribution;
 - grants the function `s3:GetObject` on the website bucket's `index.html` only (KMS decrypt where the bucket is encrypted);
-- exposes `grantPageRendererRead(...)`-style helpers: `pageRendererGrantable` (its role), for the Data stack.
+- exposes `pageRendererRoleArn` (its role's ARN, a plain string token) for the Data stack. It does not expose the role as an `IGrantable`: a grant made on the Websites-owned role would put the policy in Websites (see the Data stack below).
 
 Checkov: the Function URL with `AWS_IAM` auth satisfies the public-URL rules. Suppress only rules that do not apply, each with a reason, following the existing `suppressRules` usage.
 
 ## `packages/infra`
 
 - **`WebsitesStack`** passes `pageRenderer` props from stage config. `runtimeConfigAppName` is computed the same way `RuntimeConfig` names its application (the shared helper is exported from `core/runtime-config.ts` so both use one function).
-- **`DataStack`** calls `coreTable.grantReadData(websites.studentPortal.pageRendererGrantable)` and grants `appconfig:StartConfigurationSession` and `appconfig:GetLatestConfiguration` on the runtime config application (the existing `RuntimeConfig` grant helper).
+- **`DataStack`** imports the renderer's role with `iam.Role.fromRoleArn(this, 'PageRendererRole', websites.studentPortal.pageRendererRoleArn, { mutable: true })` and makes the grants on that import: `coreTable.grantReadData(role)` (which includes KMS decrypt on the table's key when the table is customer-managed encrypted) and `runtimeConfig.grantReadAppConfig(role)` (`appconfig:StartConfigurationSession` and `appconfig:GetLatestConfiguration`).
+  - **Why an import**: `Grant.addToPrincipal` adds the statement to the principal's default policy, in the principal's own stack. Granting on the Websites role itself would make Websites reference the table and AppConfig ARNs in Data, while Data already depends on Websites, so synth fails with a cyclic reference. Grants on a mutable import create their `AWS::IAM::Policy` in Data, attached to the role by name, so the only cross-stack reference is Data reading the role ARN from Websites, the direction that already exists.
+  - **Tests**: the Data template holds an `AWS::IAM::Policy` attached to the renderer role with the table, key (when encrypted) and AppConfig statements; the Websites template has no `Fn::ImportValue` and the renderer role's own policy has only the `index.html` statement.
 - **`CoreApiStack`**: `CORE_API_DEDICATED_FUNCTIONS.MediaUrl` gains `course.previewVideoUrl`. The synth test that every operation has an integration covers it.
 - **`InstructorApiStack`**: `INSTRUCTOR_API_DEDICATED_FUNCTIONS.Media` gains `coursePreview.createUploadUrl`, `create`, `replace` and `remove`; `MediaUrl` gains `coursePreview.createVideoUrl`. Their existing grants already cover `courses/*` in the lesson media bucket and MediaConvert; a synth test confirms no new statement is needed.
 - **`MediaPipeline` and `StreamRouter`**: no new resources. The existing MediaConvert completion rule, Transcribe rule, reconciler schedule and cleanup scheduler carry preview jobs, told apart by job metadata.

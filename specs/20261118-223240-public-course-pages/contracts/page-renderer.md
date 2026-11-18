@@ -78,7 +78,9 @@ If a dependency fails (the table or AppConfig), the response is `503` with `Cach
 
 ## The `index.html` template
 
-- **Deployed**: read from the website bucket (`GetObject index.html`, granted read on that key only) and cached in memory for 60 seconds.
+- **Deployed**: read from the website bucket (`GetObject index.html`, granted read on that key only). The renderer keeps the last body and its `ETag` in memory, and on every request sends `GetObject` with `If-None-Match: <etag>`. A `304` reuses the cached body; a `200` replaces it. There is no fixed-time cache: a portal deploy prunes old hashed assets and then invalidates the distribution, and a fixed cache would let a warm renderer keep serving the old `index.html` after that invalidation, with CloudFront then caching pages that reference deleted bundles for up to 300 s.
+  - If the conditional read fails (S3 error or timeout), the request gets the usual dependency-failure `503` with `no-store`. It does not fall back to the cached body, because that body may be the stale one.
+  - A unit test pins this: a template whose `ETag` changes between two requests on the same warm handler renders the new asset references on the second request, a `304` reuses the body without re-parsing, and an S3 failure gives a `503`.
 - **Locally**: fetched from `LOCAL_PORTAL_URLS.student`.
 
 The renderer inserts its head tags before `</head>` and replaces the empty `<div id="root"></div>`. If that marker is missing, it fails the request with 503 rather than serving a broken page, and a unit test pins the marker against the portal's `index.html`.
