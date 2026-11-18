@@ -208,6 +208,7 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   }),
   'quiz.view': () => quizView(),
   'quiz.myAttempts': () => noAttempts,
+  'discussion.listQuestions': () => ({ items: [] }),
   ...overrides,
 });
 
@@ -417,6 +418,60 @@ describe('LessonPage', () => {
       'aria-current',
       'page',
     );
+  });
+
+  it('shows the Questions section for the lesson after its items', async () => {
+    const { calls } = openLesson('lesson-1');
+
+    const questions = await screen.findByRole('region', { name: 'Questions' });
+    expect(
+      await within(questions).findByText(/No questions yet/),
+    ).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole('article', { name: 'Notes' })
+        .compareDocumentPosition(questions) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      calls.find((call) => call.path === 'discussion.listQuestions')?.input,
+    ).toEqual(
+      expect.objectContaining({
+        courseId: 'course-1',
+        moduleId: 'module-1',
+        lessonId: 'lesson-1',
+      }),
+    );
+  });
+
+  it('keeps the lesson working when the questions call fails', async () => {
+    openLesson('lesson-1', {
+      'discussion.listQuestions': () => {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+      },
+    });
+
+    expect(
+      await screen.findByText("Couldn't load the questions"),
+    ).toBeInTheDocument();
+    expect(
+      within(await item('Notes')).getByText('Notes body'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Next lesson' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the questions read-only in an archived course', async () => {
+    openLesson('lesson-1', {
+      'course.view': () => course({ status: 'archived' }),
+    });
+
+    expect(
+      await screen.findByText(
+        'This course is archived, so questions are read-only.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Post question' })).toBeNull();
   });
 
   it('plays a ready video from the URL core-api signs for it', async () => {

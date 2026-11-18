@@ -13,6 +13,7 @@ import {
   type CoursePlayer,
   CoursePlayerLayout,
 } from './course-player';
+import { QuestionsSection } from './discussion/questions-section';
 import { useQuizFailed } from './quiz-item';
 import type { PlayerItem } from './use-course-player';
 
@@ -187,6 +188,13 @@ function Lesson({
           </Fragment>
         ))
       )}
+
+      <QuestionsSection
+        courseId={courseId}
+        moduleId={module.moduleId}
+        lessonId={lesson.lessonId}
+        readOnly={readOnly}
+      />
 
       <nav
         aria-label="Lessons"
