@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { apiUser } from '../helpers/api.js';
+import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
 import { createUploadAssignmentCourse } from '../helpers/assignment.js';
 import {
   addLesson,
@@ -129,5 +129,57 @@ test.describe('course reviews in the instructor portal', () => {
     await expect(
       page.getByRole('button', { name: /^Respond to .* review$/ }),
     ).toBeVisible();
+  });
+});
+
+// The admin portal's Reviews screen: removing a review that breaks the rules.
+test.describe('course reviews in the admin portal', () => {
+  test('an admin removes a review with a reason', async ({ page }) => {
+    const title = uniqueName('E2E reviews removal');
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const { courseId } = await createPublishedCourseViaApi(instructor, title);
+    const student = await apiUser('Sam', ['student']);
+    await student.core.course.enrol.mutate({ courseId });
+    await student.core.review.post.mutate({
+      courseId,
+      rating: 1,
+      text: 'Rude words about the instructor.',
+    });
+
+    await page.goto(`${PORTALS.admin}/reviews`);
+    await signIn(page, newUser('Cara', ['admin']));
+    await expect(page.getByRole('heading', { name: 'Reviews' })).toBeVisible();
+    await page
+      .getByLabel('Course')
+      .selectOption({ label: `${title} · 1 rating` });
+    await expect(
+      page.getByText('Rude words about the instructor.'),
+    ).toBeVisible();
+    await screenshot(page, 'the admin reviews screen with a visible review');
+
+    await page.getByRole('button', { name: /^Remove .* review$/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+      dialog.getByRole('button', { name: 'Remove review' }),
+    ).toBeDisabled();
+    await dialog.getByLabel('Reason').fill('Abusive language');
+    await screenshot(page, 'the removal dialog with a reason');
+    await dialog.getByRole('button', { name: 'Remove review' }).click();
+
+    await expect(page.getByText('Removed', { exact: true })).toBeVisible();
+    await expect(page.getByText('Abusive language')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /^Remove .* review$/ }),
+    ).toBeHidden();
+    await screenshot(page, 'the review marked removed with its reason');
+
+    // The student can't post again, and the course's rating no longer counts it.
+    await expect(
+      student.core.review.post.mutate({ courseId, rating: 5 }),
+    ).rejects.toThrow();
+    await page.reload();
+    await expect(
+      page.getByRole('option', { name: `${title} · 0 ratings` }),
+    ).toHaveCount(1);
   });
 });
