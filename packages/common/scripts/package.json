@@ -15,7 +15,8 @@
   },
   "devDependencies": {
     "@aws-sdk/client-sts": "catalog:",
-    "@aws-sdk/credential-providers": "catalog:"
+    "@aws-sdk/credential-providers": "catalog:",
+    "typescript": "catalog:"
   },
   "license": "Apache-2.0"
 }

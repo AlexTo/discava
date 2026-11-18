@@ -84,6 +84,17 @@ Every API and event handler shares the core table, and some rules span records t
 
 Add a check for each such rule to `core-table`'s `helpers/invariants.ts`. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
 
+Two checks make sure a change that could need a new rule gets one:
+
+- **Every entity is in the snapshot.** A test in `core-table` (`helpers/invariants-coverage.test.ts`) fails when an entity's records aren't loaded into `TableSnapshot`. Add the new entity there, with checks for the rules it keeps, or list it in that test's `NO_INVARIANTS` with the reason it has none.
+- **Who writes each entity.** `core-table`'s `entity-writers.json` lists, for every entity, the files in each package that write it. It's generated from the code with the TypeScript compiler, so after changing which code writes the core table, regenerate it and commit the result:
+
+  ```sh
+  pnpm nx run @discava/common-scripts:entity-writers
+  ```
+
+  The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the pull request also changes `helpers/invariants.ts`. If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
+
 ### Testing Portal Components
 
 The instructor portal's components are tested with [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com/docs/react-testing-library/intro), in jsdom. Put a test next to the component as `<name>.test.tsx`.
