@@ -105,6 +105,9 @@ export function ByLessonView({ courseId }: { courseId: string }) {
       </div>
     );
   }
+  if (!course.data) {
+    return null;
+  }
   const { lessons, courseArchived } = course.data;
   const lesson = lessons.find((l) => l.lessonId === picked);
 

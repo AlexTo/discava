@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type UseQueryResult, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 
 export interface LessonRef {
@@ -29,11 +29,17 @@ export interface CourseLessons {
   lessons: CourseLesson[];
 }
 
-// Spelled out so the declaration emit doesn't have to name the API router's
-// inferred types.
-export function useCourseLessons(
-  courseId: string,
-): UseQueryResult<CourseLessons, Error> {
+// The parts of the query the views use, spelled out so the declaration emit
+// doesn't have to name the API router's inferred types.
+export interface CourseLessonsQuery {
+  data: CourseLessons | undefined;
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: () => unknown;
+}
+
+export function useCourseLessons(courseId: string): CourseLessonsQuery {
   const trpc = useInstructorApi();
   return useQuery({
     ...trpc.course.view.queryOptions({ courseId }),
