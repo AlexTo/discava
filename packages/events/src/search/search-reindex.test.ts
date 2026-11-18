@@ -15,9 +15,10 @@ vi.mock('@discava/search', async (importActual) => {
   const actual = await importActual<typeof import('@discava/search')>();
   return { ...actual, getOpenSearchClient: getOpenSearchClientMock };
 });
-vi.mock('@discava/core-table', () => ({
-  createCoreTableService: createCoreTableServiceMock,
-}));
+vi.mock('@discava/core-table', async (importActual) => {
+  const actual = await importActual<typeof import('@discava/core-table')>();
+  return { ...actual, createCoreTableService: createCoreTableServiceMock };
+});
 
 const { searchReindex, BATCH_SIZE } = await import('./search-reindex.js');
 const { toCourseDocument } = await import('./course-document.js');
@@ -35,12 +36,19 @@ const course = (id: string, extra: Record<string, unknown> = {}) => ({
 describe('searchReindex', () => {
   const client = { bulk: vi.fn(), search: vi.fn() };
   const go = vi.fn();
+  const ratingGet = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     getOpenSearchClientMock.mockResolvedValue(client);
     createCoreTableServiceMock.mockResolvedValue({
-      entities: { course: { query: { byStatus: () => ({ go }) } } },
+      entities: {
+        course: { query: { byStatus: () => ({ go }) } },
+        courseRating: { get: ratingGet },
+      },
+    });
+    ratingGet.mockReturnValue({
+      go: async () => ({ data: [], unprocessed: [] }),
     });
     client.bulk.mockResolvedValue({ body: { errors: false, items: [] } });
     client.search.mockResolvedValue({ body: { hits: { hits: [] } } });
@@ -88,6 +96,57 @@ describe('searchReindex', () => {
     expect(body[1]).toEqual(toCourseDocument(course('c1', fields) as never));
     expect(body[1]).toMatchObject(fields);
     expect(body[3].categoryId).toBeUndefined();
+  });
+
+  it('indexes each course with its rating from one batch get per page', async () => {
+    go.mockResolvedValue({ data: [course('c1'), course('c2')], cursor: null });
+    ratingGet.mockReturnValue({
+      go: async () => ({
+        data: [{ courseId: 'c1', stars5: 1 }],
+        unprocessed: [],
+      }),
+    });
+
+    await searchReindex();
+
+    expect(ratingGet).toHaveBeenCalledTimes(1);
+    expect(ratingGet).toHaveBeenCalledWith([
+      { courseId: 'c1' },
+      { courseId: 'c2' },
+    ]);
+    const body = client.bulk.mock.calls[0]![0].body;
+    expect(body[1]).toMatchObject({ ratingCount: 1, ratingAverage: 5 });
+    expect(body[1].ratingScore).toBeCloseTo(3.75);
+    expect(body[3]).toMatchObject({ ratingBoost: 1 });
+    expect(body[3].ratingCount).toBeUndefined();
+  });
+
+  it('reads again the rating keys a batch get left unprocessed', async () => {
+    go.mockResolvedValue({ data: [course('c1')], cursor: null });
+    ratingGet
+      .mockReturnValueOnce({
+        go: async () => ({ data: [], unprocessed: [{ courseId: 'c1' }] }),
+      })
+      .mockReturnValueOnce({
+        go: async () => ({
+          data: [{ courseId: 'c1', stars4: 2 }],
+          unprocessed: [],
+        }),
+      });
+
+    await searchReindex();
+
+    expect(ratingGet).toHaveBeenCalledTimes(2);
+    expect(client.bulk.mock.calls[0]![0].body[1]).toMatchObject({
+      ratingCount: 2,
+      ratingAverage: 4,
+    });
+  });
+
+  it('reads no ratings for an empty page', async () => {
+    go.mockResolvedValue({ data: [], cursor: null });
+    await searchReindex();
+    expect(ratingGet).not.toHaveBeenCalled();
   });
 
   it('removes documents for courses that are no longer published', async () => {

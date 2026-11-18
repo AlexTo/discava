@@ -29,6 +29,12 @@ export const CourseDocumentSchema = z.object({
   level: z.string().optional(),
   language: z.string().optional(),
   durationHours: z.number().int().optional(),
+  // The course's ratings (see helpers/review-rating.ts in core-table), all
+  // absent for an unrated course except `ratingBoost`, which is then 1.
+  ratingCount: z.number().int().optional(),
+  ratingAverage: z.number().optional(),
+  ratingScore: z.number().optional(),
+  ratingBoost: z.number().optional(),
 });
 
 export type ICourseDocument = z.output<typeof CourseDocumentSchema>;
@@ -63,6 +69,11 @@ export default createIndex({
       level: { type: 'keyword' },
       language: { type: 'keyword' },
       durationHours: { type: 'integer' },
+      // Ratings, also new properties; numeric fields need no analyzer.
+      ratingCount: { type: 'integer' },
+      ratingAverage: { type: 'float' },
+      ratingScore: { type: 'float' },
+      ratingBoost: { type: 'float' },
     },
   },
 });
