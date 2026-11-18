@@ -20,6 +20,7 @@ const {
   courseGet,
   userGet,
   enrolmentGet,
+  courseRatingGet,
   curriculumCollection,
 } = vi.hoisted(() => ({
   courseInstructorQueryByInstructor: vi.fn(),
@@ -28,6 +29,7 @@ const {
   courseGet: vi.fn(),
   userGet: vi.fn(),
   enrolmentGet: vi.fn(),
+  courseRatingGet: vi.fn(),
   curriculumCollection: vi.fn(),
 }));
 
@@ -41,6 +43,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       },
       user: { get: userGet },
       enrolment: { get: enrolmentGet },
+      courseRating: { get: courseRatingGet },
       courseInstructor: {
         query: {
           byInstructor: courseInstructorQueryByInstructor,
@@ -107,6 +110,10 @@ const enrolment = (status: 'active' | 'completed' | 'dropped' = 'active') => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // No course is rated, unless a test says otherwise.
+  courseRatingGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: [], unprocessed: [] }),
+  });
   // The caller is enrolled, unless a test says otherwise.
   enrolmentGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: enrolment() }),
@@ -297,7 +304,10 @@ describe('publicListCourses', () => {
 
     const result = await callAnonymously().publicListCourses({});
 
-    expect(result).toEqual({ items: [course], cursor: null });
+    expect(result).toEqual({
+      items: [{ ...course, ratingCount: 0 }],
+      cursor: null,
+    });
   });
 
   it('queries only published courses, defaulting limit to 10', async () => {
@@ -331,7 +341,84 @@ describe('publicListCourses', () => {
       limit: 20,
       order: 'desc',
     });
-    expect(result).toEqual({ items: [course], cursor: 'next-page' });
+    expect(result).toEqual({
+      items: [{ ...course, ratingCount: 0 }],
+      cursor: 'next-page',
+    });
+  });
+
+  it('adds the rating of each course, in the order of the page', async () => {
+    const other = { ...course, courseId: 'course-2' };
+    courseQueryByStatus.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: [other, course], cursor: null }),
+    });
+    // Only course-1 is rated: 3 x 5 stars and 1 x 4 stars, 4.75 on average.
+    courseRatingGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [{ courseId: 'course-1', stars4: 1, stars5: 3 }],
+        unprocessed: [],
+      }),
+    });
+
+    const result = await callAnonymously().publicListCourses({});
+
+    expect(result.items).toEqual([
+      { ...other, ratingCount: 0 },
+      { ...course, ratingAverage: 4.8, ratingCount: 4 },
+    ]);
+    expect(result.items[0].ratingAverage).toBeUndefined();
+  });
+
+  it('reads the ratings of a page with one batch get', async () => {
+    courseQueryByStatus.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [course, { ...course, courseId: 'course-2' }],
+        cursor: null,
+      }),
+    });
+
+    await callAnonymously().publicListCourses({ limit: 100 });
+
+    expect(courseRatingGet).toHaveBeenCalledTimes(1);
+    expect(courseRatingGet).toHaveBeenCalledWith([
+      { courseId: 'course-1' },
+      { courseId: 'course-2' },
+    ]);
+  });
+
+  it('reads no ratings for an empty page', async () => {
+    courseQueryByStatus.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: [], cursor: null }),
+    });
+
+    const result = await callAnonymously().publicListCourses({});
+
+    expect(result).toEqual({ items: [], cursor: null });
+    expect(courseRatingGet).not.toHaveBeenCalled();
+  });
+
+  it('asks again for ratings DynamoDB left unprocessed', async () => {
+    courseQueryByStatus.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: [course], cursor: null }),
+    });
+    courseRatingGet
+      .mockReturnValueOnce({
+        go: vi.fn().mockResolvedValue({
+          data: [],
+          unprocessed: [{ courseId: 'course-1' }],
+        }),
+      })
+      .mockReturnValueOnce({
+        go: vi.fn().mockResolvedValue({
+          data: [{ courseId: 'course-1', stars5: 1 }],
+          unprocessed: [],
+        }),
+      });
+
+    const result = await callAnonymously().publicListCourses({});
+
+    expect(courseRatingGet).toHaveBeenCalledTimes(2);
+    expect(result.items[0]).toMatchObject({ ratingAverage: 5, ratingCount: 1 });
   });
 });
 

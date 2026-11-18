@@ -39,6 +39,22 @@ const handlers = {
   'category.list': () => [],
   'course.publicView': () => course,
   'course.myEnrolment': () => null,
+  'review.summary': () => ({
+    count: 1,
+    average: 5,
+    stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 1 },
+  }),
+  'review.list': () => ({
+    items: [
+      {
+        reviewerName: 'Ada L.',
+        rating: 5,
+        text: 'Superb.',
+        createdAt: '2026-10-05T12:00:00.000Z',
+      },
+    ],
+    cursor: null,
+  }),
 };
 
 const open = (path: string, options: { signedIn?: boolean } = {}) =>
@@ -79,14 +95,14 @@ describe('/', () => {
     });
 
     expect(
-      await screen.findByRole('button', { name: 'Science (3)' }),
+      await screen.findByRole('link', { name: 'Science (3)' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Art (0)' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Technology' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Art (0)' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Technology' })).toBeNull();
   });
 
-  it('narrows the courses by a category chip, in the address', async () => {
-    const { router, user, calls } = renderWithCoreApi(null, {
+  it('links each category chip to its landing page', async () => {
+    renderWithCoreApi(null, {
       routeTree,
       path: '/',
       signedIn: false,
@@ -98,18 +114,9 @@ describe('/', () => {
       },
     });
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Science (3)' }),
-    );
-
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ category: 'science' }),
-    );
-    await waitFor(() =>
-      expect(
-        calls.filter((c) => c.path === 'course.publicSearch').at(-1)?.input,
-      ).toMatchObject({ categoryId: 'cat-1' }),
-    );
+    expect(
+      await screen.findByRole('link', { name: 'Science (3)' }),
+    ).toHaveAttribute('href', '/category/science');
   });
 
   it('shows signed-in students their own home', async () => {
@@ -132,6 +139,20 @@ describe('/learn/<courseId>/home', () => {
   it('lets signed-in students in', async () => {
     const { router } = open('/learn/course-1/home', { signedIn: true });
     expect((await pathAfterLoad(router)).pathname).toBe('/learn/course-1/home');
+  });
+});
+
+describe('/learn/<courseId>', () => {
+  it('shows a signed-out visitor the reviews without sending them to sign in', async () => {
+    const { router, calls } = open('/learn/course-1');
+
+    expect(await screen.findByText('Superb.')).toBeInTheDocument();
+    expect((await pathAfterLoad(router)).pathname).toBe('/learn/course-1');
+    const paths = calls.map(({ path }) => path);
+    expect(paths).toContain('review.summary');
+    expect(paths).toContain('review.list');
+    expect(paths).not.toContain('review.mine');
+    expect(paths).not.toContain('course.myEnrolment');
   });
 });
 

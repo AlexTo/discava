@@ -17,6 +17,9 @@
       "path": "../../apis/instructor-api/tsconfig.lib.json"
     },
     {
+      "path": "../../apis/admin-api/tsconfig.lib.json"
+    },
+    {
       "path": "../../apis/core-api/tsconfig.lib.json"
     },
     {

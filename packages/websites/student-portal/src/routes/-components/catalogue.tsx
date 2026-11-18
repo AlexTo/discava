@@ -115,12 +115,13 @@ export function Catalogue() {
                 {categories.map(({ id, name, slug, courseCount }) => (
                   <Button
                     key={id}
-                    type="button"
                     size="sm"
                     variant={filters.category === slug ? 'default' : 'outline'}
-                    onClick={() => setFilters({ ...filters, category: slug })}
+                    asChild
                   >
-                    {name} ({courseCount})
+                    <Link to="/category/$slug" params={{ slug }}>
+                      {name} ({courseCount})
+                    </Link>
                   </Button>
                 ))}
               </div>

@@ -13,7 +13,10 @@ import { getOpenSearchClient, resolveIndexName } from '@discava/search';
 import middy from '@middy/core';
 import type { Client } from '@opensearch-project/opensearch';
 import type { Context } from 'aws-lambda';
-import { toCourseDocument } from './course-document.js';
+import {
+  type CourseRatingSource,
+  toCourseDocument,
+} from './course-document.js';
 
 export type { Context };
 
@@ -26,6 +29,9 @@ const metrics = new Metrics();
 
 // Documents per _bulk call, and per page of the stale-id scan.
 export const BATCH_SIZE = 500;
+
+// Reads of a page's ratings before giving up on keys left unprocessed.
+const RATING_READ_ATTEMPTS = 5;
 
 export interface ReindexResult {
   indexed: number;
@@ -41,6 +47,29 @@ const assertNoBulkErrors = (response: {
       `_bulk reported failures: ${JSON.stringify(response.items)}`,
     );
   }
+};
+
+// The ratings of a page of courses, by batch get. A course nobody has rated
+// has no record; keys DynamoDB left unprocessed are read again.
+const readRatings = async (
+  coreTable: Awaited<ReturnType<typeof createCoreTableService>>,
+  courseIds: string[],
+) => {
+  const ratings = new Map<string, CourseRatingSource>();
+  let pending = courseIds.map((courseId) => ({ courseId }));
+  for (let attempt = 0; pending.length > 0; attempt++) {
+    if (attempt === RATING_READ_ATTEMPTS) {
+      throw new Error('Ratings could not be read: throttled');
+    }
+    const { data, unprocessed } = await coreTable.entities.courseRating
+      .get(pending)
+      .go();
+    for (const rating of data) {
+      ratings.set(rating.courseId, rating);
+    }
+    pending = unprocessed;
+  }
+  return ratings;
 };
 
 // Every id currently in the index, read with `search_after`: OpenSearch
@@ -94,8 +123,12 @@ export const searchReindex = async (): Promise<ReindexResult> => {
       .go({ cursor, limit: BATCH_SIZE });
 
     if (page.length > 0) {
+      const ratings = await readRatings(
+        coreTable,
+        page.map(({ courseId }) => courseId),
+      );
       const body = page.flatMap((course) => {
-        const doc = toCourseDocument(course);
+        const doc = toCourseDocument(course, ratings.get(course.courseId));
         publishedIds.add(doc.courseId);
         return [{ index: { _index: index, _id: doc.courseId } }, doc];
       });

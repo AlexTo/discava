@@ -255,6 +255,8 @@ const violations = (table: Table) =>
     announcements: [],
     categories: [],
     categoryClaims: [],
+    discussionPosts: [],
+    discussionVotes: [],
   } as unknown as TableSnapshot).filter((v) =>
     [
       'review-shape',

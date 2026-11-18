@@ -276,6 +276,130 @@ describe('/search', () => {
       ).toBeInTheDocument();
     });
 
+    it('offers the sort and minimum rating, defaulting to relevance and any', async () => {
+      filtered('/search?query=linear');
+
+      expect(await screen.findByLabelText('Sort by')).toHaveValue('relevance');
+      for (const name of [
+        'Relevance',
+        'Highest rated',
+        'Newest',
+        'Any',
+        '4.5 and up',
+        '4.0 and up',
+        '3.5 and up',
+        '3.0 and up',
+      ]) {
+        expect(screen.getByRole('option', { name })).toBeInTheDocument();
+      }
+      expect(screen.getByLabelText('Minimum rating')).toHaveValue('');
+    });
+
+    it('puts a chosen sort in the address and the request, and clears it', async () => {
+      const { router, calls, user } = filtered('/search?query=linear');
+
+      await user.selectOptions(
+        await screen.findByLabelText('Sort by'),
+        'Highest rated',
+      );
+
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          query: 'linear',
+          sort: 'rating',
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          calls.filter(({ path }) => path === 'course.publicSearch').at(-1)
+            ?.input,
+        ).toMatchObject({ q: 'linear', sort: 'rating' }),
+      );
+
+      await user.selectOptions(screen.getByLabelText('Sort by'), 'Relevance');
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({ query: 'linear' }),
+      );
+      await waitFor(() =>
+        expect(
+          calls.filter(({ path }) => path === 'course.publicSearch').at(-1)
+            ?.input,
+        ).not.toHaveProperty('sort'),
+      );
+    });
+
+    it('puts a chosen minimum rating in the address and the request, and clears it', async () => {
+      const { router, calls, user } = filtered('/search?query=linear');
+
+      await user.selectOptions(
+        await screen.findByLabelText('Minimum rating'),
+        '4.0 and up',
+      );
+
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          query: 'linear',
+          minRating: 4,
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          calls.filter(({ path }) => path === 'course.publicSearch').at(-1)
+            ?.input,
+        ).toMatchObject({ q: 'linear', minRating: 4 }),
+      );
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Clear filters' }),
+      );
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({ query: 'linear' }),
+      );
+      expect(screen.getByLabelText('Minimum rating')).toHaveValue('');
+    });
+
+    it('restores the sort and minimum rating from the address', async () => {
+      const { calls } = filtered(
+        '/search?query=linear&sort=newest&minRating=3.5',
+      );
+
+      expect(await screen.findByLabelText('Sort by')).toHaveValue('newest');
+      expect(screen.getByLabelText('Minimum rating')).toHaveValue('3.5');
+      await waitFor(() =>
+        expect(
+          calls.filter(({ path }) => path === 'course.publicSearch').at(-1)
+            ?.input,
+        ).toMatchObject({ sort: 'newest', minRating: 3.5 }),
+      );
+    });
+
+    it('shows each result’s rating, or that it has none', async () => {
+      renderWithCoreApi(null, {
+        routeTree,
+        path: '/search?query=linear',
+        signedIn: false,
+        handlers: {
+          'course.publicSearch': () => ({
+            items: [
+              {
+                ...hit('linalg', 'Linear Algebra'),
+                ratingAverage: 4.6,
+                ratingCount: 128,
+              },
+              { ...hit('calc', 'Calculus'), ratingCount: 0 },
+            ],
+            cursor: null,
+            facets,
+          }),
+          'category.list': () => [],
+        },
+      });
+
+      expect(await screen.findByText('4.6')).toBeInTheDocument();
+      expect(screen.getByText('(128 ratings)')).toBeInTheDocument();
+      expect(screen.getByText('No ratings yet')).toBeInTheDocument();
+    });
+
     it('shows each course’s level, language and duration', async () => {
       renderWithCoreApi(null, {
         routeTree,

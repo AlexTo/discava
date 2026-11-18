@@ -50,7 +50,7 @@ export default {
           // requests. Sized for a handful of testers:
           // - API Gateway throttles each method separately, so the API's
           //   ceiling is the sum over its methods: core-api 10 x 2 + 2 x 1 =
-          //   22 requests/s, instructor-api 33 x 2 = 66. Anonymous callers
+          //   22 requests/s, instructor-api 33 x 2 = 66, admin-api 4 x 2 = 8. Anonymous callers
           //   reach only the 2 public methods: 2 requests/s in all.
           // - Reserved concurrency caps how many requests each function
           //   runs at once. core-api serves every operation from one
@@ -81,6 +81,16 @@ export default {
               enableTracing: false,
             },
             instructorApi: {
+              enableWaf: false,
+              enableKmsEncryption: false,
+              retainOnDelete: false,
+              throttleRateLimit: 2,
+              throttleBurstLimit: 5,
+              reservedConcurrency: 10,
+              logLevel: 'WARN',
+              enableTracing: false,
+            },
+            adminApi: {
               enableWaf: false,
               enableKmsEncryption: false,
               retainOnDelete: false,
@@ -159,6 +169,17 @@ export default {
               throttleRateLimit: 20,
               throttleBurstLimit: 50,
               reservedConcurrency: 25,
+              logLevel: 'INFO',
+              enableTracing: true,
+            },
+            adminApi: {
+              enableWaf: true,
+              enableKmsEncryption: true,
+              enableKeyRotation: true,
+              retainOnDelete: true,
+              throttleRateLimit: 10,
+              throttleBurstLimit: 20,
+              reservedConcurrency: 10,
               logLevel: 'INFO',
               enableTracing: true,
             },

@@ -61,8 +61,16 @@ export type IPublicListCoursesInput = z.output<
   typeof PublicListCoursesInputSchema
 >;
 
-export const PublicListCoursesOutputSchema =
-  createPaginatedQueryOutputSchema(CourseSchema);
+// A course as the catalogue lists it, with its rating: the average to one
+// decimal (absent when unrated) and how many ratings it has.
+export const PublicListCourseSchema = CourseSchema.extend({
+  ratingAverage: z.number().optional(),
+  ratingCount: z.number(),
+});
+
+export const PublicListCoursesOutputSchema = createPaginatedQueryOutputSchema(
+  PublicListCourseSchema,
+);
 
 export const ViewCourseInputSchema = z.object({
   courseId: z.string(),
