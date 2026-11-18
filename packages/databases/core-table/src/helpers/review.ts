@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { REVIEW_TEXT_MAX } from '../entities/review.js';
+import { REVIEW_RESPONSE_MAX, REVIEW_TEXT_MAX } from '../entities/review.js';
 import type { createCoreTableService } from '../service.js';
 import { starField } from './review-rating.js';
 
@@ -75,7 +75,39 @@ export interface ReviewDelete extends ReviewWriteBase {
   existing: { version: number; rating: number };
 }
 
-export type ReviewWrite = ReviewPost | ReviewEdit | ReviewDelete;
+/** An instructor's answer to a review; replaces any earlier answer. */
+export interface ReviewRespond extends ReviewWriteBase {
+  action: 'respond';
+  /** `userId` is the reviewer; this is the answering instructor. */
+  instructorId: string;
+  /** From reviewerName, read from the instructor's user record. */
+  instructorName: string;
+  text: string;
+}
+
+export interface ReviewDeleteResponse extends ReviewWriteBase {
+  action: 'deleteResponse';
+  instructorId: string;
+}
+
+export type ReviewWrite =
+  | ReviewPost
+  | ReviewEdit
+  | ReviewDelete
+  | ReviewRespond
+  | ReviewDeleteResponse;
+
+/** Response text as stored: trimmed, 1 to REVIEW_RESPONSE_MAX characters. */
+export const responseText = (text: string): string => {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    throw new RangeError('response text is empty');
+  }
+  if (trimmed.length > REVIEW_RESPONSE_MAX) {
+    throw new RangeError(`response is over ${REVIEW_RESPONSE_MAX} characters`);
+  }
+  return trimmed;
+};
 
 /** Review text as stored: trimmed, and absent when nothing is left. */
 export const reviewText = (text: string | undefined): string | undefined => {
@@ -97,11 +129,46 @@ export const reviewText = (text: string | undefined): string | undefined => {
  * whole transaction; the caller reads again and decides.
  */
 export const reviewWrites = (
-  { review, courseRating, enrolment, course }: TransactionEntities,
+  {
+    review,
+    courseRating,
+    enrolment,
+    course,
+    courseInstructor,
+  }: TransactionEntities,
   write: ReviewWrite,
 ): ReturnType<TransactionWrites> => {
   const { courseId, userId, at } = write;
   const key = { courseId, userId };
+
+  // An answer touches neither the version nor the tally, so a student's edit
+  // from the version it read still goes through. It needs the review to be
+  // visible and the caller to still teach the course.
+  if (write.action === 'respond' || write.action === 'deleteResponse') {
+    const visible = (attr: any, op: any) => op.eq(attr.status, 'visible');
+    const patch = review.patch(key);
+    const answer =
+      write.action === 'respond'
+        ? patch.set({
+            responseText: responseText(write.text),
+            responseAt: at,
+            responseById: write.instructorId,
+            responseByName: write.instructorName,
+          })
+        : patch.remove([
+            'responseText',
+            'responseAt',
+            'responseById',
+            'responseByName',
+          ]);
+    return [
+      answer.where(visible).commit(),
+      courseInstructor
+        .check({ courseId, instructorId: write.instructorId })
+        .where((attr, op) => op.exists(attr.instructorId))
+        .commit(),
+    ];
+  }
 
   if (write.action === 'post') {
     const text = reviewText(write.text);
@@ -181,7 +248,9 @@ export type ReviewCancellation =
   | 'already-reviewed'
   | 'not-enrolled'
   | 'course-closed'
-  | 'stale';
+  | 'stale'
+  | 'not-instructor'
+  | 'unavailable';
 
 /**
  * What cancelled a review transaction, from the reason DynamoDB gave for each
@@ -196,6 +265,14 @@ export const classifyReviewCancellation = (
 ): ReviewCancellation | undefined => {
   const failed = (index: number) =>
     reasons[index]?.code === 'ConditionalCheckFailed';
+  if (action === 'respond' || action === 'deleteResponse') {
+    // The review is missing or removed (the caller reads it to tell which),
+    // or the caller no longer teaches the course.
+    if (failed(1)) {
+      return 'not-instructor';
+    }
+    return failed(0) ? 'unavailable' : undefined;
+  }
   if (action === 'post') {
     if (failed(0)) {
       return 'already-reviewed';

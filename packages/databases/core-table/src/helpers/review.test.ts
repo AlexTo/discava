@@ -8,6 +8,7 @@ import { createCoreTableService } from '../service.js';
 import {
   classifyReviewCancellation,
   type ReviewWrite,
+  responseText,
   reviewerName,
   reviewText,
   reviewWrites,
@@ -264,6 +265,96 @@ describe('a delete', () => {
   });
 });
 
+const respond: ReviewWrite = {
+  ...base,
+  action: 'respond',
+  instructorId: 'instructor-1',
+  instructorName: 'Sam L.',
+  text: '  Thanks for the feedback!  ',
+};
+const deleteResponse: ReviewWrite = {
+  ...base,
+  action: 'deleteResponse',
+  instructorId: 'instructor-1',
+};
+
+describe('responseText', () => {
+  it('trims, and refuses nothing or too much', () => {
+    expect(responseText('  Thanks \n')).toBe('Thanks');
+    expect(responseText(` ${'a'.repeat(1000)} `)).toHaveLength(1000);
+    expect(() => responseText('   ')).toThrow(RangeError);
+    expect(() => responseText('a'.repeat(1001))).toThrow(RangeError);
+  });
+});
+
+describe('a response', () => {
+  it('sets the four response attributes on a visible review', () => {
+    const items = itemsFor(respond);
+    const [patch] = items;
+
+    expect(items).toHaveLength(2);
+    expect(updateOf(patch!)).toContain(
+      'responseText = Thanks for the feedback!',
+    );
+    expect(updateOf(patch!)).toContain(`responseAt = ${AT}`);
+    expect(updateOf(patch!)).toContain('responseById = instructor-1');
+    expect(updateOf(patch!)).toContain('responseByName = Sam L.');
+    expect(conditionOf(patch!)).toContain('status = visible');
+  });
+
+  it('leaves the version, edit time, rating and tally alone', () => {
+    const items = itemsFor(respond);
+    const update = updateOf(items[0]!);
+
+    for (const name of ['version', 'editedAt', 'rating', 'text =', 'stars']) {
+      expect(update).not.toContain(name);
+    }
+    expect(conditionOf(items[0]!)).not.toContain('version');
+    expect(items.some((item) => updateOf(item).includes('stars'))).toBe(false);
+  });
+
+  it('checks the instructor still teaches the course', () => {
+    const check = itemsFor(respond)[1]!;
+
+    expect(check.ConditionCheck).toBeDefined();
+    expect(conditionOf(check)).toContain('attribute_exists(instructorId)');
+    expect(JSON.stringify(check.ConditionCheck!.Key)).toContain('course-1');
+  });
+
+  it('refuses empty or over-long text', () => {
+    expect(() => itemsFor({ ...respond, text: ' ' } as ReviewWrite)).toThrow();
+    expect(() =>
+      itemsFor({ ...respond, text: 'a'.repeat(1001) } as ReviewWrite),
+    ).toThrow();
+  });
+
+  it('writes no two items for one key', () => {
+    const keys = keysOf(itemsFor(respond));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('deleting a response', () => {
+  it('removes the four attributes under the same conditions, with no counter', () => {
+    const items = itemsFor(deleteResponse);
+    const update = updateOf(items[0]!);
+
+    expect(items).toHaveLength(2);
+    expect(update).toMatch(/REMOVE/);
+    for (const name of [
+      'responseText',
+      'responseAt',
+      'responseById',
+      'responseByName',
+    ]) {
+      expect(update).toContain(name);
+    }
+    expect(update).not.toContain('stars');
+    expect(conditionOf(items[0]!)).toContain('status = visible');
+    expect(conditionOf(items[1]!)).toContain('attribute_exists(instructorId)');
+  });
+});
+
 describe('classifyReviewCancellation', () => {
   const failed = { code: 'ConditionalCheckFailed' };
   const none = { code: 'None' };
@@ -284,6 +375,24 @@ describe('classifyReviewCancellation', () => {
     },
   );
 
+  it.each(['respond', 'deleteResponse'] as const)(
+    'a %s on a missing or removed review is unavailable',
+    (action) => {
+      expect(classifyReviewCancellation(action, [failed, none])).toBe(
+        'unavailable',
+      );
+    },
+  );
+
+  it.each(['respond', 'deleteResponse'] as const)(
+    'a %s by someone who no longer teaches the course is refused',
+    (action) => {
+      expect(classifyReviewCancellation(action, [none, failed])).toBe(
+        'not-instructor',
+      );
+    },
+  );
+
   it('names nothing when no condition failed', () => {
     const conflict = { code: 'TransactionConflict' };
 
@@ -292,5 +401,8 @@ describe('classifyReviewCancellation', () => {
     ).toBeUndefined();
     expect(classifyReviewCancellation('edit', [conflict])).toBeUndefined();
     expect(classifyReviewCancellation('delete', [])).toBeUndefined();
+    expect(
+      classifyReviewCancellation('respond', [conflict, none]),
+    ).toBeUndefined();
   });
 });

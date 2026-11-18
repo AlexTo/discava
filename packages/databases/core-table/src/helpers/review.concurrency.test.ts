@@ -31,7 +31,7 @@ class Cancelled extends Error {
 }
 
 const rowKey = (entity: string, key: Row) =>
-  `${entity} ${key.courseId} ${key.userId ?? ''}`;
+  `${entity} ${key.courseId} ${key.userId ?? key.instructorId ?? ''}`;
 
 // `where` callbacks build their condition from `op.eq(attr.version, 2)`
 // joined with AND; each call returns a token standing for its predicate.
@@ -129,6 +129,7 @@ const fakeEntities = () => {
     },
     enrolment: { check: checking('enrolment'), patch: patching('enrolment') },
     course: { check: checking('course') },
+    courseInstructor: { check: checking('courseInstructor') },
     courseRating: {
       update: (key: Row) => {
         const b = builder('courseRating', key, {});
@@ -205,6 +206,13 @@ const newTable = (students: string[]): Table => {
     courseId: 'c1',
     status: 'published',
   });
+  table.set(
+    rowKey('courseInstructor', { courseId: 'c1', instructorId: 'i1' }),
+    {
+      courseId: 'c1',
+      instructorId: 'i1',
+    },
+  );
   for (const userId of students) {
     table.set(rowKey('enrolment', { courseId: 'c1', userId }), {
       courseId: 'c1',
@@ -234,7 +242,7 @@ const violations = (table: Table) =>
     modules: [],
     lessons: [],
     contentItems: [],
-    courseInstructors: [],
+    courseInstructors: rows(table, 'courseInstructor'),
     itemCompletions: [],
     progress: [],
     quizAttempts: [],
@@ -475,5 +483,98 @@ describe('concurrent review writes', () => {
       version: 2,
     });
     expect(violations(table)).toEqual([]);
+  });
+
+  describe('instructor responses', () => {
+    const respond = (text = 'Thank you'): ReviewWrite => ({
+      action: 'respond',
+      courseId: 'c1',
+      userId: 'a',
+      at: AT,
+      instructorId: 'i1',
+      instructorName: 'Sam L.',
+      text,
+    });
+    const clear: ReviewWrite = {
+      action: 'deleteResponse',
+      courseId: 'c1',
+      userId: 'a',
+      at: AT,
+      instructorId: 'i1',
+    };
+    const edit: ReviewWrite = {
+      action: 'edit',
+      courseId: 'c1',
+      userId: 'a',
+      at: AT,
+      rating: 2,
+      existing: { version: 1, rating: 4 },
+    };
+
+    it('answers a review without touching its version or the tally', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+
+      expect(succeeds(table, respond())).toBe(true);
+
+      expect(review(table, 'a')).toMatchObject({
+        rating: 4,
+        version: 1,
+        responseText: 'Thank you',
+        responseById: 'i1',
+        responseByName: 'Sam L.',
+      });
+      expect(tally(table)).toMatchObject({ stars4: 1 });
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('lets a student edit from the version it read after a response', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+      run(table, respond());
+
+      expect(succeeds(table, edit)).toBe(true);
+
+      expect(review(table, 'a')).toMatchObject({
+        rating: 2,
+        version: 2,
+        responseText: 'Thank you',
+      });
+      expect(tally(table)).toMatchObject({ stars4: 0, stars2: 1 });
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('replaces an answer and clears it, twice over without harm', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+      run(table, respond('First'));
+      run(table, respond('Second'));
+      expect(review(table, 'a')).toMatchObject({ responseText: 'Second' });
+
+      expect(succeeds(table, clear)).toBe(true);
+      expect(succeeds(table, clear)).toBe(true);
+      expect(review(table, 'a')).not.toHaveProperty('responseText');
+      expect(review(table, 'a')).not.toHaveProperty('responseById');
+      expect(violations(table)).toEqual([]);
+    });
+
+    it('refuses an answer to a removed or missing review', () => {
+      const table = newTable(['a']);
+      expect(succeeds(table, respond())).toBe(false);
+
+      run(table, post('a', 4));
+      review(table, 'a')!.status = 'removed';
+      expect(succeeds(table, respond())).toBe(false);
+      expect(review(table, 'a')).not.toHaveProperty('responseText');
+    });
+
+    it('refuses an answer from someone who does not teach the course', () => {
+      const table = newTable(['a']);
+      run(table, post('a', 4));
+
+      expect(succeeds(table, { ...respond(), instructorId: 'other' })).toBe(
+        false,
+      );
+    });
   });
 });
