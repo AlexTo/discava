@@ -205,6 +205,29 @@ export {
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
 export {
+  classifyReviewCancellation,
+  type ReviewCancellation,
+  type ReviewDelete,
+  type ReviewEdit,
+  type ReviewPost,
+  type ReviewWrite,
+  reviewerName,
+  reviewText,
+  reviewWrites,
+} from './helpers/review.js';
+export {
+  PRIOR_MEAN,
+  PRIOR_WEIGHT,
+  ratingAverage,
+  ratingBoost,
+  ratingCount,
+  type StarField,
+  type Stars,
+  starCounts,
+  starField,
+  weightedRating,
+} from './helpers/review-rating.js';
+export {
   matchesSearchStreamFilters,
   SEARCH_STREAM_FILTERS,
   type SearchStreamRecord,
