@@ -726,9 +726,7 @@ describe('notification delivery', () => {
           .map(() => name),
       ),
     ).toEqual(['StreamRouter']);
-    // Synthesizes the whole stage twice, which on a loaded CI runner can pass
-    // vitest's default 5 seconds as the stage gains stacks.
-  }, 30_000);
+  });
 
   it('gives the queue a visibility timeout of six times the function timeout', () => {
     const template = synth({})('StreamRouter');
@@ -741,7 +739,7 @@ describe('notification delivery', () => {
     ).filter((queue) => queue.RedrivePolicy);
     expect(queues).toHaveLength(1);
     expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
-  }, 30_000);
+  });
 
   it('is told where the portals and the API are, and where its secret is', () => {
     const { Environment } = deliveryFunction(configured);
