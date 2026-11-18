@@ -38,6 +38,31 @@ const FIELDS = [
   'durationHours',
 ] as const;
 
+// Every writer of a course copies its new updatedAt to its instructors'
+// records (the by-recency listing sorts on it; checked by
+// checkInstructorCourseUpdatedAt). ElectroDB sets updatedAt at write time and
+// a transaction doesn't return it, so read the course back.
+const refreshInstructorCourseUpdatedAt = async (
+  service: CoreTable,
+  courseId: string,
+) => {
+  const { data: course } = await service.entities.course.get({ courseId }).go();
+  if (!course) {
+    return;
+  }
+  const { data: instructors } = await service.entities.courseInstructor.query
+    .primary({ courseId })
+    .go({ pages: 'all' });
+  await Promise.all(
+    instructors.map(({ instructorId }) =>
+      service.entities.courseInstructor
+        .patch({ courseId, instructorId })
+        .set({ courseUpdatedAt: course.updatedAt })
+        .go(),
+    ),
+  );
+};
+
 /**
  * Replaces a course's catalogue fields: an omitted field is removed. A
  * category must exist and be active, unless it is the course's current one
@@ -99,6 +124,7 @@ export const courseCatalogueWrites = async (
       .set(set as never)
       .remove(remove as never)
       .go();
+    await refreshInstructorCourseUpdatedAt(service, courseId);
     return;
   }
   const { canceled, data: results } = await service.transaction
@@ -119,4 +145,5 @@ export const courseCatalogueWrites = async (
       ? new InvalidRequestError('Choose an active category')
       : new NotFoundError('Course not found');
   }
+  await refreshInstructorCourseUpdatedAt(service, courseId);
 };

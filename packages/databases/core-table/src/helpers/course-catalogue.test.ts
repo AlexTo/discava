@@ -34,6 +34,9 @@ const stubCourse = (course: Request | undefined) => {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  vi.spyOn(service.entities.courseInstructor.query, 'primary').mockReturnValue({
+    go: async () => ({ data: [] }),
+  } as never);
   written = [];
   canceled = undefined;
   vi.spyOn(service.transaction, 'write').mockImplementation(((
@@ -53,6 +56,34 @@ const names = (request: Request) =>
   Object.values(request.ExpressionAttributeNames ?? {});
 
 describe('courseCatalogueWrites', () => {
+  it('copies the course’s new updatedAt to each instructor’s record', async () => {
+    stubCourse({ courseId: 'c1', updatedAt: '2026-11-18T02:00:00.000Z' });
+    const goInstructorPatch = vi.fn(async () => ({ data: {} }));
+    const set = vi.fn(() => ({ go: goInstructorPatch }));
+    const patch = vi
+      .spyOn(service.entities.courseInstructor, 'patch')
+      .mockReturnValue({ set } as never);
+    vi.spyOn(
+      service.entities.courseInstructor.query,
+      'primary',
+    ).mockReturnValue({
+      go: async () => ({
+        data: [{ instructorId: 'i1' }, { instructorId: 'i2' }],
+      }),
+    } as never);
+
+    await courseCatalogueWrites(service, {
+      courseId: 'c1',
+      categoryId: 'cat-1',
+    });
+
+    expect(patch).toHaveBeenCalledWith({ courseId: 'c1', instructorId: 'i1' });
+    expect(patch).toHaveBeenCalledWith({ courseId: 'c1', instructorId: 'i2' });
+    expect(set).toHaveBeenCalledWith({
+      courseUpdatedAt: '2026-11-18T02:00:00.000Z',
+    });
+  });
+
   it('sets every field, normalising the tags', async () => {
     stubCourse({ courseId: 'c1' });
 
