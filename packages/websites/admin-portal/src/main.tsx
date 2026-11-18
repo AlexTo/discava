@@ -11,6 +11,7 @@ import { createRoot } from 'react-dom/client';
  * SPDX-License-Identifier: Apache-2.0
  */
 import { useAuth } from 'react-oidc-context';
+import AdminApiClientProvider from './components/AdminApiClientProvider';
 import CognitoAuth from './components/CognitoAuth';
 import CoreApiClientProvider from './components/CoreApiClientProvider';
 import QueryClientProvider from './components/QueryClientProvider';
@@ -51,7 +52,9 @@ root &&
         <CognitoAuth>
           <QueryClientProvider>
             <CoreApiClientProvider>
-              <App />
+              <AdminApiClientProvider>
+                <App />
+              </AdminApiClientProvider>
             </CoreApiClientProvider>
           </QueryClientProvider>
         </CognitoAuth>

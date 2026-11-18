@@ -1,0 +1,115 @@
+{
+  "name": "@discava/admin-api",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/apis/admin-api/src",
+  "projectType": "library",
+  "tags": [],
+  "metadata": {
+    "generator": "ts#trpc-api",
+    "ports": [2025],
+    "apiName": "AdminApi",
+    "apiType": "trpc",
+    "auth": "cognito",
+    "infra": "rest-lambda",
+    "integrationPattern": "isolated",
+    "iac": "cdk",
+    "components": [
+      {
+        "generator": "ts#dynamodb#trpc-connection",
+        "path": "packages/databases/core-table",
+        "name": "@discava/core-table"
+      }
+    ]
+  },
+  "targets": {
+    "assemble": {
+      "dependsOn": ["compile", "bundle"]
+    },
+    "build": {
+      "dependsOn": ["lint", "compile", "test", "bundle"]
+    },
+    "bundle": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["compile"],
+      "cache": true,
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/bundle"],
+      "options": {
+        "command": "rolldown -c rolldown.config.ts",
+        "cwd": "{projectRoot}"
+      },
+      "inputs": ["default"]
+    },
+    "compile": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/tsc"],
+      "options": {
+        "command": "tsc --build tsconfig.lib.json",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": ["@discava/core-table"],
+          "target": "dev"
+        }
+      ],
+      "continuous": true,
+      "options": {
+        "commands": ["tsx --watch src/local-server.ts"],
+        "cwd": "{projectRoot}",
+        "env": {
+          "LOCAL_DEV": "true"
+        }
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome format {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome format --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "format",
+        {
+          "projects": ["@discava/source"],
+          "target": "license-check"
+        }
+      ],
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome lint {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome check --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "commands": ["tsx --watch src/local-server.ts"],
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}
