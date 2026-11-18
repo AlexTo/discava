@@ -100,6 +100,45 @@ describe('announcement.list', () => {
     expect(result.cursor).toBe('next');
   });
 
+  it('shows the new text and editedAt of an edited announcement', async () => {
+    const body = '{"type":"doc","content":[{"type":"paragraph"}]}';
+    announcementPage
+      .mockResolvedValueOnce({ items: [stored('a')] })
+      .mockResolvedValueOnce({
+        items: [
+          stored('a', {
+            title: 'Corrected title',
+            body,
+            editedAt: '2026-11-17T12:00:00.000Z',
+            version: 4,
+          }),
+        ],
+      });
+
+    const before = await call().listAnnouncements({ courseId: 'course-1' });
+    const after = await call().listAnnouncements({ courseId: 'course-1' });
+
+    expect(before.items[0]).not.toHaveProperty('editedAt');
+    expect(after.items[0]).toMatchObject({
+      announcementId: 'a',
+      title: 'Corrected title',
+      body,
+      editedAt: '2026-11-17T12:00:00.000Z',
+    });
+  });
+
+  it('leaves a deleted announcement out of the next list', async () => {
+    announcementPage
+      .mockResolvedValueOnce({ items: [stored('b'), stored('a')] })
+      .mockResolvedValueOnce({ items: [stored('a')] });
+
+    const before = await call().listAnnouncements({ courseId: 'course-1' });
+    const after = await call().listAnnouncements({ courseId: 'course-1' });
+
+    expect(before.items.map((item) => item.announcementId)).toEqual(['b', 'a']);
+    expect(after.items.map((item) => item.announcementId)).toEqual(['a']);
+  });
+
   it('never returns authorId or version', async () => {
     announcementPage.mockResolvedValue({ items: [stored('a')] });
 
