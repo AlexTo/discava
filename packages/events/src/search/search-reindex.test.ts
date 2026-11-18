@@ -90,6 +90,35 @@ describe('searchReindex', () => {
     expect(body[3].categoryId).toBeUndefined();
   });
 
+  it('refers to the current category, the same one on a second run', async () => {
+    const fields = { categoryId: 'cat-2', tags: ['sql'], level: 'advanced' };
+    go.mockResolvedValue({ data: [course('c1', fields)], cursor: null });
+
+    await searchReindex();
+    await searchReindex();
+
+    const [first, second] = client.bulk.mock.calls.map((call) => call[0]);
+    expect(first.body[1]).toMatchObject({ categoryId: 'cat-2' });
+    expect(second).toEqual(first);
+  });
+
+  it('indexes courses without the fields without them', async () => {
+    go.mockResolvedValue({ data: [course('c1')], cursor: null });
+
+    await searchReindex();
+
+    const doc = client.bulk.mock.calls[0]![0].body[1];
+    for (const field of [
+      'categoryId',
+      'tags',
+      'level',
+      'language',
+      'durationHours',
+    ]) {
+      expect(doc[field]).toBeUndefined();
+    }
+  });
+
   it('removes documents for courses that are no longer published', async () => {
     go.mockResolvedValue({ data: [course('c1')], cursor: null });
     client.search.mockResolvedValue({
