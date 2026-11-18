@@ -187,3 +187,84 @@ test('facets count the published courses under each filter', async ({
     await expect(page.getByText('1 course', { exact: true })).toBeVisible();
   });
 });
+
+// Ratings in search: three courses sharing a tag, one rated 5 and 4 by two
+// students (average 4.5), one rated 2, one unrated. The rating reaches the
+// index through the stream, so each check keeps looking for a few seconds.
+test('search sorts and filters courses by their ratings', async ({ page }) => {
+  const scope = uniqueName('rated').toLowerCase();
+  const instructor = await apiUser('Rhea', ['instructor']);
+  const publish = async (label: string) => {
+    const title = uniqueName(`Rated ${label}`);
+    const { courseId } = await createPublishedCourseViaApi(instructor, title);
+    await setCourseCatalogue(courseId, { tags: [scope] });
+    return { courseId, title };
+  };
+  const best = await publish('best');
+  const poor = await publish('poor');
+  const unrated = await publish('unrated');
+
+  const review = async (
+    givenName: string,
+    ratings: { courseId: string; rating: number }[],
+  ) => {
+    const student = await apiUser(givenName, ['student']);
+    for (const { courseId, rating } of ratings) {
+      await student.core.course.enrol.mutate({ courseId });
+      await student.core.review.post.mutate({ courseId, rating });
+    }
+  };
+  await review('Sid', [
+    { courseId: best.courseId, rating: 5 },
+    { courseId: poor.courseId, rating: 2 },
+  ]);
+  await review('Sue', [{ courseId: best.courseId, rating: 4 }]);
+
+  const open = (params: Record<string, string> = {}) =>
+    page.goto(
+      `${PORTALS.student}/search?${new URLSearchParams({
+        tags: JSON.stringify([scope]),
+        ...params,
+      })}`,
+    );
+  const titles = () => page.locator('h3').allInnerTexts();
+
+  await test.step('every course shows its rating or that it has none', async () => {
+    await expectAfterReloads(page, async () => {
+      await open();
+      await expect(page.getByText('4.5')).toBeVisible({ timeout: 2_000 });
+    });
+    await expect(page.getByText('(2 ratings)')).toBeVisible();
+    await expect(page.getByText('(1 rating)')).toBeVisible();
+    await expect(page.getByText('No ratings yet')).toBeVisible();
+    await screenshot(page, 'search-results-with-ratings');
+  });
+
+  await test.step('Highest rated puts the best first and the unrated last', async () => {
+    await open({ sort: 'rating' });
+    await expect(page.getByLabel('Sort by')).toHaveValue('rating');
+    await expect
+      .poll(async () => (await titles()).map((t) => t.trim()))
+      .toEqual([best.title, poor.title, unrated.title]);
+    await screenshot(page, 'search-sorted-by-highest-rated');
+  });
+
+  await test.step('a minimum rating drops the lower and the unrated', async () => {
+    await open({ minRating: '4' });
+    await expect(page.getByLabel('Minimum rating')).toHaveValue('4');
+    await expect(page.getByText('1 course', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: best.title })).toBeVisible();
+    await expect(page.getByRole('link', { name: poor.title })).toHaveCount(0);
+    await screenshot(page, 'search-minimum-rating-4');
+  });
+
+  await test.step('choosing from the selects changes the address', async () => {
+    await open();
+    await page.getByLabel('Sort by').selectOption('rating');
+    await expect(page).toHaveURL(/sort=rating/);
+    await page.getByLabel('Minimum rating').selectOption('3');
+    await expect(page).toHaveURL(/minRating=3/);
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page).not.toHaveURL(/sort=|minRating=/);
+  });
+});

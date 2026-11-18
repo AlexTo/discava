@@ -63,6 +63,52 @@ const clausesOf = (input: ISearchCoursesInput) => {
   return clauses;
 };
 
+// The text query, or every course. Under the default sort a text query's
+// score is multiplied by the course's rating boost (1 when it has none), so
+// a well-rated course ranks above an equally relevant poorly rated one.
+const textQueryOf = (input: ISearchCoursesInput) => {
+  if (!input.q) {
+    return { match_all: {} };
+  }
+  const text = {
+    multi_match: {
+      query: input.q,
+      fields: ['title', 'description'],
+      // Any word may match (in title or description); more
+      // matching words rank higher.
+      type: 'cross_fields',
+    },
+  };
+  return input.sort !== 'rating' && input.sort !== 'newest'
+    ? {
+        function_score: {
+          query: text,
+          field_value_factor: { field: 'ratingBoost', missing: 1 },
+          boost_mode: 'multiply',
+        },
+      }
+    : text;
+};
+
+// With the id as the last key so a page boundary is stable.
+const sortOf = (input: ISearchCoursesInput) => {
+  switch (input.sort) {
+    case 'rating':
+      return [
+        { ratingScore: { order: 'desc', missing: '_last' } },
+        { publishedAt: 'desc' },
+        { courseId: 'asc' },
+      ];
+    case 'newest':
+      return [{ publishedAt: 'desc' }, { courseId: 'asc' }];
+    default:
+      // Without text there is no relevance: newest published first.
+      return input.q
+        ? undefined
+        : [{ publishedAt: 'desc' }, { courseId: 'asc' }];
+  }
+};
+
 const filterOf = (clauses: object[]) =>
   clauses.length > 0 ? { bool: { filter: clauses } } : { match_all: {} };
 
@@ -76,6 +122,7 @@ const filterOf = (clauses: object[]) =>
 export const buildSearchRequest = (input: ISearchCoursesInput) => {
   const clauses = clausesOf(input);
   const all = Object.values(clauses);
+  const sort = sortOf(input);
 
   const facet = (name: Facet, values: object) => ({
     filter: filterOf(
@@ -91,23 +138,17 @@ export const buildSearchRequest = (input: ISearchCoursesInput) => {
     size: input.limit,
     query: {
       bool: {
-        must: input.q
-          ? {
-              multi_match: {
-                query: input.q,
-                fields: ['title', 'description'],
-                // Any word may match (in title or description); more
-                // matching words rank higher.
-                type: 'cross_fields',
-              },
-            }
-          : { match_all: {} },
-        filter: [{ term: { status: 'published' } }],
+        must: textQueryOf(input),
+        filter: [
+          { term: { status: 'published' } },
+          // In the query, not post_filter, so every facet count respects it.
+          ...(input.minRating !== undefined
+            ? [{ range: { ratingAverage: { gte: input.minRating } } }]
+            : []),
+        ],
       },
     },
-    // Without text there is no relevance: newest published first, with the
-    // id as the tie-break so a page boundary is stable.
-    ...(!input.q && { sort: [{ publishedAt: 'desc' }, { courseId: 'asc' }] }),
+    ...(sort && { sort }),
     ...(all.length > 0 && { post_filter: { bool: { filter: all } } }),
     aggs: {
       // The taxonomy is bounded at 500, so every category is listed, not the
