@@ -117,6 +117,32 @@ describe('searchIndexing', () => {
     expect(client.delete).not.toHaveBeenCalled();
   });
 
+  it('indexes the catalogue fields of a course that has them, and none otherwise', async () => {
+    courseGet.mockReturnValue({
+      go: async () => ({
+        data: stored({
+          categoryId: 'cat-1',
+          tags: ['sql'],
+          level: 'beginner',
+          language: 'en',
+          durationHours: 12,
+        }),
+      }),
+    });
+    await searchIndexing(event(courseChange()));
+    expect(client.index.mock.calls[0]![0].body).toMatchObject({
+      categoryId: 'cat-1',
+      tags: ['sql'],
+      level: 'beginner',
+      language: 'en',
+      durationHours: 12,
+    });
+
+    courseGet.mockReturnValue({ go: async () => ({ data: stored() }) });
+    await searchIndexing(event(courseChange()));
+    expect(client.index.mock.calls[1]![0].body.categoryId).toBeUndefined();
+  });
+
   it('reads the course consistently, so it sees the write that triggered the batch', async () => {
     const go = vi.fn(async () => ({ data: stored() }));
     courseGet.mockReturnValue({ go });

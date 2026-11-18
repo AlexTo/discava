@@ -71,3 +71,36 @@ export const ListAnnouncementsOutputSchema = z.object({
 export type IListAnnouncementsOutput = z.output<
   typeof ListAnnouncementsOutputSchema
 >;
+
+export const UpdateAnnouncementInputSchema = z
+  .object({
+    courseId: z.string().min(1),
+    announcementId: z.string().min(1),
+    // The version the caller read; the edit applies only if it is still current.
+    version: z.number().int().min(1),
+    title: TitleSchema.optional(),
+    body: BodySchema.optional(),
+  })
+  .refine(
+    (input) => input.title !== undefined || input.body !== undefined,
+    'an edit needs a title or a body',
+  );
+
+export type IUpdateAnnouncementInput = z.output<
+  typeof UpdateAnnouncementInputSchema
+>;
+
+export const UpdateAnnouncementOutputSchema = AnnouncementSchema;
+
+export const DeleteAnnouncementInputSchema = z.object({
+  courseId: z.string().min(1),
+  announcementId: z.string().min(1),
+});
+
+export type IDeleteAnnouncementInput = z.output<
+  typeof DeleteAnnouncementInputSchema
+>;
+
+export const DeleteAnnouncementOutputSchema = z.object({
+  announcementId: z.string(),
+});

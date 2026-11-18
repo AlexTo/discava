@@ -5,10 +5,13 @@
 import type { EntityItem } from 'electrodb';
 import type { createAnnouncementEntity } from '../entities/announcement.js';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
+import type { createCategoryEntity } from '../entities/category.js';
+import type { createCategoryClaimEntity } from '../entities/category-claim.js';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
+import type { createCourseRatingEntity } from '../entities/course-rating.js';
 import type { createCourseStatsEntity } from '../entities/course-stats.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
@@ -25,6 +28,12 @@ import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
 import type { createQuizQuestionStatsEntity } from '../entities/quiz-question-stats.js';
 import type { createQuizScoreStatsEntity } from '../entities/quiz-score-stats.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
+import type { createReviewEntity } from '../entities/review.js';
+import {
+  REVIEW_REMOVED_REASON_MAX,
+  REVIEW_RESPONSE_MAX,
+  REVIEW_TEXT_MAX,
+} from '../entities/review.js';
 import type { createUserEntity } from '../entities/user.js';
 import type { createVideoPositionEntity } from '../entities/video-position.js';
 import type { createCoreTableService } from '../service.js';
@@ -43,9 +52,19 @@ import {
   uuidV7Time,
 } from './announcement.js';
 import { MAX_CAPTION_TRACKS } from './caption-tracks.js';
+import {
+  DURATION_HOURS_MAX,
+  DURATION_HOURS_MIN,
+  LANGUAGES,
+  LEVELS,
+  MAX_TAGS,
+  normaliseCategoryName,
+  normaliseTags,
+} from './catalogue.js';
 import { parseNotificationPosition } from './notification.js';
 import { NOTIFICATION_TYPES } from './notification-types.js';
 import { computeProgress } from './progress.js';
+import { starCounts } from './review-rating.js';
 import { isValidPosition } from './video-position.js';
 
 // Rules the core table must keep that span several records, or several
@@ -60,7 +79,16 @@ type Item<F extends () => Promise<any>> = EntityItem<Awaited<ReturnType<F>>>;
 export interface TableSnapshot {
   courses: Pick<
     Item<typeof createCourseEntity>,
-    'courseId' | 'status' | 'publishedAt' | 'updatedAt' | 'lastChildOrder'
+    | 'courseId'
+    | 'status'
+    | 'publishedAt'
+    | 'updatedAt'
+    | 'lastChildOrder'
+    | 'categoryId'
+    | 'tags'
+    | 'level'
+    | 'language'
+    | 'durationHours'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -268,6 +296,35 @@ export interface TableSnapshot {
     | 'editedAt'
     | 'version'
   >[];
+  categories: Pick<
+    Item<typeof createCategoryEntity>,
+    'categoryId' | 'name' | 'slug' | 'status'
+  >[];
+  categoryClaims: Pick<
+    Item<typeof createCategoryClaimEntity>,
+    'claim' | 'categoryId'
+  >[];
+  reviews: Pick<
+    Item<typeof createReviewEntity>,
+    | 'courseId'
+    | 'userId'
+    | 'rating'
+    | 'text'
+    | 'reviewerName'
+    | 'status'
+    | 'version'
+    | 'removedAt'
+    | 'removedBy'
+    | 'removedReason'
+    | 'responseText'
+    | 'responseAt'
+    | 'responseById'
+    | 'responseByName'
+  >[];
+  courseRatings: Pick<
+    Item<typeof createCourseRatingEntity>,
+    'courseId' | 'stars1' | 'stars2' | 'stars3' | 'stars4' | 'stars5'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -304,6 +361,12 @@ export const INVARIANTS = [
   'notification-broadcast-done-complete',
   'announcement-shape',
   'announcement-has-broadcast',
+  'course-category-exists',
+  'category-claims-consistent',
+  'course-catalogue-shape',
+  'review-shape',
+  'review-has-enrolment',
+  'course-rating-matches-reviews',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1816,6 +1879,270 @@ export const checkAnnouncementHasBroadcast = (
       : [];
   });
 
+// 34. A course's category, when it has one, exists.
+export const checkCourseCategoryExists = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const categoryIds = new Set(snapshot.categories.map((c) => c.categoryId));
+  return snapshot.courses
+    .filter((c) => c.categoryId !== undefined && !categoryIds.has(c.categoryId))
+    .map((c) =>
+      violation(
+        'course-category-exists',
+        { courseId: c.courseId },
+        `categoryId ${c.categoryId} names no category`,
+      ),
+    );
+};
+
+// 35. Every category has exactly one slug claim and one name claim pointing
+// back to it, with its slug and its normalised (lower-cased) name; every claim
+// belongs to an existing category.
+export const checkCategoryClaimsConsistent = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const categoryIds = new Set(snapshot.categories.map((c) => c.categoryId));
+  const perCategory = snapshot.categories.flatMap((c) => {
+    const owned = snapshot.categoryClaims.filter(
+      (claim) => claim.categoryId === c.categoryId,
+    );
+    const slugs = owned.filter((claim) => claim.claim.startsWith('slug#'));
+    const names = owned.filter((claim) => claim.claim.startsWith('name#'));
+    const problems: string[] = [];
+    if (slugs.length !== 1) {
+      problems.push(`has ${slugs.length} slug claims, not 1`);
+    } else if (slugs[0].claim !== `slug#${c.slug}`) {
+      problems.push(`its slug claim ${slugs[0].claim} is not for its slug`);
+    }
+    if (names.length !== 1) {
+      problems.push(`has ${names.length} name claims, not 1`);
+    } else if (
+      names[0].claim !==
+      `name#${normaliseCategoryNameSafe(c.name).toLowerCase()}`
+    ) {
+      problems.push(`its name claim ${names[0].claim} is not for its name`);
+    }
+    return problems.map((problem) =>
+      violation(
+        'category-claims-consistent',
+        { categoryId: c.categoryId },
+        problem,
+      ),
+    );
+  });
+  const orphans = snapshot.categoryClaims
+    .filter((claim) => !categoryIds.has(claim.categoryId))
+    .map((claim) =>
+      violation(
+        'category-claims-consistent',
+        { claim: claim.claim },
+        `claim points to no category (${claim.categoryId})`,
+      ),
+    );
+  return [...perCategory, ...orphans];
+};
+
+// A name that fails normalisation is compared as typed, so a malformed
+// category is reported by the claim check rather than crashing the scan.
+const normaliseCategoryNameSafe = (name: string) => {
+  try {
+    return normaliseCategoryName(name);
+  } catch {
+    return name;
+  }
+};
+
+// 36. A course's catalogue fields are well formed: tags normalised, unique and
+// at most 8; level and language in their sets; duration a whole number in
+// range. A course without them is fine.
+export const checkCourseCatalogueShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.courses.flatMap((c) => {
+    const problems: string[] = [];
+    if (c.tags !== undefined) {
+      try {
+        const normalised = normaliseTags(c.tags);
+        if (
+          normalised.length !== c.tags.length ||
+          normalised.some((tag, i) => tag !== c.tags?.[i])
+        ) {
+          problems.push('tags are not normalised and unique');
+        }
+      } catch {
+        problems.push(
+          `tags are not 1 to 30 characters each, at most ${MAX_TAGS}`,
+        );
+      }
+    }
+    if (c.level !== undefined && !LEVELS.includes(c.level)) {
+      problems.push(`level ${c.level} is not allowed`);
+    }
+    if (c.language !== undefined && !LANGUAGES.includes(c.language)) {
+      problems.push(`language ${c.language} is not allowed`);
+    }
+    if (
+      c.durationHours !== undefined &&
+      !(
+        Number.isInteger(c.durationHours) &&
+        c.durationHours >= DURATION_HOURS_MIN &&
+        c.durationHours <= DURATION_HOURS_MAX
+      )
+    ) {
+      problems.push(
+        `durationHours ${c.durationHours} is not a whole number ${DURATION_HOURS_MIN} to ${DURATION_HOURS_MAX}`,
+      );
+    }
+    return problems.map((problem) =>
+      violation('course-catalogue-shape', { courseId: c.courseId }, problem),
+    );
+  });
+
+const present = (value: unknown) => value !== undefined && value !== null;
+
+// 37. A review is well formed: a rating of 1 to 5, a known status, a version
+// of at least 1, text and response within their limits, a reviewer name, the
+// response's four attributes all set or all absent, and the removal's three
+// all set exactly when it is removed.
+export const checkReviewShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.reviews.flatMap((r) => {
+    const problems: string[] = [];
+    if (!Number.isInteger(r.rating) || r.rating < 1 || r.rating > 5) {
+      problems.push(`rating ${r.rating} is not an integer 1 to 5`);
+    }
+    if (r.status !== 'visible' && r.status !== 'removed') {
+      problems.push(`status ${r.status} is not visible or removed`);
+    }
+    if (!(r.version >= 1)) {
+      problems.push(`version is ${r.version}, not at least 1`);
+    }
+    if (r.text !== undefined && r.text.length > REVIEW_TEXT_MAX) {
+      problems.push(`text is over ${REVIEW_TEXT_MAX} characters`);
+    }
+    if (!r.reviewerName) {
+      problems.push('reviewerName is not set');
+    }
+    const response = [
+      r.responseText,
+      r.responseAt,
+      r.responseById,
+      r.responseByName,
+    ];
+    if (response.some(present) && !response.every(present)) {
+      problems.push('the response attributes are not all set or all absent');
+    } else if (
+      r.responseText !== undefined &&
+      (r.responseText.length < 1 || r.responseText.length > REVIEW_RESPONSE_MAX)
+    ) {
+      problems.push(
+        `responseText is not 1 to ${REVIEW_RESPONSE_MAX} characters`,
+      );
+    }
+    const removal = [r.removedAt, r.removedBy, r.removedReason];
+    if (r.status === 'removed' && !removal.every(present)) {
+      problems.push(
+        'is removed without removedAt, removedBy and removedReason',
+      );
+    } else if (r.status === 'visible' && removal.some(present)) {
+      problems.push('is visible but has removal attributes');
+    }
+    if (
+      r.removedReason !== undefined &&
+      r.removedReason.length > REVIEW_REMOVED_REASON_MAX
+    ) {
+      problems.push(
+        `removedReason is over ${REVIEW_REMOVED_REASON_MAX} characters`,
+      );
+    }
+    return problems.map((problem) =>
+      violation(
+        'review-shape',
+        { courseId: r.courseId, userId: r.userId },
+        problem,
+      ),
+    );
+  });
+
+// 38. A review's student has an enrolment in its course, in any status
+// (dropping keeps the record, and a review outlives it), and the course
+// exists (an archived course still does).
+export const checkReviewHasEnrolment = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const enrolled = new Set(
+    snapshot.enrolments.map((e) => `${e.courseId} ${e.userId}`),
+  );
+  const courses = new Set(snapshot.courses.map((c) => c.courseId));
+  return snapshot.reviews.flatMap((r) => {
+    const record = { courseId: r.courseId, userId: r.userId };
+    return [
+      ...(courses.has(r.courseId)
+        ? []
+        : [
+            violation(
+              'review-has-enrolment',
+              record,
+              'its course does not exist',
+            ),
+          ]),
+      ...(enrolled.has(`${r.courseId} ${r.userId}`)
+        ? []
+        : [
+            violation(
+              'review-has-enrolment',
+              record,
+              'its student has no enrolment',
+            ),
+          ]),
+    ];
+  });
+};
+
+// 39. A course's rating tally counts its visible reviews: each stars<n> is
+// the number of visible reviews rated n, a missing record meaning none of
+// each, and every tally belongs to an existing course. reviewWrites changes
+// the review and the tally in one transaction.
+export const checkCourseRatingMatchesReviews = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const courses = new Set(snapshot.courses.map((c) => c.courseId));
+  const tallies = new Map(snapshot.courseRatings.map((t) => [t.courseId, t]));
+  const visible = groupBy(
+    snapshot.reviews.filter((r) => r.status === 'visible'),
+    (r) => r.courseId,
+  );
+  const mismatches = [
+    ...new Set([...tallies.keys(), ...visible.keys()]),
+  ].flatMap((courseId) => {
+    const actual = starCounts(tallies.get(courseId));
+    const reviews = visible.get(courseId) ?? [];
+    return actual.flatMap((stored, i) => {
+      const expected = reviews.filter((r) => r.rating === i + 1).length;
+      return stored === expected
+        ? []
+        : [
+            violation(
+              'course-rating-matches-reviews',
+              { courseId },
+              `stars${i + 1} is ${stored}, but ${expected} visible reviews are rated ${i + 1}`,
+            ),
+          ];
+    });
+  });
+  const orphans = snapshot.courseRatings
+    .filter((t) => !courses.has(t.courseId))
+    .map((t) =>
+      violation(
+        'course-rating-matches-reviews',
+        { courseId: t.courseId },
+        'its course does not exist',
+      ),
+    );
+  return [...mismatches, ...orphans];
+};
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -1850,6 +2177,12 @@ const CHECKS = [
   checkNotificationBroadcastDoneComplete,
   checkAnnouncementShape,
   checkAnnouncementHasBroadcast,
+  checkCourseCategoryExists,
+  checkCategoryClaimsConsistent,
+  checkCourseCatalogueShape,
+  checkReviewShape,
+  checkReviewHasEnrolment,
+  checkCourseRatingMatchesReviews,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -1889,6 +2222,10 @@ export const loadTableSnapshot = async (
     notificationPreferences,
     notificationBroadcasts,
     announcements,
+    categories,
+    categoryClaims,
+    reviews,
+    courseRatings,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -1914,6 +2251,10 @@ export const loadTableSnapshot = async (
     entities.notificationPreference.scan.go(all),
     entities.notificationBroadcast.scan.go(all),
     entities.announcement.scan.go(all),
+    entities.category.scan.go(all),
+    entities.categoryClaim.scan.go(all),
+    entities.review.scan.go(all),
+    entities.courseRating.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -1940,5 +2281,9 @@ export const loadTableSnapshot = async (
     notificationPreferences: notificationPreferences.data,
     notificationBroadcasts: notificationBroadcasts.data,
     announcements: announcements.data,
+    categories: categories.data,
+    categoryClaims: categoryClaims.data,
+    reviews: reviews.data,
+    courseRatings: courseRatings.data,
   };
 };

@@ -4,6 +4,7 @@
  */
 export * from './announcement.js';
 export * from './assignment.js';
+export * from './category.js';
 export * from './certificate.js';
 export * from './common.js';
 export * from './completion.js';

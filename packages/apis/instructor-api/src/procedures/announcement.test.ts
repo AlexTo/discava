@@ -6,21 +6,34 @@ import { NOTIFICATION_TYPES } from '@discava/core-table';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { createAnnouncement, listAnnouncements } from './announcement.js';
+import {
+  createAnnouncement,
+  deleteAnnouncement,
+  listAnnouncements,
+  updateAnnouncement,
+} from './announcement.js';
 
 const {
+  announcementDeleteWrites,
+  announcementEditWrites,
   announcementGet,
   announcementPage,
   announcementWrites,
   courseGet,
   courseInstructorGet,
+  notifyCourseStudents,
+  publishNotification,
   userGet,
   transactionWrite,
   transactionGo,
 } = vi.hoisted(() => ({
+  announcementDeleteWrites: vi.fn(),
+  announcementEditWrites: vi.fn(),
   announcementGet: vi.fn(),
   announcementPage: vi.fn(),
   announcementWrites: vi.fn(),
+  notifyCourseStudents: vi.fn(),
+  publishNotification: vi.fn(),
   courseGet: vi.fn(),
   courseInstructorGet: vi.fn(),
   userGet: vi.fn(),
@@ -30,8 +43,12 @@ const {
 
 vi.mock('@discava/core-table', async (importActual) => ({
   ...(await importActual<typeof import('@discava/core-table')>()),
+  announcementDeleteWrites,
+  announcementEditWrites,
   announcementPage,
   announcementWrites,
+  notifyCourseStudents,
+  publishNotification,
   createCoreTableService: vi.fn(async () => ({
     entities: {
       announcement: { get: announcementGet },
@@ -43,7 +60,12 @@ vi.mock('@discava/core-table', async (importActual) => ({
   })),
 }));
 
-const router = t.router({ createAnnouncement, listAnnouncements });
+const router = t.router({
+  createAnnouncement,
+  deleteAnnouncement,
+  listAnnouncements,
+  updateAnnouncement,
+});
 const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
@@ -107,6 +129,8 @@ beforeEach(() => {
     ]),
   );
   announcementWrites.mockReturnValue(['post', 'member', 'course', 'broadcast']);
+  announcementEditWrites.mockReturnValue(['patch', 'member']);
+  announcementDeleteWrites.mockReturnValue(['delete', 'member']);
   transactionWrite.mockImplementation((fn) => {
     fn({});
     return { go: transactionGo };
@@ -385,5 +409,261 @@ describe('listAnnouncements', () => {
     await expect(
       callAs().listAnnouncements({ courseId: 'course-1', cursor: 'x' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('updateAnnouncement', () => {
+  const edit = {
+    courseId: 'course-1',
+    announcementId: ID,
+    version: 1,
+    title: 'Welcome back',
+  };
+
+  it.each([['a student-group caller', ['student']]])(
+    'refuses %s and changes nothing',
+    async (_, groups) => {
+      await expect(
+        callAs(groups).updateAnnouncement(edit),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(transactionWrite).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses an instructor, or an admin, who is not on the course', async () => {
+    courseInstructorGet.mockReturnValue(resolves(null));
+
+    for (const groups of [['instructor'], ['instructor', 'admin']]) {
+      await expect(
+        callAs(groups).updateAnnouncement(edit),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
+    expect(announcementEditWrites).not.toHaveBeenCalled();
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it('answers NOT_FOUND for an announcement of another course', async () => {
+    announcementGet.mockReturnValue(resolves(null));
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(announcementGet).toHaveBeenCalledWith({
+      courseId: 'course-1',
+      announcementId: ID,
+    });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['nothing to change', { title: undefined }],
+    ['an empty title', { title: '  ' }],
+    ['a body that is not a document', { body: 'plain' }],
+    ['a body with no text', { body: JSON.stringify({ type: 'doc' }) }],
+    ['a version below 1', { version: 0 }],
+  ])('answers BAD_REQUEST for %s', async (_, over) => {
+    await expect(
+      callAs().updateAnnouncement({ ...edit, ...over }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it('answers BAD_REQUEST when the table refuses the edit', async () => {
+    const { AnnouncementInputError } = await import('@discava/core-table');
+    announcementEditWrites.mockImplementation(() => {
+      throw new AnnouncementInputError('title is too long');
+    });
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('edits with the version the caller read and returns the new text', async () => {
+    announcementGet.mockReturnValueOnce(resolves(stored)).mockReturnValueOnce(
+      resolves({
+        ...stored,
+        title: 'Welcome back',
+        editedAt: '2026-11-16T12:00:00.000Z',
+        version: 2,
+      }),
+    );
+
+    const result = await callAs().updateAnnouncement({
+      ...edit,
+      title: '  Welcome back  ',
+      body: doc('New text'),
+    });
+
+    expect(announcementEditWrites).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        courseId: 'course-1',
+        announcementId: ID,
+        instructorId: INSTRUCTOR_SUB,
+        version: 1,
+        title: 'Welcome back',
+        body: doc('New text'),
+        now: expect.any(Date),
+      }),
+    );
+    expect(transactionWrite).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      title: 'Welcome back',
+      version: 2,
+      editedAt: '2026-11-16T12:00:00.000Z',
+      authorName: 'Alice Smith',
+    });
+  });
+
+  it('works for an archived course', async () => {
+    courseGet.mockReturnValue(resolves({ ...course, status: 'archived' }));
+
+    await expect(callAs().updateAnnouncement(edit)).resolves.toBeDefined();
+    expect(transactionWrite).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers CONFLICT for a stale version', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [{ code: 'ConditionalCheckFailed' }, undefined],
+    });
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'This announcement changed. Reload to see the latest text.',
+    });
+  });
+
+  it('answers NOT_FOUND when it was deleted meanwhile', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [{ code: 'ConditionalCheckFailed' }, undefined],
+    });
+    announcementGet
+      .mockReturnValueOnce(resolves(stored))
+      .mockReturnValueOnce(resolves(null));
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('answers FORBIDDEN when the membership was removed meanwhile', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [undefined, { code: 'ConditionalCheckFailed' }],
+    });
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('answers CONFLICT for a transaction conflict', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [{ code: 'TransactionConflict' }],
+    });
+
+    await expect(callAs().updateAnnouncement(edit)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('notifies nobody', async () => {
+    await callAs().updateAnnouncement(edit);
+
+    expect(notifyCourseStudents).not.toHaveBeenCalled();
+    expect(publishNotification).not.toHaveBeenCalled();
+    expect(announcementWrites).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleteAnnouncement', () => {
+  const remove = { courseId: 'course-1', announcementId: ID };
+
+  it.each([['a student-group caller', ['student']]])(
+    'refuses %s and deletes nothing',
+    async (_, groups) => {
+      await expect(
+        callAs(groups).deleteAnnouncement(remove),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(transactionWrite).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses an instructor, or an admin, who is not on the course', async () => {
+    courseInstructorGet.mockReturnValue(resolves(null));
+
+    for (const groups of [['instructor'], ['instructor', 'admin']]) {
+      await expect(
+        callAs(groups).deleteAnnouncement(remove),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    }
+    expect(announcementDeleteWrites).not.toHaveBeenCalled();
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it('answers NOT_FOUND for a missing announcement, or one of another course', async () => {
+    announcementGet.mockReturnValue(resolves(null));
+
+    await expect(callAs().deleteAnnouncement(remove)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(announcementGet).toHaveBeenCalledWith({
+      courseId: 'course-1',
+      announcementId: ID,
+    });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it('answers NOT_FOUND, recreating nothing, when it was deleted meanwhile', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [{ code: 'ConditionalCheckFailed' }, undefined],
+    });
+
+    await expect(callAs().deleteAnnouncement(remove)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('answers FORBIDDEN when the membership was removed meanwhile', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [undefined, { code: 'ConditionalCheckFailed' }],
+    });
+
+    await expect(callAs().deleteAnnouncement(remove)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('answers CONFLICT for a transaction conflict', async () => {
+    transactionGo.mockResolvedValue({
+      canceled: true,
+      data: [{ code: 'TransactionConflict' }],
+    });
+
+    await expect(callAs().deleteAnnouncement(remove)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('deletes, for an archived course too, and notifies nobody', async () => {
+    courseGet.mockReturnValue(resolves({ ...course, status: 'archived' }));
+
+    await expect(callAs().deleteAnnouncement(remove)).resolves.toEqual({
+      announcementId: ID,
+    });
+    expect(announcementDeleteWrites).toHaveBeenCalledWith(expect.anything(), {
+      courseId: 'course-1',
+      announcementId: ID,
+      instructorId: INSTRUCTOR_SUB,
+    });
+    expect(transactionWrite).toHaveBeenCalledTimes(1);
+    expect(notifyCourseStudents).not.toHaveBeenCalled();
+    expect(publishNotification).not.toHaveBeenCalled();
   });
 });

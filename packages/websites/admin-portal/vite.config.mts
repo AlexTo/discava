@@ -43,6 +43,7 @@ export default defineConfig(() => ({
   test: {
     passWithNoTests: true,
     name: '@discava/admin-portal',
+    setupFiles: ['src/test/setup.ts'],
     watch: false,
     globals: true,
     environment: 'jsdom',

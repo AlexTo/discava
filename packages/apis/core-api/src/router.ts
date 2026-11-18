@@ -10,6 +10,7 @@ import {
   submit,
   uploadUrl,
 } from './procedures/assignment.js';
+import { categoryBySlug, listCategories } from './procedures/category.js';
 import {
   certificatePdf,
   myCertificates,
@@ -74,6 +75,10 @@ export const appRouter = router({
     mySubmission,
     submissionFileUrl,
   }),
+  category: router({
+    list: listCategories,
+    bySlug: categoryBySlug,
+  }),
   certificate: router({
     verify: verifyCertificate,
     myCertificates,
@@ -112,5 +117,7 @@ export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
+  'category.list',
+  'category.bySlug',
   'certificate.verify',
 ] as const;

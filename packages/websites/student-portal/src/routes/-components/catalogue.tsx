@@ -10,22 +10,23 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
-import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { getRouteApi, Link } from '@tanstack/react-router';
 import {
   CalendarCheck,
   GraduationCap,
   LayoutDashboard,
   MessageCircleMore,
-  Search,
 } from 'lucide-react';
-import { useState } from 'react';
-import { Alert } from '../../components/alert';
-import { CourseCard } from '../../components/course-card';
-import { Spinner } from '../../components/spinner';
+import { CatalogueResults } from '../../components/catalogue-results';
 import { useCoreApi } from '../../hooks/useCoreApi';
-import { categories, toDisplayCourse } from '../../lib/course-display';
+import {
+  type CatalogueFilters,
+  catalogueFiltersToSearch,
+  parseCatalogueFilters,
+} from '../../lib/catalogue-filters';
+
+const homeRoute = getRouteApi('/');
 
 const features = [
   {
@@ -69,19 +70,17 @@ const steps = [
 // What `/` shows signed-out visitors: the course catalogue and what
 // Discava is. Signed-in students see SignedInHome instead.
 export function Catalogue() {
-  const [category, setCategory] = useState<(typeof categories)[number]>('All');
+  const filters = parseCatalogueFilters(homeRoute.useSearch());
+  const navigate = homeRoute.useNavigate();
+  const setFilters = (next: CatalogueFilters) =>
+    navigate({ search: catalogueFiltersToSearch(next) });
 
   const trpc = useCoreApi();
-  const coursesQuery = useQuery(
-    trpc.course.publicList.queryOptions({ limit: 100 }),
-  );
-  const courses = (coursesQuery.data?.items ?? []).map(toDisplayCourse);
+  const categoriesQuery = useQuery(trpc.category.list.queryOptions());
+  const categories = categoriesQuery.data ?? [];
 
-  // Searching is the top bar's job (/search); this only narrows by category.
-  const visibleCourses = courses.filter(
-    (course) => category === 'All' || course.category === category,
-  );
-
+  // Searching is the top bar's job (/search); this narrows by category and
+  // the filters beside the courses.
   return (
     <main className="w-full overflow-hidden text-left">
       <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
@@ -96,89 +95,43 @@ export function Catalogue() {
             </p>
           </div>
 
-          <div className="mt-8 flex flex-col gap-4 rounded-2xl border bg-muted/30 p-4 sm:p-5">
-            <div
-              className="flex flex-wrap gap-2"
-              aria-label="Course categories"
-            >
-              {categories.map((item) => (
-                <Button
-                  key={item}
-                  type="button"
-                  size="sm"
-                  variant={category === item ? 'default' : 'outline'}
-                  onClick={() => setCategory(item)}
-                >
-                  {item}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {!coursesQuery.isLoading && !coursesQuery.isError && (
-            <div className="mt-7 flex items-center justify-between gap-4">
-              <p className="text-sm text-muted-foreground" aria-live="polite">
-                Showing {visibleCourses.length}{' '}
-                {visibleCourses.length === 1 ? 'course' : 'courses'}
-                {category !== 'All' ? ` in ${category}` : ''}
-              </p>
-              {category !== 'All' && (
+          {categories.length > 0 && (
+            <div className="mt-8 flex flex-col gap-4 rounded-2xl border bg-muted/30 p-4 sm:p-5">
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Course categories"
+              >
                 <Button
                   type="button"
-                  variant="ghost"
                   size="sm"
-                  onClick={() => setCategory('All')}
+                  variant={filters.category ? 'outline' : 'default'}
+                  onClick={() =>
+                    setFilters({ ...filters, category: undefined })
+                  }
                 >
-                  Show all
+                  All
                 </Button>
-              )}
-            </div>
-          )}
-
-          {coursesQuery.isLoading ? (
-            <div className="mt-10 flex justify-center py-12">
-              <Spinner />
-            </div>
-          ) : coursesQuery.isError ? (
-            <div className="mt-10">
-              <Alert type="error" header="Couldn't load courses">
-                {apiErrorMessage(coursesQuery.error)}
-              </Alert>
-            </div>
-          ) : (
-            <>
-              <div className="mt-10 grid gap-6 md:grid-cols-3">
-                {visibleCourses.map((course) => (
-                  <CourseCard key={course.courseId} course={course} />
+                {categories.map(({ id, name, slug, courseCount }) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    size="sm"
+                    variant={filters.category === slug ? 'default' : 'outline'}
+                    onClick={() => setFilters({ ...filters, category: slug })}
+                  >
+                    {name} ({courseCount})
+                  </Button>
                 ))}
               </div>
-              {visibleCourses.length === 0 && (
-                <div className="mt-10 rounded-2xl border border-dashed px-6 py-14 text-center">
-                  <Search className="mx-auto size-8 text-muted-foreground" />
-                  <h3 className="mt-4 font-semibold">
-                    {category !== 'All'
-                      ? 'No matching courses'
-                      : 'No courses available yet'}
-                  </h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {category !== 'All'
-                      ? 'Try another category, or show all courses.'
-                      : 'Check back soon for new courses.'}
-                  </p>
-                  {category !== 'All' && (
-                    <Button
-                      className="mt-5"
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCategory('All')}
-                    >
-                      Show all courses
-                    </Button>
-                  )}
-                </div>
-              )}
-            </>
+            </div>
           )}
+
+          <CatalogueResults
+            filters={filters}
+            onFiltersChange={setFilters}
+            emptyMessage="Try other filters, or clear them to see every course."
+          />
         </div>
       </section>
 

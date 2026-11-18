@@ -5,6 +5,8 @@
 import { plainTextExcerpt } from '@discava/common-tiptap';
 import {
   AnnouncementInputError,
+  announcementDeleteWrites,
+  announcementEditWrites,
   announcementPage,
   announcementWrites,
 } from '@discava/core-table';
@@ -20,9 +22,13 @@ import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateAnnouncementInputSchema,
   CreateAnnouncementOutputSchema,
+  DeleteAnnouncementInputSchema,
+  DeleteAnnouncementOutputSchema,
   type IAnnouncement,
   ListAnnouncementsInputSchema,
   ListAnnouncementsOutputSchema,
+  UpdateAnnouncementInputSchema,
+  UpdateAnnouncementOutputSchema,
 } from '../schema/index.js';
 
 type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
@@ -209,6 +215,144 @@ export const listAnnouncements = courseProcedure
       ...(page.cursor !== undefined && { cursor: page.cursor }),
     };
   });
+
+// Edits the title and/or body of an announcement. The caller's version is a
+// condition of the write, so an edit made from a stale read is refused.
+// Never notifies: students were told once, when it was posted.
+export const updateAnnouncement = courseProcedure
+  .input(UpdateAnnouncementInputSchema)
+  .output(UpdateAnnouncementOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable!;
+    const { courseId, announcementId, version, title, body } = input;
+    const instructorId = ctx.user.sub;
+
+    await requireCourseInstructor(coreTable, courseId, instructorId);
+    const existing = await readAnnouncement(
+      coreTable,
+      courseId,
+      announcementId,
+    );
+    if (!existing) {
+      throw announcementNotFound();
+    }
+
+    let items: ReturnType<typeof announcementEditWrites>;
+    try {
+      items = announcementEditWrites(coreTable, {
+        courseId,
+        announcementId,
+        instructorId,
+        version,
+        title,
+        body,
+        now: new Date(),
+      });
+    } catch (error) {
+      if (error instanceof AnnouncementInputError) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+      }
+      throw error;
+    }
+
+    const { canceled, data: results } = await coreTable.transaction
+      .write(() => items)
+      .go();
+
+    if (canceled) {
+      const failed = failedChecks(results);
+      if (failed[1]) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      if (failed[0]) {
+        // The version no longer matches, or the announcement was deleted.
+        const current = await readAnnouncement(
+          coreTable,
+          courseId,
+          announcementId,
+        );
+        throw current
+          ? new TRPCError({
+              code: 'CONFLICT',
+              message:
+                'This announcement changed. Reload to see the latest text.',
+            })
+          : announcementNotFound();
+      }
+      if (hasTransactionConflict(results)) {
+        throw transactionConflict();
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to edit the announcement',
+      });
+    }
+
+    const updated = await readAnnouncement(coreTable, courseId, announcementId);
+    if (!updated) {
+      throw announcementNotFound();
+    }
+    return withAuthorName(
+      updated,
+      (await authorNames(coreTable, [updated.authorId])).get(
+        updated.authorId,
+      ) ?? DEFAULT_AUTHOR_NAME,
+    );
+  });
+
+// Removes an announcement. Students keep the notification they received.
+export const deleteAnnouncement = courseProcedure
+  .input(DeleteAnnouncementInputSchema)
+  .output(DeleteAnnouncementOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable!;
+    const { courseId, announcementId } = input;
+    const instructorId = ctx.user.sub;
+
+    await requireCourseInstructor(coreTable, courseId, instructorId);
+    const existing = await readAnnouncement(
+      coreTable,
+      courseId,
+      announcementId,
+    );
+    if (!existing) {
+      throw announcementNotFound();
+    }
+
+    const { canceled, data: results } = await coreTable.transaction
+      .write(() =>
+        announcementDeleteWrites(coreTable, {
+          courseId,
+          announcementId,
+          instructorId,
+        }),
+      )
+      .go();
+
+    if (canceled) {
+      const failed = failedChecks(results);
+      if (failed[1]) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      if (failed[0]) {
+        throw announcementNotFound();
+      }
+      if (hasTransactionConflict(results)) {
+        throw transactionConflict();
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to delete the announcement',
+      });
+    }
+    return { announcementId };
+  });
+
+const failedChecks = (results: ({ code?: string } | undefined)[] | undefined) =>
+  (results ?? []).map((result) => result?.code === 'ConditionalCheckFailed');
+
+const announcementNotFound = () =>
+  new TRPCError({ code: 'NOT_FOUND', message: 'Announcement not found' });
 
 const notPublished = () =>
   new TRPCError({

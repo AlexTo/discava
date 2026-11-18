@@ -20,6 +20,15 @@ export const CourseDocumentSchema = z.object({
   status: z.literal('published'),
   publishedAt: z.string(),
   updatedAt: z.string(),
+  // The catalogue fields (see the course entity), all optional: a course
+  // without them is in text results and under no facet value. The category's
+  // name and slug are not stored; they are resolved from the category records
+  // when a response is built, so a rename touches no document.
+  categoryId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  level: z.string().optional(),
+  language: z.string().optional(),
+  durationHours: z.number().int().optional(),
 });
 
 export type ICourseDocument = z.output<typeof CourseDocumentSchema>;
@@ -45,6 +54,15 @@ export default createIndex({
       status: { type: 'keyword' },
       publishedAt: { type: 'date' },
       updatedAt: { type: 'date' },
+      // Added after the first version, all as new properties so putMapping
+      // applies them to an existing index in place. A change to an existing
+      // property's type or analyzer is breaking and needs #270's versioned
+      // index. A keyword field takes an array, so `tags` needs no special type.
+      categoryId: { type: 'keyword' },
+      tags: { type: 'keyword' },
+      level: { type: 'keyword' },
+      language: { type: 'keyword' },
+      durationHours: { type: 'integer' },
     },
   },
 });
