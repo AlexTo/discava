@@ -134,13 +134,13 @@ description: "Task list for catalogue categories, tags and richer filters"
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T036 [P] [US4] Component tests in `packages/websites/student-portal/src/routes/category/-category.test.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): heading, results scoped to the category, filter panel without the category group, empty state, not found for an unknown slug, "no longer available" for an archived category, cold-start retry, and the home chips linking to the page.
-- [ ] T037 [P] [US4] Extend `packages/e2e/src/scenarios/category.e2e.ts`: the landing page lists 100% of the category's published courses and none from another category, facets are counted inside the category, an archived category's address shows "no longer available", and a made-up slug shows not found.
+- [x] T036 [P] [US4] Component tests in `packages/websites/student-portal/src/routes/category/-category.test.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): heading, results scoped to the category, filter panel without the category group, empty state, not found for an unknown slug, "no longer available" for an archived category, cold-start retry, and the home chips linking to the page.
+- [x] T037 [P] [US4] Extend `packages/e2e/src/scenarios/category.e2e.ts`: the landing page lists 100% of the category's published courses and none from another category, facets are counted inside the category, an archived category's address shows "no longer available", and a made-up slug shows not found.
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Route `packages/websites/student-portal/src/routes/category/$slug.tsx` using `category.bySlug` and `course.publicSearch` with the category's id, sharing the filter panel and results from T020; regenerate the route tree as the repo does; text buttons only.
-- [ ] T039 [US4] Run the US4 tests locally and fix until green.
+- [x] T038 [US4] Route `packages/websites/student-portal/src/routes/category/$slug.tsx` using `category.bySlug` and `course.publicSearch` with the category's id, sharing the filter panel and results from T020; regenerate the route tree as the repo does; text buttons only.
+- [x] T039 [US4] Run the US4 tests locally and fix until green.
 
 **Checkpoint**: browsing has shareable front doors.
 

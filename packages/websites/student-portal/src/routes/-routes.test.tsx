@@ -79,14 +79,14 @@ describe('/', () => {
     });
 
     expect(
-      await screen.findByRole('button', { name: 'Science (3)' }),
+      await screen.findByRole('link', { name: 'Science (3)' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Art (0)' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Technology' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Art (0)' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Technology' })).toBeNull();
   });
 
-  it('narrows the courses by a category chip, in the address', async () => {
-    const { router, user, calls } = renderWithCoreApi(null, {
+  it('links each category chip to its landing page', async () => {
+    renderWithCoreApi(null, {
       routeTree,
       path: '/',
       signedIn: false,
@@ -98,18 +98,9 @@ describe('/', () => {
       },
     });
 
-    await user.click(
-      await screen.findByRole('button', { name: 'Science (3)' }),
-    );
-
-    await waitFor(() =>
-      expect(router.state.location.search).toEqual({ category: 'science' }),
-    );
-    await waitFor(() =>
-      expect(
-        calls.filter((c) => c.path === 'course.publicSearch').at(-1)?.input,
-      ).toMatchObject({ categoryId: 'cat-1' }),
-    );
+    expect(
+      await screen.findByRole('link', { name: 'Science (3)' }),
+    ).toHaveAttribute('href', '/category/science');
   });
 
   it('shows signed-in students their own home', async () => {
