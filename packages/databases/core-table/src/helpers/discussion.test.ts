@@ -315,6 +315,12 @@ describe('reply', () => {
     now: AT,
   };
 
+  it("refuses a reply whose postId is the question's id", () => {
+    expect(() => items({ ...REPLY, postId: QID })).toThrow(
+      DiscussionInputError,
+    );
+  });
+
   it('checks, adds one to replyCount only, and creates the reply', () => {
     const list = items(REPLY);
 
