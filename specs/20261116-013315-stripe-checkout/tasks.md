@@ -13,7 +13,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 **Who runs what**: an automated agent implements these tasks without `pnpm dev` or Docker. It runs unit and component tests, lint, typecheck, `build` and `synth` locally. The e2e scenarios and the concurrency test are written by the agent but run on PR CI (`pr-checks.yml`'s `E2E tests` job); a CI failure is the feedback for those. Tasks marked **(human)** need a running local stack, a Stripe account or people, and are done by a reviewer before merge.
 
-**Organization**: Grouped by user story, in the order the code needs them (a price comes before a purchase, the refusal before the checkout), each phase one agent PR, merged in order; each phase leaves `main` green and working. Paths are relative to the repository root. Only the last PR closes #284; earlier PRs say "Part of #284" and must not use a closing keyword. Do not set a real price on a deployed stage until Phase 6 has shipped.
+**Organization**: Grouped by user story, in the order the code needs them (a price comes before a purchase, the refusal before the checkout), each phase one agent PR, merged in order; each phase leaves `main` green and working. Paths are relative to the repository root. Only the last PR closes #284; earlier PRs say "Part of #284" and must not use a closing keyword. Do not set a real price on a deployed stage until Phase 7 has shipped.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -30,7 +30,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 ## Phase 2: Foundational (blocks every story)
 
-**Purpose**: the price rules, the records, the one writer of orders and paid enrolments, and every invariant, before anything calls them. Behaviour is unchanged until Phase 3.
+**Purpose**: the price rules, the records, the one writer of orders and paid enrolments, and every invariant, before anything calls them. Behaviour is unchanged until Phase 4.
 
 **⚠️ CRITICAL**: no user story work starts until this phase is done.
 
@@ -76,11 +76,11 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 2A: User Story 6 - An administrator connects Stripe (backend and local stand-in) (P1)
+## Phase 3: User Story 6 - An administrator connects Stripe (backend and local stand-in) (P1)
 
-**Goal**: an administrator can, through admin-api, connect, replace and disconnect Stripe, with the key and signing secret stored only in the secrets service, so that checkout (Phase 5) and pricing (Phase 3) have a connection to rely on. Needs Phase 2. Added by the 2026-11-18 amendment; it comes before Phase 3 because `course.setPrice` refuses a non-zero price until a connection is active.
+**Goal**: an administrator can, through admin-api, connect, replace and disconnect Stripe, with the key and signing secret stored only in the secrets service, so that checkout (Phase 6) and pricing (Phase 4) have a connection to rely on. Needs Phase 2. Added by the 2026-11-18 amendment; it comes before Phase 4 because `course.setPrice` refuses a non-zero price until a connection is active.
 
-**Independent Test**: against the stand-in and mocked Stripe in unit tests, then locally by calling `payment.connect` as Carol with `sk_test_local`: status becomes active in test mode; a bad key changes nothing; rotation touches one secret; a switch with an open checkout is refused; disconnect clears the secrets. The page comes in Phase 6A.
+**Independent Test**: against the stand-in and mocked Stripe in unit tests, then locally by calling `payment.connect` as Carol with `sk_test_local`: status becomes active in test mode; a bad key changes nothing; rotation touches one secret; a switch with an open checkout is refused; disconnect clears the secrets. The page comes in Phase 8.
 
 ### Tests for User Story 6 (write first, see them fail)
 
@@ -102,7 +102,7 @@ description: "Task list for Stripe checkout for paid courses"
 ---
 
 
-## Phase 3: User Story 3 - Instructor sets a price and currency (P1) 🎯 MVP
+## Phase 4: User Story 3 - Instructor sets a price and currency (P1) 🎯 MVP
 
 **Goal**: an instructor of a course sets, changes or clears its price and currency, and visitors see it on the course page and in the catalogue. Nothing can be bought yet.
 
@@ -126,7 +126,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 4: User Story 2 - Unpaid users cannot get paid content (P1)
+## Phase 5: User Story 2 - Unpaid users cannot get paid content (P1)
 
 **Goal**: a priced course cannot be entered without a paid order, by any route, and students who enrolled while it was free keep their access.
 
@@ -146,9 +146,9 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 5: User Story 1 - Buy a paid course and start learning (backend, local stand-in and infrastructure) (P1)
+## Phase 6: User Story 1 - Buy a paid course and start learning (backend, local stand-in and infrastructure) (P1)
 
-**Goal**: a student can buy a priced course end to end against the local stand-in or a deployed Stripe test account: checkout creation, the hosted page, the signed webhook, and exactly one enrolment per paid order. The portal buttons come in Phase 6.
+**Goal**: a student can buy a priced course end to end against the local stand-in or a deployed Stripe test account: checkout creation, the hosted page, the signed webhook, and exactly one enrolment per paid order. The portal buttons come in Phase 7.
 
 **Independent Test**: with the stand-in, call `payment.checkout`, pay on its page, and check one paid order and one enrolment; replay the confirmation concurrently: still one.
 
@@ -166,7 +166,7 @@ description: "Task list for Stripe checkout for paid courses"
 - [ ] T034 [US1] `packages/common/constructs/src/core/stripe-secrets.ts`: the two Secrets Manager secrets (`StripeApiKey`, `StripeWebhookSigningSecret`), created by the deployment and filled later by an administrator's save (no operator sets a value, and the plan notes CDK's generated placeholder is never trusted), encrypted with the stage's KMS key per `enableKmsEncryption`, with `grantReadApiKey`/`grantReadWebhookSecret` helpers; instantiate it in `packages/infra/src/stacks/data-stack.ts` (stateful resources live in `Data`) and export the ARNs to the other stacks. Add Checkov suppressions only where a rule cannot apply to an empty operator-filled secret (no rotation), each with its reason, as `core/checkov.ts` does. **Amendment 2026-11-18**: the construct offers `grantReadApiKey`, `grantReadWebhookSecret` and a separate `grantWrite` (both secrets, `PutSecretValue` and `GetSecretValue` on the key, plus the KMS grant) used only by T080; its test asserts that no role other than `PaymentsConnect`'s has `PutSecretValue` on either secret, and that the template contains no secret value.
 - [ ] T035 [US1] `packages/common/infra-config/src/stages.types.ts`: add a `payments` component config (the webhook API's `enableWaf`, throttle rate and burst, optional custom domain and certificate like the APIs, `logLevel`, `enableTracing`, `reservedConcurrency`, `timeoutSeconds`), defaulting fully hardened; `packages/common/infra-config/src/stages.config.ts`: relax WAF and KMS for `discava-development` only, sized for a handful of testers as the other components are; extend `env-overrides.test.ts` and `resolve-stage.test.ts` for the new component. Update the comment block at the top of `stages.config.ts` with the webhook's domain variable.
 - [ ] T036 [US1] Use the `nx-plugin-for-aws` MCP server (`generator-guide` for `ts#lambda-function`) to generate the webhook handler in `packages/events` rather than hand-writing the wrapper: `StripeWebhook` at `packages/events/src/payments/stripe-webhook-handler.ts` with the generator-owned wrapper `packages/common/constructs/src/app/lambda-functions/events-stripe-webhook.ts` (never hand-edit the wrapper or the license headers). Record the generator command in the PR; if the generator does not fit the events project, say why in the PR and hand-write only the handler.
-- [ ] T037 [US1] `packages/events/src/payments/stripe-webhook.ts`: `handleStripeWebhook(rawBody, signature)` per [contracts/stripe-webhook.md](./contracts/stripe-webhook.md): verify with `constructEvent(rawBody, signature, await getStripeWebhookSecret(), 300)` (on a signature failure drop the secret cache and retry once), route on `event.type` to one file per type under `packages/events/src/payments/events/` (`session-completed.ts` now; `session-expired.ts` in Phase 7; `charge-refunded.ts` in Phase 8), answer 400, 200 or 500 as the contract's table says, and log the event ID, type and order ID (never a secret or card detail). `session-completed.ts`: find the order by `client_reference_id`, check metadata, amount and currency, call `settleOrderPaid`, and for `undeliverable` create the Stripe refund (idempotency key `refund-<orderId>`) then `refundUndeliverable`. `stripe-webhook-handler.ts` decodes the proxy event's body to exact bytes and reads the signature header in any case. Add `packages/events` direct dependencies the project lacks.
+- [ ] T037 [US1] `packages/events/src/payments/stripe-webhook.ts`: `handleStripeWebhook(rawBody, signature)` per [contracts/stripe-webhook.md](./contracts/stripe-webhook.md): verify with `constructEvent(rawBody, signature, await getStripeWebhookSecret(), 300)` (on a signature failure drop the secret cache and retry once), route on `event.type` to one file per type under `packages/events/src/payments/events/` (`session-completed.ts` now; `session-expired.ts` in Phase 9; `charge-refunded.ts` in Phase 10), answer 400, 200 or 500 as the contract's table says, and log the event ID, type and order ID (never a secret or card detail). `session-completed.ts`: find the order by `client_reference_id`, check metadata, amount and currency, call `settleOrderPaid`, and for `undeliverable` create the Stripe refund (idempotency key `refund-<orderId>`) then `refundUndeliverable`. `stripe-webhook-handler.ts` decodes the proxy event's body to exact bytes and reads the signature header in any case. Add `packages/events` direct dependencies the project lacks.
 - [ ] T038 [US1] `packages/common/constructs/src/app/apis/stripe-webhook-api.ts` (hand-written: no generator creates an API Gateway method with a raw-body Lambda and no authorizer, as plan Constitution II says): one REST API with `POST /stripe/webhook`, the stage's WAF and throttling per T035, access logging as the other APIs, the `EventsStripeWebhook` function with table read/write and read on both secrets only, `STRIPE_API_KEY_SECRET_ARN` and `STRIPE_WEBHOOK_SECRET_ARN` as environment variables, and a `webhookUrl` output. Then `packages/infra/src/stacks/payments-stack.ts` (new) composing it, and `packages/infra/src/stages/application-stage.ts` adding the stack in the order Data, Payments, MediaPipeline, CoreApi, InstructorApi, RuntimeConfig, with the stage's doc comment updated. Run `pnpm nx synth @discava/infra` and `pnpm nx run @discava/infra:checkov`; record the Payments and CoreApi resource counts in the PR description (each well under 500, no dependency cycle). **Amendment 2026-11-18**: the Payments stack exports the webhook URL (the stage's custom domain when set), and `packages/infra/src/stages/application-stage.ts` orders the `AdminApi` stack after `Payments` and passes the URL to `PaymentsConnect` as `STRIPE_WEBHOOK_URL` (T080 left it unset: until this task merges, connect fails with "The payment confirmation address isn't available").
 - [ ] T039 [US1] `packages/events/src/local/stripe-stand-in.ts` per [contracts/stripe-stand-in.md](./contracts/stripe-stand-in.md): the Stripe API slice (`POST /v1/checkout/sessions`, `GET /v1/payment_intents/:id`, `POST /v1/refunds` returning 404 in Stripe's error shape for anything else), the hosted page at `/stripe/pay/:sessionId` with text-only **Pay**, **Decline card** and **Cancel** buttons (the HTML kept in a separate file beside it as `local-oidc/login.html` is), signed delivery with `t=<unix>,v1=<hmac-sha256>` to the runner's own `/stripe/webhook` with up to 3 retries, and the `/stripe/test/replay` and `/stripe/test/forge` controls (the refund and expire controls come with their phases). State in memory. **Amendment 2026-11-18**: this file is created earlier by T081 (accounts and `webhook_endpoints`); this task extends it with the remaining slice and keeps one signing secret per endpoint, delivering to each registered endpoint instead of one fixed address.
 - [ ] T040 [US1] Add `POST /stripe/webhook` (which calls `handleStripeWebhook`) to the stand-in already mounted by T081 in `packages/events/src/local/event-runner-server.ts`, extend `event-runner-server.test.ts`, add the Stripe stand-in row to the table of local services in `CONTRIBUTING.md` ("Event runner" row's description gains Stripe), and note in the runner's start-up log which Stripe URL it serves. Check `packages/common/scripts` `reset-local-data` needs no change (the stand-in holds no persistent state) and say so in the PR. **Amendment 2026-11-18**: `reset-local-data` MUST also delete `tmp/local-dev/secrets/` (the connection record is in the table it wipes, so a leftover key would be a connected-looking stage without a record); extend its test and the "wipe local data" note in `CONTRIBUTING.md`. This replaces the earlier "needs no change" check.
@@ -176,7 +176,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 6: User Story 1 - Buy a paid course and start learning (student portal) (P1)
+## Phase 7: User Story 1 - Buy a paid course and start learning (student portal) (P1)
 
 **Goal**: the course page shows the price, **Buy now** starts a checkout, and the page confirms the enrolment when it appears. Catalogue cards show prices.
 
@@ -198,9 +198,9 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 6A: User Story 6 - The Payments page (admin portal) (P1)
+## Phase 8: User Story 6 - The Payments page (admin portal) (P1)
 
-**Goal**: administrators connect, replace and disconnect Stripe from the admin portal, per [contracts/admin-portal-ui.md](./contracts/admin-portal-ui.md). Needs Phases 2A and 5.
+**Goal**: administrators connect, replace and disconnect Stripe from the admin portal, per [contracts/admin-portal-ui.md](./contracts/admin-portal-ui.md). Needs Phases 3 and 6.
 
 ### Tests for this phase (write first, see them fail)
 
@@ -217,7 +217,7 @@ description: "Task list for Stripe checkout for paid courses"
 ---
 
 
-## Phase 7: User Story 5 - Abandoned and failed payments leave nothing behind (P2)
+## Phase 9: User Story 5 - Abandoned and failed payments leave nothing behind (P2)
 
 **Goal**: a cancelled, declined or expired checkout leaves no enrolment and no charge, closes its order, and a new purchase works.
 
@@ -238,7 +238,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 8: User Story 4 - A refund takes access away (P2)
+## Phase 10: User Story 4 - A refund takes access away (P2)
 
 **Goal**: a full refund ends the enrolment (progress kept), buying again restores it, a partial refund changes nothing about access, and repeated notices are harmless.
 
@@ -261,7 +261,7 @@ description: "Task list for Stripe checkout for paid courses"
 
 ---
 
-## Phase 9: Polish and cross-cutting
+## Phase 11: Polish and cross-cutting
 
 - [ ] T060 [P] Add `packages/e2e/src/helpers/payment.ts` and `helpers/stripe-stand-in.ts` (set a price through instructor-api, start a checkout, pay, decline, cancel, refund, replay and expire through the stand-in's controls, wait for the enrolment by polling as other helpers do), then `packages/e2e/src/scenarios/payment.e2e.ts` (read `packages/e2e/README.md` first; users and data made by the scenario with unique names; never reset local data; keep the invariant check after every test): a student buys a priced course on the stand-in's page and ends enrolled once; Decline stays and Cancel returns with the cancelled message; Buy now again reuses the same payment page; the free enrol route is refused for the priced course; a forged return (`?checkout=success` with no payment) grants nothing; a student enrolled while the course was free keeps access after it is priced and a new student must pay. **Amendment 2026-11-18**: `helpers/stripe-stand-in.ts` also exports `connectStripeStandIn()`, which signs in as Carol (admin) and calls `payment.connect` with `sk_test_local` (idempotent: a no-op when already active), and every payment scenario calls it first, since a fresh local stack starts disconnected.
 - [ ] T061 [P] `packages/e2e/src/scenarios/refund.e2e.ts`: buy, complete the lesson (so a certificate is issued), refund fully: the course page says the enrolment has ended and offers Buy now, the completion is still on record and the certificate still verifies; buy again and pay: the progress is back; a second student refunded partially keeps access.
@@ -278,23 +278,23 @@ description: "Task list for Stripe checkout for paid courses"
 
 ## Dependencies and order
 
-- **Amendment 2026-11-18 (admin-configured Stripe)**: new IDs T070 to T088 are appended, not renumbered, so earlier IDs and references stay valid. Phase order is now 1, 2, **2A**, 3, 4, 5, 6, **6A**, 7, 8, 9. Phase 2A needs Phase 2 (T070 to T072 and T014); Phase 3 needs 2A (a non-zero price needs a connection); Phase 5 needs 2A (checkout needs an active connection and the stored key) and wires the webhook URL into the admin function (T038); Phase 6A needs 2A and 5. T081 creates the stand-in file that T039 extends, so T039 comes after T081.
+- **Amendment 2026-11-18 (admin-configured Stripe)**: new task IDs T070 to T088 are appended, not renumbered, so earlier task IDs and references stay valid; the phases are renumbered because the new ones sit between old ones (old phases 3 to 9 are now 4 to 11; phase 3 is the connection backend and phase 8 the Payments page). Phase 3 needs Phase 2 (T070 to T072 and T014); Phase 4 needs Phases 2 and 3 (a non-zero price needs a connection); Phase 6 needs Phase 3 (checkout needs an active connection and the stored key) and wires the webhook URL into the admin function (T038); Phase 8 needs Phases 3 and 6. T081 creates the stand-in file that T039 extends, so T039 comes after T081.
 
 - Phase 1 → Phase 2 → the story phases in order. Within Phase 2: T002 is independent of T003 to T005; T006 needs T003 to T005; T007 and T008 need T006; T009 to T012 need T003 to T005 and, for the new checks, T006 to T008's shapes; T013 and T014 are independent; T015 must be done on each stage before T003 is deployed there.
-- Phase 3 (US3) needs Phases 2 and 2A. Phase 4 (US2) needs Phase 2 and can run alongside Phase 3 (different files; both touch `invariants.test.ts` only through Phase 2). Phase 5 (US1 backend) needs Phases 2 and 4: its checkout assumes the enrol refusal. Within Phase 5: T032 → T033; T034 and T035 before T038; T036 before T037; T037 and T039 before T040; T037 and T038 before the synth in T041.
-- Phase 6 (US1 portal) needs Phases 3 and 5. Phase 7 (US5) and Phase 8 (US4) each need Phase 5 (and Phase 6 for their portal tasks) and are independent of each other, so they can be built in parallel; merge in numeric order.
-- Phase 9 needs all earlier phases. T060 to T062 are independent files; T063 needs T060's helpers.
+- Phase 4 (US3) needs Phases 2 and 3. Phase 5 (US2) needs Phase 2 and can run alongside Phase 4 (different files; both touch `invariants.test.ts` only through Phase 2). Phase 6 (US1 backend) needs Phases 2, 3 and 5: its checkout assumes the enrol refusal and an active connection. Within Phase 6: T032 → T033; T034 and T035 before T038; T036 before T037; T037 and T039 before T040; T037 and T038 before the synth in T041.
+- Phase 7 (US1 portal) needs Phases 4 and 6. Phase 9 (US5) and Phase 10 (US4) each need Phase 6 (and Phase 7 for their portal tasks) and are independent of each other, so they can be built in parallel; merge in numeric order.
+- Phase 11 needs all earlier phases. T060 to T062 are independent files; T063 needs T060's helpers.
 - Within a phase, tests come first, and tasks run in ID order except those marked [P].
 
 ## Parallel examples
 
 - Phase 2: T002, T004, T013 and T014 together; then T006 to T008 and the invariants tasks in two lanes once the entities exist.
-- Phase 5: T028, T029, T030 and T031 together (tests); then T032/T033 (core-api), T034/T035 (infra), T037/T038 (webhook) and T039/T040 (stand-in) in four lanes once the helpers exist.
-- Phases 7 and 8 in parallel after Phase 6.
-- Phase 9: T060, T061, T062, T064 and T065 together.
+- Phase 6: T028, T029, T030 and T031 together (tests); then T032/T033 (core-api), T034/T035 (infra), T037/T038 (webhook) and T039/T040 (stand-in) in four lanes once the helpers exist.
+- Phases 9 and 10 in parallel after Phase 7.
+- Phase 11: T060, T061, T062, T064 and T065 together.
 
 ## Implementation strategy
 
-- **MVP**: Phases 1 to 6 plus 2A (the connection backend; an operator can connect Stripe by calling the admin API until Phase 6A adds the page, so 6A may land after the MVP if the portal is not ready): a student can buy a priced course and be enrolled exactly once, unpaid users are refused, and instructors can set prices. Abandoned checkouts (Phase 7) close themselves when their order lapses even before Phase 7 ships, since a pending order past its expiry is treated as closed; refunds (Phase 8) can be done by an operator by hand in the interim, so Phases 7 and 8 are reviewable follow-ups.
-- Each phase is one agent PR and leaves `main` green: Phase 2 changes no behaviour, Phase 2A adds the connection (nothing reads it for payments yet), Phase 3 shows prices nobody can pay, Phase 4 refuses the free route for priced courses, and the purchase arrives with Phases 5 and 6. Prices cannot be set on a deployed stage until an administrator has connected Stripe (`course.setPrice` refuses a non-zero price otherwise), so leave Stripe unconnected there until Phase 6 is merged.
+- **MVP**: Phases 1 to 7 (including the connection backend in Phase 3; an operator can connect Stripe by calling the admin API until Phase 8 adds the page, so 8 may land after the MVP if the portal is not ready): a student can buy a priced course and be enrolled exactly once, unpaid users are refused, and instructors can set prices. Abandoned checkouts (Phase 9) close themselves when their order lapses even before Phase 9 ships, since a pending order past its expiry is treated as closed; refunds (Phase 10) can be done by an operator by hand in the interim, so Phases 9 and 10 are reviewable follow-ups.
+- Each phase is one agent PR and leaves `main` green: Phase 2 changes no behaviour, Phase 3 adds the connection (nothing reads it for payments yet), Phase 4 shows prices nobody can pay, Phase 5 refuses the free route for priced courses, and the purchase arrives with Phases 6 and 7. Prices cannot be set on a deployed stage until an administrator has connected Stripe (`course.setPrice` refuses a non-zero price otherwise), so leave Stripe unconnected there until Phase 7 is merged.
 - The riskiest pieces are the exactly-once transaction (T007) and the widened invariants (T011, T012): land and verify them before building on them. Every phase runs `pnpm nx affected --target build` before it is opened and stays within its phase's files.
