@@ -100,7 +100,9 @@ test.describe('course reviews in the instructor portal', () => {
     await screenshot(page, 'a review waiting for a response');
 
     await page.getByRole('button', { name: /^Respond to .* review$/ }).click();
-    await page.getByLabel('Response').fill('Thanks, Sam!');
+    await page
+      .getByRole('textbox', { name: 'Response', exact: true })
+      .fill('Thanks, Sam!');
     await screenshot(page, 'the response dialog');
     await page.getByRole('button', { name: 'Save response' }).click();
     await expect(page.getByText('Thanks, Sam!')).toBeVisible();
@@ -109,7 +111,9 @@ test.describe('course reviews in the instructor portal', () => {
     await page
       .getByRole('button', { name: /^Edit response to .* review$/ })
       .click();
-    await page.getByLabel('Response').fill('Thanks, Sam, glad it helped.');
+    await page
+      .getByRole('textbox', { name: 'Response', exact: true })
+      .fill('Thanks, Sam, glad it helped.');
     await page.getByRole('button', { name: 'Save response' }).click();
     await expect(page.getByText('Thanks, Sam, glad it helped.')).toBeVisible();
 
