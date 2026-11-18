@@ -11,20 +11,36 @@ const hit = (courseId: string, title: string, description?: string) => ({
   courseId,
   title,
   description,
+  tags: [],
 });
+
+const facets = {
+  categories: [],
+  tags: [],
+  levels: [],
+  languages: [],
+  durationBands: [],
+};
 
 const search = (
   query: string,
   handler: (input: unknown) => unknown = () => ({
     items: [hit('linalg', 'Linear Algebra', 'Vectors and matrices')],
     cursor: null,
+    facets,
   }),
 ) =>
   renderWithCoreApi(null, {
     routeTree,
     path: query ? `/search?query=${encodeURIComponent(query)}` : '/search',
     signedIn: false,
-    handlers: { 'course.publicSearch': handler },
+    handlers: {
+      'course.publicSearch': (input) => {
+        const result = handler(input) as Record<string, unknown>;
+        return { facets, ...result };
+      },
+      'category.list': () => [],
+    },
   });
 
 describe('/search', () => {
@@ -84,10 +100,11 @@ describe('/search', () => {
     await user.click(screen.getByRole('button', { name: 'Load more results' }));
 
     expect(await screen.findByText('Calculus')).toBeInTheDocument();
-    expect(calls.map(({ input }) => input)).toMatchObject([
-      { q: 'linear' },
-      { q: 'linear', cursor: 1 },
-    ]);
+    expect(
+      calls
+        .filter(({ path }) => path === 'course.publicSearch')
+        .map(({ input }) => input),
+    ).toMatchObject([{ q: 'linear' }, { q: 'linear', cursor: 1 }]);
   });
 
   it('shows a waiting state and retries once while the collection cold-starts', async () => {
@@ -107,5 +124,185 @@ describe('/search', () => {
       timeout: 10_000,
     });
     expect(await screen.findByText('Linear Algebra')).toBeInTheDocument();
+  });
+
+  describe('filters', () => {
+    const facetsWithCounts = {
+      categories: [
+        { id: 'cat-1', name: 'Science', slug: 'science', count: 3 },
+        { id: 'cat-2', name: 'Business', slug: 'business', count: 1 },
+      ],
+      tags: [{ value: 'sql', count: 2 }],
+      levels: [
+        { value: 'beginner', count: 2 },
+        { value: 'advanced', count: 1 },
+      ],
+      languages: [{ value: 'en', count: 3 }],
+      durationBands: [{ value: 'lt2', count: 1 }],
+    };
+
+    const filtered = (path: string) =>
+      renderWithCoreApi(null, {
+        routeTree,
+        path,
+        signedIn: false,
+        handlers: {
+          'course.publicSearch': () => ({
+            items: [hit('linalg', 'Linear Algebra')],
+            cursor: null,
+            facets: facetsWithCounts,
+          }),
+          'category.list': () => [
+            { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
+          ],
+        },
+      });
+
+    it('shows each group with the count of every value', async () => {
+      filtered('/search?query=linear');
+
+      expect(
+        await screen.findByRole('checkbox', { name: /Beginner/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Level')).toBeInTheDocument();
+      expect(screen.getByText('Category')).toBeInTheDocument();
+      expect(screen.getByText('Language')).toBeInTheDocument();
+      expect(screen.getByText('Duration')).toBeInTheDocument();
+      expect(screen.getByText('Tags')).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: 'Science (3)' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: 'Under 2 hours (1)' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: 'English (3)' }),
+      ).toBeInTheDocument();
+    });
+
+    it('puts a selected value in the address and the request, and clears it', async () => {
+      const { router, calls, user } = filtered('/search?query=linear');
+
+      await user.click(
+        await screen.findByRole('checkbox', { name: 'Beginner (2)' }),
+      );
+
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({
+          query: 'linear',
+          levels: ['beginner'],
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          calls
+            .filter(({ path }) => path === 'course.publicSearch')
+            .map(({ input }) => input),
+        ).toContainEqual(
+          expect.objectContaining({ q: 'linear', levels: ['beginner'] }),
+        ),
+      );
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Clear filters' }),
+      );
+      await waitFor(() =>
+        expect(router.state.location.search).toEqual({ query: 'linear' }),
+      );
+    });
+
+    it('restores the filters from the address', async () => {
+      const { calls } = filtered(
+        '/search?query=linear&levels=%5B%22advanced%22%5D&durations=%5B%22lt2%22%5D&category=science',
+      );
+
+      expect(
+        await screen.findByRole('checkbox', { name: 'Advanced (1)' }),
+      ).toBeChecked();
+      expect(
+        screen.getByRole('checkbox', { name: 'Under 2 hours (1)' }),
+      ).toBeChecked();
+      expect(
+        screen.getByRole('checkbox', { name: 'Science (3)' }),
+      ).toBeChecked();
+      await waitFor(() =>
+        expect(
+          calls.filter(({ path }) => path === 'course.publicSearch').at(-1)
+            ?.input,
+        ).toMatchObject({
+          q: 'linear',
+          categoryId: 'cat-1',
+          levels: ['advanced'],
+          durationBands: ['lt2'],
+        }),
+      );
+    });
+
+    it('browses with filters and no text', async () => {
+      const { calls } = filtered('/search?levels=%5B%22beginner%22%5D');
+
+      expect(
+        await screen.findByRole('heading', { name: 'Browse courses' }),
+      ).toBeInTheDocument();
+      expect(await screen.findByText('Linear Algebra')).toBeInTheDocument();
+      const [call] = calls.filter(({ path }) => path === 'course.publicSearch');
+      expect(call.input).not.toHaveProperty('q');
+    });
+
+    it('shows the empty state, with a way to clear, for values that match nothing', async () => {
+      const { user } = renderWithCoreApi(null, {
+        routeTree,
+        path: '/search?levels=%5B%22expert%22%5D',
+        signedIn: false,
+        handlers: {
+          'course.publicSearch': () => ({
+            items: [],
+            cursor: null,
+            facets: {
+              ...facets,
+              levels: [{ value: 'expert', count: 0 }],
+            },
+          }),
+          'category.list': () => [],
+        },
+      });
+
+      expect(await screen.findByText('No courses match')).toBeInTheDocument();
+      await user.click(
+        screen.getAllByRole('button', { name: 'Clear filters' })[0],
+      );
+      expect(
+        await screen.findByRole('heading', { name: 'Search for a course' }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows each course’s level, language and duration', async () => {
+      renderWithCoreApi(null, {
+        routeTree,
+        path: '/search?query=linear',
+        signedIn: false,
+        handlers: {
+          'course.publicSearch': () => ({
+            items: [
+              {
+                ...hit('linalg', 'Linear Algebra'),
+                category: { id: 'cat-1', name: 'Science', slug: 'science' },
+                level: 'advanced',
+                language: 'fr',
+                durationHours: 12,
+              },
+            ],
+            cursor: null,
+            facets,
+          }),
+          'category.list': () => [],
+        },
+      });
+
+      expect(await screen.findByText('Science')).toBeInTheDocument();
+      expect(screen.getByText('12 hours')).toBeInTheDocument();
+      expect(screen.getByText('Advanced')).toBeInTheDocument();
+      expect(screen.getByText('French')).toBeInTheDocument();
+    });
   });
 });

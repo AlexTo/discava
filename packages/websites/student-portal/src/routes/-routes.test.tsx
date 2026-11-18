@@ -25,6 +25,18 @@ const handlers = {
     completedAt: '2026-10-05T12:00:00.000Z',
   }),
   'course.publicList': () => ({ items: [course] }),
+  'course.publicSearch': () => ({
+    items: [{ courseId: 'course-1', title: 'Linear Algebra', tags: [] }],
+    cursor: null,
+    facets: {
+      categories: [],
+      tags: [],
+      levels: [],
+      languages: [],
+      durationBands: [],
+    },
+  }),
+  'category.list': () => [],
   'course.publicView': () => course,
   'course.myEnrolment': () => null,
 };
@@ -50,6 +62,54 @@ describe('/', () => {
         name: 'Browse courses for every goal.',
       }),
     ).toBeInTheDocument();
+  });
+
+  it('offers the categories from the API as chips, with their counts', async () => {
+    renderWithCoreApi(null, {
+      routeTree,
+      path: '/',
+      signedIn: false,
+      handlers: {
+        ...handlers,
+        'category.list': () => [
+          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
+          { id: 'cat-2', name: 'Art', slug: 'art', courseCount: 0 },
+        ],
+      },
+    });
+
+    expect(
+      await screen.findByRole('button', { name: 'Science (3)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Art (0)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Technology' })).toBeNull();
+  });
+
+  it('narrows the courses by a category chip, in the address', async () => {
+    const { router, user, calls } = renderWithCoreApi(null, {
+      routeTree,
+      path: '/',
+      signedIn: false,
+      handlers: {
+        ...handlers,
+        'category.list': () => [
+          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
+        ],
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Science (3)' }),
+    );
+
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ category: 'science' }),
+    );
+    await waitFor(() =>
+      expect(
+        calls.filter((c) => c.path === 'course.publicSearch').at(-1)?.input,
+      ).toMatchObject({ categoryId: 'cat-1' }),
+    );
   });
 
   it('shows signed-in students their own home', async () => {
