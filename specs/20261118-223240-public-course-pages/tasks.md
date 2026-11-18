@@ -117,13 +117,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
   Entity tests refuse each out-of-range field and an invalid handle.
 - [ ] T008 [US1] Tests first, then add `packages/databases/core-table/src/helpers/instructor-profile.ts`, exported from `src/index.ts`, with:
-  - `handleFromName(given, family)`: lower-cases, folds to ASCII (NFKD, strips marks), collapses runs of other characters to one `-`, trims hyphens, cuts to 30 characters without a trailing hyphen, pads names under 3 characters to `instructor`, and never returns a reserved handle (`admin`, `instructors`, `learn`, `search`, `category`, `certificates`, `my-learning`, `signin`, `sitemap`, `robots`);
+  - `handleFromName(given, family)`: lower-cases, folds to ASCII (NFKD, strips marks), collapses runs of other characters to one `-`, trims hyphens, cuts to 30 characters without a trailing hyphen, pads names under 3 characters to `instructor`, and never returns a reserved handle (export `RESERVED_HANDLES` with the list in data-model.md "Reserved handles"; the instructor-api validation in T023 imports it);
   - `handleCandidates(base)`: the base, then `-2` to `-9`, then four `base-<4 random [a-z0-9]>` candidates;
   - `defaultDisplayName(user)`: `"<given> <family>"` trimmed, or "Discava instructor";
   - `instructorProfileWrites.ensure({ instructorId, user, candidate, now })`: returns a profile create (condition: not exists) and a claim create (condition: not exists);
-  - `ensureInstructorProfile(coreTable, instructorId)`: does nothing if a profile exists, otherwise tries `handleCandidates` in order and retries only when the claim was taken; it is idempotent when the profile was created concurrently.
+  - `ensureInstructorProfile(coreTable, instructorId, { fields?, handle? } = {})`: does nothing if a profile exists (returns `exists`). Otherwise it creates one with `fields` (display name, headline, bio; display name defaulting to `defaultDisplayName(user)`). With no `handle` it tries `handleCandidates` in order and retries only when the claim was taken; with an explicit `handle` it tries only that one and returns `handle-taken` if it is claimed. It is idempotent when the profile was created concurrently.
 
-  Tests in `helpers/instructor-profile.test.ts` cover accented names, emoji, empty names, 40-character names, reserved words, collisions up to the random step, and an existing profile.
+  Tests in `helpers/instructor-profile.test.ts` cover accented names, emoji, empty names, 40-character names, reserved words, collisions up to the random step, an existing profile, and an explicit handle that is taken (no fallback to a generated one).
 - [ ] T009 [US1] Impact-check invariants, tests first, in `packages/databases/core-table/src/helpers/invariants.ts`. Add `instructorProfiles` and `profileHandleClaims` to `TableSnapshot` and `loadTableSnapshot` (a scan is allowed in invariant tooling, outside any user request), and add three checks:
   - `instructor-has-profile`: every `courseInstructor.instructorId` has an `instructorProfile`;
   - `profile-handle-claims-consistent`: each profile's handle has exactly one claim, owned by it, and each claim's owner has a profile with that handle;
@@ -210,7 +210,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - `publicView` has `preview` exactly when `previewVideoUrl` would succeed.
 - [ ] T019 [US2] Add `'course.previewVideoUrl'` to `PUBLIC_OPERATIONS` in `packages/apis/core-api/src/router.ts`, and to `CORE_API_DEDICATED_FUNCTIONS.MediaUrl` in `packages/common/constructs/src/app/apis/core-api.ts`. Extend `router.test.ts` so it passes with no user. Run `pnpm nx run @discava/infra:synth` and the core-api stack test so every operation keeps an integration.
 - [ ] T020 [US2] Tests first, then in `course-page.tsx`, when `preview` is present, render the shared `HlsVideo` (`packages/common/shadcn/src/components/hls-video.tsx`) in the header in place of `CourseThumbnail`. It shows the course image as the poster and a "Preview this course" label. The video URL loads from `course.previewVideoUrl` only after the visitor presses play, with captions and the usual controls. Component tests: the poster shows without a query; pressing play triggers exactly one query; with no `preview`, the image shows.
-- [ ] T021 [US2] Extend `public-landing-page.e2e.ts`. The instructor uploads a short video (reuse `src/helpers` from `video.e2e.ts`), waits for the local transcode, and chooses the video as the preview in the card. Then:
+- [ ] T021 [US2] Extend `public-landing-page.e2e.ts`. The instructor uploads a short video (reuse `src/helpers` from `video.e2e.ts`), waits for the local transcode, and chooses the video as the preview: through the Landing page card if Phase 3 is on `main`, otherwise through `course.updateLanding` with the API helper from T014 (Phase 3's T017 switches it to the card either way). Then:
   1. Signed out, press play and wait for `playing`. Take a `screenshot()`.
   2. Signed out, call `contentItem.videoUrl` for the same item and get `UNAUTHORIZED`.
   3. Hide the lesson. The header shows the image, and `course.previewVideoUrl` gives `NOT_FOUND`.
@@ -234,7 +234,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   Tests cover every item and condition. Extend the T009 invariants with a snapshot written by `changeHandle` that satisfies `profile-handle-claims-consistent`.
 - [ ] T023 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/profile.ts` with `get`, `update`, `createPhotoUploadUrl` and `updatePhoto` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
   - `get` returns a default with `version: 0` and writes nothing when there is no profile; `isPublic` is true if any taught course is `published` (`courseInstructor.byInstructor` and a batch get of courses);
-  - `update` validates "1 to 60", "Up to 100" and "Up to 2,000" characters, the handle pattern and reserved words; `version: 0` goes through `ensureInstructorProfile` with the given fields;
+  - `update` validates "1 to 60", "Up to 100" and "Up to 2,000" characters, the handle pattern and reserved words; `version: 0` calls `ensureInstructorProfile(caller, { fields, handle })` with the explicit handle (`handle-taken` → `CONFLICT` "That handle is taken"; `exists` → `CONFLICT` "Your profile changed; reload and try again");
   - errors are `CONFLICT` "That handle is taken" and "Your profile changed; reload and try again";
   - photo procedures mirror `course-image.ts`, with key `instructors/<sub>/<uuid>.jpg` and a 2 MB JPEG limit.
 
@@ -336,7 +336,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a draft course gives 404;
   - `/sitemap.xml` lists the course and profile;
   - `/robots.txt` is `Disallow: /`.
-- [ ] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the cross-stack grant works on a first deploy (plan risk P2). Record the results in the PR.
+- [ ] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the cross-stack grant works on a first deploy (plan risk P2). Time a landing page with `curl -o /dev/null -s -w '%{time_starttransfer}\n'` on a cache miss (first request after an edit) and on a hit, and check the miss against the plan's p95 goal (under 500 ms) and SC-004 (title and header within 2 seconds on an ordinary connection, checked in a browser with network throttling set to "Fast 4G"). Record the results in the PR.
 
 ---
 
@@ -346,7 +346,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 - [ ] T041 [P] Add `docs/src/content/docs/en/design/public-pages.mdx`, covering the renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview's exposure rules. Add a short "Your landing page and profile" section to the instructor guide. Link both from the design index. Note "translations pending" in the PR (constitution VIII).
 - [ ] T042 [P] Add to CLAUDE.md's Architecture section one line on the page renderer (core-api's second handler, served by the student portal distribution, local port 2026), and add port 2026 to CONTRIBUTING.md's local dev ports if they are listed there.
-- [ ] T043 (human) Run [quickstart.md](./quickstart.md) "Local, by hand" steps 1 to 6, saving screenshots to `tmp/screenshots/pr-<number>/`.
+- [ ] T043 (human) Run [quickstart.md](./quickstart.md) "Local, by hand" steps 1 to 6, saving screenshots to `tmp/screenshots/pr-<number>/`. Time steps 1 and 2 together for someone who has not seen the screens before, and check SC-005 (under 5 minutes).
 - [ ] T044 (human) Run quickstart "Deployed stage" steps 3, 4 and 6: link previews in two apps (SC-006), the Rich Results Test, and no visible flash on a hard reload (FR-012).
 - [ ] T045 Run `graphify update .`, then `pnpm build`, `pnpm lint` and `pnpm nx affected --target test`. Tick this spec's checklist items, and close #287 from this PR.
 
@@ -361,7 +361,7 @@ Phase 1 (US3 data/API) ──► Phase 2 (US1 page, profiles data) ──┬─�
 Phases 2, 4 and 5 ──► Phase 6 (US4 crawlers) ──► Phase 7 (polish)
 ```
 
-- Phases 3, 4 and 5 are independent of each other after Phase 2 and can be implemented in parallel PRs. They all touch `public-landing-page.e2e.ts`, so each later PR rebases and appends its own `test()` block rather than editing another's.
+- Phases 3, 4 and 5 are independent of each other after Phase 2 and can be implemented in parallel PRs. Tests that set landing fields use the card when Phase 3 is on `main` and the API helper otherwise (T014, T017, T021), so none waits on another. They all touch `public-landing-page.e2e.ts`, so each later PR rebases and appends its own `test()` block rather than editing another's.
 - Inside a phase, `[P]` tasks touch different files and can run together. For example, in Phase 2, T010 runs alongside T008. In Phase 5, T025 and T026 run together once T023 and T024 are done. In Phase 6, T038 runs alongside T031 to T034.
 
 ## Implementation strategy

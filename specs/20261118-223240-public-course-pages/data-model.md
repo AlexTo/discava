@@ -22,7 +22,7 @@ All records live in the one core table, defined as ElectroDB entities in `packag
 | Attribute | Type | Rules |
 |-----------|------|-------|
 | `instructorId` | string, required | Cognito `sub`; the key |
-| `handle` | string, required | 3 to 30 characters, `^[a-z0-9]+(-[a-z0-9]+)*$`; unique through `profileHandleClaim` |
+| `handle` | string, required | 3 to 30 characters, `^[a-z0-9]+(-[a-z0-9]+)*$`; unique through `profileHandleClaim`; never one of the reserved handles below |
 | `displayName` | string, required | 1 to 60 characters; defaults to the user's `givenName familyName`, else "Discava instructor" |
 | `headline` | string, optional | Up to 100 characters |
 | `bio` | string, optional | Up to 2,000 characters; plain text, `\n\n` separates paragraphs |
@@ -32,9 +32,11 @@ All records live in the one core table, defined as ElectroDB entities in `packag
 
 **Keys**: `pk` is `instructorId` and `sk` is `instructorId` (primary only). It has no index.
 
+**Reserved handles** (the single list; code and contracts refer to it): `admin`, `instructors`, `learn`, `search`, `category`, `certificates`, `my-learning`, `signin`, `sitemap`, `robots`.
+
 **Written by** `instructorProfileWrites` in `core-table/src/helpers/instructor-profile.ts`:
 
-- `ensureInstructorProfile(instructorId)` creates the profile and its claim if missing (idempotent). It is called inside `createCourse`'s transaction, and by the local seed script for seeded instructors.
+- `ensureInstructorProfile(instructorId, { fields?, handle? })` creates the profile and its claim if missing (idempotent). With no `handle` it tries generated candidates; with an explicit `handle` it tries only that one and reports `handle-taken`. It is called by `createCourse` just *before* the course transaction (the handle retry loop cannot run inside one transaction; the call is idempotent, and a profile without a course breaks no invariant), and by the local seed script for seeded instructors.
 - `update(instructorId, version, patch)` covers display name, headline and bio.
 - `changeHandle(instructorId, version, from, to)` is one transaction: claim create (the new handle must not exist), claim delete (the old claim must belong to this instructor), and profile update (`handle = from`, `version` matches).
 - `setPhoto(instructorId, photoKey | null)` follows the course-image attach and detach flow.

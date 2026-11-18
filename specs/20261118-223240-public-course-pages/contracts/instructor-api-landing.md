@@ -31,7 +31,7 @@ Its transaction gains `courseLandingWrites.clearPreviewIfMatches`. Deleting the 
 
 ## `course.create` (changed)
 
-Its transaction gains `instructorProfileWrites.ensureInstructorProfile(caller)`. The test pins that a first course creates exactly one profile and claim, and that a second course creates none.
+It calls `ensureInstructorProfile(caller)` just before its transaction (idempotent; the handle retry loop cannot run inside a transaction). The test pins that a first course creates exactly one profile and claim, and that a second course creates none.
 
 ## `profile.get` (new)
 
@@ -41,10 +41,10 @@ Its transaction gains `instructorProfileWrites.ensureInstructorProfile(caller)`.
 
 **Input**: `{ version: number; displayName: string; headline?: string; bio?: string; handle: string }`
 
-**Validation**: lengths as in [data-model.md](../data-model.md). The handle is lower-cased and must match the pattern. A reserved handle (`admin`, `instructors`, `learn`, `search`, `category`, `certificates`, `my-learning`, `signin`, `sitemap`, `robots`) returns `BAD_REQUEST`.
+**Validation**: lengths as in [data-model.md](../data-model.md). The handle is lower-cased and must match the pattern. A reserved handle (the list in [data-model.md](../data-model.md)) returns `BAD_REQUEST`.
 
 **Behavior**:
-- With `version: 0`, it calls `ensureInstructorProfile` with the given fields; the handle must be free.
+- With `version: 0`, it calls `ensureInstructorProfile(caller, { fields, handle })` with the explicit handle, so a taken handle gives `CONFLICT` and is never swapped for a generated one. If a profile already exists by then (created concurrently), it returns `CONFLICT` "Your profile changed; reload and try again".
 - Otherwise it calls `update`, plus `changeHandle` when the handle differs, all in one transaction, conditioned on `version`.
 
 **Errors**:
