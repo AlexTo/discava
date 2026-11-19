@@ -35,6 +35,11 @@ export const CourseDocumentSchema = z.object({
   ratingAverage: z.number().optional(),
   ratingScore: z.number().optional(),
   ratingBoost: z.number().optional(),
+  // What the course costs (see the course entity): minor units and the ISO
+  // currency. Optional only because a document indexed before the price
+  // existed has neither until the course is re-indexed.
+  priceAmount: z.number().int().optional(),
+  priceCurrency: z.string().optional(),
 });
 
 export type ICourseDocument = z.output<typeof CourseDocumentSchema>;
@@ -74,6 +79,9 @@ export default createIndex({
       ratingAverage: { type: 'float' },
       ratingScore: { type: 'float' },
       ratingBoost: { type: 'float' },
+      // The price, also new properties.
+      priceAmount: { type: 'integer' },
+      priceCurrency: { type: 'keyword' },
     },
   },
 });

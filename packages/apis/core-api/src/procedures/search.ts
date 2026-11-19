@@ -158,6 +158,10 @@ export const publicSearchCourses = publicSearchProcedure
             ratingAverage: doc.ratingAverage,
           }),
           ratingCount: doc.ratingCount ?? 0,
+          ...(doc.priceAmount !== undefined && {
+            priceAmount: doc.priceAmount,
+          }),
+          ...(doc.priceCurrency && { priceCurrency: doc.priceCurrency }),
         };
       }),
       cursor: from + hits.length < total ? from + hits.length : null,

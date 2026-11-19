@@ -25,6 +25,8 @@ export type StoredPost = NonNullable<
 export type Caller = { sub: string; groups: string[] };
 
 const MAX_ATTEMPTS = 3;
+// The longest random pause before the first re-run; the second waits twice it.
+const RETRY_JITTER_MS = 50;
 export const CLOSED = 'Questions are closed for this lesson';
 
 export const notFound = () => new TRPCError({ code: 'NOT_FOUND' });
@@ -164,7 +166,8 @@ export interface Step<T> {
 
 // Reads, decides and writes. A cancelled transaction is run again from the
 // reads, so the error is decided on fresh state, up to three times, then
-// CONFLICT.
+// CONFLICT. Each run again waits a random moment first, so writers that
+// collided on one thread's counters don't all collide again in step.
 export const writeWithRetry = async <T>(
   coreTable: CoreTable,
   step: () => Promise<Step<T>>,
@@ -194,6 +197,11 @@ export const writeWithRetry = async <T>(
     }
     if (!canceled) {
       return result();
+    }
+    if (attempt < MAX_ATTEMPTS - 1) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.random() * RETRY_JITTER_MS * (attempt + 1)),
+      );
     }
   }
   throw transactionConflict();

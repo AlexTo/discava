@@ -53,6 +53,9 @@ export const SearchCourseHitSchema = z.object({
   durationHours: z.number().optional(),
   ratingAverage: z.number().optional(),
   ratingCount: z.number(),
+  // Absent for a course indexed before it had a price, until it is re-indexed.
+  priceAmount: z.number().optional(),
+  priceCurrency: z.string().optional(),
 });
 
 export type ISearchCourseHit = z.output<typeof SearchCourseHitSchema>;

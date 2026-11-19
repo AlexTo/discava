@@ -9,6 +9,8 @@ import type { createCategoryEntity } from '../../entities/category.js';
 import type { createCategoryClaimEntity } from '../../entities/category-claim.js';
 import type { createCertificateEntity } from '../../entities/certificate.js';
 import type { createContentItemEntity } from '../../entities/content-item.js';
+import type { createCouponEntity } from '../../entities/coupon.js';
+import type { createCouponRedemptionEntity } from '../../entities/coupon-redemption.js';
 import type { createCourseEntity } from '../../entities/course.js';
 import type { createCourseInstructorEntity } from '../../entities/course-instructor.js';
 import type { createCoursePreviewEntity } from '../../entities/course-preview.js';
@@ -351,6 +353,20 @@ export interface TableSnapshot {
     Item<typeof createProfileHandleClaimEntity>,
     'handle' | 'instructorId'
   >[];
+  coupons: Pick<
+    Item<typeof createCouponEntity>,
+    | 'courseId'
+    | 'code'
+    | 'type'
+    | 'value'
+    | 'currency'
+    | 'maxRedemptions'
+    | 'redeemedCount'
+  >[];
+  couponRedemptions: Pick<
+    Item<typeof createCouponRedemptionEntity>,
+    'courseId' | 'code' | 'userId' | 'status' | 'reservedUntil'
+  >[];
   orders: Pick<
     Item<typeof createOrderEntity>,
     | 'orderId'
@@ -436,6 +452,8 @@ export const SNAPSHOT_ENTITIES = {
   courseRatings: 'courseRating',
   instructorProfiles: 'instructorProfile',
   profileHandleClaims: 'profileHandleClaim',
+  coupons: 'coupon',
+  couponRedemptions: 'couponRedemption',
   orders: 'order',
   paymentConnections: 'paymentConnection',
   paymentChanges: 'paymentChange',
