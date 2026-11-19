@@ -476,7 +476,7 @@ describe('recalculateStudent', () => {
     });
   });
 
-  // T008: two runs for the same completing student at the same moment.
+  // Two runs for the same completing student at the same moment.
   describe('concurrent runs for the same completing student', () => {
     const both = () => Promise.all([recalculate(), recalculate()]);
 

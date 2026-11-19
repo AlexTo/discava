@@ -26,8 +26,7 @@ const tracer = new Tracer();
 const logger = new Logger();
 const metrics = new Metrics();
 
-// A job's metadata is a lesson video's (no `target`, as before preview
-// videos) or a course preview's.
+// A job's metadata is a lesson video's (no `target`) or a course preview's.
 const UserMetadataSchema = z.union([
   z.object({
     target: z.literal('contentItem').optional(),

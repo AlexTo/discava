@@ -74,7 +74,7 @@ A handle given in a different case or with a trailing slash still renders. The c
 
 ## Failure
 
-If a dependency fails (the table or AppConfig), the response is `503` with `Cache-Control: no-store` and the plain `index.html`, so the app still boots for people. The error is logged with the request path. A failure is never cached and never turned into a 404.
+If a dependency fails (the table or AppConfig), the response is a plain-text `503` (`Content-Type: text/plain`, body `Service temporarily unavailable`) with `Cache-Control: no-store`, `X-Robots-Tag: noindex` and `Retry-After: 5`. It carries no HTML, so a full page load during an outage shows that text. The error is logged with the request path. A failure is never cached and never turned into a 404.
 
 ## The `index.html` template
 

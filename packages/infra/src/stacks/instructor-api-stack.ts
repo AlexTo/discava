@@ -22,10 +22,8 @@ type InstructorApiIntegrations = ReturnType<
   ReturnType<typeof InstructorApi.defaultIntegrations>['build']
 >;
 
-// Procedures that can delete a lesson video's S3 objects: deleting a
-// lesson or module cascades to its content items, best-effort-deleting
-// each one's underlying S3 object -- as does every permanent delete of an
-// archived content item, lesson or module.
+// Procedures that can delete a lesson video's S3 objects: deleting a lesson
+// or module cascades to its content items, as does every permanent delete.
 const CASCADE_DELETE_PROCEDURES = [
   'lesson.delete',
   'module.delete',
@@ -34,7 +32,7 @@ const CASCADE_DELETE_PROCEDURES = [
   'module.deletePermanently',
 ] as const;
 
-// The procedures that can reach bestEffortCancelTranscodeJob(s).
+// The contentItem procedures that can reach bestEffortCancelTranscodeJob(s).
 const TRANSCODE_CANCEL_PROCEDURES = [
   'contentItem.createVideo',
   'contentItem.updateVideo',
@@ -57,7 +55,9 @@ export interface InstructorApiStackProps extends StackProps {
 
 /**
  * The tRPC API only instructors can call, plus every lesson-media and
- * transcode permission its procedures need.
+ * transcode permission its procedures need. Grants name contentItem
+ * operations; coursePreview's share their dedicated function (see
+ * INSTRUCTOR_API_DEDICATED_FUNCTIONS) and so their grants.
  */
 export class InstructorApiStack extends Stack {
   public readonly instructorApi: InstructorApi<InstructorApiIntegrations>;
@@ -175,16 +175,10 @@ export class InstructorApiStack extends Stack {
     ] as const) {
       lessonMediaBucket.grantDelete(this.privilegedHandler(op));
     }
-    // bestEffortDeleteContentItemVideos lists a ready item's whole
-    // .../content-items/<id>/ prefix (manifest + segments) before batch-
-    // deleting it, so every handler that can reach that best-effort cleanup
-    // for a ready video needs read (for ListObjectsV2) alongside delete --
-    // delete alone can't list, so without this the list throws AccessDenied,
-    // gets swallowed by the best-effort error handling, and the old HLS
-    // output is silently orphaned forever instead of cleaned up.
-    // updateContentItemVideo also best-effort-deletes the old S3 object when
-    // a video is replaced with a new file. updateContentItemText never
-    // touches S3, so it gets no bucket permissions.
+    // bestEffortDeleteContentItemVideos lists a ready item's
+    // .../content-items/<id>/ prefix (manifest and segments) before deleting
+    // it, so these need read (ListObjectsV2) as well as delete. Without it the
+    // best-effort cleanup swallows the AccessDenied and orphans the HLS output.
     for (const op of [
       'contentItem.delete',
       'contentItem.updateVideo',
@@ -198,8 +192,7 @@ export class InstructorApiStack extends Stack {
   private grantLessonMediaUploadAccess(
     lessonMediaUploadBucket: LessonMediaUploadBucket,
   ) {
-    // createContentItemVideoUploadUrl targets this bucket instead of
-    // lessonMediaBucket -- the raw upload never sits behind CloudFront.
+    // Raw uploads land here, never behind CloudFront.
     for (const op of [
       'contentItem.createVideoUploadUrl',
       'contentItem.createFileUploadUrl',
@@ -207,10 +200,8 @@ export class InstructorApiStack extends Stack {
     ] as const) {
       lessonMediaUploadBucket.grantPut(this.privilegedHandler(op));
     }
-    // createContentItemVideo/updateContentItemVideo check the upload
-    // actually exists before recording/submitting a transcode job for it.
-    // createContentItemFile/updateContentItemFile check theirs too, then copy
-    // it (which reads it) into the lesson media bucket.
+    // Each checks its upload exists before using it; the file and caption
+    // procedures then read it to copy it into the lesson media bucket.
     for (const op of [
       'contentItem.createVideo',
       'contentItem.updateVideo',

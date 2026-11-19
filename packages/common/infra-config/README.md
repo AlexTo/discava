@@ -14,7 +14,7 @@ Run `pnpm nx test @discava/common-infra-config` to execute the unit tests via Vi
 
 To update snapshots, run the following command:
 
-`pnpm nx test @discava/common-infra-config --configuration=update-snapshot`
+`pnpm nx test @discava/common-infra-config -u`
 
 ## Run lint
 
@@ -22,12 +22,11 @@ Run `pnpm nx lint @discava/common-infra-config`
 
 ### Fixable issues
 
-You can also automatiaclly fix some lint errors by running the following command:
+You can also automatically fix some lint errors by running the following command:
 
 `pnpm nx lint @discava/common-infra-config --configuration=fix`
 
 ## Useful links
 
-- [common-infra-config reference docs](TODO)
 - [Learn more about NX](https://nx.dev/getting-started/intro)
 

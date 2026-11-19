@@ -7,9 +7,7 @@
  * The submission nonce a transcoded video's manifest lives under, from its
  * key: `courses/…/content-items/<contentItemId>/<nonce>/master.m3u8`. Each
  * transcode writes to its own nonce's folder, so that folder can be deleted
- * without touching any other version. Undefined for a manifest from before
- * nonces, stored directly under the content item's folder, whose deletion
- * would take every version with it.
+ * without touching any other version. Undefined for a key not in that shape.
  */
 export const manifestNonce = (manifestKey: string): string | undefined =>
   manifestKey.match(/\/content-items\/[^/]+\/([^/]+)\/[^/]+$/)?.[1];

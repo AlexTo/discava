@@ -7,8 +7,8 @@
 // request. The Issue-to-PR automation sends its agent back to revise a pull
 // request whose latest commit carries a `software-factory/review` status in
 // state `failure` or `error`. The reviewer ends its review with a verdict
-// line but sets no status, so "changes requested" went unanswered. This turns
-// that verdict into the status, a limited number of times per pull request.
+// line but sets no status; this turns that verdict into the status, a limited
+// number of times per pull request.
 // The reviewer re-reviews on its own once the agent pushes: its scan treats a
 // new head commit as a new review.
 

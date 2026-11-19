@@ -45,7 +45,6 @@ import {
 import { findCloudFrontDomainNames } from '../../core/cloudfront.js';
 import { RuntimeConfig } from '../../core/runtime-config.js';
 
-// String union type for all API operation names
 type Operations = Procedures<AppRouter>;
 
 /**
@@ -66,21 +65,10 @@ const functionNameFor = (op: Operations | '$router'): string =>
     (ops as readonly string[]).includes(op),
   )?.[0] ?? 'Router';
 
-/**
- * Properties for creating a AdminApi construct
- *
- * @template TIntegrations - Map of operation names to their integrations
- */
 export interface AdminApiProps<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
 > {
-  /**
-   * Map of operation names to their API Gateway integrations
-   */
   integrations: TIntegrations;
-  /**
-   * Identity details for Cognito Authentication
-   */
   identity: {
     userPool: IUserPool;
   };
@@ -139,7 +127,6 @@ export interface AdminApiProps<
 /**
  * A CDK construct that creates and configures an AWS API Gateway REST API
  * specifically for AdminApi.
- * @template TIntegrations - Map of operation names to their integrations
  */
 export class AdminApi<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
@@ -162,10 +149,8 @@ export class AdminApi<
    * gets its own integration entry, so infra can grant permissions to
    * `integrations[op].handler`.
    *
-   * @param scope - The CDK construct scope
    * @param functionOptions - The stage's timeout, reserved concurrency, log
    *   level and tracing for the API's functions
-   * @returns An IntegrationBuilder with default lambda integrations
    */
   public static defaultIntegrations = (
     scope: Construct,
@@ -275,15 +260,11 @@ export class AdminApi<
   }
 
   /**
-   * Restricts CORS to the provided origins
-   *
    * Configures the provided CloudFront distribution domains or origin strings
    * as the only permitted CORS origins in API Gateway preflight responses and the
    * AWS Lambda integrations. Any custom domain names (aliases) configured on a
    * CloudFront distribution are included automatically alongside its default
    * `*.cloudfront.net` domain.
-   *
-   * @param origins - The origin strings, CloudFront distributions, or objects containing a CloudFront distribution to grant CORS from
    */
   public restrictCorsTo(
     ...origins: (
@@ -304,7 +285,6 @@ export class AdminApi<
 
     this.allowedOrigins = allowedOrigins;
 
-    // Set ALLOWED_ORIGINS environment variable for all Lambda integrations
     Object.values(this.integrations).forEach((integration) => {
       if ('handler' in integration && integration.handler instanceof Function) {
         integration.handler.addEnvironment(

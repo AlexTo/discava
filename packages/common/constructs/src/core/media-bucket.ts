@@ -80,9 +80,9 @@ export interface MediaBucketProps {
   /**
    * `Domain=` attribute for the CloudFront signed cookies issued for HLS
    * video playback. Must be a shared parent domain of `domainNames` here
-   * and instructor-api's own custom domain (which is what actually issues
-   * the cookies) -- a cookie can only be set for the issuing domain or one
-   * of its parents.
+   * and of the custom domains of the APIs that issue the cookies (core-api
+   * and instructor-api): a cookie can only be set for the issuing domain or
+   * one of its parents.
    */
   readonly cookieDomain?: string;
 }
@@ -90,8 +90,8 @@ export interface MediaBucketProps {
 /**
  * A private S3 bucket served through a CloudFront distribution (Origin
  * Access Control, so the bucket itself stays fully private) using signed
- * URLs for downloads, and presigned PUT URLs for uploads generated
- * server-side. Objects are never publicly readable or directly reachable
+ * URLs for downloads and signed cookies for HLS playback, and presigned PUT
+ * URLs for uploads generated server-side. Objects are never publicly readable or directly reachable
  * from S3.
  */
 export class MediaBucket extends Construct {
@@ -232,13 +232,9 @@ export class MediaBucket extends Construct {
 
     RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, {
       bucketName: this.bucket.bucketName,
-      // Prefer the configured custom domain (its first alias, if there are
-      // several) over the generated *.cloudfront.net hostname, so signed
-      // URLs built from this value use it instead. Only when `certificate`
-      // is also set, matching the Distribution's own condition above --
-      // `domainNames` alone never reaches the distribution as an alias, so
-      // publishing it here without a certificate would point signed URLs
-      // at a hostname CloudFront doesn't actually recognize.
+      // The first custom domain, so signed URLs use it, but only with
+      // `certificate` set: like the Distribution above, `domainNames` alone
+      // adds no alias, so signed URLs would name a host CloudFront rejects.
       cloudFrontDomainName:
         certificate && domainNames?.[0]
           ? domainNames[0]
@@ -258,8 +254,6 @@ export class MediaBucket extends Construct {
 
   /**
    * Restricts the bucket's CORS configuration to the provided origins.
-   *
-   * @param origins - The origin strings, CloudFront distributions, or objects containing a CloudFront distribution to grant CORS from
    */
   public restrictCorsTo(
     ...origins: (

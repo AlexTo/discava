@@ -116,7 +116,7 @@ export const checkVideoTranscodeState = (
   }),
 ];
 
-// 24 (captions). A video's caption tracks are valid: at most 10, one per
+// A video's caption tracks are valid: at most 10, one per
 // language, exactly one default when there are any, each of the item's
 // played version (the version swap drops every other nonce in the same patch
 // that sets status: ready), and each file under that version's captions
@@ -217,7 +217,7 @@ export const checkCaptionTracksValid = (
   }),
 ];
 
-// 6 (files, #102). A file item has its file: the key, name, size and type,
+// A file item has its file: the key, name, size and type,
 // with the key in the version folder its submissionNonce names, which is what
 // replacing or deleting it retires.
 export const checkFileItemShape = (snapshot: TableSnapshot): Violation[] =>

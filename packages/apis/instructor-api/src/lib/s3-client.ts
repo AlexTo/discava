@@ -19,16 +19,12 @@ import {
 } from '@discava/common-server-utils/media-keys';
 
 /**
- * Returns a raw video upload's ETag if it actually exists in
- * LessonMediaUploadBucket, or undefined otherwise.
- * createContentItemVideo/updateContentItemVideo take an instructor-supplied
- * objectKey with no other proof the client's presigned PUT ever completed,
- * so this guards against submitting a transcode job -- and writing a
- * DynamoDB record -- for an object that was never uploaded. The ETag itself
- * is a content fingerprint (mediaconvert-client.ts folds it into the
- * MediaConvert job's idempotency token, since objectKey alone can't tell a
- * retried submission apart from a genuinely different file later
- * overwriting the same key).
+ * A raw video upload's ETag if it exists in LessonMediaUploadBucket, else
+ * undefined. The objectKey comes from the instructor with no proof the
+ * presigned PUT completed, so this stops a transcode job and record being
+ * made for nothing. The ETag fingerprints the content: video procedures store
+ * it as `rawObjectETag` to tell a retry of the same upload from a new file
+ * written to the same key.
  */
 export const getVideoUploadETag = async (
   objectKey: string,
@@ -60,27 +56,18 @@ export type IDeletableVideoContentItem = {
 };
 
 /**
- * Best-effort cleans up one or more video content items' underlying S3
- * object(s) -- a single item for a direct delete/replace, or several at
- * once for a lesson/module cascade delete. Failures are logged, never
- * thrown: the DynamoDB record is always the source of truth for whether a
- * piece of content exists, so a failure to clean up here must never fail
- * the caller's mutation.
+ * Best-effort cleans up video content items' S3 objects (one for a
+ * delete/replace, several for a lesson/module cascade). Failures are logged,
+ * never thrown: the DynamoDB record decides whether content exists.
  *
- * Which bucket holds an item's object(s), and how they're cleaned up,
- * depends on its `status`:
- * - `'ready'`: `s3Key` is its HLS manifest in LessonMediaBucket, alongside
- *   segment files that aren't individually tracked -- the whole
- *   `.../content-items/<contentItemId>/<submissionNonce>/` prefix needs
- *   deleting, which can span many objects. Rather than paginating through
- *   all of them inline (delaying the caller's response for no benefit --
- *   nothing about it needs to happen before responding), this schedules a
- *   delayed cleanup the same way a canceled job's own output is cleaned up
- *   (see scheduleTranscodeCleanup). A `'ready'` item from before
- *   `submissionNonce` existed has no scoped prefix to schedule against --
- *   falls back to the old inline delete for just those, best-effort.
- * - anything else: `s3Key` is still the single raw upload in
- *   LessonMediaUploadBucket -- one object, cheap to delete inline.
+ * By `status`:
+ * - `'ready'`: `s3Key` is its HLS manifest in LessonMediaBucket, beside
+ *   untracked segments, so the whole `.../<contentItemId>/<submissionNonce>/`
+ *   prefix goes, through a delayed scheduleTranscodeCleanup rather than an
+ *   inline paginated delete. A ready item with no `submissionNonce` has no
+ *   scoped prefix, so its content-item folder is deleted inline.
+ * - anything else: `s3Key` is the single raw upload in
+ *   LessonMediaUploadBucket, deleted inline.
  */
 export const bestEffortDeleteContentItemVideos = async (
   logger: Logger | undefined,
@@ -136,8 +123,8 @@ export const bestEffortDeleteContentItemVideos = async (
  * Kept apart from bestEffortDeleteContentItemVideos, which also cleans up an
  * abandoned replacement's upload while the item still plays its previous
  * version. Waits RETIRED_VERSION_DELAY_MINUTES, so anyone still streaming it
- * isn't cut off. One from before nonces shares its folder with every other
- * version, so it's left rather than risk them.
+ * isn't cut off. A previous key with no nonce in its path shares its folder
+ * with every other version, so it's left rather than risk them.
  */
 export const bestEffortRetirePreviousVersions = async (
   logger: Logger | undefined,

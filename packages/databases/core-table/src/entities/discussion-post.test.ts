@@ -149,7 +149,7 @@ describe('discussionPost', () => {
 
   // ElectroDB re-evaluates a sparse index's condition when an update provides
   // one of its composites. Neither queue may lose its keys to a write that
-  // does not touch its flag (the writer of Phase 2 relies on this).
+  // does not touch its flag (discussionWrites relies on this).
   describe('an update of a flagged post', () => {
     const key = {
       courseId: 'course-1',

@@ -192,9 +192,8 @@ export const createRenderWithApi =
     return { ...result, calls, queryClient, optionsProxy, user };
   };
 
-// Stubs for what jsdom doesn't implement, which the portals' components need:
-// the union of what each portal's test setup used to stub. Each is only set
-// when jsdom lacks it.
+// Stubs for what jsdom doesn't implement, which the portals' components need.
+// Each is only set when jsdom lacks it.
 export const installJsdomStubs = (): void => {
   // Radix components and dnd-kit track element sizes with it. Layout isn't
   // computed in jsdom anyway, so observing nothing is enough.

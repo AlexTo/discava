@@ -55,13 +55,10 @@ import { RuntimeConfig } from './runtime-config.js';
 const DEFAULT_RUNTIME_CONFIG_FILENAME = 'runtime-config.json';
 
 // Content-Security-Policy enforced on all responses. Restricts scripts and
-// framing to mitigate XSS and clickjacking, while permitting HTTPS calls
-// (connect-src, media-src) to AWS service endpoints such as API Gateway,
-// Cognito, Bedrock AgentCore, and presigned S3/CloudFront media URLs, and
-// HTTPS images (img-src) such as course images from the public media
-// distribution, which are only known at deploy time: that distribution is in
-// a stack deployed after the portals'. Edit this to tighten
-// connect-src/media-src/img-src to your specific origins once they are known.
+// framing to mitigate XSS and clickjacking, while allowing any HTTPS origin
+// for connect-src, media-src and img-src: the APIs, Cognito, the media
+// distributions and presigned S3 URLs are only known at deploy time, and the
+// media distributions are in a stack deployed after the portals'.
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
@@ -198,7 +195,6 @@ export class StaticWebsite extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // S3 Bucket to hold website files
     this.websiteBucket = new Bucket(this, 'WebsiteBucket', {
       versioned: true,
       enforceSSL: true,
@@ -220,12 +216,11 @@ export class StaticWebsite extends Construct {
       this.websiteBucket,
       accessLogs,
     );
-    // Web ACL
     const wafStack = enableWaf ? new CloudfrontWebAcl(this, 'waf') : undefined;
 
-    // Bucket holding CloudFront standard access logs. CloudFront delivers its
-    // own logs to S3 only, so this bucket is retained; its S3 server access
-    // logs are delivered to CloudWatch Logs.
+    // CloudFront delivers its standard access logs to S3 only, hence this
+    // bucket (unlike the website bucket's logs, which go to CloudWatch Logs,
+    // as do this bucket's own server access logs).
     const logBucket = new Bucket(this, 'DistributionLogBucket', {
       enforceSSL: true,
       autoDeleteObjects: true,
@@ -332,11 +327,9 @@ export class StaticWebsite extends Construct {
       );
     }
 
-    // Deploy Website
     this.bucketDeployment = new BucketDeployment(this, 'WebsiteDeployment', {
       sources: [Source.asset(websiteFilePath)],
       destinationBucket: this.websiteBucket,
-      // Files in the distribution's edge caches will be invalidated after files are uploaded to the destination bucket.
       distribution: this.cloudFrontDistribution,
       // Exclude the runtime config from this deployment's sync so its default pruning
       // never deletes the file managed separately by RuntimeConfigDeployment below.

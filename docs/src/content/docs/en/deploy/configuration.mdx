@@ -70,6 +70,7 @@ Each API, portal and media distribution can have its own domain. You need, for e
 | --- | --- | --- |
 | Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | The stage's region |
 | Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | The stage's region |
+| Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | The stage's region |
 | Student portal | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
 | Instructor portal | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
 | Admin portal | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
@@ -78,7 +79,7 @@ Each API, portal and media distribution can have its own domain. You need, for e
 
 Each also takes a matching `…_CERTIFICATE_ARN`. A domain is only applied when its certificate is set too. Portals and media accept several comma-separated domains; an API takes one.
 
-**The easiest way to set these is to run the setup script again.** Give it a root domain and it suggests a subdomain for each component, finds a matching certificate in ACM, validates it and writes the variables:
+**The easiest way to set these is to run the setup script again.** Give it a root domain and it suggests a subdomain for each component, finds a matching certificate in ACM, validates it and writes the variables. It doesn't cover the admin API yet: set that one's two variables yourself.
 
 ```sh
 ./scripts/setup-stage.sh discava-development
@@ -86,7 +87,7 @@ Each also takes a matching `…_CERTIFICATE_ARN`. A domain is only applied when 
 
 Three rules to know:
 
-- **Each API needs its own certificate naming exactly its domain.** Not a wildcard, and not one shared with the other API. Otherwise a browser can reuse one connection for both APIs and get errors from the wrong one.
+- **Each API needs its own certificate naming exactly its domain.** Not a wildcard, and not one shared with another API. Otherwise a browser can reuse one connection for two APIs and get errors from the wrong one.
 - **Video playback needs a shared parent domain.** When lesson media has a custom domain, playback is authorised with cookies shared between the API and lesson media, so both must sit under one parent, given as `…_INFRA_LESSON_MEDIA_COOKIE_DOMAIN` (`example.com` for `instructor-api.example.com` and `lesson-media.example.com`).
 - **DNS is yours to manage.** After the deploy, point each domain at its target: a CloudFront distribution for portals and media, the API Gateway custom domain for APIs. Until then the domains don't resolve, although the portals already use them.
 

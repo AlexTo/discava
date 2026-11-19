@@ -162,8 +162,7 @@ const hardDeleteModule = async (
     });
   }
 
-  // Each content item delete is conditioned on two things -- see the
-  // equivalent comment in lesson.ts's hardDeleteLesson for why:
+  // Each content item delete is conditioned on (as in hardDeleteLesson):
   // - updatedAt (bumped by every write -- see the contentItem entity's
   //   `watch: '*'`) still matching the queried snapshot, so a transcode
   //   completing in between isn't cleaned up from stale data;
@@ -326,9 +325,7 @@ export const deleteModule = courseProcedure
         undefined,
         courseId,
       );
-      // DynamoDB transactions don't return the deleted attributes, but we
-      // already fetched the module's pre-delete state above for the
-      // existence check.
+      // Transactions don't return the deleted attributes.
       return existing;
     }
 

@@ -53,8 +53,7 @@ test.beforeEach(async () => {
 });
 
 // Archived once done, so the courses these tests publish don't crowd the
-// student portal's catalogue and search, which list the first 100 published
-// courses (oldest first).
+// student portal's catalogue and search.
 test.afterEach(async () => {
   await instructor.instructor.course.archive.mutate({
     courseId: course.courseId,

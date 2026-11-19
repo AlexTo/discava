@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { fileURLToPath } from 'url';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
@@ -25,6 +25,8 @@ export default defineConfig(() => ({
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // Run by the `test-setup-stage` target (vitest.setup-stage.config.mts).
+    exclude: [...configDefaults.exclude, 'src/setup-stage.test.ts'],
     reporters: ['default'],
     coverage: {
       reportsDirectory:

@@ -47,7 +47,7 @@ import { asContentItemOutput } from './content-item-shared.js';
 
 // File items (#102): a document students download. The file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then copied into
-// the lesson media bucket when the item is saved (see lib/lesson-files.ts).
+// the lesson media bucket when the item is saved (see common-server-utils/lesson-files).
 
 interface ItemKey {
   courseId: string;

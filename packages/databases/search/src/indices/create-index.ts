@@ -17,10 +17,8 @@ export interface IndexDefinition<T, N extends string = string> {
   readonly mappings: Record<string, unknown>;
 }
 
-// Identity function: exists so every index module has the same shape
-// (`export default createIndex({...})`), and so a future generator-emitted
-// version of this file can validate its input without every index needing
-// to import a type.
+// Identity function, so every index module has the same shape
+// (`export default createIndex({...})`) without importing a type.
 // `N` keeps the index's name as a literal, so `IndexName` (client.ts) is the
 // union of the names defined, not `string`.
 export const createIndex = <T, const N extends string>(

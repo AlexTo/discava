@@ -70,9 +70,6 @@ const getLessonOrThrow = async (coreTable: CoreTable, key: LessonKey) => {
   return lesson;
 };
 
-// Every page is read (a query returns at most 1 MB per page), since callers
-// act on the whole set: a missed page would be left unpublished, or escape
-// the student-activity check and be orphaned by a permanent delete.
 // After a guarded write was refused by the lesson's own condition: reports
 // why, from its current state.
 const throwForLessonState = async (
@@ -88,6 +85,9 @@ const throwForLessonState = async (
   });
 };
 
+// Every page is read (a query returns at most 1 MB per page), since callers
+// act on the whole set: a missed page would be left unpublished, or escape
+// the student-activity check and be orphaned by a permanent delete.
 const queryLessonContentItems = async (
   coreTable: CoreTable,
   key: LessonKey,
@@ -330,9 +330,7 @@ export const deleteLesson = courseProcedure
         undefined,
         courseId,
       );
-      // DynamoDB transactions don't return the deleted attributes, but we
-      // already fetched the lesson's pre-delete state above for the
-      // existence check.
+      // Transactions don't return the deleted attributes.
       return existing;
     }
 

@@ -11,9 +11,8 @@ import {
 } from '@aws-sdk/client-sqs';
 
 /**
- * The most an SQS message can hold, body and attributes together: 1,048,576
- * bytes (1 MiB), per the SQS developer guide's message quotas, read when this
- * was written (research R-4).
+ * The most an SQS message can hold, body and attributes together: 1 MiB, per
+ * SQS's message quotas.
  */
 export const MAX_MESSAGE_BYTES = 1_048_576;
 
@@ -48,7 +47,7 @@ export interface QueueDepth {
 
 /**
  * The few queue operations the router and the local feature runners use, so
- * local dev can swap SQS (ElasticMQ) for an in-process queue.
+ * tests can swap SQS for an in-process queue (local/in-process-queue.ts).
  */
 export interface QueueClient {
   /** Sends messages, at most 10 per call; returns those that failed. */
@@ -137,7 +136,7 @@ export const createSqsQueueClient = (sqs: SQSClient): QueueClient => {
           });
         }
       } catch (error) {
-        // The whole call failed: every entry in it may be retried.
+        // The whole call failed, so every entry in it did.
         chunk.forEach((_, i) =>
           failures.push({
             index: start + i,
