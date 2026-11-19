@@ -30,6 +30,7 @@ beforeAll(async () => {
           userId: 'u',
           courseId: 'c',
           accountId: 'a',
+          mode: 'test',
           courseTitle: 't',
           listAmount: 100,
           amount: 100,

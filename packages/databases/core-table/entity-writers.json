@@ -32,6 +32,8 @@
       "packages/events/src/media/transcode-reconciler.ts"
     ],
     "instructor-api": [
+      "packages/apis/instructor-api/src/helpers/content-item.ts",
+      "packages/apis/instructor-api/src/helpers/hard-delete.ts",
       "packages/apis/instructor-api/src/helpers/video-replacement.ts",
       "packages/apis/instructor-api/src/procedures/assignment.ts",
       "packages/apis/instructor-api/src/procedures/content-item-captions.ts",
@@ -102,6 +104,18 @@
   "discussionVote": {
     "core-table": ["packages/databases/core-table/src/helpers/discussion.ts"]
   },
+  "earningDay": {
+    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+  },
+  "earningEntry": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/earning.ts",
+      "packages/databases/core-table/src/helpers/payout.ts"
+    ]
+  },
+  "earningOrder": {
+    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+  },
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
@@ -127,6 +141,7 @@
   "lesson": {
     "instructor-api": [
       "packages/apis/instructor-api/src/helpers/ancestor-writes.ts",
+      "packages/apis/instructor-api/src/helpers/hard-delete.ts",
       "packages/apis/instructor-api/src/procedures/assignment.ts",
       "packages/apis/instructor-api/src/procedures/lesson.ts",
       "packages/apis/instructor-api/src/procedures/module.ts"
@@ -179,6 +194,12 @@
       "packages/databases/core-table/src/helpers/order.ts",
       "packages/databases/core-table/src/helpers/payment-connection.ts"
     ]
+  },
+  "payout": {
+    "core-table": ["packages/databases/core-table/src/helpers/payout.ts"]
+  },
+  "payoutAccount": {
+    "core-table": ["packages/databases/core-table/src/helpers/payout.ts"]
   },
   "periodStats": {
     "core-table": [

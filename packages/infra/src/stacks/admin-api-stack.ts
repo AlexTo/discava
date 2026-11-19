@@ -27,6 +27,8 @@ export interface AdminApiStackProps extends StackProps {
   readonly coreTable: CoreTable;
   /** The Stripe secrets an administrator's save writes. */
   readonly stripeSecrets: StripeSecrets;
+  /** The address Stripe is told to post to (the Payments stack's output). */
+  readonly webhookUrl: string;
   /** The only portal that calls admin-api. */
   readonly adminPortal: AdminPortal;
 }
@@ -51,6 +53,7 @@ export class AdminApiStack extends Stack {
       identity,
       coreTable,
       stripeSecrets,
+      webhookUrl,
       adminPortal,
       ...props
     }: AdminApiStackProps,
@@ -102,8 +105,12 @@ export class AdminApiStack extends Stack {
     );
     // The stage's name goes into each webhook endpoint's metadata, so a
     // leftover one of ours is recognised. STRIPE_WEBHOOK_URL (the address the
-    // endpoint is registered at) is set where the Payments stack exists; until
-    // then a connect says the address isn't available.
+    // endpoint is registered at) is the Payments stack's output.
+    // The shared router needs it too: payment.status says whether the saved
+    // registration is at this address.
+    for (const handler of [payments, integrations['payment.status'].handler]) {
+      handler.addEnvironment('STRIPE_WEBHOOK_URL', webhookUrl);
+    }
     payments.addEnvironment(
       'STRIPE_ENDPOINT_STAGE',
       Stage.of(this)?.stageName ?? 'unknown',

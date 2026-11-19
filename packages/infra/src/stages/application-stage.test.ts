@@ -11,10 +11,11 @@ import {
 } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { App } from 'aws-cdk-lib';
+import { App, type Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import {
+  actionsByRole,
   methodSettings,
   resources,
   stackTemplates,
@@ -27,6 +28,7 @@ const API_FUNCTIONS = {
     'CoreApiRouterHandler',
     'CoreApiMediaUrlHandler',
     'CoreApiAssignmentSubmitHandler',
+    'CoreApiPaymentsCheckoutHandler',
   ],
   InstructorApi: [
     'InstructorApiRouterHandler',
@@ -35,6 +37,7 @@ const API_FUNCTIONS = {
     'InstructorApiCourseImageHandler',
   ],
   AdminApi: ['AdminApiRouterHandler', 'AdminApiPaymentsConnectHandler'],
+  Payments: ['StripeWebhookApiHandler'],
 };
 
 describe("discava-development's limits", () => {
@@ -192,6 +195,7 @@ describe('Lambda functions', () => {
   it.each([
     'Websites',
     'Data',
+    'Payments',
     'MediaPipeline',
     'CoreApi',
     'InstructorApi',
@@ -547,5 +551,119 @@ describe('limits a stage leaves out', () => {
     stack('Data').hasResourceProperties('AWS::Cognito::UserPool', {
       AdminCreateUserConfig: { AllowAdminCreateUserOnly: false },
     });
+  });
+});
+
+describe('payments (the Stripe webhook and checkout)', () => {
+  const stack = synth({});
+  const policiesOf = (template: Template, rolePrefix: string) =>
+    Object.values(template.findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        (policy.Properties.Roles as { Ref: string }[]).some((role) =>
+          role.Ref.startsWith(rolePrefix),
+        ),
+      )
+      .map((policy) => JSON.stringify(policy.Properties.PolicyDocument));
+
+  it('has a Payments stack that orders after Data', () => {
+    const app = new App();
+    const stage = new ApplicationStage(app, 'discava-test', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+    });
+    const names = stage.node.children.map((child) => child.node.id);
+    expect(names).toContain('Payments');
+    const payments = stage.node.findChild('Payments') as Stack;
+    // References between stacks become dependencies when the app synthesizes.
+    app.synth();
+    const dependencies = payments.dependencies.map((d) => d.node.id);
+    expect(dependencies).toContain('Data');
+  });
+
+  it('serves POST /stripe/webhook as the only method, with no authorizer', () => {
+    const template = stack('Payments');
+    const methods = Object.values(
+      template.findResources('AWS::ApiGateway::Method'),
+    ).map((m) => m.Properties);
+    expect(methods).toHaveLength(1);
+    expect(methods[0]).toMatchObject({
+      HttpMethod: 'POST',
+      AuthorizationType: 'NONE',
+    });
+    template.hasResourceProperties('AWS::ApiGateway::Resource', {
+      PathPart: 'webhook',
+    });
+    expect(
+      Object.keys(template.findResources('AWS::ApiGateway::Authorizer')),
+    ).toEqual([]);
+  });
+
+  it('puts the stage WAF in front of it by default, and none when the stage turns it off', () => {
+    expect(
+      Object.keys(stack('Payments').findResources('AWS::WAFv2::WebACL')),
+    ).toHaveLength(1);
+    const off = synth({ payments: { enableWaf: false } })('Payments');
+    expect(Object.keys(off.findResources('AWS::WAFv2::WebACL'))).toEqual([]);
+  });
+
+  it('throttles the method as the stage says', () => {
+    const settings = methodSettings(
+      synth({ payments: { throttleRateLimit: 3, throttleBurstLimit: 7 } })(
+        'Payments',
+      ),
+    );
+    expect(settings).toContainEqual(
+      expect.objectContaining({
+        ThrottlingRateLimit: 3,
+        ThrottlingBurstLimit: 7,
+      }),
+    );
+  });
+
+  it("gives the webhook's role the table and the two secrets, and no write to either secret", () => {
+    const policies = policiesOf(
+      stack('Payments'),
+      'StripeWebhookApiHandler',
+    ).join('');
+    expect(policies).toContain('dynamodb:PutItem');
+    expect(policies).toContain('ApiKey');
+    expect(policies).toContain('WebhookSigningSecret');
+    expect(policies).not.toContain('secretsmanager:PutSecretValue');
+  });
+
+  it('gives the checkout function the API key and not the webhook secret', () => {
+    const coreApi = stack('CoreApi');
+    const policies = policiesOf(coreApi, 'CoreApiPaymentsCheckoutHandler').join(
+      '',
+    );
+    expect(policies).toContain('ApiKey');
+    expect(policies).not.toContain('WebhookSigningSecret');
+    const [fn] = resources(
+      coreApi,
+      'AWS::Lambda::Function',
+      'CoreApiPaymentsCheckoutHandler',
+    );
+    const variables = JSON.stringify(
+      (fn as { Environment: { Variables: object } }).Environment.Variables,
+    );
+    expect(variables).toContain('STRIPE_API_KEY_SECRET_ARN');
+    expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
+  });
+
+  it('lets no role but the admin connect function write either secret', () => {
+    for (const [name, template] of stackTemplates({})) {
+      for (const [role, actions] of Object.entries(actionsByRole(template))) {
+        if (!actions.includes('secretsmanager:PutSecretValue')) continue;
+        expect(`${name}/${role}`, 'writes a Stripe secret').toMatch(
+          /^AdminApi\/AdminApiPaymentsConnectHandler/,
+        );
+      }
+    }
+  });
+
+  it('tells the connect function and the shared admin router the webhook address', () => {
+    const functions = JSON.stringify(
+      stack('AdminApi').findResources('AWS::Lambda::Function'),
+    );
+    expect(functions.match(/STRIPE_WEBHOOK_URL/g)?.length).toBe(2);
   });
 });

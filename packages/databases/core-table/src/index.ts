@@ -8,6 +8,12 @@ export {
   resolveTableName,
 } from './client.js';
 export { PREVIEW_MAX_SECONDS } from './entities/course-preview.js';
+export {
+  EARNING_ENTRY_KINDS,
+  type EarningEntryKind,
+  openSettlement,
+  payoutSettlement,
+} from './entities/earning-entry.js';
 export * from './entities/index.js';
 export {
   BIO_MAX,
@@ -18,6 +24,11 @@ export {
   HEADLINE_MAX,
   isValidHandle,
 } from './entities/instructor-profile.js';
+export { PAYOUT_STATUSES, type PayoutStatus } from './entities/payout.js';
+export {
+  PAYOUT_ACCOUNT_STATUSES,
+  type PayoutAccountStatus,
+} from './entities/payout-account.js';
 export {
   aggregatesOf,
   type Contributions,
@@ -212,6 +223,22 @@ export {
   postIdTime,
 } from './helpers/discussion-text.js';
 export {
+  type EarningDayRecord,
+  type EarningEntryRecord,
+  type EarningOrderRecord,
+  type EarningSaleOrder,
+  earningDayOf,
+  queryEarningDays,
+  queryEarningLines,
+  recordRefund,
+  recordSale,
+} from './helpers/earning.js';
+export {
+  EARNINGS_STREAM_FILTERS,
+  type EarningsStreamRecord,
+  matchesEarningsStreamFilters,
+} from './helpers/earnings-stream.js';
+export {
   type CancellationReasons,
   cancellationReasons,
   failedAt,
@@ -327,6 +354,21 @@ export {
   rotateKey,
 } from './helpers/payment-connection.js';
 export {
+  claimPayout,
+  createPayout,
+  listActiveAccounts,
+  listUnsettledPayouts,
+  markPayoutFailed,
+  markPayoutSent,
+  openEntries,
+  PAYOUT_BATCH_SIZE,
+  PAYOUT_CLAIM_GRACE_MS,
+  type PayoutAccountRecord,
+  type PayoutRecord,
+  releasePayout,
+  saveAccountStatus,
+} from './helpers/payout.js';
+export {
   type Curriculum,
   computeProgress,
   type LessonStatus,
@@ -337,6 +379,16 @@ export {
   PROGRESS_STREAM_FILTERS,
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
+export {
+  calculateFee,
+  calculateRefund,
+  calculateSale,
+  type InstructorRefund,
+  type InstructorSale,
+  type RefundInput,
+  type SaleInput,
+  splitAmount,
+} from './helpers/revenue.js';
 export {
   classifyReviewCancellation,
   type ReviewCancellation,

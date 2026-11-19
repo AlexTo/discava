@@ -23,6 +23,7 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
+import { asContentItemOutput } from '../helpers/content-item.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   initialVisibilityFields,
@@ -60,7 +61,6 @@ import {
   UpdateContentItemVideoInputSchema,
   UpdateContentItemVideoOutputSchema,
 } from '../schema/index.js';
-import { asContentItemOutput } from './content-item-shared.js';
 
 // Extension -> content type allowlist for lesson videos. Anything else is
 // rejected with BAD_REQUEST before a presigned URL is ever issued.

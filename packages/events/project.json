@@ -84,6 +84,12 @@
         "path": "src/notifications/notification-unsubscribe.ts",
         "name": "notification-unsubscribe",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/payments/stripe-webhook-handler.ts",
+        "name": "stripe-webhook",
+        "iac": "cdk"
       }
     ]
   },

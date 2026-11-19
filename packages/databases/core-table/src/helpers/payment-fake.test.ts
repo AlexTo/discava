@@ -24,6 +24,23 @@ const KEYS: Record<string, (key: Row) => string> = {
   paymentConnection: () => 'singleton',
   paymentChange: (k) => k.changeId,
   certificate: (k) => `${k.userId}|${k.courseId}`,
+  earningOrder: (k) => k.orderId,
+  earningEntry: (k) =>
+    `${k.instructorId}|${k.courseId}|${k.occurredAt}|${k.entryId}`,
+  earningDay: (k) => `${k.instructorId}|${k.day}|${k.courseId}|${k.currency}`,
+  payout: (k) => `${k.instructorId}|${k.createdAt}|${k.payoutId}`,
+  payoutAccount: (k) => `${k.instructorId}|${k.accountId}|${k.mode}`,
+};
+
+// The sort keys of the entities a range query reads, as their templates build
+// them, and the partial key a `between` bound stands for.
+const SORT_KEYS: Record<string, (k: Row) => string> = {
+  earningDay: (k) => `D#${k.day}#${k.courseId}#${k.currency}`,
+  earningEntry: (k) => `L#${k.courseId}#${k.occurredAt}#${k.entryId}`,
+};
+const BOUNDS: Record<string, (k: Row) => string> = {
+  earningDay: (k) => `D#${k.day}`,
+  earningEntry: (k) => `L#${k.courseId}#${k.occurredAt}`,
 };
 
 type Test = (row?: Row) => boolean;
@@ -67,7 +84,7 @@ const evaluate = (where?: (attr: any, op: any) => string): Test => {
 export interface Operation {
   entity: string;
   id: string;
-  kind: 'create' | 'patch' | 'check';
+  kind: 'create' | 'patch' | 'check' | 'upsert';
   holds: Test;
   apply: (row: Row | undefined) => Row | undefined;
 }
@@ -75,7 +92,11 @@ export interface Operation {
 export const createFakeCoreTable = () => {
   const tables: Record<string, Map<string, Row>> = {};
   const table = (entity: string) => (tables[entity] ??= new Map());
-  const log = { transactions: 0, cancelled: 0 };
+  const log: {
+    transactions: number;
+    cancelled: number;
+    reasons: { code: string }[];
+  } = { transactions: 0, cancelled: 0, reasons: [] };
   const hooks: { beforeTransaction?: () => void } = {};
 
   const conditionFailed = () =>
@@ -89,14 +110,18 @@ export const createFakeCoreTable = () => {
     hooks.beforeTransaction?.();
     log.transactions++;
     const ids = operations.map((o) => `${o.entity} ${o.id}`);
-    const ok =
-      new Set(ids).size === ids.length &&
-      operations.every((o) => {
-        const row = table(o.entity).get(o.id);
-        if (o.kind === 'create' && row) return false;
-        if (o.kind === 'patch' && !row) return false;
-        return o.holds(row);
-      });
+    const duplicates = new Set(ids).size !== ids.length;
+    // DynamoDB's per-item cancellation reasons, as ElectroDB returns them.
+    const reasons = operations.map((o) => {
+      const row = table(o.entity).get(o.id);
+      const holds =
+        !(o.kind === 'create' && row) &&
+        !(o.kind === 'patch' && !row) &&
+        o.holds(row);
+      return { code: holds ? 'None' : 'ConditionalCheckFailed' };
+    });
+    const ok = !duplicates && reasons.every((r) => r.code === 'None');
+    log.reasons = reasons;
     if (!ok) {
       log.cancelled++;
       return false;
@@ -108,10 +133,72 @@ export const createFakeCoreTable = () => {
     return true;
   };
 
+  // A query on an instructor's partition, optionally `between` two bounds,
+  // paged by `limit` and a cursor (the last sort key returned).
+  const rangeQuery = (name: string, key: Row) => {
+    let low = '';
+    let high = '\uffff';
+    const chain: any = {
+      between: (from: Row, to: Row) => {
+        low = BOUNDS[name]!(from);
+        high = BOUNDS[name]!(to);
+        return chain;
+      },
+      go: async ({
+        cursor,
+        limit,
+      }: {
+        cursor?: string;
+        limit?: number;
+        pages?: 'all';
+      } = {}) => {
+        const sorted = [...table(name).values()]
+          .filter((row) => row.instructorId === key.instructorId)
+          .map((row) => ({ sk: SORT_KEYS[name]!(row), row }))
+          .filter(({ sk }) => sk >= low && sk <= high)
+          .sort((a, b) => (a.sk < b.sk ? -1 : 1))
+          .filter(({ sk }) => cursor === undefined || sk > cursor);
+        const page = limit === undefined ? sorted : sorted.slice(0, limit);
+        return {
+          data: page.map(({ row }) => structuredClone(row)),
+          cursor:
+            limit !== undefined && sorted.length > limit
+              ? page[page.length - 1]!.sk
+              : null,
+        };
+      },
+    };
+    return chain;
+  };
+
+  // A query on an index: the rows that match, in index order, `limit` at most.
+  const listing = (
+    name: string,
+    matches: (row: Row) => boolean,
+    order: string,
+  ) => ({
+    go: async ({ limit }: { limit?: number; pages?: 'all' } = {}) => {
+      const rows = [...table(name).values()]
+        .filter(matches)
+        .sort((a, b) =>
+          `${a[order]}#${a.entryId}` < `${b[order]}#${b.entryId}` ? -1 : 1,
+        )
+        .map((row) => structuredClone(row));
+      return { data: limit === undefined ? rows : rows.slice(0, limit) };
+    },
+  });
+
+  // An earning entry is created in its instructor's open partition.
+  const withSettlement = (name: string, item: Row): Row =>
+    name === 'earningEntry'
+      ? { ...item, settlement: `open#${item.instructorId}` }
+      : item;
+
   const entity = (name: string) => {
     const idOf = KEYS[name]!;
     const patch = (key: Row) => {
       let changes: Row = {};
+      let adds: Row = {};
       let removed: string[] = [];
       let where: ((attr: any, op: any) => string) | undefined;
       const build = (): Operation => ({
@@ -121,12 +208,19 @@ export const createFakeCoreTable = () => {
         holds: evaluate(where),
         apply: (row) => {
           const next = { ...row, ...changes };
+          // ElectroDB moves an entry to its payout's settlement key when
+          // `payoutId` is set; clearing it is the caller's `settlement`.
+          if (changes.payoutId) next.settlement = `payout#${changes.payoutId}`;
+          for (const [field, amount] of Object.entries(adds)) {
+            next[field] = (next[field] ?? 0) + (amount as number);
+          }
           for (const field of removed) delete next[field];
           return next;
         },
       });
       const chain: any = {
         set: (values: Row) => ((changes = { ...changes, ...values }), chain),
+        add: (values: Row) => ((adds = values), chain),
         remove: (names: string[]) => ((removed = names), chain),
         where: (fn: typeof where) => ((where = fn), chain),
         commit: build,
@@ -149,7 +243,7 @@ export const createFakeCoreTable = () => {
           id: idOf(item),
           kind: 'create',
           holds: () => true,
-          apply: () => ({ ...item }),
+          apply: () => withSettlement(name, { ...item }),
         }),
         go: async () => {
           const op: Operation = {
@@ -157,7 +251,7 @@ export const createFakeCoreTable = () => {
             id: idOf(item),
             kind: 'create',
             holds: () => true,
-            apply: () => ({ ...item }),
+            apply: () => withSettlement(name, { ...item }),
           };
           if (!run([op])) throw conditionFailed();
           return { data: structuredClone(item) };
@@ -178,6 +272,55 @@ export const createFakeCoreTable = () => {
         return chain;
       },
       patch,
+      delete: (key: Row) => {
+        let where: ((attr: any, op: any) => string) | undefined;
+        const build = (): Operation => ({
+          entity: name,
+          id: idOf(key),
+          kind: 'patch',
+          holds: evaluate(where),
+          apply: () => {
+            table(name).delete(idOf(key));
+            return undefined;
+          },
+        });
+        const chain: any = {
+          where: (fn: typeof where) => ((where = fn), chain),
+          commit: build,
+          go: async () => {
+            if (!run([build()])) throw conditionFailed();
+            return { data: null };
+          },
+        };
+        return chain;
+      },
+      // An update that creates the item when it is missing and adds to its
+      // numbers, as DynamoDB's ADD does.
+      update: (key: Row) => {
+        let adds: Row = {};
+        const build = (): Operation => ({
+          entity: name,
+          id: idOf(key),
+          kind: 'upsert',
+          holds: () => true,
+          apply: (row) => {
+            const next = { ...key, ...row };
+            for (const [field, amount] of Object.entries(adds)) {
+              next[field] = (next[field] ?? 0) + (amount as number);
+            }
+            return next;
+          },
+        });
+        const chain: any = {
+          add: (values: Row) => ((adds = values), chain),
+          commit: build,
+          go: async () => {
+            run([build()]);
+            return { data: structuredClone(table(name).get(idOf(key))) };
+          },
+        };
+        return chain;
+      },
       query: {
         // Orders of one student for one course, oldest first.
         byStudentCourse: ({ userId, courseId }: Row) => ({
@@ -188,13 +331,29 @@ export const createFakeCoreTable = () => {
               .map((r) => structuredClone(r)),
           }),
         }),
-        primary: () => ({
-          go: async () => ({
-            data: [...table(name).values()]
-              .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
-              .map((r) => structuredClone(r)),
-          }),
-        }),
+        bySettlement: ({ settlement }: Row) =>
+          listing(name, (row) => row.settlement === settlement, 'releaseAt'),
+        payoutsByStatus: ({ status }: Row) =>
+          listing(name, (row) => row.status === status, 'payoutId'),
+        byStatus: ({ accountId, mode, status }: Row) =>
+          listing(
+            name,
+            (row) =>
+              row.accountId === accountId &&
+              row.mode === mode &&
+              row.status === status,
+            'instructorId',
+          ),
+        primary: (key: Row) =>
+          SORT_KEYS[name]
+            ? rangeQuery(name, key)
+            : {
+                go: async () => ({
+                  data: [...table(name).values()]
+                    .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
+                    .map((r) => structuredClone(r)),
+                }),
+              },
       },
     };
   };
@@ -207,7 +366,10 @@ export const createFakeCoreTable = () => {
     entities,
     transaction: {
       write: (build: (e: typeof entities) => Operation[]) => ({
-        go: async () => ({ canceled: !run(build(entities)), data: [] }),
+        go: async () => {
+          const canceled = !run(build(entities));
+          return { canceled, data: canceled ? log.reasons : [] };
+        },
       }),
     },
   } as unknown as CoreTable;

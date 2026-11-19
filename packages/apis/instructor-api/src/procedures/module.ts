@@ -4,12 +4,10 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
-import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
   cancellationReasons,
   failedAt,
-  hasTransactionConflict,
   lessonHasDiscussion,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -21,8 +19,6 @@ import {
 } from '../helpers/ancestor-writes.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
-  courseNoLongerDraft,
-  draftCourseCheck,
   firstPublishedAt,
   initialVisibilityFields,
   isDraftCourse,
@@ -30,12 +26,9 @@ import {
   requireCourseNotArchived,
   requireNotArchived,
 } from '../helpers/curriculum-guards.js';
-import { bestEffortCancelTranscodeJobs } from '../helpers/mediaconvert-client.js';
+import { hardDeleteCurriculumNode } from '../helpers/hard-delete.js';
 import { writeAtEnd } from '../helpers/order.js';
-import {
-  bestEffortDeleteContentItemVideos,
-  bestEffortRetirePreviousVersions,
-} from '../helpers/s3-client.js';
+import { reorderChildren } from '../helpers/reorder.js';
 import { courseInstructorProcedure } from '../init.js';
 import {
   CreateModuleInputSchema,
@@ -128,124 +121,36 @@ const queryModuleDescendants = async (
 // Lessons -- and their content items -- have no lifecycle independent of
 // their module, and there's no way to reach one once its module is gone, so
 // deleting a module cascades to every lesson and content item under it.
-// Everything is deleted transactionally so a failure partway through can't
-// leave an orphaned lesson or content item referencing a module that no
-// longer exists.
-//
-// `checkedArchivedAt`, when given, is the archivedAt the caller checked: the
-// module delete is then conditioned on it being unchanged, so a restore (or a
-// restore and re-archive) landing after that check cancels the delete.
-const hardDeleteModule = async (
+const hardDeleteModule = (
   coreTable: CoreTable,
   logger: Logger | undefined,
-  courseId: string,
-  moduleId: string,
+  { courseId, moduleId }: { courseId: string; moduleId: string },
   { lessons, contentItems }: Awaited<ReturnType<typeof queryModuleDescendants>>,
-  checkedArchivedAt?: string,
-  // Set for a delete in a draft course: the delete lands only while the course
-  // is still a draft.
-  draftCourseId?: string,
-) => {
-  // Nothing currently limits how many lessons/content items a module can
-  // hold, so a module this large can't be deleted in one transactional
-  // cascade.
-  if (
-    1 +
-      lessons.length +
-      contentItems.length +
-      (draftCourseId === undefined ? 0 : 1) >
-    MAX_TRANSACTION_ITEMS
-  ) {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message:
-        'This module has too many lessons and content items to delete in one operation (the limit is 100 records). Delete some of its lessons first, then the module.',
-    });
-  }
-
-  // Each content item delete is conditioned on (as in hardDeleteLesson):
-  // - updatedAt (bumped by every write -- see the contentItem entity's
-  //   `watch: '*'`) still matching the queried snapshot, so a transcode
-  //   completing in between isn't cleaned up from stale data;
-  // - studentActivityCount = 0, checked directly rather than through
-  //   updatedAt: a millisecond-precision timestamp can come out the same
-  //   for a write in the same millisecond (or from another machine's
-  //   clock), and student data must never be deleted.
-  const { canceled, data: transactionResults } = await coreTable.transaction
-    .write((entities) => [
+  options: { checkedArchivedAt?: string; draftCourseId?: string },
+) =>
+  hardDeleteCurriculumNode(coreTable, logger, {
+    courseId,
+    moduleId,
+    deleteNode: (entities, checkedArchivedAt) =>
       checkedArchivedAt === undefined
         ? entities.module.delete({ courseId, moduleId }).commit()
         : entities.module
             .delete({ courseId, moduleId })
             .where((attr, op) => op.eq(attr.archivedAt, checkedArchivedAt))
             .commit(),
-      ...lessons.map(({ lessonId }) =>
-        entities.lesson.delete({ courseId, moduleId, lessonId }).commit(),
-      ),
-      ...contentItems.map((item) =>
-        entities.contentItem
-          .delete({
-            courseId,
-            moduleId,
-            lessonId: item.lessonId,
-            contentItemId: item.contentItemId,
-          })
-          .where(
-            (attr, op) =>
-              `${op.eq(attr.updatedAt, item.updatedAt)} AND ${op.eq(attr.studentActivityCount, 0)}`,
-          )
-          .commit(),
-      ),
-      ...(draftCourseId === undefined
-        ? []
-        : [draftCourseCheck(entities, draftCourseId)]),
-    ])
-    .go();
-
-  if (canceled) {
-    // The module is the transaction's first item.
-    const results = cancellationReasons(transactionResults);
-    // The draft check, when there is one, is its last.
-    if (draftCourseId !== undefined && failedAt(results, results.length - 1)) {
-      throw courseNoLongerDraft();
-    }
-    if (failedAt(results, 0)) {
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message:
-          'The module was restored or changed while it was being deleted; nothing was deleted',
-      });
-    }
-    const staleContentItem = failedAt(results, 1, results.length);
-    // Another transaction touching the same records at that moment.
-    if (!staleContentItem && hasTransactionConflict(results)) {
-      throw transactionConflict();
-    }
-    throw new TRPCError({
-      code: staleContentItem ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
-      message: staleContentItem
-        ? 'A content item in this module changed while it was being deleted; retry the delete'
-        : 'Failed to delete module',
-    });
-  }
-
-  // Best-effort: the DynamoDB records are the source of truth for the
-  // module's content, so a failure to remove the underlying S3 objects is
-  // logged rather than thrown. Video and file items have S3 objects to
-  // clean up (and a video possibly a still-running transcode job); a file's
-  // sits in a version folder the same cleanup retires (#102).
-  const videoContentItems = contentItems.filter(
-    (item) => item.type === 'video',
-  );
-  await bestEffortCancelTranscodeJobs(logger, videoContentItems);
-  await bestEffortDeleteContentItemVideos(
-    logger,
-    contentItems.filter(
-      (item) => item.type === 'video' || item.type === 'file',
-    ),
-  );
-  await bestEffortRetirePreviousVersions(logger, videoContentItems);
-};
+    lessons,
+    contentItems,
+    ...options,
+    messages: {
+      tooMany:
+        'This module has too many lessons and content items to delete in one operation (the limit is 100 records). Delete some of its lessons first, then the module.',
+      restoredOrChanged:
+        'The module was restored or changed while it was being deleted; nothing was deleted',
+      contentItemChanged:
+        'A content item in this module changed while it was being deleted; retry the delete',
+      failed: 'Failed to delete module',
+    },
+  });
 
 export const createModule = courseInstructorProcedure(CreateModuleInputSchema)
   .output(CreateModuleOutputSchema)
@@ -314,11 +219,9 @@ export const deleteModule = courseInstructorProcedure(DeleteModuleInputSchema)
       await hardDeleteModule(
         coreTable,
         ctx.logger,
-        courseId,
-        moduleId,
+        { courseId, moduleId },
         await queryModuleDescendants(coreTable, courseId, moduleId),
-        undefined,
-        courseId,
+        { draftCourseId: courseId },
       );
       // Transactions don't return the deleted attributes.
       return existing;
@@ -602,10 +505,9 @@ export const deleteModulePermanently = courseInstructorProcedure(
     await hardDeleteModule(
       coreTable,
       ctx.logger,
-      courseId,
-      moduleId,
+      { courseId, moduleId },
       descendants,
-      existing.archivedAt,
+      { checkedArchivedAt: existing.archivedAt },
     );
 
     return existing;
@@ -637,61 +539,31 @@ export const reorderModules = courseInstructorProcedure(
 
     await requireActiveCourse(coreTable, courseId);
 
-    if (new Set(moduleIds).size !== moduleIds.length) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'A module can only appear once in the new order',
-      });
-    }
-
-    // Every page, so no module is missed.
-    const readModules = async () => {
-      const { data } = await coreTable.entities.module.query
-        .primary({ courseId })
-        .go({ pages: 'all' });
-      return data.filter((module) => !module.archivedAt);
-    };
-    const modules = await readModules();
-    const byId = new Map(modules.map((module) => [module.moduleId, module]));
-    if (
-      byId.size !== moduleIds.length ||
-      moduleIds.some((id) => !byId.has(id))
-    ) {
-      throw courseModulesChanged();
-    }
-
-    // The transaction also carries the check on the course.
-    if (1 + moduleIds.length > MAX_TRANSACTION_ITEMS) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: `This course has too many modules to reorder in one operation (the limit is ${MAX_TRANSACTION_ITEMS - 1}).`,
-      });
-    }
-
-    const unchanged = moduleIds.every(
-      (id, index) => byId.get(id)?.order === index + 1,
-    );
-    if (!unchanged) {
+    return reorderChildren({
+      ids: moduleIds,
+      // Every page, so no module is missed.
+      readActive: async () => {
+        const { data } = await coreTable.entities.module.query
+          .primary({ courseId })
+          .go({ pages: 'all' });
+        return data.filter((module) => !module.archivedAt);
+      },
+      idOf: (module) => module.moduleId,
       // Each module is conditioned on still not being archived, so one
-      // archived after the read above is never moved: the whole reorder is
-      // refused.
-      await writeInActiveCourse(
-        coreTable,
-        courseId,
-        (entities) =>
-          moduleIds.map((moduleId, index) =>
-            entities.module
-              .patch({ courseId, moduleId })
-              .set({ order: index + 1 })
-              .where((attr, op) => op.notExists(attr.archivedAt))
-              .commit(),
-          ),
-        () => {
-          throw courseModulesChanged();
-        },
-      );
-    }
-
-    // Transactions don't return the written attributes.
-    return (await readModules()).sort((a, b) => a.order - b.order);
+      // archived after the read is never moved: the whole reorder is refused.
+      patch: (entities, moduleId, order) =>
+        entities.module
+          .patch({ courseId, moduleId })
+          .set({ order })
+          .where((attr, op) => op.notExists(attr.archivedAt))
+          .commit(),
+      write: (writes, onChanged) =>
+        writeInActiveCourse(coreTable, courseId, writes, onChanged),
+      // The transaction also carries the check on the course.
+      checkCount: 1,
+      duplicateMessage: 'A module can only appear once in the new order',
+      tooManyMessage: (limit) =>
+        `This course has too many modules to reorder in one operation (the limit is ${limit}).`,
+      changedError: courseModulesChanged,
+    });
   });

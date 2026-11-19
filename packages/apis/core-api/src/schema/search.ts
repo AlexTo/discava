@@ -86,3 +86,25 @@ export const SearchCoursesOutputSchema = z.object({
 });
 
 export type ISearchCoursesOutput = z.output<typeof SearchCoursesOutputSchema>;
+
+// Suggestions as the user types (the top bar's search box): a prefix match
+// on titles only, so the text must be long enough to be worth a request.
+export const SuggestCoursesInputSchema = z.object({
+  q: z.string().trim().min(3).max(200),
+});
+
+export type ISuggestCoursesInput = z.output<typeof SuggestCoursesInputSchema>;
+
+export const SuggestCoursesOutputSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        courseId: z.string(),
+        title: z.string(),
+        imageKey: z.string().optional(),
+      }),
+    )
+    .max(10),
+});
+
+export type ISuggestCoursesOutput = z.output<typeof SuggestCoursesOutputSchema>;

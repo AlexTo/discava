@@ -25,6 +25,7 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_LESSON_MEDIA_DOMAIN_NAMES',
   'DISCAVA_TEST_STAGE_INFRA_UNKNOWN_FIELD',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT',
+  'DISCAVA_TEST_STAGE_INFRA_CORE_API_PUBLIC_SUGGEST_THROTTLE_RATE_LIMIT',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL',
   'DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY',
   'DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS',
@@ -33,6 +34,8 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_STREAM_ROUTER_ENABLE_KEY_ROTATION',
   'DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_FROM_ADDRESS',
   'DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_SES_IDENTITY',
+  'DISCAVA_TEST_STAGE_INFRA_PAYMENTS_DOMAIN_NAME',
+  'DISCAVA_TEST_STAGE_INFRA_PAYMENTS_ENABLE_WAF',
 ];
 
 afterEach(() => {
@@ -40,6 +43,17 @@ afterEach(() => {
 });
 
 describe('applyEnvOverrides', () => {
+  it('overrides the payments (Stripe webhook) component', () => {
+    process.env.DISCAVA_TEST_STAGE_INFRA_PAYMENTS_DOMAIN_NAME =
+      'payments.example.com';
+    process.env.DISCAVA_TEST_STAGE_INFRA_PAYMENTS_ENABLE_WAF = 'false';
+
+    expect(applyEnvOverrides(STAGE, {}).infra?.payments).toEqual({
+      domainName: 'payments.example.com',
+      enableWaf: false,
+    });
+  });
+
   it('returns base config unchanged when no override env vars are set', () => {
     const base: StageConfig = {
       region: 'ap-southeast-2',
@@ -114,6 +128,8 @@ describe('applyEnvOverrides', () => {
 
   it('overrides the limit settings: numbers, log levels and self sign-up', () => {
     process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT = ' 25 ';
+    process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_PUBLIC_SUGGEST_THROTTLE_RATE_LIMIT =
+      '7';
     process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL = 'WARN';
     process.env.DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY =
       '5';
@@ -129,6 +145,7 @@ describe('applyEnvOverrides', () => {
       infra: {
         coreApi: {
           throttleRateLimit: 25,
+          publicSuggestThrottleRateLimit: 7,
           logLevel: 'WARN',
           enableTracing: false,
         },

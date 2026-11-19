@@ -51,6 +51,8 @@ type Operations = Procedures<AppRouter>;
 // Cognito authorizer. core-api declares them next to its router, where a test
 // checks the list against how each procedure treats an anonymous caller.
 const PUBLIC: ReadonlySet<Operations> = new Set<Operations>(PUBLIC_OPERATIONS);
+// Has a throttle of its own, `publicSuggestThrottle`.
+const SUGGEST_OPERATION = 'course.publicSuggest' satisfies Operations;
 
 /**
  * Operations served by a dedicated function instead of the shared router,
@@ -71,6 +73,9 @@ export const CORE_API_DEDICATED_FUNCTIONS = {
   // Scheduler rights, to hand out upload links and copy the file into the
   // lesson media bucket
   AssignmentSubmit: ['assignment.uploadUrl', 'assignment.submit'],
+  // Starts a paid checkout: the only core-api function that reads the Stripe
+  // API key
+  PaymentsCheckout: ['payment.checkout'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 /**
@@ -171,6 +176,14 @@ export interface CoreApiProps<
    * @default `throttle`
    */
   publicThrottle?: ThrottleSettings;
+  /**
+   * Requests per second (and burst) API Gateway lets through to
+   * `course.publicSuggest`, the search box's suggestions, which fire on every
+   * typing pause. Every other public operation keeps `publicThrottle`.
+   *
+   * @default `publicThrottle`
+   */
+  publicSuggestThrottle?: ThrottleSettings;
   /**
    * Routes beside the router's operations. CORS is restricted like the rest
    * of the API's.
@@ -280,6 +293,7 @@ export class CoreApi<
       certificate,
       enableTracing = true,
       publicThrottle,
+      publicSuggestThrottle,
       extraRoutes = [],
       ...props
     }: CoreApiProps<TIntegrations>,
@@ -310,13 +324,20 @@ export class CoreApi<
               ...extraRoutes
                 .filter((route) => route.public)
                 .map((route) => `/${route.path}/${route.method}`),
-            ].map((key) => [
-              key,
-              {
-                throttlingRateLimit: publicThrottle.rateLimit,
-                throttlingBurstLimit: publicThrottle.burstLimit,
-              },
-            ]),
+            ].map((key) => {
+              const throttle =
+                key ===
+                `/${SUGGEST_OPERATION}/${operations[SUGGEST_OPERATION].method}`
+                  ? (publicSuggestThrottle ?? publicThrottle)
+                  : publicThrottle;
+              return [
+                key,
+                {
+                  throttlingRateLimit: throttle.rateLimit,
+                  throttlingBurstLimit: throttle.burstLimit,
+                },
+              ];
+            }),
           ),
         }),
       },

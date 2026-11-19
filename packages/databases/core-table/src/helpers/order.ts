@@ -4,6 +4,7 @@
  */
 import { v7 as uuidv7 } from 'uuid';
 import type { OrderRefundReason, OrderStatus } from '../entities/order.js';
+import type { PaymentMode } from '../entities/payment-connection.js';
 import type { createCoreTableService } from '../service.js';
 import { InvalidRequestError, NotFoundError } from './errors.js';
 
@@ -26,6 +27,7 @@ export interface OrderRecord {
   userId: string;
   courseId: string;
   accountId: string;
+  mode: PaymentMode;
   courseTitle: string;
   listAmount: number;
   amount: number;
@@ -53,6 +55,7 @@ export interface OrderCourse {
 export interface OrderConnection {
   status: string;
   accountId?: string;
+  mode?: PaymentMode;
   latestCheckoutExpiresAt?: string;
 }
 
@@ -109,7 +112,8 @@ export const startOrder = async ({
     if (
       !connection ||
       connection.status !== 'active' ||
-      !connection.accountId
+      !connection.accountId ||
+      !connection.mode
     ) {
       throw new PaymentsUnavailableError();
     }
@@ -119,6 +123,7 @@ export const startOrder = async ({
       userId,
       courseId: course.courseId,
       accountId: connection.accountId,
+      mode: connection.mode,
       courseTitle: course.title,
       listAmount: course.priceAmount,
       amount: course.priceAmount,
