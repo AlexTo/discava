@@ -5,76 +5,28 @@
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { myQuizAttempts, submitQuizAttempt, viewQuiz } from './quiz.js';
+import {
+  allCorrect,
+  cancelledWith,
+  db,
+  entities,
+  existingSummary,
+  installDefaults,
+  itemOf,
+  quizItem,
+  ref,
+  SECRET_EXPLANATION,
+  TransactionItem,
+  transactionEntity,
+  transactions,
+  USER_SUB,
+  withSettings,
+} from './quiz.fixtures.js';
+import { submitQuizAttempt } from './quiz.js';
 
-// What the mocked table holds for this test; each entity's `get` reads it.
-const { db, transactionGo, attemptQuery } = vi.hoisted(() => ({
-  db: {} as Record<string, any>,
-  transactionGo: vi.fn(),
-  attemptQuery: vi.fn(),
-}));
-
-// A transaction item as the procedure built it: the entity, the operation, its
-// key or data, and its condition rendered as a string, e.g.
-// "visibility = visible AND notExists(archivedAt)".
-interface TransactionItem {
-  entity: string;
-  op: 'check' | 'update' | 'patch' | 'create';
-  key?: Record<string, unknown>;
-  data?: Record<string, unknown>;
-  set?: Record<string, unknown>;
-  add?: Record<string, unknown>;
-  condition?: string;
-}
-
-const attr = new Proxy({}, { get: (_, name) => name });
-const ops = {
-  eq: (name: string, value: unknown) => `${name} = ${value}`,
-  ne: (name: string, value: unknown) => `${name} <> ${value}`,
-  lte: (name: string, value: unknown) => `${name} <= ${value}`,
-  exists: (name: string) => `exists(${name})`,
-  notExists: (name: string) => `notExists(${name})`,
-};
-
-const transactionEntity = (entity: string) => {
-  const chain = (item: TransactionItem) => ({
-    set: (set: Record<string, unknown>) => chain({ ...item, set }),
-    add: (add: Record<string, unknown>) => chain({ ...item, add }),
-    where: (build: (a: unknown, o: typeof ops) => string) =>
-      chain({ ...item, condition: build(attr, ops) }),
-    commit: () => item,
-  });
-  return {
-    check: (key: Record<string, unknown>) =>
-      chain({ entity, op: 'check', key }),
-    update: (key: Record<string, unknown>) =>
-      chain({ entity, op: 'update', key }),
-    patch: (key: Record<string, unknown>) =>
-      chain({ entity, op: 'patch', key }),
-    create: (data: Record<string, unknown>) =>
-      chain({ entity, op: 'create', data }),
-  };
-};
-
-const stored = (name: string) => ({
-  get: vi.fn(() => ({
-    go: vi.fn(async () => ({ data: db[name] ?? null })),
-  })),
-});
-
-const entities = {
-  course: stored('course'),
-  module: stored('module'),
-  lesson: stored('lesson'),
-  contentItem: stored('contentItem'),
-  enrolment: stored('enrolment'),
-  quizSummary: stored('quizSummary'),
-  itemCompletion: stored('itemCompletion'),
-  quizAttempt: { query: { primary: attemptQuery } },
-};
-
-// Every transaction written, in order, as its list of items.
-const transactions: TransactionItem[][] = [];
+const { transactionGo } = await vi.hoisted(
+  async () => (await import('./quiz.fixtures.js')).spies,
+);
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
@@ -104,216 +56,15 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
 }));
 
 const router = t.router({
-  view: viewQuiz,
   submitAttempt: submitQuizAttempt,
-  myAttempts: myQuizAttempts,
 });
 
-const USER_SUB = 'student-1';
-
 const callAsUser = () => callerFor(router, { sub: USER_SUB });
-
-const callAnonymously = () => callerFor(router);
-
-const ref = {
-  courseId: 'course-1',
-  moduleId: 'module-1',
-  lessonId: 'lesson-1',
-  contentItemId: 'quiz-1',
-};
-
-const prompt = (text: string) =>
-  JSON.stringify({
-    type: 'doc',
-    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
-  });
-
-const SECRET_EXPLANATION = prompt('Fargate runs containers serverlessly');
-
-// q1 is single choice (b is right); q2 is multiple choice (a and c are).
-const quizItem = {
-  ...ref,
-  type: 'quiz' as const,
-  status: 'ready' as const,
-  title: 'Module 1 check',
-  order: 1,
-  visibility: 'visible' as const,
-  studentActivityCount: 0,
-  questions: [
-    {
-      questionId: 'q1',
-      kind: 'single',
-      prompt: prompt('Which service runs containers without servers?'),
-      options: [
-        { optionId: 'a', text: 'EC2' },
-        { optionId: 'b', text: 'Fargate' },
-      ],
-    },
-    {
-      questionId: 'q2',
-      kind: 'multiple',
-      prompt: prompt('Which are serverless?'),
-      options: [
-        { optionId: 'a', text: 'Lambda' },
-        { optionId: 'b', text: 'EC2' },
-        { optionId: 'c', text: 'Fargate' },
-      ],
-    },
-  ],
-  answerKey: {
-    q1: { correctOptionIds: ['b'], explanation: SECRET_EXPLANATION },
-    q2: { correctOptionIds: ['a', 'c'] },
-  },
-  settings: {
-    passMarkPercent: 50,
-    attemptsAllowed: 3,
-    shuffleOptions: false,
-    revealAnswers: 'after_each_attempt',
-  },
-  quizVersion: 4,
-  questionsHash: 'hash-4',
-  createdAt: '2024-01-01T00:00:00.000Z',
-  updatedAt: '2024-01-02T00:00:00.000Z',
-};
-
-const allCorrect = { q1: ['b'], q2: ['a', 'c'] };
 
 const submit = (answers: Record<string, string[]>, questionsHash = 'hash-4') =>
   callAsUser().submitAttempt({ ...ref, questionsHash, answers });
 
-const withSettings = (settings: Partial<typeof quizItem.settings>) => {
-  db.contentItem = {
-    ...quizItem,
-    settings: { ...quizItem.settings, ...settings },
-  };
-};
-
-const existingSummary = (summary: Record<string, unknown>) => {
-  db.quizSummary = {
-    userId: USER_SUB,
-    courseId: 'course-1',
-    contentItemId: 'quiz-1',
-    moduleId: 'module-1',
-    lessonId: 'lesson-1',
-    attemptsUsed: 1,
-    bestScore: 50,
-    bestAttemptId: 'attempt-0',
-    ...summary,
-  };
-};
-
-const cancelledWith = (codes: string[]) => ({
-  canceled: true,
-  data: codes.map((code) => ({ code })),
-});
-
-const itemOf = (transaction: TransactionItem[], entity: string) =>
-  transaction.find((item) => item.entity === entity)!;
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  transactions.length = 0;
-  for (const key of Object.keys(db)) {
-    delete db[key];
-  }
-  db.course = { courseId: 'course-1', title: 'AWS', status: 'published' };
-  db.module = { ...ref, visibility: 'visible' };
-  db.lesson = { ...ref, visibility: 'visible' };
-  db.contentItem = quizItem;
-  db.enrolment = {
-    courseId: 'course-1',
-    userId: USER_SUB,
-    status: 'active',
-    progressPercent: 0,
-    createdAt: '2024-01-02T00:00:00.000Z',
-    updatedAt: '2024-01-02T00:00:00.000Z',
-  };
-  transactionGo.mockResolvedValue({ canceled: false, data: [] });
-  attemptQuery.mockReturnValue({
-    go: vi.fn().mockResolvedValue({ data: [], cursor: null }),
-  });
-});
-
-// The access rules every quiz procedure shares.
-describe.each([
-  ['view', () => callAsUser().view(ref)],
-  ['submitAttempt', () => submit(allCorrect)],
-  ['myAttempts', () => callAsUser().myAttempts(ref)],
-] as const)('%s access', (name, call) => {
-  it('rejects unauthenticated callers', async () => {
-    const anonymous = callAnonymously();
-    await expect(
-      name === 'submitAttempt'
-        ? anonymous.submitAttempt({
-            ...ref,
-            questionsHash: 'hash-4',
-            answers: {},
-          })
-        : anonymous[name](ref),
-    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
-  });
-
-  it('is FORBIDDEN without an enrolment in a published course', async () => {
-    db.enrolment = null;
-    await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(transactions).toHaveLength(0);
-  });
-
-  it('is FORBIDDEN with a dropped enrolment', async () => {
-    db.enrolment = { ...db.enrolment, status: 'dropped' };
-    await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  });
-
-  it('is NOT_FOUND without an enrolment in a course that isn’t published', async () => {
-    db.enrolment = null;
-    db.course = { ...db.course, status: 'draft' };
-    await expect(call()).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  });
-
-  it.each([
-    ['the quiz is hidden', () => (db.contentItem.visibility = 'hidden')],
-    ['the quiz is archived', () => (db.contentItem.archivedAt = 'x')],
-    ['its lesson is hidden', () => (db.lesson.visibility = 'hidden')],
-    ['its lesson is archived', () => (db.lesson.archivedAt = 'x')],
-    ['its module is hidden', () => (db.module.visibility = 'hidden')],
-    ['its module is archived', () => (db.module.archivedAt = 'x')],
-    ['it doesn’t exist', () => (db.contentItem = null)],
-    ['it isn’t a quiz', () => (db.contentItem.type = 'text')],
-  ])('is NOT_FOUND when %s', async (_, change) => {
-    db.contentItem = { ...quizItem };
-    db.module = { ...db.module };
-    db.lesson = { ...db.lesson };
-    change();
-    await expect(call()).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
-    expect(transactions).toHaveLength(0);
-  });
-});
-
-describe('view', () => {
-  // Invariant: the answer key never leaks through quiz.view.
-  it('returns the questions and settings without the answer key', async () => {
-    const result = await callAsUser().view(ref);
-
-    expect(result).toMatchObject({
-      ...ref,
-      title: 'Module 1 check',
-      questions: quizItem.questions,
-      settings: quizItem.settings,
-      quizVersion: 4,
-      questionsHash: 'hash-4',
-    });
-    expect(result).not.toHaveProperty('answerKey');
-    expect(JSON.stringify(result)).not.toContain('correctOptionIds');
-    expect(JSON.stringify(result)).not.toContain(SECRET_EXPLANATION);
-  });
-
-  it('still shows the quiz to an enrolled student once the course is archived', async () => {
-    db.course = { ...db.course, status: 'archived' };
-    await expect(callAsUser().view(ref)).resolves.toMatchObject(ref);
-  });
-});
+beforeEach(installDefaults);
 
 describe('submitAttempt', () => {
   // Invariant: the first attempt counts the student once on the quiz, and
@@ -904,112 +655,5 @@ describe('submitAttempt', () => {
       expect(completionIn(transactions[0])).toBeDefined();
       expect(completionIn(transactions[1])).toBeUndefined();
     });
-  });
-});
-
-describe('myAttempts', () => {
-  const storedAttempt = {
-    userId: USER_SUB,
-    ...ref,
-    attemptId: 'attempt-0',
-    answers: { q1: ['b'] },
-    correctQuestionIds: ['q1'],
-    scorePercent: 50,
-    passed: true,
-    quizVersion: 4,
-    questionsHash: 'hash-4',
-    submittedAt: '2024-02-01T00:00:00.000Z',
-  };
-
-  it('returns the caller’s summary and attempts, with the answers once revealed', async () => {
-    existingSummary({ passedAt: '2024-02-01T00:00:00.000Z' });
-    attemptQuery.mockReturnValue({
-      go: vi
-        .fn()
-        .mockResolvedValue({ data: [storedAttempt], cursor: 'next-page' }),
-    });
-
-    const result = await callAsUser().myAttempts(ref);
-
-    expect(attemptQuery).toHaveBeenCalledWith({
-      userId: USER_SUB,
-      courseId: 'course-1',
-      contentItemId: 'quiz-1',
-    });
-    expect(result).toEqual({
-      summary: {
-        attemptsUsed: 1,
-        attemptsAllowed: 3,
-        bestScore: 50,
-        bestAttemptId: 'attempt-0',
-        passedAt: '2024-02-01T00:00:00.000Z',
-      },
-      attempts: {
-        items: [
-          {
-            attemptId: 'attempt-0',
-            answers: { q1: ['b'] },
-            correctQuestionIds: ['q1'],
-            scorePercent: 50,
-            passed: true,
-            quizVersion: 4,
-            questionsHash: 'hash-4',
-            submittedAt: '2024-02-01T00:00:00.000Z',
-          },
-        ],
-        cursor: 'next-page',
-      },
-      reveal: {
-        q1: { correctOptionIds: ['b'], explanation: SECRET_EXPLANATION },
-        q2: { correctOptionIds: ['a', 'c'] },
-      },
-    });
-  });
-
-  it('returns no summary, attempts or reveal before the first attempt', async () => {
-    await expect(callAsUser().myAttempts(ref)).resolves.toEqual({
-      summary: null,
-      attempts: { items: [], cursor: null },
-      reveal: null,
-    });
-  });
-
-  // Invariant: the history is read a page at a time, since with unlimited
-  // attempts it has no bound.
-  it('reads one page of attempts, latest first, 10 by default', async () => {
-    await callAsUser().myAttempts(ref);
-
-    expect(attemptQuery.mock.results[0].value.go).toHaveBeenCalledWith({
-      cursor: undefined,
-      limit: 10,
-      order: 'desc',
-    });
-  });
-
-  it('reads the page the cursor names, with the limit asked for', async () => {
-    await callAsUser().myAttempts({ ...ref, cursor: 'page-2', limit: 25 });
-
-    expect(attemptQuery.mock.results[0].value.go).toHaveBeenCalledWith({
-      cursor: 'page-2',
-      limit: 25,
-      order: 'desc',
-    });
-  });
-
-  it('is a BAD_REQUEST for a page of more than 100 attempts', async () => {
-    await expect(
-      callAsUser().myAttempts({ ...ref, limit: 101 }),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(attemptQuery).not.toHaveBeenCalled();
-  });
-
-  it('doesn’t reveal the answers the settings hold back', async () => {
-    existingSummary({});
-    withSettings({ revealAnswers: 'after_final_attempt' });
-
-    const result = await callAsUser().myAttempts(ref);
-
-    expect(result.reveal).toBeNull();
-    expect(JSON.stringify(result)).not.toContain(SECRET_EXPLANATION);
   });
 });
