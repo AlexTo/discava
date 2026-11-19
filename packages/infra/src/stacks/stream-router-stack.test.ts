@@ -6,7 +6,7 @@
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { synth } from './stack-test-fixture.js';
+import { synth, tableFunctionsMissingAppConfig } from './stack-test-fixture.js';
 
 describe('search indexing (#53)', () => {
   const stack = synth({});
@@ -40,5 +40,13 @@ describe('search indexing (#53)', () => {
     expect(actions).not.toContain('dynamodb:PutItem');
     expect(actions).not.toContain('dynamodb:UpdateItem');
     expect(actions).not.toContain('dynamodb:DeleteItem');
+  });
+});
+
+describe('runtime config (#619)', () => {
+  it('gives every function that uses the core table the AppConfig application id and read access', () => {
+    expect(tableFunctionsMissingAppConfig(synth({})('StreamRouter'))).toEqual(
+      [],
+    );
   });
 });

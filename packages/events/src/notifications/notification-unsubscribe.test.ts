@@ -7,6 +7,17 @@
 import type { UnsubscribeDeps } from '@discava/common-server-utils/unsubscribe';
 import { signUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const createCoreTableService = vi.hoisted(() =>
+  vi.fn(async () => {
+    throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
+  }),
+);
+vi.mock('@discava/core-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@discava/core-table')>()),
+  createCoreTableService,
+}));
+
 import { notificationUnsubscribe } from './notification-unsubscribe.js';
 
 const SECRET = 'secret-1';
@@ -78,6 +89,16 @@ describe('notificationUnsubscribe', () => {
     expect(result.statusCode).toBe(404);
     expect(JSON.parse(result.body)).toEqual({ error: 'invalid' });
     expect(setEmailEnabled).not.toHaveBeenCalled();
+  });
+
+  it('refuses a forged token with 404 before any table access', async () => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    const result = await notificationUnsubscribe(
+      event({ httpMethod: 'GET', pathParameters: { token: 'bogus.token' } }),
+    );
+    expect(result.statusCode).toBe(404);
+    expect(JSON.parse(result.body)).toEqual({ error: 'invalid' });
+    expect(createCoreTableService).not.toHaveBeenCalled();
   });
 
   it('answers a missing path parameter with 404', async () => {

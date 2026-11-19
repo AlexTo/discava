@@ -50,18 +50,20 @@ const course = (
   courseId: string,
   title: string,
   status: 'draft' | 'published' | 'archived',
+  updatedAt = '2026-03-04T10:00:00.000Z',
 ) => ({
   courseId,
   title,
   description: '',
   imageKey: undefined,
   status,
+  updatedAt,
 });
 
 // The page itself reads from core-api, but also renders CreateCourseDialog,
 // which calls useInstructorApi() as soon as it mounts (to set up its create
 // mutation) even before it's opened, so both APIs need a context here.
-const renderPage = (coreHandlers = {}) => {
+const renderPage = (coreHandlers = {}, instructorHandlers = {}) => {
   const calls: { path: string; input: unknown }[] = [];
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -78,7 +80,7 @@ const renderPage = (coreHandlers = {}) => {
     links: [
       httpLink({
         url: 'http://instructor-api.test/',
-        fetch: fakeTrpcFetch({}, []),
+        fetch: fakeTrpcFetch(instructorHandlers, []),
       }),
     ],
   });
@@ -115,6 +117,16 @@ const renderPage = (coreHandlers = {}) => {
 
 beforeEach(() => {
   linkProps.length = 0;
+});
+
+const summary = (courseId: string, enrolments: number) => ({
+  courseId,
+  title: courseId,
+  status: 'published' as const,
+  enrolments,
+  activeThisWeek: 0,
+  completionRate: null,
+  updatedAt: null,
 });
 
 describe('My courses', () => {
@@ -245,5 +257,87 @@ describe('My courses', () => {
       to: '/my-courses/$courseId',
       params: { courseId: 'c1' },
     });
+  });
+
+  it('shows each course its own enrolments and updated date, with no invented figures', async () => {
+    renderPage(
+      {
+        'course.listByInstructor': () => ({
+          items: [
+            course(
+              'c1',
+              'Intro to DynamoDB',
+              'published',
+              '2026-03-04T10:00:00.000Z',
+            ),
+            course(
+              'c2',
+              'Advanced Queries',
+              'published',
+              '2026-05-20T10:00:00.000Z',
+            ),
+          ],
+          cursor: null,
+        }),
+      },
+      {
+        'analytics.courseSummaries': () => [
+          summary('c1', 12),
+          summary('c2', 40),
+        ],
+      },
+    );
+
+    const first = (await screen.findByText('Intro to DynamoDB')).closest(
+      '[data-slot="card"]',
+    );
+    const second = screen
+      .getByText('Advanced Queries')
+      .closest('[data-slot="card"]');
+    await waitFor(() => expect(first).toHaveTextContent('12'));
+    expect(second).toHaveTextContent('40');
+    expect(first).toHaveTextContent('4 Mar 2026');
+    expect(second).toHaveTextContent('20 May 2026');
+    for (const invented of [
+      'Semester 2, 2026',
+      'Course content coming soon',
+      'Updated recently',
+      'Ungraded',
+      'Modules',
+    ]) {
+      expect(screen.queryByText(invented)).not.toBeInTheDocument();
+    }
+  });
+
+  it("counts the summary cards from the courses' statuses", async () => {
+    renderPage(
+      {
+        'course.listByInstructor': () => ({
+          items: [
+            course('c1', 'One', 'published'),
+            course('c2', 'Two', 'published'),
+            course('c3', 'Three', 'draft'),
+            course('c4', 'Four', 'archived'),
+            course('c5', 'Five', 'draft'),
+            course('c6', 'Six', 'draft'),
+          ],
+          cursor: null,
+        }),
+      },
+      {
+        'analytics.courseSummaries': () => [summary('c1', 5), summary('c2', 7)],
+      },
+    );
+
+    const summaryCards = await screen.findByLabelText('Course summary');
+    await waitFor(() =>
+      expect(summaryCards).toHaveTextContent('12 enrolments in total'),
+    );
+    const card = (label: string) =>
+      screen.getByText(label).closest('[data-slot="card"]');
+    expect(card('Active courses')).toHaveTextContent('2');
+    expect(card('Draft courses')).toHaveTextContent('3');
+    expect(card('Archived courses')).toHaveTextContent('1');
+    expect(screen.queryByText('Awaiting grading')).not.toBeInTheDocument();
   });
 });

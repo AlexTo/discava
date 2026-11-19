@@ -45,6 +45,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/earnings/payout-run.ts",
+        "name": "payout-run",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/progress/progress-recalculation.ts",
         "name": "progress-recalculation",
         "iac": "cdk"

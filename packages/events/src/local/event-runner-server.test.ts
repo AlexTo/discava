@@ -65,6 +65,7 @@ describe('startEventRunnerServer', () => {
       stripeWebhook: vi.fn(async (_body: Buffer, signature?: string) => ({
         status: signature === 't=1,v1=good' ? 200 : 400,
       })),
+      runPayoutRun: vi.fn(async () => ({ sent: 1, failed: 0, recovered: 0 })),
       failFeature: vi.fn((feature: string, batches: number) =>
         feature === 'search-indexing' ? batches : undefined,
       ),
@@ -260,6 +261,61 @@ describe('startEventRunnerServer', () => {
 
     expect(redrive.status).toBe(404);
     expect(fail.status).toBe(404);
+  });
+
+  describe('POST /payout-run', () => {
+    it('runs the payout run once and answers its result', async () => {
+      const { handlers, url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/payout-run'), { method: 'POST' });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        sent: 1,
+        failed: 0,
+        recovered: 0,
+      });
+      expect(handlers.runPayoutRun).toHaveBeenCalledWith({
+        graceMs: undefined,
+      });
+    });
+
+    it('passes graceSeconds on as the recovery grace', async () => {
+      const { handlers, url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      await fetch(url('/payout-run'), {
+        method: 'POST',
+        ...json({ graceSeconds: 0 }),
+      });
+
+      expect(handlers.runPayoutRun).toHaveBeenCalledWith({ graceMs: 0 });
+    });
+
+    it.each([-1, 'soon'])('refuses a graceSeconds of %s', async (value) => {
+      const { handlers, url } = start();
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/payout-run'), {
+        method: 'POST',
+        ...json({ graceSeconds: value }),
+      });
+
+      expect(response.status).toBe(400);
+      expect(handlers.runPayoutRun).not.toHaveBeenCalled();
+    });
+
+    it('answers 500 with the message when the run throws', async () => {
+      const { handlers, url } = start();
+      handlers.runPayoutRun.mockRejectedValueOnce(new Error('run failed'));
+      await new Promise((resolve) => server!.once('listening', resolve));
+
+      const response = await fetch(url('/payout-run'), { method: 'POST' });
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ message: 'run failed' });
+    });
   });
 
   describe('POST /router/fail/{feature}', () => {
