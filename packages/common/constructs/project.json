@@ -35,7 +35,11 @@
         "@discava/admin-portal:build",
         "@discava/instructor-api:build",
         "@discava/admin-api:build",
-        "@discava/search:build"
+        "@discava/search:build",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
       ]
     },
     "compile": {

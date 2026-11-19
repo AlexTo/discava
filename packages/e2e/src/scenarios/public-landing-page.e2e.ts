@@ -3,57 +3,134 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
-import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
+import {
+  addLesson,
+  addModule,
+  addTextItem,
+  createCourse,
+  publishCourse,
+} from '../helpers/instructor-portal.js';
+import { PORTALS } from '../helpers/portals.js';
+import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { uniqueName } from '../helpers/users.js';
+import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
-// The public course page shows what a visitor needs to decide: outcomes,
-// requirements and who teaches. A course that is archived is not found for
-// anyone, including a student who enrolled.
-test('a signed-out visitor sees outcomes, requirements and instructors', async ({
-  page,
+// The instructor writes the landing page in the portal; the public page then
+// shows what a visitor needs to decide: outcomes, requirements and who teaches.
+test('an instructor edits the landing page and a signed-out visitor sees it', async ({
+  browser,
 }) => {
-  const instructor = await apiUser('Ivy', ['instructor']);
   const title = uniqueName('E2E landing course');
-  const api = instructor.instructor;
-  const { courseId } = await createPublishedCourseViaApi(instructor, title);
-  await setLandingViaApi(instructor, courseId, {
-    learningOutcomes: ['Build a landing page', 'Read a curriculum'],
-    requirements: ['A laptop'],
+  const instructor = await browser.newPage();
+  const visitor = await browser.newPage();
+
+  await test.step('the instructor publishes a course', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course for the landing page tests.',
+    });
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Hello.' });
+    await publishCourse(instructor);
   });
 
-  await test.step('signed out, the sections and the instructor show', async () => {
-    await page.goto(coursePageUrl(courseId));
+  await test.step('the card saves outcomes and requirements, and the checklist follows', async () => {
+    const checklist = instructor.getByRole('region', {
+      name: 'Landing page checklist',
+    });
     await expect(
-      page.getByRole('heading', { level: 1, name: title }),
-    ).toBeVisible();
-    const outcomes = page.getByRole('region', { name: "What you'll learn" });
-    await expect(outcomes.getByText('Build a landing page')).toBeVisible();
+      checklist.getByRole('listitem').filter({ hasText: 'Learning outcomes' }),
+    ).toContainText('Not yet');
+
+    const outcomes = 'What students will learn';
+    await instructor
+      .getByRole('button', { name: `Add ${outcomes} item` })
+      .click();
+    await instructor
+      .getByLabel(`${outcomes} item 1`, { exact: true })
+      .fill('Build a landing page');
+    await instructor
+      .getByRole('button', { name: `Add ${outcomes} item` })
+      .click();
+    await instructor
+      .getByLabel(`${outcomes} item 2`, { exact: true })
+      .fill('Read a curriculum');
+    await instructor
+      .getByRole('button', { name: 'Move up What students will learn item 2' })
+      .click();
+    await instructor
+      .getByRole('button', { name: 'Add Requirements item' })
+      .click();
+    await instructor
+      .getByLabel('Requirements item 1', { exact: true })
+      .fill('A laptop');
+    await instructor.getByRole('button', { name: 'Save landing page' }).click();
+    await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
+
     await expect(
-      page.getByRole('region', { name: 'Requirements' }).getByText('A laptop'),
+      checklist.getByRole('listitem').filter({ hasText: 'Learning outcomes' }),
+    ).toContainText('Done');
+    await expect(
+      instructor.getByRole('link', { name: 'View public page' }),
     ).toBeVisible();
-    const team = page.getByRole('region', { name: 'Instructors' });
-    await expect(team.getByText('View profile')).toBeVisible();
-    await screenshot(page, 'landing page with outcomes and instructor', {
+    await screenshot(instructor, 'landing page card and checklist', {
       fullPage: true,
     });
   });
 
-  await test.step('archived, it is not found for a visitor or an enrolled student', async () => {
-    const student = await apiUser('Sam', ['student']);
-    await student.core.course.enrol.mutate({ courseId });
-    await api.course.archive.mutate({ courseId });
-
-    await page.goto(coursePageUrl(courseId));
+  await test.step('signed out, the sections show in the order the instructor set', async () => {
+    const courseId = instructor.url().split('/').pop() as string;
+    await visitor.goto(coursePageUrl(courseId));
     await expect(
-      page.getByRole('heading', { name: 'Course not found' }),
+      visitor.getByRole('heading', { level: 1, name: title }),
     ).toBeVisible();
-    await screenshot(page, 'archived course not found');
-
-    // An enrolled student gets the same answer from the API.
+    const learn = visitor.getByRole('region', { name: "What you'll learn" });
+    await expect(learn.getByRole('listitem')).toHaveText([
+      'Read a curriculum',
+      'Build a landing page',
+    ]);
     await expect(
-      student.core.course.publicView.query({ courseId }),
-    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+      visitor
+        .getByRole('region', { name: 'Requirements' })
+        .getByText('A laptop'),
+    ).toBeVisible();
+    await expect(
+      visitor
+        .getByRole('region', { name: 'Instructors' })
+        .getByText('View profile'),
+    ).toBeVisible();
+    await screenshot(visitor, 'landing page with outcomes and instructor', {
+      fullPage: true,
+    });
   });
+});
+
+// A course that is archived is not found for anyone, including a student who
+// enrolled.
+test('an archived course is not found for a visitor or an enrolled student', async ({
+  page,
+}) => {
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { courseId } = await createPublishedCourseViaApi(
+    instructor,
+    uniqueName('E2E archived landing course'),
+  );
+  const student = await apiUser('Sam', ['student']);
+  await student.core.course.enrol.mutate({ courseId });
+  await instructor.instructor.course.archive.mutate({ courseId });
+
+  await page.goto(coursePageUrl(courseId));
+  await expect(
+    page.getByRole('heading', { name: 'Course not found' }),
+  ).toBeVisible();
+  await screenshot(page, 'archived course not found');
+
+  // An enrolled student gets the same answer from the API.
+  await expect(
+    student.core.course.publicView.query({ courseId }),
+  ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
 });

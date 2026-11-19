@@ -60,7 +60,11 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Guides',
-          items: ['guides/announcements', 'guides/notifications'],
+          items: [
+            'guides/announcements',
+            'guides/notifications',
+            'guides/reviews',
+          ],
         },
         {
           label: 'Design',
