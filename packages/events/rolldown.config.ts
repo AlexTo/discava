@@ -73,7 +73,7 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
-    input: 'src/search/index-content.ts',
+    input: 'src/search/search-indexing.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/search-indexing/index.js',
       format: 'cjs',
@@ -128,7 +128,7 @@ export default defineConfig([
   },
   {
     tsconfig: 'tsconfig.lib.json',
-    input: 'src/notifications/delivery.ts',
+    input: 'src/notifications/notification-delivery.ts',
     output: {
       file: '../../dist/packages/events/bundle/lambda/notification-delivery/index.js',
       format: 'cjs',

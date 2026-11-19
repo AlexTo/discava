@@ -4,7 +4,7 @@
  */
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { notificationDelivery } from './delivery.js';
+import { notificationDelivery } from './notification-delivery.js';
 import {
   createFakeTable,
   fakeNotification,
@@ -17,9 +17,9 @@ const mocks = vi.hoisted(() => ({
   transitions: {} as Record<string, (...args: never[]) => unknown>,
 }));
 vi.mock('./fan-out.js', () => ({ fanOutBroadcast: mocks.fanOut }));
-vi.mock('@discava/common-server-utils/email', async (importActual) => ({
+vi.mock('./email.js', async (importActual) => ({
   ...(await importActual<
-    typeof import('@discava/common-server-utils/email')
+    typeof import('./email.js')
   >()),
   sendEmail: mocks.send,
 }));

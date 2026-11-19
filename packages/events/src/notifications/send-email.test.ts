@@ -6,7 +6,7 @@
 import {
   EmailPermanentError,
   EmailTransientError,
-} from '@discava/common-server-utils/email';
+} from './email.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFakeTable,

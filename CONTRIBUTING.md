@@ -51,6 +51,7 @@ pnpm dev
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
+| OpenSearch | 9200 | OpenSearch (course search; started by `packages/databases/search`'s `dev` target, which also syncs the local indices) |
 | Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step) |
 | Local OIDC server | 9400 | Cognito |
 
