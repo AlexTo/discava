@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { apiUser } from '../helpers/api.js';
+import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
@@ -17,17 +17,11 @@ test('a signed-out visitor sees outcomes, requirements and instructors', async (
   const instructor = await apiUser('Ivy', ['instructor']);
   const title = uniqueName('E2E landing course');
   const api = instructor.instructor;
-  const { courseId } = await api.course.create.mutate({ title });
-  const { moduleId } = await api.module.create.mutate({
-    courseId,
-    title: 'Module 1',
-  });
-  await api.lesson.create.mutate({ courseId, moduleId, title: 'Lesson 1' });
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
   await setLandingViaApi(instructor, courseId, {
     learningOutcomes: ['Build a landing page', 'Read a curriculum'],
     requirements: ['A laptop'],
   });
-  await api.course.publish.mutate({ courseId });
 
   await test.step('signed out, the sections and the instructor show', async () => {
     await page.goto(coursePageUrl(courseId));
