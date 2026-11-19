@@ -935,12 +935,22 @@ export const checkCaptionTracksValid = (
   }),
   ...snapshot.coursePreviews.flatMap((preview) => {
     const tracks = preview.captionTracks ?? [];
-    if (tracks.length === 0) {
-      return [];
-    }
     const manifest =
       preview.status === 'ready' ? preview.s3Key : preview.previousS3Key;
-    return captionTrackProblems(tracks, manifest).map((message) =>
+    const problems =
+      tracks.length === 0 ? [] : captionTrackProblems(tracks, manifest);
+    // A preview's captions are automatic only, so its captions being ready
+    // means the pipeline wrote the played version's track (the transcribe
+    // outcome writes the track and the status in one patch).
+    const nonce = preview.s3Key?.split('/').at(-2);
+    if (
+      preview.status === 'ready' &&
+      preview.captionsStatus === 'ready' &&
+      !tracks.some((track) => track.nonce === nonce)
+    ) {
+      problems.push('a ready preview with ready captions has no track');
+    }
+    return problems.map((message) =>
       violation(
         'caption-tracks-valid',
         { courseId: preview.courseId },

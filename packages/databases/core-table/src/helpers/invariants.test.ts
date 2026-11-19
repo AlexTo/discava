@@ -3194,6 +3194,20 @@ describe('course previews', () => {
       expect(violationsOf('caption-tracks-valid')).toEqual([]);
     });
 
+    it('accepts a preview whose captions are ready with the track', () => {
+      table.coursePreviews = [
+        preview({ captionsStatus: 'ready', captionTracks: [track('en-US')] }),
+      ];
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports ready captions with no track for the played version', () => {
+      table.coursePreviews = [preview({ captionsStatus: 'ready' })];
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /ready captions has no track/,
+      );
+    });
+
     it('reports a track for a version that is not played', () => {
       table.coursePreviews = [
         preview({
