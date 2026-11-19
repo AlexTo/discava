@@ -455,6 +455,38 @@ export type NotificationsComponentConfig = {
 export type AdminApiComponentConfig = InstructorApiComponentConfig;
 
 /**
+ * Per-stage settings for the Stripe webhook API (`POST /stripe/webhook`),
+ * which Stripe calls without a Cognito token: the WAF and throttling are what
+ * stand in front of it. Fully hardened by default.
+ */
+export type PaymentsComponentConfig = {
+  /** Protect the API with AWS WAF's default managed ruleset */
+  enableWaf?: boolean;
+  /** Encrypt the API's access log group with a customer-managed KMS key */
+  enableKmsEncryption?: boolean;
+  /** Rotate that key every year. Only used when `enableKmsEncryption` is true */
+  enableKeyRotation?: boolean;
+  /** Retain the access log group when the stack is deleted */
+  retainOnDelete?: boolean;
+  /** Custom domain name for the API. Requires `certificateArn` */
+  domainName?: string;
+  /** ACM certificate ARN for the custom domain. Must be in the stage's region */
+  certificateArn?: string;
+  /** Requests per second API Gateway lets through to the webhook method */
+  throttleRateLimit?: number;
+  /** Burst allowed above that rate */
+  throttleBurstLimit?: number;
+  /** Concurrent executions reserved for the webhook function */
+  reservedConcurrency?: number;
+  /** The webhook function's timeout, in seconds */
+  timeoutSeconds?: number;
+  /** The webhook function's log level */
+  logLevel?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+  /** Trace requests with AWS X-Ray */
+  enableTracing?: boolean;
+};
+
+/**
  * Component-level settings consuming apps use to configure their constructs
  * per stage, keyed by component name. Omitted components/flags fall back to
  * whatever default the app itself chooses.
@@ -464,6 +496,7 @@ export type StageComponents = {
   coreApi?: CoreApiComponentConfig;
   instructorApi?: InstructorApiComponentConfig;
   adminApi?: AdminApiComponentConfig;
+  payments?: PaymentsComponentConfig;
   coreTable?: CoreTableComponentConfig;
   streamRouter?: StreamRouterComponentConfig;
   studentPortal?: StudentPortalComponentConfig;

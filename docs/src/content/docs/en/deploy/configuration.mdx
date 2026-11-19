@@ -71,6 +71,7 @@ Each API, portal and media distribution can have its own domain. You need, for e
 | Core API | `…_INFRA_CORE_API_DOMAIN_NAME` | The stage's region |
 | Instructor API | `…_INFRA_INSTRUCTOR_API_DOMAIN_NAME` | The stage's region |
 | Admin API | `…_INFRA_ADMIN_API_DOMAIN_NAME` | The stage's region |
+| Payments (Stripe webhook API) | `…_INFRA_PAYMENTS_DOMAIN_NAME` | The stage's region |
 | Student portal | `…_INFRA_STUDENT_PORTAL_DOMAIN_NAMES` | `us-east-1` |
 | Instructor portal | `…_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES` | `us-east-1` |
 | Admin portal | `…_INFRA_ADMIN_PORTAL_DOMAIN_NAMES` | `us-east-1` |
@@ -79,7 +80,7 @@ Each API, portal and media distribution can have its own domain. You need, for e
 
 Each also takes a matching `…_CERTIFICATE_ARN`. A domain is only applied when its certificate is set too. Portals and media accept several comma-separated domains; an API takes one.
 
-**The easiest way to set these is to run the setup script again.** Give it a root domain and it serves each component from a fixed subdomain of it, finds the issued certificate for each in ACM and writes the variables. If any component has no certificate, it lists the missing ones and stops before changing anything. It doesn't cover the admin API yet: set that one's two variables yourself.
+**The easiest way to set these is to run the setup script again.** Give it a root domain and it serves each component from a fixed subdomain of it, finds the issued certificate for each in ACM and writes the variables. If any component has no certificate, it lists the missing ones and stops before changing anything. It doesn't cover the admin API or the payments API yet: set their variables yourself.
 
 ```sh
 ./scripts/setup-stage.sh discava-development

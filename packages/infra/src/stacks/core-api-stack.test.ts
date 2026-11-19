@@ -26,9 +26,14 @@ describe("core-api's functions", () => {
           [statement.Action].flat().includes('secretsmanager:GetSecretValue'),
         );
         return readsSecrets ? Roles.map((role) => role.Ref) : [];
-        // The unsubscribe function reads its own secret, not the signing key.
+        // The unsubscribe function reads its own secret, and checkout the
+        // Stripe key; neither reads the signing key.
       })
-      .filter((role) => !role.startsWith('NotificationUnsubscribe'));
+      .filter(
+        (role) =>
+          !role.startsWith('NotificationUnsubscribe') &&
+          !role.startsWith('CoreApiPaymentsCheckoutHandler'),
+      );
 
     expect(roles).toHaveLength(1);
     expect(roles[0]).toMatch(/^CoreApiMediaUrlHandlerServiceRole/);

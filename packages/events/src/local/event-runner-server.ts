@@ -60,7 +60,10 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  * - `POST /router/redrive/<feature>` -> `{ feature, redriven }`, moving the
  *   feature's failure queue back to its queue (404 for an unregistered
  *   feature)
- * - `/v1/*` and `/stripe/test/*` -> the Stripe stand-in (stripe-stand-in.ts),
+ * - `POST /stripe/webhook` -> `handleStripeWebhook` on the exact bytes and
+ *   `Stripe-Signature` header received, answering its status (400 for a
+ *   message that doesn't verify), as the deployed webhook API does
+ * - `/v1/*`, `/stripe/pay/*` and `/stripe/test/*` -> the Stripe stand-in (stripe-stand-in.ts),
  *   as Stripe's API
  * - `POST /router/fail/<feature>` (`{ batches }`) -> `{ feature, failing }`,
  *   making the feature's runner fail its next batches (404 for an
@@ -78,6 +81,7 @@ export const startEventRunnerServer = ({
   redriveFeature,
   failFeature,
   stripe,
+  stripeWebhook,
   log,
 }: {
   port: number;
@@ -94,6 +98,11 @@ export const startEventRunnerServer = ({
   failFeature: (feature: string, batches: number) => number | undefined;
   /** The Stripe stand-in, answering Stripe's API paths when given. */
   stripe?: StripeStandIn;
+  /** Applies a Stripe message: the status to answer with. */
+  stripeWebhook?: (
+    rawBody: Buffer,
+    signature: string | undefined,
+  ) => Promise<{ status: number }>;
   log: (message: string) => void;
 }) => {
   const server = createServer(async (request, response) => {
@@ -111,6 +120,20 @@ export const startEventRunnerServer = ({
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
       if (stripe && (await stripe.handle(request, response, path))) {
         return;
+      }
+      if (
+        request.method === 'POST' &&
+        path === '/stripe/webhook' &&
+        stripeWebhook
+      ) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(chunk as Buffer);
+        const signature = request.headers['stripe-signature'];
+        const { status } = await stripeWebhook(
+          Buffer.concat(chunks),
+          typeof signature === 'string' ? signature : undefined,
+        );
+        return send(status, status === 200 ? { received: true } : undefined);
       }
       if (request.method === 'POST' && path === '/transcode-jobs') {
         const job = (await readJson(request)) as LocalTranscodeJobRequest;

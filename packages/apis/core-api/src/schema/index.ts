@@ -15,6 +15,7 @@ export * from './enrolment.js';
 export * from './instructor-profile.js';
 export * from './lesson-progress.js';
 export * from './notification.js';
+export * from './payment.js';
 export * from './quiz.js';
 export * from './review.js';
 export * from './search.js';

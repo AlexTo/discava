@@ -49,6 +49,17 @@ describe('resolveStage', () => {
     });
   });
 
+  it('relaxes the Stripe webhook API for development only', () => {
+    expect(resolveStage(PROJECT_PATH, STAGE)?.infra?.payments?.enableWaf).toBe(
+      false,
+    );
+    // Production has no entry, so the component's hardened defaults apply.
+    expect(
+      resolveStage(PROJECT_PATH, 'discava-production')?.infra?.payments
+        ?.enableWaf,
+    ).not.toBe(false);
+  });
+
   it('returns undefined for a stage with no configuration at all', () => {
     expect(resolveStage(PROJECT_PATH, 'does-not-exist')).toBeUndefined();
   });

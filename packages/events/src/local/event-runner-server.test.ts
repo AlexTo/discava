@@ -62,11 +62,19 @@ describe('startEventRunnerServer', () => {
       redriveFeature: vi.fn(async (feature: string) =>
         feature === 'search-indexing' ? 2 : undefined,
       ),
+      stripeWebhook: vi.fn(async (_body: Buffer, signature?: string) => ({
+        status: signature === 't=1,v1=good' ? 200 : 400,
+      })),
       failFeature: vi.fn((feature: string, batches: number) =>
         feature === 'search-indexing' ? batches : undefined,
       ),
     };
-    server = startEventRunnerServer({ port: 0, ...handlers, log: () => {} });
+    server = startEventRunnerServer({
+      port: 0,
+      ...handlers,
+      stripeWebhook: handlers.stripeWebhook,
+      log: () => {},
+    });
     const url = (path: string) =>
       `http://localhost:${(server!.address() as AddressInfo).port}${path}`;
     return { handlers, url };
@@ -362,5 +370,36 @@ describe('startEventRunnerServer', () => {
     await new Promise((resolve) => server!.once('listening', resolve));
 
     expect((await fetch(url('/inbox/nope'))).status).toBe(404);
+  });
+
+  it('passes a Stripe message to the webhook as the exact bytes, with its signature', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+    const body = '{"a": 1,  "b":2}';
+
+    const response = await fetch(url('/stripe/webhook'), {
+      method: 'POST',
+      headers: { 'stripe-signature': 't=1,v1=good' },
+      body,
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ received: true });
+    expect(handlers.stripeWebhook).toHaveBeenCalledWith(
+      Buffer.from(body),
+      't=1,v1=good',
+    );
+  });
+
+  it('answers a Stripe message that does not verify with its 400', async () => {
+    const { url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+
+    const response = await fetch(url('/stripe/webhook'), {
+      method: 'POST',
+      body: '{}',
+    });
+
+    expect(response.status).toBe(400);
   });
 });

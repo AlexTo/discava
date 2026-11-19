@@ -73,6 +73,9 @@ export const CORE_API_DEDICATED_FUNCTIONS = {
   // Scheduler rights, to hand out upload links and copy the file into the
   // lesson media bucket
   AssignmentSubmit: ['assignment.uploadUrl', 'assignment.submit'],
+  // Starts a paid checkout: the only core-api function that reads the Stripe
+  // API key
+  PaymentsCheckout: ['payment.checkout'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 /**
