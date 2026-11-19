@@ -10,6 +10,8 @@
 
 **Parent issue**: none
 
+**Design page**: [`design/search`](../../docs/src/content/docs/en/design/search.mdx) (gains a "Suggestions" section)
+
 ## Clarifications
 
 ### Session 2026-11-19
