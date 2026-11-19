@@ -84,7 +84,7 @@ describe('/search', () => {
   it('shows the query in the top bar', async () => {
     search('linear');
     expect(
-      await screen.findByRole('searchbox', { name: 'Search courses' }),
+      await screen.findByRole('combobox', { name: 'Search courses' }),
     ).toHaveValue('linear');
   });
 

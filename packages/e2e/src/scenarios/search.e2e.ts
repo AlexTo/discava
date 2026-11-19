@@ -65,21 +65,21 @@ test('suggestions offer a published course by the start of its title', async ({
     await expectAfterReloads(page, async () => {
       const suggestions = await suggestInSiteSearch(page, typed);
       await expect(
-        suggestions.getByRole('button', { name: title, exact: true }),
+        suggestions.getByRole('option', { name: title, exact: true }),
       ).toBeVisible({ timeout: 2_000 });
     });
     await expect(
-      page.getByTestId('site-search-suggestions').getByRole('button', {
-        name: `${title} draft`,
-      }),
+      page
+        .getByRole('listbox', { name: 'Course suggestions' })
+        .getByRole('option', { name: `${title} draft` }),
     ).toHaveCount(0);
     await screenshot(page, 'search-suggestions-open');
   });
 
   await test.step('choosing it opens the course page', async () => {
     await page
-      .getByTestId('site-search-suggestions')
-      .getByRole('button', { name: title, exact: true })
+      .getByRole('listbox', { name: 'Course suggestions' })
+      .getByRole('option', { name: title, exact: true })
       .click();
     await page.waitForURL(new RegExp(`/learn/${courseId}`));
     await expect(
@@ -88,15 +88,46 @@ test('suggestions offer a published course by the start of its title', async ({
     await screenshot(page, 'search-suggestion-course-page');
   });
 
+  await test.step('the keyboard alone picks a suggestion, and Escape closes the list', async () => {
+    await page.goto(PORTALS.student);
+    const box = page.getByRole('combobox', { name: 'Search courses' });
+    const suggestions = await suggestInSiteSearch(page, typed);
+    const option = suggestions.getByRole('option', {
+      name: title,
+      exact: true,
+    });
+    await expect(option).toBeVisible();
+    for (let presses = 0; presses < 10; presses++) {
+      if ((await option.getAttribute('aria-selected')) === 'true') break;
+      await box.press('ArrowDown');
+    }
+    await expect(option).toHaveAttribute('aria-selected', 'true');
+    await expect(box).toHaveAttribute('aria-activedescendant', /.+/);
+    await screenshot(page, 'search-suggestions-keyboard');
+    await box.press('Enter');
+    await page.waitForURL(new RegExp(`/learn/${courseId}`));
+    await expect(
+      page.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+
+    await page.goto(PORTALS.student);
+    await suggestInSiteSearch(page, typed);
+    await box.press('Escape');
+    await expect(
+      page.getByRole('listbox', { name: 'Course suggestions' }),
+    ).toBeHidden();
+    await expect(box).toHaveValue(typed);
+  });
+
   await test.step('archiving it removes it from the suggestions', async () => {
     await instructor.instructor.course.archive.mutate({ courseId });
     await expect(async () => {
       await page.goto(PORTALS.student);
-      await page.getByRole('searchbox', { name: 'Search courses' }).fill(typed);
+      await page.getByRole('combobox', { name: 'Search courses' }).fill(typed);
       // Past the pause, so a suggestion would be showing by now.
       await page.waitForTimeout(1_000);
       await expect(
-        page.getByRole('button', { name: title, exact: true }),
+        page.getByRole('option', { name: title, exact: true }),
       ).toHaveCount(0);
     }).toPass({ timeout: 30_000 });
   });
