@@ -4,7 +4,11 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { formatProblem, validateTasks } from './validate.js';
+import {
+  formatProblem,
+  validateArchivedTasks,
+  validateTasks,
+} from './validate.js';
 
 const VALID = `# Tasks: Something
 
@@ -145,6 +149,27 @@ describe('validateTasks', () => {
         `${VALID}\n\`\`\`text\n## Phase 9 - example\n- [ ] Create model\n- [ ] T001 [US1] Example\n\`\`\`\n`,
       ),
     ).toEqual([]);
+  });
+});
+
+describe('validateArchivedTasks', () => {
+  it('accepts a file with every task ticked', () => {
+    expect(validateArchivedTasks(VALID.replaceAll('- [ ]', '- [x]'))).toEqual(
+      [],
+    );
+  });
+
+  it('refuses unticked tasks, human ones too', () => {
+    expect(
+      validateArchivedTasks(VALID).map(({ line, message }) => [
+        line,
+        message.split(';')[0],
+      ]),
+    ).toEqual([
+      [17, 'T002 is not ticked'],
+      [18, 'T003 is not ticked'],
+      [24, 'T010 is not ticked'],
+    ]);
   });
 });
 
