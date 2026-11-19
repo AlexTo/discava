@@ -58,7 +58,14 @@ export const createCourse = courseProcedure
     const { canceled } = await coreTable.transaction
       .write((entities) => [
         entities.course
-          .create({ courseId, title, description, certificatesEnabled: true })
+          .create({
+            courseId,
+            title,
+            description,
+            certificatesEnabled: true,
+            priceAmount: 0,
+            priceCurrency: 'USD',
+          })
           .commit(),
         entities.courseInstructor
           .create({ courseId, instructorId: currentUser, courseUpdatedAt })

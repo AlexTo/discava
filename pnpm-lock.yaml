@@ -327,6 +327,9 @@ catalogs:
     starlight-blog:
       specifier: 0.30.2
       version: 0.30.2
+    stripe:
+      specifier: 23.1.0
+      version: 23.1.0
     tailwindcss:
       specifier: 4.3.5
       version: 4.3.5
@@ -641,6 +644,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -888,6 +894,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -1063,12 +1072,18 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@discava/common-web-utils':
+        specifier: workspace:*
+        version: link:../../common/web-utils
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
+      uuid:
+        specifier: 'catalog:'
+        version: 14.0.2
     devDependencies:
       '@types/aws-lambda':
         specifier: 'catalog:'
@@ -1219,6 +1234,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -9073,6 +9091,15 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  stripe@23.1.0:
+    resolution: {integrity: sha512-fVUfMSfTPoukfoV//MUKAx2+YxyKmYaYtnAL9VkfnHfaPNQylFdWZMD+zgUFerI8rjbaiER8Vzj2XEUQ2AhAsQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   strnum@2.4.2:
     resolution: {integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==}
@@ -18682,6 +18709,10 @@ snapshots:
       min-indent: 1.0.1
 
   strip-json-comments@3.1.1: {}
+
+  stripe@23.1.0(@types/node@26.6.6):
+    optionalDependencies:
+      '@types/node': 26.6.6
 
   strnum@2.4.2:
     dependencies:

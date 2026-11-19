@@ -2,6 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import {
+  isSupportedCurrency,
+  PRICE_MAX,
+  PRICE_MIN,
+} from '@discava/common-web-utils/price';
 import type { EntityItem } from 'electrodb';
 import type { createAnnouncementEntity } from '../entities/announcement.js';
 import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
@@ -37,6 +42,18 @@ import type { createNotificationEntity } from '../entities/notification.js';
 import type { createNotificationBroadcastEntity } from '../entities/notification-broadcast.js';
 import type { createNotificationPreferenceEntity } from '../entities/notification-preference.js';
 import type { createNotificationStateEntity } from '../entities/notification-state.js';
+import {
+  type createOrderEntity,
+  ORDER_REFUND_REASONS,
+} from '../entities/order.js';
+import {
+  type createPaymentChangeEntity,
+  PAYMENT_CHANGE_KINDS,
+} from '../entities/payment-change.js';
+import {
+  type createPaymentConnectionEntity,
+  PAYMENT_CONNECTION_STATUSES,
+} from '../entities/payment-connection.js';
 import type { createPeriodStatsEntity } from '../entities/period-stats.js';
 import type { createProfileHandleClaimEntity } from '../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../entities/progress.js';
@@ -118,6 +135,9 @@ export interface TableSnapshot {
     | 'durationHours'
     | 'learningOutcomes'
     | 'requirements'
+    | 'priceAmount'
+    | 'priceCurrency'
+    | 'pricedAt'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -196,6 +216,7 @@ export interface TableSnapshot {
     | 'completedAt'
     | 'lastActivityAt'
     | 'createdAt'
+    | 'orderId'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -405,6 +426,53 @@ export interface TableSnapshot {
     Item<typeof createProfileHandleClaimEntity>,
     'handle' | 'instructorId'
   >[];
+  orders: Pick<
+    Item<typeof createOrderEntity>,
+    | 'orderId'
+    | 'userId'
+    | 'courseId'
+    | 'accountId'
+    | 'listAmount'
+    | 'amount'
+    | 'currency'
+    | 'status'
+    | 'expiresAt'
+    | 'checkoutSessionId'
+    | 'paymentIntentId'
+    | 'paidAt'
+    | 'refundedAt'
+    | 'refundedAmount'
+    | 'refundReason'
+    | 'createdAt'
+  >[];
+  // At most one (a singleton); a list so a stray second one is seen.
+  paymentConnections: Pick<
+    Item<typeof createPaymentConnectionEntity>,
+    | 'status'
+    | 'mode'
+    | 'accountId'
+    | 'accountName'
+    | 'keyLast4'
+    | 'webhookEndpointId'
+    | 'webhookUrl'
+    | 'latestCheckoutExpiresAt'
+    | 'leaseUntil'
+    | 'previousStatus'
+    | 'revision'
+    | 'changedAt'
+  >[];
+  paymentChanges: Pick<
+    Item<typeof createPaymentChangeEntity>,
+    | 'changeId'
+    | 'kind'
+    | 'byUserId'
+    | 'byName'
+    | 'at'
+    | 'mode'
+    | 'accountId'
+    | 'keyLast4'
+    | 'step'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -460,6 +528,15 @@ export const INVARIANTS = [
   'instructor-has-profile',
   'profile-handle-claims-consistent',
   'instructor-profile-shape',
+  'price-shape',
+  'order-shape',
+  'paid-order-has-enrolment',
+  'enrolment-order-matches',
+  'paid-course-enrolment-paid',
+  'payment-connection-shape',
+  'checkout-window-covers-orders',
+  'order-account-known',
+  'payment-change-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -1057,7 +1134,10 @@ export const checkPublishedAtSet = (
 };
 
 // 8. completedAt is set exactly when the status is completed, on lesson
-// progress and on enrolments: the recalculation sets both together.
+// progress and on enrolments: the recalculation sets both together. An
+// enrolment widens it: a refund ends a completed enrolment (`dropped`)
+// without clearing the date, so `dropped` may carry a completedAt too. Even
+// so, completed still needs its date, and an active one can't have one.
 export const checkCompletedAtIffCompleted = (
   snapshot: TableSnapshot,
 ): InvariantViolation[] =>
@@ -1067,17 +1147,20 @@ export const checkCompletedAtIffCompleted = (
         record: { userId, courseId, lessonId },
         status,
         completedAt,
+        allowedWithDate: ['completed'] as string[],
       }),
     ),
     ...snapshot.enrolments.map(({ userId, courseId, status, completedAt }) => ({
       record: { userId, courseId },
       status,
       completedAt,
+      allowedWithDate: ['completed', 'dropped'] as string[],
     })),
   ]
     .filter(
-      ({ status, completedAt }) =>
-        (status === 'completed') !== (completedAt !== undefined),
+      ({ status, completedAt, allowedWithDate }) =>
+        (status === 'completed' && completedAt === undefined) ||
+        (completedAt !== undefined && !allowedWithDate.includes(status)),
     )
     .map(({ record, status, completedAt }) =>
       violation(
@@ -1619,7 +1702,8 @@ export const checkCertificateShape = (
 };
 
 // 22 (certificates). A certificate is for a completed enrolment, with the
-// same completedAt, in a course that exists. Certificates off for the course
+// same completedAt, in a course that exists. A refunded student keeps their
+// certificate, so the enrolment may also be `dropped` with that completedAt. Certificates off for the course
 // is not a violation (the setting isn't retroactive), nor is a completed
 // enrolment without a certificate (no backfill).
 export const checkCertificateHasCompletedEnrolment = (
@@ -1635,7 +1719,10 @@ export const checkCertificateHasCompletedEnrolment = (
     const problems: string[] = [];
     if (!enrolment) {
       problems.push('certificate for a student not enrolled in the course');
-    } else if (enrolment.status !== 'completed') {
+    } else if (
+      enrolment.status !== 'completed' &&
+      !(enrolment.status === 'dropped' && enrolment.completedAt)
+    ) {
       problems.push(`enrolment is ${enrolment.status}, not completed`);
     } else if (enrolment.completedAt !== completedAt) {
       problems.push("completedAt differs from the enrolment's");
@@ -2814,6 +2901,389 @@ export const checkInstructorProfileShape = (
     );
   });
 
+// Payments (the Stripe checkout feature). Price and order shape, and the links
+// between orders and enrolments that make "paid exactly once" and "unpaid
+// users cannot access paid content" checkable as data.
+
+const isInteger = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value);
+
+// A course's price is whole minor units, free or within the bounds, in a
+// supported currency, and `pricedAt` is set exactly when it isn't free.
+export const checkPriceShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.courses.flatMap(
+    ({ courseId, priceAmount, priceCurrency, pricedAt }) => {
+      const problems: string[] = [];
+      if (
+        !isInteger(priceAmount) ||
+        (priceAmount !== 0 &&
+          (priceAmount < PRICE_MIN || priceAmount > PRICE_MAX))
+      ) {
+        problems.push(
+          `priceAmount ${priceAmount} is not 0 or a whole number from ${PRICE_MIN} to ${PRICE_MAX}`,
+        );
+      }
+      if (!isSupportedCurrency(String(priceCurrency))) {
+        problems.push(`priceCurrency ${priceCurrency} is not supported`);
+      }
+      if (priceAmount > 0 !== (pricedAt !== undefined)) {
+        problems.push(
+          priceAmount > 0
+            ? 'priced, but pricedAt is not set'
+            : 'free, but pricedAt is set',
+        );
+      }
+      return problems.map((message) =>
+        violation('price-shape', { courseId }, message),
+      );
+    },
+  );
+
+// An order has what its status needs. A pending order past its expiry is not a
+// violation (its expired event may be late), and a course set back to free
+// with paid orders is not one either.
+export const checkOrderShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const sessions = groupBy(
+    snapshot.orders.filter((o) => o.checkoutSessionId !== undefined),
+    (o) => o.checkoutSessionId,
+  );
+  return snapshot.orders.flatMap((order) => {
+    const problems: string[] = [];
+    for (const field of [
+      'userId',
+      'courseId',
+      'accountId',
+      'currency',
+      'status',
+      'expiresAt',
+    ] as const) {
+      if (!order[field]) problems.push(`${field} is not set`);
+    }
+    if (
+      !isInteger(order.listAmount) ||
+      order.listAmount < PRICE_MIN ||
+      order.listAmount > PRICE_MAX
+    ) {
+      problems.push(`listAmount ${order.listAmount} is out of range`);
+    }
+    if (
+      !isInteger(order.amount) ||
+      order.amount < 0 ||
+      order.amount > order.listAmount
+    ) {
+      problems.push(`amount ${order.amount} is not from 0 to listAmount`);
+    }
+    if (!isSupportedCurrency(String(order.currency))) {
+      problems.push(`currency ${order.currency} is not supported`);
+    }
+    if (order.status === 'paid') {
+      if (!order.paidAt) problems.push('paid, but paidAt is not set');
+      if (order.amount > 0 && !order.paymentIntentId) {
+        problems.push('paid, but there is no payment intent');
+      }
+    }
+    if (order.status === 'refunded') {
+      if (!order.refundedAt)
+        problems.push('refunded, but refundedAt is not set');
+      if (
+        !order.refundReason ||
+        !(ORDER_REFUND_REASONS as readonly string[]).includes(
+          order.refundReason,
+        )
+      ) {
+        problems.push(`refund reason ${order.refundReason} is not known`);
+      }
+      if (order.refundReason === 'requested' && !order.paidAt) {
+        problems.push('refunded on request, but paidAt is not set');
+      }
+    }
+    if (
+      order.refundedAmount !== undefined &&
+      order.refundedAmount > order.amount
+    ) {
+      problems.push('refundedAmount is more than the amount');
+    }
+    if (
+      (order.status === 'pending' || order.status === 'expired') &&
+      order.paidAt !== undefined
+    ) {
+      problems.push(`${order.status}, but paidAt is set`);
+    }
+    if (
+      order.checkoutSessionId !== undefined &&
+      (sessions.get(order.checkoutSessionId)?.length ?? 0) > 1
+    ) {
+      problems.push('its checkout session is on another order too');
+    }
+    return problems.map((message) =>
+      violation('order-shape', { orderId: order.orderId }, message),
+    );
+  });
+};
+
+// Every paid order has its student's enrolment, not dropped, pointing back at
+// it, and a student has at most one paid order per course: exactly once, as
+// data.
+export const checkPaidOrderHasEnrolment = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const enrolments = new Map(
+    snapshot.enrolments.map((e) => [`${e.userId} ${e.courseId}`, e]),
+  );
+  const paid = snapshot.orders.filter((o) => o.status === 'paid');
+  const perStudentCourse = groupBy(paid, (o) => `${o.userId} ${o.courseId}`);
+  return paid.flatMap((order) => {
+    const problems: string[] = [];
+    const enrolment = enrolments.get(`${order.userId} ${order.courseId}`);
+    if (!enrolment) {
+      problems.push('paid, but the student has no enrolment');
+    } else if (enrolment.status === 'dropped') {
+      problems.push('paid, but the enrolment is dropped');
+    } else if (enrolment.orderId !== order.orderId) {
+      problems.push('paid, but the enrolment names another order');
+    }
+    if (
+      (perStudentCourse.get(`${order.userId} ${order.courseId}`)?.length ?? 0) >
+      1
+    ) {
+      problems.push('the student has another paid order for the course');
+    }
+    return problems.map((message) =>
+      violation(
+        'paid-order-has-enrolment',
+        { orderId: order.orderId },
+        message,
+      ),
+    );
+  });
+};
+
+// An enrolment's `orderId` names an order for the same student and course
+// that is paid, or was refunded on request with the enrolment ended. An order
+// refunded because it couldn't be delivered is never an enrolment's order.
+export const checkEnrolmentOrderMatches = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const orders = new Map(snapshot.orders.map((o) => [o.orderId, o]));
+  return snapshot.enrolments.flatMap((enrolment) => {
+    if (enrolment.orderId === undefined) return [];
+    const order = orders.get(enrolment.orderId);
+    const record = { userId: enrolment.userId, courseId: enrolment.courseId };
+    let problem: string | undefined;
+    if (!order) {
+      problem = 'its order does not exist';
+    } else if (
+      order.userId !== enrolment.userId ||
+      order.courseId !== enrolment.courseId
+    ) {
+      problem = 'its order is for another student or course';
+    } else if (order.status === 'paid') {
+      problem = undefined;
+    } else if (
+      order.status === 'refunded' &&
+      order.refundReason === 'requested' &&
+      enrolment.status === 'dropped'
+    ) {
+      problem = undefined;
+    } else {
+      problem = `its order is ${order.status}${order.refundReason ? ` (${order.refundReason})` : ''} while the enrolment is ${enrolment.status}`;
+    }
+    return problem
+      ? [violation('enrolment-order-matches', record, problem)]
+      : [];
+  });
+};
+
+// In a priced course, an enrolment with no order was made before the course
+// was priced (within ten seconds, for the write that priced it), or restored
+// for free after a refund when the course was free again. Anything else is
+// someone in a paid course without paying.
+const PRICED_GRACE_MS = 10_000;
+export const checkPaidCourseEnrolmentPaid = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const priced = new Map(
+    snapshot.courses
+      .filter((c) => c.priceAmount > 0)
+      .map((c) => [c.courseId, c]),
+  );
+  const refunded = new Set(
+    snapshot.orders
+      .filter((o) => o.status === 'refunded')
+      .map((o) => `${o.userId} ${o.courseId}`),
+  );
+  return snapshot.enrolments.flatMap((enrolment) => {
+    const course = priced.get(enrolment.courseId);
+    if (!course || enrolment.orderId !== undefined) return [];
+    if (
+      enrolment.status !== 'dropped' &&
+      refunded.has(`${enrolment.userId} ${enrolment.courseId}`)
+    ) {
+      return [];
+    }
+    const pricedAt = course.pricedAt ? Date.parse(course.pricedAt) : undefined;
+    if (
+      pricedAt !== undefined &&
+      Date.parse(enrolment.createdAt) <= pricedAt + PRICED_GRACE_MS
+    ) {
+      return [];
+    }
+    return [
+      violation(
+        'paid-course-enrolment-paid',
+        { userId: enrolment.userId, courseId: enrolment.courseId },
+        'enrolled in a priced course with no order, after it was priced',
+      ),
+    ];
+  });
+};
+
+// The administrator's Stripe setup: a valid status, the facts that status
+// needs, a positive revision, and one record at most.
+export const checkPaymentConnectionShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const record = { record: 'paymentConnection' };
+  const problems: string[] = [];
+  if (snapshot.paymentConnections.length > 1) {
+    problems.push(`${snapshot.paymentConnections.length} connection records`);
+  }
+  for (const c of snapshot.paymentConnections) {
+    if (
+      !(PAYMENT_CONNECTION_STATUSES as readonly string[]).includes(c.status)
+    ) {
+      problems.push(`status ${c.status} is not known`);
+    }
+    if (!isInteger(c.revision) || c.revision < 1) {
+      problems.push(`revision ${c.revision} is not a positive integer`);
+    }
+    // A change from a disconnected record has no account yet.
+    const needsAccount =
+      c.status === 'active' ||
+      (c.status === 'changing' && c.previousStatus === 'active');
+    if (c.status === 'active' || c.status === 'changing') {
+      if (!c.mode) problems.push(`${c.status}, but mode is not set`);
+    }
+    if (needsAccount) {
+      for (const field of ['accountId', 'accountName'] as const) {
+        if (!c[field]) problems.push(`${c.status}, but ${field} is not set`);
+      }
+      if (c.keyLast4?.length !== 4) {
+        problems.push(`${c.status}, but keyLast4 is not four characters`);
+      }
+    }
+    if (c.status === 'active' && (!c.webhookEndpointId || !c.webhookUrl)) {
+      problems.push('active, but the webhook registration is not set');
+    }
+    if (c.status === 'changing' && !c.leaseUntil) {
+      problems.push('changing, but leaseUntil is not set');
+    }
+  }
+  return problems.map((message) =>
+    violation('payment-connection-shape', record, message),
+  );
+};
+
+// Every order's expiry is covered by the connection's `latestCheckoutExpiresAt`,
+// which is what makes "no checkout is open" a safe check before a switch.
+export const checkCheckoutWindowCoversOrders = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const [connection] = snapshot.paymentConnections;
+  return snapshot.orders.flatMap((order) => {
+    if (!connection) {
+      return [
+        violation(
+          'checkout-window-covers-orders',
+          { orderId: order.orderId },
+          'there is an order but no connection record',
+        ),
+      ];
+    }
+    if (
+      !connection.latestCheckoutExpiresAt ||
+      order.expiresAt > connection.latestCheckoutExpiresAt
+    ) {
+      return [
+        violation(
+          'checkout-window-covers-orders',
+          { orderId: order.orderId },
+          `expires ${order.expiresAt}, after the connection's latestCheckoutExpiresAt ${connection.latestCheckoutExpiresAt}`,
+        ),
+      ];
+    }
+    return [];
+  });
+};
+
+// Every order names its account, and one created while the record is active
+// since its last change names that record's account. Orders from earlier
+// connections may name another account.
+export const checkOrderAccountKnown = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const [connection] = snapshot.paymentConnections;
+  return snapshot.orders.flatMap((order) => {
+    if (!order.accountId) {
+      return [
+        violation(
+          'order-account-known',
+          { orderId: order.orderId },
+          'has no accountId',
+        ),
+      ];
+    }
+    if (
+      connection?.status === 'active' &&
+      connection.changedAt !== undefined &&
+      order.createdAt > connection.changedAt &&
+      order.accountId !== connection.accountId
+    ) {
+      return [
+        violation(
+          'order-account-known',
+          { orderId: order.orderId },
+          `names ${order.accountId}, not the connected account ${connection.accountId}`,
+        ),
+      ];
+    }
+    return [];
+  });
+};
+
+// Audit rows carry who and when, and never more than four characters of a key
+// or any signing secret.
+const SECRET_PATTERN = /\b(?:sk|rk|pk)_(?:test|live)_\w+|whsec_\w+/;
+export const checkPaymentChangeShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.paymentChanges.flatMap((change) => {
+    const problems: string[] = [];
+    for (const field of ['kind', 'byUserId', 'byName', 'at'] as const) {
+      if (!change[field]) problems.push(`${field} is not set`);
+    }
+    if (!(PAYMENT_CHANGE_KINDS as readonly string[]).includes(change.kind)) {
+      problems.push(`kind ${change.kind} is not known`);
+    }
+    if (change.keyLast4 !== undefined && change.keyLast4.length > 4) {
+      problems.push('keyLast4 holds more than four characters');
+    }
+    if (
+      Object.values(change).some(
+        (value) => typeof value === 'string' && SECRET_PATTERN.test(value),
+      )
+    ) {
+      problems.push('holds what looks like a key or signing secret');
+    }
+    return problems.map((message) =>
+      violation('payment-change-shape', { changeId: change.changeId }, message),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -2867,6 +3337,15 @@ const CHECKS = [
   checkInstructorHasProfile,
   checkProfileHandleClaimsConsistent,
   checkInstructorProfileShape,
+  checkPriceShape,
+  checkOrderShape,
+  checkPaidOrderHasEnrolment,
+  checkEnrolmentOrderMatches,
+  checkPaidCourseEnrolmentPaid,
+  checkPaymentConnectionShape,
+  checkCheckoutWindowCoversOrders,
+  checkOrderAccountKnown,
+  checkPaymentChangeShape,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -2916,6 +3395,9 @@ export const loadTableSnapshot = async (
     courseRatings,
     instructorProfiles,
     profileHandleClaims,
+    orders,
+    paymentConnections,
+    paymentChanges,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -2951,6 +3433,9 @@ export const loadTableSnapshot = async (
     entities.courseRating.scan.go(all),
     entities.instructorProfile.scan.go(all),
     entities.profileHandleClaim.scan.go(all),
+    entities.order.scan.go(all),
+    entities.paymentConnection.scan.go(all),
+    entities.paymentChange.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -2987,5 +3472,8 @@ export const loadTableSnapshot = async (
     courseRatings: courseRatings.data,
     instructorProfiles: instructorProfiles.data,
     profileHandleClaims: profileHandleClaims.data,
+    orders: orders.data,
+    paymentConnections: paymentConnections.data,
+    paymentChanges: paymentChanges.data,
   };
 };

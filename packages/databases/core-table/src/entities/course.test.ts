@@ -18,9 +18,29 @@ const record = {
   courseId: 'course-1',
   title: 'A course',
   certificatesEnabled: true,
+  priceAmount: 0,
+  priceCurrency: 'USD',
 };
 
 describe('course', () => {
+  it.each(['priceAmount', 'priceCurrency'] as const)(
+    'refuses a record without %s',
+    (attribute) => {
+      const { [attribute]: _omitted, ...rest } = record;
+      expect(() => course.create(rest as typeof record).params()).toThrow(
+        attribute,
+      );
+    },
+  );
+
+  it('keeps pricedAt optional', () => {
+    const { Item } = course.create(record).params() as {
+      Item: Record<string, unknown>;
+    };
+    expect(Item).not.toHaveProperty('pricedAt');
+    expect(Item.priceAmount).toBe(0);
+  });
+
   it('round-trips learningOutcomes and requirements', () => {
     const { Item } = course
       .create({

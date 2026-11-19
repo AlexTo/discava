@@ -137,6 +137,23 @@ describe('STREAM_FEATURES', () => {
     }
   });
 
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+  ] as const)(
+    'sends a %s of an order, a connection or an audit row to no feature',
+    (eventName, image) => {
+      for (const entity of ['order', 'paymentConnection', 'paymentChange']) {
+        expect(
+          featuresFor({
+            eventName,
+            dynamodb: { [image]: { __edb_e__: { S: entity } } },
+          }),
+        ).toEqual([]);
+      }
+    },
+  );
+
   it('has filters that each match at least one sample record', () => {
     for (const feature of STREAM_FEATURES) {
       for (const filter of feature.filters) {

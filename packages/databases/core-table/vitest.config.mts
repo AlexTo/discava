@@ -7,6 +7,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/databases/core-table',
+  resolve: {
+    // Workspace packages without package exports resolve through tsconfig
+    // paths, as for tsc.
+    tsconfigPaths: true,
+  },
   test: {
     passWithNoTests: true,
     name: '@discava/core-table',

@@ -48,6 +48,27 @@ describe('matchesSearchStreamFilters', () => {
     },
   );
 
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+  ] as const)(
+    'ignores a %s of an order or a Stripe connection record',
+    (eventName, image) => {
+      for (const entity of ['order', 'paymentConnection', 'paymentChange']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, image, entity)),
+        ).toBe(false);
+      }
+    },
+  );
+
+  // A price change is a course MODIFY, so the catalogue re-indexes the course.
+  it('matches a course edit that changes only the price', () => {
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'course')),
+    ).toBe(true);
+  });
+
   it('matches an inserted or modified course', () => {
     expect(
       matchesSearchStreamFilters(record('INSERT', 'NewImage', 'course')),

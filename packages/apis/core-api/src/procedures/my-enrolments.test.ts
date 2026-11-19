@@ -265,6 +265,16 @@ describe('course.myEnrolments', () => {
     expect((await call()).items[0].courseStatus).toBe('archived');
   });
 
+  it('returns no order of a paid enrolment', async () => {
+    addCourse('c1');
+    enrol('c1', { orderId: 'order-secret' });
+
+    const result = await call();
+    expect(result.items).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain('order-secret');
+    expect(result.items[0]).not.toHaveProperty('orderId');
+  });
+
   it('rejects unauthenticated callers', async () => {
     const anonymous = caller({
       event: { requestContext: {} } as unknown as APIGatewayProxyEvent,

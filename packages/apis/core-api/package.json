@@ -24,6 +24,7 @@
     "aws-xray-sdk-core": "catalog:",
     "aws4fetch": "catalog:",
     "electrodb": "catalog:",
+    "stripe": "catalog:",
     "tslib": "^2.3.0",
     "uuid": "catalog:",
     "zod": "catalog:"
