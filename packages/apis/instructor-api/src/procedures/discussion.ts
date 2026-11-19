@@ -9,6 +9,8 @@ import {
   DiscussionInputError,
   type DiscussionOperation,
   discussionWrites,
+  toPostRead,
+  toQuestionRead,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -178,24 +180,6 @@ export const reported = courseProcedure
       ...(next && { cursor: next }),
     };
   });
-
-const toPostRead = (post: StoredPost) => ({
-  kind: post.kind,
-  threadId: post.threadId,
-  postId: post.postId,
-  authorId: post.authorId,
-  authorIsInstructor: post.authorIsInstructor,
-  state: post.state,
-});
-
-const toQuestionRead = (question: StoredPost) => ({
-  threadId: question.threadId,
-  state: question.state,
-  acceptedPostId: question.acceptedPostId,
-  replyCount: question.replyCount,
-  instructorReplyCount: question.instructorReplyCount,
-  createdAt: question.createdAt,
-});
 
 interface Step {
   /** What to write, or nothing when the post is already as asked. */

@@ -141,6 +141,28 @@ export interface DiscussionQuestionRead {
   createdAt: string;
 }
 
+/** The read an operation's conditions pin, from a stored post. */
+export const toPostRead = (post: DiscussionPostRead): DiscussionPostRead => ({
+  kind: post.kind,
+  threadId: post.threadId,
+  postId: post.postId,
+  authorId: post.authorId,
+  authorIsInstructor: post.authorIsInstructor,
+  state: post.state,
+});
+
+/** The read an operation's conditions pin, from a stored question. */
+export const toQuestionRead = (
+  question: DiscussionQuestionRead,
+): DiscussionQuestionRead => ({
+  threadId: question.threadId,
+  state: question.state,
+  acceptedPostId: question.acceptedPostId,
+  replyCount: question.replyCount,
+  instructorReplyCount: question.instructorReplyCount,
+  createdAt: question.createdAt,
+});
+
 interface ModerateInput<T extends string> {
   type: T;
   post: DiscussionPostRead;
