@@ -20,7 +20,7 @@ pnpm build                      # includes synth and checkov for the Payments st
 5. Replay the confirmation five times at once (`POST /stripe/test/replay`): Bob is still enrolled once, with the same progress.
 6. Refund fully (`POST /stripe/test/refund`): Bob's page says his enrolment has ended and offers Buy now; his lesson completion is still on record. Buy again and pay: he is back with his progress.
 7. As Dan, buy, then refund 5.00 only: Dan keeps access.
-8. As Alice, set the price to free: new students enrol without paying; Bob and Dan keep access. Set it back to 20.00 and sign in as a student enrolled earlier: still enrolled; a new student must pay.
+8. As Alice, set the price to free: new students enrol without paying; Bob and Dan keep access. Refund Dan's order fully (`POST /stripe/test/refund`): his page says his enrolment has ended and offers **Enrol now**; choose it: he is back without paying, with his progress. Set it back to 20.00 and sign in as a student enrolled earlier: still enrolled; a new student must pay.
 9. Save screenshots of the key steps to `tmp/screenshots/pr-<number>/`.
 
 ## Connecting, replacing and disconnecting (local)
@@ -43,5 +43,5 @@ pnpm build                      # includes synth and checkov for the Payments st
 ## Expected data afterwards
 
 - One `paid` order per purchase and one enrolment per student and course, the enrolment pointing at its order.
-- A fully refunded student's enrolment is `dropped` with its progress intact; after buying again it points at the new order.
+- A fully refunded student's enrolment is `dropped` with its progress intact; after buying again it points at the new order; after enrolling again in a course set to free it is restored with no `orderId`.
 - Core-table invariants pass.

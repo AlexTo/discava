@@ -14,7 +14,7 @@
 | `?checkout=success`, still not enrolled after 60 s | alert: "Your payment is still being confirmed. It is not lost: refresh in a minute." with a **Refresh** button; no **Buy now** |
 | `?checkout=cancelled` | alert "Payment cancelled. You have not been charged." and **Buy now** |
 | Enrolled or completed | as today |
-| `dropped` (refunded) | "Your enrolment has ended." and, if the course is priced, **Buy now**; for a free course the existing message |
+| `dropped` (refunded) | "Your enrolment has ended." and, if the course is priced, **Buy now**; if it is free, **Enrol now**, which calls `course.enrol` and brings the enrolment back with its progress (core-api-payment.md) |
 
 The price comes from `course.publicView`; the API, not the page, decides what is charged. An address with `?checkout=success` and no payment shows the waiting state and then the 60 s message, and grants nothing.
 

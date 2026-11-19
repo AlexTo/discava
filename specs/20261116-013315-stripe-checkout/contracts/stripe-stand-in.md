@@ -9,7 +9,7 @@ Requests carry the key as a bearer token. The stand-in knows two accounts: `sk_t
 - `GET /v1/account`: returns `{ id, business_profile: { name }, settings: { dashboard: { display_name } } }` for the key's account.
 - `POST /v1/webhook_endpoints`: validates `url` and `enabled_events`, creates `{ id, url, enabled_events, status: 'enabled', metadata, secret: 'whsec_<random>' }` and returns the `secret` only in this response, as Stripe does. `GET /v1/webhook_endpoints` lists them (without `secret`); `DELETE /v1/webhook_endpoints/:id` removes one. A key marked "restricted without webhook permission" (`rk_test_local_nowebhook`) gets the permission error from create, so that path is testable.
 
-- `POST /v1/checkout/sessions`: validates `mode=payment`, one line item, `client_reference_id`, `metadata`, `expires_at`, success and cancel URLs; returns `{ id, url, expires_at, payment_status: 'unpaid', client_reference_id, metadata, amount_total, currency, payment_intent }`. Honours an `Idempotency-Key` header (same key, same session).
+- `POST /v1/checkout/sessions`: validates `mode=payment`, one line item, `client_reference_id`, `metadata`, `expires_at`, success and cancel URLs, and `adaptive_pricing[enabled]=false` (a session without it is a 400 in Stripe's error shape, so dropping the setting of research R-10 fails locally); returns `{ id, url, expires_at, payment_status: 'unpaid', client_reference_id, metadata, amount_total, currency, payment_intent }`. Honours an `Idempotency-Key` header (same key, same session).
 - `GET /v1/payment_intents/:id`: returns `{ id, metadata, amount, currency, status }`.
 - `POST /v1/refunds`: for a payment intent, full or partial; honours the idempotency key; then delivers `charge.refunded`.
 
@@ -26,4 +26,4 @@ Every event is delivered to each endpoint registered for that account whose `ena
 
 ## Tests
 
-`stripe-stand-in.test.ts`: both accounts and the 401 for an unknown key; a created endpoint returns its secret once and a signature made with it verifies, one made with another endpoint's does not; delete stops delivery; the restricted key's permission error;  each endpoint's shape against what the `stripe` SDK parses; the signature it produces verifies with `constructEvent`; Pay then redirect; Decline stays; idempotency key reuse; replay N times; an unknown route is a 404 in Stripe's error shape.
+`stripe-stand-in.test.ts`: both accounts and the 401 for an unknown key; a created endpoint returns its secret once and a signature made with it verifies, one made with another endpoint's does not; delete stops delivery; the restricted key's permission error;  each endpoint's shape against what the `stripe` SDK parses; the signature it produces verifies with `constructEvent`; Pay then redirect; Decline stays; idempotency key reuse; a session created without `adaptive_pricing[enabled]=false` is refused; replay N times; an unknown route is a 404 in Stripe's error shape.

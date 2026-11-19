@@ -67,6 +67,12 @@
 - [ ] CHK027 Are the points where coupons (#285) and payouts (#286) extend orders and fulfilment stated, and the work left to them listed? [Dependency, Spec FR-020, Assumptions]
 - [ ] CHK028 Are the interactions with certificates, announcements, the catalogue and the dashboard specs stated and non-conflicting? [Consistency, Assumptions]
 
+## Review Follow-ups (2026-11-19)
+
+- [ ] CHK029 Is there a way back in for a refunded student in every price state of the course (priced: buy again; set to free: enrol again), with the progress outcome stated? [Coverage, Spec FR-004, FR-015, US4 scenario 6]
+- [ ] CHK030 Is the outcome defined for a genuine confirmation whose student, course, amount or currency differ from the order's, so that no verified payment ends with neither an enrolment nor a refund? [Coverage, Spec FR-009, FR-011, SC-005]
+- [ ] CHK031 Is it stated that the payment page charges the order's amount in the order's currency, with no conversion to the payer's local currency? [Clarity, Spec FR-005]
+
 ## Notes
 
 - Mark items `[x]` only after review confirms the requirement-quality criterion is satisfied

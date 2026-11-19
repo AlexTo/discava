@@ -22,7 +22,7 @@ One checkout attempt by one student for one course.
 | `paidAt` | string (ISO) | set when Stripe confirmed payment (also on an order refunded automatically: the money was taken) |
 | `refundedAt` | string (ISO) | set with `status: refunded` |
 | `refundedAmount` | number (integer) | total refunded so far; may be set on a `paid` order for a partial refund; never lowered |
-| `refundReason` | `requested` \| `duplicate` \| `unavailable` | why it is `refunded`: an operator's refund, a second payment, or a course no longer published |
+| `refundReason` | `requested` \| `duplicate` \| `unavailable` \| `mismatch` | why it is `refunded`: an operator's refund, a second payment, a course no longer published, or a paid session whose student, course, amount or currency differ from the order's |
 | `createdAt`, `updatedAt` | as other entities | |
 
 **Lifecycle** (each move is a conditional write on the status it comes from):
@@ -31,7 +31,7 @@ One checkout attempt by one student for one course.
 pending ──paid session──────────────► paid ──full refund──► refunded (reason requested)
    │                                    └─partial refund─► paid (refundedAmount grows)
    ├──expired session / lapsed────────► expired
-   └──paid session, not deliverable──► refunded (reason duplicate | unavailable)
+   └──paid session, not deliverable──► refunded (reason duplicate | unavailable | mismatch)
 ```
 
 `expired` and `refunded` are final. A pending order past `expiresAt` is treated as closed by every reader even if its `expired` event never arrived.
@@ -90,30 +90,31 @@ Required with no default and no fallback; existing courses are backfilled by han
 
 ## `enrolment` (existing): `orderId`
 
-Optional string. The order that currently entitles the enrolment: absent for a free enrolment, set by `settleOrderPaid` on create or restore, kept when the enrolment is ended by a refund (so the refund is traceable), replaced by the new order on a re-purchase. Not exposed in API outputs.
+Optional string. The order that currently entitles the enrolment: absent for a free enrolment, set by `settleOrderPaid` on create or restore, kept when the enrolment is ended by a refund (so the refund is traceable), replaced by the new order on a re-purchase, and removed when `course.enrol` restores a refunded enrolment in a course that is now free (the refunded order still names the student and course). Not exposed in API outputs.
 
 ## Rules and where they live
 
-`packages/databases/core-table/src/helpers/order.ts` is the only writer of `order`, and the only writer of `enrolment.orderId` and of the paid-restore and refund-end enrolment writes:
+`packages/databases/core-table/src/helpers/order.ts` is the only writer of `order`, and the only writer of `enrolment.orderId` and of the paid-restore, free-restore and refund-end enrolment writes:
 
 1. `startOrder({ coreTable, course, userId, now })`: refuses a free or unpublished course; in one transaction requires the connection `active`, creates a `pending` order with `listAmount = amount = course.priceAmount`, `accountId` from the record and `expiresAt = now + 1 h`, and raises the record's `latestCheckoutExpiresAt` (R-15). Fails with a distinct `payments-unavailable` error when the record is missing, `changing` or `disconnected`.
 2. `attachCheckoutSession(order, { sessionId, url })`: patches the pending order.
 3. `findOpenOrder({ coreTable, userId, courseId, now })`: the student's `pending` order with a session and `expiresAt` more than 5 minutes ahead, or none.
 4. `settleOrderPaid({ coreTable, order, paymentIntentId?, now })`: R-2: one transaction (order to `paid`; enrolment created or restored; course check `published`). Returns `fulfilled`, `already-settled`, or `undeliverable` with the reason (already enrolled, course unavailable). It does not call Stripe and takes no session, so #285 can call it for a fully discounted order that has no payment intent.
-5. `refundUndeliverable(order, reason)`: the order move `pending` to `refunded`; the Stripe call is made by the handler before it.
+5. `refundUndeliverable(order, reason)`: the order move `pending` to `refunded`, with reason `duplicate`, `unavailable` or `mismatch`; the Stripe call is made by the handler before it. `refundedAmount` is the order's `amount` (refunded in full); for a `mismatch` the figures Stripe actually charged are in the handler's log, not on the order.
 6. `expireOrder(order)`: `pending` to `expired`.
 7. `refundOrder({ coreTable, order, refundedTotal, now })`: full: one transaction (order to `refunded` with reason `requested`; enrolment to `dropped` where `orderId` is this order). Partial: raises `refundedAmount`. Both are no-ops on an order already at or beyond that state.
+8. `restoreFreeEnrolment({ coreTable, courseId, userId })`: one transaction (course check `published` and `priceAmount = 0`; enrolment `dropped` to `completed` if it has `completedAt`, else `active`, with `orderId` removed, conditioned on `status = 'dropped'`). Returns `restored`, `course-unavailable` (the course check failed) or `not-dropped` (the enrolment is no longer `dropped`). Writes no order.
 
-`course.enrol` (free enrolments) keeps its own transaction and gains the `priceAmount = 0` condition; it never sets `orderId`.
+`course.enrol` (free enrolments) keeps its own transaction for a new enrolment and gains the `priceAmount = 0` condition; it never sets `orderId`. For an enrolment that is `dropped` it calls `restoreFreeEnrolment`, so a refunded student gets back into a course that has since been set to free.
 
 ## Invariants (`helpers/invariants.ts`; the snapshot gains `orders`)
 
 New:
 
 - `price-shape`: every course has an integer `priceAmount` that is `0` or within 100 to 1,000,000, a currency from the list, and `pricedAt` exactly when `priceAmount > 0`.
-- `order-shape`: required attributes present; `listAmount` an integer within bounds and `amount` an integer from 0 to `listAmount` (this feature always writes `amount = listAmount`; the zero case is left for #285); the currency from the list; `paid` has `paidAt`, and a payment intent when `amount > 0`; `refunded` has `refundedAt` and a reason, and `requested` has `paidAt`; `refundedAmount <= amount`; `pending` and `expired` have no `paidAt`; checkout session IDs unique across orders.
+- `order-shape`: required attributes present; `listAmount` an integer within bounds and `amount` an integer from 0 to `listAmount` (this feature always writes `amount = listAmount`; the zero case is left for #285); the currency from the list; `paid` has `paidAt`, and a payment intent when `amount > 0`; `refunded` has `refundedAt` and a reason from the list, and `requested` has `paidAt`; `refundedAmount <= amount`; `pending` and `expired` have no `paidAt`; checkout session IDs unique across orders.
 - `paid-order-has-enrolment`: for each `paid` order there is an enrolment for its student and course, not `dropped`, with `orderId` equal to the order; and a student has at most one `paid` order per course. (Exactly-once, as data.)
-- `enrolment-order-matches`: an enrolment with an `orderId` has that order, for the same student and course; the order is `paid`, or is `refunded` with reason `requested` and the enrolment is `dropped`. An order refunded for `duplicate` or `unavailable` is never an enrolment's order.
+- `enrolment-order-matches`: an enrolment with an `orderId` has that order, for the same student and course; the order is `paid`, or is `refunded` with reason `requested` and the enrolment is `dropped`. An order refunded for `duplicate`, `unavailable` or `mismatch` is never an enrolment's order.
 - `paid-course-enrolment-paid`: in a course with `priceAmount > 0`, an enrolment with no `orderId` has `createdAt` at most `pricedAt` plus 10 seconds. (The issue's "unpaid users cannot access paid content", as data.)
 
 Widened (existing tests kept, new cases added):
@@ -128,4 +129,4 @@ New, for the connection (each with a test that breaks it):
 - `order-account-known`: every order has an `accountId`, and an order created after the record's `changedAt` for an `active` record names that record's account. Orders from earlier connections may name another account.
 - `payment-change-shape`: required attributes present; no attribute holds more than four characters of a key (a test writes a row containing a full key and expects the check to fail).
 
-Not violations: a free enrolment in a course that is paid now and was enrolled before `pricedAt`; a `pending` order past `expiresAt`; a course set back to free with paid orders; a certificate whose student was refunded. Each ships with a test that breaks it. A test pins that an order alone does not make a student count in `activity-count-matches-students` or trip a `student-records-*` check.
+Not violations: a free enrolment in a course that is paid now and was enrolled before `pricedAt`; a `pending` order past `expiresAt`; a course set back to free with paid orders; a certificate whose student was refunded; an enrolment with no `orderId`, not `dropped`, whose student has a `refunded` order for the course (restored for free after the course went back to free). Each ships with a test that breaks it. A test pins that an order alone does not make a student count in `activity-count-matches-students` or trip a `student-records-*` check.
