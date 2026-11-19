@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import type { AppRouter as AdminApi } from '@discava/admin-api';
 import type { AppRouter as CoreApi } from '@discava/core-api';
 import {
@@ -108,7 +109,10 @@ export const apiClients = (accessToken: string) => {
 // `payment.connect` needs the webhook address, which the local stack has no
 // webhook API to give yet. A `put` replaces the record, so every scenario that
 // needs it can call this at the same moment.
-export const connectLocalPayments = async () => {
+export const connectLocalPayments = async (
+  webhookEndpointId = 'we_local',
+  webhookUrl = 'http://localhost/stripe/webhook',
+) => {
   const coreTable = await createCoreTableService();
   await coreTable.entities.paymentConnection
     .put({
@@ -117,14 +121,63 @@ export const connectLocalPayments = async () => {
       accountId: 'acct_local',
       accountName: 'Local Stripe Account',
       keyLast4: 'ocal',
-      webhookEndpointId: 'we_local',
-      webhookUrl: 'http://localhost/stripe/webhook',
+      webhookEndpointId,
+      webhookUrl,
       revision: 1,
       changedBy: 'e2e',
       changedByName: 'End-to-end tests',
       changedAt: new Date().toISOString(),
     })
     .go();
+};
+
+// Connects payments for real against the local Stripe stand-in, the state a
+// purchase needs: registers a webhook endpoint with it (as admin-api's connect
+// does), saves the key and the endpoint's signing secret where the local
+// secrets store reads them (`tmp/local-dev/secrets/`), and records the
+// connection. `connectLocalPayments` alone leaves checkout without a key.
+export const connectLocalStripe = async () => {
+  const apiKey = 'sk_test_local';
+  const runner = 'http://localhost:2024';
+  const authorization = `Bearer ${apiKey}`;
+  // A retried scenario must not leave an earlier endpoint behind: the stand-in
+  // delivers every event to each endpoint, signed with that endpoint's secret.
+  const existing = (await (
+    await fetch(`${runner}/v1/webhook_endpoints`, {
+      headers: { authorization },
+    })
+  ).json()) as { data?: { id: string }[] };
+  for (const { id } of existing.data ?? []) {
+    await fetch(`${runner}/v1/webhook_endpoints/${id}`, {
+      method: 'DELETE',
+      headers: { authorization },
+    });
+  }
+  const response = await fetch(`${runner}/v1/webhook_endpoints`, {
+    method: 'POST',
+    headers: {
+      authorization,
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      url: `${runner}/stripe/webhook`,
+      'enabled_events[0]': 'checkout.session.completed',
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`The stand-in refused the endpoint: ${response.status}`);
+  }
+  const endpoint = (await response.json()) as { id: string; secret: string };
+
+  const dir = fileURLToPath(
+    new URL('../../../../tmp/local-dev/secrets/', import.meta.url),
+  );
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await writeFile(`${dir}stripe-api-key`, apiKey, { mode: 0o600 });
+  await writeFile(`${dir}stripe-webhook-secret`, endpoint.secret, {
+    mode: 0o600,
+  });
+  await connectLocalPayments(endpoint.id, `${runner}/stripe/webhook`);
 };
 
 export type ApiUser = Awaited<ReturnType<typeof apiUser>>;

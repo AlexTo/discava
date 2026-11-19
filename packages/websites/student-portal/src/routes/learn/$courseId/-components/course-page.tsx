@@ -156,6 +156,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
                 <EnrolmentActions
                   courseId={courseId}
                   courseTitle={course.title}
+                  priceAmount={course.priceAmount}
+                  priceCurrency={course.priceCurrency}
                 />
               </div>
             </div>

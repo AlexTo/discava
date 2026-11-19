@@ -39,7 +39,10 @@ export const startLocalServer = ({
       // deployed: keep the user's core table record in step (#230).
       await syncLocalUser(claims);
       return {
+        // The request's headers too, as API Gateway passes them: checkout
+        // takes the browser's Origin from them for its return addresses.
         event: {
+          headers: req.headers,
           requestContext: { authorizer: { claims } },
         } as any,
         context: {} as any,

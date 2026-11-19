@@ -17,12 +17,14 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { formatPrice } from '@discava/common-web-utils/price';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../../api';
+import { useCheckoutReturn } from './use-checkout-return';
 
 const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code;
@@ -32,7 +34,17 @@ const errorCode = (error: unknown) =>
 const enrolErrorMessage = (error: unknown) =>
   errorCode(error) === 'NOT_FOUND'
     ? 'This course is no longer open for enrolment.'
-    : ((error as Error | null)?.message ?? 'Something went wrong.');
+    : errorCode(error) === 'PRECONDITION_FAILED'
+      ? 'This course must be purchased'
+      : ((error as Error | null)?.message ?? 'Something went wrong.');
+
+const PAYMENTS_UNAVAILABLE =
+  'Payments are unavailable right now. Please try again later.';
+
+// payment.checkout refuses with this while Stripe isn't connected.
+const isPaymentsUnavailable = (error: unknown) =>
+  errorCode(error) === 'PRECONDITION_FAILED' &&
+  ((error as Error).message ?? '').startsWith('Payments are unavailable');
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -41,15 +53,22 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
-// The course page's call to action: sign in, enrol, or continue learning,
-// depending on who is looking. Enrolling calls core-api's course.enrol, which
-// is idempotent, so a double click or a stale page can't enrol twice.
+// The course page's call to action: sign in, enrol or buy, or continue
+// learning, depending on who is looking. Enrolling calls core-api's
+// course.enrol, which is idempotent, so a double click or a stale page can't
+// enrol twice. A priced course is bought through payment.checkout, which
+// sends the student to the hosted payment page; only the enrolment the
+// payment creates (read from course.myEnrolment) unlocks the course.
 export function EnrolmentActions({
   courseId,
   courseTitle,
+  priceAmount = 0,
+  priceCurrency = 'USD',
 }: {
   courseId: string;
   courseTitle: string;
+  priceAmount?: number;
+  priceCurrency?: string;
 }) {
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
@@ -78,6 +97,58 @@ export function EnrolmentActions({
   );
 
   const enrolment = enrolmentQuery.data;
+  const enrolled =
+    enrolment?.status === 'active' || enrolment?.status === 'completed';
+  const openEnrolledDialog = useCallback(() => setEnrolledOpen(true), []);
+  const checkoutReturn = useCheckoutReturn({
+    courseId,
+    enabled: isAuthenticated && !enrolmentQuery.isPending,
+    enrolled,
+    onEnrolled: openEnrolledDialog,
+  });
+
+  // A stale page can show a course as free after it got a price.
+  const priced =
+    priceAmount > 0 || errorCode(enrol.error) === 'PRECONDITION_FAILED';
+  const availableQuery = useQuery(
+    trpc.payment.available.queryOptions(undefined, {
+      enabled: isAuthenticated && priced && !enrolled,
+    }),
+  );
+  const checkout = useMutation(
+    trpc.payment.checkout.mutationOptions({
+      onSuccess: ({ checkoutUrl }) => window.location.assign(checkoutUrl),
+    }),
+  );
+  const paymentsUnavailable =
+    availableQuery.data?.available === false ||
+    isPaymentsUnavailable(checkout.error);
+  const priceLine = (
+    <p className="text-lg font-semibold">
+      {formatPrice(priceAmount, priceCurrency)}
+    </p>
+  );
+  const buy = () =>
+    paymentsUnavailable ? (
+      <ErrorAlert type="info" header="Payments unavailable">
+        {PAYMENTS_UNAVAILABLE}
+      </ErrorAlert>
+    ) : availableQuery.isPending ? (
+      <Button className="w-full" size="lg" disabled>
+        Checking payment…
+      </Button>
+    ) : (
+      <Button
+        className="w-full"
+        size="lg"
+        disabled={checkout.isPending || checkout.isSuccess}
+        onClick={() => checkout.mutate({ courseId })}
+      >
+        {checkout.isPending || checkout.isSuccess
+          ? 'Starting payment…'
+          : 'Buy now'}
+      </Button>
+    );
   const learnLink = (label: string) => (
     <Button className="w-full" size="lg" asChild>
       <Link to="/learn/$courseId/home" params={{ courseId }}>
@@ -89,9 +160,16 @@ export function EnrolmentActions({
   let action: React.ReactNode;
   if (!isAuthenticated) {
     action = (
-      <Button className="w-full" size="lg" onClick={() => setSignInOpen(true)}>
-        Enrol now
-      </Button>
+      <>
+        {priceLine}
+        <Button
+          className="w-full"
+          size="lg"
+          onClick={() => setSignInOpen(true)}
+        >
+          {priced ? 'Sign in to buy' : 'Enrol now'}
+        </Button>
+      </>
     );
   } else if (enrolmentQuery.isPending) {
     action = (
@@ -136,24 +214,66 @@ export function EnrolmentActions({
         {learnLink('Review course')}
       </>
     );
-  } else if (enrolment?.status === 'dropped') {
-    // Enrolling again returns the dropped enrolment, so there's nothing to
-    // offer here yet.
+  } else if (checkoutReturn.status === 'confirming') {
     action = (
-      <ErrorAlert header="You're no longer enrolled">
-        Your enrolment in this course has ended.
-      </ErrorAlert>
+      <div className="space-y-1.5" role="status">
+        <p className="text-sm font-medium">Confirming your payment</p>
+        <Progress aria-label="Confirming your payment" />
+      </div>
+    );
+  } else if (checkoutReturn.status === 'timed-out') {
+    action = (
+      <>
+        <ErrorAlert type="info" header="Still confirming">
+          Your payment is still being confirmed. It is not lost: refresh in a
+          minute.
+        </ErrorAlert>
+        <Button
+          className="w-full"
+          size="lg"
+          variant="outline"
+          onClick={() => window.location.reload()}
+        >
+          Refresh
+        </Button>
+      </>
+    );
+  } else if (enrolment?.status === 'dropped') {
+    // A refunded or dropped student can buy a priced course again. Enrolling
+    // again in a free one is not offered here yet.
+    action = (
+      <>
+        <ErrorAlert header="You're no longer enrolled">
+          Your enrolment in this course has ended.
+        </ErrorAlert>
+        {priced ? buy() : null}
+      </>
+    );
+  } else if (priced) {
+    action = (
+      <>
+        {priceLine}
+        {checkoutReturn.result === 'cancelled' ? (
+          <ErrorAlert type="info" header="Payment cancelled">
+            Payment cancelled. You have not been charged.
+          </ErrorAlert>
+        ) : null}
+        {buy()}
+      </>
     );
   } else {
     action = (
-      <Button
-        className="w-full"
-        size="lg"
-        disabled={enrol.isPending}
-        onClick={() => enrol.mutate({ courseId })}
-      >
-        {enrol.isPending ? 'Enrolling…' : 'Enrol now'}
-      </Button>
+      <>
+        {priceLine}
+        <Button
+          className="w-full"
+          size="lg"
+          disabled={enrol.isPending}
+          onClick={() => enrol.mutate({ courseId })}
+        >
+          {enrol.isPending ? 'Enrolling…' : 'Enrol now'}
+        </Button>
+      </>
     );
   }
 
@@ -168,6 +288,11 @@ export function EnrolmentActions({
       {enrol.isError ? (
         <ErrorAlert type="error" header="Couldn't enrol you">
           {enrolErrorMessage(enrol.error)}
+        </ErrorAlert>
+      ) : null}
+      {checkout.isError && !isPaymentsUnavailable(checkout.error) ? (
+        <ErrorAlert type="error" header="Couldn't start payment">
+          {apiErrorMessage(checkout.error)}
         </ErrorAlert>
       ) : null}
 
@@ -201,9 +326,12 @@ export function EnrolmentActions({
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <Sparkles className="size-6" />
             </div>
-            <DialogTitle className="text-center">Sign in to enrol</DialogTitle>
+            <DialogTitle className="text-center">
+              {priced ? 'Sign in to buy' : 'Sign in to enrol'}
+            </DialogTitle>
             <DialogDescription className="text-center">
-              Create or sign in to your account to enrol in {courseTitle}.
+              Create or sign in to your account to {priced ? 'buy' : 'enrol in'}{' '}
+              {courseTitle}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center">
