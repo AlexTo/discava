@@ -31,6 +31,7 @@ for (const stageName of listStageNames(PROJECT_PATH)) {
     },
     permissionsBoundary: stagePermissionsBoundary(app, stageName),
     ...config?.infra,
+    payouts: config?.payouts,
   });
 }
 

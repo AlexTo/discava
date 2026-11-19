@@ -15,6 +15,7 @@ import {
   LOCAL_CORE_API_URL,
   LOCAL_EVENT_RUNNER,
   LOCAL_NOTIFICATIONS_FROM,
+  LOCAL_PAYOUTS,
   LOCAL_PORTAL_URLS,
   LOCAL_QUEUES,
   localBucketName,
@@ -98,6 +99,13 @@ process.env.STUDENT_PORTAL_URL ??= LOCAL_PORTAL_URLS.student;
 process.env.INSTRUCTOR_PORTAL_URL ??= LOCAL_PORTAL_URLS.instructor;
 process.env.ADMIN_PORTAL_URL ??= LOCAL_PORTAL_URLS.admin;
 process.env.CORE_API_URL ??= LOCAL_CORE_API_URL;
+
+// What the earnings-recording handler reads when deployed from the stacks'
+// environment variables.
+process.env.PLATFORM_FEE_BASIS_POINTS ??= String(
+  LOCAL_PAYOUTS.platformFeeBasisPoints,
+);
+process.env.PAYOUT_HOLD_DAYS ??= String(LOCAL_PAYOUTS.holdDays);
 
 const outcomeLogger = new Logger({ serviceName: 'TranscribeComplete' });
 

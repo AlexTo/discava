@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { RuntimeConfig } from '@discava/common-constructs';
-import type { StageComponents } from '@discava/common-infra-config';
+import type {
+  PayoutSettings,
+  StageComponents,
+} from '@discava/common-infra-config';
 import { Stack, Stage, StageProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AdminApiStack } from '../stacks/admin-api-stack.js';
@@ -16,7 +19,11 @@ import { StreamRouterStack } from '../stacks/stream-router-stack.js';
 import { WebsitesStack } from '../stacks/websites-stack.js';
 
 /** Per-component settings (all default to fully hardened) plus the stage's env. */
-export type ApplicationStageProps = StageProps & StageComponents;
+export type ApplicationStageProps = StageProps &
+  StageComponents & {
+    /** The stage's payout settings. @default the documented defaults (2000 basis points, 14 days) */
+    payouts?: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
+  };
 
 /**
  * The application, split into stacks to stay well under CloudFormation's
@@ -57,6 +64,7 @@ export class ApplicationStage extends Stage {
       publicMedia,
       search,
       notifications,
+      payouts = { platformFeeBasisPoints: 2000, holdDays: 14 },
       ...props
     }: ApplicationStageProps,
   ) {
@@ -132,6 +140,7 @@ export class ApplicationStage extends Stage {
       notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       portalUrls: websites.portalUrls,
       coreApiUrl: coreApiStack.apiUrl,
+      payouts,
     });
 
     new InstructorApiStack(this, 'InstructorApi', {

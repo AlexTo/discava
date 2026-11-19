@@ -5,6 +5,7 @@
 
 export * from './core-api-page-renderer.js';
 export * from './events-analytics-update.js';
+export * from './events-earnings-recording.js';
 export * from './events-notification-delivery.js';
 export * from './events-notification-unsubscribe.js';
 export * from './events-post-confirmation.js';

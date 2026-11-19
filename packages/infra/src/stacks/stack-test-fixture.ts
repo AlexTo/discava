@@ -7,11 +7,16 @@
 import { type StageComponents } from '@discava/common-infra-config';
 import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { ApplicationStage } from '../stages/application-stage.js';
+import {
+  ApplicationStage,
+  type ApplicationStageProps,
+} from '../stages/application-stage.js';
 
 // Synthesizes the application with a stage's settings and returns each of
 // its stacks' templates.
-export const synth = (components: StageComponents) => {
+export const synth = (
+  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
     ...components,
@@ -69,7 +74,9 @@ export const actionsOf = (template: Template, rolePrefix: string) =>
     .flatMap(([, actions]) => actions);
 
 // Every stack in the stage, by name, with its synthesized template.
-export const stackTemplates = (components: StageComponents) => {
+export const stackTemplates = (
+  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
     ...components,
