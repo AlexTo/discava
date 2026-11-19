@@ -13,6 +13,9 @@ import {
 } from './revenue.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
+type TransactionEntities = Parameters<
+  Parameters<CoreTable['transaction']['write']>[0]
+>[0];
 
 // The only writer of `earningEntry`, `earningDay` and `earningOrder`. A sale
 // and every refund step is one DynamoDB transaction holding the entries, the
@@ -92,11 +95,6 @@ const plusDays = (iso: string, days: number) =>
 export const earningDayOf = (iso: string) =>
   new Date(iso).toISOString().slice(0, 10);
 
-type Figures = Pick<
-  EarningEntryRecord,
-  'grossMinor' | 'discountMinor' | 'refundMinor' | 'feeMinor' | 'netMinor'
->;
-
 type EntryContext = Pick<
   EarningEntryRecord,
   | 'courseId'
@@ -112,7 +110,7 @@ type EntryContext = Pick<
 // One entry and the add to its day row, which a transaction holds for each
 // instructor. The entry is conditioned on its key not existing.
 const entryWrites = (
-  { earningEntry, earningDay }: CoreTable['entities'],
+  { earningEntry, earningDay }: TransactionEntities,
   entry: EarningEntryRecord,
   sale: boolean,
 ) => [

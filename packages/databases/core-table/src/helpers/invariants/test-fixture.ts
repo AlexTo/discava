@@ -267,6 +267,11 @@ export const consistentTable = (): TableSnapshot => ({
   orders: [],
   paymentConnections: [],
   paymentChanges: [],
+  payoutAccounts: [],
+  earningEntries: [],
+  earningDays: [],
+  earningOrders: [],
+  payouts: [],
 });
 
 // The helpers a topic's tests share, working on whichever table the test file
