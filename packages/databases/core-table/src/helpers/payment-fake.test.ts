@@ -37,6 +37,7 @@ const KEYS: Record<string, (key: Row) => string> = {
 const SORT_KEYS: Record<string, (k: Row) => string> = {
   earningDay: (k) => `D#${k.day}#${k.courseId}#${k.currency}`,
   earningEntry: (k) => `L#${k.courseId}#${k.occurredAt}#${k.entryId}`,
+  payout: (k) => `P#${k.createdAt}#${k.payoutId}`,
 };
 const BOUNDS: Record<string, (k: Row) => string> = {
   earningDay: (k) => `D#${k.day}`,
@@ -147,16 +148,18 @@ export const createFakeCoreTable = () => {
       go: async ({
         cursor,
         limit,
+        order,
       }: {
         cursor?: string;
         limit?: number;
         pages?: 'all';
+        order?: 'asc' | 'desc';
       } = {}) => {
         const sorted = [...table(name).values()]
           .filter((row) => row.instructorId === key.instructorId)
           .map((row) => ({ sk: SORT_KEYS[name]!(row), row }))
           .filter(({ sk }) => sk >= low && sk <= high)
-          .sort((a, b) => (a.sk < b.sk ? -1 : 1))
+          .sort((a, b) => (a.sk < b.sk ? -1 : 1) * (order === 'desc' ? -1 : 1))
           .filter(({ sk }) => cursor === undefined || sk > cursor);
         const page = limit === undefined ? sorted : sorted.slice(0, limit);
         return {

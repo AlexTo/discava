@@ -107,6 +107,7 @@ import {
 import {
   account as payoutAccount,
   dashboardLink as payoutDashboardLink,
+  overview as payoutOverview,
   startOnboarding as payoutStartOnboarding,
 } from './procedures/payout.js';
 import {
@@ -182,6 +183,7 @@ export const appRouter = router({
     account: payoutAccount,
     startOnboarding: payoutStartOnboarding,
     dashboardLink: payoutDashboardLink,
+    overview: payoutOverview,
   }),
   category: router({
     listActive: listActiveCategories,
