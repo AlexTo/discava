@@ -164,6 +164,8 @@ const id = (prefix: string) => `${prefix}_${randomBytes(12).toString('hex')}`;
 
 // Stripe retries a message that wasn't answered with a 2xx; so does this.
 const DELIVERY_ATTEMPTS = 3;
+// The longest delay setTimeout accepts.
+const MAX_TIMER_MS = 2 ** 31 - 1;
 
 const DEFAULT_CONNECT_STATE_FILE = new URL(
   '../../../../tmp/local-dev/stripe-connect.json',
@@ -366,6 +368,25 @@ export const createStripeStandIn = ({
     return deliver(session.accountId, event);
   };
 
+  // Closes an unpaid session and tells the endpoints; a no-op for any other.
+  const expireSession = async (session: Session) => {
+    if (session.status !== 'open') return;
+    session.status = 'expired';
+    await notify(session, 'checkout.session.expired');
+  };
+
+  // An unpaid session expires by itself at its `expires_at`, as at Stripe.
+  const scheduleExpiry = (session: Session) => {
+    const delay = Math.min(
+      Math.max(0, session.expiresAt * 1000 - Date.now()),
+      MAX_TIMER_MS,
+    );
+    setTimeout(() => {
+      if (session.expiresAt * 1000 > Date.now()) return scheduleExpiry(session);
+      expireSession(session).catch(() => {});
+    }, delay).unref();
+  };
+
   const refundIntent = async (intent: PaymentIntent, amount?: number) => {
     const refunded = Math.min(
       intent.amount,
@@ -417,8 +438,7 @@ export const createStripeStandIn = ({
     const session = sessions.get(decodeURIComponent(match[1] as string));
     const action = match[2];
     if (session?.status === 'open' && session.expiresAt * 1000 <= Date.now()) {
-      session.status = 'expired';
-      await notify(session, 'checkout.session.expired');
+      await expireSession(session);
     }
     if (!session || session.status !== 'open') {
       sendHtml(response, 200, page('stripe-pay-expired.html'));
@@ -452,7 +472,7 @@ export const createStripeStandIn = ({
     path: string,
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
-    const control = /^\/stripe\/test\/(replay|forge)$/.exec(path);
+    const control = /^\/stripe\/test\/(replay|forge|expire)$/.exec(path);
     if (!control) return false;
     const input = JSON.parse((await readBody(request)) || '{}') as {
       sessionId?: string;
@@ -460,6 +480,11 @@ export const createStripeStandIn = ({
       kind?: 'signature' | 'body';
     };
     const session = input.sessionId ? sessions.get(input.sessionId) : undefined;
+    if (control[1] === 'expire' && session) {
+      await expireSession(session);
+      send(response, 200, { status: session.status });
+      return true;
+    }
     if (!session?.lastEvent) {
       error(
         response,
@@ -966,6 +991,7 @@ export const createStripeStandIn = ({
         paymentStatus: 'unpaid',
       };
       sessions.set(sessionId, session);
+      scheduleExpiry(session);
       const intentData =
         typeof form.payment_intent_data === 'object'
           ? form.payment_intent_data
