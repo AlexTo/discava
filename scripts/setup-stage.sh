@@ -1046,6 +1046,22 @@ create_execution_policy_files() {
       "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
     },
     {
+      "Sid": "ManageDiscavaManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy"
+      ],
+      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:policy/$RESOURCE_PREFIX*"
+    },
+    {
       "Sid": "GrantOnlyWithinStageBoundary",
       "Effect": "Allow",
       "Action": [
@@ -1139,7 +1155,9 @@ EOF
         "dynamodb:DescribeContinuousBackups",
         "dynamodb:DescribeContributorInsights",
         "dynamodb:DescribeKinesisStreamingDestination",
-        "dynamodb:GetResourcePolicy"
+        "dynamodb:GetResourcePolicy",
+        "dynamodb:PutResourcePolicy",
+        "dynamodb:DeleteResourcePolicy"
       ],
       "Resource": [
         "arn:$AWS_PARTITION:dynamodb:$AWS_REGION:$ACCOUNT_ID:table/$RESOURCE_PREFIX*",
