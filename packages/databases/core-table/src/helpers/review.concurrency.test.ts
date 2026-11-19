@@ -266,6 +266,8 @@ const violations = (table: Table) =>
     categoryClaims: [],
     instructorProfiles: [],
     profileHandleClaims: [],
+    coupons: [],
+    couponRedemptions: [],
     discussionPosts: [],
     discussionVotes: [],
   } as unknown as TableSnapshot).filter((v) =>

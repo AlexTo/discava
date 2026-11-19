@@ -9,6 +9,8 @@ export { createCategoryEntity } from './category.js';
 export { createCategoryClaimEntity } from './category-claim.js';
 export { createCertificateEntity } from './certificate.js';
 export { createContentItemEntity } from './content-item.js';
+export { createCouponEntity } from './coupon.js';
+export { createCouponRedemptionEntity } from './coupon-redemption.js';
 export { createCourseEntity } from './course.js';
 export { createCourseInstructorEntity } from './course-instructor.js';
 export { createCoursePreviewEntity } from './course-preview.js';

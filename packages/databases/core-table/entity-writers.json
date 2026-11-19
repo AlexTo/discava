@@ -43,6 +43,16 @@
       "packages/apis/instructor-api/src/procedures/module.ts"
     ]
   },
+  "coupon": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/coupon-redemption.ts"
+    ]
+  },
+  "couponRedemption": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/coupon-redemption.ts"
+    ]
+  },
   "course": {
     "core-table": [
       "packages/databases/core-table/src/helpers/course-catalogue.ts",
