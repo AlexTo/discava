@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
+import { buildNotification } from './notification-types.js';
 import {
   classifyReviewCancellation,
+  MAX_REVIEW_NOTIFIED_INSTRUCTORS,
   type ReviewWrite,
+  responseText,
   reviewerName,
+  reviewNotifications,
   reviewText,
   reviewWrites,
 } from './review.js';
@@ -199,6 +203,96 @@ describe('a post', () => {
   });
 });
 
+// No notification state yet for any instructor, so no table is read.
+const notify = (instructorIds: string[]) =>
+  reviewNotifications(coreTable, {
+    courseId: 'course-1',
+    courseTitle: 'Intro to Rust',
+    studentId: 'student-1',
+    rating: 4,
+    createdAt: AT,
+    instructorIds,
+  });
+
+describe('a post with notifications', () => {
+  beforeAll(() => {
+    vi.spyOn(coreTable.entities.notificationState, 'get').mockReturnValue({
+      go: async () => ({ data: undefined }),
+    } as never);
+  });
+
+  it('adds a notification and unread count for each instructor after the tally', async () => {
+    const notifications = await notify(['teacher-1', 'teacher-2']);
+    const items = itemsFor({ ...post, notifications } as ReviewWrite);
+
+    expect(notifications).toHaveLength(4);
+    expect(items).toHaveLength(8);
+    const created = items.filter(
+      (item) => item.Put?.Item.type === 'review.received',
+    );
+    expect(created.map((item) => item.Put?.Item.userId)).toEqual([
+      'teacher-1',
+      'teacher-2',
+    ]);
+    expect(created[0]!.Put?.Item).toMatchObject({
+      occurredAt: AT,
+      title: 'New review for Intro to Rust',
+      link: { portal: 'instructor', path: '/my-courses/course-1/reviews' },
+    });
+    expect(conditionOf(created[0]!)).toContain('attribute_not_exists');
+    const keys = keysOf(items);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('takes its params from a registered type and the rating as a string', () => {
+    expect(() =>
+      buildNotification('review.received', {
+        courseId: 'course-1',
+        courseTitle: 'Intro to Rust',
+        rating: '4',
+      }),
+    ).not.toThrow();
+  });
+
+  it('uses the same notification id for the same student and course', async () => {
+    const notifications = await notify(['teacher-1']);
+    const again = await notify(['teacher-1']);
+    const sk = (items: typeof notifications) =>
+      (
+        coreTable.transaction.write(() => items).params()
+          .TransactItems as TransactItem[]
+      )[0]!.Put?.Item.sk;
+    expect(sk(notifications)).toBe(sk(again));
+  });
+
+  it('posts without notification items for a course with no instructor', async () => {
+    expect(await notify([])).toEqual([]);
+    expect(
+      itemsFor({ ...post, notifications: [] } as ReviewWrite),
+    ).toHaveLength(4);
+  });
+
+  it('notifies each instructor once and no more than a transaction holds', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => `teacher-${i % 120}`);
+    const notifications = await notify(many);
+    const items = itemsFor({ ...post, notifications } as ReviewWrite);
+
+    expect(notifications).toHaveLength(MAX_REVIEW_NOTIFIED_INSTRUCTORS * 2);
+    expect(items.length).toBeLessThanOrEqual(100);
+  });
+
+  it.each([
+    ['an edit', edit],
+    ['a delete', remove],
+    ['a response', respond],
+    ['a response deleted', deleteResponse],
+  ])('%s adds no notification items', (_, write) => {
+    expect(
+      itemsFor(write).some((item) => item.Put?.Item.type === 'review.received'),
+    ).toBe(false);
+  });
+});
+
 describe('an edit', () => {
   it('patches the review under the version it read, while visible', () => {
     const items = itemsFor(edit);
@@ -264,6 +358,138 @@ describe('a delete', () => {
   });
 });
 
+describe('a removal', () => {
+  const removal: ReviewWrite = {
+    ...base,
+    action: 'remove',
+    existing: { version: 2, rating: 4 },
+    removedBy: 'admin-1',
+    reason: '  Abusive language  ',
+  };
+
+  it('marks the review removed under the version it read, and takes one off its counter', () => {
+    const [review, counter, ...rest] = itemsFor(removal);
+
+    expect(rest).toEqual([]);
+    expect(updateOf(review!)).toContain('status = removed');
+    expect(updateOf(review!)).toContain(`removedAt = ${AT}`);
+    expect(updateOf(review!)).toContain('removedBy = admin-1');
+    expect(updateOf(review!)).toContain('removedReason = Abusive language');
+    expect(updateOf(review!)).not.toContain('version =');
+    expect(conditionOf(review!)).toContain('version = 2');
+    expect(conditionOf(review!)).toContain('status = visible');
+    expect(updateOf(counter!)).toMatch(/ADD .*stars4 -1/);
+    expect(conditionOf(counter!)).toContain('stars4 >= 1');
+  });
+
+  it('refuses an empty or over-long reason', () => {
+    expect(() => itemsFor({ ...removal, reason: '  ' } as ReviewWrite)).toThrow(
+      RangeError,
+    );
+    expect(() =>
+      itemsFor({ ...removal, reason: 'x'.repeat(201) } as ReviewWrite),
+    ).toThrow(RangeError);
+    expect(() =>
+      itemsFor({ ...removal, reason: 'x'.repeat(200) } as ReviewWrite),
+    ).not.toThrow();
+  });
+
+  it('writes no two items for one key', () => {
+    const keys = keysOf(itemsFor(removal));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+const respond: ReviewWrite = {
+  ...base,
+  action: 'respond',
+  instructorId: 'instructor-1',
+  instructorName: 'Sam L.',
+  text: '  Thanks for the feedback!  ',
+};
+const deleteResponse: ReviewWrite = {
+  ...base,
+  action: 'deleteResponse',
+  instructorId: 'instructor-1',
+};
+
+describe('responseText', () => {
+  it('trims, and refuses nothing or too much', () => {
+    expect(responseText('  Thanks \n')).toBe('Thanks');
+    expect(responseText(` ${'a'.repeat(1000)} `)).toHaveLength(1000);
+    expect(() => responseText('   ')).toThrow(RangeError);
+    expect(() => responseText('a'.repeat(1001))).toThrow(RangeError);
+  });
+});
+
+describe('a response', () => {
+  it('sets the four response attributes on a visible review', () => {
+    const items = itemsFor(respond);
+    const [patch] = items;
+
+    expect(items).toHaveLength(2);
+    expect(updateOf(patch!)).toContain(
+      'responseText = Thanks for the feedback!',
+    );
+    expect(updateOf(patch!)).toContain(`responseAt = ${AT}`);
+    expect(updateOf(patch!)).toContain('responseById = instructor-1');
+    expect(updateOf(patch!)).toContain('responseByName = Sam L.');
+    expect(conditionOf(patch!)).toContain('status = visible');
+  });
+
+  it('leaves the version, edit time, rating and tally alone', () => {
+    const items = itemsFor(respond);
+    const update = updateOf(items[0]!);
+
+    for (const name of ['version', 'editedAt', 'rating', 'text =', 'stars']) {
+      expect(update).not.toContain(name);
+    }
+    expect(conditionOf(items[0]!)).not.toContain('version');
+    expect(items.some((item) => updateOf(item).includes('stars'))).toBe(false);
+  });
+
+  it('checks the instructor still teaches the course', () => {
+    const check = itemsFor(respond)[1]!;
+
+    expect(check.ConditionCheck).toBeDefined();
+    expect(conditionOf(check)).toContain('attribute_exists(instructorId)');
+    expect(JSON.stringify(check.ConditionCheck!.Key)).toContain('course-1');
+  });
+
+  it('refuses empty or over-long text', () => {
+    expect(() => itemsFor({ ...respond, text: ' ' } as ReviewWrite)).toThrow();
+    expect(() =>
+      itemsFor({ ...respond, text: 'a'.repeat(1001) } as ReviewWrite),
+    ).toThrow();
+  });
+
+  it('writes no two items for one key', () => {
+    const keys = keysOf(itemsFor(respond));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('deleting a response', () => {
+  it('removes the four attributes under the same conditions, with no counter', () => {
+    const items = itemsFor(deleteResponse);
+    const update = updateOf(items[0]!);
+
+    expect(items).toHaveLength(2);
+    expect(update).toMatch(/REMOVE/);
+    for (const name of [
+      'responseText',
+      'responseAt',
+      'responseById',
+      'responseByName',
+    ]) {
+      expect(update).toContain(name);
+    }
+    expect(update).not.toContain('stars');
+    expect(conditionOf(items[0]!)).toContain('status = visible');
+    expect(conditionOf(items[1]!)).toContain('attribute_exists(instructorId)');
+  });
+});
+
 describe('classifyReviewCancellation', () => {
   const failed = { code: 'ConditionalCheckFailed' };
   const none = { code: 'None' };
@@ -276,11 +502,29 @@ describe('classifyReviewCancellation', () => {
     expect(classifyReviewCancellation('post', reasons)).toBe(expected);
   });
 
-  it.each(['edit', 'delete'] as const)(
+  it.each(['edit', 'delete', 'remove'] as const)(
     'an %s on a changed review, or one with no count to move, is stale',
     (action) => {
       expect(classifyReviewCancellation(action, [failed, none])).toBe('stale');
       expect(classifyReviewCancellation(action, [none, failed])).toBe('stale');
+    },
+  );
+
+  it.each(['respond', 'deleteResponse'] as const)(
+    'a %s on a missing or removed review is unavailable',
+    (action) => {
+      expect(classifyReviewCancellation(action, [failed, none])).toBe(
+        'unavailable',
+      );
+    },
+  );
+
+  it.each(['respond', 'deleteResponse'] as const)(
+    'a %s by someone who no longer teaches the course is refused',
+    (action) => {
+      expect(classifyReviewCancellation(action, [none, failed])).toBe(
+        'not-instructor',
+      );
     },
   );
 
@@ -292,5 +536,8 @@ describe('classifyReviewCancellation', () => {
     ).toBeUndefined();
     expect(classifyReviewCancellation('edit', [conflict])).toBeUndefined();
     expect(classifyReviewCancellation('delete', [])).toBeUndefined();
+    expect(
+      classifyReviewCancellation('respond', [conflict, none]),
+    ).toBeUndefined();
   });
 });

@@ -315,6 +315,12 @@ describe('reply', () => {
     now: AT,
   };
 
+  it("refuses a reply whose postId is the question's id", () => {
+    expect(() => items({ ...REPLY, postId: QID })).toThrow(
+      DiscussionInputError,
+    );
+  });
+
   it('checks, adds one to replyCount only, and creates the reply', () => {
     const list = items(REPLY);
 
@@ -793,6 +799,18 @@ describe('report and dismiss', () => {
     expect(condition).toContain('attribute_not_exists(reportedBy)');
     expect(condition).toContain('contains(reportedBy, "r1")');
     expect(condition).toContain('size(reportedBy) < 20');
+  });
+
+  it('uses every attribute name it sends, which DynamoDB insists on', () => {
+    for (const item of items(REPORT)) {
+      const request = requestOf(item) as Conditional & {
+        UpdateExpression?: string;
+      };
+      const text = `${request.ConditionExpression ?? ''} ${request.UpdateExpression ?? ''}`;
+      for (const name of Object.keys(request.ExpressionAttributeNames)) {
+        expect(text, name).toMatch(new RegExp(`${name}(?!\\w)`));
+      }
+    }
   });
 
   it('keeps the time of the first report', () => {

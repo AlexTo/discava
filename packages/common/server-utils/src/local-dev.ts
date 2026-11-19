@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { LOCAL_PORTAL_ORIGINS } from '@discava/common-infra-config/local-portals';
 
 /** Whether this is a local dev server (`nx dev`), rather than a deployed Lambda. */
 export const isLocalDev = (): boolean => process.env.LOCAL_DEV === 'true';
@@ -177,11 +178,7 @@ export interface LocalEmailRequest {
  * Where local dev's portals and core-api listen, for the links in notification
  * emails. Deployed, the stacks set these through environment variables.
  */
-export const LOCAL_PORTAL_URLS = {
-  student: 'http://localhost:4201',
-  instructor: 'http://localhost:4200',
-  admin: 'http://localhost:4202',
-};
+export const LOCAL_PORTAL_URLS = LOCAL_PORTAL_ORIGINS;
 export const LOCAL_CORE_API_URL = 'http://localhost:2022';
 
 /** The sender local dev's notification emails come from, so email counts as configured. */

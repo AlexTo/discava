@@ -19,6 +19,9 @@ const FOLDER_NAME = '[A-Za-z0-9][A-Za-z0-9._-]*';
 export const isSpecFolderName = (name: string): boolean =>
   new RegExp(`^${FOLDER_NAME}$`).test(name);
 
+/** Finished specs live in `specs/_archive/`; the agent-issue tooling skips it. */
+export const ARCHIVE_FOLDER = '_archive';
+
 /** What every marker starts with, to find the issues that carry one. */
 export const MARKER_PREFIX = '<!-- agent-issue spec:';
 

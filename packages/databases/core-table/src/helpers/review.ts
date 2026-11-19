@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { REVIEW_TEXT_MAX } from '../entities/review.js';
+import {
+  REVIEW_REMOVED_REASON_MAX,
+  REVIEW_RESPONSE_MAX,
+  REVIEW_TEXT_MAX,
+} from '../entities/review.js';
 import type { createCoreTableService } from '../service.js';
+import { notificationWrites } from './notification.js';
 import { starField } from './review-rating.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
@@ -59,6 +64,12 @@ export interface ReviewPost extends ReviewWriteBase {
   reviewerName: string;
   rating: number;
   text?: string;
+  /**
+   * The instructors' notifications, from reviewNotifications; added to the
+   * transaction after the tally. Edits, deletes, answers and removals notify
+   * nobody.
+   */
+  notifications?: ReturnType<TransactionWrites>;
 }
 
 export interface ReviewEdit extends ReviewWriteBase {
@@ -75,7 +86,65 @@ export interface ReviewDelete extends ReviewWriteBase {
   existing: { version: number; rating: number };
 }
 
-export type ReviewWrite = ReviewPost | ReviewEdit | ReviewDelete;
+/** An admin's removal of a review; the review stays, marked removed. */
+export interface ReviewRemove extends ReviewWriteBase {
+  action: 'remove';
+  /** The review as read. */
+  existing: { version: number; rating: number };
+  /** The admin's `sub`. */
+  removedBy: string;
+  /** Why; trimmed, 1 to REVIEW_REMOVED_REASON_MAX characters. */
+  reason: string;
+}
+
+/** An instructor's answer to a review; replaces any earlier answer. */
+export interface ReviewRespond extends ReviewWriteBase {
+  action: 'respond';
+  /** `userId` is the reviewer; this is the answering instructor. */
+  instructorId: string;
+  /** From reviewerName, read from the instructor's user record. */
+  instructorName: string;
+  text: string;
+}
+
+export interface ReviewDeleteResponse extends ReviewWriteBase {
+  action: 'deleteResponse';
+  instructorId: string;
+}
+
+export type ReviewWrite =
+  | ReviewPost
+  | ReviewEdit
+  | ReviewDelete
+  | ReviewRemove
+  | ReviewRespond
+  | ReviewDeleteResponse;
+
+/** Response text as stored: trimmed, 1 to REVIEW_RESPONSE_MAX characters. */
+export const responseText = (text: string): string => {
+  const trimmed = text.trim();
+  if (trimmed === '') {
+    throw new RangeError('response text is empty');
+  }
+  if (trimmed.length > REVIEW_RESPONSE_MAX) {
+    throw new RangeError(`response is over ${REVIEW_RESPONSE_MAX} characters`);
+  }
+  return trimmed;
+};
+
+/** A removal reason as stored: trimmed, 1 to REVIEW_REMOVED_REASON_MAX characters. */
+export const removalReason = (reason: string): string => {
+  const trimmed = reason.trim();
+  if (trimmed === '') {
+    throw new RangeError('removal reason is empty');
+  }
+  if (trimmed.length > REVIEW_REMOVED_REASON_MAX) {
+    throw new RangeError(
+      `removal reason is over ${REVIEW_REMOVED_REASON_MAX} characters`,
+    );
+  }
+  return trimmed;
+};
 
 /** Review text as stored: trimmed, and absent when nothing is left. */
 export const reviewText = (text: string | undefined): string | undefined => {
@@ -89,19 +158,101 @@ export const reviewText = (text: string | undefined): string | undefined => {
   return trimmed;
 };
 
+// A transaction holds 100 items. A post writes 4, and each instructor's
+// notification is 2 (the notification and the user's unread count).
+const TRANSACTION_ITEMS = 100;
+const POST_ITEMS = 4;
+export const MAX_REVIEW_NOTIFIED_INSTRUCTORS = Math.floor(
+  (TRANSACTION_ITEMS - POST_ITEMS) / 2,
+);
+
 /**
- * The checks and writes of one post, edit or delete. The items are in a fixed
+ * The `review.received` notification items for a new review, one
+ * notification per instructor (the first MAX_REVIEW_NOTIFIED_INSTRUCTORS, so
+ * the post stays within a transaction). The dedupe key names the student and
+ * course, so a post that commits twice notifies once.
+ */
+export const reviewNotifications = async (
+  service: CoreTable,
+  input: {
+    courseId: string;
+    courseTitle: string;
+    studentId: string;
+    rating: number;
+    createdAt: string;
+    instructorIds: string[];
+  },
+): Promise<ReturnType<TransactionWrites>> => {
+  const items: ReturnType<TransactionWrites> = [];
+  for (const userId of [...new Set(input.instructorIds)].slice(
+    0,
+    MAX_REVIEW_NOTIFIED_INSTRUCTORS,
+  )) {
+    items.push(
+      ...(await notificationWrites(service, {
+        type: 'review.received',
+        userId,
+        params: {
+          courseId: input.courseId,
+          courseTitle: input.courseTitle,
+          rating: String(input.rating),
+        },
+        dedupeKey: `${input.courseId}:${input.studentId}`,
+        occurredAt: input.createdAt,
+      })),
+    );
+  }
+  return items;
+};
+
+/**
+ * The checks and writes of one post, edit, delete or removal. The items are in a fixed
  * order, which classifyReviewCancellation reads: a post's are the review,
- * the enrolment, the course and the tally; an edit's and a delete's are the
+ * the enrolment, the course, the tally and any notifications; an edit's, a delete's and a removal's are the
  * review, then the tally when it changes. A failed condition cancels the
  * whole transaction; the caller reads again and decides.
  */
 export const reviewWrites = (
-  { review, courseRating, enrolment, course }: TransactionEntities,
+  {
+    review,
+    courseRating,
+    enrolment,
+    course,
+    courseInstructor,
+  }: TransactionEntities,
   write: ReviewWrite,
 ): ReturnType<TransactionWrites> => {
   const { courseId, userId, at } = write;
   const key = { courseId, userId };
+
+  // An answer touches neither the version nor the tally, so a student's edit
+  // from the version it read still goes through. It needs the review to be
+  // visible and the caller to still teach the course.
+  if (write.action === 'respond' || write.action === 'deleteResponse') {
+    const visible = (attr: any, op: any) => op.eq(attr.status, 'visible');
+    const patch = review.patch(key);
+    const answer =
+      write.action === 'respond'
+        ? patch.set({
+            responseText: responseText(write.text),
+            responseAt: at,
+            responseById: write.instructorId,
+            responseByName: write.instructorName,
+          })
+        : patch.remove([
+            'responseText',
+            'responseAt',
+            'responseById',
+            'responseByName',
+          ]);
+    return [
+      answer.where(visible).commit(),
+      courseInstructor
+        .check({ courseId, instructorId: write.instructorId })
+        .where((attr, op) => op.exists(attr.instructorId))
+        .commit(),
+    ];
+  }
 
   if (write.action === 'post') {
     const text = reviewText(write.text);
@@ -132,6 +283,7 @@ export const reviewWrites = (
         .update({ courseId })
         .add({ [starField(write.rating)]: 1 })
         .commit(),
+      ...(write.notifications ?? []),
     ];
   }
 
@@ -143,6 +295,27 @@ export const reviewWrites = (
     const field = starField(existing.rating);
     return [
       review.delete(key).where(unchanged).commit(),
+      courseRating
+        .update({ courseId })
+        .add({ [field]: -1 })
+        .where((attr, op) => op.gte(attr[field], 1))
+        .commit(),
+    ];
+  }
+
+  if (write.action === 'remove') {
+    const field = starField(existing.rating);
+    return [
+      review
+        .patch(key)
+        .set({
+          status: 'removed',
+          removedAt: at,
+          removedBy: write.removedBy,
+          removedReason: removalReason(write.reason),
+        })
+        .where(unchanged)
+        .commit(),
       courseRating
         .update({ courseId })
         .add({ [field]: -1 })
@@ -181,7 +354,9 @@ export type ReviewCancellation =
   | 'already-reviewed'
   | 'not-enrolled'
   | 'course-closed'
-  | 'stale';
+  | 'stale'
+  | 'not-instructor'
+  | 'unavailable';
 
 /**
  * What cancelled a review transaction, from the reason DynamoDB gave for each
@@ -196,6 +371,14 @@ export const classifyReviewCancellation = (
 ): ReviewCancellation | undefined => {
   const failed = (index: number) =>
     reasons[index]?.code === 'ConditionalCheckFailed';
+  if (action === 'respond' || action === 'deleteResponse') {
+    // The review is missing or removed (the caller reads it to tell which),
+    // or the caller no longer teaches the course.
+    if (failed(1)) {
+      return 'not-instructor';
+    }
+    return failed(0) ? 'unavailable' : undefined;
+  }
   if (action === 'post') {
     if (failed(0)) {
       return 'already-reviewed';

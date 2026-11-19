@@ -7,8 +7,8 @@ name: Agent CI Status
 # `software-factory/review` in state `failure` or `error` (worker.py in the
 # automation's package; it polls every 15 minutes). Nothing here set that
 # status, so a failing CI run went unanswered. This posts it when PR Checks
-# fails on an agent's branch (`openhands/issue-<n>`), at most three times per
-# pull request (labels `ci-fix-1` to `ci-fix-3`), then comments and stops
+# fails on an agent's branch (`openhands/issue-<n>`), at most five times per
+# pull request (labels `ci-fix-1` to `ci-fix-5`), then comments and stops
 # (`ci-fix-exhausted`). A passing run posts nothing.
 # The rules are in packages/common/scripts/src/agent-ci/.
 

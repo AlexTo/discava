@@ -32,6 +32,16 @@ import {
   publicViewCourse,
   viewCourse,
 } from './procedures/course.js';
+import {
+  accept,
+  ask,
+  listQuestions,
+  removeOwn,
+  reply,
+  report,
+  thread,
+  vote,
+} from './procedures/discussion.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
@@ -97,6 +107,16 @@ export const appRouter = router({
     videoUrl,
     saveVideoPosition,
     fileUrl,
+  }),
+  discussion: router({
+    listQuestions,
+    thread,
+    ask,
+    reply,
+    vote,
+    accept,
+    report,
+    removeOwn,
   }),
   notification: router({
     list: listNotifications,

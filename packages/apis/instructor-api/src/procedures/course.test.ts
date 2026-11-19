@@ -33,6 +33,7 @@ const {
   transactionWrite,
   transactionGo,
   curriculumCollection,
+  ensureProfile,
 } = vi.hoisted(() => ({
   courseCreate: vi.fn(),
   courseGet: vi.fn(),
@@ -52,10 +53,12 @@ const {
   transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   curriculumCollection: vi.fn(),
+  ensureProfile: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importActual) => ({
   ...(await importActual<typeof import('@discava/core-table')>()),
+  ensureInstructorProfile: ensureProfile,
   createCoreTableService: vi.fn(async () => ({
     entities: {
       course: {
@@ -126,6 +129,7 @@ beforeEach(() => {
   courseCreate.mockImplementation((attrs) => ({
     commit: () => ({ item: null, attrs }),
   }));
+  ensureProfile.mockResolvedValue({ status: 'exists' });
   courseInstructorCreate.mockImplementation((attrs) => ({
     commit: () => ({ item: null, attrs }),
   }));
@@ -191,6 +195,41 @@ beforeEach(() => {
 });
 
 describe('createCourse', () => {
+  it("ensures the caller's profile before the course transaction", async () => {
+    const order: string[] = [];
+    ensureProfile.mockImplementation(async () => {
+      order.push('profile');
+      return { status: 'created', handle: 'instructor-one' };
+    });
+    transactionGo.mockImplementation(async () => {
+      order.push('course');
+      return { canceled: false, data: [] };
+    });
+
+    await callAs().createCourse({ title: 'Intro' });
+
+    expect(ensureProfile).toHaveBeenCalledTimes(1);
+    expect(ensureProfile).toHaveBeenCalledWith(
+      expect.anything(),
+      INSTRUCTOR_SUB,
+    );
+    expect(order).toEqual(['profile', 'course']);
+  });
+
+  it('ensures the profile on every course, leaving the first-time rule to the helper', async () => {
+    await callAs().createCourse({ title: 'One' });
+    await callAs().createCourse({ title: 'Two' });
+
+    expect(ensureProfile).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates no course when the profile cannot be ensured', async () => {
+    ensureProfile.mockRejectedValue(new Error('boom'));
+
+    await expect(callAs().createCourse({ title: 'Intro' })).rejects.toThrow();
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
   it('rejects callers who are not in the instructor group', async () => {
     await expect(
       callAs(['student']).createCourse({ title: 'Intro' }),

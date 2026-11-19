@@ -132,11 +132,16 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   </AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel className="font-semibold">
                   Hi, {user?.profile?.['cognito:username'] as any}!
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link to="/settings/notifications">
+                    Notification settings
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   className="cursor-pointer"
                   // The same sign-out as the other portals, which works with

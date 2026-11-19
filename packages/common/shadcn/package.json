@@ -37,7 +37,8 @@
     "./styles/*": "./src/styles/*",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
-    "./hooks/*": "./src/hooks/*.ts"
+    "./hooks/*": "./src/hooks/*.ts",
+    "./discussion/*": "./src/discussion/*.tsx"
   },
   "devDependencies": {
     "@testing-library/dom": "catalog:",

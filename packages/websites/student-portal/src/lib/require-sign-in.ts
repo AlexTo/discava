@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { type ParsedLocation, redirect } from '@tanstack/react-router';
-import type { RouterProviderContext } from '../router';
+import type { RouterProviderContext } from '../router-context';
 
 // A route's beforeLoad for pages only signed-in students see: sends anyone
 // else to sign in, coming back here afterwards (see routes/signin/index.tsx).

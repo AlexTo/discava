@@ -17,10 +17,12 @@ const sample = (id: string): Record<string, string> =>
 const ids = Object.keys(NOTIFICATION_TYPES);
 
 describe('NOTIFICATION_TYPES', () => {
-  it('has the four v1 types', () => {
+  it('has the v1 types and the discussion types', () => {
     expect(ids.sort()).toEqual([
       'announcement.posted',
       'assignment.returned',
+      'discussion.accepted',
+      'discussion.answered',
       'discussion.reply',
       'review.received',
     ]);
@@ -40,6 +42,8 @@ describe('NOTIFICATION_TYPES', () => {
       'assignment.returned': 'default-on',
       'announcement.posted': 'default-on',
       'discussion.reply': 'default-on',
+      'discussion.answered': 'default-on',
+      'discussion.accepted': 'default-off',
       'review.received': 'default-off',
     });
   });
@@ -76,6 +80,28 @@ describe('buildNotification', () => {
       }).link,
     ).toEqual({ portal: 'student', path: '/learn/c1/home' });
   });
+
+  it.each(['discussion.reply', 'discussion.answered', 'discussion.accepted'])(
+    '%s has complete params, a lesson link and fits long names',
+    (id) => {
+      const params = {
+        courseId: 'c1',
+        lessonId: 'l1',
+        authorName: 'N'.repeat(300),
+        excerpt: 'E'.repeat(140),
+      };
+      expect(NOTIFICATION_TYPES[id].params.every((n) => n in params)).toBe(
+        true,
+      );
+      const built = buildNotification(id, params);
+      expect(built.link).toEqual({
+        portal: 'student',
+        path: '/learn/c1/lesson/l1',
+      });
+      expect(built.title.length).toBeLessThanOrEqual(120);
+      expect(built.body.length).toBeLessThanOrEqual(500);
+    },
+  );
 
   it('links a review to the instructor portal', () => {
     expect(

@@ -18,6 +18,7 @@ import {
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
@@ -169,12 +170,7 @@ export class CoreApiStack extends Stack {
 
     this.coreApi.restrictCorsTo(
       ...portals,
-      'http://localhost:4200',
-      'http://localhost:4300',
-      'http://localhost:4201',
-      'http://localhost:4301',
-      'http://localhost:4202',
-      'http://localhost:4302',
+      ...localPortalOrigins('instructor', 'student', 'admin'),
     );
 
     this.createSearchReindexLambda(coreTable, searchCollection);

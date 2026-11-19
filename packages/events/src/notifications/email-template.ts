@@ -10,7 +10,10 @@ export interface NotificationEmailInput {
   link: { path: string };
   /** The URL of the portal `link` belongs to. */
   portalUrl: string;
+  /** The API route: for the one-click `List-Unsubscribe` header only. */
   unsubscribeUrl: string;
+  /** The student portal's unsubscribe page: what the person opens from the body. */
+  unsubscribePageUrl: string;
   settingsUrl: string;
   /** The notification type's display name, as in the settings page. */
   typeName: string;
@@ -38,13 +41,18 @@ const singleLine = (value: string): string =>
 const joinUrl = (base: string, path: string): string =>
   `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 
-/** Builds the subject, both bodies and the one-click unsubscribe headers. */
+/**
+ * Builds the subject, both bodies and the one-click unsubscribe headers. The
+ * body's links open the portal's page (a `GET` on the API shows raw JSON);
+ * mail clients POST to the header's API URL.
+ */
 export const renderNotificationEmail = ({
   title,
   body,
   link,
   portalUrl,
   unsubscribeUrl,
+  unsubscribePageUrl,
   settingsUrl,
   typeName,
 }: NotificationEmailInput): NotificationEmail => {
@@ -59,7 +67,7 @@ export const renderNotificationEmail = ({
     '',
     `Open: ${url}`,
     '',
-    `${reason} Stop these emails: ${unsubscribeUrl}`,
+    `${reason} Stop these emails: ${unsubscribePageUrl}`,
     `Email settings: ${settingsUrl}`,
   ].join('\n');
 
@@ -71,7 +79,7 @@ export const renderNotificationEmail = ({
 <p><a href="${escapeHtml(url)}" style="display: inline-block; padding: 10px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 4px;">Open</a></p>
 <p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
 <hr>
-<p style="font-size: 12px; color: #6b7280;">You get this because you have ${escapeHtml(typeName)} emails on. <a href="${escapeHtml(unsubscribeUrl)}">Stop these emails</a>. <a href="${escapeHtml(settingsUrl)}">Email settings</a>.</p>
+<p style="font-size: 12px; color: #6b7280;">You get this because you have ${escapeHtml(typeName)} emails on. <a href="${escapeHtml(unsubscribePageUrl)}">Stop these emails</a>. <a href="${escapeHtml(settingsUrl)}">Email settings</a>.</p>
 </body>
 </html>`;
 

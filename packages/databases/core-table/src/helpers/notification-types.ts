@@ -82,6 +82,36 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       },
     }),
   }),
+  'discussion.answered': defineType({
+    id: 'discussion.answered',
+    name: 'Answered questions',
+    description: 'Someone marks an answer to your question in a lesson.',
+    params: ['courseId', 'lessonId', 'authorName', 'excerpt'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `${p.authorName} marked an answer to your question`,
+      body: p.excerpt,
+      link: {
+        portal: 'student',
+        path: `/learn/${p.courseId}/lesson/${p.lessonId}`,
+      },
+    }),
+  }),
+  'discussion.accepted': defineType({
+    id: 'discussion.accepted',
+    name: 'Accepted answers',
+    description: 'Your reply in a lesson discussion is marked as the answer.',
+    params: ['courseId', 'lessonId', 'excerpt'],
+    emailPolicy: 'default-off',
+    build: (p) => ({
+      title: 'Your reply was marked as the answer',
+      body: p.excerpt,
+      link: {
+        portal: 'student',
+        path: `/learn/${p.courseId}/lesson/${p.lessonId}`,
+      },
+    }),
+  }),
   'review.received': defineType({
     id: 'review.received',
     name: 'Course reviews',

@@ -29,6 +29,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@discava/common-web-utils": "workspace:*",
     "@types/aws-lambda": "catalog:",
     "@types/cors": "catalog:",
     "cors": "catalog:"
