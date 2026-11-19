@@ -335,6 +335,22 @@ describe('SiteSearch suggestions', () => {
       expect(box).not.toHaveAttribute('aria-activedescendant');
     });
 
+    it('drops the highlight when the text is edited, so Enter submits', async () => {
+      const { box, router, type } = await openThree();
+
+      key(box, 'ArrowDown');
+      await type('python pandas');
+      expect(box).not.toHaveAttribute('aria-activedescendant');
+      key(box, 'Enter');
+      fireEvent.submit(box.closest('form') as HTMLFormElement);
+      await advance(0);
+
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({
+        query: 'python pandas',
+      });
+    });
+
     it('announces the count of suggestions', async () => {
       await openThree();
 

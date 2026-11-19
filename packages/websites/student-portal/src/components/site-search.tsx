@@ -133,6 +133,8 @@ export const SiteSearch = () => {
           setValue(event.target.value);
           setTouched(true);
           setDismissed(false);
+          // The highlighted row belongs to the text before this edit.
+          setActiveIndex(-1);
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
