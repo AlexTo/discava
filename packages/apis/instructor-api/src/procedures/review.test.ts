@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -14,52 +14,37 @@ import {
 const {
   courseInstructorGet,
   reviewGet,
-  reviewByCourse,
+  reviewQueryByCourse,
   userGet,
   reviewWrites,
   transactionWrite,
   transactionGo,
-} = vi.hoisted(() => ({
-  courseInstructorGet: vi.fn(),
-  reviewGet: vi.fn(),
-  reviewByCourse: vi.fn(),
-  userGet: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   reviewWrites: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    courseInstructor: ['get'],
+    review: ['get', 'query.byCourse'],
+    user: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  reviewWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      courseInstructor: { get: courseInstructorGet },
-      review: { get: reviewGet, query: { byCourse: reviewByCourse } },
-      user: { get: userGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { reviewWrites }),
+);
 
 const router = t.router({
   list: listReviews,
   respond: respondToReview,
   deleteResponse: deleteReviewResponse,
 });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const resolves = (data: unknown) => ({
   go: vi.fn().mockResolvedValue({ data }),
@@ -156,11 +141,11 @@ describe('list', () => {
 
   it('returns visible reviews newest first with the reviewer ID and no email', async () => {
     const byCourse = page([answered], null);
-    reviewByCourse.mockReturnValue(byCourse);
+    reviewQueryByCourse.mockReturnValue(byCourse);
 
     const result = await callAs().list({ courseId: 'course-1' });
 
-    expect(reviewByCourse).toHaveBeenCalledWith({ courseId: 'course-1' });
+    expect(reviewQueryByCourse).toHaveBeenCalledWith({ courseId: 'course-1' });
     expect(byCourse.go).toHaveBeenCalledWith(
       expect.objectContaining({ order: 'desc', limit: 20 }),
     );
@@ -190,7 +175,7 @@ describe('list', () => {
       .fn()
       .mockResolvedValueOnce({ data: [removed], cursor: 'c1' })
       .mockResolvedValueOnce({ data: [stored], cursor: 'c2' });
-    reviewByCourse.mockReturnValue({ go });
+    reviewQueryByCourse.mockReturnValue({ go });
 
     const result = await callAs().list({ courseId: 'course-1', limit: 1 });
 

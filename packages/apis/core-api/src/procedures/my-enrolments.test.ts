@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { myEnrolments } from './my-enrolments.js';
@@ -62,16 +62,9 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-const caller = t.createCallerFactory(t.router({ myEnrolments }));
+const router = t.router({ myEnrolments });
 const USER_SUB = 'student-1';
-const call = () =>
-  caller({
-    event: {
-      requestContext: { authorizer: { claims: { sub: USER_SUB } } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  }).myEnrolments();
+const call = () => callerFor(router, { sub: USER_SUB }).myEnrolments();
 
 const shown = { visibility: 'visible' };
 
@@ -276,11 +269,7 @@ describe('course.myEnrolments', () => {
   });
 
   it('rejects unauthenticated callers', async () => {
-    const anonymous = caller({
-      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
-    });
+    const anonymous = callerFor(router);
 
     await expect(anonymous.myEnrolments()).rejects.toMatchObject({
       code: 'UNAUTHORIZED',

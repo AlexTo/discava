@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { account, dashboardLink, startOnboarding } from './payout.js';
@@ -46,23 +46,13 @@ import { PaymentAccountMismatchError } from '@discava/common-server-utils/stripe
 import { PaymentsNotConnectedError } from '@discava/common-server-utils/stripe/secrets';
 
 const router = t.router({ account, startOnboarding, dashboardLink });
-const caller = t.createCallerFactory(router);
 
 const SUB = 'instructor-1';
 const ORIGIN = 'https://instructors.example.com';
 const KEY = 'sk_test_secretkeyvalue';
 
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({
-    event: {
-      headers: { origin: ORIGIN },
-      requestContext: {
-        authorizer: { claims: { sub: SUB, 'cognito:groups': groups } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: SUB, groups, headers: { origin: ORIGIN } });
 
 const active = { status: 'active', accountId: 'acct_p', mode: 'test' };
 const stored = (status = 'in_progress') => ({

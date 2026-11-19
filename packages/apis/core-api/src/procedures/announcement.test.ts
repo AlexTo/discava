@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { ListAnnouncementsInputSchema } from '../schema/index.js';
@@ -29,22 +29,11 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-const caller = t.createCallerFactory(t.router({ listAnnouncements }));
+const router = t.router({ listAnnouncements });
 
 const STUDENT_SUB = 'student-1';
 
-const call = () =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: STUDENT_SUB, 'cognito:groups': ['student'] },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const call = () => callerFor(router, { sub: STUDENT_SUB, groups: ['student'] });
 
 const resolves = (data: unknown) => ({
   go: vi.fn().mockResolvedValue({ data }),

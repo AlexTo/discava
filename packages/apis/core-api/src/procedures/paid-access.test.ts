@@ -2,7 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { submit } from './assignment.js';
@@ -52,13 +53,7 @@ const router = t.router({
   submitQuizAttempt,
   submit,
 });
-const caller = t.createCallerFactory(router)({
-  event: {
-    requestContext: { authorizer: { claims: { sub: 'student-1' } } },
-  } as unknown as APIGatewayProxyEvent,
-  context: {} as any,
-  info: {} as any,
-});
+const caller = callerFor(router, { sub: 'student-1' });
 
 const ref = {
   courseId: 'course-1',
