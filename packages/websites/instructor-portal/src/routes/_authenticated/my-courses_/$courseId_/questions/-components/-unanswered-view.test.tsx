@@ -2,9 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ApiError } from '@discava/common-web-utils/testing';
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ApiError } from '../../../../../../test/fake-trpc-fetch';
 import {
   lessonsView,
   renderQuestions,

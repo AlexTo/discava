@@ -2,13 +2,18 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import {
+  type ApiCall,
+  fakeTrpcFetch,
+  type Handler,
+} from '@discava/common-web-utils/testing';
 import type { AppRouter as CoreRouter } from '@discava/core-api';
 import { QueryClient } from '@tanstack/react-query';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { CoreApiTRPCContext } from '../api';
-import { type ApiCall, fakeFetch, type Handler } from './fake-trpc-fetch';
 import { renderWithInstructorApi } from './render-with-instructor-api';
 
 export const lessonsView = (
@@ -45,7 +50,7 @@ export const renderQuestions = (
     links: [
       httpLink({
         url: 'http://core-api.test/',
-        fetch: fakeFetch(core, coreCalls),
+        fetch: fakeTrpcFetch(core, coreCalls),
       }),
     ],
   });
