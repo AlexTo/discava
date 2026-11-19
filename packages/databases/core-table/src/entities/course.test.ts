@@ -10,7 +10,6 @@ import { createCourseEntity } from './course.js';
 
 let course: Awaited<ReturnType<typeof createCourseEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   course = await createCourseEntity();
 });
 

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { uuidV7Time } from '../announcement.js';
+
 import {
   answeredState,
   DISCUSSION_BODY_MAX,
@@ -10,6 +10,7 @@ import {
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DISCUSSION_TITLE_MAX,
 } from '../discussion.js';
+import { uuidV7Time } from '../uuid-v7.js';
 import { type Check, groupBy, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 

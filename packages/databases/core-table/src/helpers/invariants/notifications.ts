@@ -5,10 +5,10 @@
 import {
   ANNOUNCEMENT_BODY_MAX,
   ANNOUNCEMENT_TITLE_MAX,
-  uuidV7Time,
 } from '../announcement.js';
 import { parseNotificationPosition } from '../notification.js';
 import { NOTIFICATION_TYPES } from '../notification-types.js';
+import { uuidV7Time } from '../uuid-v7.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 

@@ -16,7 +16,6 @@ import { createContentItemEntity } from './content-item.js';
 
 let contentItem: Awaited<ReturnType<typeof createContentItemEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   contentItem = await createContentItemEntity();
 });
 
