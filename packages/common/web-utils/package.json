@@ -4,10 +4,20 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-query-devtools": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "@trpc/tanstack-react-query": "catalog:",
+    "event-source-polyfill": "catalog:",
+    "react": "catalog:",
     "react-oidc-context": "catalog:",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/event-source-polyfill": "catalog:",
     "@types/node": "catalog:"
   },
   "exports": {

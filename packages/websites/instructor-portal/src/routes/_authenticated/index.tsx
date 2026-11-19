@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -11,21 +12,20 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../components/alert';
+import { useCoreApi } from '../../api';
 import {
   type CourseStatus,
   courseStatusStyles,
 } from '../../components/course-status';
 import { CreateCourseDialog } from '../../components/create-course-dialog';
-import { Spinner } from '../../components/spinner';
 import { getUserIdentity } from '../../components/UserMenu/user-profile';
-import { useCoreApi } from '../../hooks/useCoreApi';
-import { usePublicMediaUrl } from '../../hooks/usePublicMediaUrl';
 
 export const Route = createFileRoute('/_authenticated/')({
   component: RouteComponent,
@@ -122,9 +122,9 @@ function RouteComponent() {
           </div>
         ) : coursesQuery.isError ? (
           <div className="space-y-3">
-            <Alert type="error" header="Couldn't load your courses">
+            <ErrorAlert type="error" header="Couldn't load your courses">
               {apiErrorMessage(coursesQuery.error)}
-            </Alert>
+            </ErrorAlert>
             <Button
               variant="outline"
               size="sm"

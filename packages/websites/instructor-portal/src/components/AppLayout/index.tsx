@@ -22,10 +22,10 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@discava/common-shadcn/components/ui/sidebar';
+import Config from '@discava/common-web-utils/app-config';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import * as React from 'react';
-import Config from '../../config';
-import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
 import { NotificationBell } from '../NotificationBell';
 import { UserMenu } from '../UserMenu';

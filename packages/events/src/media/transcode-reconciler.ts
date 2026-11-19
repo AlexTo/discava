@@ -22,6 +22,7 @@ import {
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import type { z } from 'zod';
+import { durationSecondsOf } from './job-duration.js';
 import { applyTranscodeOutcome, getCoreTable } from './transcode-outcome.js';
 
 export type { Context };
@@ -43,11 +44,14 @@ export const NO_JOB_AFTER_MINUTES = 30;
 // or kept failing (#185).
 export const STUCK_AFTER_MINUTES = 120;
 
+// A lesson video, or (target `coursePreview`, no lesson ids) a course's
+// preview.
 type PendingVideo = {
+  target?: 'contentItem' | 'coursePreview';
   courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
+  moduleId?: string;
+  lessonId?: string;
+  contentItemId?: string;
   status: string;
   s3Key?: string;
   submissionNonce?: string;
@@ -73,20 +77,41 @@ const markFailed = async (video: PendingVideo, reason: string) => {
   const coreTable = await getCoreTable();
   const { courseId, moduleId, lessonId, contentItemId, submissionNonce } =
     video;
+  // A preview waits as `processing`, a lesson video as `pending`.
+  const waiting = video.target === 'coursePreview' ? 'processing' : 'pending';
+  const condition = (
+    attr: { status: unknown; submissionNonce: unknown },
+    op: {
+      eq(a: unknown, v: unknown): string;
+      notExists(a: unknown): string;
+    },
+  ) =>
+    `${op.eq(attr.status, waiting)} AND ${
+      submissionNonce
+        ? op.eq(attr.submissionNonce, submissionNonce)
+        : op.notExists(attr.submissionNonce)
+    }`;
   try {
-    await coreTable.entities.contentItem
-      .patch({ courseId, moduleId, lessonId, contentItemId })
-      .set({ status: 'failed' })
-      .remove([...TRANSCODE_PENDING_ATTRIBUTES])
-      .where(
-        (attr, op) =>
-          `${op.eq(attr.status, 'pending')} AND ${
-            submissionNonce
-              ? op.eq(attr.submissionNonce, submissionNonce)
-              : op.notExists(attr.submissionNonce)
-          }`,
-      )
-      .go();
+    if (video.target === 'coursePreview') {
+      await coreTable.entities.coursePreview
+        .patch({ courseId })
+        .set({ status: 'failed', failureReason: 'transcode-error' })
+        .remove([...TRANSCODE_PENDING_ATTRIBUTES])
+        .where(condition)
+        .go();
+    } else {
+      await coreTable.entities.contentItem
+        .patch({
+          courseId,
+          moduleId: moduleId as string,
+          lessonId: lessonId as string,
+          contentItemId: contentItemId as string,
+        })
+        .set({ status: 'failed' })
+        .remove([...TRANSCODE_PENDING_ATTRIBUTES])
+        .where(condition)
+        .go();
+    }
   } catch (error) {
     if (isConditionalCheckFailed(error)) {
       return 'superseded' as const;
@@ -125,19 +150,34 @@ const reconcile = async (
     case 'COMPLETE':
     case 'ERROR': {
       const { courseId, moduleId, lessonId, contentItemId } = video;
-      await applyTranscodeOutcome(logger, {
+      const common = {
         jobId,
         status: job.Status,
         courseId,
-        moduleId,
-        lessonId,
-        contentItemId,
         rawObjectKey: job.UserMetadata?.rawObjectKey ?? video.s3Key ?? '',
         // The submission the job was for: if the item has moved on to a
         // replacement since, the outcome's own conditions leave it alone.
         submissionNonce:
           job.UserMetadata?.submissionNonce ?? video.submissionNonce ?? '',
-      });
+        durationSeconds: durationSecondsOf(
+          job.OutputGroupDetails?.map((group) => ({
+            durationsInMs: (group.OutputDetails ?? []).map(
+              (o) => o.DurationInMs,
+            ),
+          })),
+        ),
+      };
+      await applyTranscodeOutcome(
+        logger,
+        video.target === 'coursePreview'
+          ? { ...common, target: 'coursePreview' }
+          : {
+              ...common,
+              moduleId: moduleId as string,
+              lessonId: lessonId as string,
+              contentItemId: contentItemId as string,
+            },
+      );
       logger.warn('Applied a transcode whose outcome never arrived', {
         jobId,
         jobStatus: job.Status,
@@ -169,10 +209,25 @@ export const transcodeReconciler = async (
   const now = Date.now();
   const coreTable = await getCoreTable();
 
-  const { data } = await coreTable.entities.contentItem.query
-    .byTranscodePending({ transcodePending: 'pending' })
-    .lt({ transcodePendingSince: minutesAgo(NO_JOB_AFTER_MINUTES, now) })
-    .go({ pages: 'all' });
+  const olderThan = {
+    transcodePendingSince: minutesAgo(NO_JOB_AFTER_MINUTES, now),
+  };
+  const [{ data: items }, { data: previews }] = await Promise.all([
+    coreTable.entities.contentItem.query
+      .byTranscodePending({ transcodePending: 'pending' })
+      .lt(olderThan)
+      .go({ pages: 'all' }),
+    coreTable.entities.coursePreview.query
+      .byTranscodePending({ transcodePending: 'pending' })
+      .lt(olderThan)
+      .go({ pages: 'all' }),
+  ]);
+  const data = [
+    ...(items as PendingVideo[]),
+    ...(previews as PendingVideo[]).map(
+      (preview): PendingVideo => ({ ...preview, target: 'coursePreview' }),
+    ),
+  ];
 
   const counts: Record<Resolution | 'errors', number> = {
     applied: 0,
@@ -183,7 +238,7 @@ export const transcodeReconciler = async (
     errors: 0,
   };
   // One at a time: there are rarely any, and each is a few small calls.
-  for (const video of data as PendingVideo[]) {
+  for (const video of data) {
     try {
       counts[await reconcile(video, now)]++;
     } catch (error) {

@@ -6,6 +6,7 @@ import {
   NotificationBell as Bell,
   type NotificationBellItem,
 } from '@discava/common-shadcn/components/notification-bell';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import {
   useInfiniteQuery,
   useMutation,
@@ -14,8 +15,7 @@ import {
 } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useCoreApi } from '../hooks/useCoreApi';
-import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
+import { useCoreApi } from '../api';
 
 const THIS_PORTAL = 'admin';
 const PORTAL_ADDRESS_KEYS = {

@@ -2,14 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { PostCard } from '@discava/common-shadcn/discussion/post-card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useCoreApi } from '../../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../../api';
 import { QuestionForm } from './question-form';
 import { ThreadView } from './thread-view';
 
@@ -58,7 +59,7 @@ export function QuestionsSection({
     );
   } else if (listQuery.isError) {
     content = (
-      <Alert type="error" header="Couldn't load the questions">
+      <ErrorAlert type="error" header="Couldn't load the questions">
         {apiErrorMessage(listQuery.error)}
         <Button
           className="mt-2"
@@ -68,7 +69,7 @@ export function QuestionsSection({
         >
           Try again
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   } else {
     content = (

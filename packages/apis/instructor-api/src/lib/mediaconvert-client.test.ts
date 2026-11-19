@@ -345,6 +345,60 @@ const CANCELABLE_JOB = {
   submissionNonce: SUBMISSION_NONCE,
 };
 
+describe('submitTranscodeJob for a course preview', () => {
+  beforeEach(() => {
+    mediaConvertSend.mockResolvedValue({ Job: { Id: 'job-1' } });
+  });
+
+  const previewRequest = {
+    target: 'coursePreview' as const,
+    courseId: COURSE_ID,
+    objectKey: `courses/${COURSE_ID}/preview/raw.mp4`,
+    submissionNonce: SUBMISSION_NONCE,
+  };
+
+  it('tags the job and writes to the course preview folder', async () => {
+    await submitTranscodeJob(previewRequest);
+
+    const [command] = mediaConvertSend.mock.calls[0]!;
+    expect(command.UserMetadata).toEqual({
+      target: 'coursePreview',
+      courseId: COURSE_ID,
+      rawObjectKey: previewRequest.objectKey,
+      submissionNonce: SUBMISSION_NONCE,
+    });
+    expect(
+      command.Settings.OutputGroups[0].OutputGroupSettings.HlsGroupSettings
+        .Destination,
+    ).toBe(
+      `s3://${MEDIA_BUCKET_NAME}/courses/${COURSE_ID}/preview/${SUBMISSION_NONCE}/master`,
+    );
+  });
+
+  it('sends a lesson job with no target field, as before', async () => {
+    await submitTranscodeJob({
+      target: 'contentItem',
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      objectKey: OBJECT_KEY,
+      submissionNonce: SUBMISSION_NONCE,
+    });
+
+    const [command] = mediaConvertSend.mock.calls[0]!;
+    expect(command.UserMetadata).toEqual({
+      courseId: COURSE_ID,
+      moduleId: MODULE_ID,
+      lessonId: LESSON_ID,
+      contentItemId: CONTENT_ITEM_ID,
+      rawObjectKey: OBJECT_KEY,
+      submissionNonce: SUBMISSION_NONCE,
+    });
+    expect('target' in command.UserMetadata).toBe(false);
+  });
+});
+
 describe('bestEffortCancelTranscodeJob', () => {
   it('cancels the given job', async () => {
     mediaConvertSend.mockResolvedValue({});

@@ -55,6 +55,28 @@ export const transcribeInputKey = (nonce: string) =>
 export const transcribeOutputPrefix = (ref: ItemRef, nonce: string) =>
   `${itemFolder(ref)}/transcribe-output/${nonce}/`;
 
+// A course's preview video lives in one folder per attempt, beside the
+// lessons': courses/<courseId>/preview/<nonce>/.
+export const previewFolder = (courseId: string) =>
+  `courses/${courseId}/preview`;
+
+/** A preview track's key, inside its version's folder (as captionKey). */
+export const previewCaptionKey = (
+  courseId: string,
+  nonce: string,
+  trackId: string,
+) => `${previewFolder(courseId)}/${nonce}/captions/${trackId}.vtt`;
+
+/** The Transcribe job for a preview version's automatic captions. */
+export const previewTranscribeJobName = (courseId: string, nonce: string) =>
+  `captions-preview-${courseId}-${nonce}`;
+
+/** As transcribeOutputPrefix, for a preview: outside `<nonce>/*`. */
+export const previewTranscribeOutputPrefix = (
+  courseId: string,
+  nonce: string,
+) => `${previewFolder(courseId)}/transcribe-output/${nonce}/`;
+
 /**
  * Whether bytes are a WebVTT file we accept: an optional UTF-8 byte order
  * mark, then `WEBVTT` followed by a space, tab or newline; valid UTF-8 with no

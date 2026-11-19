@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 
 export type PlayerCourse = IViewCourseOutput;
 export type PlayerModule = PlayerCourse['modules'][number];

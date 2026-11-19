@@ -6,15 +6,13 @@ import {
   AdminApi,
   type AdminPortal,
   CoreTable,
-  suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { AdminApiComponentConfig } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
-import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { apiLimits } from './api-limits.js';
+import { trpcApiProps } from './trpc-api-props.js';
 
 type AdminApiIntegrations = ReturnType<
   ReturnType<typeof AdminApi.defaultIntegrations>['build']
@@ -49,46 +47,22 @@ export class AdminApiStack extends Stack {
   ) {
     super(scope, id, props);
 
-    const adminApiKmsEnabled = adminApiConfig?.enableKmsEncryption ?? true;
-    const limits = apiLimits(adminApiConfig);
+    const {
+      limits,
+      props: apiProps,
+      suppressLogGroupKmsRule,
+    } = trpcApiProps(this, 'AdminApi', adminApiConfig);
     const integrations = AdminApi.defaultIntegrations(
       this,
       limits.functionOptions,
     ).build();
-    const adminApiCertificate = adminApiConfig?.certificateArn
-      ? Certificate.fromCertificateArn(
-          this,
-          'AdminApiCertificate',
-          adminApiConfig.certificateArn,
-        )
-      : undefined;
 
     this.adminApi = new AdminApi(this, 'AdminApi', {
       integrations,
       identity,
-      enableWaf: adminApiConfig?.enableWaf ?? true,
-      throttle: limits.throttle,
-      enableTracing: limits.enableTracing,
-      enableKmsEncryption: adminApiKmsEnabled,
-      enableKeyRotation: adminApiConfig?.enableKeyRotation ?? true,
-      removalPolicy:
-        (adminApiConfig?.retainOnDelete ?? true)
-          ? RemovalPolicy.RETAIN
-          : RemovalPolicy.DESTROY,
-      domainName: adminApiConfig?.domainName,
-      certificate: adminApiCertificate,
+      ...apiProps,
     });
-    if (!adminApiKmsEnabled) {
-      suppressRules(
-        this,
-        ['CKV_AWS_158'],
-        'KMS encryption disabled for this stage',
-        (c) =>
-          CfnResource.isCfnResource(c) &&
-          c.cfnResourceType === 'AWS::Logs::LogGroup' &&
-          c.node.path.includes('/AdminApi/AccessLogs'),
-      );
-    }
+    suppressLogGroupKmsRule();
 
     Object.values(integrations).forEach(({ handler }) =>
       coreTable.grantReadWriteData(handler),

@@ -26,7 +26,7 @@ export const listCategories = publicSearchProcedure
   .output(ListCategoriesOutputSchema)
   .query(async ({ ctx }) => {
     const [categories, { body }] = await Promise.all([
-      readCategories(ctx.coreTable!),
+      readCategories(ctx.coreTable),
       ctx.search!.search({
         index: resolveIndexName('courses'),
         body: {
@@ -69,7 +69,7 @@ export const categoryBySlug = publicCourseProcedure
   .input(CategoryBySlugInputSchema)
   .output(CategoryBySlugOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { data: claim } = await coreTable.entities.categoryClaim
       .get({ claim: `slug#${input.slug}` })
       .go();

@@ -47,6 +47,27 @@ const resolveVideoTranscodePipelineConfig =
     );
 
 /**
+ * What to transcode: a lesson's content item (the original shape, `target`
+ * left out) or a course's preview video.
+ */
+export type TranscodeJobRequest =
+  | {
+      target?: 'contentItem';
+      courseId: string;
+      moduleId: string;
+      lessonId: string;
+      contentItemId: string;
+      objectKey: string;
+      submissionNonce: string;
+    }
+  | {
+      target: 'coursePreview';
+      courseId: string;
+      objectKey: string;
+      submissionNonce: string;
+    };
+
+/**
  * Submits a MediaConvert job transcoding a just-uploaded video into HLS.
  * Called from createContentItemVideo/updateContentItemVideo only after the
  * DynamoDB record they write has been created/updated, so the completion
@@ -72,21 +93,35 @@ const resolveVideoTranscodePipelineConfig =
  * coincidental content match could dedupe onto an unrelated, long-dead
  * job. The nonce sidesteps that entirely by never depending on content.)
  */
-export const submitTranscodeJob = async ({
-  courseId,
-  moduleId,
-  lessonId,
-  contentItemId,
-  objectKey,
-  submissionNonce,
-}: {
-  courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
-  objectKey: string;
-  submissionNonce: string;
-}): Promise<string> => {
+export const submitTranscodeJob = async (
+  job: TranscodeJobRequest,
+): Promise<string> => {
+  const { courseId, objectKey, submissionNonce } = job;
+  // A lesson video's job carries no `target` in its metadata, so jobs in
+  // flight and the handlers agree (a handler reads none as `contentItem`); a
+  // preview's does, and its output goes under the course's preview folder.
+  const isPreview = job.target === 'coursePreview';
+  const { moduleId, lessonId, contentItemId } = isPreview
+    ? { moduleId: '', lessonId: '', contentItemId: '' }
+    : job;
+  const outputFolder = isPreview
+    ? `courses/${courseId}/preview/${submissionNonce}`
+    : `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}`;
+  const userMetadata: Record<string, string> = isPreview
+    ? {
+        target: 'coursePreview',
+        courseId,
+        rawObjectKey: objectKey,
+        submissionNonce,
+      }
+    : {
+        courseId,
+        moduleId,
+        lessonId,
+        contentItemId,
+        rawObjectKey: objectKey,
+        submissionNonce,
+      };
   // Local dev transcodes with ffmpeg in the event runner instead (#137): same
   // output path and metadata, and it reports back as MediaConvert would.
   if (isLocalDev()) {
@@ -95,15 +130,8 @@ export const submitTranscodeJob = async ({
       '/transcode-jobs',
       {
         inputKey: objectKey,
-        outputPrefix: `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/`,
-        userMetadata: {
-          courseId,
-          moduleId,
-          lessonId,
-          contentItemId,
-          rawObjectKey: objectKey,
-          submissionNonce,
-        },
+        outputPrefix: `${outputFolder}/`,
+        userMetadata,
       } satisfies LocalTranscodeJobRequest,
     );
     if (!response?.jobId) {
@@ -130,7 +158,7 @@ export const submitTranscodeJob = async ({
   // filename") -- "master" here is what makes the multivariant playlist
   // come out as master.m3u8, with renditions as master_1080p.m3u8 etc.
   // alongside it.
-  const destination = `s3://${mediaBucketName}/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/master`;
+  const destination = `s3://${mediaBucketName}/${outputFolder}/master`;
 
   // The audio-only group's file for Transcribe: MediaConvert appends the
   // container's extension, so this becomes transcribe-input/<nonce>.mp4.
@@ -141,7 +169,9 @@ export const submitTranscodeJob = async ({
   // ClientRequestToken caps out at 64 ASCII characters; hashing keeps this
   // well within that regardless of contentItemId/nonce length.
   const clientRequestToken = createHash('sha256')
-    .update(`${contentItemId}:${submissionNonce}`)
+    .update(
+      `${isPreview ? `preview:${courseId}` : contentItemId}:${submissionNonce}`,
+    )
     .digest('hex')
     .slice(0, 32);
 
@@ -155,14 +185,7 @@ export const submitTranscodeJob = async ({
       // submissionNonce lets it reconstruct this same job's nonce-scoped
       // manifest path without needing to parse Destination back out of
       // the job's own settings.
-      UserMetadata: {
-        courseId,
-        moduleId,
-        lessonId,
-        contentItemId,
-        rawObjectKey: objectKey,
-        submissionNonce,
-      },
+      UserMetadata: userMetadata,
       Settings: {
         // AudioSelectors/TimecodeSource are per-input, not settable on the
         // job template (MediaConvert's CreateJobTemplate API rejects an

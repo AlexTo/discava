@@ -31,7 +31,7 @@ import {
 } from '@discava/common-server-utils/media-keys';
 import {
   assignmentSubmissionWrites,
-  type createCoreTableService,
+  type CoreTable,
   isLateSubmission,
   isShown,
   studentActivityAt,
@@ -55,8 +55,6 @@ import {
   UploadUrlOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // A submit that lost to a change it can't tell from a race (an unrelated
 // write to the enrolment, say) reads again and tries this many times before
@@ -167,7 +165,7 @@ export const uploadUrl = courseProcedure
   .mutation(async ({ ctx, input }) => {
     const userId = ctx.user.sub;
     const { fileName, fileSize, ...ref } = input;
-    const read = await readAssignment(ctx.coreTable!, userId, ref);
+    const read = await readAssignment(ctx.coreTable, userId, ref);
     requireOpenForSubmitting(read);
 
     const mimeType = lessonFileType(fileName);
@@ -189,7 +187,7 @@ export const mySubmission = courseProcedure
   .output(MySubmissionOutputSchema)
   .query(async ({ ctx, input }): Promise<ISubmission | null> => {
     const { submission } = await readAssignment(
-      ctx.coreTable!,
+      ctx.coreTable,
       ctx.user.sub,
       input,
     );
@@ -204,7 +202,7 @@ export const submissionFileUrl = courseProcedure
   .output(SubmissionFileUrlOutputSchema)
   .query(async ({ ctx, input }) => {
     const { submission } = await readAssignment(
-      ctx.coreTable!,
+      ctx.coreTable,
       ctx.user.sub,
       input,
     );
@@ -278,7 +276,7 @@ export const submit = courseProcedure
   .input(SubmitInputSchema)
   .output(SubmitOutputSchema)
   .mutation(async ({ ctx, input }): Promise<ISubmission> => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const logger = ctx.logger;
     const { objectKey, fileName, ...ref } = input;

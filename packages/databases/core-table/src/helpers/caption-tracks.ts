@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { createCoreTableService } from '../service.js';
+
 // A video's caption tracks live on its contentItem (captionTracks, with
 // captionTracksRev as the condition that serialises writers). Every writer --
 // Transcribe's completion, an instructor's upload or removal, the version
@@ -198,3 +200,126 @@ export const captionWriteCondition =
       op.contains(attr.s3Key, `/${nonce}/`),
     ].join(' AND ');
   };
+
+/** A content item's key, or a course's for its preview video. */
+export type CaptionTargetKey =
+  | {
+      courseId: string;
+      moduleId: string;
+      lessonId: string;
+      contentItemId: string;
+    }
+  | { courseId: string };
+
+/** Whether the key is a `coursePreview`'s (a course's, with no content item). */
+export const isPreviewKey = (
+  key: CaptionTargetKey,
+): key is { courseId: string } => !('contentItemId' in key);
+
+// What the writers below need of an ElectroDB patch or get, loosely typed
+// because the two entities' own types differ only in their keys. The entity
+// calls themselves stay typed, so the invariant coverage scan sees the writes.
+interface PatchBuilder {
+  set(values: Record<string, unknown>): PatchBuilder;
+  remove(attributes: string[]): PatchBuilder;
+  where(condition: unknown): PatchBuilder;
+  go(): Promise<unknown>;
+}
+interface CaptionRecord {
+  status?: string;
+  s3Key?: string;
+  captionsStatus?: string;
+  captionTracks?: CaptionTrack[];
+  captionTracksRev?: number;
+}
+export type CaptionEntities = Pick<
+  Awaited<ReturnType<typeof createCoreTableService>>['entities'],
+  'contentItem' | 'coursePreview'
+>;
+
+const patchOf = (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+): PatchBuilder =>
+  (isPreviewKey(key)
+    ? entities.coursePreview.patch(key)
+    : entities.contentItem.patch(key)) as unknown as PatchBuilder;
+
+/**
+ * The `.where()` condition for a write while the record still plays the
+ * version the job was for and is still waiting for its captions.
+ */
+export const captionsStillPending =
+  (nonce: string) =>
+  (
+    attr: { status: unknown; s3Key: unknown; captionsStatus: unknown },
+    op: ConditionOps,
+  ): string =>
+    [
+      op.eq(attr.status, 'ready'),
+      op.contains(attr.s3Key, `/${nonce}/`),
+      op.eq(attr.captionsStatus, 'pending'),
+    ].join(' AND ');
+
+/** Reads the record a caption job's writers patch (a preview, or a content item). */
+export const getCaptionRecord = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+): Promise<CaptionRecord | null | undefined> =>
+  (isPreviewKey(key)
+    ? await entities.coursePreview.get(key).go()
+    : await entities.contentItem.get(key).go()
+  ).data;
+
+/**
+ * Marks the version's captioning failed, if it is still waiting. Throws
+ * ElectroDB's conditional check failure when it no longer is.
+ */
+export const writeCaptionsFailed = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+  nonce: string,
+): Promise<void> => {
+  await patchOf(entities, key)
+    .set({ captionsStatus: 'failed' })
+    .remove(['captionsPendingSince'])
+    .where(captionsStillPending(nonce))
+    .go();
+};
+
+/** Marks the version's captioning ready without adding a track. */
+export const writeCaptionsReady = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+  nonce: string,
+): Promise<void> => {
+  await patchOf(entities, key)
+    .set({ captionsStatus: 'ready' })
+    .remove(['captionsPendingSince'])
+    .where(captionsStillPending(nonce))
+    .go();
+};
+
+/**
+ * Writes the version's new track list, conditioned on the revision read
+ * (captionWriteCondition) and moving it on, and marks captioning ready.
+ */
+export const writeCaptionTracks = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+  {
+    tracks,
+    rev,
+    nonce,
+  }: { tracks: CaptionTrack[]; rev: number; nonce: string },
+): Promise<void> => {
+  await patchOf(entities, key)
+    .set({
+      captionTracks: tracks,
+      captionTracksRev: rev + 1,
+      captionsStatus: 'ready',
+    })
+    .remove(['captionsPendingSince'])
+    .where(captionWriteCondition(rev, nonce))
+    .go();
+};

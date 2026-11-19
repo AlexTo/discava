@@ -95,14 +95,22 @@ export {
   CAPTIONS_PENDING_TIMEOUT_MS,
   type CaptionChange,
   type CaptionChangeResult,
+  type CaptionEntities,
+  type CaptionTargetKey,
   type CaptionTrack,
   CaptionTrackError,
   type CaptionTrackErrorCode,
+  captionsStillPending,
   captionWriteCondition,
   dropOtherVersions,
+  getCaptionRecord,
+  isPreviewKey,
   MAX_CAPTION_TRACKS,
   reportedCaptionsStatus,
   tracksForPlayback,
+  writeCaptionsFailed,
+  writeCaptionsReady,
+  writeCaptionTracks,
 } from './helpers/caption-tracks.js';
 export {
   CATEGORY_NAME_MAX_LENGTH,
@@ -318,4 +326,4 @@ export {
   VIDEO_POSITION_MAX_SECONDS,
   videoPositionToStore,
 } from './helpers/video-position.js';
-export { createCoreTableService } from './service.js';
+export { type CoreTable, createCoreTableService } from './service.js';

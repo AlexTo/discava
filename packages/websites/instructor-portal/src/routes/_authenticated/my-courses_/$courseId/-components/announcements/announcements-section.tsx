@@ -8,7 +8,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { AnnouncementForm } from './announcement-form';
 import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
 

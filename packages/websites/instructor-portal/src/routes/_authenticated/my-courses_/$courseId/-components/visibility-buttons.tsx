@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -19,8 +20,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../api';
 
 type Visibility = 'hidden' | 'visible';
 
@@ -122,12 +122,12 @@ function VisibilityDialog({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert
+          <ErrorAlert
             type="error"
             header={`Couldn't ${action.toLowerCase()} the ${noun}`}
           >
             {errorMessage}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>

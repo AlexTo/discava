@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -18,8 +19,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { studentActivityNote, usedItemCount } from '../student-activity';
 
 type ArchivedItem = {
@@ -278,9 +278,9 @@ function ArchivedRow({
         />
       </div>
       {restore.isError && (
-        <Alert type="error" header={`Couldn't restore the ${entry.noun}`}>
+        <ErrorAlert type="error" header={`Couldn't restore the ${entry.noun}`}>
           {apiErrorMessage(restore.error)}
-        </Alert>
+        </ErrorAlert>
       )}
     </li>
   );
@@ -354,9 +354,9 @@ function DeletePermanentlyDialog({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert type="error" header={`Couldn't delete the ${entry.noun}`}>
+          <ErrorAlert type="error" header={`Couldn't delete the ${entry.noun}`}>
             {errorMessage}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>

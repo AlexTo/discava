@@ -4,12 +4,12 @@
  */
 import { RestrictedPortal } from '@discava/common-shadcn/components/restricted-portal';
 import { isInGroup } from '@discava/common-web-utils/groups';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import AppLayout from '../../components/AppLayout';
 import { getUserIdentity } from '../../components/UserMenu/user-profile';
-import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ context, location }) => {

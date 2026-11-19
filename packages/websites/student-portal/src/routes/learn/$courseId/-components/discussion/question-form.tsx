@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
@@ -13,8 +15,7 @@ import {
 } from '@discava/common-web-utils/discussion';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useCoreApi } from '../../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../../api';
 import { usePostId } from './post-id';
 
 export interface LessonRef {
@@ -81,9 +82,9 @@ export function QuestionForm({ lesson }: { lesson: LessonRef }) {
         </p>
       </div>
       {ask.isError ? (
-        <Alert type="error" header="Couldn't post your question">
+        <ErrorAlert type="error" header="Couldn't post your question">
           {apiErrorMessage(ask.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <Button type="submit" disabled={empty || ask.isPending}>
         Post question

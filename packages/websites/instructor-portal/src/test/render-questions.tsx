@@ -7,7 +7,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
-import { CoreApiTRPCContext } from '../components/CoreApiClientProvider';
+import { CoreApiTRPCContext } from '../api';
 import { type ApiCall, fakeFetch, type Handler } from './fake-trpc-fetch';
 import { renderWithInstructorApi } from './render-with-instructor-api';
 

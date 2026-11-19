@@ -8,7 +8,7 @@ import { PostCard } from '@discava/common-shadcn/discussion/post-card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useCoreApi } from '../../../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../../../api';
 import { lessonStateLabel, useCourseLessons } from './lessons';
 import { PagedList } from './paged-list';
 import { ThreadDialog } from './thread-dialog';

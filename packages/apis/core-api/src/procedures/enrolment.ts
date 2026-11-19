@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { createCoreTableService } from '@discava/core-table';
+import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -18,8 +18,6 @@ import {
   MyEnrolmentInputSchema,
   MyEnrolmentOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // ElectroDB types `progressPercent` as optional because it has a default,
 // but every enrolment is written with it.
@@ -56,7 +54,7 @@ export const enrol = courseProcedure
   .input(EnrolInputSchema)
   .output(EnrolOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId } = input;
     const userId = ctx.user.sub;
 
@@ -111,5 +109,5 @@ export const myEnrolment = courseProcedure
   .input(MyEnrolmentInputSchema)
   .output(MyEnrolmentOutputSchema)
   .query(async ({ ctx, input }) =>
-    getEnrolment(ctx.coreTable!, input.courseId, ctx.user.sub),
+    getEnrolment(ctx.coreTable, input.courseId, ctx.user.sub),
   );

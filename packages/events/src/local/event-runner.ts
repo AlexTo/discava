@@ -245,11 +245,11 @@ const transcoder = createTranscoder({
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean),
-  onFinished: (jobId, status, { userMetadata }) =>
+  onFinished: (jobId, status, { userMetadata }, durationSeconds) =>
     invoke(
       'transcode-complete',
       transcodeComplete,
-      transcodeCompletionEvent(jobId, status, userMetadata),
+      transcodeCompletionEvent(jobId, status, userMetadata, durationSeconds),
     ),
   log,
 });
@@ -275,7 +275,7 @@ const server = startEventRunnerServer({
   scheduleTranscodeCleanup: ({ payload, delaySeconds }) => {
     const delay = delaySeconds ?? LOCAL_EVENT_RUNNER.cleanupDelaySeconds;
     log(
-      `transcode-cleanup scheduled in ${delay}s for ${payload.contentItemId}/${payload.submissionNonce}`,
+      `transcode-cleanup scheduled in ${delay}s for ${payload.contentItemId ?? `${payload.courseId} preview`}/${payload.submissionNonce}`,
     );
     setTimeout(
       () => void invoke('transcode-cleanup', transcodeCleanup, payload),

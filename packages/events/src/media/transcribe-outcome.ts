@@ -10,18 +10,27 @@ import {
   GetObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { captionKey } from '@discava/common-server-utils/captions';
+import {
+  captionKey,
+  previewCaptionKey,
+} from '@discava/common-server-utils/captions';
 import { resolveLessonMediaBucketName } from '@discava/common-server-utils/lesson-media-bucket';
 import { s3ClientConfig } from '@discava/common-server-utils/local-dev';
-import { manifestNonce } from '@discava/common-server-utils/media-keys';
+import {
+  manifestNonce,
+  previewManifestNonce,
+} from '@discava/common-server-utils/media-keys';
 import { captionLabel } from '@discava/common-web-utils/caption-languages';
 import {
   applyCaptionChange,
+  type CaptionTargetKey,
   CaptionTrackError,
-  captionWriteCondition,
+  getCaptionRecord,
   isConditionalCheckFailed,
+  writeCaptionsFailed,
+  writeCaptionsReady,
+  writeCaptionTracks,
 } from '@discava/core-table';
-import { stillPending } from './caption-conditions.js';
 import { getCoreTable } from './transcode-outcome.js';
 
 // S3Mock in local dev (#137).
@@ -30,21 +39,32 @@ const s3Client = new S3Client(s3ClientConfig());
 // The language automatic captions are made in (the job's LanguageCode default).
 const AUTO_CAPTION_LANGUAGE = 'en-US';
 
-/** How a Transcribe job ended, and the video version it was for. */
-export interface TranscribeOutcome {
+interface OutcomeBase {
   jobName: string;
   // Transcribe's job status: COMPLETED and FAILED are acted on, anything
   // else is ignored.
   status: string;
-  courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
   // The version (manifest nonce) the job captioned.
   nonce: string;
   // The WebVTT Transcribe wrote, in the version's scratch folder.
   vttKey?: string;
 }
+
+/**
+ * How a Transcribe job ended, and the video version it was for: a content
+ * item's (no `target`) or a course preview's.
+ */
+export type TranscribeOutcome = OutcomeBase &
+  (
+    | {
+        target?: 'contentItem';
+        courseId: string;
+        moduleId: string;
+        lessonId: string;
+        contentItemId: string;
+      }
+    | { target: 'coursePreview'; courseId: string }
+  );
 
 const WRITE_ACCESS_CHECK_FILE = '.write_access_check_file.temp';
 
@@ -96,11 +116,21 @@ export const applyTranscribeOutcome = async (
   logger: Logger,
   outcome: TranscribeOutcome,
 ): Promise<void> => {
-  const { jobName, courseId, moduleId, lessonId, contentItemId, nonce } =
-    outcome;
-  const ref = { courseId, moduleId, lessonId, contentItemId };
+  const { jobName, nonce } = outcome;
+  const isPreview = outcome.target === 'coursePreview';
+  const ref: CaptionTargetKey =
+    outcome.target === 'coursePreview'
+      ? { courseId: outcome.courseId }
+      : {
+          courseId: outcome.courseId,
+          moduleId: outcome.moduleId,
+          lessonId: outcome.lessonId,
+          contentItemId: outcome.contentItemId,
+        };
   const context = { jobName, nonce, ...ref };
-  const coreTable = await getCoreTable();
+  const { entities } = await getCoreTable();
+  const versionNonce = (s3Key: string) =>
+    isPreview ? previewManifestNonce(s3Key) : manifestNonce(s3Key);
 
   if (outcome.status !== 'COMPLETED' && outcome.status !== 'FAILED') {
     logger.info('Ignoring Transcribe job state change', {
@@ -114,12 +144,7 @@ export const applyTranscribeOutcome = async (
 
   const markFailed = async (): Promise<void> => {
     try {
-      await coreTable.entities.contentItem
-        .patch(ref)
-        .set({ captionsStatus: 'failed' })
-        .remove(['captionsPendingSince'])
-        .where(stillPending(nonce))
-        .go();
+      await writeCaptionsFailed(entities, ref, nonce);
     } catch (error) {
       if (!isConditionalCheckFailed(error)) {
         logger.error('Failed to mark captions failed', { error, ...context });
@@ -135,17 +160,17 @@ export const applyTranscribeOutcome = async (
   }
 
   for (let attempt = 1; ; attempt++) {
-    const { data: item } = await coreTable.entities.contentItem.get(ref).go();
+    const item = await getCaptionRecord(entities, ref);
     if (
       !item ||
       item.status !== 'ready' ||
-      manifestNonce(item.s3Key ?? '') !== nonce ||
+      versionNonce(item.s3Key ?? '') !== nonce ||
       item.captionsStatus !== 'pending'
     ) {
       // Deleted, replaced since, or already applied (the scratch files of a
       // first application are gone, so a second one has nothing to copy).
       logger.info('Video no longer waiting for these captions', context);
-      if (scratch && item && manifestNonce(item.s3Key ?? '') !== nonce) {
+      if (scratch && item && versionNonce(item.s3Key ?? '') !== nonce) {
         await deleteScratch(logger, bucket, scratch);
       }
       return;
@@ -153,7 +178,10 @@ export const applyTranscribeOutcome = async (
 
     const rev = item.captionTracksRev ?? 0;
     const trackId = randomUUID();
-    const key = captionKey(ref, nonce, trackId);
+    const key =
+      'contentItemId' in ref
+        ? captionKey(ref, nonce, trackId)
+        : previewCaptionKey(ref.courseId, nonce, trackId);
     let change: ReturnType<typeof applyCaptionChange>;
     try {
       change = applyCaptionChange(
@@ -190,12 +218,7 @@ export const applyTranscribeOutcome = async (
         context,
       );
       try {
-        await coreTable.entities.contentItem
-          .patch(ref)
-          .set({ captionsStatus: 'ready' })
-          .remove(['captionsPendingSince'])
-          .where(stillPending(nonce))
-          .go();
+        await writeCaptionsReady(entities, ref, nonce);
       } catch (error) {
         if (!isConditionalCheckFailed(error)) {
           throw error;
@@ -232,16 +255,11 @@ export const applyTranscribeOutcome = async (
       }),
     );
     try {
-      await coreTable.entities.contentItem
-        .patch(ref)
-        .set({
-          captionTracks: change.tracks,
-          captionTracksRev: rev + 1,
-          captionsStatus: 'ready',
-        })
-        .remove(['captionsPendingSince'])
-        .where(captionWriteCondition(rev, nonce))
-        .go();
+      await writeCaptionTracks(entities, ref, {
+        tracks: change.tracks,
+        rev,
+        nonce,
+      });
     } catch (error) {
       await s3Client
         .send(new DeleteObjectCommand({ Bucket: bucket, Key: key }))

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -17,8 +18,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 export function DeleteAnnouncementDialog({
   courseId,
@@ -62,9 +62,9 @@ export function DeleteAnnouncementDialog({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert type="error" header="Couldn't delete the announcement">
+          <ErrorAlert type="error" header="Couldn't delete the announcement">
             {apiErrorMessage(error)}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>

@@ -14,19 +14,18 @@ import {
   RuntimeConfig,
   SearchCollection,
   StudentPortal,
-  suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { CoreApiComponentConfig } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Stack, StackProps } from 'aws-cdk-lib';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
-import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
-import { apiLimits, publicThrottle } from './api-limits.js';
+import { publicThrottle } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
+import { privilegedHandler, trpcApiProps } from './trpc-api-props.js';
 
 type CoreApiIntegrations = ReturnType<
   ReturnType<typeof CoreApi.defaultIntegrations>['build']
@@ -81,19 +80,16 @@ export class CoreApiStack extends Stack {
   ) {
     super(scope, id, props);
 
-    const coreApiKmsEnabled = coreApiConfig?.enableKmsEncryption ?? true;
-    const limits = apiLimits(coreApiConfig);
+    const {
+      limits,
+      certificate,
+      props: apiProps,
+      suppressLogGroupKmsRule,
+    } = trpcApiProps(this, 'CoreApi', coreApiConfig);
     const integrations = CoreApi.defaultIntegrations(
       this,
       limits.functionOptions,
     ).build();
-    const coreApiCertificate = coreApiConfig?.certificateArn
-      ? Certificate.fromCertificateArn(
-          this,
-          'CoreApiCertificate',
-          coreApiConfig.certificateArn,
-        )
-      : undefined;
 
     const unsubscribe = this.createNotificationUnsubscribeLambda(
       coreTable,
@@ -115,37 +111,17 @@ export class CoreApiStack extends Stack {
         public: true,
       })),
       identity,
-      enableWaf: coreApiConfig?.enableWaf ?? true,
-      throttle: limits.throttle,
       publicThrottle: publicThrottle(coreApiConfig),
-      enableTracing: limits.enableTracing,
-      enableKmsEncryption: coreApiKmsEnabled,
-      enableKeyRotation: coreApiConfig?.enableKeyRotation ?? true,
-      removalPolicy:
-        (coreApiConfig?.retainOnDelete ?? true)
-          ? RemovalPolicy.RETAIN
-          : RemovalPolicy.DESTROY,
-      domainName: coreApiConfig?.domainName,
-      certificate: coreApiCertificate,
+      ...apiProps,
     });
     // With a custom domain the base path mapping serves the API without the
     // deployment stage's prefix, so clients call the domain directly.
     this.apiUrl = (
-      coreApiConfig?.domainName && coreApiCertificate
+      coreApiConfig?.domainName && certificate
         ? `https://${coreApiConfig.domainName}`
         : this.coreApi.api.url
     ).replace(/\/+$/, '');
-    if (!coreApiKmsEnabled) {
-      suppressRules(
-        this,
-        ['CKV_AWS_158'],
-        'KMS encryption disabled for this stage',
-        (c) =>
-          CfnResource.isCfnResource(c) &&
-          c.cfnResourceType === 'AWS::Logs::LogGroup' &&
-          c.node.path.includes('/CoreApi/AccessLogs'),
-      );
-    }
+    suppressLogGroupKmsRule();
 
     Object.values(integrations).forEach(({ handler }) => {
       coreTable.grantReadWriteData(handler);
@@ -204,14 +180,9 @@ export class CoreApiStack extends Stack {
   // that serves every other core-api procedure.
   private privilegedHandler(
     integrations: CoreApiIntegrations,
-    op: keyof CoreApiIntegrations,
+    op: keyof CoreApiIntegrations & string,
   ) {
-    if (!CoreApi.hasDedicatedFunction(op)) {
-      throw new Error(
-        `core-api operation '${op}' is served by the shared router; add it to CORE_API_DEDICATED_FUNCTIONS before granting it extra permissions`,
-      );
-    }
-    return integrations[op].handler;
+    return privilegedHandler(CoreApi, 'core-api', integrations, op);
   }
 
   // Rebuilds the courses index from the core table when invoked, for after

@@ -20,7 +20,7 @@ export const listAnnouncements = courseProcedure
   .input(ListAnnouncementsInputSchema)
   .output(ListAnnouncementsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, cursor, limit } = input;
 
     const [{ data: course }, enrolment] = await Promise.all([

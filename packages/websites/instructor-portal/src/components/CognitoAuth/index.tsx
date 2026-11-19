@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { safeReturnTo } from '@discava/common-web-utils/return-to';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import React, { PropsWithChildren } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
-import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { router } from '../../router';
-import { Alert } from '../alert';
-import { Spinner } from '../spinner';
 
 /**
  * Sets up sign-in: with Cognito, from runtime-config.json's cognitoProps, or
@@ -21,11 +21,11 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
 
   if (!cognitoProps && !localOidc) {
     return (
-      <Alert type="error" header="Runtime config configuration error">
+      <ErrorAlert type="error" header="Runtime config configuration error">
         <p>
           The cognitoProps have not been configured in the runtime-config.json.
         </p>
-      </Alert>
+      </ErrorAlert>
     );
   }
 
@@ -67,12 +67,12 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
 
   if (auth.error) {
     return (
-      <Alert type="error" header="Couldn't sign you in">
+      <ErrorAlert type="error" header="Couldn't sign you in">
         <p>
           We couldn't reach the sign-in service. Please refresh the page or try
           again later.
         </p>
-      </Alert>
+      </ErrorAlert>
     );
   }
 

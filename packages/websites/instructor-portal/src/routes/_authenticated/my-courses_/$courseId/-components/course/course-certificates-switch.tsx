@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 /**
  * Whether completing the course issues a certificate (#276). It shows the
@@ -82,9 +82,12 @@ export function CourseCertificatesSwitch({
         </div>
       </div>
       {isError && (
-        <Alert type="error" header="Couldn't change the certificate setting">
+        <ErrorAlert
+          type="error"
+          header="Couldn't change the certificate setting"
+        >
           {apiErrorMessage(error)}
-        </Alert>
+        </ErrorAlert>
       )}
     </div>
   );

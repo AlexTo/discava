@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
@@ -10,8 +11,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { RichTextEditor } from '../rich-text-editor';
 
 const TITLE_MAX = 120;
@@ -103,7 +103,7 @@ export function AnnouncementForm({
       }}
     >
       {mutation.isError && (
-        <Alert
+        <ErrorAlert
           type="error"
           header={
             announcement
@@ -127,7 +127,7 @@ export function AnnouncementForm({
               </Button>
             )}
           </div>
-        </Alert>
+        </ErrorAlert>
       )}
 
       <div className="space-y-2">
