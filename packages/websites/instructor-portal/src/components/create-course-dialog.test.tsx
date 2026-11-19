@@ -12,9 +12,10 @@ import { CreateCourseDialog } from './create-course-dialog';
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return { ...actual, useNavigate: () => navigate };
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
+    useNavigate: () => navigate,
+  });
 });
 
 const renderDialog = (handlers = {}) =>

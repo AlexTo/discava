@@ -12,10 +12,8 @@ import {
 // Link needs a router context this test doesn't set up; a plain anchor, its
 // `to` and `params` kept as the href, shows where each card leads.
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return {
-    ...actual,
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
     Link: ({
       children,
       to,
@@ -37,7 +35,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
         {children}
       </a>
     ),
-  };
+  });
 });
 
 const { Route } = await import('./route');
