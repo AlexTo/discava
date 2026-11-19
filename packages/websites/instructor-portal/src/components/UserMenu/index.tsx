@@ -46,6 +46,9 @@ export const UserMenu = () => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild className="cursor-pointer">
+          <Link to="/profile">Public profile</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer">
           <Link to="/settings/notifications">Notification settings</Link>
         </DropdownMenuItem>
         <DropdownMenuItem className="cursor-pointer" onSelect={handleSignOut}>

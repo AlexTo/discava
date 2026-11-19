@@ -91,6 +91,14 @@ function RouteComponent() {
     data: fullCourse,
   } = useQuery(trpc.course.view.queryOptions({ courseId }));
 
+  const profileQuery = useQuery(trpc.profile.get.queryOptions());
+  // The checklist's profile line: a headline and a photo. Left unknown until
+  // the profile has loaded.
+  const profile = profileQuery.data;
+  const hasProfile = profile
+    ? Boolean(profile.headline && profile.photoKey)
+    : undefined;
+
   useBreadcrumbLabel(fullCourse?.title);
 
   if (isPending) {
@@ -215,6 +223,7 @@ function RouteComponent() {
             hasRequirements={(course.requirements?.length ?? 0) > 0}
             hasPreview={course.preview?.status === 'ready'}
             hasImage={Boolean(course.imageKey)}
+            hasProfile={hasProfile}
           />
         </Card>
       </section>
