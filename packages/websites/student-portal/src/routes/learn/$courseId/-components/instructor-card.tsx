@@ -8,7 +8,7 @@ import {
   AvatarImage,
 } from '@discava/common-shadcn/components/ui/avatar';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
-import { usePublicMediaUrl } from '../../../../hooks/usePublicMediaUrl';
+import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 
 export interface InstructorCardData {
   handle: string;

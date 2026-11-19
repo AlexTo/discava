@@ -2,15 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Star } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../../components/alert';
+import { useCoreApi } from '../../../../api';
 import { RatingSummary } from '../../../../components/rating-summary';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
 import { formatReviewDate } from './review-date';
 import { ReviewForm } from './review-form';
 
@@ -50,7 +51,7 @@ function ReviewSummary({ courseId }: { courseId: string }) {
   }
   if (summaryQuery.isError) {
     return (
-      <Alert type="error" header="Couldn't load the ratings">
+      <ErrorAlert type="error" header="Couldn't load the ratings">
         {apiErrorMessage(summaryQuery.error)}
         <Button
           className="mt-2"
@@ -60,7 +61,7 @@ function ReviewSummary({ courseId }: { courseId: string }) {
         >
           Retry
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   }
   const { average, count, stars } = summaryQuery.data;
@@ -102,7 +103,7 @@ function ReviewList({ courseId }: { courseId: string }) {
   }
   if (listQuery.isError) {
     return (
-      <Alert type="error" header="Couldn't load the reviews">
+      <ErrorAlert type="error" header="Couldn't load the reviews">
         {apiErrorMessage(listQuery.error)}
         <Button
           className="mt-2"
@@ -112,7 +113,7 @@ function ReviewList({ courseId }: { courseId: string }) {
         >
           Retry
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   }
 

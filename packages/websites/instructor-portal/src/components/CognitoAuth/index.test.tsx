@@ -2,10 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import { render, screen } from '@testing-library/react';
 import type { AuthContextProps } from 'react-oidc-context';
 import { describe, expect, it, vi } from 'vitest';
-import { RuntimeConfigContext } from '../RuntimeConfig';
 
 const authState = vi.hoisted(() => ({
   value: { isLoading: false, error: undefined } as Partial<AuthContextProps>,

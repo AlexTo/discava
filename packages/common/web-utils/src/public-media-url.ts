@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useRuntimeConfig } from './useRuntimeConfig';
+import { useRuntimeConfig } from './runtime-config';
 
 /**
  * Turns a public media object key from the APIs (e.g. a course's `imageKey`)

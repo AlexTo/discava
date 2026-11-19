@@ -9,12 +9,12 @@ import {
 } from '@discava/common-shadcn/components/skip-link';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { TooltipProvider } from '@discava/common-shadcn/components/ui/tooltip';
+import Config from '@discava/common-web-utils/app-config';
 import { isInGroup } from '@discava/common-web-utils/groups';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
-import Config from '../config';
-import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { NotificationBell } from './NotificationBell';
 import { SiteSearch } from './SiteSearch';
 import { UserMenu } from './UserMenu';

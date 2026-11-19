@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
@@ -15,6 +16,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from '@discava/common-shadcn/components/ui/item';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,9 +29,7 @@ import {
   Play,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../components/alert';
-import { Spinner } from '../../../../components/spinner';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 import { AssignmentItem } from './assignment-item';
 import { QuizItem } from './quiz-item';
 import {
@@ -96,16 +96,16 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
 
   if (item.status === 'pending') {
     return (
-      <Alert header="This video is still processing">
+      <ErrorAlert header="This video is still processing">
         Check back in a few minutes.
-      </Alert>
+      </ErrorAlert>
     );
   }
   if (item.status === 'failed') {
     return (
-      <Alert type="error" header="This video isn't available">
+      <ErrorAlert type="error" header="This video isn't available">
         Your instructor has been asked to upload it again.
-      </Alert>
+      </ErrorAlert>
     );
   }
   if (videoQuery.isPending) {
@@ -117,9 +117,9 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
   }
   if (videoQuery.isError) {
     return (
-      <Alert type="error" header="Couldn't load this video">
+      <ErrorAlert type="error" header="Couldn't load this video">
         {apiErrorMessage(videoQuery.error)}
-      </Alert>
+      </ErrorAlert>
     );
   }
   return (
@@ -199,9 +199,9 @@ function FileDownload({
         </ItemActions>
       </Item>
       {error ? (
-        <Alert type="error" header="Couldn't download this file">
+        <ErrorAlert type="error" header="Couldn't download this file">
           {apiErrorMessage(error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
     </div>
   );
@@ -248,11 +248,11 @@ function MarkAsDone({
         {complete.isPending ? 'Saving…' : 'Mark as done'}
       </Button>
       {complete.error ? (
-        <Alert type="error" header="Couldn't mark this as done">
+        <ErrorAlert type="error" header="Couldn't mark this as done">
           {errorCode(complete.error) === 'NOT_FOUND'
             ? 'This item is no longer available.'
             : apiErrorMessage(complete.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
     </div>
   );

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
@@ -11,6 +12,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@discava/common-shadcn/components/ui/collapsible';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -22,11 +24,9 @@ import {
   Search,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../components/alert';
+import { useCoreApi } from '../../../../api';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
-import { Spinner } from '../../../../components/spinner';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
 import {
   formatDuration,
   LANGUAGE_LABELS,
@@ -96,9 +96,9 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </>
         ) : (
           <div className="text-left">
-            <Alert type="error" header="Couldn't load this course">
+            <ErrorAlert type="error" header="Couldn't load this course">
               {apiErrorMessage(courseQuery.error)}
-            </Alert>
+            </ErrorAlert>
           </div>
         )}
         <Button className="mt-6" asChild>

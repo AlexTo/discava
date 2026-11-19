@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -31,8 +32,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Upload } from 'lucide-react';
 import { type ReactNode, useRef, useState } from 'react';
 import { type FileRejection, useDropzone } from 'react-dropzone';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 // What a file item may be, as instructor-api allows it (its
 // LESSON_FILE_TYPES): documents, spreadsheets, slides, plain text, images and
@@ -282,9 +282,9 @@ export function AttachLessonFileDialog({
         </DialogHeader>
 
         {error && (
-          <Alert type="error" header="Couldn't save the file">
+          <ErrorAlert type="error" header="Couldn't save the file">
             {error}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <div className="space-y-2">

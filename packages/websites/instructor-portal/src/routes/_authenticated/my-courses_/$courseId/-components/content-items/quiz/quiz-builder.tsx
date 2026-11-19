@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
@@ -28,8 +29,7 @@ import { useSortable } from '@dnd-kit/react/sortable';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CirclePlus, Eye, Save } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Alert } from '../../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../../api';
 import { QuestionCard, QuestionHandle } from './question-card';
 import {
   fromQuizItem,
@@ -241,17 +241,19 @@ export function QuizBuilder({
   return (
     <div className="space-y-6">
       {readOnlyReason && (
-        <Alert header="This quiz can't be edited">{readOnlyReason}</Alert>
+        <ErrorAlert header="This quiz can't be edited">
+          {readOnlyReason}
+        </ErrorAlert>
       )}
       {!readOnly && studentActivityCount > 0 && (
-        <Alert
+        <ErrorAlert
           header={`${studentActivityCount} ${studentActivityCount === 1 ? 'student has' : 'students have'} attempted this quiz`}
         >
           Their attempts and best scores are kept, and never regraded. Changing
           the questions makes anyone mid-attempt review the quiz before
           submitting; changing only the answer key or explanations doesn't
           interrupt them.
-        </Alert>
+        </ErrorAlert>
       )}
 
       <div className="sm:grid sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-6">
@@ -530,13 +532,13 @@ export function QuizBuilder({
       {(!readOnly || onClose) && (
         <div className="sticky bottom-0 space-y-3 border-t bg-background/95 py-4 backdrop-blur">
           {showProblems && errors.quiz.length > 0 && (
-            <Alert type="error" header="Fix these before saving">
+            <ErrorAlert type="error" header="Fix these before saving">
               <ul className="list-disc pl-5">
                 {errors.quiz.map((problem) => (
                   <li key={problem}>{problem}</li>
                 ))}
               </ul>
-            </Alert>
+            </ErrorAlert>
           )}
           {showProblems && Object.keys(errors.questions).length > 0 && (
             <p role="alert" className="text-sm text-destructive">
@@ -548,7 +550,7 @@ export function QuizBuilder({
           )}
           {saveError &&
             (saveError.data?.code === 'CONFLICT' ? (
-              <Alert
+              <ErrorAlert
                 type="error"
                 header="This quiz changed since you opened it"
               >
@@ -565,11 +567,11 @@ export function QuizBuilder({
                 >
                   Reload the quiz
                 </Button>
-              </Alert>
+              </ErrorAlert>
             ) : (
-              <Alert type="error" header="Couldn't save the quiz">
+              <ErrorAlert type="error" header="Couldn't save the quiz">
                 {saveError.message}
-              </Alert>
+              </ErrorAlert>
             ))}
           <div className="flex items-center justify-end gap-3">
             <span className="text-sm text-muted-foreground" role="status">

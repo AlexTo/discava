@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import {
@@ -10,6 +12,7 @@ import {
   CollapsibleTrigger,
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
 import {
@@ -21,12 +24,10 @@ import {
   Search,
 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { Alert } from '../../../../components/alert';
 import {
   type Crumb,
   PageBreadcrumbs,
 } from '../../../../components/page-breadcrumbs';
-import { Spinner } from '../../../../components/spinner';
 import {
   type CoursePlayer,
   errorCode,
@@ -81,9 +82,9 @@ function Unavailable({
         </>
       ) : (
         <div className="text-left">
-          <Alert type="error" header="Couldn't load this course">
+          <ErrorAlert type="error" header="Couldn't load this course">
             {(error as Error | null)?.message ?? 'Something went wrong.'}
-          </Alert>
+          </ErrorAlert>
         </div>
       )}
       <Button className="mt-6" asChild>
@@ -331,9 +332,9 @@ export function CoursePlayerLayout({
 
       {player.readOnly ? (
         <div className="mt-6">
-          <Alert header="This course is archived">
+          <ErrorAlert header="This course is archived">
             You can still review it, but nothing in it can be completed now.
-          </Alert>
+          </ErrorAlert>
         </div>
       ) : null}
 

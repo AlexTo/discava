@@ -14,10 +14,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@discava/common-shadcn/components/ui/dropdown-menu';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
 import { Link } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
-import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { getUserIdentity } from './user-profile';
 
 export const UserMenu = () => {

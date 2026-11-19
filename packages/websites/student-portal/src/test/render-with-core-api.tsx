@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import type { AppRouter } from '@discava/core-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -17,8 +19,7 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { AuthContext, type AuthContextProps } from 'react-oidc-context';
-import { CoreApiTRPCContext } from '../components/CoreApiClientProvider';
-import { RuntimeConfigContext } from '../components/RuntimeConfig';
+import { CoreApiTRPCContext } from '../api';
 
 const API_URL = 'http://core-api.test/';
 // Where public media (course images) is served from in tests.

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -29,8 +30,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { FileText } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { useInstructorApi } from '../hooks/useInstructorApi';
-import { Alert } from './alert';
+import { useInstructorApi } from '../api';
 
 const courseFormSchema = z.object({
   title: z.string().trim().min(1, 'Course title is required').max(200),
@@ -95,9 +95,9 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
           }}
         >
           {createCourse.isError && (
-            <Alert type="error" header="Couldn't create the course">
+            <ErrorAlert type="error" header="Couldn't create the course">
               {apiErrorMessage(createCourse.error)}
-            </Alert>
+            </ErrorAlert>
           )}
 
           <Card className="gap-5 py-5">

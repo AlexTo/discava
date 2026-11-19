@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -16,12 +17,11 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BarChart3, BookOpen } from 'lucide-react';
-import { Alert } from '../../../components/alert';
+import { useInstructorApi } from '../../../api';
 import {
   type CourseStatus,
   courseStatusStyles,
 } from '../../../components/course-status';
-import { useInstructorApi } from '../../../hooks/useInstructorApi';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
@@ -77,9 +77,9 @@ function RouteComponent() {
         </section>
       ) : summariesQuery.isError ? (
         <div className="space-y-3">
-          <Alert type="error" header="Couldn't load your courses">
+          <ErrorAlert type="error" header="Couldn't load your courses">
             {apiErrorMessage(summariesQuery.error)}
-          </Alert>
+          </ErrorAlert>
           <Button
             variant="outline"
             size="sm"

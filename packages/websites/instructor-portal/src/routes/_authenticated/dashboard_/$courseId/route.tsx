@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
@@ -9,9 +11,8 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BarChart3, Users } from 'lucide-react';
+import { useInstructorApi } from '../../../../api';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
-import { Alert } from '../../../../components/alert';
-import { useInstructorApi } from '../../../../hooks/useInstructorApi';
 import { DailyChart } from './-components/daily-chart';
 import { LessonDropOff } from './-components/lesson-drop-off';
 import { QuizPanel } from './-components/quiz-panel';
@@ -58,14 +59,14 @@ function RouteComponent() {
     const notFound = analyticsQuery.error.data?.code === 'NOT_FOUND';
     return (
       <div className="space-y-3">
-        <Alert
+        <ErrorAlert
           type="error"
           header={notFound ? 'Course not found' : "Couldn't load the analytics"}
         >
           {notFound
             ? "This course doesn't exist, or you don't have access to it."
             : apiErrorMessage(analyticsQuery.error)}
-        </Alert>
+        </ErrorAlert>
         {!notFound && (
           <Button
             variant="outline"

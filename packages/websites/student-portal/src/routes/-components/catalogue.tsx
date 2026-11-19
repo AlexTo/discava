@@ -18,8 +18,8 @@ import {
   LayoutDashboard,
   MessageCircleMore,
 } from 'lucide-react';
+import { useCoreApi } from '../../api';
 import { CatalogueResults } from '../../components/catalogue-results';
-import { useCoreApi } from '../../hooks/useCoreApi';
 import {
   type CatalogueFilters,
   catalogueFiltersToSearch,

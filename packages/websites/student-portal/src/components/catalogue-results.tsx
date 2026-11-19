@@ -2,11 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { useCoreApi } from '../hooks/useCoreApi';
+import { useCoreApi } from '../api';
 import {
   type CatalogueFilters,
   catalogueFiltersToInput,
@@ -14,10 +17,8 @@ import {
   NO_FILTERS,
 } from '../lib/catalogue-filters';
 import { toDisplayCourse } from '../lib/course-display';
-import { Alert } from './alert';
 import { CatalogueFilterPanel } from './catalogue-filters';
 import { CourseCard } from './course-card';
-import { Spinner } from './spinner';
 
 const PAGE_SIZE = 12;
 
@@ -107,7 +108,7 @@ export function CatalogueResults({
             )}
           </div>
         ) : searchQuery.isError ? (
-          <Alert
+          <ErrorAlert
             type="error"
             header={
               coldStart ? 'Search is starting up' : "Couldn't search courses"
@@ -123,7 +124,7 @@ export function CatalogueResults({
             >
               Try again
             </Button>
-          </Alert>
+          </ErrorAlert>
         ) : results.length === 0 ? (
           <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
             <Search className="mx-auto size-8 text-muted-foreground" />

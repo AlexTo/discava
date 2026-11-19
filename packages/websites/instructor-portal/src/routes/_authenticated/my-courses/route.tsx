@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -13,11 +14,13 @@ import {
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
 import { Input } from '@discava/common-shadcn/components/ui/input';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import {
   ToggleGroup,
   ToggleGroupItem,
 } from '@discava/common-shadcn/components/ui/toggle-group';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -31,15 +34,12 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../components/alert';
+import { useCoreApi } from '../../../api';
 import {
   type CourseStatus,
   courseStatusStyles,
 } from '../../../components/course-status';
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
-import { Spinner } from '../../../components/spinner';
-import { useCoreApi } from '../../../hooks/useCoreApi';
-import { usePublicMediaUrl } from '../../../hooks/usePublicMediaUrl';
 
 export const Route = createFileRoute('/_authenticated/my-courses')({
   component: RouteComponent,
@@ -207,9 +207,9 @@ function RouteComponent() {
             <Spinner />
           </div>
         ) : coursesQuery.isError ? (
-          <Alert type="error" header="Couldn't load your courses">
+          <ErrorAlert type="error" header="Couldn't load your courses">
             {apiErrorMessage(coursesQuery.error)}
-          </Alert>
+          </ErrorAlert>
         ) : visibleCourses.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {visibleCourses.map((course) => (
