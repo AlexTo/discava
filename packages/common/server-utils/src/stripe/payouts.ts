@@ -116,7 +116,7 @@ export const payoutStripe = async (
       stripe.transfers.create(
         {
           amount: amountMinor,
-          currency,
+          currency: currency.toLowerCase(),
           destination,
           transfer_group: payoutId,
           metadata: { payoutId },

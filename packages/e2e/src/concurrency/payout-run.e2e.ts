@@ -72,10 +72,17 @@ test('payout runs at the same moment pay released earnings once', async () => {
   });
 
   // More released earnings than one transaction holds. Each sale is recorded
-  // with no hold and then its order is stored, so the earnings match their
-  // orders; the router's own recording of those orders finds the sale already
-  // recorded and changes nothing.
-  const paidAt = new Date(Date.now() - 60_000).toISOString();
+  // with no hold and then its order is stored, with the student's enrolment
+  // and a checkout window that covers it, so the earnings match their orders
+  // and the payment invariants hold; the router's own recording of those
+  // orders finds the sale already recorded and changes nothing.
+  const paidAt = '2026-01-01T00:00:00.000Z';
+  await coreTable.entities.paymentConnection
+    .patch({})
+    .set({ latestCheckoutExpiresAt: paidAt })
+    .where((attr, op) => op.notExists(attr.latestCheckoutExpiresAt))
+    .go()
+    .catch(() => undefined);
   const orderIds = Array.from({ length: SALES }, () => randomUUID());
   for (let start = 0; start < SALES; start += 20) {
     await Promise.all(
@@ -85,7 +92,7 @@ test('payout runs at the same moment pay released earnings once', async () => {
           courseId,
           accountId: 'acct_local',
           mode: 'test' as const,
-          currency: 'usd',
+          currency: 'USD',
           listAmount: 1000,
           amount: 1000,
           paidAt,
@@ -97,14 +104,19 @@ test('payout runs at the same moment pay released earnings once', async () => {
           feeBasisPoints: 2000,
           holdDays: 0,
         });
+        const userId = randomUUID();
         await coreTable.entities.order
           .put({
             ...order,
-            userId: randomUUID(),
+            userId,
             courseTitle: 'Payout race',
             status: 'paid',
+            paymentIntentId: `pi_${orderId}`,
             expiresAt: paidAt,
           })
+          .go();
+        await coreTable.entities.enrolment
+          .put({ courseId, userId, status: 'active', orderId })
           .go();
       }),
     );
