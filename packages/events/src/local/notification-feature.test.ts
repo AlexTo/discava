@@ -17,12 +17,14 @@ import { createInProcessQueue } from './in-process-queue.js';
 const delivery = vi.hoisted(() =>
   vi.fn(async () => ({ handled: 1, ignored: 0 })),
 );
-vi.mock('../notifications/delivery.js', async (importActual) => ({
-  ...(await importActual<typeof import('../notifications/delivery.js')>()),
+vi.mock('../notifications/notification-delivery.js', async (importActual) => ({
+  ...(await importActual<
+    typeof import('../notifications/notification-delivery.js')
+  >()),
   notificationDelivery: delivery,
 }));
 
-import { notificationDelivery } from '../notifications/delivery.js';
+import { notificationDelivery } from '../notifications/notification-delivery.js';
 
 // The local runner builds its router and feature runners from STREAM_FEATURES
 // (event-runner.ts), and the notification-delivery registration is added with

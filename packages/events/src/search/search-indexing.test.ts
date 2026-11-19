@@ -28,7 +28,7 @@ vi.mock('@discava/core-table', async (importActual) => {
   return { ...actual, createCoreTableService: createCoreTableServiceMock };
 });
 
-const { searchIndexing } = await import('./index-content.js');
+const { searchIndexing } = await import('./search-indexing.js');
 
 type StreamEvent = z.infer<typeof DynamoDBStreamSchema>;
 type StreamRecord = StreamEvent['Records'][number];
