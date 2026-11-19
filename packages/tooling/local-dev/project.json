@@ -141,8 +141,8 @@
       "dependsOn": ["pull-dynamodb-image"],
       "options": {
         "commands": [
-          "tsx {projectRoot}/src/dynamodb/start-container.ts",
-          "tsx {projectRoot}/src/dynamodb/create-local-table.ts"
+          "tsx ../../tooling/local-dev/src/dynamodb/start-container.ts",
+          "tsx ../../tooling/local-dev/src/dynamodb/create-local-table.ts"
         ],
         "parallel": true,
         "cwd": "{workspaceRoot}/packages/databases/core-table"
@@ -160,8 +160,8 @@
       ],
       "options": {
         "commands": [
-          "tsx {projectRoot}/src/opensearch/start-container.ts",
-          "tsx {projectRoot}/src/opensearch/sync-local-indices.ts"
+          "tsx ../../tooling/local-dev/src/opensearch/start-container.ts",
+          "tsx ../../tooling/local-dev/src/opensearch/sync-local-indices.ts"
         ],
         "parallel": true,
         "cwd": "{workspaceRoot}/packages/databases/search"
@@ -170,14 +170,14 @@
     "pull-dynamodb-image": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx {projectRoot}/src/dynamodb/pull-image.ts",
+        "command": "tsx ../../tooling/local-dev/src/dynamodb/pull-image.ts",
         "cwd": "{workspaceRoot}/packages/databases/core-table"
       }
     },
     "pull-opensearch-image": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx {projectRoot}/src/opensearch/pull-image.ts",
+        "command": "tsx ../../tooling/local-dev/src/opensearch/pull-image.ts",
         "cwd": "{workspaceRoot}/packages/databases/search"
       }
     }
