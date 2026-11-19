@@ -168,3 +168,5 @@ export const createCoreTableService = async () => {
     couponRedemption,
   });
 };
+
+export type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
+import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -34,8 +34,6 @@ import { asContentItemOutput } from './content-item-shared.js';
 // one transaction, and the item can't be added to, removed or archived
 // separately (see requireOrdinaryLesson and the delete guards in
 // content-item-shared.ts), so an assignment lesson always has exactly one.
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 // What the item holds beyond the keys, title and order every item has.
 type ItemAttributes =
@@ -133,7 +131,7 @@ export const createQuizAssignment = courseProcedure
   .output(CreateQuizAssignmentOutputSchema)
   .mutation(({ ctx, input }) => {
     const { questions, answerKey, settings, ...target } = input;
-    return createAssignmentLesson(ctx.coreTable!, ctx.user.sub, target, {
+    return createAssignmentLesson(ctx.coreTable, ctx.user.sub, target, {
       type: 'quiz',
       questions,
       answerKey,
@@ -148,7 +146,7 @@ export const createUploadAssignment = courseProcedure
   .output(CreateUploadAssignmentOutputSchema)
   .mutation(({ ctx, input }) => {
     const { body, dueAt, maxPoints, ...target } = input;
-    return createAssignmentLesson(ctx.coreTable!, ctx.user.sub, target, {
+    return createAssignmentLesson(ctx.coreTable, ctx.user.sub, target, {
       type: 'assignment',
       body,
       dueAt,
@@ -163,7 +161,7 @@ export const updateContentItemAssignment = courseProcedure
   .input(UpdateContentItemAssignmentInputSchema)
   .output(UpdateContentItemAssignmentOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { body, dueAt, maxPoints, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 

@@ -38,7 +38,7 @@ export const videoUrl = courseProcedure
   .input(VideoUrlInputSchema)
   .output(VideoUrlOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId, moduleId, lessonId, contentItemId } = input;
 
@@ -123,7 +123,7 @@ export const saveVideoPosition = courseProcedure
   .input(SaveVideoPositionInputSchema)
   .output(SaveVideoPositionOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const {
       courseId,
@@ -206,7 +206,7 @@ export const fileUrl = courseProcedure
   .input(FileUrlInputSchema)
   .output(FileUrlOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId, moduleId, lessonId, contentItemId } = input;
 

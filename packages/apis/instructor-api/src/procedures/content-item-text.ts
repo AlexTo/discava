@@ -28,7 +28,7 @@ export const createContentItemText = courseProcedure
   .input(CreateContentItemTextInputSchema)
   .output(CreateContentItemTextOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, title, description, body } = input;
     const { sub: currentUser } = ctx.user;
 
@@ -88,7 +88,7 @@ export const updateContentItemText = courseProcedure
   .input(UpdateContentItemTextInputSchema)
   .output(UpdateContentItemTextOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const {
       courseId,
       moduleId,

@@ -25,7 +25,7 @@ export const updateCourseCatalogue = courseProcedure
   .input(UpdateCourseCatalogueInputSchema)
   .output(UpdateCourseCatalogueOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, ...catalogue } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -55,8 +55,8 @@ export const updateCourseCatalogue = courseProcedure
 export const listActiveCategories = courseProcedure
   .output(ListActiveCategoriesOutputSchema)
   .query(async ({ ctx }) => {
-    const { data } = await ctx
-      .coreTable!.entities.category.query.primary({})
+    const { data } = await ctx.coreTable.entities.category.query
+      .primary({})
       .go({ pages: 'all' });
     return data
       .filter((category) => category.status === 'active')

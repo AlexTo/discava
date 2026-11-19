@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
-import { lessonHasDiscussion } from '@discava/core-table';
+import { type CoreTable, lessonHasDiscussion } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -49,8 +48,6 @@ import {
   UpdateModuleInputSchema,
   UpdateModuleOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 const getModuleOrThrow = async (
   coreTable: CoreTable,
@@ -253,7 +250,7 @@ export const createModule = courseProcedure
   .input(CreateModuleInputSchema)
   .output(CreateModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, title, description } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -283,7 +280,7 @@ export const updateModule = courseProcedure
   .input(UpdateModuleInputSchema)
   .output(UpdateModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, title, description } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -311,7 +308,7 @@ export const deleteModule = courseProcedure
   .input(DeleteModuleInputSchema)
   .output(DeleteModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -368,7 +365,7 @@ export const publishModule = courseProcedure
   .input(PublishModuleInputSchema)
   .output(PublishModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -508,7 +505,7 @@ export const hideModule = courseProcedure
   .input(HideModuleInputSchema)
   .output(HideModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -532,7 +529,7 @@ export const restoreModule = courseProcedure
   .input(RestoreModuleInputSchema)
   .output(RestoreModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -563,7 +560,7 @@ export const deleteModulePermanently = courseProcedure
   .input(DeleteModulePermanentlyInputSchema)
   .output(DeleteModulePermanentlyOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -642,7 +639,7 @@ export const reorderModules = courseProcedure
   .input(ReorderModulesInputSchema)
   .output(ReorderModulesOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleIds } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);

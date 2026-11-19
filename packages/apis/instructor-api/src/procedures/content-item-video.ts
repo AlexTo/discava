@@ -71,7 +71,7 @@ export const createContentItemVideoUploadUrl = courseProcedure
   .input(CreateContentItemVideoUploadUrlInputSchema)
   .output(CreateContentItemVideoUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, fileName } = input;
     const { sub: currentUser } = ctx.user;
 
@@ -163,7 +163,7 @@ export const createContentItemVideo = courseProcedure
   .input(CreateContentItemVideoInputSchema)
   .output(CreateContentItemVideoOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const {
       courseId,
       moduleId,
@@ -356,7 +356,7 @@ export const updateContentItemVideo = courseProcedure
   .input(UpdateContentItemVideoInputSchema)
   .output(UpdateContentItemVideoOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const {
       courseId,
       moduleId,
@@ -750,7 +750,7 @@ export const createContentItemVideoUrl = courseProcedure
   .input(CreateContentItemVideoUrlInputSchema)
   .output(CreateContentItemVideoUrlOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const { sub: currentUser } = ctx.user;
 

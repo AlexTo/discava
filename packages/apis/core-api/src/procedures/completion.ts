@@ -57,7 +57,7 @@ export const completeContentItem = courseProcedure
   .input(CompleteContentItemInputSchema)
   .output(CompleteContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const itemKey = { courseId, moduleId, lessonId, contentItemId };
@@ -178,7 +178,7 @@ export const myItemCompletions = courseProcedure
   .input(MyItemCompletionsInputSchema)
   .output(MyItemCompletionsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId } = input;
     const [{ data: course }, enrolment] = await Promise.all([

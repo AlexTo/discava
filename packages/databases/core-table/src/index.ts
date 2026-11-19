@@ -347,4 +347,4 @@ export {
   VIDEO_POSITION_MAX_SECONDS,
   videoPositionToStore,
 } from './helpers/video-position.js';
-export { createCoreTableService } from './service.js';
+export { type CoreTable, createCoreTableService } from './service.js';
