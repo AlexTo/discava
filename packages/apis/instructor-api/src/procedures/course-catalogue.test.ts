@@ -60,6 +60,8 @@ const course = {
   title: 'Course',
   status: 'draft',
   certificatesEnabled: true,
+  priceAmount: 0,
+  priceCurrency: 'USD',
   createdAt: 'a',
   updatedAt: 'b',
 };

@@ -54,6 +54,8 @@ const course = {
   title: 'Course',
   status: 'draft',
   certificatesEnabled: true,
+  priceAmount: 0,
+  priceCurrency: 'USD',
   learningOutcomes: ['Build'],
   createdAt: 'a',
   updatedAt: 'b',

@@ -33,6 +33,8 @@ export const CourseSchema = z.object({
   learningOutcomes: z.array(z.string()).optional(),
   requirements: z.array(z.string()).optional(),
   certificatesEnabled: z.boolean(),
+  priceAmount: z.number(),
+  priceCurrency: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -129,6 +131,18 @@ export const SetCourseCertificatesOutputSchema = CourseSchema;
 export type ISetCourseCertificatesOutput = z.output<
   typeof SetCourseCertificatesOutputSchema
 >;
+
+export const SetCoursePriceInputSchema = z.object({
+  courseId: z.string(),
+  priceAmount: z.number(),
+  priceCurrency: z.string(),
+});
+
+export type ISetCoursePriceInput = z.output<typeof SetCoursePriceInputSchema>;
+
+export const SetCoursePriceOutputSchema = CourseSchema;
+
+export type ISetCoursePriceOutput = z.output<typeof SetCoursePriceOutputSchema>;
 
 export const ViewCourseInputSchema = z.object({
   courseId: z.string(),

@@ -87,6 +87,8 @@ const course = {
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-02T00:00:00.000Z',
   certificatesEnabled: true,
+  priceAmount: 0,
+  priceCurrency: 'USD',
 };
 
 // What the course looked like before the write, as `response: 'all_old'`

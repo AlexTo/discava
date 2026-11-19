@@ -115,6 +115,8 @@ const course = {
   courseId: 'course-1',
   title: 'Intro to DynamoDB',
   status: 'draft' as const,
+  priceAmount: 0,
+  priceCurrency: 'USD',
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
 };
@@ -1685,5 +1687,60 @@ describe('publicViewCourse preview', () => {
     ],
   ])('has no preview for %s', async (_name, preview) => {
     expect((await view(preview)).preview).toBeUndefined();
+  });
+});
+
+describe('course prices in outputs', () => {
+  // What the table holds beyond what an output may show.
+  const priced = {
+    ...course,
+    status: 'published' as const,
+    priceAmount: 1999,
+    priceCurrency: 'EUR',
+    pricedAt: '2024-02-01T00:00:00.000Z',
+    orderId: 'order-1',
+  };
+  const curriculum = () =>
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { course: [priced], module: [], lesson: [], contentItem: [] },
+      }),
+    });
+
+  it('returns the price, and nothing of its history, from publicListCourses', async () => {
+    courseQueryByStatus.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: [priced], cursor: null }),
+    });
+
+    const { items } = await callAnonymously().publicListCourses({});
+
+    expect(items[0]).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+    expect(items[0]).not.toHaveProperty('pricedAt');
+    expect(items[0]).not.toHaveProperty('orderId');
+  });
+
+  it('returns the price, and nothing of its history, from publicViewCourse', async () => {
+    curriculum();
+
+    const result = await callAnonymously().publicViewCourse({
+      courseId: priced.courseId,
+    });
+
+    expect(result).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+    expect(result).not.toHaveProperty('pricedAt');
+    expect(result).not.toHaveProperty('orderId');
+  });
+
+  it('returns the price, and nothing of its history, from viewCourse', async () => {
+    curriculum();
+    enrolmentGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: enrolment() }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: priced.courseId });
+
+    expect(result).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+    expect(result).not.toHaveProperty('pricedAt');
+    expect(result).not.toHaveProperty('orderId');
   });
 });
