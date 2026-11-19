@@ -127,6 +127,24 @@ describe('scheduleTranscodeCleanupOrThrow', () => {
   });
 });
 
+describe('a course preview folder', () => {
+  const preview = {
+    target: 'coursePreview' as const,
+    courseId: COURSE_ID,
+    submissionNonce: SUBMISSION_NONCE,
+  };
+
+  it('sends its own payload, and a name apart from a lesson item with the same nonce', async () => {
+    await scheduleTranscodeCleanupOrThrow(preview);
+    await scheduleTranscodeCleanupOrThrow(params);
+
+    const [first] = schedulerSend.mock.calls[0]!;
+    const [second] = schedulerSend.mock.calls[1]!;
+    expect(first.Target.Input).toBe(JSON.stringify(preview));
+    expect(first.Name).not.toBe(second.Name);
+  });
+});
+
 describe('scheduleTranscodeCleanup (best effort)', () => {
   const logger = { error: vi.fn() };
 

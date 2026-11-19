@@ -17,6 +17,8 @@ export const transcodeCompletionEvent = (
   jobId: string,
   status: 'COMPLETE' | 'ERROR',
   userMetadata: LocalTranscodeJobRequest['userMetadata'],
+  // As MediaConvert's output details report it, for a COMPLETE job.
+  durationSeconds?: number,
 ) => ({
   version: '0',
   id: randomUUID(),
@@ -26,7 +28,18 @@ export const transcodeCompletionEvent = (
   time: new Date().toISOString(),
   region: 'local',
   resources: [`arn:aws:mediaconvert:local:000000000000:jobs/${jobId}`],
-  detail: { jobId, status, userMetadata },
+  detail: {
+    jobId,
+    status,
+    userMetadata,
+    ...(durationSeconds !== undefined && {
+      outputGroupDetails: [
+        {
+          outputDetails: [{ durationInMs: Math.round(durationSeconds * 1000) }],
+        },
+      ],
+    }),
+  },
 });
 
 /**

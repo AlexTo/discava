@@ -128,3 +128,16 @@ describe('Transcribe locations', () => {
     ).toBe(false);
   });
 });
+
+describe('preview caption paths', () => {
+  it('keeps captions in the version folder and Transcribe output outside it', async () => {
+    const m = await import('./captions.js');
+    expect(m.previewCaptionKey('c', 'n', 't')).toBe(
+      'courses/c/preview/n/captions/t.vtt',
+    );
+    expect(m.previewTranscribeOutputPrefix('c', 'n')).toBe(
+      'courses/c/preview/transcribe-output/n/',
+    );
+    expect(m.previewTranscribeJobName('c', 'n')).toBe('captions-preview-c-n');
+  });
+});

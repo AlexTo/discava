@@ -344,4 +344,29 @@ describe('createTranscoder', () => {
     expect(ran).toEqual(['ffprobe']);
     expect(onFinished).not.toHaveBeenCalled();
   });
+
+  it('is passed to onFinished for a COMPLETE job, from the ffprobe call', async () => {
+    const { instance, onFinished } = transcoder(async (args) =>
+      args.includes('/ffprobe')
+        ? {
+            code: 0,
+            stdout: JSON.stringify({
+              streams: [{ codec_type: 'video', height: 720 }],
+              format: { duration: '301.52' },
+            }),
+            stderr: '',
+          }
+        : { code: 0, stdout: '', stderr: '' },
+    );
+
+    const jobId = instance.submit(REQUEST);
+    await instance.idle();
+
+    expect(onFinished).toHaveBeenCalledExactlyOnceWith(
+      jobId,
+      'COMPLETE',
+      REQUEST,
+      301.52,
+    );
+  });
 });

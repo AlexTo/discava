@@ -15,6 +15,13 @@ export const manifestNonce = (manifestKey: string): string | undefined =>
   manifestKey.match(/\/content-items\/[^/]+\/([^/]+)\/[^/]+$/)?.[1];
 
 /**
+ * The submission nonce a course preview's manifest lives under, from its key:
+ * `courses/<courseId>/preview/<nonce>/master.m3u8`.
+ */
+export const previewManifestNonce = (manifestKey: string): string | undefined =>
+  manifestKey.match(/^courses\/[^/]+\/preview\/([^/]+)\/[^/]+$/)?.[1];
+
+/**
  * How long a video's signed cookies last (see lesson-media). A viewer who got
  * them just before a version was retired can stream it until they expire, so
  * a retired version's output is kept at least this long.

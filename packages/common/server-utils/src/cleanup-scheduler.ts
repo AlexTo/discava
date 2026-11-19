@@ -57,13 +57,25 @@ const resolveTranscodeCleanupConfig = (): Promise<TranscodeCleanupConfig> =>
 // second constant needing its own justification.
 const TRANSCODE_CLEANUP_DELAY_MINUTES = 10;
 
-export interface TranscodeCleanupParams {
+export interface ContentItemCleanupParams {
   courseId: string;
   moduleId: string;
   lessonId: string;
   contentItemId: string;
   submissionNonce: string;
 }
+
+/** A course preview's attempt folder: courses/<courseId>/preview/<nonce>/. */
+export interface CoursePreviewCleanupParams {
+  target: 'coursePreview';
+  courseId: string;
+  submissionNonce: string;
+}
+
+// A lesson item's payload carries no `target`, as before preview videos.
+export type TranscodeCleanupParams =
+  | ContentItemCleanupParams
+  | CoursePreviewCleanupParams;
 
 export interface TranscodeCleanupOptions {
   /**
@@ -114,7 +126,7 @@ const createCleanupSchedule = async (
   // not the name.
   const scheduleName = `cleanup-${createHash('sha256')
     .update(
-      `${params.contentItemId}:${params.submissionNonce}${purpose === undefined ? '' : `:${purpose}`}`,
+      `${'contentItemId' in params ? params.contentItemId : `preview:${params.courseId}`}:${params.submissionNonce}${purpose === undefined ? '' : `:${purpose}`}`,
     )
     .digest('hex')
     .slice(0, 32)}`;
