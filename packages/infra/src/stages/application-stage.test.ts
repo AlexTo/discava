@@ -34,7 +34,7 @@ const API_FUNCTIONS = {
     'InstructorApiMediaHandler',
     'InstructorApiCourseImageHandler',
   ],
-  AdminApi: ['AdminApiRouterHandler'],
+  AdminApi: ['AdminApiRouterHandler', 'AdminApiPaymentsConnectHandler'],
 };
 
 describe("discava-development's limits", () => {
