@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import {
+  type CoreTable,
   classifyReviewCancellation,
   type ReviewWrite,
   reviewerName,
@@ -27,7 +27,6 @@ import {
   RespondToReviewOutputSchema,
 } from '../schema/index.js';
 
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 type StoredReview = NonNullable<
   Awaited<
     ReturnType<ReturnType<CoreTable['entities']['review']['get']>['go']>
@@ -127,7 +126,7 @@ export const listReviews = courseProcedure
   .input(ListReviewsInputSchema)
   .output(ListReviewsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, limit } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -159,7 +158,7 @@ export const respondToReview = courseProcedure
   .input(RespondToReviewInputSchema)
   .output(RespondToReviewOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, reviewerId, text } = input;
     const instructorId = ctx.user.sub;
 
@@ -185,7 +184,7 @@ export const deleteReviewResponse = courseProcedure
   .input(DeleteReviewResponseInputSchema)
   .output(DeleteReviewResponseOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, reviewerId } = input;
     const instructorId = ctx.user.sub;
 

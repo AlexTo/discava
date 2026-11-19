@@ -37,7 +37,7 @@ export const createCourse = courseProcedure
   .input(CreateCourseInputSchema)
   .output(CreateCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const courseId = uuidv7();
     const { sub: currentUser } = ctx.user;
     const { title, description } = input;
@@ -99,7 +99,7 @@ export const archiveCourse = courseProcedure
   .input(ArchiveCourseInputSchema)
   .output(ArchiveCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId } = input;
     const { sub: currentUser } = ctx.user;
 
@@ -139,7 +139,7 @@ export const publishCourse = courseProcedure
   .input(PublishCourseInputSchema)
   .output(PublishCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -261,7 +261,7 @@ export const restoreCourse = courseProcedure
   .input(RestoreCourseInputSchema)
   .output(RestoreCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -302,7 +302,7 @@ export const setCourseCertificates = courseProcedure
   .input(SetCourseCertificatesInputSchema)
   .output(SetCourseCertificatesOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, enabled } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -329,7 +329,7 @@ export const viewCourse = courseProcedure
   .input(ViewCourseInputSchema)
   .output(ViewCourseOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);

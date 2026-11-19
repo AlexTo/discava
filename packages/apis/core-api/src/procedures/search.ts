@@ -121,7 +121,7 @@ export const publicSearchCourses = publicSearchProcedure
           }
           throw error;
         }),
-      readCategories(ctx.coreTable!),
+      readCategories(ctx.coreTable),
     ]);
 
     const byId = new Map(

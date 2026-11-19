@@ -24,7 +24,7 @@ export const updateCourseLanding = courseProcedure
   .input(UpdateCourseLandingInputSchema)
   .output(UpdateCourseLandingOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, learningOutcomes, requirements } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);

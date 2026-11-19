@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  type createCoreTableService,
+  type CoreTable,
   isShown,
   studentActivityAt,
   studentActivityWrites,
@@ -33,8 +33,6 @@ import {
   ViewQuizOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // A submission whose transaction lost a race (another attempt, an instructor's
 // save, or a concurrent transaction) is re-read and regraded this many times
@@ -210,7 +208,7 @@ export const viewQuiz = courseProcedure
   .input(ViewQuizInputSchema)
   .output(ViewQuizOutputSchema)
   .query(async ({ ctx, input }) => {
-    const { quiz } = await loadQuiz(ctx.coreTable!, input, ctx.user.sub);
+    const { quiz } = await loadQuiz(ctx.coreTable, input, ctx.user.sub);
     return {
       courseId: quiz.courseId,
       moduleId: quiz.moduleId,
@@ -246,7 +244,7 @@ export const submitQuizAttempt = courseProcedure
   .input(SubmitQuizAttemptInputSchema)
   .output(SubmitQuizAttemptOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId, moduleId, lessonId, contentItemId, answers } = input;
 
@@ -409,7 +407,7 @@ export const myQuizAttempts = courseProcedure
   .input(MyQuizAttemptsInputSchema)
   .output(MyQuizAttemptsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { quiz, summary } = await loadQuiz(coreTable, input, userId);
 
