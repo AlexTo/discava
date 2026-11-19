@@ -4,13 +4,13 @@
  */
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import type { PlayerItem } from '../../../../hooks/use-course-player';
 import {
   ApiError,
   type Handler,
   renderWithCoreApi,
 } from '../../../../test/render-with-core-api';
 import { AssignmentItem } from './assignment-item';
-import type { PlayerItem } from './use-course-player';
 
 const AT = '2026-10-01T00:00:00.000Z';
 const doc = (text: string) =>

@@ -30,13 +30,13 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useCoreApi } from '../../../../api';
-import { AssignmentItem } from './assignment-item';
-import { QuizItem } from './quiz-item';
 import {
   errorCode,
   type PlayerItem,
   useCompleteItem,
-} from './use-course-player';
+} from '../../../../hooks/use-course-player';
+import { AssignmentItem } from './assignment-item';
+import { QuizItem } from './quiz-item';
 
 export const ITEM_TYPES = {
   text: { label: 'Reading', icon: FileText },

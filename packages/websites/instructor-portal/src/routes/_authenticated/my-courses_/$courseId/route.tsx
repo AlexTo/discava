@@ -29,7 +29,7 @@ import { useInstructorApi } from '../../../../api';
 import {
   type CourseStatus,
   courseStatusStyles,
-} from '../../../../components/course-status';
+} from '../../../../lib/course-status';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
