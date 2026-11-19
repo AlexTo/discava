@@ -22,6 +22,9 @@ const {
   transactionWrite,
   transactionGo,
   reviewWrites,
+  reviewNotifications,
+  courseGet,
+  instructorQuery,
 } = vi.hoisted(() => ({
   reviewGet: vi.fn(),
   reviewQueryByCourse: vi.fn(),
@@ -30,16 +33,22 @@ const {
   transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   reviewWrites: vi.fn(),
+  reviewNotifications: vi.fn(),
+  courseGet: vi.fn(),
+  instructorQuery: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
   // The writer has its own tests; here only what the procedures ask of it.
   reviewWrites,
+  reviewNotifications,
   createCoreTableService: vi.fn(async () => ({
     entities: {
       review: { get: reviewGet, query: { byCourse: reviewQueryByCourse } },
       user: { get: userGet },
+      course: { get: courseGet },
+      courseInstructor: { query: { primary: instructorQuery } },
       courseRating: { get: courseRatingGet },
     },
     transaction: { write: transactionWrite },
@@ -112,6 +121,13 @@ beforeEach(() => {
     go: transactionGo,
   }));
   transactionGo.mockResolvedValue({ canceled: false, data: [] });
+  courseGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: { title: 'Intro to Rust' } }),
+  });
+  instructorQuery.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: [] }),
+  });
+  reviewNotifications.mockResolvedValue([]);
   userGet.mockReturnValue({
     go: vi
       .fn()
@@ -322,6 +338,127 @@ describe('postReview', () => {
     await expect(
       callAsUser().postReview({ courseId: 'course-1', rating: 4 }),
     ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+  });
+});
+
+describe('postReview notifications', () => {
+  const instructors = (...ids: string[]) =>
+    instructorQuery.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: ids.map((instructorId) => ({ instructorId })),
+      }),
+    });
+
+  it('tells every instructor of the course, with the course title and rating', async () => {
+    instructors('teacher-1', 'teacher-2');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    reviewRecord(stored());
+
+    await callAsUser().postReview({ courseId: 'course-1', rating: 4 });
+
+    expect(instructorQuery).toHaveBeenCalledWith({ courseId: 'course-1' });
+    expect(reviewNotifications).toHaveBeenCalledWith(expect.anything(), {
+      courseId: 'course-1',
+      courseTitle: 'Intro to Rust',
+      studentId: USER_SUB,
+      rating: 4,
+      createdAt: writeArg().at,
+      instructorIds: ['teacher-1', 'teacher-2'],
+    });
+    expect(writeArg().notifications).toEqual(['notice-items']);
+  });
+
+  it('posts without notification items for a course with no instructor record', async () => {
+    reviewRecord(stored());
+
+    await callAsUser().postReview({ courseId: 'course-1', rating: 4 });
+
+    expect(reviewNotifications).not.toHaveBeenCalled();
+    expect(writeArg().notifications).toEqual([]);
+  });
+
+  it('answers CONFLICT, not a second notice, when a retried post commits twice', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    cancelled('ConditionalCheckFailed', 'None', 'None', 'None', 'None');
+    reviewRecord(stored());
+
+    await expect(
+      callAsUser().postReview({ courseId: 'course-1', rating: 4 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(transactionGo).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts the review without notices when only the notices cancelled the transaction', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    transactionGo
+      .mockResolvedValueOnce({
+        canceled: true,
+        data: ['None', 'None', 'None', 'None', 'ConditionalCheckFailed'].map(
+          (code) => ({ code }),
+        ),
+      })
+      .mockResolvedValueOnce({ canceled: false, data: [] });
+    reviewRecord(stored());
+
+    const result = await callAsUser().postReview({
+      courseId: 'course-1',
+      rating: 4,
+    });
+
+    expect(result).toMatchObject({ rating: 4 });
+    expect(reviewWrites.mock.calls[0][1].notifications).toEqual([
+      'notice-items',
+    ]);
+    expect(reviewWrites.mock.calls[1][1].notifications).toBeUndefined();
+  });
+
+  it('posts the review without notices when a notice item was held by another transaction', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    transactionGo
+      .mockResolvedValueOnce({
+        canceled: true,
+        data: ['None', 'None', 'None', 'None', 'TransactionConflict'].map(
+          (code) => ({ code }),
+        ),
+      })
+      .mockResolvedValueOnce({ canceled: false, data: [] });
+    reviewRecord(stored());
+
+    const result = await callAsUser().postReview({
+      courseId: 'course-1',
+      rating: 4,
+    });
+
+    expect(result).toMatchObject({ rating: 4 });
+    expect(transactionGo).toHaveBeenCalledTimes(2);
+    expect(reviewWrites.mock.calls[1][1].notifications).toBeUndefined();
+  });
+
+  it('still answers CONFLICT when the retry without notices is held too', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    cancelled('TransactionConflict', 'None', 'None', 'TransactionConflict');
+
+    await expect(
+      callAsUser().postReview({ courseId: 'course-1', rating: 4 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(transactionGo).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['an edit', 'editReview', { courseId: 'course-1', rating: 5, version: 1 }],
+    ['a delete', 'deleteReview', { courseId: 'course-1', version: 1 }],
+  ])('%s reads no instructors and adds no notices', async (_, name, input) => {
+    reviewRecord(stored(), stored({ rating: 5, version: 2 }));
+
+    await (callAsUser() as any)[name](input);
+
+    expect(instructorQuery).not.toHaveBeenCalled();
+    expect(reviewNotifications).not.toHaveBeenCalled();
+    expect(writeArg().notifications).toBeUndefined();
   });
 });
 

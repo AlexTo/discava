@@ -69,6 +69,15 @@ import {
   createCourseImageUploadUrl,
   updateCourseImage,
 } from './procedures/course-image.js';
+import { updateCourseLanding } from './procedures/course-landing.js';
+import {
+  dismissReports,
+  hide as hideDiscussionPost,
+  remove as removeDiscussionPost,
+  reported,
+  unanswered,
+  unhide as unhideDiscussionPost,
+} from './procedures/discussion.js';
 import {
   createLesson,
   deleteLesson,
@@ -89,6 +98,11 @@ import {
   restoreModule,
   updateModule,
 } from './procedures/module.js';
+import {
+  deleteReviewResponse,
+  listReviews,
+  respondToReview,
+} from './procedures/review.js';
 
 export const router = t.router;
 
@@ -104,6 +118,11 @@ export const appRouter = router({
     update: updateAnnouncement,
     delete: deleteAnnouncement,
   }),
+  review: router({
+    list: listReviews,
+    respond: respondToReview,
+    deleteResponse: deleteReviewResponse,
+  }),
   course: router({
     create: createCourse,
     archive: archiveCourse,
@@ -114,6 +133,15 @@ export const appRouter = router({
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
     updateCatalogue: updateCourseCatalogue,
+    updateLanding: updateCourseLanding,
+  }),
+  discussion: router({
+    unanswered,
+    reported,
+    hide: hideDiscussionPost,
+    unhide: unhideDiscussionPost,
+    remove: removeDiscussionPost,
+    dismissReports,
   }),
   category: router({
     listActive: listActiveCategories,

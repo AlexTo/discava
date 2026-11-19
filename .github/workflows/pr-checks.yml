@@ -103,6 +103,51 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  # A pull request that changes who writes the core table (an entity gaining
+  # a second writing package, a new direct write to an entity several
+  # packages write, or a new entity) must also change core-table's
+  # helpers/invariants.ts, since rules spanning those writers are what it
+  # checks. A maintainer waives it with the `no-new-invariant` label and
+  # re-runs this job. It also fails while core-table's entity-writers.json,
+  # the map it compares with the base branch's, is out of date with the code.
+  # The rules are in packages/common/scripts/src/invariant-coverage/.
+  invariant-coverage:
+    name: Invariant coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check whether code that could write the core table changed
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --quiet "origin/$BASE_REF...HEAD" -- \
+            packages/apis packages/events packages/databases \
+            packages/common/scripts; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: ./.github/actions/init-monorepo
+        if: steps.changed.outputs.run == 'true'
+        with:
+          setup-uv: "false"
+          set-nx-shas: "false"
+
+      - name: Check the pull request
+        if: steps.changed.outputs.run == 'true'
+        run: pnpm nx run @discava/common-scripts:invariant-coverage
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          GH_TOKEN: ${{ github.token }}
+
   # End-to-end tests (#3): Playwright drives the portals in Chromium against
   # the whole local stack, which it starts with `pnpm dev` (DynamoDB local,
   # S3Mock and the local OIDC server in Docker; no AWS). Only when something

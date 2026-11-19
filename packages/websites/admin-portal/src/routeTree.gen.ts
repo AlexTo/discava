@@ -10,11 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as CategoriesIndexRouteImport } from './routes/categories/index'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewsRoute = ReviewsRouteImport.update({
+  id: '/reviews',
+  path: '/reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategoriesIndexRoute = CategoriesIndexRouteImport.update({
@@ -22,30 +29,43 @@ const CategoriesIndexRoute = CategoriesIndexRouteImport.update({
   path: '/categories/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/settings/notifications',
+  path: '/settings/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/reviews': typeof ReviewsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/reviews': typeof ReviewsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories': typeof CategoriesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/reviews': typeof ReviewsRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/categories/'
+  fullPaths: '/' | '/reviews' | '/settings/notifications' | '/categories/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/categories'
-  id: '__root__' | '/' | '/categories/'
+  to: '/' | '/reviews' | '/settings/notifications' | '/categories'
+  id: '__root__' | '/' | '/reviews' | '/settings/notifications' | '/categories/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ReviewsRoute: typeof ReviewsRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   CategoriesIndexRoute: typeof CategoriesIndexRoute
 }
 
@@ -58,6 +78,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reviews': {
+      id: '/reviews'
+      path: '/reviews'
+      fullPath: '/reviews'
+      preLoaderRoute: typeof ReviewsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/categories/': {
       id: '/categories/'
       path: '/categories'
@@ -65,11 +92,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CategoriesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/settings/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ReviewsRoute: ReviewsRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
   CategoriesIndexRoute: CategoriesIndexRoute,
 }
 export const routeTree = rootRouteImport

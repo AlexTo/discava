@@ -14,7 +14,8 @@
     "@trpc/server": "catalog:",
     "aws-cdk-lib": "catalog:",
     "constructs": "catalog:",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "@discava/common-infra-config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:"

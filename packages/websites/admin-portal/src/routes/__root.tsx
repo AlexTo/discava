@@ -9,7 +9,7 @@ import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import AppLayout from '../components/AppLayout';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
-import { RouterProviderContext } from '../main';
+import type { RouterProviderContext } from '../router-context';
 
 export const Route = createRootRouteWithContext<RouterProviderContext>()({
   component: AdminsOnly,

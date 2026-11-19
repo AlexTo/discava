@@ -15,6 +15,39 @@ const record = (
 });
 
 describe('matchesSearchStreamFilters', () => {
+  // A landing-page edit (learningOutcomes, requirements) is a course MODIFY.
+  // It matches, which is harmless: the document ignores those fields.
+  it('matches a course edit that changes only the landing fields', () => {
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'course')),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)('ignores a %s of a course preview', (eventName, image) => {
+    expect(
+      matchesSearchStreamFilters(record(eventName, image, 'coursePreview')),
+    ).toBe(false);
+  });
+
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)(
+    'ignores a %s of an instructor profile or handle claim',
+    (eventName, image) => {
+      for (const entity of ['instructorProfile', 'profileHandleClaim']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, image, entity)),
+        ).toBe(false);
+      }
+    },
+  );
+
   it('matches an inserted or modified course', () => {
     expect(
       matchesSearchStreamFilters(record('INSERT', 'NewImage', 'course')),

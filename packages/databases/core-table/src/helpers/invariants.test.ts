@@ -89,6 +89,7 @@ const consistentTable = (): TableSnapshot => ({
   ],
   modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
   lessons: [{ ...ids, ...shown, kind: 'lesson', order: 1, lastChildOrder: 4 }],
+  coursePreviews: [],
   contentItems: [
     {
       ...ids,
@@ -261,6 +262,15 @@ const consistentTable = (): TableSnapshot => ({
 
   reviews: [],
   courseRatings: [],
+  instructorProfiles: [
+    {
+      instructorId: 'teacher',
+      handle: 'the-teacher',
+      displayName: 'The Teacher',
+      version: 1,
+    },
+  ],
+  profileHandleClaims: [{ handle: 'the-teacher', instructorId: 'teacher' }],
 });
 
 let table: TableSnapshot;
@@ -367,6 +377,7 @@ describe('checkTableInvariants', () => {
         modules: [],
         lessons: [],
         contentItems: [],
+        coursePreviews: [],
         courseInstructors: [],
         enrolments: [],
         itemCompletions: [],
@@ -394,6 +405,8 @@ describe('checkTableInvariants', () => {
 
         reviews: [],
         courseRatings: [],
+        instructorProfiles: [],
+        profileHandleClaims: [],
       }),
     ).toEqual([]);
   });
@@ -580,6 +593,55 @@ describe('checkTableInvariants', () => {
         row.courseUpdatedAt = course.updatedAt;
       }
       expect(broken().invariants).toEqual([]);
+    });
+
+    it('accepts a landing write that synced courseUpdatedAt', () => {
+      const course = table.courses[0];
+      course.learningOutcomes = ['Build a thing'];
+      course.updatedAt = '2026-02-01T00:00:00.000Z';
+      for (const row of table.courseInstructors) {
+        row.courseUpdatedAt = course.updatedAt;
+      }
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports a landing write that left the sync out', () => {
+      const course = table.courses[0];
+      course.requirements = ['A laptop'];
+      course.updatedAt = '2026-02-01T00:00:00.000Z';
+      expectOnly('instructor-course-updated-at');
+    });
+  });
+
+  describe('course-landing-shape', () => {
+    it('accepts lists of ten trimmed items', () => {
+      table.courses[0].learningOutcomes = Array.from(
+        { length: 10 },
+        (_, i) => `Outcome ${i}`,
+      );
+      table.courses[0].requirements = ['a'.repeat(160)];
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('reports an 11-item list', () => {
+      table.courses[0].learningOutcomes = Array.from(
+        { length: 11 },
+        (_, i) => `Outcome ${i}`,
+      );
+      expectOnly('course-landing-shape', /11 items/);
+    });
+
+    it('reports a padded item', () => {
+      table.courses[0].requirements = [' padded '];
+      expectOnly('course-landing-shape', /not trimmed/);
+    });
+
+    it('reports an empty item and a 161-character item', () => {
+      table.courses[0].requirements = [''];
+      expectOnly('course-landing-shape', /item 1 is 0 characters/);
+      table = consistentTable();
+      table.courses[0].learningOutcomes = ['a'.repeat(161)];
+      expectOnly('course-landing-shape', /161 characters/);
     });
   });
 
@@ -2345,6 +2407,47 @@ describe('notifications', () => {
         table.courseRatings = [{ courseId: 'gone' }];
         expectOnly('course-rating-matches-reviews', /does not exist/);
       });
+
+      it('holds on a table with a review and the notification it caused', () => {
+        hold();
+        table.users.push({ userId: 'teacher' } as never);
+        table.notifications = [
+          {
+            userId: 'teacher',
+            occurredAt: REVIEWED,
+            id: 'a1b2c3d4e5f60718',
+            type: 'review.received',
+            title: 'New review for Course',
+            link: { portal: 'instructor', path: '/my-courses/c1/reviews' },
+            email: { state: 'skipped', reason: 'never' },
+            createdAt: REVIEWED,
+          } as never,
+        ];
+        table.notificationStates = [{ userId: 'teacher', unreadCount: 1 }];
+
+        expect(broken().invariants).toEqual([]);
+      });
+
+      it('does not take a notification for a review, or its sender for a reviewer', () => {
+        hold();
+        table.notifications = [
+          {
+            userId: 'student',
+            occurredAt: REVIEWED,
+            id: 'a1b2c3d4e5f60718',
+            type: 'review.received',
+            link: { portal: 'instructor', path: '/my-courses/c1/reviews' },
+            email: { state: 'skipped', reason: 'never' },
+            createdAt: REVIEWED,
+          } as never,
+        ];
+        table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+
+        const names = broken().invariants;
+        expect(names).not.toContain('review-shape');
+        expect(names).not.toContain('review-has-enrolment');
+        expect(names).not.toContain('course-rating-matches-reviews');
+      });
     });
   });
 });
@@ -2447,6 +2550,32 @@ describe('discussion', () => {
           v.invariant.startsWith('student-records-'),
       ),
     ).toEqual([]);
+  });
+
+  it('keeps the discussion rules with discussion notifications present', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-16T12:00:00.000Z'));
+    try {
+      table.notifications = [
+        ...[
+          'discussion.reply',
+          'discussion.answered',
+          'discussion.accepted',
+        ].map((type, i) => ({
+          userId: 'asker',
+          occurredAt: `2026-11-16T10:0${i}:00.000Z`,
+          id: `${i}`.repeat(16),
+          type,
+          link: { portal: 'student' as const, path: '/learn/c1/lesson/l1' },
+          email: { state: 'skipped' as const, reason: 'never' as const },
+          createdAt: `2026-11-16T10:0${i}:00.000Z`,
+        })),
+      ];
+      table.notificationStates = [{ userId: 'asker', unreadCount: 3 }];
+      expect(checkTableInvariants(table)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves a certificate-style record of another entity untouched', () => {
@@ -2821,6 +2950,105 @@ describe('discussion', () => {
   });
 });
 
+describe('instructor profiles', () => {
+  const profile = () => table.instructorProfiles[0];
+
+  it('passes a profile with its claim', () => {
+    expect(broken().invariants).toEqual([]);
+  });
+
+  describe('instructor-has-profile', () => {
+    it('reports a courseInstructor with no profile', () => {
+      table.courseInstructors.push({
+        courseId: 'c1',
+        instructorId: 'other',
+        courseUpdatedAt: T,
+      });
+      table.users.push({ userId: 'other' });
+      expectOnly('instructor-has-profile', /no profile/);
+    });
+  });
+
+  describe('profile-handle-claims-consistent', () => {
+    it('reports an orphan claim', () => {
+      table.profileHandleClaims.push({
+        handle: 'gone',
+        instructorId: 'nobody',
+      });
+      expectOnly(
+        'profile-handle-claims-consistent',
+        /no profile with that handle/,
+      );
+    });
+
+    it('reports a claim owned by someone else', () => {
+      table.profileHandleClaims = [
+        { handle: 'the-teacher', instructorId: 'someone-else' },
+      ];
+      const { invariants, violations } = broken();
+      expect(invariants).toEqual(['profile-handle-claims-consistent']);
+      expect(violations.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(/claimed by someone-else/),
+      );
+    });
+
+    it('reports a profile whose handle has no claim', () => {
+      table.profileHandleClaims = [];
+      const { invariants, violations } = broken();
+      expect(invariants).toEqual(['profile-handle-claims-consistent']);
+      expect(violations.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(/no claim/),
+      );
+    });
+
+    it('reports a claim for the old handle after a handle change', () => {
+      profile().handle = 'new-handle';
+      table.profileHandleClaims.push({
+        handle: 'new-handle',
+        instructorId: 'teacher',
+      });
+      expectOnly(
+        'profile-handle-claims-consistent',
+        /no profile with that handle/,
+      );
+    });
+  });
+
+  describe('instructor-profile-shape', () => {
+    it('reports a 61-character display name', () => {
+      profile().displayName = 'a'.repeat(61);
+      expectOnly('instructor-profile-shape', /displayName is 61/);
+    });
+
+    it('reports an empty display name', () => {
+      profile().displayName = '';
+      expectOnly('instructor-profile-shape', /displayName is 0/);
+    });
+
+    it.each(['a--b', 'ab', '-ab-', 'Abc', 'a'.repeat(31)])(
+      'reports the handle %s',
+      (handle) => {
+        profile().handle = handle;
+        table.profileHandleClaims = [{ handle, instructorId: 'teacher' }];
+        expectOnly('instructor-profile-shape', /not a valid handle/);
+      },
+    );
+
+    it('reports a long headline and a long bio', () => {
+      profile().headline = 'a'.repeat(101);
+      profile().bio = 'a'.repeat(2001);
+      const { invariants, violations } = broken();
+      expect(invariants).toEqual(['instructor-profile-shape']);
+      expect(violations).toHaveLength(2);
+    });
+
+    it('reports a version below 1', () => {
+      profile().version = 0;
+      expectOnly('instructor-profile-shape', /version is 0/);
+    });
+  });
+});
+
 describe('violationId', () => {
   it('is the same for the same violation found twice, and differs otherwise', () => {
     table.courseInstructors = [];
@@ -2830,5 +3058,167 @@ describe('violationId', () => {
     expect(violationId({ ...first, record: { courseId: 'c2' } })).not.toBe(
       violationId(first),
     );
+  });
+});
+
+describe('course previews', () => {
+  const nonce = 'n1';
+  const manifest = `courses/c1/preview/${nonce}/master.m3u8`;
+  const preview = (overrides = {}) => ({
+    courseId: 'c1',
+    status: 'ready' as const,
+    s3Key: manifest,
+    submissionNonce: nonce,
+    durationSeconds: 120,
+    ...overrides,
+  });
+  const track = (language: string, overrides = {}) => ({
+    trackId: `t-${language}`,
+    nonce,
+    language,
+    label: language,
+    source: 'auto' as const,
+    key: `courses/c1/preview/${nonce}/captions/t-${language}.vtt`,
+    isDefault: true,
+    ...overrides,
+  });
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  it('accepts a ready preview, one processing, and one that failed', () => {
+    table.coursePreviews = [preview()];
+    expect(broken().invariants).toEqual([]);
+    table.coursePreviews = [
+      preview({
+        status: 'processing',
+        s3Key: undefined,
+        previousS3Key: manifest,
+        transcodePending: 'pending',
+        transcodePendingSince: T,
+      }),
+    ];
+    expect(broken().invariants).toEqual([]);
+    table.coursePreviews = [
+      preview({
+        status: 'failed',
+        s3Key: undefined,
+        failureReason: 'too-long',
+      }),
+    ];
+    expect(broken().invariants).toEqual([]);
+  });
+
+  describe('course-preview-shape', () => {
+    it.each([
+      ['has no course', { courseId: 'gone' }, /course does not exist/],
+      ['is 301 seconds', { durationSeconds: 301 }, /301/],
+      ['is 0 seconds', { durationSeconds: 0 }, /not 1 to 300/],
+      ['is ready without an s3Key', { s3Key: undefined }, /s3Key is not set/],
+      [
+        'is ready under another course',
+        { s3Key: `courses/c2/preview/${nonce}/master.m3u8` },
+        /s3Key/,
+      ],
+      [
+        'is ready under another attempt',
+        { s3Key: 'courses/c1/preview/other/master.m3u8' },
+        /own/,
+      ],
+      [
+        'is processing with a failureReason',
+        { status: 'processing', s3Key: undefined, failureReason: 'too-long' },
+        /failureReason is set on a processing/,
+      ],
+      [
+        'failed without a failureReason',
+        { status: 'failed', s3Key: undefined },
+        /no failureReason/,
+      ],
+      [
+        'keeps a previous version of another course',
+        { previousS3Key: 'courses/c2/preview/x/master.m3u8' },
+        /previousS3Key/,
+      ],
+    ])('reports a preview that %s', (_, overrides, message) => {
+      table.coursePreviews = [preview(overrides)];
+      const found = violationsOf('course-preview-shape');
+      expect(found.map((v) => v.message)).toContainEqual(
+        expect.stringMatching(message),
+      );
+    });
+  });
+
+  describe('video-transcode-state', () => {
+    it('reports transcodePending without its timestamp', () => {
+      table.coursePreviews = [
+        preview({
+          status: 'processing',
+          s3Key: undefined,
+          transcodePending: 'pending',
+        }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /not set together/,
+      );
+    });
+
+    it('reports transcodePending on a ready preview', () => {
+      table.coursePreviews = [
+        preview({ transcodePending: 'pending', transcodePendingSince: T }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /on a ready preview/,
+      );
+    });
+
+    it('reports a ready preview whose key is not a manifest', () => {
+      table.coursePreviews = [
+        preview({ s3Key: `courses/c1/preview/${nonce}/x` }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /ready preview's s3Key/,
+      );
+    });
+
+    it('reports captionsStatus pending without its timestamp', () => {
+      table.coursePreviews = [preview({ captionsStatus: 'pending' })];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /without captionsPendingSince/,
+      );
+    });
+  });
+
+  describe('caption-tracks-valid', () => {
+    it('accepts a track of the played version', () => {
+      table.coursePreviews = [preview({ captionTracks: [track('en-US')] })];
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports a track for a version that is not played', () => {
+      table.coursePreviews = [
+        preview({
+          captionTracks: [
+            track('en-US', {
+              nonce: 'old',
+              key: 'courses/c1/preview/old/captions/t.vtt',
+            }),
+          ],
+        }),
+      ];
+      expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
+        /for version old/,
+      );
+    });
+
+    it('reports two tracks in one language', () => {
+      table.coursePreviews = [
+        preview({
+          captionTracks: [track('en-US'), track('en-US', { trackId: 'b' })],
+        }),
+      ];
+      expect(
+        violationsOf('caption-tracks-valid').map((v) => v.message),
+      ).toContainEqual(expect.stringMatching(/two caption tracks/));
+    });
   });
 });

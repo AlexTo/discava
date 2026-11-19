@@ -2,11 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  type EmailMessage,
-  EmailPermanentError,
-  sendEmail,
-} from '@discava/common-server-utils/email';
+import { type EmailMessage, EmailPermanentError, sendEmail } from './email.js';
 import { signUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import {
   claimEmail,
@@ -105,6 +101,7 @@ export const sendNotificationEmail = async (
       link: notification.link,
       portalUrl: config.portalUrls[notification.link.portal],
       unsubscribeUrl: `${trim(config.coreApiUrl)}/unsubscribe/${token}`,
+      unsubscribePageUrl: `${trim(config.portalUrls.student)}/unsubscribe?token=${encodeURIComponent(token)}`,
       settingsUrl: `${trim(config.portalUrls.student)}/settings/notifications`,
       typeName: entry.name,
     }),

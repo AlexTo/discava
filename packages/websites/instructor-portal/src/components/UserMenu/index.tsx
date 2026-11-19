@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@discava/common-shadcn/components/ui/dropdown-menu';
 import { signOut } from '@discava/common-web-utils/sign-out';
+import { Link } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { getUserIdentity } from './user-profile';
@@ -39,11 +40,14 @@ export const UserMenu = () => {
           </AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36">
+      <DropdownMenuContent align="end" className="w-52">
         <DropdownMenuLabel className="font-semibold">
           Hi, {displayName}!
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link to="/settings/notifications">Notification settings</Link>
+        </DropdownMenuItem>
         <DropdownMenuItem className="cursor-pointer" onSelect={handleSignOut}>
           Sign out
         </DropdownMenuItem>

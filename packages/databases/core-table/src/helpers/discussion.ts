@@ -357,6 +357,11 @@ const reply = (
   entities: TransactionEntities,
   op: Extract<DiscussionOperation, { type: 'reply' }>,
 ): Items => {
+  // A question's postId is its threadId, which is how later calls tell the
+  // two kinds apart: a reply may not take it.
+  if (op.postId === op.threadId) {
+    throw new DiscussionInputError("postId must not be the question's id");
+  }
   const post = newPost(op, op);
   const instructor = op.author.isInstructor;
   const patch = entities.discussionPost
@@ -671,9 +676,11 @@ const report = (
         // Kept from the first report.
         reportedSince: op.reportedSince ?? op.now.toISOString(),
       })
+      // The limit is a value of `reportedBy` only so that the attribute's name,
+      // which DynamoDB rejects when unused, is the one `size()` already uses.
       .where(
         (attr, o) =>
-          `${o.eq(attr.state, 'shown')} AND ${o.ne(attr.authorId, reporterId)} AND (${o.notExists(attr.reportedBy)} OR ${o.contains(attr.reportedBy, reporterId)} OR size(${o.name(attr.reportedBy)}) < ${o.value(attr.voteCount, DISCUSSION_MAX_REPORTERS)})`,
+          `${o.eq(attr.state, 'shown')} AND ${o.ne(attr.authorId, reporterId)} AND (${o.notExists(attr.reportedBy)} OR ${o.contains(attr.reportedBy, reporterId)} OR size(${o.name(attr.reportedBy)}) < ${o.value(attr.reportedBy, DISCUSSION_MAX_REPORTERS as never)})`,
       )
       .commit(),
   ];

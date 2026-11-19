@@ -45,7 +45,119 @@ const renderPage = (publicView: () => unknown = () => course) =>
     handlers: { 'course.publicView': publicView },
   });
 
+const landing = {
+  learningOutcomes: ['Solve linear systems', 'Find eigenvalues'],
+  requirements: ['Comfort with high-school algebra'],
+  level: 'intermediate',
+  language: 'en',
+  durationHours: 12,
+  instructors: [
+    {
+      handle: 'gil',
+      displayName: 'Gil Strang',
+      headline: 'Professor of mathematics',
+    },
+    { handle: 'ada', displayName: 'Ada' },
+  ],
+};
+
+const sectionNames = () =>
+  within(screen.getByRole('navigation', { name: 'Course sections' }))
+    .getAllByRole('link')
+    .map((link) => link.textContent);
+
 describe('CoursePage', () => {
+  it('shows the outcomes, requirements, facts and instructors', async () => {
+    renderPage(() => ({ ...course, ...landing }));
+
+    const outcomes = await screen.findByRole('region', {
+      name: "What you'll learn",
+    });
+    expect(within(outcomes).getAllByRole('listitem')).toHaveLength(2);
+    expect(
+      within(outcomes).getByText('Solve linear systems'),
+    ).toBeInTheDocument();
+    const requirements = screen.getByRole('region', { name: 'Requirements' });
+    expect(
+      within(requirements).getByText('Comfort with high-school algebra'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Intermediate')).toBeInTheDocument();
+    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(screen.getByText('12 hours')).toBeInTheDocument();
+    const team = screen.getByRole('region', { name: 'Instructors' });
+    expect(
+      within(team).getByRole('heading', { name: 'Gil Strang' }),
+    ).toBeInTheDocument();
+    expect(
+      within(team).getByText('Professor of mathematics'),
+    ).toBeInTheDocument();
+    expect(within(team).getAllByText('View profile')).toHaveLength(2);
+    // The name has no photo here, so its initials stand in.
+    expect(within(team).getByText('GS')).toBeInTheDocument();
+    expect(within(team).getByText('A')).toBeInTheDocument();
+  });
+
+  it('puts the sections in order, and the tab bar matches', async () => {
+    renderPage(() => ({ ...course, ...landing }));
+
+    await screen.findByRole('region', { name: "What you'll learn" });
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings.slice(0, 5)).toEqual([
+      "What you'll learn",
+      'About this course',
+      'Requirements',
+      'There are 2 modules in this course',
+      'Instructors',
+    ]);
+    expect(sectionNames()).toEqual([
+      "What you'll learn",
+      'About',
+      'Requirements',
+      'Modules',
+      'Instructors',
+      'Reviews',
+    ]);
+  });
+
+  it('leaves out the sections that are empty, and their tabs', async () => {
+    renderPage(() => ({
+      ...course,
+      learningOutcomes: [],
+      requirements: [],
+      instructors: [],
+    }));
+
+    await screen.findByRole('heading', { level: 1, name: 'Linear Algebra' });
+    expect(
+      screen.queryByRole('region', { name: "What you'll learn" }),
+    ).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Requirements' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Instructors' })).toBeNull();
+    expect(sectionNames()).toEqual(['About', 'Modules', 'Reviews']);
+    expect(screen.queryByText('Level')).toBeNull();
+    expect(screen.queryByText('Language')).toBeNull();
+  });
+
+  it('renders user text as text, never HTML', async () => {
+    const script = '<script>alert(1)</script>';
+    renderPage(() => ({
+      ...course,
+      learningOutcomes: [script],
+      requirements: ['<b>bold</b>'],
+      instructors: [
+        { handle: 'x', displayName: '<img src=x onerror=alert(1)>' },
+      ],
+    }));
+
+    expect(await screen.findByText(script)).toBeInTheDocument();
+    expect(screen.getByText('<b>bold</b>')).toBeInTheDocument();
+    expect(document.querySelector('script')).toBeNull();
+    expect(document.querySelector('b')).toBeNull();
+    expect(document.querySelector('img[onerror]')).toBeNull();
+  });
+
   it('does not show announcements on the public course page', async () => {
     renderPage();
 

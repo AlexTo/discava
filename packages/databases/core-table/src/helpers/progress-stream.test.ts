@@ -39,6 +39,17 @@ describe('matchesProgressStreamFilters', () => {
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    // A landing-page edit changes only learningOutcomes and requirements.
+    ['a course landing edit', record('MODIFY', 'NewImage', 'course')],
+    ['a new preview', record('INSERT', 'NewImage', 'coursePreview')],
+    ['an edited preview', record('MODIFY', 'NewImage', 'coursePreview')],
+    ['a removed preview', record('REMOVE', 'OldImage', 'coursePreview')],
+    // Profiles and handle claims change no item, so no progress.
+    ...['instructorProfile', 'profileHandleClaim'].flatMap((entity) => [
+      [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
+      [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
+      [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
+    ]),
     ['a new category', record('INSERT', 'NewImage', 'category')],
     ['a category change', record('MODIFY', 'NewImage', 'category')],
     ['a new category claim', record('INSERT', 'NewImage', 'categoryClaim')],

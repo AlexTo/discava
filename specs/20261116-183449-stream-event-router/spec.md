@@ -10,6 +10,8 @@
 
 **Parent issue**: none
 
+**Design page**: [`design/stream-event-router`](../../docs/src/content/docs/en/design/stream-event-router.mdx)
+
 ## Clarifications
 
 ### Session 2026-11-16

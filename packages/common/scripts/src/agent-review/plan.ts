@@ -15,7 +15,7 @@
 import { AGENT_BRANCH, REVIEW_STATUS_CONTEXT } from '../agent-ci/plan.js';
 
 export { AGENT_BRANCH, REVIEW_STATUS_CONTEXT };
-export const MAX_REVIEW_FIX_ATTEMPTS = 3;
+export const MAX_REVIEW_FIX_ATTEMPTS = 5;
 export const ATTEMPT_LABEL_PREFIX = 'review-fix-';
 export const EXHAUSTED_LABEL = 'review-fix-exhausted';
 

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { createIndex } from './create-index.js';
 
 // Only a published course's doc is ever written -- see
-// packages/events/src/search/index-content.ts -- so `status` here is always
+// packages/events/src/search/search-indexing.ts -- so `status` here is always
 // 'published'. It's still indexed (rather than assumed) so the search
 // procedure can filter on it defensively, the same way publicListCourses
 // re-checks status even though byStatus already scoped the query.

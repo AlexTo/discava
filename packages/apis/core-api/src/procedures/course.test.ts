@@ -21,6 +21,8 @@ const {
   userGet,
   enrolmentGet,
   courseRatingGet,
+  instructorProfileGet,
+  categoryGet,
   curriculumCollection,
 } = vi.hoisted(() => ({
   courseInstructorQueryByInstructor: vi.fn(),
@@ -30,6 +32,8 @@ const {
   userGet: vi.fn(),
   enrolmentGet: vi.fn(),
   courseRatingGet: vi.fn(),
+  instructorProfileGet: vi.fn(),
+  categoryGet: vi.fn(),
   curriculumCollection: vi.fn(),
 }));
 
@@ -44,6 +48,8 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       user: { get: userGet },
       enrolment: { get: enrolmentGet },
       courseRating: { get: courseRatingGet },
+      instructorProfile: { get: instructorProfileGet },
+      category: { get: categoryGet },
       courseInstructor: {
         query: {
           byInstructor: courseInstructorQueryByInstructor,
@@ -113,6 +119,16 @@ beforeEach(() => {
   // No course is rated, unless a test says otherwise.
   courseRatingGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: [], unprocessed: [] }),
+  });
+  // A course has no instructors and no category, unless a test says otherwise.
+  courseInstructorQueryPrimary.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: [] }),
+  });
+  instructorProfileGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: [], unprocessed: [] }),
+  });
+  categoryGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: null }),
   });
   // The caller is enrolled, unless a test says otherwise.
   enrolmentGet.mockReturnValue({
@@ -1069,6 +1085,7 @@ describe('viewCourse', () => {
 
 describe('publicViewCourse', () => {
   const publishedCourse = { ...course, status: 'published' as const };
+  const noExtras = { learningOutcomes: [], requirements: [], instructors: [] };
 
   it('allows unauthenticated callers', async () => {
     curriculumCollection.mockReturnValue({
@@ -1086,7 +1103,7 @@ describe('publicViewCourse', () => {
       courseId: publishedCourse.courseId,
     });
 
-    expect(result).toEqual({ ...publishedCourse, modules: [] });
+    expect(result).toEqual({ ...publishedCourse, ...noExtras, modules: [] });
   });
 
   it('throws NOT_FOUND for a draft course, without leaking that it exists', async () => {
@@ -1185,6 +1202,7 @@ describe('publicViewCourse', () => {
     });
     expect(result).toEqual({
       ...publishedCourse,
+      ...noExtras,
       modules: [
         { ...module2, lessons: [lesson2, lesson1] },
         { ...module1, lessons: [] },
@@ -1254,7 +1272,208 @@ describe('publicViewCourse', () => {
 
     expect(result).toEqual({
       ...publishedCourse,
+      ...noExtras,
       modules: [{ ...shownModule, lessons: [shownLesson] }],
     });
+  });
+
+  describe('landing page fields', () => {
+    const open = (course: object) =>
+      curriculumCollection.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: { course: [course], module: [], lesson: [], contentItem: [] },
+        }),
+      });
+    const membership = (instructorId: string, createdAt: string) => ({
+      courseId: 'course-1',
+      instructorId,
+      createdAt,
+      courseUpdatedAt: createdAt,
+    });
+    const profile = (instructorId: string, handle: string) => ({
+      instructorId,
+      handle,
+      displayName: `Name of ${handle}`,
+      headline: 'A headline',
+      photoKey: `instructors/${instructorId}/p.jpg`,
+      version: 3,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+
+    it('returns the outcomes, requirements and facts', async () => {
+      open({
+        ...publishedCourse,
+        learningOutcomes: ['Build an API'],
+        requirements: ['A laptop'],
+        level: 'beginner',
+        language: 'en',
+        durationHours: 12,
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result).toMatchObject({
+        learningOutcomes: ['Build an API'],
+        requirements: ['A laptop'],
+        level: 'beginner',
+        language: 'en',
+        durationHours: 12,
+      });
+    });
+
+    it('returns empty lists when they are unset', async () => {
+      open(publishedCourse);
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result.learningOutcomes).toEqual([]);
+      expect(result.requirements).toEqual([]);
+      expect(result.category).toBeUndefined();
+    });
+
+    it('returns the category of the course when it is active', async () => {
+      open({ ...publishedCourse, categoryId: 'cat-1' });
+      categoryGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            categoryId: 'cat-1',
+            name: 'Data science',
+            slug: 'data-science',
+            status: 'active',
+          },
+        }),
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result.category).toEqual({
+        slug: 'data-science',
+        name: 'Data science',
+      });
+    });
+
+    it('leaves out an archived category', async () => {
+      open({ ...publishedCourse, categoryId: 'cat-1' });
+      categoryGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            categoryId: 'cat-1',
+            name: 'Old',
+            slug: 'old',
+            status: 'archived',
+          },
+        }),
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result.category).toBeUndefined();
+    });
+
+    it('lists the instructors by when they joined, without any ID', async () => {
+      open(publishedCourse);
+      courseInstructorQueryPrimary.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: [
+            membership('a-id', '2024-03-01T00:00:00.000Z'),
+            membership('b-id', '2024-01-01T00:00:00.000Z'),
+          ],
+        }),
+      });
+      instructorProfileGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: [profile('a-id', 'alice'), profile('b-id', 'bob')],
+          unprocessed: [],
+        }),
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result.instructors).toEqual([
+        {
+          handle: 'bob',
+          displayName: 'Name of bob',
+          headline: 'A headline',
+          photoKey: 'instructors/b-id/p.jpg',
+        },
+        {
+          handle: 'alice',
+          displayName: 'Name of alice',
+          headline: 'A headline',
+          photoKey: 'instructors/a-id/p.jpg',
+        },
+      ]);
+      const json = JSON.stringify(result);
+      expect(json).not.toContain('instructorId');
+      expect(json).not.toContain('userId');
+      expect(json).not.toContain('a-id"');
+    });
+
+    it('batch-gets the profiles once, not one by one', async () => {
+      open(publishedCourse);
+      courseInstructorQueryPrimary.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: [
+            membership('a-id', '2024-03-01T00:00:00.000Z'),
+            membership('b-id', '2024-01-01T00:00:00.000Z'),
+          ],
+        }),
+      });
+
+      await callAnonymously().publicViewCourse({ courseId: 'course-1' });
+
+      expect(instructorProfileGet).toHaveBeenCalledTimes(1);
+      expect(instructorProfileGet).toHaveBeenCalledWith([
+        { instructorId: 'b-id' },
+        { instructorId: 'a-id' },
+      ]);
+    });
+
+    it('skips an instructor with no profile', async () => {
+      open(publishedCourse);
+      courseInstructorQueryPrimary.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: [
+            membership('a-id', '2024-01-01T00:00:00.000Z'),
+            membership('b-id', '2024-02-01T00:00:00.000Z'),
+          ],
+        }),
+      });
+      instructorProfileGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: [profile('b-id', 'bob')],
+          unprocessed: [],
+        }),
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: 'course-1',
+      });
+
+      expect(result.instructors.map((i) => i.handle)).toEqual(['bob']);
+    });
+
+    it.each(['draft', 'archived'] as const)(
+      'still answers NOT_FOUND for a %s course',
+      async (status) => {
+        open({ ...publishedCourse, status, learningOutcomes: ['x'] });
+
+        await expect(
+          callAnonymously().publicViewCourse({ courseId: 'course-1' }),
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+        expect(courseInstructorQueryPrimary).not.toHaveBeenCalled();
+      },
+    );
   });
 });
