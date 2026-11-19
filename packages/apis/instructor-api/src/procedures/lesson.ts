@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { lessonHasDiscussion } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
@@ -31,7 +32,6 @@ import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
 } from '../lib/s3-client.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateLessonInputSchema,
   CreateLessonOutputSchema,

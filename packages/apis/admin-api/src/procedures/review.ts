@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import {
   classifyReviewCancellation,
   ratingCount,
@@ -9,8 +11,7 @@ import {
   starCounts,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { categoryProcedure } from '../init.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
+import { adminProcedure } from '../init.js';
 import {
   type IAdminReview,
   type IReviewCourse,
@@ -94,7 +95,7 @@ const parseCourseCursor = (cursor?: string) => {
 
 // Published courses, then archived ones, newest first within each, with how
 // many reviews each has (the tally's counts, one batch get).
-export const listReviewCourses = categoryProcedure
+export const listReviewCourses = adminProcedure
   .input(ListReviewCoursesInputSchema)
   .output(ListReviewCoursesOutputSchema)
   .query(async ({ ctx, input }) => {
@@ -152,7 +153,7 @@ export const listReviewCourses = categoryProcedure
 
 // A course's reviews, newest first, every status: removed ones stay in the
 // index with their reason.
-export const listAdminReviews = categoryProcedure
+export const listAdminReviews = adminProcedure
   .input(ListAdminReviewsInputSchema)
   .output(ListAdminReviewsOutputSchema)
   .query(async ({ ctx, input }) => {
@@ -175,7 +176,7 @@ export const listAdminReviews = categoryProcedure
 // removed review changes nothing. If the student edited it at the same
 // moment, the write is cancelled; it is read again and tried once more, so
 // the removal lands on the edited review.
-export const removeReview = categoryProcedure
+export const removeReview = adminProcedure
   .input(RemoveReviewInputSchema)
   .output(RemoveReviewOutputSchema)
   .mutation(async ({ ctx, input }) => {

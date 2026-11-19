@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -16,7 +18,6 @@ import {
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
 import { hashQuizQuestions } from '../lib/quiz-hash.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateQuizAssignmentInputSchema,
   CreateQuizAssignmentOutputSchema,

@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { TRPCError } from '@trpc/server';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import type { ICurriculumVisibility } from '../schema/index.js';
 
 type CoreTable = NonNullable<ICoreTableContext['coreTable']>;

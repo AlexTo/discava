@@ -12,7 +12,7 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { categoryProcedure } from '../init.js';
+import { adminProcedure } from '../init.js';
 import {
   ArchiveCategoryInputSchema,
   CategorySchema,
@@ -57,7 +57,7 @@ const asTrpcError = (error: unknown) => {
  * Every category, archived ones included, with how many courses have it
  * whatever their status, so an admin sees what archiving affects.
  */
-export const listCategories = categoryProcedure
+export const listCategories = adminProcedure
   .output(ListCategoriesOutputSchema)
   .query(async ({ ctx }) => {
     const coreTable = ctx.coreTable!;
@@ -81,7 +81,7 @@ export const listCategories = categoryProcedure
       .sort((a, b) => a.name.localeCompare(b.name));
   });
 
-export const createCategory = categoryProcedure
+export const createCategory = adminProcedure
   .input(CreateCategoryInputSchema)
   .output(CategorySchema)
   .mutation(async ({ ctx, input }) => {
@@ -97,7 +97,7 @@ export const createCategory = categoryProcedure
     }
   });
 
-export const renameCategory = categoryProcedure
+export const renameCategory = adminProcedure
   .input(RenameCategoryInputSchema)
   .output(CategorySchema)
   .mutation(async ({ ctx, input }) => {
@@ -113,7 +113,7 @@ export const renameCategory = categoryProcedure
     }
   });
 
-export const archiveCategory = categoryProcedure
+export const archiveCategory = adminProcedure
   .input(ArchiveCategoryInputSchema)
   .output(CategorySchema)
   .mutation(async ({ ctx, input }) => {
