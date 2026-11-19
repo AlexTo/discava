@@ -31,6 +31,7 @@ type ArchivedItem = {
 };
 type ArchivedLesson = {
   lessonId: string;
+  kind: 'lesson' | 'assignment';
   title: string;
   archivedAt?: string;
   contentItems: ArchivedItem[];
@@ -88,7 +89,7 @@ export const archivedEntries = (modules: ArchivedModule[]): Entry[] => {
         entries.push({
           key: `lesson:${lesson.lessonId}`,
           kind: 'lesson',
-          noun: 'lesson',
+          noun: lesson.kind,
           title: lesson.title,
           location: module.title,
           archivedAt: lesson.archivedAt,

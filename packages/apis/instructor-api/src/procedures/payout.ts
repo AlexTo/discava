@@ -13,14 +13,18 @@ import {
 import { PaymentsNotConnectedError } from '@discava/common-server-utils/stripe/secrets';
 import {
   getConnection,
+  openEntries,
   type PayoutAccountRecord,
+  type PayoutRecord,
   saveAccountStatus,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
+  type IPayoutOverviewOutput,
   PayoutAccountOutputSchema,
   PayoutLinkOutputSchema,
+  PayoutOverviewOutputSchema,
   StartOnboardingInputSchema,
 } from '../schema/index.js';
 
@@ -200,4 +204,76 @@ export const dashboardLink = courseProcedure
     return {
       url: (await stripe.createLoginLink(stored.connectedAccountId)).url,
     };
+  });
+
+export const overview = courseProcedure
+  .output(PayoutOverviewOutputSchema)
+  .query(async ({ ctx }): Promise<IPayoutOverviewOutput> => {
+    const { coreTable } = ctx;
+    const instructorId = ctx.user.sub;
+    const now = Date.now();
+    const current = await currentPaymentAccount(coreTable);
+    const stored = current
+      ? await storedAccount(coreTable, instructorId, current)
+      : undefined;
+    // Released earnings are ready only with an active payout account.
+    const releasedBucket =
+      stored?.status === 'active' ? 'readyMinor' : 'waitingMinor';
+
+    const byCurrency = new Map<
+      string,
+      IPayoutOverviewOutput['currencies'][0]
+    >();
+    for (const entry of await openEntries({ coreTable, instructorId })) {
+      let figures = byCurrency.get(entry.currency);
+      if (!figures) {
+        figures = {
+          currency: entry.currency,
+          onHoldMinor: 0,
+          waitingMinor: 0,
+          readyMinor: 0,
+          heldMinor: 0,
+        };
+        byCurrency.set(entry.currency, figures);
+      }
+      if (
+        !current ||
+        entry.accountId !== current.accountId ||
+        entry.mode !== current.mode
+      ) {
+        figures.heldMinor += entry.netMinor;
+      } else if (Date.parse(entry.releaseAt) > now) {
+        figures.onHoldMinor += entry.netMinor;
+        if (!figures.nextReleaseAt || entry.releaseAt < figures.nextReleaseAt) {
+          figures.nextReleaseAt = entry.releaseAt;
+        }
+      } else {
+        figures[releasedBucket] += entry.netMinor;
+      }
+    }
+
+    const { data } = await coreTable.entities.payout.query
+      .primary({ instructorId })
+      .go({ pages: 'all', order: 'desc' });
+    const payouts: IPayoutOverviewOutput['payouts'] = [];
+    for (const payout of data as PayoutRecord[]) {
+      // A releasing payout never reached a transfer: it is only shown when it
+      // carries the reason Stripe refused it.
+      if (payout.status === 'releasing' && !payout.failureReason) continue;
+      payouts.push({
+        payoutId: payout.payoutId,
+        currency: payout.currency,
+        amountMinor: payout.amountMinor,
+        status:
+          payout.status === 'sent'
+            ? 'sent'
+            : payout.status === 'pending' || payout.status === 'collecting'
+              ? 'pending'
+              : 'failed',
+        failureReason: payout.failureReason,
+        createdAt: payout.createdAt,
+        settledAt: payout.settledAt,
+      });
+    }
+    return { currencies: [...byCurrency.values()], payouts };
   });

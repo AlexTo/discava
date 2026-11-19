@@ -65,6 +65,10 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  *   message that doesn't verify), as the deployed webhook API does
  * - `/v1/*`, `/stripe/pay/*` and `/stripe/test/*` -> the Stripe stand-in (stripe-stand-in.ts),
  *   as Stripe's API
+ * - `POST /payout-run` (optional `{ graceSeconds }`, replacing the 15-minute
+ *   recovery grace) -> the run's result, running the payout run once as the
+ *   daily schedule does (400 for a `graceSeconds` that isn't a non-negative
+ *   number; 500 with the error's message if the run throws)
  * - `POST /router/fail/<feature>` (`{ batches }`) -> `{ feature, failing }`,
  *   making the feature's runner fail its next batches (404 for an
  *   unregistered feature; 403 unless `LOCAL_DEV=true`)
@@ -82,6 +86,7 @@ export const startEventRunnerServer = ({
   failFeature,
   stripe,
   stripeWebhook,
+  runPayoutRun,
   log,
 }: {
   port: number;
@@ -103,6 +108,8 @@ export const startEventRunnerServer = ({
     rawBody: Buffer,
     signature: string | undefined,
   ) => Promise<{ status: number }>;
+  /** Runs the payout run once; `graceMs` replaces its recovery grace. */
+  runPayoutRun?: (options: { graceMs?: number }) => Promise<unknown>;
   log: (message: string) => void;
 }) => {
   const server = createServer(async (request, response) => {
@@ -134,6 +141,25 @@ export const startEventRunnerServer = ({
           typeof signature === 'string' ? signature : undefined,
         );
         return send(status, status === 200 ? { received: true } : undefined);
+      }
+      if (request.method === 'POST' && path === '/payout-run' && runPayoutRun) {
+        const { graceSeconds } = (await readJson(request)) as {
+          graceSeconds?: unknown;
+        };
+        if (
+          graceSeconds !== undefined &&
+          (typeof graceSeconds !== 'number' ||
+            !Number.isFinite(graceSeconds) ||
+            graceSeconds < 0)
+        ) {
+          return send(400, {
+            message: 'graceSeconds must be a non-negative number',
+          });
+        }
+        const result = await runPayoutRun({
+          graceMs: graceSeconds === undefined ? undefined : graceSeconds * 1000,
+        });
+        return send(200, result ?? {});
       }
       if (request.method === 'POST' && path === '/transcode-jobs') {
         const job = (await readJson(request)) as LocalTranscodeJobRequest;
