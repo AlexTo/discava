@@ -14,12 +14,8 @@ import {
   useState,
 } from 'react';
 
-// Consider specifying types if desired
 export type IRuntimeConfig = any;
 
-/**
- * Context for storing the runtimeConfig.
- */
 export const RuntimeConfigContext = createContext<IRuntimeConfig | undefined>(
   undefined,
 );

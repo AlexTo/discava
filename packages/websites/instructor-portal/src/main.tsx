@@ -34,9 +34,8 @@ root &&
         fallback={<Spinner />}
       >
         <CognitoAuth
-          // Runs above <RouterProvider>, so useNavigate isn't available here:
-          // navigate via the router instance directly instead of
-          // window.location.replace, to avoid a full page reload.
+          // Runs above <RouterProvider>, so useNavigate isn't available: the
+          // router instance navigates without a full page reload.
           onReturn={(path) => router.navigate({ href: path, replace: true })}
         >
           <QueryClientProvider>

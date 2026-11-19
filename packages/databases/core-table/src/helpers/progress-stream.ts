@@ -13,8 +13,9 @@ import { CURRICULUM_ENTITIES } from './curriculum.js';
  * old and new images, so the recalculation itself checks that a curriculum
  * edit changed what students see.
  *
- * The one definition both the deployed event source mapping's filters
- * (CoreApiStack) and local dev's event runner (#137) are built from.
+ * The one definition the `progress-recalculation` entry in STREAM_FEATURES
+ * (and so the deployed stream router and local dev's event runner) is built
+ * from.
  */
 export const PROGRESS_STREAM_FILTERS: readonly {
   eventName: 'INSERT' | 'MODIFY' | 'REMOVE';

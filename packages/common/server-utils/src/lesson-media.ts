@@ -79,10 +79,8 @@ const resolvePrivateKey = async (secretArn: string): Promise<string> => {
   return _privateKey;
 };
 
-// With a signed URL, expiry only gated the single already-generated URL.
-// With cookies, the same expiry gates every request for the rest of the
-// viewing session (manifest, renditions, every segment), so this needs to
-// comfortably outlast one sitting rather than one request.
+// The cookies gate every request for the rest of the viewing session
+// (manifest, renditions, every segment), so they must outlast one sitting.
 const COOKIE_EXPIRY_SECONDS = SIGNED_COOKIE_LIFETIME_SECONDS;
 
 /**

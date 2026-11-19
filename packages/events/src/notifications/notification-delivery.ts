@@ -53,8 +53,8 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 // fanned out to its course's students, and a `notification` INSERT has its
 // email sent. Anything else (a MODIFY, another entity) is ignored.
 //
-// How it tolerates the router's at-least-once, unordered delivery (router
-// FR-011), and so duplicate and reordered records and redelivered batches:
+// How it tolerates the router's at-least-once, unordered delivery, and so
+// duplicate and reordered records and redelivered batches:
 // - Duplicates: the email is claimed with a conditional patch on its state, so
 //   a second delivery of the same notification, or of the same record, finds
 //   it claimed or final and sends nothing; a notification's id comes from its

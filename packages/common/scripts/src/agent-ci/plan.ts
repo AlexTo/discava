@@ -6,10 +6,9 @@
 // What to do when the PR Checks workflow finishes on an agent's pull request.
 // The Issue-to-PR automation sends its agent back to revise a pull request
 // whose latest commit carries a `software-factory/review` status in state
-// `failure` or `error` (worker.py in the automation's package). Nothing in
-// this repository set that status, so a failing CI run went unanswered. This
-// turns a failed CI run into that status, a limited number of times per pull
-// request, so the agent is sent back with the failing checks.
+// `failure` or `error` (worker.py in the automation's package). This turns a
+// failed CI run into that status, a limited number of times per pull request,
+// so the agent is sent back with the failing checks.
 
 export const REVIEW_STATUS_CONTEXT = 'software-factory/review';
 export const MAX_CI_FIX_ATTEMPTS = 5;

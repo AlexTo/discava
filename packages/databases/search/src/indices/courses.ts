@@ -8,8 +8,7 @@ import { createIndex } from './create-index.js';
 // Only a published course's doc is ever written -- see
 // packages/events/src/search/search-indexing.ts -- so `status` here is always
 // 'published'. It's still indexed (rather than assumed) so the search
-// procedure can filter on it defensively, the same way publicListCourses
-// re-checks status even though byStatus already scoped the query.
+// procedure can filter on it defensively.
 export const CourseDocumentSchema = z.object({
   courseId: z.string(),
   title: z.string(),
@@ -65,21 +64,19 @@ export default createIndex({
       status: { type: 'keyword' },
       publishedAt: { type: 'date' },
       updatedAt: { type: 'date' },
-      // Added after the first version, all as new properties so putMapping
-      // applies them to an existing index in place. A change to an existing
-      // property's type or analyzer is breaking and needs #270's versioned
-      // index. A keyword field takes an array, so `tags` needs no special type.
+      // putMapping only adds new properties to an existing index: a change to
+      // an existing property's type or analyzer is breaking and needs #270's
+      // versioned index. A keyword field takes an array, so `tags` needs no
+      // special type.
       categoryId: { type: 'keyword' },
       tags: { type: 'keyword' },
       level: { type: 'keyword' },
       language: { type: 'keyword' },
       durationHours: { type: 'integer' },
-      // Ratings, also new properties; numeric fields need no analyzer.
       ratingCount: { type: 'integer' },
       ratingAverage: { type: 'float' },
       ratingScore: { type: 'float' },
       ratingBoost: { type: 'float' },
-      // The price, also new properties.
       priceAmount: { type: 'integer' },
       priceCurrency: { type: 'keyword' },
     },

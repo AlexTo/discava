@@ -90,20 +90,16 @@ const keepsSubmissionFolder = async ({
     : undefined;
 };
 
-// Invoked directly by an EventBridge Scheduler one-time schedule that
-// bestEffortCancelTranscodeJob creates alongside canceling a job -- not
-// wrapped in an EventBridge event envelope, just this plain payload.
+// Invoked directly by an EventBridge Scheduler one-time schedule (a plain
+// payload, no EventBridge envelope), scheduled when a job is canceled, a
+// version is replaced or a transcode's output is orphaned.
 //
-// Deletes everything under one specific job's own nonce-scoped
-// subdirectory -- see submitTranscodeJob's docstring for why that
-// subdirectory is guaranteed disjoint from whatever job superseded this
-// one, which is what makes an unconditional delete here safe: nothing
-// else will ever write to or reference this exact prefix again,
-// regardless of what's happened to the content item since the job was
-// canceled. Errors are allowed to propagate (not swallowed) so
-// EventBridge Scheduler's own retry policy can retry a transient failure
-// -- unlike transcode-complete.ts, every invocation of this handler is
-// safe to retry: deleting an already-deleted prefix is a no-op.
+// Deletes everything under one submission's own nonce-scoped folder -- see
+// submitTranscodeJob's docstring (instructor-api's mediaconvert-client.ts)
+// for why that folder is disjoint from whatever superseded it -- unless a
+// course preview or assignment submission still holds it (checked below).
+// Errors propagate so Scheduler's retry policy retries a transient failure;
+// a retry is safe, as deleting an already-deleted prefix is a no-op.
 export const transcodeCleanup = async (event: unknown): Promise<void> => {
   logger.info('Received event', event as Record<string, unknown>);
 

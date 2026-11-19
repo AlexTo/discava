@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/** `robots.txt`, as the page renderer contract gives it. */
+/** `robots.txt`: the signed-in routes closed and the site map named, or everything closed when indexing is off. */
 export const robotsTxt = (host: string, allowIndexing: boolean): string =>
   allowIndexing
     ? [

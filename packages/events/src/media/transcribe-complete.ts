@@ -41,7 +41,7 @@ export const transcribeComplete = async (
   const detail = TranscribeJobStateChangeDetailSchema.parse(event.detail);
   const job = await getCaptionJob(detail.TranscriptionJobName);
   // The job's tags say which record it is for: a course's preview, or a
-  // content item (no `target`, as before preview videos).
+  // content item (no `target`).
   const common = {
     jobName: detail.TranscriptionJobName,
     status: detail.TranscriptionJobStatus,

@@ -4,8 +4,8 @@ This library was generated with [Nx](https://nx.dev).
 
 ## Building
 
-Run `nx build events` to build the library.
+Run `pnpm nx build @discava/events` to build the library.
 
 ## Running unit tests
 
-Run `nx test events` to execute the unit tests via [Vitest](https://vitest.dev/).
+Run `pnpm nx test @discava/events` to execute the unit tests via [Vitest](https://vitest.dev/).

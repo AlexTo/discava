@@ -383,10 +383,9 @@ export const submitQuizAttempt = courseProcedure
       }
       // Something changed after it was read: the course, the quiz or its
       // ancestors, the enrolment, or another attempt (or completion) landed
-      // first. Nothing
-      // was written; read again, which gives the precise error if the
-      // submission is no longer allowed, or grades it against what's there
-      // now.
+      // first. Nothing was written; read again, which gives the precise error
+      // if the submission is no longer allowed, or grades it against what's
+      // there now.
       const reasons = cancellationReasons(data);
       if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
         throw new TRPCError({

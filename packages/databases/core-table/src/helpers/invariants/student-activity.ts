@@ -15,8 +15,8 @@ import type { TableSnapshot } from './snapshot.js';
 
 // A content item's studentActivityCount is the number of distinct
 // students with records for it: an itemCompletion, an assignmentSubmission,
-// or for a quiz a quizSummary. Each is created in the transaction that increments the count,
-// and neither is ever removed, so the count is exact. It gates permanent
+// or for a quiz a quizSummary. Each is created in the transaction that
+// increments the count, and none is ever removed, so the count is exact. It gates permanent
 // deletion, so too low a count could let student data be destroyed.
 export const checkActivityCountMatchesStudents = (
   snapshot: TableSnapshot,
@@ -356,8 +356,9 @@ export const checkStudentRecordsPlacedWithItem = (
 };
 
 // An enrolment's lastActivityAt is the student's latest activity in the
-// course: it's set, in the same transaction, to the time of each completion
-// quiz attempt and assignment submission. It orders "Continue where you left off".
+// course: it's set, in the same transaction, to the time of each completion,
+// quiz attempt and assignment submission. It orders "Continue where you left
+// off".
 export const checkLastActivityAtCurrent = (
   snapshot: TableSnapshot,
 ): Violation[] => {
@@ -388,7 +389,7 @@ export const checkLastActivityAtCurrent = (
   });
 };
 
-// 20 (submissions, #102). An assignment submission holds one file with a key,
+// An assignment submission holds one file with a key,
 // name, size and type, in the student's own folder of its item
 // (`…/content-items/<id>/submissions/<userId>/`); it is for an upload
 // assignment, has a version from 1, and comes with the item's completion,
@@ -439,7 +440,7 @@ export const checkAssignmentSubmissionShape = (
   });
 };
 
-// 23 (video positions). A saved position is whole seconds from 0 to the cap,
+// A saved position is whole seconds from 0 to the cap,
 // for a named version of the video. Positions are deliberately not in
 // studentRecords (and so not in the targets and placement checks above): a
 // position isn't student activity, and deleting a video with watchers is

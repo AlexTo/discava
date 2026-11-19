@@ -43,7 +43,7 @@ export type StudentPortalProps = Omit<
   StaticWebsiteProps,
   'websiteName' | 'websiteFilePath'
 > & {
-  /** Serve landing pages, the site map and robots.txt from a Lambda. */
+  /** Serve landing pages, instructor profiles, the site map and robots.txt from a Lambda. */
   readonly pageRenderer?: PageRendererProps;
 };
 
@@ -112,8 +112,9 @@ export class StudentPortal extends StaticWebsite {
     const origin = FunctionUrlOrigin.withOriginAccessControl(functionUrl);
 
     // Keyed on the path alone: no query, cookies or headers reach the cache
-    // key or the renderer, so a response never depends on who asks. The
-    // renderer's `s-maxage` is honoured, up to five minutes.
+    // key, and the renderer gets only the viewer's host (`x-discava-host`), so
+    // a response never depends on who asks. The renderer's `s-maxage` is
+    // honoured, up to five minutes.
     const cachePolicy = new CachePolicy(this, 'PageRendererCachePolicy', {
       minTtl: Duration.seconds(0),
       defaultTtl: Duration.seconds(0),

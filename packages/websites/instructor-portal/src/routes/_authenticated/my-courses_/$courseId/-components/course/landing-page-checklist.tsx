@@ -5,7 +5,7 @@
 
 interface Line {
   label: string;
-  // Undefined while it is being worked out.
+  // Undefined while its data loads (only the profile line); shown as "Checking…".
   done?: boolean;
   href?: string;
 }

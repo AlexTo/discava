@@ -23,20 +23,17 @@ export type ApplicationStageProps = StageProps & StageComponents;
  *
  *   Websites -> Data -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> AdminApi -> RuntimeConfig
  *
- * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
- * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
- * and RuntimeConfig (AppConfig content plus each
- * portal's runtime-config.json) collects values from all of them.
- * InstructorApi also depends on CoreApi only because the stage's single
- * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
- * whichever API stack is created first. AdminApi reads from Data and Websites
- * only (the table, the user pool and the admin portal's address for CORS). Data's search collection (#53) is
- * stateful like the core table, so it lives there too; CoreApi depends on it
- * for the search procedure's read access. StreamRouter holds the single
- * reader of the core table's stream, the queues it feeds and the progress
- * and search handlers behind them (the indexing Lambda's write access to the
- * collection included); it depends on Data, and on Websites and CoreApi for the
- * addresses the notification emails link to.
+ * Data (users, the core table, media buckets, the search collection and the
+ * secrets) depends on Websites for Cognito callback URLs and lesson media
+ * CORS. The APIs depend on both, and CoreApi and InstructorApi on
+ * MediaPipeline (transcodes and scheduled cleanups). InstructorApi and AdminApi
+ * also depend on CoreApi, only because the stage's single ApiGatewayAccount
+ * (API Gateway's account-wide logging role) lands in whichever API stack is
+ * created first. StreamRouter holds the single reader of the core table's
+ * stream, the queues it feeds and the handlers behind them; it depends on
+ * Data, and on Websites and CoreApi for the addresses notification emails
+ * link to. RuntimeConfig (AppConfig content plus each portal's
+ * runtime-config.json) collects values from all of them.
  */
 export class ApplicationStage extends Stage {
   constructor(
