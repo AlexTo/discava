@@ -72,7 +72,7 @@ jobs:
         with:
           paths: |
             specs/*/tasks.md
-            packages/common/scripts/src/agent-issues/
+            packages/tooling/agent/src/agent-issues/
 
       - uses: ./.github/actions/init-monorepo
         if: steps.changed.outputs.changed == 'true'
@@ -82,14 +82,14 @@ jobs:
 
       - name: Validate every tasks.md
         if: steps.changed.outputs.changed == 'true'
-        run: pnpm nx run @discava/common-scripts:validate-tasks
+        run: pnpm nx run @discava/tooling-agent:validate-tasks
 
   # A pull request that changes portal or shared UI source must add a
   # `screenshot(` call to an e2e scenario, so the `E2E screenshots` comment
   # shows the reviewer the change. A maintainer waives it with the
   # `no-ui-screenshots` label and re-runs this job (the labels are read when
   # it runs, so labelling doesn't restart the other checks). The rules are in
-  # packages/common/scripts/src/ui-screenshots/.
+  # packages/tooling/agent/src/ui-screenshots/.
   ui-screenshots:
     name: UI Screenshots
     runs-on: ubuntu-latest
@@ -105,7 +105,7 @@ jobs:
           set-nx-shas: "false"
 
       - name: Check the pull request
-        run: pnpm nx run @discava/common-scripts:ui-screenshots
+        run: pnpm nx run @discava/tooling-agent:ui-screenshots
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -116,7 +116,7 @@ jobs:
   # checks. A maintainer waives it with the `no-new-invariant` label and
   # re-runs this job. It also fails while core-table's entity-writers.json,
   # the map it compares with the base branch's, is out of date with the code.
-  # The rules are in packages/common/scripts/src/invariant-coverage/.
+  # The rules are in packages/tooling/agent/src/invariant-coverage/.
   invariant-coverage:
     name: Invariant coverage
     runs-on: ubuntu-latest
@@ -136,7 +136,7 @@ jobs:
             packages/apis
             packages/events
             packages/databases
-            packages/common/scripts
+            packages/tooling
 
       - uses: ./.github/actions/init-monorepo
         if: steps.changed.outputs.changed == 'true'
@@ -146,7 +146,7 @@ jobs:
 
       - name: Check the pull request
         if: steps.changed.outputs.changed == 'true'
-        run: pnpm nx run @discava/common-scripts:invariant-coverage
+        run: pnpm nx run @discava/tooling-agent:invariant-coverage
         env:
           BASE_REF: ${{ github.base_ref }}
           GH_TOKEN: ${{ github.token }}
@@ -265,7 +265,7 @@ jobs:
       # Leads with the pictures whose `screenshot(` call this pull request
       # adds, and folds the ones from scenarios that were already there.
       - name: Comment on the pull request
-        run: pnpm nx run @discava/common-scripts:screenshots-comment
+        run: pnpm nx run @discava/tooling-agent:screenshots-comment
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
