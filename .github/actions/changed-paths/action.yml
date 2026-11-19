@@ -1,0 +1,40 @@
+name: Changed paths
+description: Report whether a pull request changes any of the given paths, compared with its base branch.
+
+# Needs a full-history checkout (fetch-depth: 0), so the base branch is there
+# to diff against. Run before init-monorepo, to skip it when nothing changed.
+
+inputs:
+  paths:
+    description: 'Git pathspecs (globs allowed), one per line.'
+    required: true
+  base-ref:
+    description: 'The branch the pull request targets.'
+    required: false
+    default: ${{ github.base_ref }}
+
+outputs:
+  changed:
+    description: '"true" when any of the paths changed, otherwise "false".'
+    value: ${{ steps.diff.outputs.changed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Diff against the base branch
+      id: diff
+      shell: bash
+      env:
+        BASE_REF: ${{ inputs.base-ref }}
+        PATHS: ${{ inputs.paths }}
+      run: |
+        pathspecs=()
+        while IFS= read -r line; do
+          if [ -n "$line" ]; then pathspecs+=("$line"); fi
+        done <<< "$PATHS"
+
+        if git diff --quiet "origin/$BASE_REF...HEAD" -- "${pathspecs[@]}"; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
