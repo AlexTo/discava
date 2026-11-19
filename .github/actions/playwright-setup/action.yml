@@ -6,11 +6,10 @@ description: Restore Chromium from the cache, keyed by the Playwright version, a
 # and PR Checks never runs on main, so ci.yml's playwright-cache job saves the
 # cache under this same key, from this same action.
 
-inputs:
-  with-deps:
-    description: "Also install Chromium's system libraries (apt, outside the cache, so installed on a hit too). Needed by jobs that run the browser."
-    required: false
-    default: 'false'
+# Chromium's system libraries aren't installed: the runner image already has
+# them all, and `playwright install-deps` only added nine font packages (CJK,
+# Thai, unifont, X fonts) that no scenario renders, from an apt mirror that
+# often stalled for minutes.
 
 runs:
   using: 'composite'
@@ -30,11 +29,4 @@ runs:
     - name: Download Chromium
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
-      env:
-        WITH_DEPS: ${{ inputs.with-deps == 'true' && '--with-deps' || '' }}
-      run: pnpm --filter @discava/e2e exec playwright install $WITH_DEPS chromium
-
-    - name: Install Chromium's system libraries
-      if: steps.playwright-cache.outputs.cache-hit == 'true' && inputs.with-deps == 'true'
-      shell: bash
-      run: pnpm --filter @discava/e2e exec playwright install-deps chromium
+      run: pnpm --filter @discava/e2e exec playwright install chromium

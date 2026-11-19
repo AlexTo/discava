@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDescription,
@@ -25,7 +26,6 @@ import {
   Tags,
 } from 'lucide-react';
 import { useInstructorApi } from '../../../../api';
-import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import {
   type CourseStatus,
   courseStatusStyles,

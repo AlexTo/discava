@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
@@ -18,7 +19,6 @@ import { createRoot } from 'react-dom/client';
  */
 import { useAuth } from 'react-oidc-context';
 import { AdminApiClientProvider, CoreApiClientProvider } from './api';
-import CognitoAuth from './components/CognitoAuth';
 import { LOCAL_DEV_CONFIG } from './local-dev-config';
 import { router } from './router';
 import './styles.css';
@@ -37,7 +37,11 @@ root &&
         localDevConfig={LOCAL_DEV_CONFIG}
         fallback={<Spinner />}
       >
-        <CognitoAuth>
+        <CognitoAuth
+          autoSignIn
+          // The router isn't created until signed in, so it starts on this page.
+          onReturn={(path) => window.history.replaceState(null, '', path)}
+        >
           <QueryClientProvider>
             <CoreApiClientProvider>
               <AdminApiClientProvider>

@@ -26,6 +26,9 @@
     },
     {
       "path": "../tiptap/tsconfig.lib.json"
+    },
+    {
+      "path": "../../apis/core-api/tsconfig.lib.json"
     }
   ],
   "exclude": [

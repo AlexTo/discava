@@ -10,7 +10,7 @@ import {
   type Handler,
   renderWithCoreApi,
 } from '../test/render-with-core-api';
-import { NotificationBell } from './NotificationBell';
+import { NotificationBell } from './notification-bell-container';
 
 // There's no router in these renders; the portal's navigation is a spy.
 const navigate = vi.fn();
@@ -57,9 +57,9 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
 const callsTo = (calls: ApiCall[], path: string) =>
   calls.filter((call) => call.path === path);
 
-describe('NotificationBell (instructor portal)', () => {
+describe('NotificationBell container', () => {
   it('shows the unread count from the API', async () => {
-    renderWithCoreApi(<NotificationBell />, {
+    renderWithCoreApi(<NotificationBell portal="instructor" />, {
       handlers: handlers(),
       runtimeConfig: { portals },
     });
@@ -76,10 +76,13 @@ describe('NotificationBell (instructor portal)', () => {
   });
 
   it('lists the notifications when opened, and not before', async () => {
-    const { calls, user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers(),
-      runtimeConfig: { portals },
-    });
+    const { calls, user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers(),
+        runtimeConfig: { portals },
+      },
+    );
     await screen.findByRole('button', { name: 'Notifications, 3 unread' });
     expect(callsTo(calls, 'notification.list')).toHaveLength(0);
 
@@ -90,10 +93,13 @@ describe('NotificationBell (instructor portal)', () => {
   });
 
   it('marks an unread item read, then follows its link', async () => {
-    const { calls, user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers(),
-      runtimeConfig: { portals },
-    });
+    const { calls, user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers(),
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );
@@ -117,10 +123,13 @@ describe('NotificationBell (instructor portal)', () => {
   });
 
   it("doesn't mark an already read item read", async () => {
-    const { calls, user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers(),
-      runtimeConfig: { portals },
-    });
+    const { calls, user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers(),
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );
@@ -135,17 +144,20 @@ describe('NotificationBell (instructor portal)', () => {
   it("opens another portal's address for a cross-portal link", async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
-    const { user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers({
-        'notification.list': () => ({
-          items: [
-            item('c', { link: { portal: 'student', path: '/over/there' } }),
-          ],
-          unreadCount: 1,
+    const { user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers({
+          'notification.list': () => ({
+            items: [
+              item('c', { link: { portal: 'student', path: '/over/there' } }),
+            ],
+            unreadCount: 1,
+          }),
         }),
-      }),
-      runtimeConfig: { portals },
-    });
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );
@@ -159,10 +171,13 @@ describe('NotificationBell (instructor portal)', () => {
   });
 
   it('marks all as read with the newest shown position', async () => {
-    const { calls, user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers(),
-      runtimeConfig: { portals },
-    });
+    const { calls, user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers(),
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );
@@ -183,15 +198,18 @@ describe('NotificationBell (instructor portal)', () => {
 
   it('repeats mark all while the API says there is more', async () => {
     let call = 0;
-    const { calls, user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers({
-        'notification.markAllRead': () => {
-          call += 1;
-          return { unreadCount: call === 1 ? 5 : 0, more: call === 1 };
-        },
-      }),
-      runtimeConfig: { portals },
-    });
+    const { calls, user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers({
+          'notification.markAllRead': () => {
+            call += 1;
+            return { unreadCount: call === 1 ? 5 : 0, more: call === 1 };
+          },
+        }),
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );
@@ -205,14 +223,17 @@ describe('NotificationBell (instructor portal)', () => {
   });
 
   it('shows the error state when the list fails', async () => {
-    const { user } = renderWithCoreApi(<NotificationBell />, {
-      handlers: handlers({
-        'notification.list': () => {
-          throw new ApiError('INTERNAL_SERVER_ERROR', 'boom');
-        },
-      }),
-      runtimeConfig: { portals },
-    });
+    const { user } = renderWithCoreApi(
+      <NotificationBell portal="instructor" />,
+      {
+        handlers: handlers({
+          'notification.list': () => {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'boom');
+          },
+        }),
+        runtimeConfig: { portals },
+      },
+    );
     await user.click(
       await screen.findByRole('button', { name: /Notifications/ }),
     );

@@ -8,6 +8,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import type { IMyEnrolment } from '@discava/core-api';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -21,7 +22,6 @@ import {
   UpNext,
 } from '../../components/course-progress-card';
 import { CourseThumbnail } from '../../components/course-thumbnail';
-import { getUserIdentity } from '../../components/UserMenu/user-profile';
 import { toDisplayCourse } from '../../lib/course-display';
 
 // How many of the student's other courses the home shows; My Learning has

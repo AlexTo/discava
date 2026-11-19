@@ -16,7 +16,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
-import { UserMenu } from './index';
+import { UserMenu } from './user-menu';
 
 const removeUser = vi.fn(async () => {});
 const removeStoredUser = vi.fn(async () => null);

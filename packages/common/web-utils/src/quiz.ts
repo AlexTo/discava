@@ -187,3 +187,34 @@ export const gradeQuiz = (
     passed: scorePercent >= passMarkPercent,
   };
 };
+
+// An attempt in progress, as saved between page loads.
+export interface QuizDraft {
+  // The questions as the student saw them, to reconcile against.
+  questions: QuizQuestion[];
+  questionsHash: string;
+  answers: QuizAnswers;
+  attemptNumber: number;
+}
+
+const draftKey = (quizKey: string) => `discava:quiz-draft:${quizKey}`;
+
+// localStorage can be missing or throw (private mode, blocked storage): a
+// draft is a convenience, so failing to read or write one is ignored.
+export const readQuizDraft = (quizKey: string): QuizDraft | null => {
+  try {
+    const raw = localStorage.getItem(draftKey(quizKey));
+    return raw ? (JSON.parse(raw) as QuizDraft) : null;
+  } catch {
+    return null;
+  }
+};
+export const writeQuizDraft = (quizKey: string, draft: QuizDraft | null) => {
+  try {
+    if (draft) {
+      localStorage.setItem(draftKey(quizKey), JSON.stringify(draft));
+    } else {
+      localStorage.removeItem(draftKey(quizKey));
+    }
+  } catch {}
+};
