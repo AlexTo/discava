@@ -1,6 +1,7 @@
 <div align="center">
   <h1>Discava</h1>
-  <h3>The serverless, AI-native Learning Management System</h3>
+  <h3>Teach, learn and grow, on a platform you own.</h3>
+  <p>The serverless, AI-native Learning Management System.</p>
   <a href="https://opensource.org/licenses/Apache-2.0">
     <img
       src="https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg"
@@ -29,16 +30,72 @@
 
 ---
 
+**Discava is a free, open source learning platform that runs in your own AWS account.** Publish courses, teach with video, quizzes and assignments, and let learners track their progress. An AI assistant is coming as part of the core experience.
+
+## What you get
+
+### 🎓 For learners
+
+- 🔍 Browse a course catalogue by category, or search for what you want to learn
+- 🎬 Adaptive HD video with captions, playback speeds and keyboard shortcuts
+- 📝 Quizzes and assignment submissions, with late submissions flagged
+- 📊 Progress tracking that shows how far you are through each course
+- 🏆 Certificates when you complete a course
+- ⭐ Rate and review the courses you take
+- 💬 Discuss lessons with your instructor and classmates
+- 🔔 Notifications and 📣 announcements, so you never miss an update
+
+### 📚 For instructors
+
+- 🎬 Build courses from video, text, files, quizzes and assignments
+- ✏️ Edit your course live and publish a public landing page for it
+- 📊 An instructor dashboard with course analytics
+- 💬 Answer lesson discussions and respond to reviews
+- 📣 Post announcements to your enrolled learners
+
+### 🛡️ For admins
+
+- 🗂️ Manage the category taxonomy that organises the catalogue
+- ⭐ Moderate course reviews from one admin portal
+
+> [!TIP]
+> 🤖 **AI built in, not bolted on.** ✨ An AI assistant and personalised learning are part of the core experience, not a paid add-on. Coming soon.
+
+## Why Discava
+
+- ☁️ **Serverless.** Pay for what you use. It scales to zero.
+- 🔒 **Your AWS account.** You own your data.
+- 🛡️ **Hardened production defaults.** WAF and KMS encryption.
+- 🆓 **Free and open source.** Apache 2.0.
+- 🤖 **Built with AI in mind** from the start.
+
 > [!IMPORTANT]
 > Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
 
-**Discava** is a free and open source, serverless, AWS-native Learning Management System: course delivery, enrolment, and student/instructor/admin portals, deployable to your own AWS account.
+## For developers
 
-It's opinionated by design: one cloud provider, one way to deploy, rather than a pluggable backend you configure yourself. The trade-off is deliberate, easier to deploy and fewer integration quirks, instead of maximum backend flexibility. And it's built with agentic AI from the start rather than bolted on later: an AI assistant and personalised learning are part of the core experience, not a paid add-on.
+Discava is a TypeScript monorepo. It is opinionated by design: one cloud provider, one way to deploy.
+
+- 🐳 Everything runs locally with Docker. No AWS account needed to try it.
+- 🚀 One command deploys it to AWS with CDK.
+- ✅ Well tested.
+
+### Try it locally
+
+With Docker running:
+
+```sh
+pnpm i
+pnpm dev
+```
+
+Sign in as Alice (instructor and student), Bob or Dan (students) or Carol (admin).
+
+See the docs and [CONTRIBUTING.md](CONTRIBUTING.md) for everything else.
 
 ## Documentation
 
-Full documentation, including architecture and guides, lives at the [Discava docs site](https://alexto.github.io/discava/).
+Architecture and guides live at the [Discava docs site](https://alexto.github.io/discava/).
 
 ## License
 
