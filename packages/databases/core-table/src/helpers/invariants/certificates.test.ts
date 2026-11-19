@@ -89,11 +89,29 @@ describe('certificate-shape and certificate-has-completed-enrolment', () => {
     (status) => {
       issued();
       table.enrolments[0].status = status;
+      // A refunded student keeps their certificate while the enrolment holds
+      // the same completedAt, so the dropped case has none.
+      if (status === 'dropped') table.enrolments[0].completedAt = undefined;
       expect(
         violationsOf('certificate-has-completed-enrolment')[0]?.message,
       ).toMatch(new RegExp(`is ${status}`));
     },
   );
+
+  it('accepts a dropped enrolment with the same completedAt (a refunded student)', () => {
+    issued();
+    table.enrolments[0].status = 'dropped';
+    expect(violationsOf('certificate-has-completed-enrolment')).toEqual([]);
+  });
+
+  it('reports a dropped enrolment with a different completedAt', () => {
+    issued();
+    table.enrolments[0].status = 'dropped';
+    table.enrolments[0].completedAt = '2026-01-04T00:00:00.000Z';
+    expect(
+      violationsOf('certificate-has-completed-enrolment')[0]?.message,
+    ).toMatch(/is dropped|completedAt differs/);
+  });
 
   it('reports a different completedAt', () => {
     issued();

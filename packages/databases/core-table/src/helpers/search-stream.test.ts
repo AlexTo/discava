@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { matchesSearchStreamFilters } from './search-stream.js';
+import {
+  matchesSearchStreamFilters,
+  SEARCH_STREAM_FILTERS,
+} from './search-stream.js';
 
 const record = (
   eventName: string,
@@ -47,6 +50,27 @@ describe('matchesSearchStreamFilters', () => {
       }
     },
   );
+
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+  ] as const)(
+    'ignores a %s of an order or a Stripe connection record',
+    (eventName, image) => {
+      for (const entity of ['order', 'paymentConnection', 'paymentChange']) {
+        expect(
+          matchesSearchStreamFilters(record(eventName, image, entity)),
+        ).toBe(false);
+      }
+    },
+  );
+
+  // A price change is a course MODIFY, so the catalogue re-indexes the course.
+  it('matches a course edit that changes only the price', () => {
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'course')),
+    ).toBe(true);
+  });
 
   it('matches an inserted or modified course', () => {
     expect(
@@ -170,4 +194,25 @@ describe('matchesSearchStreamFilters', () => {
       matchesSearchStreamFilters(record('MODIFY', 'OldImage', 'course')),
     ).toBe(false);
   });
+});
+
+describe('matchesSearchStreamFilters for coupon records', () => {
+  // Coupons and redemptions change no item and no course document, so no
+  // feature reads them.
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)(
+    'ignores a %s of a coupon or a redemption',
+    (eventName, image) => {
+      for (const entity of ['coupon', 'couponRedemption']) {
+        const streamRecord = record(eventName, image, entity);
+        expect(matchesSearchStreamFilters(streamRecord)).toBe(false);
+        for (const filter of SEARCH_STREAM_FILTERS) {
+          expect(JSON.stringify(filter)).not.toContain(entity);
+        }
+      }
+    },
+  );
 });

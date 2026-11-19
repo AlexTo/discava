@@ -170,6 +170,26 @@ describe('enrol', () => {
   });
 });
 
+// An enrolment bought through a Stripe checkout names its order; no output
+// carries it.
+describe('an enrolment with an orderId', () => {
+  const paid = { ...enrolment, orderId: 'order-secret' };
+
+  it('is returned without the orderId by enrol', async () => {
+    storedEnrolment(paid);
+    const result = await callAsUser().enrol({ courseId: 'course-1' });
+    expect(result).toEqual(enrolment);
+    expect(result).not.toHaveProperty('orderId');
+  });
+
+  it('is returned without the orderId by myEnrolment', async () => {
+    storedEnrolment(paid);
+    const result = await callAsUser().myEnrolment({ courseId: 'course-1' });
+    expect(result).toEqual(enrolment);
+    expect(result).not.toHaveProperty('orderId');
+  });
+});
+
 describe('myEnrolment', () => {
   it('returns the caller’s enrolment in the course', async () => {
     await expect(

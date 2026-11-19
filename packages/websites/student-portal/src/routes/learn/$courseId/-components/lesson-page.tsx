@@ -7,6 +7,7 @@ import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle, CircleCheck, FileX } from 'lucide-react';
 import { Fragment } from 'react';
+import type { PlayerItem } from '../../../../hooks/use-course-player';
 import { ContentItem, ITEM_TYPES, itemAnchor } from './content-item';
 import {
   CompletedWithNew,
@@ -15,7 +16,6 @@ import {
 } from './course-player';
 import { QuestionsSection } from './discussion/questions-section';
 import { useQuizFailed } from './quiz-item';
-import type { PlayerItem } from './use-course-player';
 
 // One item as a step: ✓ done, ⚠ a quiz finished without passing, or the
 // item's type. It scrolls to the item on this page.

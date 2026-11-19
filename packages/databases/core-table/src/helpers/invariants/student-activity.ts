@@ -198,7 +198,10 @@ export const checkProgressMatchesCompletions = (
 };
 
 // completedAt is set exactly when the status is completed, on lesson
-// progress and on enrolments: the recalculation sets both together.
+// progress and on enrolments: the recalculation sets both together. An
+// enrolment widens it: a refund ends a completed enrolment (`dropped`)
+// without clearing the date, so `dropped` may carry a completedAt too. Even
+// so, completed still needs its date, and an active one can't have one.
 export const checkCompletedAtIffCompleted = (
   snapshot: TableSnapshot,
 ): Violation[] =>
@@ -208,17 +211,20 @@ export const checkCompletedAtIffCompleted = (
         record: { userId, courseId, lessonId },
         status,
         completedAt,
+        allowedWithDate: ['completed'] as string[],
       }),
     ),
     ...snapshot.enrolments.map(({ userId, courseId, status, completedAt }) => ({
       record: { userId, courseId },
       status,
       completedAt,
+      allowedWithDate: ['completed', 'dropped'] as string[],
     })),
   ]
     .filter(
-      ({ status, completedAt }) =>
-        (status === 'completed') !== (completedAt !== undefined),
+      ({ status, completedAt, allowedWithDate }) =>
+        (status === 'completed' && completedAt === undefined) ||
+        (completedAt !== undefined && !allowedWithDate.includes(status)),
     )
     .map(({ record, status, completedAt }) =>
       violation(

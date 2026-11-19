@@ -11,6 +11,7 @@ import {
   publishCourse,
   restoreCourse,
   setCourseCertificates,
+  setCoursePrice,
   viewCourse,
 } from './course.js';
 
@@ -20,6 +21,8 @@ const {
   coursePreviewGet,
   coursePatch,
   coursePatchSet,
+  coursePatchRemove,
+  paymentConnectionGet,
   coursePatchWhere,
   coursePatchGo,
   coursePatchCommit,
@@ -41,6 +44,8 @@ const {
   coursePreviewGet: vi.fn(),
   coursePatch: vi.fn(),
   coursePatchSet: vi.fn(),
+  coursePatchRemove: vi.fn(),
+  paymentConnectionGet: vi.fn(),
   coursePatchWhere: vi.fn(),
   coursePatchGo: vi.fn(),
   coursePatchCommit: vi.fn(),
@@ -69,6 +74,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
         patch: coursePatch,
       },
       coursePreview: { get: coursePreviewGet },
+      paymentConnection: { get: paymentConnectionGet },
       courseInstructor: {
         create: courseInstructorCreate,
         get: courseInstructorGet,
@@ -93,6 +99,7 @@ const router = t.router({
   publishCourse,
   restoreCourse,
   setCourseCertificates,
+  setCoursePrice,
   viewCourse,
 });
 const caller = t.createCallerFactory(router);
@@ -116,6 +123,8 @@ const course = {
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
   certificatesEnabled: true,
+  priceAmount: 0,
+  priceCurrency: 'USD',
 };
 
 type CheckCondition = (
@@ -161,6 +170,15 @@ beforeEach(() => {
   coursePatchSet.mockReturnValue({
     go: coursePatchGo,
     where: coursePatchWhere,
+    remove: coursePatchRemove,
+  });
+  coursePatchRemove.mockReturnValue({
+    go: coursePatchGo,
+    where: coursePatchWhere,
+  });
+  // Payments are connected, unless a test says otherwise.
+  paymentConnectionGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: { status: 'active' } }),
   });
   coursePatchWhere.mockReturnValue({
     go: coursePatchGo,
@@ -270,6 +288,14 @@ describe('createCourse', () => {
     const [courseArgs] = courseCreate.mock.calls[0];
     const [instructorArgs] = courseInstructorCreate.mock.calls[0];
     expect(instructorArgs.courseId).toBe(courseArgs.courseId);
+  });
+
+  it('creates a course free, in USD, with no pricedAt', async () => {
+    await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    expect(courseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ priceAmount: 0, priceCurrency: 'USD' }),
+    );
+    expect(courseCreate.mock.calls[0]?.[0]).not.toHaveProperty('pricedAt');
   });
 
   it('stores certificatesEnabled: true on a new course', async () => {
@@ -987,6 +1013,202 @@ describe('setCourseCertificates', () => {
 
     // The entity mock above has no `certificate` entity, so a touch would
     // throw; the course patch is the only write to the course table.
+    expect(coursePatch).toHaveBeenCalledTimes(1);
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe('setCoursePrice', () => {
+  const input = {
+    courseId: course.courseId,
+    priceAmount: 1999,
+    priceCurrency: 'EUR',
+  };
+  const readCourse = (priceAmount: number, pricedAt?: string) =>
+    courseGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { ...course, priceAmount, ...(pricedAt && { pricedAt }) },
+      }),
+    });
+  // The condition the patch was given, run against a recording stub.
+  const patchCondition = () => {
+    const eq = vi.fn(() => 'eq');
+    const where = coursePatchWhere.mock.calls.at(-1)?.[0] as (
+      attr: Record<string, string>,
+      op: { eq: typeof eq },
+    ) => string;
+    where({ priceAmount: 'priceAmount' }, { eq });
+    return eq.mock.calls[0];
+  };
+
+  it('rejects callers who are not in the instructor group before checking course membership', async () => {
+    await expect(
+      callAs(['student']).setCoursePrice(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(courseInstructorGet).not.toHaveBeenCalled();
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('throws FORBIDDEN when the caller does not teach the course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: undefined }),
+    });
+    await expect(callAs().setCoursePrice(input)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('sets a price, with pricedAt, on a free course', async () => {
+    readCourse(0);
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, priceAmount: 1999, priceCurrency: 'EUR' },
+    });
+
+    const result = await callAs().setCoursePrice(input);
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      priceAmount: 1999,
+      priceCurrency: 'EUR',
+      pricedAt: expect.any(String),
+    });
+    expect(coursePatchRemove).not.toHaveBeenCalled();
+    expect(patchCondition()).toEqual(['priceAmount', 0]);
+    expect(result).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+  });
+
+  it('keeps pricedAt when one price changes to another', async () => {
+    readCourse(500, '2024-02-01T00:00:00.000Z');
+    await callAs().setCoursePrice(input);
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      priceAmount: 1999,
+      priceCurrency: 'EUR',
+    });
+    expect(coursePatchRemove).not.toHaveBeenCalled();
+    expect(patchCondition()).toEqual(['priceAmount', 500]);
+  });
+
+  it('clears the price and removes pricedAt', async () => {
+    readCourse(500, '2024-02-01T00:00:00.000Z');
+    await callAs().setCoursePrice({ ...input, priceAmount: 0 });
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      priceAmount: 0,
+      priceCurrency: 'EUR',
+    });
+    expect(coursePatchRemove).toHaveBeenCalledWith(['pricedAt']);
+  });
+
+  it.each([
+    ['a non-integer', { priceAmount: 10.5 }],
+    ['99', { priceAmount: 99 }],
+    ['1,000,001', { priceAmount: 1_000_001 }],
+    ['a negative amount', { priceAmount: -100 }],
+    ['an unsupported currency', { priceCurrency: 'JPY' }],
+  ])('refuses %s and writes nothing', async (_name, change) => {
+    await expect(
+      callAs().setCoursePrice({ ...input, ...change }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['changing', { status: 'changing' }],
+    ['disconnected', { status: 'disconnected' }],
+  ])(
+    'refuses a non-zero price when the connection is %s',
+    async (_name, record) => {
+      paymentConnectionGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({ data: record }),
+      });
+
+      await expect(callAs().setCoursePrice(input)).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: "Payments aren't set up yet; ask an administrator",
+      });
+      expect(coursePatch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still sets a course to free when payments are not connected', async () => {
+    paymentConnectionGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: undefined }),
+    });
+    readCourse(500, '2024-02-01T00:00:00.000Z');
+
+    await callAs().setCoursePrice({ ...input, priceAmount: 0 });
+
+    expect(paymentConnectionGet).not.toHaveBeenCalled();
+    expect(coursePatchRemove).toHaveBeenCalledWith(['pricedAt']);
+  });
+
+  it.each(['draft', 'published', 'archived'] as const)(
+    'prices a %s course',
+    async (status) => {
+      coursePatchGo.mockResolvedValueOnce({
+        data: { ...course, status, priceAmount: 1999 },
+      });
+      const result = await callAs().setCoursePrice(input);
+      expect(result.status).toBe(status);
+    },
+  );
+
+  it("moves updatedAt and every instructor's courseUpdatedAt", async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: {
+        ...course,
+        priceAmount: 1999,
+        updatedAt: '2024-03-01T00:00:00.000Z',
+      },
+    });
+    courseInstructorQueryPrimary.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [
+          { courseId: course.courseId, instructorId: INSTRUCTOR_SUB },
+          { courseId: course.courseId, instructorId: 'co-instructor' },
+        ],
+      }),
+    });
+
+    const result = await callAs().setCoursePrice(input);
+
+    expect(result.updatedAt).toBe('2024-03-01T00:00:00.000Z');
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: course.courseId,
+      instructorId: 'co-instructor',
+    });
+    expect(courseInstructorPatchSet).toHaveBeenCalledWith({
+      courseUpdatedAt: '2024-03-01T00:00:00.000Z',
+    });
+  });
+
+  it('retries once from the new state when the amount moved, then gives up with CONFLICT', async () => {
+    const failed = Object.assign(new Error('conditional'), {
+      cause: Object.assign(new Error('conditional'), {
+        name: 'ConditionalCheckFailedException',
+      }),
+    });
+    coursePatchGo.mockRejectedValueOnce(failed);
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, priceAmount: 1999 },
+    });
+    await expect(callAs().setCoursePrice(input)).resolves.toMatchObject({
+      priceAmount: 1999,
+    });
+    expect(coursePatchGo).toHaveBeenCalledTimes(2);
+
+    coursePatchGo.mockReset();
+    coursePatchGo.mockRejectedValue(failed);
+    await expect(callAs().setCoursePrice(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('never touches orders or enrolments', async () => {
+    await callAs().setCoursePrice(input);
+    // The entity mock has neither entity, so a touch would throw.
     expect(coursePatch).toHaveBeenCalledTimes(1);
     expect(transactionWrite).not.toHaveBeenCalled();
   });

@@ -34,7 +34,7 @@ import {
   lessonDueAt,
   type PlayerModule,
   useCoursePlayer,
-} from './use-course-player';
+} from '../../../../hooks/use-course-player';
 
 export type { CoursePlayer };
 

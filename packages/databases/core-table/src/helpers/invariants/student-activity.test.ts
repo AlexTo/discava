@@ -186,6 +186,20 @@ describe('completed-at-iff-completed', () => {
     table.enrolments[0].status = 'completed';
     expectOnly('completed-at-iff-completed', /completedAt is not set/);
   });
+
+  // A refund ends a completed enrolment without clearing the date.
+  it('accepts a dropped enrolment with or without completedAt', () => {
+    table.enrolments[0].status = 'dropped';
+    table.enrolments[0].completedAt = T;
+    expect(broken().invariants).not.toContain('completed-at-iff-completed');
+    table.enrolments[0].completedAt = undefined;
+    expect(broken().invariants).not.toContain('completed-at-iff-completed');
+  });
+
+  it('still reports an active enrolment with completedAt', () => {
+    table.enrolments[0].completedAt = T;
+    expectOnly('completed-at-iff-completed', /the status is active/);
+  });
 });
 
 describe('student-records-have-targets', () => {

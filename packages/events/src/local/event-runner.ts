@@ -42,6 +42,7 @@ import { pollStream } from './dynamodb-stream.js';
 import { createEmailInbox } from './email-inbox.js';
 import { startEventRunnerServer } from './event-runner-server.js';
 import { createFeatureRunner } from './feature-runner.js';
+import { createStripeStandIn } from './stripe-stand-in.js';
 import { createTranscoder, type Docker } from './transcoder.js';
 import { createTranscriber } from './transcriber.js';
 import {
@@ -269,6 +270,7 @@ const emailInbox = createEmailInbox({
 
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
+  stripe: createStripeStandIn({ log }),
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
   submitTranscriptionJob: (request) => transcriber.submit(request),

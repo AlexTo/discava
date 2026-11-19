@@ -24,10 +24,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
-import {
-  ACCEPTED_VIDEO_TYPES,
-  putFileWithProgress,
-} from '../content-items/attach-lesson-video-dialog';
+import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
+import { ACCEPTED_VIDEO_TYPES } from '../content-items/attach-lesson-video-dialog';
 import { readVideoDuration } from './read-video-duration';
 
 // The cap the API enforces (core-table's PREVIEW_MAX_SECONDS).
@@ -118,7 +116,13 @@ export function PreviewVideoArea({
         courseId,
         fileName: file.name,
       });
-      await putFileWithProgress(uploadUrl, file, setProgress);
+      await putFileWithProgress(
+        uploadUrl,
+        { 'Content-Type': file.type },
+        file,
+        setProgress,
+        'Failed to upload the video file',
+      );
       const input = {
         courseId,
         rawKey: objectKey,

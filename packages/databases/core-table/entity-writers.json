@@ -32,6 +32,7 @@
       "packages/events/src/media/transcode-reconciler.ts"
     ],
     "instructor-api": [
+      "packages/apis/instructor-api/src/helpers/video-replacement.ts",
       "packages/apis/instructor-api/src/procedures/assignment.ts",
       "packages/apis/instructor-api/src/procedures/content-item-captions.ts",
       "packages/apis/instructor-api/src/procedures/content-item-file.ts",
@@ -41,6 +42,16 @@
       "packages/apis/instructor-api/src/procedures/content-item-video.ts",
       "packages/apis/instructor-api/src/procedures/lesson.ts",
       "packages/apis/instructor-api/src/procedures/module.ts"
+    ]
+  },
+  "coupon": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/coupon-redemption.ts"
+    ]
+  },
+  "couponRedemption": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/coupon-redemption.ts"
     ]
   },
   "course": {
@@ -94,6 +105,7 @@
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
+      "packages/databases/core-table/src/helpers/order.ts",
       "packages/databases/core-table/src/helpers/student-activity.ts"
     ],
     "events": ["packages/events/src/progress/recalculate.ts"]
@@ -152,6 +164,20 @@
     "core-table": [
       "packages/databases/core-table/src/helpers/notification-read.ts",
       "packages/databases/core-table/src/helpers/notification.ts"
+    ]
+  },
+  "order": {
+    "core-table": ["packages/databases/core-table/src/helpers/order.ts"]
+  },
+  "paymentChange": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/payment-connection.ts"
+    ]
+  },
+  "paymentConnection": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/order.ts",
+      "packages/databases/core-table/src/helpers/payment-connection.ts"
     ]
   },
   "periodStats": {

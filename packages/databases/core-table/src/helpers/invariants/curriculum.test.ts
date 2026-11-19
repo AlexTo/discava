@@ -51,6 +51,27 @@ describe('instructor-course-updated-at', () => {
     expect(broken().invariants).toEqual([]);
   });
 
+  // course.setPrice writes priceAmount and priceCurrency, which move the
+  // course's updatedAt; an instructor row left behind is a violation.
+  it('reports a price change that did not move courseUpdatedAt', () => {
+    const course = table.courses[0];
+    course.priceAmount = 1999;
+    course.pricedAt = '2030-01-01T00:00:00.000Z';
+    course.updatedAt = '2030-01-01T00:00:00.000Z';
+    expectOnly('instructor-course-updated-at');
+  });
+
+  it('accepts a price change that moved courseUpdatedAt', () => {
+    const course = table.courses[0];
+    course.priceAmount = 1999;
+    course.pricedAt = '2030-01-01T00:00:00.000Z';
+    course.updatedAt = '2030-01-01T00:00:00.000Z';
+    for (const row of table.courseInstructors) {
+      row.courseUpdatedAt = course.updatedAt;
+    }
+    expect(broken().invariants).toEqual([]);
+  });
+
   it('accepts a landing write that synced courseUpdatedAt', () => {
     const course = table.courses[0];
     course.learningOutcomes = ['Build a thing'];

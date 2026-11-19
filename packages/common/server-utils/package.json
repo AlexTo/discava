@@ -22,6 +22,7 @@
     "aws-xray-sdk-core": "catalog:",
     "cors": "catalog:",
     "electrodb": "catalog:",
+    "stripe": "catalog:",
     "tslib": "^2.3.0",
     "zod": "catalog:"
   },

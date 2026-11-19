@@ -21,7 +21,7 @@ import { useInstructorApi } from '../../../api';
 import {
   type CourseStatus,
   courseStatusStyles,
-} from '../../../components/course-status';
+} from '../../../lib/course-status';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,

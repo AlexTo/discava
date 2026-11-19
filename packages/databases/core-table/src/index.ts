@@ -141,6 +141,27 @@ export {
   transcodePendingFrom,
 } from './helpers/content-item.js';
 export {
+  generateCouponCode,
+  normaliseCouponCode,
+} from './helpers/coupon-code.js';
+export {
+  belowMinimumCharge,
+  type CouponPrice,
+  MIN_CHARGE_MINOR,
+  minimumCharge,
+  type PricedCoupon,
+  priceWithCoupon,
+} from './helpers/coupon-price.js';
+export {
+  COUPON_REFUSALS,
+  type CouponClaim,
+  type CouponStatus,
+  claimCouponWrites,
+  confirmCouponWrites,
+  couponStatus,
+  releaseCouponWrites,
+} from './helpers/coupon-redemption.js';
+export {
   type CourseCatalogue,
   courseCatalogueWrites,
 } from './helpers/course-catalogue.js';
@@ -178,6 +199,8 @@ export {
   type PostIdCheck,
   type PostIdProblem,
   postIdTime,
+  toPostRead,
+  toQuestionRead,
 } from './helpers/discussion.js';
 export {
   DISCUSSION_EXCERPT_MAX,
@@ -265,6 +288,42 @@ export {
   type NotificationPortal,
   type NotificationType,
 } from './helpers/notification-types.js';
+export {
+  attachCheckoutSession,
+  CHECKOUT_REUSE_MARGIN_SECONDS,
+  CHECKOUT_TTL_SECONDS,
+  expireOrder,
+  findOpenOrder,
+  type OrderConnection,
+  type OrderCourse,
+  type OrderRecord,
+  PaymentsUnavailableError,
+  type RestoreResult,
+  refundOrder,
+  refundUndeliverable,
+  restoreFreeEnrolment,
+  type SettleResult,
+  settleOrderPaid,
+  startOrder,
+} from './helpers/order.js';
+export {
+  type Actor,
+  abandonChange,
+  beginChange,
+  CHANGE_LIST_LIMIT,
+  ChangeInProgressError,
+  type ConnectionFacts,
+  completeConnection,
+  completeDisconnect,
+  getConnection,
+  LEASE_SECONDS,
+  listChanges,
+  OpenCheckoutError,
+  type PaymentChangeRecord,
+  type PaymentConnectionRecord,
+  recordChange,
+  rotateKey,
+} from './helpers/payment-connection.js';
 export {
   type Curriculum,
   computeProgress,

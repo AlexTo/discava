@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { matchesProgressStreamFilters } from './progress-stream.js';
+import {
+  matchesProgressStreamFilters,
+  PROGRESS_STREAM_FILTERS,
+} from './progress-stream.js';
 
 const record = (
   eventName: string,
@@ -74,8 +77,40 @@ describe('matchesProgressStreamFilters', () => {
       [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
       [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
     ]),
+    // Payments: an order's writes and the Stripe connection records change no
+    // item, so no progress; an enrolment restored or ended by a refund is an
+    // enrolment write, which is already left out above.
+    ...['order', 'paymentConnection', 'paymentChange'].flatMap((entity) => [
+      [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
+      [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
+    ]),
+    [
+      'an enrolment restored or ended',
+      record('MODIFY', 'NewImage', 'enrolment'),
+    ],
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);
   });
+});
+
+describe('matchesProgressStreamFilters for coupon records', () => {
+  // Coupons and redemptions change no item and no course document, so no
+  // feature reads them.
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)(
+    'ignores a %s of a coupon or a redemption',
+    (eventName, image) => {
+      for (const entity of ['coupon', 'couponRedemption']) {
+        const streamRecord = record(eventName, image, entity);
+        expect(matchesProgressStreamFilters(streamRecord)).toBe(false);
+        for (const filter of PROGRESS_STREAM_FILTERS) {
+          expect(JSON.stringify(filter)).not.toContain(entity);
+        }
+      }
+    },
+  );
 });

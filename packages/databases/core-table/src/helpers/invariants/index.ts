@@ -9,11 +9,13 @@ import {
 import { CATALOGUE_CHECKS } from './catalogue.js';
 import { CERTIFICATES_CHECKS } from './certificates.js';
 import type { Violation } from './common.js';
+import { COUPONS_CHECKS } from './coupons.js';
 import { CURRICULUM_CHECKS } from './curriculum.js';
 import { DISCUSSION_CHECKS } from './discussion.js';
 import { INSTRUCTOR_PROFILES_CHECKS } from './instructor-profiles.js';
 import { MEDIA_CHECKS } from './media.js';
 import { NOTIFICATIONS_CHECKS } from './notifications.js';
+import { PAYMENTS_CHECKS } from './payments.js';
 import { REVIEWS_CHECKS } from './reviews.js';
 import type { TableSnapshot } from './snapshot.js';
 import { STUDENT_ACTIVITY_CHECKS } from './student-activity.js';
@@ -31,6 +33,8 @@ const CHECKS = [
   ...DISCUSSION_CHECKS,
   ...REVIEWS_CHECKS,
   ...INSTRUCTOR_PROFILES_CHECKS,
+  ...COUPONS_CHECKS,
+  ...PAYMENTS_CHECKS,
 ] as const;
 
 export type InvariantName = (typeof CHECKS)[number]['name'];

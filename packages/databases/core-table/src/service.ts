@@ -11,6 +11,8 @@ import {
   createCategoryEntity,
   createCertificateEntity,
   createContentItemEntity,
+  createCouponEntity,
+  createCouponRedemptionEntity,
   createCourseEntity,
   createCourseInstructorEntity,
   createCoursePreviewEntity,
@@ -28,6 +30,9 @@ import {
   createNotificationEntity,
   createNotificationPreferenceEntity,
   createNotificationStateEntity,
+  createOrderEntity,
+  createPaymentChangeEntity,
+  createPaymentConnectionEntity,
   createPeriodStatsEntity,
   createProfileHandleClaimEntity,
   createProgressEntity,
@@ -79,11 +84,15 @@ export const createCoreTableService = async () => {
     categoryClaim,
     discussionPost,
     discussionVote,
-
+    order,
+    paymentConnection,
+    paymentChange,
     review,
     courseRating,
     instructorProfile,
     profileHandleClaim,
+    coupon,
+    couponRedemption,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -115,11 +124,15 @@ export const createCoreTableService = async () => {
     createCategoryClaimEntity(),
     createDiscussionPostEntity(),
     createDiscussionVoteEntity(),
-
+    createOrderEntity(),
+    createPaymentConnectionEntity(),
+    createPaymentChangeEntity(),
     createReviewEntity(),
     createCourseRatingEntity(),
     createInstructorProfileEntity(),
     createProfileHandleClaimEntity(),
+    createCouponEntity(),
+    createCouponRedemptionEntity(),
   ]);
 
   return new Service({
@@ -153,11 +166,15 @@ export const createCoreTableService = async () => {
     categoryClaim,
     discussionPost,
     discussionVote,
-
+    order,
+    paymentConnection,
+    paymentChange,
     review,
     courseRating,
     instructorProfile,
     profileHandleClaim,
+    coupon,
+    couponRedemption,
   });
 };
 

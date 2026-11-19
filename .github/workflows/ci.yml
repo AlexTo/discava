@@ -29,8 +29,11 @@ jobs:
           fetch-depth: 0
 
       # infra:checkov (part of the build target) invokes checkov via `uvx`, so
-      # this job needs uv (init-monorepo's default).
+      # this job needs uv (init-monorepo's default). Its Nx cache is the one a
+      # pull request's first run falls back to.
       - uses: ./.github/actions/init-monorepo
+        with:
+          nx-cache-scope: main
 
       - name: Lint
         run: pnpm nx run-many --target lint --all

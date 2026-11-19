@@ -15,17 +15,14 @@ import {
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
+import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../api';
-import {
-  type CourseStatus,
-  courseStatusStyles,
-} from '../../components/course-status';
 import { CreateCourseDialog } from '../../components/create-course-dialog';
-import { getUserIdentity } from '../../components/UserMenu/user-profile';
+import { type CourseStatus, courseStatusStyles } from '../../lib/course-status';
 
 export const Route = createFileRoute('/_authenticated/')({
   component: RouteComponent,

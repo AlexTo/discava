@@ -1,0 +1,679 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import {
+  attachCheckoutSession,
+  expireOrder,
+  findOpenOrder,
+  type OrderConnection,
+  type OrderCourse,
+  type OrderRecord,
+  PaymentsUnavailableError,
+  refundOrder,
+  refundUndeliverable,
+  restoreFreeEnrolment,
+  settleOrderPaid,
+  startOrder,
+} from './order.js';
+import { createFakeCoreTable } from './payment-fake.test.js';
+
+const NOW = '2026-11-19T00:00:00.000Z';
+const LATER = '2026-11-19T00:10:00.000Z';
+
+const course: OrderCourse = {
+  courseId: 'course-1',
+  title: 'Intro',
+  status: 'published',
+  priceAmount: 1999,
+  priceCurrency: 'USD',
+};
+const connection: OrderConnection & Record<string, unknown> = {
+  status: 'active',
+  accountId: 'acct_1',
+  revision: 1,
+};
+
+const setup = () => {
+  const fake = createFakeCoreTable();
+  fake.put('course', { ...course });
+  fake.put('paymentConnection', { ...connection });
+  const getConnection = async () =>
+    structuredClone(fake.rows('paymentConnection')[0]) as
+      | OrderConnection
+      | undefined;
+  const start = (now = NOW, userId = 'user-1') =>
+    startOrder({
+      coreTable: fake.coreTable,
+      course,
+      userId,
+      now,
+      getConnection,
+    });
+  return { fake, getConnection, start };
+};
+
+const order = (over: Partial<OrderRecord> = {}): OrderRecord => ({
+  orderId: 'order-1',
+  userId: 'user-1',
+  courseId: 'course-1',
+  accountId: 'acct_1',
+  courseTitle: 'Intro',
+  listAmount: 1999,
+  amount: 1999,
+  currency: 'USD',
+  status: 'pending',
+  expiresAt: '2026-11-19T01:00:00.000Z',
+  ...over,
+});
+
+describe('startOrder', () => {
+  it('creates a pending order from the course and the connection', async () => {
+    const { fake, start } = setup();
+    const created = await start();
+    expect(created).toMatchObject({
+      status: 'pending',
+      listAmount: 1999,
+      amount: 1999,
+      currency: 'USD',
+      courseTitle: 'Intro',
+      accountId: 'acct_1',
+      expiresAt: '2026-11-19T01:00:00.000Z',
+    });
+    expect(fake.rows('order')).toHaveLength(1);
+  });
+
+  it('refuses a free course and an unpublished one, writing nothing', async () => {
+    const { fake, getConnection } = setup();
+    for (const bad of [
+      { ...course, priceAmount: 0 },
+      { ...course, status: 'draft' },
+    ]) {
+      await expect(
+        startOrder({
+          coreTable: fake.coreTable,
+          course: bad,
+          userId: 'u',
+          now: NOW,
+          getConnection,
+        }),
+      ).rejects.toThrow();
+    }
+    expect(fake.rows('order')).toEqual([]);
+  });
+
+  it.each(['changing', 'disconnected'])(
+    'refuses with payments-unavailable while the connection is %s',
+    async (status) => {
+      const { fake, start } = setup();
+      fake.put('paymentConnection', { ...connection, status });
+      await expect(start()).rejects.toBeInstanceOf(PaymentsUnavailableError);
+      expect(fake.rows('order')).toEqual([]);
+    },
+  );
+
+  it('refuses when there is no connection record', async () => {
+    const { fake } = setup();
+    await expect(
+      startOrder({
+        coreTable: fake.coreTable,
+        course,
+        userId: 'u',
+        now: NOW,
+        getConnection: async () => undefined,
+      }),
+    ).rejects.toBeInstanceOf(PaymentsUnavailableError);
+    expect(fake.rows('order')).toEqual([]);
+  });
+
+  it('raises the record expiry and never lowers it', async () => {
+    const { fake, start } = setup();
+    await start(NOW);
+    expect(fake.rows('paymentConnection')[0]?.latestCheckoutExpiresAt).toBe(
+      '2026-11-19T01:00:00.000Z',
+    );
+    await start('2026-11-18T00:00:00.000Z');
+    expect(fake.rows('paymentConnection')[0]?.latestCheckoutExpiresAt).toBe(
+      '2026-11-19T01:00:00.000Z',
+    );
+    await start('2026-11-19T02:00:00.000Z');
+    expect(fake.rows('paymentConnection')[0]?.latestCheckoutExpiresAt).toBe(
+      '2026-11-19T03:00:00.000Z',
+    );
+  });
+
+  it('keeps the larger value when two starts run at once', async () => {
+    const { fake, start } = setup();
+    await Promise.all([
+      start(NOW, 'a'),
+      start('2026-11-19T00:30:00.000Z', 'b'),
+    ]);
+    expect(fake.rows('order')).toHaveLength(2);
+    expect(fake.rows('paymentConnection')[0]?.latestCheckoutExpiresAt).toBe(
+      '2026-11-19T01:30:00.000Z',
+    );
+  });
+
+  it('does not touch the record revision', async () => {
+    const { fake, start } = setup();
+    await start();
+    expect(fake.rows('paymentConnection')[0]?.revision).toBe(1);
+  });
+
+  it('honours a shorter life for local development', async () => {
+    const { fake, getConnection } = setup();
+    const created = await startOrder({
+      coreTable: fake.coreTable,
+      course,
+      userId: 'u',
+      now: NOW,
+      getConnection,
+      ttlSeconds: 30,
+    });
+    expect(created.expiresAt).toBe('2026-11-19T00:00:30.000Z');
+  });
+
+  it('throws after three attempts that lose to contention', async () => {
+    const { fake, getConnection } = setup();
+    let bump = 0;
+    fake.hooks.beforeTransaction = () => {
+      bump++;
+      fake.put('paymentConnection', {
+        ...connection,
+        latestCheckoutExpiresAt: `2027-01-0${bump}T00:00:00.000Z`,
+      });
+    };
+    await expect(
+      startOrder({
+        coreTable: fake.coreTable,
+        course,
+        userId: 'u',
+        now: NOW,
+        getConnection,
+      }),
+    ).rejects.toThrow();
+    expect(fake.log.transactions).toBe(3);
+    expect(fake.rows('order')).toEqual([]);
+  });
+});
+
+describe('attachCheckoutSession and findOpenOrder', () => {
+  const find = (fake: ReturnType<typeof setup>['fake'], userId = 'user-1') =>
+    findOpenOrder({
+      coreTable: fake.coreTable,
+      userId,
+      courseId: 'course-1',
+      now: NOW,
+    });
+
+  it('patches a pending order only', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    fake.put('order', order({ orderId: 'order-2', status: 'paid' }));
+    expect(
+      await attachCheckoutSession(fake.coreTable, order(), {
+        sessionId: 'cs_1',
+        url: 'https://pay',
+      }),
+    ).toBe(true);
+    expect(
+      await attachCheckoutSession(
+        fake.coreTable,
+        order({ orderId: 'order-2' }),
+        {
+          sessionId: 'cs_2',
+          url: 'https://pay',
+        },
+      ),
+    ).toBe(false);
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      checkoutSessionId: 'cs_1',
+      checkoutUrl: 'https://pay',
+    });
+    expect(fake.row('order', { orderId: 'order-2' })).not.toHaveProperty(
+      'checkoutSessionId',
+    );
+  });
+
+  it('finds the open one', async () => {
+    const { fake } = setup();
+    fake.put('order', order({ checkoutSessionId: 'cs_1' }));
+    expect((await find(fake))?.orderId).toBe('order-1');
+  });
+
+  it('does not find one with no session, an expired one, one ending within 5 minutes, a paid one or another student’s', async () => {
+    const { fake } = setup();
+    fake.put('order', order({ orderId: 'a' }));
+    fake.put(
+      'order',
+      order({
+        orderId: 'b',
+        checkoutSessionId: 's',
+        expiresAt: '2026-11-18T23:00:00.000Z',
+      }),
+    );
+    fake.put(
+      'order',
+      order({
+        orderId: 'c',
+        checkoutSessionId: 's',
+        expiresAt: '2026-11-19T00:04:59.000Z',
+      }),
+    );
+    fake.put(
+      'order',
+      order({ orderId: 'd', checkoutSessionId: 's', status: 'paid' }),
+    );
+    fake.put(
+      'order',
+      order({ orderId: 'e', checkoutSessionId: 's', userId: 'other' }),
+    );
+    expect(await find(fake)).toBeUndefined();
+  });
+});
+
+describe('settleOrderPaid', () => {
+  const settle = (fake: ReturnType<typeof setup>['fake'], id = 'order-1') =>
+    settleOrderPaid({
+      coreTable: fake.coreTable,
+      order: { orderId: id },
+      paymentIntentId: 'pi_1',
+      now: LATER,
+    });
+
+  it('enrols a new student with the order', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    expect(await settle(fake)).toEqual({ result: 'fulfilled' });
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'paid',
+      paidAt: LATER,
+      paymentIntentId: 'pi_1',
+    });
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' }),
+    ).toMatchObject({ orderId: 'order-1', courseId: 'course-1' });
+  });
+
+  it.each([
+    ['with completedAt', { completedAt: 'x' }, 'completed'],
+    ['without it', {}, 'active'],
+  ])(
+    'restores a dropped student %s, keeping progress',
+    async (_n, extra, status) => {
+      const { fake } = setup();
+      fake.put('order', order({ orderId: 'order-2' }));
+      fake.put('enrolment', {
+        courseId: 'course-1',
+        userId: 'user-1',
+        status: 'dropped',
+        progressPercent: 40,
+        orderId: 'order-1',
+        ...extra,
+      });
+      fake.put('order', order({ status: 'refunded' }));
+      expect(await settle(fake, 'order-2')).toEqual({ result: 'fulfilled' });
+      expect(
+        fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' }),
+      ).toMatchObject({ status, progressPercent: 40, orderId: 'order-2' });
+    },
+  );
+
+  it.each(['active', 'completed'])(
+    'reports a duplicate for an %s enrolment and writes nothing',
+    async (status) => {
+      const { fake } = setup();
+      fake.put('order', order());
+      fake.put('enrolment', { courseId: 'course-1', userId: 'user-1', status });
+      expect(await settle(fake)).toEqual({
+        result: 'undeliverable',
+        reason: 'duplicate',
+      });
+      expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('pending');
+    },
+  );
+
+  it.each(['draft', 'archived', undefined])(
+    'reports a course that is %s as unavailable',
+    async (status) => {
+      const { fake } = setup();
+      fake.put('order', order());
+      if (status) fake.put('course', { ...course, status });
+      else fake.rows('course').length = 0;
+      if (!status) {
+        const other = createFakeCoreTable();
+        other.put('order', order());
+        expect(await settle(other)).toEqual({
+          result: 'undeliverable',
+          reason: 'unavailable',
+        });
+        return;
+      }
+      expect(await settle(fake)).toEqual({
+        result: 'undeliverable',
+        reason: 'unavailable',
+      });
+      expect(fake.rows('enrolment')).toEqual([]);
+    },
+  );
+
+  it('settles the same order twice, and twice at once, into one enrolment', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    const results = await Promise.all([
+      settle(fake),
+      settle(fake),
+      settle(fake),
+    ]);
+    expect(results.filter((r) => r.result === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.result === 'already-settled')).toHaveLength(
+      2,
+    );
+    expect(fake.rows('enrolment')).toHaveLength(1);
+    expect(await settle(fake)).toEqual({ result: 'already-settled' });
+  });
+
+  it('never marks the order paid when the enrolment write fails', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    // An enrolment appears between the read and the write.
+    fake.hooks.beforeTransaction = () => {
+      fake.hooks.beforeTransaction = undefined;
+      fake.put('enrolment', {
+        courseId: 'course-1',
+        userId: 'user-1',
+        status: 'active',
+      });
+    };
+    expect(await settle(fake)).toEqual({
+      result: 'undeliverable',
+      reason: 'duplicate',
+    });
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('pending');
+  });
+
+  it('throws after three cancelled attempts', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    // A competing writer keeps changing the course between the read and the
+    // write, so the transaction is cancelled every time.
+    fake.hooks.beforeTransaction = () => {
+      fake.put('enrolment', {
+        courseId: 'course-1',
+        userId: 'user-1',
+        status: 'dropped',
+      });
+      fake.put('course', { ...course, status: 'archived' });
+    };
+    const reads = fake.coreTable.entities.course;
+    const realGet = reads.get;
+    let count = 0;
+    reads.get = ((key: { courseId: string }) => {
+      count++;
+      fake.put('course', { ...course, status: 'published' });
+      return realGet(key);
+    }) as typeof reads.get;
+    await expect(settle(fake)).rejects.toThrow();
+    expect(count).toBe(3);
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('pending');
+  });
+});
+
+describe('expireOrder and refundUndeliverable', () => {
+  it('expires a pending order and leaves any other alone', async () => {
+    const { fake } = setup();
+    fake.put('order', order());
+    fake.put('order', order({ orderId: 'p', status: 'paid' }));
+    await expireOrder(fake.coreTable, { orderId: 'order-1' });
+    await expireOrder(fake.coreTable, { orderId: 'p' });
+    expect(fake.row('order', { orderId: 'order-1' })?.status).toBe('expired');
+    expect(fake.row('order', { orderId: 'p' })?.status).toBe('paid');
+  });
+
+  it.each(['duplicate', 'unavailable', 'mismatch'] as const)(
+    'refunds an undeliverable order for %s in full',
+    async (reason) => {
+      const { fake } = setup();
+      fake.put('order', order());
+      await refundUndeliverable(
+        fake.coreTable,
+        { orderId: 'order-1' },
+        reason,
+        LATER,
+      );
+      expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+        status: 'refunded',
+        refundReason: reason,
+        refundedAt: LATER,
+        refundedAmount: 1999,
+        paidAt: LATER,
+      });
+    },
+  );
+
+  it('keeps an existing paidAt and does nothing the second time', async () => {
+    const { fake } = setup();
+    fake.put('order', order({ paidAt: NOW }));
+    await refundUndeliverable(
+      fake.coreTable,
+      { orderId: 'order-1' },
+      'duplicate',
+      LATER,
+    );
+    await refundUndeliverable(
+      fake.coreTable,
+      { orderId: 'order-1' },
+      'unavailable',
+      'later',
+    );
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      paidAt: NOW,
+      refundReason: 'duplicate',
+      refundedAt: LATER,
+    });
+  });
+});
+
+describe('refundOrder', () => {
+  const paid = (over: Partial<OrderRecord> = {}) =>
+    order({ status: 'paid', paidAt: NOW, paymentIntentId: 'pi', ...over });
+  const refund = (
+    fake: ReturnType<typeof setup>['fake'],
+    total: number,
+    id = 'order-1',
+  ) =>
+    refundOrder({
+      coreTable: fake.coreTable,
+      order: { orderId: id },
+      refundedTotal: total,
+      now: LATER,
+    });
+
+  it('refunds in full: the order and the enrolment end together', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'completed',
+      completedAt: 'x',
+      orderId: 'order-1',
+    });
+    await refund(fake, 1999);
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'refunded',
+      refundReason: 'requested',
+      refundedAt: LATER,
+      refundedAmount: 1999,
+    });
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' }),
+    ).toMatchObject({
+      status: 'dropped',
+      completedAt: 'x',
+      orderId: 'order-1',
+    });
+  });
+
+  it('raises refundedAmount for a partial refund and never lowers it', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      orderId: 'order-1',
+    });
+    await refund(fake, 500);
+    await refund(fake, 300);
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'paid',
+      refundedAmount: 500,
+    });
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' })?.status,
+    ).toBe('active');
+    await refund(fake, 700);
+    expect(fake.row('order', { orderId: 'order-1' })?.refundedAmount).toBe(700);
+  });
+
+  it('is a no-op the second time, and for a pending order', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    fake.put('order', order({ orderId: 'pending' }));
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      orderId: 'order-1',
+    });
+    await refund(fake, 1999);
+    await refund(fake, 1999);
+    await refund(fake, 1999, 'pending');
+    expect(fake.row('order', { orderId: 'order-1' })?.refundedAt).toBe(LATER);
+    expect(fake.row('order', { orderId: 'pending' })?.status).toBe('pending');
+  });
+
+  it('leaves a newer enrolment alone when an old order is refunded again', async () => {
+    const { fake } = setup();
+    fake.put(
+      'order',
+      order({
+        status: 'refunded',
+        refundReason: 'requested',
+        refundedAt: NOW,
+        refundedAmount: 1999,
+        paidAt: NOW,
+      }),
+    );
+    fake.put('order', paid({ orderId: 'order-2' }));
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+      orderId: 'order-2',
+    });
+    await refund(fake, 1999, 'order-1');
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' })?.status,
+    ).toBe('active');
+  });
+});
+
+describe('restoreFreeEnrolment', () => {
+  const free = { ...course, priceAmount: 0 };
+  const restore = (fake: ReturnType<typeof setup>['fake']) =>
+    restoreFreeEnrolment({
+      coreTable: fake.coreTable,
+      courseId: 'course-1',
+      userId: 'user-1',
+    });
+  const dropped = (extra = {}) => ({
+    courseId: 'course-1',
+    userId: 'user-1',
+    status: 'dropped',
+    progressPercent: 60,
+    orderId: 'order-1',
+    ...extra,
+  });
+
+  it.each([
+    [{ completedAt: 'x' }, 'completed'],
+    [{}, 'active'],
+  ])(
+    'restores a dropped enrolment (%j) to %s without its order',
+    async (extra, status) => {
+      const { fake } = setup();
+      fake.put('course', free);
+      fake.put('enrolment', dropped(extra));
+      expect(await restore(fake)).toBe('restored');
+      const row = fake.row('enrolment', {
+        courseId: 'course-1',
+        userId: 'user-1',
+      });
+      expect(row).toMatchObject({ status, progressPercent: 60 });
+      expect(row).not.toHaveProperty('orderId');
+      expect(fake.rows('order')).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['priced', course],
+    ['draft', { ...free, status: 'draft' }],
+    ['archived', { ...free, status: 'archived' }],
+  ])('refuses a %s course and writes nothing', async (_n, c) => {
+    const { fake } = setup();
+    fake.put('course', c);
+    fake.put('enrolment', dropped());
+    expect(await restore(fake)).toBe('course-unavailable');
+    expect(
+      fake.row('enrolment', { courseId: 'course-1', userId: 'user-1' })?.status,
+    ).toBe('dropped');
+  });
+
+  it.each(['active', 'completed'])(
+    'reports %s as not dropped',
+    async (status) => {
+      const { fake } = setup();
+      fake.put('course', free);
+      fake.put('enrolment', dropped({ status }));
+      expect(await restore(fake)).toBe('not-dropped');
+    },
+  );
+
+  it('gives one restored and one not-dropped for two calls at once', async () => {
+    const { fake } = setup();
+    fake.put('course', free);
+    fake.put('enrolment', dropped());
+    const results = await Promise.all([restore(fake), restore(fake)]);
+    expect(results.sort()).toEqual(['not-dropped', 'restored']);
+  });
+
+  it('racing a paid settlement ends with one winner', async () => {
+    const { fake } = setup();
+    fake.put('course', free);
+    fake.put('enrolment', dropped());
+    fake.put('order', order({ orderId: 'order-2' }));
+    const [restored, settled] = await Promise.all([
+      restore(fake),
+      settleOrderPaid({
+        coreTable: fake.coreTable,
+        order: { orderId: 'order-2' },
+        paymentIntentId: 'pi',
+        now: LATER,
+      }),
+    ]);
+    const enrolment = fake.row('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+    });
+    expect(enrolment?.status).not.toBe('dropped');
+    const restoredWon = restored === 'restored';
+    const settledWon = settled.result === 'fulfilled';
+    expect(restoredWon).not.toBe(settledWon);
+    if (restoredWon) expect(enrolment).not.toHaveProperty('orderId');
+    else expect(enrolment?.orderId).toBe('order-2');
+  });
+});

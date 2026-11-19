@@ -59,6 +59,7 @@ import {
   publishCourse,
   restoreCourse,
   setCourseCertificates,
+  setCoursePrice,
   viewCourse,
 } from './procedures/course.js';
 import {
@@ -142,6 +143,7 @@ export const appRouter = router({
     publish: publishCourse,
     restore: restoreCourse,
     setCertificates: setCourseCertificates,
+    setPrice: setCoursePrice,
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,

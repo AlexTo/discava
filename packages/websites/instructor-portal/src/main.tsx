@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * Copyright Discava Contributors. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
+import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
@@ -18,7 +15,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useAuth } from 'react-oidc-context';
 import { CoreApiClientProvider, InstructorApiClientProvider } from './api';
-import CognitoAuth from './components/CognitoAuth';
 import { LOCAL_DEV_CONFIG } from './local-dev-config';
 import { router } from './router';
 import './styles.css';
@@ -37,7 +33,12 @@ root &&
         localDevConfig={LOCAL_DEV_CONFIG}
         fallback={<Spinner />}
       >
-        <CognitoAuth>
+        <CognitoAuth
+          // Runs above <RouterProvider>, so useNavigate isn't available here:
+          // navigate via the router instance directly instead of
+          // window.location.replace, to avoid a full page reload.
+          onReturn={(path) => router.navigate({ href: path, replace: true })}
+        >
           <QueryClientProvider>
             <InstructorApiClientProvider>
               <CoreApiClientProvider>

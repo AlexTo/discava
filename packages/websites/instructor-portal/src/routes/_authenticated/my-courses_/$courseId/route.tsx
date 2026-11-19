@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDescription,
@@ -25,17 +26,17 @@ import {
   Tags,
 } from 'lucide-react';
 import { useInstructorApi } from '../../../../api';
-import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import {
   type CourseStatus,
   courseStatusStyles,
-} from '../../../../components/course-status';
+} from '../../../../lib/course-status';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
 import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
+import { CoursePriceForm } from './-components/course/course-price-form';
 import { CourseStatusActions } from './-components/course/course-status-actions';
 import { LandingPageCard } from './-components/course/landing-page-card';
 import { LandingPageChecklist } from './-components/course/landing-page-checklist';
@@ -188,6 +189,13 @@ function RouteComponent() {
             <CourseCertificatesSwitch
               courseId={course.courseId}
               certificatesEnabled={course.certificatesEnabled}
+            />
+          </div>
+          <div className="mt-4 border-t pt-4">
+            <CoursePriceForm
+              courseId={course.courseId}
+              priceAmount={course.priceAmount}
+              priceCurrency={course.priceCurrency}
             />
           </div>
         </Card>

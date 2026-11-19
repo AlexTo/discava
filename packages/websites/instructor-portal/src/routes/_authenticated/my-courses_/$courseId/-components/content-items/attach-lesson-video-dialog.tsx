@@ -36,6 +36,7 @@ import { Trash2, Upload } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
+import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 import { studentActivityNote } from '../student-activity';
 
 export const ACCEPTED_VIDEO_TYPES = {
@@ -49,33 +50,6 @@ type PendingUpload = {
   objectKey: string;
   mimeType: string;
 };
-
-// fetch() exposes no upload progress; XMLHttpRequest does via
-// xhr.upload.onprogress, hence the lower-level API here instead of fetch.
-export const putFileWithProgress = (
-  uploadUrl: string,
-  file: File,
-  onProgress: (percent: number) => void,
-) =>
-  new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
-    xhr.setRequestHeader('Content-Type', file.type);
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error('Failed to upload the video file'));
-      }
-    };
-    xhr.onerror = () => reject(new Error('Failed to upload the video file'));
-    xhr.send(file);
-  });
 
 export function AttachLessonVideoDialog({
   courseId,
@@ -175,7 +149,13 @@ export function AttachLessonVideoDialog({
         ...(contentItemId && { contentItemId }),
       });
 
-      await putFileWithProgress(uploadUrl, file, setUploadProgress);
+      await putFileWithProgress(
+        uploadUrl,
+        { 'Content-Type': file.type },
+        file,
+        setUploadProgress,
+        'Failed to upload the video file',
+      );
 
       setPendingUpload({
         contentItemId: newContentItemId,
