@@ -65,6 +65,7 @@ const drop = (id: string, from: number, to: number, overId: string | null) =>
 const COURSE_ID = 'course-1';
 const lesson = (id: string, title: string) => ({
   lessonId: id,
+  kind: 'lesson' as const,
   title,
   visibility: 'visible' as const,
   contentItems: [],
@@ -259,5 +260,97 @@ describe('CourseModules', () => {
     expect(
       alert ? within(alert).getByText("Couldn't reorder the lessons") : null,
     ).toBeInTheDocument();
+  });
+
+  describe('an assignment', () => {
+    const assignmentModules = [
+      module('m1', 'Module A', [
+        {
+          ...lesson('l1', 'Lesson A1'),
+        },
+        {
+          lessonId: 'l2',
+          kind: 'assignment' as const,
+          title: 'Essay',
+          visibility: 'hidden' as const,
+          contentItems: [
+            {
+              contentItemId: 'ci2',
+              type: 'assignment',
+              title: 'Essay',
+              body: '{"type":"doc","content":[{"type":"paragraph"}]}',
+              maxPoints: 10,
+              status: 'ready',
+              visibility: 'visible' as const,
+            },
+          ],
+        },
+      ]),
+    ];
+
+    it('says Assignment, and names the assignment in its controls', () => {
+      renderModules({ modules: assignmentModules });
+
+      const row = screen.getByText('Essay').closest('article') as HTMLElement;
+      expect(within(row).getByText('Assignment')).toBeInTheDocument();
+      expect(within(row).queryByText('Lesson')).not.toBeInTheDocument();
+      expect(
+        within(row).getByRole('button', { name: 'Publish assignment Essay' }),
+      ).toBeInTheDocument();
+      expect(
+        within(row).getByRole('button', { name: 'Edit assignment Essay' }),
+      ).toBeInTheDocument();
+      expect(
+        within(row).getByRole('button', { name: 'Remove assignment Essay' }),
+      ).toBeInTheDocument();
+      expect(
+        within(row).queryByRole('button', { name: /lesson Essay/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers no add-item buttons, nor a control for its item as text', () => {
+      renderModules({ modules: assignmentModules });
+
+      const row = screen.getByText('Essay').closest('article') as HTMLElement;
+      for (const name of ['Video', 'Text', 'Quiz', 'File']) {
+        expect(
+          within(row).queryByRole('button', { name }),
+        ).not.toBeInTheDocument();
+      }
+      expect(
+        within(row).queryByRole('button', { name: /text Essay/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('leaves an ordinary lesson as it was', () => {
+      renderModules({ modules: assignmentModules });
+
+      const row = screen
+        .getByText('Lesson A1')
+        .closest('article') as HTMLElement;
+      expect(within(row).getByText('Lesson')).toBeInTheDocument();
+      expect(
+        within(row).getByRole('button', { name: 'Video' }),
+      ).toBeInTheDocument();
+    });
+
+    it('is added from "New assignment" beside "New lesson" in each module', () => {
+      renderModules({ modules: assignmentModules });
+
+      expect(
+        screen.getByRole('button', { name: 'New assignment' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'New lesson' }),
+      ).toBeInTheDocument();
+    });
+
+    it('is not added to an archived course', () => {
+      renderModules({ modules: assignmentModules, readOnly: true });
+
+      expect(
+        screen.queryByRole('button', { name: 'New assignment' }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

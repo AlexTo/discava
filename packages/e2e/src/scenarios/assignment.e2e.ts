@@ -15,13 +15,23 @@ import {
 } from '../helpers/assignment.js';
 import { WORKSHEET_PDF } from '../helpers/files.js';
 import {
+  addModule,
+  addUploadAssignment,
+  createCourse,
+  hideItem,
+  publishCourse,
+  publishItem,
+} from '../helpers/instructor-portal.js';
+import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
+import {
   enrol,
   expectCourseCompleted,
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { newUser, uniqueName } from '../helpers/users.js';
+import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
 // Submitting to an upload assignment (#102): the file goes to S3Mock's upload
 // bucket through the presigned PUT, core-api copies it into a folder of its
@@ -287,5 +297,81 @@ test.describe('submitting to an upload assignment', () => {
     await expect(
       page.getByRole('navigation', { name: 'Lesson steps' }),
     ).toHaveCount(0);
+  });
+
+  test('an instructor creates an upload assignment in the portal, and a student sees it', async ({
+    browser,
+  }) => {
+    const course = uniqueName('E2E authored assignment course');
+    const instructor = await browser.newPage();
+    const student = await browser.newPage();
+
+    await test.step('the instructor adds the assignment to a module', async () => {
+      await instructor.goto(`${PORTALS.instructor}/my-courses`);
+      await signIn(instructor, newUser('Ivy', ['instructor']));
+      await createCourse(instructor, {
+        title: course,
+        summary: 'A course with an assignment, made by the end-to-end tests.',
+      });
+      await addModule(instructor, 'Module one');
+      await addUploadAssignment(instructor, {
+        title: ASSIGNMENT,
+        instructions: 'Write about the lesson.',
+        maxPoints: 20,
+        dueAt: '2099-01-01T09:00',
+        beforeSave: () => screenshot(instructor, 'the new assignment dialog'),
+      });
+
+      const row = instructor.locator('article', { hasText: ASSIGNMENT });
+      await expect(row.getByText('Assignment', { exact: true })).toBeVisible();
+      await expect(
+        instructor.getByRole('button', { name: 'Video', exact: true }),
+      ).toHaveCount(0);
+      await screenshot(instructor, 'the assignment in the module outline');
+    });
+
+    await test.step('the instructor edits its points and removes the due date', async () => {
+      await instructor
+        .getByRole('button', { name: `Edit assignment ${ASSIGNMENT}` })
+        .click();
+      const dialog = instructor.getByRole('dialog', {
+        name: 'Edit assignment',
+      });
+      await expect(dialog.getByLabel('Max points')).toHaveValue('20');
+      await dialog.getByLabel('Max points').fill('30');
+      await dialog.getByLabel('Due date (optional)').fill('');
+      await screenshot(instructor, 'editing the assignment');
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      await expect(dialog).toBeHidden();
+
+      await instructor
+        .getByRole('button', { name: `Edit assignment ${ASSIGNMENT}` })
+        .click();
+      await expect(dialog.getByLabel('Max points')).toHaveValue('30');
+      await expect(dialog.getByLabel('Due date (optional)')).toHaveValue('');
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+    });
+
+    await test.step('the instructor hides and publishes it again', async () => {
+      await hideItem(instructor, 'assignment', ASSIGNMENT);
+      await expect(
+        instructor.getByRole('button', {
+          name: `Publish assignment ${ASSIGNMENT}`,
+        }),
+      ).toBeVisible();
+      await publishItem(instructor, 'assignment', ASSIGNMENT);
+      await publishCourse(instructor);
+    });
+
+    await test.step('a student sees its instructions', async () => {
+      await openCourse(student, course);
+      await enrol(student, newUser('Sam', ['student']));
+      await startFirstLesson(student);
+      await expect(
+        assignmentItem(student, ASSIGNMENT).getByText(
+          'Write about the lesson.',
+        ),
+      ).toBeVisible();
+    });
   });
 });

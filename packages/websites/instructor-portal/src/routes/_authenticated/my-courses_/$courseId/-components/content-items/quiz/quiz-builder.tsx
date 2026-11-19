@@ -25,12 +25,14 @@ export function QuizBuilder({
   readOnlyReason,
   onDirtyChange,
   onCreated,
+  onAssignmentCreated,
   onReload,
   onClose,
 }: {
   courseId: string;
   moduleId: string;
-  lessonId: string;
+  // Absent for a new quiz assignment, whose lesson doesn't exist yet.
+  lessonId?: string;
   // Absent for a new quiz.
   contentItemId?: string;
   quiz?: QuizItem;
@@ -43,6 +45,8 @@ export function QuizBuilder({
   onDirtyChange?: (dirty: boolean) => void;
   // After the first save of a new quiz, with the id it was given.
   onCreated?: (contentItemId: string) => void;
+  // Saving creates a quiz assignment in the module, then calls this.
+  onAssignmentCreated?: () => void;
   // Fetches the quiz again, after a CONFLICT.
   onReload: () => void;
   // Shows a Close button beside Save, for a builder in a dialog.
@@ -58,6 +62,7 @@ export function QuizBuilder({
     readOnly,
     onDirtyChange,
     onCreated,
+    onAssignmentCreated,
   });
   const { quiz, errors, expanded, showProblems } = state;
 
