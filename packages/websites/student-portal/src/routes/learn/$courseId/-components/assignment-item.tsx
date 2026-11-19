@@ -26,7 +26,7 @@ import {
   awaitProgressRecalculation,
   errorCode,
   type PlayerItem,
-} from './use-course-player';
+} from '../../../../hooks/use-course-player';
 
 // What a submission may be, as core-api allows it (LESSON_FILE_TYPES, which
 // the portal can't import: it's server code): one file of at most 100 MB.

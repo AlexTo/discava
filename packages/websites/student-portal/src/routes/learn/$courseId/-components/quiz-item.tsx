@@ -17,7 +17,7 @@ import {
   awaitProgressRecalculation,
   errorCode,
   type PlayerItem,
-} from './use-course-player';
+} from '../../../../hooks/use-course-player';
 
 const refOf = ({
   courseId,
