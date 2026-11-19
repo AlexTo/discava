@@ -53,6 +53,8 @@ export default {
           //   separately, so an API's ceiling is its rate limit times its
           //   method count, and grows with every procedure added. Anonymous
           //   callers reach only core-api's public methods, at the public rate.
+          //   Suggestions have their own throttle because they fire on every
+          //   typing pause.
           // - Reserved concurrency caps how many requests each function
           //   runs at once. core-api serves most operations from one router
           //   function, and a page fires several queries at once, so not
@@ -76,6 +78,8 @@ export default {
               throttleBurstLimit: 5,
               publicThrottleRateLimit: 1,
               publicThrottleBurstLimit: 3,
+              publicSuggestThrottleRateLimit: 5,
+              publicSuggestThrottleBurstLimit: 10,
               reservedConcurrency: 10,
               timeoutSeconds: 10,
               logLevel: 'WARN',
@@ -144,7 +148,8 @@ export default {
           // defaults (10,000 requests/s, unbounded concurrency and
           // throughput). Throttles apply to each method separately, so an
           // API's ceiling is its rate limit times its method count. Raise
-          // them as usage grows.
+          // them as usage grows. Suggestions have their own throttle because
+          // they fire on every typing pause.
           infra: {
             identity: {
               enableWaf: true,
@@ -162,6 +167,8 @@ export default {
               throttleBurstLimit: 100,
               publicThrottleRateLimit: 20,
               publicThrottleBurstLimit: 40,
+              publicSuggestThrottleRateLimit: 100,
+              publicSuggestThrottleBurstLimit: 200,
               reservedConcurrency: 50,
               timeoutSeconds: 10,
               logLevel: 'INFO',

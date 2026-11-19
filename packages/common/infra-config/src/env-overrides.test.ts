@@ -25,6 +25,7 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_LESSON_MEDIA_DOMAIN_NAMES',
   'DISCAVA_TEST_STAGE_INFRA_UNKNOWN_FIELD',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT',
+  'DISCAVA_TEST_STAGE_INFRA_CORE_API_PUBLIC_SUGGEST_THROTTLE_RATE_LIMIT',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL',
   'DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY',
   'DISCAVA_TEST_STAGE_INFRA_CORE_TABLE_MAX_READ_REQUEST_UNITS',
@@ -114,6 +115,8 @@ describe('applyEnvOverrides', () => {
 
   it('overrides the limit settings: numbers, log levels and self sign-up', () => {
     process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_THROTTLE_RATE_LIMIT = ' 25 ';
+    process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_PUBLIC_SUGGEST_THROTTLE_RATE_LIMIT =
+      '7';
     process.env.DISCAVA_TEST_STAGE_INFRA_CORE_API_LOG_LEVEL = 'WARN';
     process.env.DISCAVA_TEST_STAGE_INFRA_INSTRUCTOR_API_RESERVED_CONCURRENCY =
       '5';
@@ -129,6 +132,7 @@ describe('applyEnvOverrides', () => {
       infra: {
         coreApi: {
           throttleRateLimit: 25,
+          publicSuggestThrottleRateLimit: 7,
           logLevel: 'WARN',
           enableTracing: false,
         },

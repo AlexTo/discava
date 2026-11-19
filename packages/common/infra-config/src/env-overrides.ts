@@ -42,6 +42,8 @@ const COMPONENT_FIELDS: Record<
     enableTracing: 'boolean',
     publicThrottleRateLimit: 'number',
     publicThrottleBurstLimit: 'number',
+    publicSuggestThrottleRateLimit: 'number',
+    publicSuggestThrottleBurstLimit: 'number',
   },
   instructorApi: {
     enableWaf: 'boolean',

@@ -38,12 +38,12 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run suggest-query.test.ts search.test.ts router.test.ts`, `pnpm nx run @discava/common-infra-config:test -- --run env-overrides.test.ts` and `pnpm nx run @discava/common-constructs:test -- --run core-api.test.ts` pass, and `pnpm nx run @discava/infra:synth` succeeds.
 
-- [ ] T001 [P] Tests first, then add `SuggestCoursesInputSchema` and `SuggestCoursesOutputSchema` (with `ISuggestCoursesInput` and `ISuggestCoursesOutput` types) to `packages/apis/core-api/src/schema/search.ts`, exported through `schema/index.ts`, exactly as in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
+- [x] T001 [P] Tests first, then add `SuggestCoursesInputSchema` and `SuggestCoursesOutputSchema` (with `ISuggestCoursesInput` and `ISuggestCoursesOutput` types) to `packages/apis/core-api/src/schema/search.ts`, exported through `schema/index.ts`, exactly as in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
   - input `q: z.string().trim().min(3).max(200)`;
   - output `items` (at most 10) of `{ courseId: string, title: string, imageKey?: string }`.
 
   Schema tests (in `procedures/search.test.ts` or a new `schema/search.test.ts`): `"  ab  "` is refused, `"abc"` is accepted, and 201 characters are refused.
-- [ ] T002 [P] Tests first, then add `buildSuggestRequest(input: ISuggestCoursesInput)` in `packages/apis/core-api/src/helpers/suggest-query.ts`, returning the body in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
+- [x] T002 [P] Tests first, then add `buildSuggestRequest(input: ISuggestCoursesInput)` in `packages/apis/core-api/src/helpers/suggest-query.ts`, returning the body in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
   - `size: 10`, `track_total_hits: false`, `_source: ['courseId', 'title', 'imageKey']`;
   - a `function_score` around a `bool` with `must: match_bool_prefix` on `title`, and `filter: term status published`;
   - the `ratingBoost` multiplier with `missing: 1`;
@@ -51,7 +51,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - no `aggs`.
 
   `helpers/suggest-query.test.ts` pins the whole body for one input, and asserts the published filter is present for every input and that the text is passed as a plain string.
-- [ ] T003 Tests first, then add `publicSuggestCourses` to `packages/apis/core-api/src/procedures/search.ts`:
+- [x] T003 Tests first, then add `publicSuggestCourses` to `packages/apis/core-api/src/procedures/search.ts`:
   - built on `publicSearchProcedure`, with input and output from T001 and the request from T002;
   - a `SUGGEST_REQUEST_TIMEOUT_MS = 3_000` request timeout, with a comment pointing to research R-6;
   - a `TimeoutError` mapped to `TRPCError` `TIMEOUT` with the message "Search is starting up. Try again in a few seconds.", sharing the mapping with `publicSearchCourses` (extract a small function in the same file, not a new module);
@@ -63,16 +63,16 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - the request sent equals `buildSuggestRequest`'s;
   - a `TimeoutError` gives `TIMEOUT`;
   - `category.query` is never called.
-- [ ] T004 Register `publicSuggest: publicSuggestCourses` under `course` in `packages/apis/core-api/src/router.ts`, and add `'course.publicSuggest'` to `PUBLIC_OPERATIONS` (keep the list's order: after `'course.publicSearch'`). The existing check in `packages/apis/core-api/src/router.test.ts` must pass unchanged. If it lists the public operations by hand, add the new name there too, without weakening any other assertion.
-- [ ] T022 [P] Tests first, then add the suggest throttle's stage keys (research R-6):
+- [x] T004 Register `publicSuggest: publicSuggestCourses` under `course` in `packages/apis/core-api/src/router.ts`, and add `'course.publicSuggest'` to `PUBLIC_OPERATIONS` (keep the list's order: after `'course.publicSearch'`). The existing check in `packages/apis/core-api/src/router.test.ts` must pass unchanged. If it lists the public operations by hand, add the new name there too, without weakening any other assertion.
+- [x] T022 [P] Tests first, then add the suggest throttle's stage keys (research R-6):
   - `publicSuggestThrottleRateLimit?: number` (`@default 100`) and `publicSuggestThrottleBurstLimit?: number` (`@default 200`) on `CoreApiComponentConfig` in `packages/common/infra-config/src/stages.types.ts`, next to `publicThrottleRateLimit`, with doc comments saying they apply to `course.publicSuggest` only and are shared by every caller. Also correct `publicThrottleRateLimit`'s comment, which names only `course.publicList` and `course.publicView`: it applies to every operation in `PUBLIC_OPERATIONS`;
   - both keys as `'number'` under `coreApi` in `packages/common/infra-config/src/env-overrides.ts`, with a case in `env-overrides.test.ts` like the existing `THROTTLE_RATE_LIMIT` one;
   - in `packages/common/infra-config/src/stages.config.ts`, `5` and `10` on `discava-development` and `100` and `200` on `discava-production`, beside the `publicThrottle*` keys. Add a line to each stage's limits comment: suggestions have their own throttle because they fire on every typing pause.
-- [ ] T023 Tests first, then wire the throttle (after T004 and T022):
+- [x] T023 Tests first, then wire the throttle (after T004 and T022):
   - a `publicSuggestThrottle?: ThrottleSettings` prop on `CoreApi` in `packages/common/constructs/src/app/apis/core-api.ts` (`@default` `publicThrottle`). The method setting for `course.publicSuggest` uses it instead of `publicThrottle`; every other public operation and public extra route keeps `publicThrottle`. In `core-api.test.ts`, with `publicThrottle: { rateLimit: 2, burstLimit: 4 }` and `publicSuggestThrottle: { rateLimit: 7, burstLimit: 9 }`, assert the stage's `MethodSettings` give `/course.publicSuggest` GET 7 and 9 and `/course.publicSearch` GET still 2 and 4;
   - `publicSuggestThrottle(config)` in `packages/infra/src/stacks/api-limits.ts` beside `publicThrottle`, with `DEFAULT_PUBLIC_SUGGEST_THROTTLE = { rateLimit: 100, burstLimit: 200 }`;
   - `publicSuggestThrottle: publicSuggestThrottle(coreApiConfig)` passed to `CoreApi` in `packages/infra/src/stacks/core-api-stack.ts`.
-- [ ] T005 Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public route or its throttle. Check that the only snapshot differences are the new `course.publicSuggest` method without the Cognito authorizer, and its method setting with the suggest throttle (100 / 200 by default, or the stage's values), and say so in the PR description.
+- [x] T005 Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public route or its throttle. Check that the only snapshot differences are the new `course.publicSuggest` method without the Cognito authorizer, and its method setting with the suggest throttle (100 / 200 by default, or the stage's values), and say so in the PR description.
 
 ---
 
