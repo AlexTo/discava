@@ -13,9 +13,9 @@ import {
 } from './profile.js';
 
 const {
-  profileGet,
+  instructorProfileGet,
   userGet,
-  membershipsQuery,
+  courseInstructorQueryByInstructor,
   courseGet,
   transactionWrite,
   ensureProfile,
@@ -24,34 +24,29 @@ const {
   headPublicMediaObject,
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
-} = vi.hoisted(() => ({
-  profileGet: vi.fn(),
-  userGet: vi.fn(),
-  membershipsQuery: vi.fn(),
-  courseGet: vi.fn(),
-  transactionWrite: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   ensureProfile: vi.fn(),
   writes: { update: vi.fn(), changeHandle: vi.fn(), setPhoto: vi.fn() },
   presignJpegUpload: vi.fn(),
   headPublicMediaObject: vi.fn(),
   attachPublicMediaObject: vi.fn(),
   bestEffortDetachPublicMediaObject: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    instructorProfile: ['get'],
+    user: ['get'],
+    courseInstructor: ['query.byInstructor'],
+    course: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  ensureInstructorProfile: ensureProfile,
-  instructorProfileWrites: writes,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      instructorProfile: { get: profileGet },
-      user: { get: userGet },
-      courseInstructor: { query: { byInstructor: membershipsQuery } },
-      course: { get: courseGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), {
+    ensureInstructorProfile: ensureProfile,
+    instructorProfileWrites: writes,
+  }),
+);
 
 vi.mock('../helpers/public-media-client.js', () => ({
   presignJpegUpload,
@@ -105,11 +100,13 @@ const cancelWith = (...codes: string[]) =>
 beforeEach(() => {
   vi.resetAllMocks();
   built = undefined;
-  profileGet.mockReturnValue({ go: async () => ({ data: profile }) });
+  instructorProfileGet.mockReturnValue({ go: async () => ({ data: profile }) });
   userGet.mockReturnValue({
     go: async () => ({ data: { givenName: 'Alex', familyName: 'To' } }),
   });
-  membershipsQuery.mockReturnValue({ go: async () => ({ data: [] }) });
+  courseInstructorQueryByInstructor.mockReturnValue({
+    go: async () => ({ data: [] }),
+  });
   courseGet.mockReturnValue({ go: async () => ({ data: [] }) });
   transactionWrite.mockImplementation((build: () => unknown) => ({
     go: async () => {
@@ -136,7 +133,7 @@ describe('profile.get', () => {
   });
 
   it('is public when the caller teaches a published course', async () => {
-    membershipsQuery.mockReturnValue({
+    courseInstructorQueryByInstructor.mockReturnValue({
       go: async () => ({
         data: [{ courseId: 'c1' }, { courseId: 'c2' }],
       }),
@@ -150,7 +147,7 @@ describe('profile.get', () => {
   });
 
   it('is not public with only draft or archived courses', async () => {
-    membershipsQuery.mockReturnValue({
+    courseInstructorQueryByInstructor.mockReturnValue({
       go: async () => ({ data: [{ courseId: 'c1' }, { courseId: 'c2' }] }),
     });
     courseGet.mockReturnValue({
@@ -162,7 +159,7 @@ describe('profile.get', () => {
   });
 
   it('returns a default with version 0 and writes nothing', async () => {
-    profileGet.mockReturnValue({ go: async () => ({ data: null }) });
+    instructorProfileGet.mockReturnValue({ go: async () => ({ data: null }) });
 
     expect(await callAs().get()).toEqual({
       handle: 'alex-to',
@@ -176,8 +173,10 @@ describe('profile.get', () => {
 
   it('reads only the caller’s profile', async () => {
     await callAs().get();
-    expect(profileGet).toHaveBeenCalledWith({ instructorId: 'instructor-1' });
-    expect(membershipsQuery).toHaveBeenCalledWith({
+    expect(instructorProfileGet).toHaveBeenCalledWith({
+      instructorId: 'instructor-1',
+    });
+    expect(courseInstructorQueryByInstructor).toHaveBeenCalledWith({
       instructorId: 'instructor-1',
     });
   });
@@ -203,7 +202,7 @@ describe('profile.update validation', () => {
     await expect(
       callAs().update({ ...input, ...change }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(profileGet).not.toHaveBeenCalled();
+    expect(instructorProfileGet).not.toHaveBeenCalled();
   });
 
   it('accepts the limits', async () => {
@@ -220,7 +219,9 @@ describe('profile.update validation', () => {
 
 describe('profile.update with version 0', () => {
   beforeEach(() => {
-    profileGet.mockReturnValue({ go: async () => ({ data: profile }) });
+    instructorProfileGet.mockReturnValue({
+      go: async () => ({ data: profile }),
+    });
   });
 
   it('creates the profile with the explicit handle', async () => {
@@ -334,7 +335,7 @@ describe('profile.update of an existing profile', () => {
   });
 
   it('gives CONFLICT when the profile does not exist but a version was sent', async () => {
-    profileGet.mockReturnValue({ go: async () => ({ data: null }) });
+    instructorProfileGet.mockReturnValue({ go: async () => ({ data: null }) });
     await expect(callAs().update(input)).rejects.toMatchObject({
       code: 'CONFLICT',
     });
@@ -343,7 +344,9 @@ describe('profile.update of an existing profile', () => {
   it('uses only the caller’s sub as the profile key', async () => {
     await callAs().update(input);
     expect(
-      profileGet.mock.calls.every(([k]) => k.instructorId === 'instructor-1'),
+      instructorProfileGet.mock.calls.every(
+        ([k]) => k.instructorId === 'instructor-1',
+      ),
     ).toBe(true);
     expect(writes.changeHandle.mock.calls[0][1].instructorId).toBe(
       'instructor-1',
@@ -368,7 +371,7 @@ describe('profile photo', () => {
   });
 
   it('attaches the uploaded photo and retires the previous one', async () => {
-    profileGet.mockReturnValue({
+    instructorProfileGet.mockReturnValue({
       go: async () => ({ data: { ...profile, photoKey: OLD_PHOTO } }),
     });
     headPublicMediaObject.mockResolvedValue({
@@ -418,7 +421,7 @@ describe('profile photo', () => {
   });
 
   it('removes the photo with null, without checking an upload', async () => {
-    profileGet.mockReturnValue({
+    instructorProfileGet.mockReturnValue({
       go: async () => ({ data: { ...profile, photoKey: OLD_PHOTO } }),
     });
 
@@ -436,7 +439,7 @@ describe('profile photo', () => {
   });
 
   it('asks for the profile to be saved first', async () => {
-    profileGet.mockReturnValue({ go: async () => ({ data: null }) });
+    instructorProfileGet.mockReturnValue({ go: async () => ({ data: null }) });
     await expect(
       callAs().updatePhoto({ photoKey: null }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
