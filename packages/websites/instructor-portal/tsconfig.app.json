@@ -42,6 +42,9 @@
   ],
   "references": [
     {
+      "path": "../../common/infra-config/tsconfig.lib.json"
+    },
+    {
       "path": "../../common/web-utils/tsconfig.lib.json"
     },
     {

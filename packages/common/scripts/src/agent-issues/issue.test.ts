@@ -227,4 +227,10 @@ describe('discover', () => {
       ]),
     ).toEqual(['a', 'b']);
   });
+
+  it('ignores archived spec folders', () => {
+    expect(
+      specFolders(['specs/_archive/a/tasks.md', 'specs/b/tasks.md']),
+    ).toEqual(['b']);
+  });
 });

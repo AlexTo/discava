@@ -4,7 +4,7 @@ The only interface is the page itself; it calls an existing API unchanged.
 
 ## Consumed API
 
-`course.listByInstructor({ instructorId: <signed-in sub>, limit: 100 })` on core-api. See [`ListCoursesByInstructorInputSchema`](../../packages/apis/core-api/src/schema/course.ts). Returns `{ items: Course[], cursor? }`, newest updated first.
+`course.listByInstructor({ instructorId: <signed-in sub>, limit: 100 })` on core-api. See [`ListCoursesByInstructorInputSchema`](../../../../packages/apis/core-api/src/schema/course.ts). Returns `{ items: Course[], cursor? }`, newest updated first.
 
 ## Page states
 

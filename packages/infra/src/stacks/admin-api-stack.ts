@@ -10,6 +10,7 @@ import {
   UserIdentity,
 } from '@discava/common-constructs';
 import type { AdminApiComponentConfig } from '@discava/common-infra-config';
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
@@ -93,10 +94,6 @@ export class AdminApiStack extends Stack {
       coreTable.grantReadWriteData(handler),
     );
 
-    this.adminApi.restrictCorsTo(
-      adminPortal,
-      'http://localhost:4202',
-      'http://localhost:4302',
-    );
+    this.adminApi.restrictCorsTo(adminPortal, ...localPortalOrigins('admin'));
   }
 }

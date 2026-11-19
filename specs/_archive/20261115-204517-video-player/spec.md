@@ -10,6 +10,8 @@
 
 **Issue**: #277
 
+**Design page**: [`design/video-player`](../../../docs/src/content/docs/en/design/video-player.mdx)
+
 ## Clarifications
 
 ### Session 2026-11-15
