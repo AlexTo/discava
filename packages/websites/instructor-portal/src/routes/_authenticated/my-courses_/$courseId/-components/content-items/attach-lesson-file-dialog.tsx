@@ -33,6 +33,7 @@ import { Paperclip, Upload } from 'lucide-react';
 import { type ReactNode, useRef, useState } from 'react';
 import { type FileRejection, useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
+import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 
 // What a file item may be, as instructor-api allows it (its
 // LESSON_FILE_TYPES): documents, spreadsheets, slides, plain text, images and
@@ -72,33 +73,6 @@ type PendingUpload = {
   fileName: string;
   fileSize: number;
 };
-
-// fetch() exposes no upload progress; XMLHttpRequest does. The headers are
-// the ones the upload URL was signed with.
-const putFileWithProgress = (
-  uploadUrl: string,
-  headers: Record<string, string>,
-  file: File,
-  onProgress: (percent: number) => void,
-) =>
-  new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
-    for (const [name, value] of Object.entries(headers)) {
-      xhr.setRequestHeader(name, value);
-    }
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(Math.round((event.loaded / event.total) * 100));
-      }
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve()
-        : reject(new Error('Failed to upload the file'));
-    xhr.onerror = () => reject(new Error('Failed to upload the file'));
-    xhr.send(file);
-  });
 
 // Why the dropzone turned a file away.
 const rejectionMessage = ([rejection]: FileRejection[]) =>
@@ -173,7 +147,13 @@ export function AttachLessonFileDialog({
         fileSize: file.size,
         ...(contentItemId && { contentItemId }),
       });
-      await putFileWithProgress(uploadUrl, headers, file, setUploadProgress);
+      await putFileWithProgress(
+        uploadUrl,
+        headers,
+        file,
+        setUploadProgress,
+        'Failed to upload the file',
+      );
       setPendingUpload({
         contentItemId: newContentItemId,
         objectKey,
