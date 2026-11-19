@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { uuidV7At } from '../../test-support/uuid-v7.js';
 import type { TableSnapshot } from './snapshot.js';
 import {
   checkTableInvariants,
@@ -19,10 +20,7 @@ beforeEach(() => {
 const { broken, expectOnly } = testHelpers(() => table);
 
 describe('discussion', () => {
-  const v7 = (at: string, n: number) => {
-    const hex = new Date(at).getTime().toString(16).padStart(12, '0');
-    return `${hex.slice(0, 8)}-${hex.slice(8)}-7000-8000-${String(n).padStart(12, '0')}`;
-  };
+  const v7 = uuidV7At;
   const AT1 = '2026-11-16T10:00:00.000Z';
   const AT2 = '2026-11-16T10:05:00.000Z';
   const QID = v7(AT1, 1);

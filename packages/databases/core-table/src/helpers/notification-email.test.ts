@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import { publishNotification } from './notification.js';
 import {
@@ -179,12 +179,7 @@ describe('readEmailState', () => {
 
 // The request ElectroDB sends, checked without a table.
 describe('the real patch', () => {
-  beforeAll(() => {
-    process.env.LOCAL_DEV = 'true';
-  });
-
   it('replaces the email map only from the previous state', async () => {
-    process.env.LOCAL_DEV = 'true';
     const real = await createCoreTableService();
     const patch = vi.spyOn(real.entities.notification, 'patch');
     const params = real.entities.notification

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, describe, expect, it } from 'vitest';
-import { createCoreTableService } from '../service.js';
+import { describe, expect, it } from 'vitest';
+import { useCoreTable } from '../test-support/core-table.js';
 import {
   type AssignmentSubmissionWrite,
   assignmentSubmissionWrites,
@@ -13,11 +13,7 @@ import {
 
 // The requests ElectroDB would send, checked without a table.
 
-let coreTable: Awaited<ReturnType<typeof createCoreTableService>>;
-beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
-  coreTable = await createCoreTableService();
-});
+const coreTable = useCoreTable();
 
 const AT = '2026-11-14T10:00:00.000Z';
 const write: AssignmentSubmissionWrite = {

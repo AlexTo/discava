@@ -14,7 +14,6 @@ let announcement: Awaited<ReturnType<typeof createAnnouncementEntity>>;
 let enrolment: Awaited<ReturnType<typeof createEnrolmentEntity>>;
 let courseInstructor: Awaited<ReturnType<typeof createCourseInstructorEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   [announcement, enrolment, courseInstructor] = await Promise.all([
     createAnnouncementEntity(),
     createEnrolmentEntity(),

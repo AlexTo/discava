@@ -8,7 +8,6 @@ import { createNotificationPreferenceEntity } from './notification-preference.js
 
 let preference: Awaited<ReturnType<typeof createNotificationPreferenceEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   preference = await createNotificationPreferenceEntity();
 });
 

@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidHandle } from '../entities/instructor-profile.js';
-import { createCoreTableService } from '../service.js';
+import { useCoreTable } from '../test-support/core-table.js';
 import {
   defaultDisplayName,
   ensureInstructorProfile,
@@ -14,12 +14,7 @@ import {
   RESERVED_HANDLES,
 } from './instructor-profile.js';
 
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
-let service: CoreTable;
-beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
-  service = await createCoreTableService();
-});
+const service = useCoreTable();
 
 type Request = Record<string, any>;
 const part = (item: unknown): Request => {

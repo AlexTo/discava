@@ -4,7 +4,7 @@
  */
 // @vitest-environment node
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createCoreTableService } from '../service.js';
+import { useCoreTable } from '../test-support/core-table.js';
 import { buildNotification } from './notification-types.js';
 import {
   classifyReviewCancellation,
@@ -19,11 +19,7 @@ import {
 
 // The requests ElectroDB would send, checked without a table.
 
-let coreTable: Awaited<ReturnType<typeof createCoreTableService>>;
-beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
-  coreTable = await createCoreTableService();
-});
+const coreTable = useCoreTable();
 
 describe('reviewerName', () => {
   it.each([

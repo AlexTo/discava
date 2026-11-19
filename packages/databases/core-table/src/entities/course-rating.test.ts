@@ -8,7 +8,6 @@ import { createCourseRatingEntity } from './course-rating.js';
 
 let courseRating: Awaited<ReturnType<typeof createCourseRatingEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   courseRating = await createCourseRatingEntity();
 });
 
