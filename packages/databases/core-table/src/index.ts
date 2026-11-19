@@ -179,6 +179,8 @@ export {
   type PostIdCheck,
   type PostIdProblem,
   postIdTime,
+  toPostRead,
+  toQuestionRead,
 } from './helpers/discussion.js';
 export {
   DISCUSSION_EXCERPT_MAX,

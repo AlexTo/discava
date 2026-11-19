@@ -18,7 +18,6 @@ import { manifestNonce } from '@discava/common-server-utils/media-keys';
 import {
   isConditionalCheckFailed,
   reportedCaptionsStatus,
-  TRANSCODE_PENDING_ATTRIBUTES,
   tracksForPlayback,
   transcodePendingFrom,
 } from '@discava/core-table';
@@ -43,17 +42,12 @@ import {
   requireNotArchived,
   requireOrdinaryLesson,
   writeAtEnd,
-  writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
 import {
   bestEffortCancelTranscodeJob,
-  bestEffortCancelTranscodeJobs,
   submitTranscodeJob,
 } from '../lib/mediaconvert-client.js';
-import {
-  bestEffortDeleteContentItemVideos,
-  getVideoUploadETag,
-} from '../lib/s3-client.js';
+import { getVideoUploadETag } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
   CreateContentItemVideoOutputSchema,

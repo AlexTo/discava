@@ -32,6 +32,7 @@
       "packages/events/src/media/transcode-reconciler.ts"
     ],
     "instructor-api": [
+      "packages/apis/instructor-api/src/helpers/video-replacement.ts",
       "packages/apis/instructor-api/src/procedures/assignment.ts",
       "packages/apis/instructor-api/src/procedures/content-item-captions.ts",
       "packages/apis/instructor-api/src/procedures/content-item-file.ts",
