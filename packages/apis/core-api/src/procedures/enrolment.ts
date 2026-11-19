@@ -2,15 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import type { CoreTable } from '@discava/core-table';
+import {
+  cancellationReasons,
+  failedAt,
+  hasTransactionConflict,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
-import {
-  type CancellationReasons,
-  failedCondition,
-  hasTransactionConflict,
-  transactionConflict,
-} from '../lib/transaction.js';
 import {
   EnrolInputSchema,
   EnrolOutputSchema,
@@ -69,10 +70,10 @@ export const enrol = courseProcedure
       .go();
 
     if (canceled) {
-      const reasons: CancellationReasons = data ?? [];
+      const reasons = cancellationReasons(data);
       // Already enrolled. Checked first: a student enrolled before the course
       // was archived is still enrolled.
-      if (failedCondition(reasons, 1)) {
+      if (failedAt(reasons, 1)) {
         const existing = await getEnrolment(coreTable, courseId, userId);
         if (existing) {
           return existing;
@@ -80,7 +81,7 @@ export const enrol = courseProcedure
       }
       // Draft, archived or missing: NOT_FOUND either way, as publicView does,
       // so a draft's existence isn't leaked.
-      if (failedCondition(reasons, 0)) {
+      if (failedAt(reasons, 0)) {
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
       if (hasTransactionConflict(reasons)) {

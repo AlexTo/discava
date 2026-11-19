@@ -2,8 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
+  cancellationReasons,
+  hasFailedCondition,
+  hasTransactionConflict,
   isShown,
   studentActivityAt,
   studentActivityWrites,
@@ -11,11 +16,6 @@ import {
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
-import {
-  type CancellationReasons,
-  hasTransactionConflict,
-  transactionConflict,
-} from '../lib/transaction.js';
 import {
   type IQuizAnswerKey,
   type IQuizAnswers,
@@ -387,11 +387,8 @@ export const submitQuizAttempt = courseProcedure
       // was written; read again, which gives the precise error if the
       // submission is no longer allowed, or grades it against what's there
       // now.
-      const reasons: CancellationReasons = data ?? [];
-      if (
-        !reasons.some((reason) => reason?.code === 'ConditionalCheckFailed') &&
-        !hasTransactionConflict(reasons)
-      ) {
+      const reasons = cancellationReasons(data);
+      if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to submit the attempt',
