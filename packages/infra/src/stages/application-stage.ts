@@ -15,21 +15,23 @@ import { DataStack } from '../stacks/data-stack.js';
 import { InstructorApiStack } from '../stacks/instructor-api-stack.js';
 import { MediaPipelineStack } from '../stacks/media-pipeline-stack.js';
 import { PaymentsStack } from '../stacks/payments-stack.js';
+import { PayoutsStack } from '../stacks/payouts-stack.js';
 import { StreamRouterStack } from '../stacks/stream-router-stack.js';
 import { WebsitesStack } from '../stacks/websites-stack.js';
 
 /** Per-component settings (all default to fully hardened) plus the stage's env. */
 export type ApplicationStageProps = StageProps &
   StageComponents & {
-    /** The stage's payout settings. @default the documented defaults (2000 basis points, 14 days) */
-    payouts?: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
+    /** The stage's payout settings. @default the documented defaults (2000 basis points, 14 days, a minimum of 1000) */
+    payouts?: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'> &
+      Partial<Pick<PayoutSettings, 'minimumPayoutMinor'>>;
   };
 
 /**
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> Payments -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> AdminApi -> RuntimeConfig
+ *   Websites -> Data -> Payments -> MediaPipeline -> CoreApi -> StreamRouter -> Payouts -> InstructorApi -> AdminApi -> RuntimeConfig
  *
  * Data (users, the core table, media buckets, the search collection and the
  * secrets) depends on Websites for Cognito callback URLs and lesson media
@@ -42,7 +44,8 @@ export type ApplicationStageProps = StageProps &
  * whichever API stack is created first. StreamRouter holds the single reader
  * of the core table's stream, the queues it feeds and the handlers behind
  * them; it depends on Data, and on Websites and CoreApi for the addresses
- * notification emails link to. RuntimeConfig (AppConfig content plus each
+ * notification emails link to. Payouts holds the daily payout run, which only needs the table and the
+ * API key from Data. RuntimeConfig (AppConfig content plus each
  * portal's runtime-config.json) collects values from all of them.
  */
 export class ApplicationStage extends Stage {
@@ -141,6 +144,13 @@ export class ApplicationStage extends Stage {
       portalUrls: websites.portalUrls,
       coreApiUrl: coreApiStack.apiUrl,
       payouts,
+    });
+
+    new PayoutsStack(this, 'Payouts', {
+      ...stackProps,
+      coreTable: data.coreTable,
+      stripeSecrets: data.stripeSecrets,
+      minimumPayoutMinor: payouts.minimumPayoutMinor ?? 1000,
     });
 
     new InstructorApiStack(this, 'InstructorApi', {
