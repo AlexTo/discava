@@ -4,7 +4,13 @@
  */
 import { createHash } from 'node:crypto';
 import type { createCoreTableService } from '../service.js';
-import { VersionConflictError } from './errors.js';
+import {
+  cancellationReasons,
+  failedAt,
+  hasFailedCondition,
+  hasTransactionConflict,
+  VersionConflictError,
+} from './errors.js';
 import {
   buildNotification,
   NotificationInputError,
@@ -152,8 +158,6 @@ export const notificationWrites = async (
   return [created, update];
 };
 
-const NOT_EXISTS = 'ConditionalCheckFailed';
-
 /**
  * Publishes one notification in its own transaction. 'duplicate' when the
  * same type, user and dedupeKey was published before. Retries a state
@@ -171,17 +175,15 @@ export const publishNotification = async (
     if (!canceled) {
       return 'created';
     }
-    const reasons: ({ code?: string } | undefined)[] = data ?? [];
+    const reasons = cancellationReasons(data);
     // Item 0 is the notification's create: its condition failing means it
     // already exists.
-    if (reasons[0]?.code === NOT_EXISTS) {
+    if (failedAt(reasons, 0)) {
       await warnIfDifferent(service, input);
       return 'duplicate';
     }
-    const retryable = reasons.some(
-      (reason) =>
-        reason?.code === NOT_EXISTS || reason?.code === 'TransactionConflict',
-    );
+    const retryable =
+      hasFailedCondition(reasons) || hasTransactionConflict(reasons);
     if (!retryable) {
       throw new Error('The notification transaction was cancelled');
     }
