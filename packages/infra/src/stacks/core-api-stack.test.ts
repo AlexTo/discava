@@ -6,7 +6,12 @@
 
 import { type StageComponents } from '@discava/common-infra-config';
 import { describe, expect, it } from 'vitest';
-import { actionsOf, resources, synth } from './stack-test-fixture.js';
+import {
+  actionsOf,
+  resources,
+  synth,
+  tableFunctionsMissingAppConfig,
+} from './stack-test-fixture.js';
 
 describe("core-api's functions", () => {
   const template = synth({})('CoreApi');
@@ -185,5 +190,11 @@ describe('the unsubscribe route', () => {
     expect(roleStatements('CoreApiRouterHandler')).not.toContain(
       'secretsmanager:GetSecretValue',
     );
+  });
+});
+
+describe('runtime config (#619)', () => {
+  it('gives every function that uses the core table the AppConfig application id and read access', () => {
+    expect(tableFunctionsMissingAppConfig(synth({})('CoreApi'))).toEqual([]);
   });
 });
