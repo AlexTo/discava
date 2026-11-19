@@ -55,6 +55,9 @@ test('an admin signs in to the admin portal', async ({ page }) => {
   await expect(
     page.getByRole('heading', { level: 1, name: 'Admin' }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: /^Categories/ })).toBeVisible();
+  // The sidebar has a Categories link too; this is the home page's card.
+  await expect(
+    page.locator('#main-content').getByRole('link', { name: /^Categories/ }),
+  ).toBeVisible();
   await screenshot(page, 'admin home');
 });
