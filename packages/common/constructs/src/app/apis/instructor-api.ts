@@ -59,13 +59,21 @@ type Operations = Procedures<AppRouter>;
 export const INSTRUCTOR_API_DEDICATED_FUNCTIONS = {
   // The only holder of the CloudFront signing key: video previews and file
   // download links
-  MediaUrl: ['contentItem.createVideoUrl', 'contentItem.createFileUrl'],
+  MediaUrl: [
+    'contentItem.createVideoUrl',
+    'contentItem.createFileUrl',
+    'coursePreview.createVideoUrl',
+  ],
   // Writes and deletes lesson media (caption files included), and
   // submits/cancels transcode jobs
   Media: [
     'contentItem.createVideoUploadUrl',
     'contentItem.createVideo',
     'contentItem.updateVideo',
+    'coursePreview.createUploadUrl',
+    'coursePreview.create',
+    'coursePreview.replace',
+    'coursePreview.remove',
     'contentItem.createFileUploadUrl',
     'contentItem.createFile',
     'contentItem.updateFile',
