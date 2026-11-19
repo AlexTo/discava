@@ -205,6 +205,37 @@ describe('createPayout', () => {
     ).toBe(true);
   });
 
+  it('clears the entries it attached even when the index does not show them yet', async () => {
+    const fake = createFakeCoreTable();
+    const entries = seed(fake, 150);
+    // The settlement index lags: a payout's partition reads as empty.
+    const bySettlement =
+      fake.coreTable.entities.earningEntry.query.bySettlement;
+    vi.spyOn(
+      fake.coreTable.entities.earningEntry.query,
+      'bySettlement',
+    ).mockImplementation(((key: { settlement: string }) =>
+      key.settlement.startsWith('payout#')
+        ? { go: async () => ({ data: [] }) }
+        : bySettlement(key)) as never);
+    fake.hooks.beforeTransaction = () => {
+      const [row] = payouts(fake);
+      if (row && row.entryCount === 99 && row.status === 'collecting') {
+        fake.hooks.beforeTransaction = undefined;
+        fake.put('payout', { ...row, status: 'releasing' });
+      }
+    };
+
+    expect(await create(fake, entries)).toBeUndefined();
+    vi.restoreAllMocks();
+
+    expect(payouts(fake)).toEqual([]);
+    expect(
+      fake.rows('earningEntry').every((e) => e.payoutId === undefined),
+    ).toBe(true);
+    expect(openCount(fake)).toBe(150);
+  });
+
   it('cannot attach a batch to a payout that is releasing', async () => {
     const fake = createFakeCoreTable();
     const entries = seed(fake, 150);

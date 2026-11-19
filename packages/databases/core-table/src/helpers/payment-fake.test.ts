@@ -92,7 +92,11 @@ export interface Operation {
 export const createFakeCoreTable = () => {
   const tables: Record<string, Map<string, Row>> = {};
   const table = (entity: string) => (tables[entity] ??= new Map());
-  const log = { transactions: 0, cancelled: 0 };
+  const log: {
+    transactions: number;
+    cancelled: number;
+    reasons: { code: string }[];
+  } = { transactions: 0, cancelled: 0, reasons: [] };
   const hooks: { beforeTransaction?: () => void } = {};
 
   const conditionFailed = () =>
@@ -106,14 +110,18 @@ export const createFakeCoreTable = () => {
     hooks.beforeTransaction?.();
     log.transactions++;
     const ids = operations.map((o) => `${o.entity} ${o.id}`);
-    const ok =
-      new Set(ids).size === ids.length &&
-      operations.every((o) => {
-        const row = table(o.entity).get(o.id);
-        if (o.kind === 'create' && row) return false;
-        if (o.kind === 'patch' && !row) return false;
-        return o.holds(row);
-      });
+    const duplicates = new Set(ids).size !== ids.length;
+    // DynamoDB's per-item cancellation reasons, as ElectroDB returns them.
+    const reasons = operations.map((o) => {
+      const row = table(o.entity).get(o.id);
+      const holds =
+        !(o.kind === 'create' && row) &&
+        !(o.kind === 'patch' && !row) &&
+        o.holds(row);
+      return { code: holds ? 'None' : 'ConditionalCheckFailed' };
+    });
+    const ok = !duplicates && reasons.every((r) => r.code === 'None');
+    log.reasons = reasons;
     if (!ok) {
       log.cancelled++;
       return false;
@@ -358,7 +366,10 @@ export const createFakeCoreTable = () => {
     entities,
     transaction: {
       write: (build: (e: typeof entities) => Operation[]) => ({
-        go: async () => ({ canceled: !run(build(entities)), data: [] }),
+        go: async () => {
+          const canceled = !run(build(entities));
+          return { canceled, data: canceled ? log.reasons : [] };
+        },
       }),
     },
   } as unknown as CoreTable;

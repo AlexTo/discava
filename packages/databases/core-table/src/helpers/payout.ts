@@ -26,6 +26,9 @@ export const PAYOUT_BATCH_SIZE = 99;
 /** Entries cleared per transaction when a payout is released. */
 const RELEASE_BATCH_SIZE = 100;
 
+/** Entries cleared at once when the caller names them. */
+const CLEAR_PARALLEL = 25;
+
 /** A payout a run worked on this recently is still that run's. */
 export const PAYOUT_CLAIM_GRACE_MS = 15 * 60 * 1000;
 
@@ -210,7 +213,7 @@ export const createPayout = async ({
       ])
       .go();
     if (canceled) {
-      await releasePayout({ coreTable, payout, now });
+      await releasePayout({ coreTable, payout, entries, now });
       return undefined;
     }
   }
@@ -223,7 +226,7 @@ export const createPayout = async ({
       .go();
   } catch (error) {
     if (!isConditionalCheckFailed(error)) throw error;
-    await releasePayout({ coreTable, payout, now });
+    await releasePayout({ coreTable, payout, entries, now });
     return undefined;
   }
   return {
@@ -234,20 +237,48 @@ export const createPayout = async ({
   };
 };
 
+// Makes an entry open again if this payout holds it; one it never took, or
+// that another payout took, is left alone.
+const clearEntry = async (
+  coreTable: CoreTable,
+  entry: EarningEntryRecord,
+  payoutId: string,
+) => {
+  try {
+    await coreTable.entities.earningEntry
+      .patch(entryKey(entry))
+      .set({ settlement: openSettlement(entry.instructorId) })
+      .remove(['payoutId'])
+      .where((attr, op) => op.eq(attr.payoutId, payoutId))
+      .go();
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) throw error;
+  }
+};
+
 /**
  * Finishes a payout that will not be paid: a `collecting` one is moved to
  * `releasing` (conditionally), its entries' `payoutId` are cleared in
  * batches until none are left, and it is then marked `failed` when it has a
  * `failureReason` and deleted when it has not. Safe to call again at any
  * point, and a no-op for a payout that is `pending`, `sent` or `failed`.
+ *
+ * Entries are found through `gsi1pk-gsi1sk-index`, which DynamoDB updates
+ * eventually, so an empty page right after they were attached proves nothing.
+ * A caller that has just attached entries passes them as `entries`: each one
+ * the payout still holds is cleared by a direct, consistent write before the
+ * index is swept for the rest (recovery, long after the writes).
  */
 export const releasePayout = async ({
   coreTable,
   payout,
+  entries = [],
   now = new Date().toISOString(),
 }: {
   coreTable: CoreTable;
   payout: Pick<PayoutRecord, 'instructorId' | 'createdAt' | 'payoutId'>;
+  /** Entries the caller attached, whether or not the index shows them yet. */
+  entries?: EarningEntryRecord[];
   now?: string;
 }): Promise<void> => {
   const key = payoutKey(payout);
@@ -267,6 +298,14 @@ export const releasePayout = async ({
     if (!current) return;
   }
   if (current.status !== 'releasing') return;
+
+  for (let start = 0; start < entries.length; start += CLEAR_PARALLEL) {
+    await Promise.all(
+      entries
+        .slice(start, start + CLEAR_PARALLEL)
+        .map((entry) => clearEntry(coreTable, entry, current!.payoutId)),
+    );
+  }
 
   for (;;) {
     const { data } = await coreTable.entities.earningEntry.query

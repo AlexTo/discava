@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   type EarningEntryRecord,
   earningDayOf,
@@ -167,6 +167,46 @@ describe('recordSale', () => {
     await sale(fake, { paidAt: '2026-01-02T23:30:00.000Z' }, ['a']);
     expect(fake.rows('earningDay')[0]).toMatchObject({ day: '2026-01-02' });
     expect(earningDayOf('2026-01-02T23:30:00.000Z')).toBe('2026-01-02');
+  });
+
+  it('retries after a write conflict instead of calling the sale recorded', async () => {
+    const fake = createFakeCoreTable();
+    const write = fake.coreTable.transaction.write.bind(
+      fake.coreTable.transaction,
+    );
+    let calls = 0;
+    vi.spyOn(fake.coreTable.transaction, 'write').mockImplementation(((
+      build: never,
+    ) => {
+      if (++calls === 1) {
+        // Another sale of the same instructor, course and day was writing.
+        return {
+          go: async () => ({
+            canceled: true,
+            data: [{ code: 'None' }, { code: 'TransactionConflict' }],
+          }),
+        };
+      }
+      return write(build);
+    }) as never);
+
+    expect(await sale(fake, {}, ['a'])).toBe(true);
+    expect(calls).toBe(2);
+    expect(entries(fake)).toHaveLength(1);
+    vi.restoreAllMocks();
+  });
+
+  it('throws, so the queue redelivers, when conflicts do not stop', async () => {
+    const fake = createFakeCoreTable();
+    vi.spyOn(fake.coreTable.transaction, 'write').mockImplementation((() => ({
+      go: async () => ({
+        canceled: true,
+        data: [{ code: 'TransactionConflict' }],
+      }),
+    })) as never);
+    await expect(sale(fake, {}, ['a'])).rejects.toThrow(/try again/);
+    vi.restoreAllMocks();
+    expect(entries(fake)).toEqual([]);
   });
 
   it('refuses an order with no amount, writing nothing', async () => {

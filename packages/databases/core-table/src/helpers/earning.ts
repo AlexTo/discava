@@ -5,6 +5,11 @@
 import type { PaymentMode } from '../entities/payment-connection.js';
 import type { createCoreTableService } from '../service.js';
 import {
+  cancellationReasons,
+  hasFailedCondition,
+  hasTransactionConflict,
+} from './errors.js';
+import {
   calculateFee,
   calculateRefund,
   calculateSale,
@@ -24,6 +29,9 @@ type TransactionEntities = Parameters<
 
 /** How often a refund retries after another refund of the order won the race. */
 const REFUND_ATTEMPTS = 5;
+
+/** How often a sale retries after a write conflict on its day row. */
+const SALE_ATTEMPTS = 5;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -168,7 +176,9 @@ const refundEntry = (
  * Records a sale: the order's `earningOrder` and each instructor's sale
  * entry, each created on the condition that it does not exist, and the adds
  * to their day rows, in one transaction. A sale already recorded (or being
- * recorded by a racing call) changes nothing and returns false.
+ * recorded by a racing call) changes nothing and returns false. A write
+ * conflict with another transaction is retried up to 5 times, then throws so
+ * the queue redelivers; it is never taken for "already recorded".
  */
 export const recordSale = async ({
   coreTable,
@@ -214,15 +224,28 @@ export const recordSale = async ({
     instructorIds: shares.map((share) => share.instructorId),
     refundedMinor: 0,
   };
-  const { canceled } = await coreTable.transaction
-    .write((entities) => [
-      entities.earningOrder.create(snapshot).commit(),
-      ...shares.flatMap((share) =>
-        entryWrites(entities, saleEntry(context, share), true),
-      ),
-    ])
-    .go();
-  return !canceled;
+  for (let attempt = 0; attempt < SALE_ATTEMPTS; attempt++) {
+    const { canceled, data } = await coreTable.transaction
+      .write((entities) => [
+        entities.earningOrder.create(snapshot).commit(),
+        ...shares.flatMap((share) =>
+          entryWrites(entities, saleEntry(context, share), true),
+        ),
+      ])
+      .go();
+    if (!canceled) return true;
+    // A key that already exists means the sale is recorded.
+    if (hasFailedCondition(cancellationReasons(data))) return false;
+    // Two sales of one instructor, course and day add to one day row, and
+    // DynamoDB cancels one with TransactionConflict. Nothing was written, so
+    // it is tried again rather than taken for "already recorded".
+    if (!hasTransactionConflict(data)) {
+      throw new Error(`Could not record the sale of order ${order.orderId}`);
+    }
+  }
+  throw new Error(
+    `Could not record the sale of order ${order.orderId}; try again`,
+  );
 };
 
 /**
