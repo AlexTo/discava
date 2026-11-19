@@ -9,6 +9,7 @@ import {
   REVIEW_TEXT_MAX,
 } from '../entities/review.js';
 import type { createCoreTableService } from '../service.js';
+import { failedAt } from './errors.js';
 import { notificationWrites } from './notification.js';
 import { starField } from './review-rating.js';
 
@@ -369,8 +370,7 @@ export const classifyReviewCancellation = (
   action: ReviewWrite['action'],
   reasons: ({ code?: string } | undefined)[],
 ): ReviewCancellation | undefined => {
-  const failed = (index: number) =>
-    reasons[index]?.code === 'ConditionalCheckFailed';
+  const failed = (index: number) => failedAt(reasons, index);
   if (action === 'respond' || action === 'deleteResponse') {
     // The review is missing or removed (the caller reads it to tell which),
     // or the caller no longer teaches the course.

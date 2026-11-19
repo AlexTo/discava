@@ -2,10 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import {
   type CoreTable,
+  cancellationReasons,
   classifyReviewCancellation,
+  hasTransactionConflict,
   ratingCount,
   reviewWrites,
   starCounts,
@@ -217,10 +218,8 @@ export const removeReview = adminProcedure
         return toAdminReview(removed);
       }
 
-      const reasons: ({ code?: string } | undefined)[] = data ?? [];
-      const conflict = reasons.some(
-        (result) => result?.code === 'TransactionConflict',
-      );
+      const reasons = cancellationReasons(data);
+      const conflict = hasTransactionConflict(reasons);
       if (
         !conflict &&
         classifyReviewCancellation('remove', reasons) !== 'stale'

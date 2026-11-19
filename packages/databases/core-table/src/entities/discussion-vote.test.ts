@@ -8,7 +8,6 @@ import { createDiscussionVoteEntity } from './discussion-vote.js';
 
 let vote: Awaited<ReturnType<typeof createDiscussionVoteEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   vote = await createDiscussionVoteEntity();
 });
 

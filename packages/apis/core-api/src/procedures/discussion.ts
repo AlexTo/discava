@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
   checkPostId,
@@ -21,7 +23,6 @@ import {
   requireDiscussionAccess,
 } from '../helpers/discussion-access.js';
 import { courseProcedure } from '../init.js';
-import { transactionConflict } from '../lib/transaction.js';
 import {
   AcceptInputSchema,
   AskInputSchema,

@@ -2,18 +2,18 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
+  cancellationReasons,
+  hasFailedCondition,
+  hasTransactionConflict,
   isShown,
   studentActivityAt,
   studentActivityWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
-import {
-  type CancellationReasons,
-  hasTransactionConflict,
-  transactionConflict,
-} from '../lib/transaction.js';
 import {
   CompleteContentItemInputSchema,
   CompleteContentItemOutputSchema,
@@ -157,11 +157,8 @@ export const completeContentItem = courseProcedure
       // ancestors, the enrolment, or the same item was completed at the same
       // moment. Nothing was written; read again, which returns the completion
       // that landed or gives the precise error.
-      const reasons: CancellationReasons = data ?? [];
-      if (
-        !reasons.some((reason) => reason?.code === 'ConditionalCheckFailed') &&
-        !hasTransactionConflict(reasons)
-      ) {
+      const reasons = cancellationReasons(data);
+      if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to record the completion',
