@@ -19,16 +19,11 @@ export const Route = createFileRoute('/')({
 function AdminHome() {
   const trpc = useAdminApi();
   const categories = useQuery(trpc.category.list.queryOptions());
-  const reviewCourses = useQuery(trpc.review.courses.queryOptions({}));
 
   // A figure shows once its query has answered; a failed one shows none.
   const activeCategories = categories.data?.filter(
     (category) => category.status === 'active',
   ).length;
-  const ratings = reviewCourses.data?.items.reduce(
-    (total, course) => total + course.ratingCount,
-    0,
-  );
 
   const areas = [
     {
@@ -44,10 +39,8 @@ function AdminHome() {
       to: '/reviews',
       title: 'Reviews',
       description: 'Read course reviews and remove ones that break the rules.',
-      figure:
-        ratings === undefined
-          ? undefined
-          : `${ratings} ${ratings === 1 ? 'rating' : 'ratings'} across courses`,
+      // No admin-api procedure totals the reviews, so no figure.
+      figure: undefined,
     },
     {
       to: '/settings/notifications',

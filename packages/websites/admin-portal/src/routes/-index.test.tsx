@@ -53,22 +53,6 @@ const render = (handlers: Record<string, Handler> = {}) =>
           courseCount: 0,
         },
       ],
-      'review.courses': () => ({
-        items: [
-          {
-            courseId: 'c1',
-            title: 'Physics',
-            status: 'published',
-            ratingCount: 2,
-          },
-          {
-            courseId: 'c2',
-            title: 'Maths',
-            status: 'published',
-            ratingCount: 3,
-          },
-        ],
-      }),
       ...handlers,
     },
   });
@@ -98,25 +82,20 @@ describe('the admin home page', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows figures from the admin API', async () => {
+  it('shows the active category count from the admin API', async () => {
     render();
 
     expect(await screen.findByText('1 active category')).toBeInTheDocument();
-    expect(
-      await screen.findByText('5 ratings across courses'),
-    ).toBeInTheDocument();
   });
 
-  it('shows no figure when its query fails', async () => {
+  it('shows no category figure when its query fails', async () => {
     render({
       'category.list': () => {
         throw new ApiError('INTERNAL_SERVER_ERROR', 'boom');
       },
     });
 
-    expect(
-      await screen.findByText('5 ratings across courses'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Categories')).toBeInTheDocument();
     expect(screen.queryByText(/active categor/)).not.toBeInTheDocument();
   });
 });
