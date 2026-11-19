@@ -2407,6 +2407,47 @@ describe('notifications', () => {
         table.courseRatings = [{ courseId: 'gone' }];
         expectOnly('course-rating-matches-reviews', /does not exist/);
       });
+
+      it('holds on a table with a review and the notification it caused', () => {
+        hold();
+        table.users.push({ userId: 'teacher' } as never);
+        table.notifications = [
+          {
+            userId: 'teacher',
+            occurredAt: REVIEWED,
+            id: 'a1b2c3d4e5f60718',
+            type: 'review.received',
+            title: 'New review for Course',
+            link: { portal: 'instructor', path: '/my-courses/c1/reviews' },
+            email: { state: 'skipped', reason: 'never' },
+            createdAt: REVIEWED,
+          } as never,
+        ];
+        table.notificationStates = [{ userId: 'teacher', unreadCount: 1 }];
+
+        expect(broken().invariants).toEqual([]);
+      });
+
+      it('does not take a notification for a review, or its sender for a reviewer', () => {
+        hold();
+        table.notifications = [
+          {
+            userId: 'student',
+            occurredAt: REVIEWED,
+            id: 'a1b2c3d4e5f60718',
+            type: 'review.received',
+            link: { portal: 'instructor', path: '/my-courses/c1/reviews' },
+            email: { state: 'skipped', reason: 'never' },
+            createdAt: REVIEWED,
+          } as never,
+        ];
+        table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+
+        const names = broken().invariants;
+        expect(names).not.toContain('review-shape');
+        expect(names).not.toContain('review-has-enrolment');
+        expect(names).not.toContain('course-rating-matches-reviews');
+      });
     });
   });
 });

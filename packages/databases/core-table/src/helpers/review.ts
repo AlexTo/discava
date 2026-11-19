@@ -9,6 +9,7 @@ import {
   REVIEW_TEXT_MAX,
 } from '../entities/review.js';
 import type { createCoreTableService } from '../service.js';
+import { notificationWrites } from './notification.js';
 import { starField } from './review-rating.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
@@ -63,6 +64,12 @@ export interface ReviewPost extends ReviewWriteBase {
   reviewerName: string;
   rating: number;
   text?: string;
+  /**
+   * The instructors' notifications, from reviewNotifications; added to the
+   * transaction after the tally. Edits, deletes, answers and removals notify
+   * nobody.
+   */
+  notifications?: ReturnType<TransactionWrites>;
 }
 
 export interface ReviewEdit extends ReviewWriteBase {
@@ -151,10 +158,57 @@ export const reviewText = (text: string | undefined): string | undefined => {
   return trimmed;
 };
 
+// A transaction holds 100 items. A post writes 4, and each instructor's
+// notification is 2 (the notification and the user's unread count).
+const TRANSACTION_ITEMS = 100;
+const POST_ITEMS = 4;
+export const MAX_REVIEW_NOTIFIED_INSTRUCTORS = Math.floor(
+  (TRANSACTION_ITEMS - POST_ITEMS) / 2,
+);
+
+/**
+ * The `review.received` notification items for a new review, one
+ * notification per instructor (the first MAX_REVIEW_NOTIFIED_INSTRUCTORS, so
+ * the post stays within a transaction). The dedupe key names the student and
+ * course, so a post that commits twice notifies once.
+ */
+export const reviewNotifications = async (
+  service: CoreTable,
+  input: {
+    courseId: string;
+    courseTitle: string;
+    studentId: string;
+    rating: number;
+    createdAt: string;
+    instructorIds: string[];
+  },
+): Promise<ReturnType<TransactionWrites>> => {
+  const items: ReturnType<TransactionWrites> = [];
+  for (const userId of [...new Set(input.instructorIds)].slice(
+    0,
+    MAX_REVIEW_NOTIFIED_INSTRUCTORS,
+  )) {
+    items.push(
+      ...(await notificationWrites(service, {
+        type: 'review.received',
+        userId,
+        params: {
+          courseId: input.courseId,
+          courseTitle: input.courseTitle,
+          rating: String(input.rating),
+        },
+        dedupeKey: `${input.courseId}:${input.studentId}`,
+        occurredAt: input.createdAt,
+      })),
+    );
+  }
+  return items;
+};
+
 /**
  * The checks and writes of one post, edit, delete or removal. The items are in a fixed
  * order, which classifyReviewCancellation reads: a post's are the review,
- * the enrolment, the course and the tally; an edit's, a delete's and a removal's are the
+ * the enrolment, the course, the tally and any notifications; an edit's, a delete's and a removal's are the
  * review, then the tally when it changes. A failed condition cancels the
  * whole transaction; the caller reads again and decides.
  */
@@ -229,6 +283,7 @@ export const reviewWrites = (
         .update({ courseId })
         .add({ [starField(write.rating)]: 1 })
         .commit(),
+      ...(write.notifications ?? []),
     ];
   }
 

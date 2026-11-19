@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
+import { buildNotification } from './notification-types.js';
 import {
   classifyReviewCancellation,
+  MAX_REVIEW_NOTIFIED_INSTRUCTORS,
   type ReviewWrite,
   responseText,
   reviewerName,
+  reviewNotifications,
   reviewText,
   reviewWrites,
 } from './review.js';
@@ -197,6 +200,96 @@ describe('a post', () => {
   it('writes no two items for one key', () => {
     const keys = keysOf(itemsFor(post));
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+// No notification state yet for any instructor, so no table is read.
+const notify = (instructorIds: string[]) =>
+  reviewNotifications(coreTable, {
+    courseId: 'course-1',
+    courseTitle: 'Intro to Rust',
+    studentId: 'student-1',
+    rating: 4,
+    createdAt: AT,
+    instructorIds,
+  });
+
+describe('a post with notifications', () => {
+  beforeAll(() => {
+    vi.spyOn(coreTable.entities.notificationState, 'get').mockReturnValue({
+      go: async () => ({ data: undefined }),
+    } as never);
+  });
+
+  it('adds a notification and unread count for each instructor after the tally', async () => {
+    const notifications = await notify(['teacher-1', 'teacher-2']);
+    const items = itemsFor({ ...post, notifications } as ReviewWrite);
+
+    expect(notifications).toHaveLength(4);
+    expect(items).toHaveLength(8);
+    const created = items.filter(
+      (item) => item.Put?.Item.type === 'review.received',
+    );
+    expect(created.map((item) => item.Put?.Item.userId)).toEqual([
+      'teacher-1',
+      'teacher-2',
+    ]);
+    expect(created[0]!.Put?.Item).toMatchObject({
+      occurredAt: AT,
+      title: 'New review for Intro to Rust',
+      link: { portal: 'instructor', path: '/my-courses/course-1/reviews' },
+    });
+    expect(conditionOf(created[0]!)).toContain('attribute_not_exists');
+    const keys = keysOf(items);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('takes its params from a registered type and the rating as a string', () => {
+    expect(() =>
+      buildNotification('review.received', {
+        courseId: 'course-1',
+        courseTitle: 'Intro to Rust',
+        rating: '4',
+      }),
+    ).not.toThrow();
+  });
+
+  it('uses the same notification id for the same student and course', async () => {
+    const notifications = await notify(['teacher-1']);
+    const again = await notify(['teacher-1']);
+    const sk = (items: typeof notifications) =>
+      (
+        coreTable.transaction.write(() => items).params()
+          .TransactItems as TransactItem[]
+      )[0]!.Put?.Item.sk;
+    expect(sk(notifications)).toBe(sk(again));
+  });
+
+  it('posts without notification items for a course with no instructor', async () => {
+    expect(await notify([])).toEqual([]);
+    expect(
+      itemsFor({ ...post, notifications: [] } as ReviewWrite),
+    ).toHaveLength(4);
+  });
+
+  it('notifies each instructor once and no more than a transaction holds', async () => {
+    const many = Array.from({ length: 150 }, (_, i) => `teacher-${i % 120}`);
+    const notifications = await notify(many);
+    const items = itemsFor({ ...post, notifications } as ReviewWrite);
+
+    expect(notifications).toHaveLength(MAX_REVIEW_NOTIFIED_INSTRUCTORS * 2);
+    expect(items.length).toBeLessThanOrEqual(100);
+  });
+
+  it.each([
+    ['an edit', edit],
+    ['a delete', remove],
+    ['a response', respond],
+    ['a response deleted', deleteResponse],
+  ])('%s adds no notification items', (_, write) => {
+    expect(
+      itemsFor(write).some((item) => item.Put?.Item.type === 'review.received'),
+    ).toBe(false);
   });
 });
 

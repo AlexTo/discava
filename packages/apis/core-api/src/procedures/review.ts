@@ -7,6 +7,7 @@ import {
   type createCoreTableService,
   type ReviewWrite,
   reviewerName,
+  reviewNotifications,
   reviewWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -97,14 +98,16 @@ const requireOwnVisibleReview = async (
   return review;
 };
 
-// Runs the write; on a cancellation, works out why and throws. `reread` runs
-// once a condition failed, to say what changed.
+// Runs the write; on a cancellation, works out why and throws. `onCancelled`
+// runs once a condition failed, to say what changed. `onConflict`, when
+// given, takes the place of the CONFLICT a TransactionConflict answers.
 const commit = async (
   coreTable: CoreTable,
   write: ReviewWrite,
   onCancelled: (
     cancellation: ReturnType<typeof classifyReviewCancellation>,
-  ) => Promise<never>,
+  ) => Promise<void>,
+  onConflict?: () => Promise<void>,
 ) => {
   const { canceled, data } = await coreTable.transaction
     .write((entities) => reviewWrites(entities, write))
@@ -114,7 +117,7 @@ const commit = async (
   }
   const reasons: CancellationReasons = data ?? [];
   if (hasTransactionConflict(reasons)) {
-    throw transactionConflict();
+    return onConflict ? onConflict() : Promise.reject(transactionConflict());
   }
   return onCancelled(classifyReviewCancellation(write.action, reasons));
 };
@@ -178,50 +181,99 @@ export const postReview = courseProcedure
     const userId = ctx.user.sub;
 
     const { data: user } = await coreTable.entities.user.get({ userId }).go();
+    const at = new Date().toISOString();
+    const post = {
+      action: 'post' as const,
+      courseId,
+      userId,
+      at,
+      reviewerName: reviewerName(user),
+      rating,
+      text,
+    };
+
+    // The instructors are told in the same transaction as the post. Anything
+    // the transaction cancels over that the review itself doesn't explain (an
+    // instructor's unread count changed or was held by another transaction,
+    // or the same student's earlier review was deleted and posted again,
+    // which names the same notification) is retried without the
+    // notifications: the review matters more than the notice.
+    const notifications = await instructorNotifications(coreTable, post);
+    const withoutNotifications = () =>
+      commit(coreTable, post, (retried) =>
+        postCancelled(coreTable, courseId, userId, retried),
+      );
 
     await commit(
       coreTable,
-      {
-        action: 'post',
-        courseId,
-        userId,
-        at: new Date().toISOString(),
-        reviewerName: reviewerName(user),
-        rating,
-        text,
-      },
+      { ...post, notifications },
       async (cancellation) => {
-        if (cancellation === 'already-reviewed') {
-          const existing = await getReview(coreTable, courseId, userId);
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message:
-              existing?.status === 'removed'
-                ? 'Your review of this course was removed'
-                : 'You already reviewed this course',
-          });
+        if (cancellation === undefined && notifications.length > 0) {
+          return withoutNotifications();
         }
-        if (cancellation === 'not-enrolled') {
-          throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Enrol in the course to review it',
-          });
-        }
-        if (cancellation === 'course-closed') {
-          throw new TRPCError({
-            code: 'PRECONDITION_FAILED',
-            message: 'This course is not open for new reviews',
-          });
-        }
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to post the review',
-        });
+        return postCancelled(coreTable, courseId, userId, cancellation);
       },
+      notifications.length > 0 ? withoutNotifications : undefined,
     );
 
     return requireWritten(coreTable, courseId, userId);
   });
+
+const instructorNotifications = async (
+  coreTable: CoreTable,
+  post: { courseId: string; userId: string; at: string; rating: number },
+) => {
+  const { courseId } = post;
+  const [{ data: course }, { data: memberships }] = await Promise.all([
+    coreTable.entities.course.get({ courseId }).go(),
+    coreTable.entities.courseInstructor.query.primary({ courseId }).go(),
+  ]);
+  if (!course || memberships.length === 0) {
+    return [];
+  }
+  return reviewNotifications(coreTable, {
+    courseId,
+    courseTitle: course.title,
+    studentId: post.userId,
+    rating: post.rating,
+    createdAt: post.at,
+    instructorIds: memberships.map(({ instructorId }) => instructorId),
+  });
+};
+
+const postCancelled = async (
+  coreTable: CoreTable,
+  courseId: string,
+  userId: string,
+  cancellation: ReturnType<typeof classifyReviewCancellation>,
+): Promise<never> => {
+  if (cancellation === 'already-reviewed') {
+    const existing = await getReview(coreTable, courseId, userId);
+    throw new TRPCError({
+      code: 'CONFLICT',
+      message:
+        existing?.status === 'removed'
+          ? 'Your review of this course was removed'
+          : 'You already reviewed this course',
+    });
+  }
+  if (cancellation === 'not-enrolled') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Enrol in the course to review it',
+    });
+  }
+  if (cancellation === 'course-closed') {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'This course is not open for new reviews',
+    });
+  }
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Failed to post the review',
+  });
+};
 
 // Changes the caller's review, whatever the course's or enrolment's status.
 export const editReview = courseProcedure
