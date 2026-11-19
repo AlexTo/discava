@@ -2,12 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
+import { validatePrice } from '@discava/common-web-utils/price';
 import {
   cancellationReasons,
   ensureInstructorProfile,
   failedAt,
   filterEffectivelyVisible,
+  getConnection,
   hasTransactionConflict,
   isConditionalCheckFailed,
 } from '@discava/core-table';
@@ -32,6 +35,8 @@ import {
   RestoreCourseOutputSchema,
   SetCourseCertificatesInputSchema,
   SetCourseCertificatesOutputSchema,
+  SetCoursePriceInputSchema,
+  SetCoursePriceOutputSchema,
   ViewCourseInputSchema,
   ViewCourseOutputSchema,
 } from '../schema/index.js';
@@ -326,6 +331,73 @@ export const setCourseCertificates = courseProcedure
     );
 
     return course;
+  });
+
+// What the course costs. It only decides what new purchases pay: no order or
+// enrolment is read or written, so a student's access never changes with the
+// price. `pricedAt` marks when the course last became paid, which the
+// paid-course invariants measure free enrolments against: it is set going
+// from 0 to non-zero, kept between non-zero amounts and removed going to 0.
+// The patch is conditioned on the amount just read, so two edits at once
+// can't leave `pricedAt` out of step; the loser retries once from the new
+// state. Allowed in any course status.
+export const setCoursePrice = courseProcedure
+  .input(SetCoursePriceInputSchema)
+  .output(SetCoursePriceOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { courseId, priceAmount, priceCurrency } = input;
+
+    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+
+    const invalid = validatePrice({
+      amount: priceAmount,
+      currency: priceCurrency,
+    });
+    if (invalid) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: invalid });
+    }
+
+    // Charging needs a connected Stripe account; going back to free never does.
+    if (priceAmount > 0) {
+      const connection = await getConnection(coreTable);
+      if (connection?.status !== 'active') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: "Payments aren't set up yet; ask an administrator",
+        });
+      }
+    }
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const current = await getCourseOrThrow(coreTable, courseId);
+      const wasFree = current.priceAmount === 0;
+      const patch = coreTable.entities.course.patch({ courseId }).set({
+        priceAmount,
+        priceCurrency,
+        ...(priceAmount > 0 &&
+          wasFree && { pricedAt: new Date().toISOString() }),
+      });
+      try {
+        const { data: priced } = await (priceAmount === 0
+          ? patch.remove(['pricedAt'])
+          : patch
+        )
+          .where((attr, op) => op.eq(attr.priceAmount, current.priceAmount))
+          .go({ response: 'all_new' });
+        await refreshInstructorCourseUpdatedAt(
+          coreTable,
+          courseId,
+          priced.updatedAt,
+        );
+        return priced;
+      } catch (error) {
+        if (!isConditionalCheckFailed(error)) {
+          throw error;
+        }
+      }
+    }
+    throw courseChanged();
   });
 
 // The course editor's view: the whole curriculum, including hidden and

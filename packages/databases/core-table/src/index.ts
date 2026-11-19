@@ -141,6 +141,27 @@ export {
   transcodePendingFrom,
 } from './helpers/content-item.js';
 export {
+  generateCouponCode,
+  normaliseCouponCode,
+} from './helpers/coupon-code.js';
+export {
+  belowMinimumCharge,
+  type CouponPrice,
+  MIN_CHARGE_MINOR,
+  minimumCharge,
+  type PricedCoupon,
+  priceWithCoupon,
+} from './helpers/coupon-price.js';
+export {
+  COUPON_REFUSALS,
+  type CouponClaim,
+  type CouponStatus,
+  claimCouponWrites,
+  confirmCouponWrites,
+  couponStatus,
+  releaseCouponWrites,
+} from './helpers/coupon-redemption.js';
+export {
   type CourseCatalogue,
   courseCatalogueWrites,
 } from './helpers/course-catalogue.js';

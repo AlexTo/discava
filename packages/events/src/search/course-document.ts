@@ -25,6 +25,8 @@ export interface CourseSource {
   level?: unknown;
   language?: unknown;
   durationHours?: unknown;
+  priceAmount?: unknown;
+  priceCurrency?: unknown;
 }
 
 /** A course's `courseRating` record; absent when nobody has rated it. */
@@ -69,5 +71,7 @@ export const toCourseDocument = (
     level: course.level,
     language: course.language,
     durationHours: course.durationHours,
+    priceAmount: course.priceAmount,
+    priceCurrency: course.priceCurrency,
     ...ratingFields(rating),
   });

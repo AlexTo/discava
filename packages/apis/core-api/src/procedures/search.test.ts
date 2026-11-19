@@ -217,6 +217,27 @@ describe('course.publicSearch', () => {
     });
   });
 
+  it('returns a hit’s price, and no price for one indexed before it had one', async () => {
+    searchMock.mockResolvedValue(
+      esResponse([
+        {
+          _source: {
+            courseId: 'c1',
+            title: 'A',
+            priceAmount: 1999,
+            priceCurrency: 'EUR',
+          },
+        },
+        { _source: { courseId: 'c2', title: 'B' } },
+      ]),
+    );
+
+    const { items } = await callAnonymously().publicSearch({});
+
+    expect(items[0]).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+    expect(items[1]).not.toHaveProperty('priceAmount');
+  });
+
   it('returns a hit’s rating when it has one, and a count of 0 when not', async () => {
     searchMock.mockResolvedValue(
       esResponse([

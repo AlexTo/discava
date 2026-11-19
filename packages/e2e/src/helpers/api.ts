@@ -103,6 +103,30 @@ export const apiClients = (accessToken: string) => {
   };
 };
 
+// Marks payments as connected to the local Stripe stand-in's first account,
+// the state a price needs. It writes the record directly: admin-api's
+// `payment.connect` needs the webhook address, which the local stack has no
+// webhook API to give yet. A `put` replaces the record, so every scenario that
+// needs it can call this at the same moment.
+export const connectLocalPayments = async () => {
+  const coreTable = await createCoreTableService();
+  await coreTable.entities.paymentConnection
+    .put({
+      status: 'active',
+      mode: 'test',
+      accountId: 'acct_local',
+      accountName: 'Local Stripe Account',
+      keyLast4: 'ocal',
+      webhookEndpointId: 'we_local',
+      webhookUrl: 'http://localhost/stripe/webhook',
+      revision: 1,
+      changedBy: 'e2e',
+      changedByName: 'End-to-end tests',
+      changedAt: new Date().toISOString(),
+    })
+    .go();
+};
+
 export type ApiUser = Awaited<ReturnType<typeof apiUser>>;
 
 const textBody = (text: string) =>
