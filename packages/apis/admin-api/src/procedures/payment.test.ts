@@ -589,6 +589,36 @@ describe('failures after the secrets are written', () => {
   });
 });
 
+describe('disconnecting again after the cleanup failed', () => {
+  const disconnected = { status: 'disconnected', mode: 'test', revision: 5 };
+
+  it('clears the key that is still stored, without touching the record', async () => {
+    mocks.getConnection.mockResolvedValue(disconnected);
+    const result = await callAs().disconnect();
+    expect(mocks.clearStripeSecrets).toHaveBeenCalledTimes(1);
+    expect(mocks.beginChange).not.toHaveBeenCalled();
+    expect(mocks.completeDisconnect).not.toHaveBeenCalled();
+    expect(result.state).toBe('disconnected');
+  });
+
+  it('is refused once nothing is stored any more', async () => {
+    mocks.getConnection.mockResolvedValue(disconnected);
+    mocks.readStripeApiKey.mockResolvedValue(undefined);
+    await expect(callAs().disconnect()).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+    noSecretWrites();
+  });
+
+  it('reports a second failure to clear', async () => {
+    mocks.getConnection.mockResolvedValue(disconnected);
+    mocks.clearStripeSecrets.mockRejectedValue(new Error('denied'));
+    await expect(callAs().disconnect()).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+  });
+});
+
 describe('payment.disconnect', () => {
   it('is refused when nothing is connected', async () => {
     await expect(callAs().disconnect()).rejects.toMatchObject({
@@ -599,6 +629,7 @@ describe('payment.disconnect', () => {
       mode: 'test',
       revision: 4,
     });
+    mocks.readStripeApiKey.mockResolvedValue(undefined);
     await expect(callAs().disconnect()).rejects.toMatchObject({
       code: 'BAD_REQUEST',
     });

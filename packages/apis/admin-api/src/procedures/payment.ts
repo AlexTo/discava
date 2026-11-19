@@ -369,6 +369,22 @@ export const disconnectPayment = adminProcedure
       name: await displayName(coreTable, ctx.user.sub),
     };
     const current = await getConnection(coreTable);
+    // A disconnect whose cleanup failed left the record disconnected with the
+    // old key still stored: disconnecting again finishes clearing it.
+    if (current?.status === 'disconnected') {
+      const leftover = await readStripeApiKey().catch(() => undefined);
+      if (leftover !== undefined) {
+        try {
+          await clearStripeSecrets();
+        } catch {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: MESSAGES.secretsNotCleared,
+          });
+        }
+        return statusOf(coreTable, current, now);
+      }
+    }
     if (!current || current.status === 'disconnected') {
       throw new TRPCError({
         code: 'BAD_REQUEST',
