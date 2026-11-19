@@ -20,6 +20,15 @@ import type { createCourseStatsEntity } from '../entities/course-stats.js';
 import type { createDiscussionPostEntity } from '../entities/discussion-post.js';
 import type { createDiscussionVoteEntity } from '../entities/discussion-vote.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
+import {
+  BIO_MAX,
+  type createInstructorProfileEntity,
+  DISPLAY_NAME_MAX,
+  HANDLE_MAX,
+  HANDLE_MIN,
+  HANDLE_PATTERN,
+  HEADLINE_MAX,
+} from '../entities/instructor-profile.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
 import type { createLessonEntity } from '../entities/lesson.js';
 import type { createLessonStatsEntity } from '../entities/lesson-stats.js';
@@ -29,6 +38,7 @@ import type { createNotificationBroadcastEntity } from '../entities/notification
 import type { createNotificationPreferenceEntity } from '../entities/notification-preference.js';
 import type { createNotificationStateEntity } from '../entities/notification-state.js';
 import type { createPeriodStatsEntity } from '../entities/period-stats.js';
+import type { createProfileHandleClaimEntity } from '../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
 import type { createQuizQuestionStatsEntity } from '../entities/quiz-question-stats.js';
@@ -387,6 +397,14 @@ export interface TableSnapshot {
     Item<typeof createCourseRatingEntity>,
     'courseId' | 'stars1' | 'stars2' | 'stars3' | 'stars4' | 'stars5'
   >[];
+  instructorProfiles: Pick<
+    Item<typeof createInstructorProfileEntity>,
+    'instructorId' | 'handle' | 'displayName' | 'headline' | 'bio' | 'version'
+  >[];
+  profileHandleClaims: Pick<
+    Item<typeof createProfileHandleClaimEntity>,
+    'handle' | 'instructorId'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -439,6 +457,9 @@ export const INVARIANTS = [
   'review-shape',
   'review-has-enrolment',
   'course-rating-matches-reviews',
+  'instructor-has-profile',
+  'profile-handle-claims-consistent',
+  'instructor-profile-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -2683,6 +2704,106 @@ export const checkCoursePreviewShape = (
   });
 };
 
+// Every instructor of a course has a public profile record, created with their
+// first course (ensureInstructorProfile).
+export const checkInstructorHasProfile = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const profiles = new Set(
+    snapshot.instructorProfiles.map((p) => p.instructorId),
+  );
+  return snapshot.courseInstructors
+    .filter((ci) => !profiles.has(ci.instructorId))
+    .map((ci) =>
+      violation(
+        'instructor-has-profile',
+        { courseId: ci.courseId, instructorId: ci.instructorId },
+        'the instructor has no profile',
+      ),
+    );
+};
+
+// A profile's handle has exactly one claim, owned by that profile, and every
+// claim's owner is a profile with that handle: instructorProfileWrites keeps
+// the pair in one transaction.
+export const checkProfileHandleClaimsConsistent = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const profiles = new Map(
+    snapshot.instructorProfiles.map((p) => [p.instructorId, p]),
+  );
+  const problems = snapshot.instructorProfiles.flatMap((p) => {
+    const claims = snapshot.profileHandleClaims.filter(
+      (c) => c.handle === p.handle,
+    );
+    if (claims.length === 0) {
+      return [
+        violation(
+          'profile-handle-claims-consistent',
+          { instructorId: p.instructorId, handle: p.handle },
+          'its handle has no claim',
+        ),
+      ];
+    }
+    return claims
+      .filter((c) => c.instructorId !== p.instructorId)
+      .map((c) =>
+        violation(
+          'profile-handle-claims-consistent',
+          { instructorId: p.instructorId, handle: p.handle },
+          `its handle is claimed by ${c.instructorId}`,
+        ),
+      );
+  });
+  const orphans = snapshot.profileHandleClaims
+    .filter((c) => profiles.get(c.instructorId)?.handle !== c.handle)
+    .map((c) =>
+      violation(
+        'profile-handle-claims-consistent',
+        { instructorId: c.instructorId, handle: c.handle },
+        "the claim's owner has no profile with that handle",
+      ),
+    );
+  return [...problems, ...orphans];
+};
+
+// A profile's fields are within the entity's limits, and its version starts at
+// 1.
+export const checkInstructorProfileShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.instructorProfiles.flatMap((p) => {
+    const problems: string[] = [];
+    if (
+      p.handle.length < HANDLE_MIN ||
+      p.handle.length > HANDLE_MAX ||
+      !HANDLE_PATTERN.test(p.handle)
+    ) {
+      problems.push(`handle ${p.handle} is not a valid handle`);
+    }
+    if (p.displayName.length < 1 || p.displayName.length > DISPLAY_NAME_MAX) {
+      problems.push(
+        `displayName is ${p.displayName.length} characters, not 1 to ${DISPLAY_NAME_MAX}`,
+      );
+    }
+    if (p.headline !== undefined && p.headline.length > HEADLINE_MAX) {
+      problems.push(`headline is over ${HEADLINE_MAX} characters`);
+    }
+    if (p.bio !== undefined && p.bio.length > BIO_MAX) {
+      problems.push(`bio is over ${BIO_MAX} characters`);
+    }
+    if (!(p.version >= 1)) {
+      problems.push(`version is ${p.version}, not at least 1`);
+    }
+    return problems.map((problem) =>
+      violation(
+        'instructor-profile-shape',
+        { instructorId: p.instructorId },
+        problem,
+      ),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -2733,6 +2854,9 @@ const CHECKS = [
   checkReviewShape,
   checkReviewHasEnrolment,
   checkCourseRatingMatchesReviews,
+  checkInstructorHasProfile,
+  checkProfileHandleClaimsConsistent,
+  checkInstructorProfileShape,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -2780,6 +2904,8 @@ export const loadTableSnapshot = async (
 
     reviews,
     courseRatings,
+    instructorProfiles,
+    profileHandleClaims,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
@@ -2813,6 +2939,8 @@ export const loadTableSnapshot = async (
 
     entities.review.scan.go(all),
     entities.courseRating.scan.go(all),
+    entities.instructorProfile.scan.go(all),
+    entities.profileHandleClaim.scan.go(all),
   ]);
   return {
     courses: courses.data,
@@ -2847,5 +2975,7 @@ export const loadTableSnapshot = async (
 
     reviews: reviews.data,
     courseRatings: courseRatings.data,
+    instructorProfiles: instructorProfiles.data,
+    profileHandleClaims: profileHandleClaims.data,
   };
 };

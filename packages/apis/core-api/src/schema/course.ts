@@ -182,8 +182,27 @@ export const PublicModuleSchema = ModuleSchema.omit({ lessons: true }).extend({
 
 export type IPublicModule = z.output<typeof PublicModuleSchema>;
 
+// An instructor as a course's landing page shows them. No instructor ID: the
+// handle is the public address of their profile.
+export const PublicInstructorSchema = z.object({
+  handle: z.string(),
+  displayName: z.string(),
+  headline: z.string().optional(),
+  // Key in the public media bucket; the client builds the URL.
+  photoKey: z.string().optional(),
+});
+
+export type IPublicInstructor = z.output<typeof PublicInstructorSchema>;
+
 export const PublicViewCourseOutputSchema = CourseSchema.extend({
   modules: z.array(PublicModuleSchema),
+  learningOutcomes: z.array(z.string()),
+  requirements: z.array(z.string()),
+  level: z.string().optional(),
+  language: z.string().optional(),
+  durationHours: z.number().optional(),
+  category: z.object({ slug: z.string(), name: z.string() }).optional(),
+  instructors: z.array(PublicInstructorSchema),
 });
 
 export type IPublicViewCourseOutput = z.output<

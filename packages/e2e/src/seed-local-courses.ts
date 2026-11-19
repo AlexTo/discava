@@ -14,7 +14,8 @@ import { ensureCategory, setCourseCatalogue } from './helpers/catalogue.js';
 // language and duration, as the local OIDC page's Alice, through
 // instructor-api, so the stream indexes them for search the same way as any
 // other publish. Adds to local data (run reset-local-data first for a clean
-// slate).
+// slate). Creating Alice's first course also creates her public instructor
+// profile (createCourse), so seeded courses have an instructor card.
 const COURSES = [
   {
     title: 'Introduction to TypeScript',
