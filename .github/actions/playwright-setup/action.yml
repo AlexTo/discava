@@ -1,0 +1,40 @@
+name: Set up Playwright's Chromium
+description: Restore Chromium from the cache, keyed by the Playwright version, and download it on a miss.
+
+# Run after init-monorepo, which installs the dependencies the version lookup
+# needs. A PR's run can only restore caches saved on its own ref or on main,
+# and PR Checks never runs on main, so ci.yml's playwright-cache job saves the
+# cache under this same key, from this same action.
+
+inputs:
+  with-deps:
+    description: "Also install Chromium's system libraries (apt, outside the cache, so installed on a hit too). Needed by jobs that run the browser."
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Get the Playwright version
+      id: playwright
+      shell: bash
+      run: echo "version=$(pnpm --filter @discava/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: playwright-cache
+      name: Cache Chromium for Playwright
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+    - name: Download Chromium
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        WITH_DEPS: ${{ inputs.with-deps == 'true' && '--with-deps' || '' }}
+      run: pnpm --filter @discava/e2e exec playwright install $WITH_DEPS chromium
+
+    - name: Install Chromium's system libraries
+      if: steps.playwright-cache.outputs.cache-hit == 'true' && inputs.with-deps == 'true'
+      shell: bash
+      run: pnpm --filter @discava/e2e exec playwright install-deps chromium

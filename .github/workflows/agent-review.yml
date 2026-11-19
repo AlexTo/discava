@@ -24,9 +24,6 @@ concurrency:
   group: agent-review-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
-env:
-  CI: "true"
-
 permissions:
   contents: read
   statuses: write
@@ -43,21 +40,6 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'openhands/issue-') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.review.body, 'CHANGES REQUESTED')
-    runs-on: ubuntu-latest
-    steps:
-      # The default branch, never the pull request's code: this job holds a
-      # token that can write statuses, labels and comments, and it must not
-      # run anything the agent wrote.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
-      - uses: ./.github/actions/init-monorepo
-        with:
-          setup-uv: false
-          set-nx-shas: false
-
-      - name: Post the status
-        run: pnpm nx run @discava/common-scripts:agent-review-status
-        env:
-          GH_TOKEN: ${{ github.token }}
+    uses: ./.github/workflows/agent-status.yml
+    with:
+      target: agent-review-status
