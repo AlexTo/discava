@@ -8,6 +8,12 @@ export {
   resolveTableName,
 } from './client.js';
 export { PREVIEW_MAX_SECONDS } from './entities/course-preview.js';
+export {
+  EARNING_ENTRY_KINDS,
+  type EarningEntryKind,
+  openSettlement,
+  payoutSettlement,
+} from './entities/earning-entry.js';
 export * from './entities/index.js';
 export {
   BIO_MAX,
@@ -18,6 +24,11 @@ export {
   HEADLINE_MAX,
   isValidHandle,
 } from './entities/instructor-profile.js';
+export { PAYOUT_STATUSES, type PayoutStatus } from './entities/payout.js';
+export {
+  PAYOUT_ACCOUNT_STATUSES,
+  type PayoutAccountStatus,
+} from './entities/payout-account.js';
 export {
   aggregatesOf,
   type Contributions,
