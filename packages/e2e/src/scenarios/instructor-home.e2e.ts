@@ -4,6 +4,7 @@
  */
 
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
@@ -69,5 +70,26 @@ test('a new instructor sees their real courses on the home page', async ({
       page.getByRole('heading', { level: 1, name: course }),
     ).toBeVisible();
     await expect(page.getByText("You don't have permission")).toHaveCount(0);
+  });
+
+  await test.step('My Courses counts their real courses and invents no figures', async () => {
+    await page.goto(`${PORTALS.instructor}/my-courses`);
+    const summary = page.getByLabel('Course summary');
+    await expect(
+      summary.locator('[data-slot="card"]', { hasText: 'Draft courses' }),
+    ).toContainText('1');
+    await expect(
+      summary.locator('[data-slot="card"]', { hasText: 'Active courses' }),
+    ).toContainText('0');
+    await expect(page.getByText(course)).toBeVisible();
+    for (const invented of [
+      'Semester 2, 2026',
+      'Course content coming soon',
+      'Updated recently',
+      'Awaiting grading',
+    ]) {
+      await expect(page.getByText(invented)).toHaveCount(0);
+    }
+    await screenshot(page, 'my courses with real figures');
   });
 });
