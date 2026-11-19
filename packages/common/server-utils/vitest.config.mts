@@ -2,14 +2,25 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/common/server-utils',
-  // @discava/common-infra-config/* resolves through tsconfig `paths`, which
-  // Vite ignores unless asked.
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    // @discava/common-infra-config/* resolves through tsconfig `paths`, which
+    // Vite ignores unless asked.
+    tsconfigPaths: true,
+    alias: {
+      // @discava/core-table has no package.json `main`/`exports`, so it
+      // resolves for tsc via tsconfig `paths` but not for Vite; alias it
+      // directly to source so tests can import it.
+      '@discava/core-table': fileURLToPath(
+        new URL('../../databases/core-table/src/index.ts', import.meta.url),
+      ),
+    },
+  },
   test: {
     passWithNoTests: true,
     name: '@discava/common-server-utils',

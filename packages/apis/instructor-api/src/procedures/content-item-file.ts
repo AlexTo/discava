@@ -16,6 +16,7 @@ import {
   presignLessonFileUpload,
 } from '@discava/common-server-utils/lesson-files';
 import { getSignedCloudFrontFileUrl } from '@discava/common-server-utils/lesson-media';
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -29,7 +30,6 @@ import {
   writeAtEnd,
   writeUnderActiveAncestors,
 } from '../lib/course-lifecycle.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateContentItemFileInputSchema,
   CreateContentItemFileOutputSchema,
