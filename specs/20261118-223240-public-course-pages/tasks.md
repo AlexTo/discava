@@ -371,8 +371,8 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **PR title**: `docs(public-pages): document landing pages and profiles; final checks (closes #287)`
 
-- [ ] T041 [P] Add `docs/src/content/docs/en/design/public-pages.mdx`, covering the renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview's exposure rules. Add a short "Your landing page and profile" section to the instructor guide. Link both from the design index. Note "translations pending" in the PR (constitution VIII).
-- [ ] T042 [P] Add to CLAUDE.md's Architecture section one line on the page renderer (core-api's second handler, served by the student portal distribution, local port 2026), and add port 2026 to CONTRIBUTING.md's local dev ports if they are listed there.
+- [x] T041 [P] Add `docs/src/content/docs/en/design/public-pages.mdx`, covering the renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview's exposure rules. Add a short "Your landing page and profile" section to the instructor guide. Link both from the design index. Note "translations pending" in the PR (constitution VIII).
+- [x] T042 [P] Add to CLAUDE.md's Architecture section one line on the page renderer (core-api's second handler, served by the student portal distribution, local port 2026), and add port 2026 to CONTRIBUTING.md's local dev ports if they are listed there.
 - [ ] T043 (human) Run [quickstart.md](./quickstart.md) "Local, by hand" steps 1 to 6, saving screenshots to `tmp/screenshots/pr-<number>/`. Time steps 1 and 2 together for someone who has not seen the screens before, and check SC-005 (under 5 minutes).
 - [ ] T044 (human) Run quickstart "Deployed stage" steps 3, 4 and 6: link previews in two apps (SC-006), the Rich Results Test, and no visible flash on a hard reload (FR-012).
 - [ ] T045 Run `graphify update .`, then `pnpm build`, `pnpm lint` and `pnpm nx affected --target test`. Tick this spec's checklist items, and close #287 from this PR.
