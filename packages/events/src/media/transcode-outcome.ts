@@ -16,8 +16,8 @@ import {
   isConditionalCheckFailed,
   TRANSCODE_PENDING_ATTRIBUTES,
 } from '@discava/core-table';
-import { stillPending } from '../lib/caption-conditions.js';
-import { startCaptionJob } from '../lib/transcribe-client.js';
+import { stillPending } from './caption-conditions.js';
+import { startCaptionJob } from './transcribe-client.js';
 
 // S3Mock in local dev (#137).
 const s3Client = new S3Client(s3ClientConfig());

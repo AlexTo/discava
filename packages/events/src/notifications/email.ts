@@ -7,7 +7,7 @@ import {
   callLocalEventRunner,
   isLocalDev,
   type LocalEmailRequest,
-} from './local-dev.js';
+} from '@discava/common-server-utils/local-dev';
 
 export interface EmailMessage {
   to: string;

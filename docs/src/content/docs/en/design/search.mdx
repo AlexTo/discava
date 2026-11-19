@@ -30,7 +30,7 @@ NextGen is only available in a subset of regions (as of writing: US East N. Virg
 |---|---|
 | `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates missing indices / updates mappings, never deletes one; runs on every deploy, so an index deleted by hand comes back) |
 | `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
-| `packages/events` | `src/search/index-content.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
+| `packages/events` | `src/search/search-indexing.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
 | `packages/apis/core-api` | `course.publicSearch`: the tRPC procedure |
 
 This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
@@ -54,7 +54,7 @@ index -> search: "index / delete"
 
 The core table's stream has one reader, the <Link path="design/stream-event-router">stream router</Link>, which sends each change to the queue of every feature registered for it. Search indexing is one such feature (`search-indexing`), with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`), queue and failure queue, so a failure in it never blocks progress recalculation.
 
-`index-content.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
+`search-indexing.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
 
 - A **course** record carries its own `status`; if it's `'published'` the document is written (validated against `CourseDocumentSchema` first), otherwise it's deleted. Everything the document needs is on the record, so the Lambda never reads the table.
 - Every `REMOVE` deletes the course's document by its old image's key.

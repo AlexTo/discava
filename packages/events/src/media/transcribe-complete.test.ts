@@ -10,7 +10,7 @@ const { getCaptionJob, applyTranscribeOutcome } = vi.hoisted(() => ({
   applyTranscribeOutcome: vi.fn(),
 }));
 
-vi.mock('../lib/transcribe-client.js', () => ({ getCaptionJob }));
+vi.mock('./transcribe-client.js', () => ({ getCaptionJob }));
 vi.mock('./transcribe-outcome.js', () => ({ applyTranscribeOutcome }));
 
 const buildEvent = (status: string, detail: object = {}) => ({
