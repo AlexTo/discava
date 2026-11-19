@@ -34,6 +34,7 @@ jobs:
       - uses: ./.github/actions/init-monorepo
         with:
           setup-uv: ${{ matrix.target == 'build' }}
+          nx-cache-scope: ${{ matrix.target }}
 
       - name: Run ${{ matrix.target }}
         run: pnpm nx affected --target ${{ matrix.target }}
@@ -147,7 +148,10 @@ jobs:
   # the e2e project depends on changed.
   #
   # Sharded over runners, each starting its own stack (E2E_SHARD, read by
-  # playwright.config.ts). The `E2E tests` job below gathers the legs into one
+  # playwright.config.ts, which gives each shard files adding up to about the
+  # same run time). A shard costs about two minutes before its first test
+  # (install, stack start-up), so more of them stop paying off once the tests
+  # in each take about that long. The `E2E tests` job below gathers the legs into one
   # check, so a required check by that name keeps working whatever the count.
   e2e:
     name: E2E tests (${{ matrix.shard }}/${{ strategy.job-total }})
@@ -156,7 +160,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     env:
       E2E_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     permissions:
@@ -176,12 +180,8 @@ jobs:
           aws-docker-login-role-arn: ${{ vars.AWS_DOCKER_LOGIN_ROLE_ARN }}
           setup-uv: "false"
 
-      # Chromium's download is cached per Playwright version. Its system
-      # libraries come from apt, outside the cache, so they're installed
-      # either way.
+      # Chromium's download is cached per Playwright version.
       - uses: ./.github/actions/playwright-setup
-        with:
-          with-deps: true
 
       # Static output, so the job log lists each test even when they all pass.
       - name: Run e2e

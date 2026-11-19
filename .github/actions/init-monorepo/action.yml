@@ -17,6 +17,10 @@ inputs:
     description: 'Set NX_BASE/NX_HEAD for `nx affected`. Requires a full-history checkout (fetch-depth: 0). Disable for jobs that do not run `nx affected`.'
     required: false
     default: 'true'
+  nx-cache-scope:
+    description: "Keep Nx's task cache (.nx/cache) between runs, under this name, so a task whose inputs haven't changed since an earlier run is replayed, not run again. One name per job that runs different targets. Leave empty for jobs that run no cached Nx targets."
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -99,5 +103,19 @@ runs:
     - name: Install Node.js Dependencies
       shell: bash
       run: pnpm i --frozen-lockfile --prefer-offline
+    # Saved per commit, since a cache can't be overwritten, and restored from
+    # the newest one: this job's on an earlier push to the same branch, or
+    # else main's (ci.yml), the only other ref a pull request can read caches
+    # from. Nx removes old entries and caps the cache's size itself, so it
+    # doesn't grow without bound.
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      name: Setup Nx cache
+      if: ${{ inputs.nx-cache-scope != '' }}
+      with:
+        path: .nx/cache
+        key: ${{ runner.os }}-nx-${{ inputs.nx-cache-scope }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-nx-${{ inputs.nx-cache-scope }}-
+          ${{ runner.os }}-nx-main-
     - if: ${{ inputs.set-nx-shas == 'true' }}
       uses: nrwl/nx-set-shas@e602fada7ad5987b0f7b1905e7a99ea1c661514c # v5.1.0
