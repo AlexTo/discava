@@ -20,17 +20,16 @@ import { getSignedCloudFrontFileUrl } from '@discava/common-server-utils/lesson-
 import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
+import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
-  getCourseOrThrow,
   initialVisibilityFields,
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireNotArchived,
   requireOrdinaryLesson,
-  writeAtEnd,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/curriculum-guards.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   CreateContentItemFileInputSchema,
   CreateContentItemFileOutputSchema,
@@ -47,7 +46,7 @@ import { asContentItemOutput } from './content-item-shared.js';
 
 // File items (#102): a document students download. The file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then copied into
-// the lesson media bucket when the item is saved (see lib/lesson-files.ts).
+// the lesson media bucket when the item is saved (see helpers/lesson-files.ts).
 
 interface ItemKey {
   courseId: string;
@@ -129,14 +128,14 @@ const takeUpload = async (
   };
 };
 
-export const createContentItemFileUploadUrl = courseProcedure
-  .input(CreateContentItemFileUploadUrlInputSchema)
+export const createContentItemFileUploadUrl = courseInstructorProcedure(
+  CreateContentItemFileUploadUrlInputSchema,
+)
   .output(CreateContentItemFileUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, fileName, fileSize } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveLesson(coreTable, { courseId, moduleId, lessonId });
     const mimeType = lessonFileType(fileName);
     if (!mimeType) {
@@ -169,15 +168,15 @@ export const createContentItemFileUploadUrl = courseProcedure
     };
   });
 
-export const createContentItemFile = courseProcedure
-  .input(CreateContentItemFileInputSchema)
+export const createContentItemFile = courseInstructorProcedure(
+  CreateContentItemFileInputSchema,
+)
   .output(CreateContentItemFileOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { title, description, objectKey, fileName, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveLesson(coreTable, { courseId, moduleId, lessonId });
     const course = await getCourseOrThrow(coreTable, courseId);
 
@@ -209,15 +208,15 @@ export const createContentItemFile = courseProcedure
     return asContentItemOutput<ICreateContentItemFileOutput>(contentItem);
   });
 
-export const updateContentItemFile = courseProcedure
-  .input(UpdateContentItemFileInputSchema)
+export const updateContentItemFile = courseInstructorProcedure(
+  UpdateContentItemFileInputSchema,
+)
   .output(UpdateContentItemFileOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { title, description, objectKey, fileName, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getEditableFileItem(coreTable, key);
     await requireAncestorsNotArchived(coreTable, {
       courseId,
@@ -285,12 +284,13 @@ export const updateContentItemFile = courseProcedure
 
 // A short-lived link for the instructor to download the file, as students
 // get from core-api's contentItem.fileUrl.
-export const createContentItemFileUrl = courseProcedure
-  .input(CreateContentItemFileUrlInputSchema)
+export const createContentItemFileUrl = courseInstructorProcedure(
+  CreateContentItemFileUrlInputSchema,
+)
   .output(CreateContentItemFileUrlOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
-    await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
+
     const { data: item } = await coreTable.entities.contentItem.get(input).go();
     if (!item || item.type !== 'file' || !item.s3Key) {
       throw new TRPCError({ code: 'NOT_FOUND' });

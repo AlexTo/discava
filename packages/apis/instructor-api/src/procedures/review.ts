@@ -13,8 +13,8 @@ import {
   reviewWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import { requireCourseInstructor } from '../helpers/course-access.js';
+import { courseInstructorProcedure, courseProcedure } from '../init.js';
 import {
   DeleteReviewResponseInputSchema,
   DeleteReviewResponseOutputSchema,
@@ -120,14 +120,11 @@ const writeResponse = async (
 // A course's visible reviews, newest first, for the instructors teaching it.
 // Removed reviews stay in the index, so a page is filled by reading on until
 // `limit` are kept or it ends.
-export const listReviews = courseProcedure
-  .input(ListReviewsInputSchema)
+export const listReviews = courseInstructorProcedure(ListReviewsInputSchema)
   .output(ListReviewsOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, limit } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const items: IInstructorReview[] = [];
     let cursor: string | null = input.cursor ?? null;

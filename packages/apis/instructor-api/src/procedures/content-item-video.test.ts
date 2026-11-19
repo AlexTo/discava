@@ -4,8 +4,8 @@
  */
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { bestEffortRetirePreviousVersions } from '../helpers/s3-client.js';
 import { t } from '../init.js';
-import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import {
   createContentItemVideo,
   createContentItemVideoUploadUrl,
@@ -115,14 +115,14 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 }));
 
 // bestEffortDeleteContentItemVideos's own error-swallowing/bucket-selection
-// behavior is covered directly in lib/s3-client.test.ts; here it's just a
+// behavior is covered directly in helpers/s3-client.test.ts; here it's just a
 // mock so these tests can assert content-item-video.ts calls it correctly.
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaUploadBucketName,
 }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
   getVideoUploadETag,
@@ -138,9 +138,9 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
 }));
 
 // submitTranscodeJob's own MediaConvert-request-shape behavior is covered
-// directly in lib/mediaconvert-client.test.ts; here it's just a mock so
+// directly in helpers/mediaconvert-client.test.ts; here it's just a mock so
 // these tests can assert create/updateContentItemVideo call it correctly.
-vi.mock('../lib/mediaconvert-client.js', () => ({
+vi.mock('../helpers/mediaconvert-client.js', () => ({
   submitTranscodeJob,
   bestEffortCancelTranscodeJob,
   bestEffortCancelTranscodeJobs,

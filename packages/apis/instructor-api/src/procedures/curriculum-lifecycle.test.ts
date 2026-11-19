@@ -129,11 +129,11 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
 }));
-vi.mock('../lib/mediaconvert-client.js', () => ({
+vi.mock('../helpers/mediaconvert-client.js', () => ({
   bestEffortCancelTranscodeJobs,
 }));
 

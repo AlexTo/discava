@@ -25,18 +25,18 @@ import {
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
   putCaptionFile,
   readCaptionUpload,
-} from '../lib/caption-files.js';
+} from '../helpers/caption-files.js';
+import { requireCourseInstructor } from '../helpers/course-access.js';
 import {
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireNotArchived,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/curriculum-guards.js';
+import { courseProcedure } from '../init.js';
 import {
   AttachCaptionInputSchema,
   CaptionTracksOutputSchema,

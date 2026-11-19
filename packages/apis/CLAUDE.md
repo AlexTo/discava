@@ -21,7 +21,7 @@ Any project newly wiring up `@discava/core-table` also needs `electrodb`/`@aws-s
 ## Features that span APIs
 
 - Lesson discussions (#280): core-api's `discussion` procedures serve students and instructors, and instructor-api's `discussion` router the staff queues and moderation. Every write goes through core-table's `discussionWrites` (see `packages/databases/core-table/CLAUDE.md`).
-- Adding or restoring a module, lesson or content item goes through instructor-api's `writeAtEnd`, which claims its `order` from the parent's `lastChildOrder`.
+- Adding or restoring a module, lesson or content item goes through instructor-api's `writeAtEnd` (`helpers/order.ts`), which claims its `order` from the parent's `lastChildOrder`.
 
 ## Tests
 

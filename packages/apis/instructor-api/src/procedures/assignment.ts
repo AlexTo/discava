@@ -6,18 +6,20 @@
 import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
+import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
 import {
   getCourseOrThrow,
+  requireCourseInstructor,
+} from '../helpers/course-access.js';
+import {
   initialVisibilityFields,
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
-  writeAtEnd,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
-import { hashQuizQuestions } from '../lib/quiz-hash.js';
+} from '../helpers/curriculum-guards.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { hashQuizQuestions } from '../helpers/quiz-hash.js';
+import { courseInstructorProcedure, courseProcedure } from '../init.js';
 import {
   CreateQuizAssignmentInputSchema,
   CreateQuizAssignmentOutputSchema,
@@ -157,15 +159,15 @@ export const createUploadAssignment = courseProcedure
 // Edits an upload assignment's instructions, due date and points. A quiz
 // assignment is edited with contentItem.updateQuiz, and its title with
 // lesson.update.
-export const updateContentItemAssignment = courseProcedure
-  .input(UpdateContentItemAssignmentInputSchema)
+export const updateContentItemAssignment = courseInstructorProcedure(
+  UpdateContentItemAssignmentInputSchema,
+)
   .output(UpdateContentItemAssignmentOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { body, dueAt, maxPoints, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const { data: existing } = await coreTable.entities.contentItem
       .get(key)
       .go();

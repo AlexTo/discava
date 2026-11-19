@@ -16,8 +16,8 @@ import {
   videoPositionToStore,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
+import { playableManifest } from '../helpers/playback.js';
 import { courseProcedure } from '../init.js';
-import { playableManifest } from '../lib/playback.js';
 import {
   FileUrlInputSchema,
   FileUrlOutputSchema,

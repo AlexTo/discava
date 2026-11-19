@@ -8,18 +8,15 @@ import {
   isCourseImageKey,
 } from '@discava/common-server-utils/public-media';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import {
-  refreshInstructorCourseUpdatedAt,
-  requireActiveCourse,
-  requireCourseInstructor,
-} from '../lib/course-lifecycle.js';
+import { refreshInstructorCourseUpdatedAt } from '../helpers/course-access.js';
+import { requireActiveCourse } from '../helpers/curriculum-guards.js';
 import {
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
   headPublicMediaObject,
   presignJpegUpload,
-} from '../lib/public-media-client.js';
+} from '../helpers/public-media-client.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   COURSE_IMAGE_MAX_BYTES,
   CreateCourseImageUploadUrlInputSchema,
@@ -33,14 +30,14 @@ import {
 // the course. Uploads arrive tagged to expire, and saving one keeps it, so an
 // upload that's never saved cleans itself up.
 
-export const createCourseImageUploadUrl = courseProcedure
-  .input(CreateCourseImageUploadUrlInputSchema)
+export const createCourseImageUploadUrl = courseInstructorProcedure(
+  CreateCourseImageUploadUrlInputSchema,
+)
   .output(CreateCourseImageUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, contentLength } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
 
     const imageKey = courseImageKey(courseId, randomUUID());
@@ -50,14 +47,14 @@ export const createCourseImageUploadUrl = courseProcedure
     };
   });
 
-export const updateCourseImage = courseProcedure
-  .input(UpdateCourseImageInputSchema)
+export const updateCourseImage = courseInstructorProcedure(
+  UpdateCourseImageInputSchema,
+)
   .output(UpdateCourseImageOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, imageKey } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
 
     if (imageKey !== null) {
