@@ -2,13 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { courseLandingWrites, InvalidRequestError } from '@discava/core-table';
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
+import {
+  cancellationReasons,
+  courseLandingWrites,
+  failedAt,
+  InvalidRequestError,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
-import {
-  requireCourseInstructor,
-  transactionConflict,
-} from '../lib/course-lifecycle.js';
+import { requireCourseInstructor } from '../lib/course-lifecycle.js';
 import {
   UpdateCourseLandingInputSchema,
   UpdateCourseLandingOutputSchema,
@@ -42,9 +45,7 @@ export const updateCourseLanding = courseProcedure
       if (canceled) {
         // The course patch is the first item; it fails its condition only if
         // the course is gone.
-        const courseGone =
-          (results as { code?: string }[] | undefined)?.[0]?.code ===
-          'ConditionalCheckFailed';
+        const courseGone = failedAt(cancellationReasons(results), 0);
         throw courseGone
           ? new TRPCError({ code: 'NOT_FOUND', message: 'Course not found' })
           : transactionConflict();

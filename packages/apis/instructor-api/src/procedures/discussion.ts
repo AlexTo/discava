@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
   DISCUSSION_MAX_VISIBLE_REPLIES,
@@ -13,7 +14,6 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
-import { transactionConflict } from '../lib/course-lifecycle.js';
 import {
   DiscussionPostSchema,
   DismissReportsInputSchema,

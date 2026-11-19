@@ -9,6 +9,11 @@ import {
   funnelStatus,
   type Member,
 } from './analytics.js';
+import {
+  cancellationReasons,
+  failedAt,
+  hasTransactionConflict,
+} from './errors.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
@@ -42,11 +47,6 @@ const periodEnd = (period: string): number => {
   const week1Monday = jan4.getTime() - ((jan4.getUTCDay() || 7) - 1) * DAY_MS;
   return week1Monday + week * 7 * DAY_MS;
 };
-
-const isCancelled = (
-  reasons: ({ code?: string } | undefined)[] | undefined,
-  index: number,
-) => reasons?.[index]?.code === 'ConditionalCheckFailed';
 
 // The deltas grouped by the item they change, as a transaction may name an
 // item only once.
@@ -130,9 +130,6 @@ const itemUpdate = (
 const CONFLICT_ATTEMPTS = 5;
 const CONFLICT_BACKOFF_MS = 50;
 
-const hasConflict = (reasons: ({ code?: string } | undefined)[] | undefined) =>
-  reasons?.some((reason) => reason?.code === 'TransactionConflict') ?? false;
-
 // Runs a transaction whose first write is a marker, and says whether it was
 // applied (true) or its marker was already there (false). Anything else
 // cancelling it is thrown.
@@ -146,10 +143,10 @@ const writeOnce = async (
     if (!canceled) {
       return true;
     }
-    if (isCancelled(data, 0)) {
+    if (failedAt(cancellationReasons(data), 0)) {
       return false;
     }
-    if (!hasConflict(data) || attempt === CONFLICT_ATTEMPTS) {
+    if (!hasTransactionConflict(data) || attempt === CONFLICT_ATTEMPTS) {
       throw new Error(
         `Analytics transaction for ${what} was cancelled: ${JSON.stringify(data)}`,
       );
@@ -323,7 +320,10 @@ export const moveLessonFunnel = async (
     }
     // The marker changed under us, or a transaction on the same items met
     // ours: look again at the records and the marker.
-    if (!isCancelled(data, 0) && !hasConflict(data)) {
+    if (
+      !failedAt(cancellationReasons(data), 0) &&
+      !hasTransactionConflict(data)
+    ) {
       throw new Error(
         `Analytics funnel move for ${userId} in ${lessonId} was cancelled: ${JSON.stringify(data)}`,
       );

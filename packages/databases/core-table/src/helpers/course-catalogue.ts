@@ -12,7 +12,11 @@ import {
   type Level,
   normaliseTags,
 } from './catalogue.js';
-import { InvalidRequestError, NotFoundError } from './errors.js';
+import {
+  failedConditions,
+  InvalidRequestError,
+  NotFoundError,
+} from './errors.js';
 import { transactionEntities } from './notification.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
@@ -137,10 +141,7 @@ export const courseCatalogueWrites = async (
     ])
     .go();
   if (canceled) {
-    const failed = (results ?? []).map(
-      (result: { code?: string } | undefined) =>
-        result?.code === 'ConditionalCheckFailed',
-    );
+    const failed = failedConditions(results);
     throw failed[1]
       ? new InvalidRequestError('Choose an active category')
       : new NotFoundError('Course not found');

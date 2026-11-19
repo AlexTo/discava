@@ -190,6 +190,12 @@ export {
   discussionNotificationWrites,
 } from './helpers/discussion-notifications.js';
 export {
+  type CancellationReasons,
+  cancellationReasons,
+  failedAt,
+  failedConditions,
+  hasFailedCondition,
+  hasTransactionConflict,
   InvalidRequestError,
   isConditionalCheckFailed,
   NameConflictError,

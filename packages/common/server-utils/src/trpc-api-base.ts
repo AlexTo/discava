@@ -12,6 +12,16 @@ import {
   IMiddlewareContext,
 } from './trpc-middleware.js';
 
+// DynamoDB cancelled the request's transaction because another one touched the
+// same records at the same moment. Nothing was changed and a retry is safe, so
+// it's a CONFLICT, not a server error.
+export const transactionConflict = () =>
+  new TRPCError({
+    code: 'CONFLICT',
+    message:
+      'Another request was changing the same records; nothing was changed. Please retry',
+  });
+
 export interface ApiBaseOptions {
   /** Powertools' service name and metrics namespace, e.g. `CoreApi`. */
   serviceName: string;

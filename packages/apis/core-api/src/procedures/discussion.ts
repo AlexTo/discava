@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   checkPostId,
   DISCUSSION_MAX_REPORTERS,
