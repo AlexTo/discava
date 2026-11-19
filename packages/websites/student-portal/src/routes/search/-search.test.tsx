@@ -66,6 +66,23 @@ describe('/search', () => {
     expect(screen.getByText('Learn more')).toBeInTheDocument();
   });
 
+  it('shows each course’s price, or Free, under its title', async () => {
+    search('linear', () => ({
+      items: [
+        {
+          ...hit('linalg', 'Linear Algebra'),
+          priceAmount: 1999,
+          priceCurrency: 'USD',
+        },
+        { ...hit('calc', 'Calculus'), priceAmount: 0, priceCurrency: 'USD' },
+      ],
+      cursor: null,
+    }));
+
+    expect(await screen.findByText('$19.99')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+  });
+
   it('says when nothing matches', async () => {
     search('quantum', () => ({ items: [], cursor: null }));
     expect(

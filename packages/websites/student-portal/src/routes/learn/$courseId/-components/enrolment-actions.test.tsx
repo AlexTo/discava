@@ -2,8 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   type Handler,
@@ -39,10 +39,11 @@ const enrolment = (overrides: Record<string, unknown> = {}) => ({
 
 const renderPreview = (
   handlers: Record<string, Handler> = {},
-  { signedIn = true } = {},
+  { signedIn = true, path = '/' } = {},
 ) =>
   renderWithCoreApi(<CoursePage courseId="course-1" />, {
     signedIn,
+    path,
     handlers: {
       'course.publicView': () => course,
       // The page's Reviews section reads these; these tests are not about it.
@@ -197,5 +198,210 @@ describe('EnrolmentActions', () => {
       "Couldn't check your enrolment",
     );
     expect(await enrolButton()).toBeEnabled();
+  });
+});
+
+const priced = { ...course, priceAmount: 2000, priceCurrency: 'USD' };
+
+describe('EnrolmentActions: paid courses', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const renderPriced = (
+    handlers: Record<string, Handler> = {},
+    options: { signedIn?: boolean; path?: string } = {},
+  ) =>
+    renderPreview(
+      {
+        'course.publicView': () => priced,
+        'course.myEnrolment': () => null,
+        'payment.available': () => ({ available: true }),
+        ...handlers,
+      },
+      options,
+    );
+
+  const buyButton = () => screen.findByRole('button', { name: 'Buy now' });
+
+  it('shows Free for a free course', async () => {
+    renderPreview({ 'course.myEnrolment': () => null });
+    await enrolButton();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+  });
+
+  it('asks a signed-out visitor to sign in to buy, keeping the course', async () => {
+    const { user, calls } = renderPriced({}, { signedIn: false });
+
+    expect(await screen.findByText('$20.00')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+    await user.click(
+      await screen.findByRole('button', { name: 'Sign in to buy' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Sign in to buy',
+    });
+    expect(
+      within(dialog).getByRole('link', { name: 'Continue to sign in' }),
+    ).toHaveAttribute('href', `/signin?redirect=${encodeURIComponent('/')}`);
+    expect(calls.map(({ path }) => path)).not.toContain('payment.checkout');
+  });
+
+  it('starts a checkout and sends the browser to its page', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const { user, calls } = renderPriced({
+      'payment.checkout': () => ({ checkoutUrl: 'https://pay.test/session-1' }),
+    });
+
+    expect(await screen.findByText('$20.00')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enrol now' })).toBeNull();
+    await user.click(await buyButton());
+
+    expect(
+      await screen.findByRole('button', { name: 'Starting payment…' }),
+    ).toBeDisabled();
+    expect(assign).toHaveBeenCalledWith('https://pay.test/session-1');
+    expect(calls).toContainEqual({
+      path: 'payment.checkout',
+      input: { courseId: 'course-1' },
+    });
+  });
+
+  it('shows the API message when the checkout fails', async () => {
+    const { user } = renderPriced({
+      'payment.checkout': () => {
+        throw new ApiError('CONFLICT', 'You are already enrolled');
+      },
+    });
+
+    await user.click(await buyButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'You are already enrolled',
+    );
+    expect(screen.getByRole('button', { name: 'Buy now' })).toBeEnabled();
+  });
+
+  it('offers no purchase while payments are unavailable', async () => {
+    renderPriced({ 'payment.available': () => ({ available: false }) });
+
+    expect(
+      await screen.findByText(
+        'Payments are unavailable right now. Please try again later.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+  });
+
+  it('shows the same message when the checkout is refused as unavailable', async () => {
+    const { user } = renderPriced({
+      'payment.checkout': () => {
+        throw new ApiError(
+          'PRECONDITION_FAILED',
+          'Payments are unavailable right now',
+        );
+      },
+    });
+
+    await user.click(await buyButton());
+
+    expect(
+      await screen.findByText(
+        'Payments are unavailable right now. Please try again later.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+  });
+
+  it('offers Buy now when enrolling in a course that must be purchased', async () => {
+    const { user } = renderPreview({
+      'course.myEnrolment': () => null,
+      'course.enrol': () => {
+        throw new ApiError(
+          'PRECONDITION_FAILED',
+          'This course must be purchased',
+        );
+      },
+      'payment.available': () => ({ available: true }),
+    });
+
+    await user.click(await enrolButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This course must be purchased',
+    );
+    expect(await buyButton()).toBeEnabled();
+  });
+
+  it('shows the cancelled notice with Buy now', async () => {
+    renderPriced({}, { path: '/?checkout=cancelled' });
+
+    expect(
+      await screen.findByText('Payment cancelled. You have not been charged.'),
+    ).toBeInTheDocument();
+    expect(await buyButton()).toBeEnabled();
+  });
+
+  it('offers a dropped student a new purchase', async () => {
+    renderPriced({
+      'course.myEnrolment': () => enrolment({ status: 'dropped' }),
+    });
+
+    expect(await buyButton()).toBeEnabled();
+  });
+
+  it('confirms the payment, then shows the enrolled state when the enrolment appears', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let enrolled = false;
+    renderPriced(
+      { 'course.myEnrolment': () => (enrolled ? enrolment() : null) },
+      { path: '/?checkout=success' },
+    );
+
+    expect(await screen.findByText('Confirming your payment')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /learning/ })).toBeNull();
+
+    enrolled = true;
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+    expect(
+      await screen.findByRole('dialog', { name: "You're enrolled!" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Confirming your payment')).toBeNull();
+  });
+
+  it('polls every 2 seconds and gives up after 60', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { calls } = renderPriced({}, { path: '/?checkout=success' });
+    const enrolmentCalls = () =>
+      calls.filter(({ path }) => path === 'course.myEnrolment').length;
+
+    await screen.findByText('Confirming your payment');
+    const before = enrolmentCalls();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(enrolmentCalls() - before).toBeGreaterThanOrEqual(4);
+
+    await act(() => vi.advanceTimersByTimeAsync(55_000));
+    expect(
+      await screen.findByText(
+        'Your payment is still being confirmed. It is not lost: refresh in a minute.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Buy now' })).toBeNull();
+    expect(screen.queryByRole('link', { name: /learning/ })).toBeNull();
+
+    const after = enrolmentCalls();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(enrolmentCalls()).toBe(after);
+  });
+
+  it('has no arrow icons in any button', async () => {
+    renderPriced();
+    expect((await buyButton()).querySelector('svg')).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { formatPrice } from '@discava/common-web-utils/price';
 import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import type { IMyEnrolment } from '@discava/core-api';
 import { useQuery } from '@tanstack/react-query';
@@ -176,6 +177,12 @@ export function SignedInHome() {
                     <h3 className="text-base font-semibold leading-5">
                       {course.title}
                     </h3>
+                    {course.priceAmount !== undefined &&
+                    course.priceCurrency ? (
+                      <p className="mt-1 text-sm font-semibold">
+                        {formatPrice(course.priceAmount, course.priceCurrency)}
+                      </p>
+                    ) : null}
                     {course.description ? (
                       <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                         {course.description}

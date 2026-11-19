@@ -125,6 +125,32 @@ describe('/', () => {
       await screen.findByRole('heading', { name: /^Welcome/ }),
     ).toBeInTheDocument();
   });
+
+  it('shows the price or Free on the signed-in home’s course cards', async () => {
+    renderWithCoreApi(null, {
+      routeTree,
+      path: '/',
+      signedIn: true,
+      handlers: {
+        ...handlers,
+        'course.publicList': () => ({
+          items: [
+            { ...course, priceAmount: 2000, priceCurrency: 'USD' },
+            {
+              ...course,
+              courseId: 'course-2',
+              title: 'Calculus',
+              priceAmount: 0,
+              priceCurrency: 'USD',
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(await screen.findByText('$20.00')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+  });
 });
 
 describe('/learn/<courseId>/home', () => {

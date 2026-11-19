@@ -46,6 +46,10 @@ export interface DisplayCourse {
   // Its ratings, from the catalogue; absent where the source has none.
   ratingAverage?: number;
   ratingCount?: number;
+  // Its price in the smallest currency unit (0 is free); absent where the
+  // source has none, such as a course indexed before it had a price.
+  priceAmount?: number;
+  priceCurrency?: string;
 }
 
 export function toDisplayCourse(course: {
@@ -59,6 +63,8 @@ export function toDisplayCourse(course: {
   durationHours?: number;
   ratingAverage?: number;
   ratingCount?: number;
+  priceAmount?: number;
+  priceCurrency?: string;
 }): DisplayCourse {
   const seed = hashString(course.courseId);
   return {
@@ -74,5 +80,7 @@ export function toDisplayCourse(course: {
     imageKey: course.imageKey,
     ratingAverage: course.ratingAverage,
     ratingCount: course.ratingCount,
+    priceAmount: course.priceAmount,
+    priceCurrency: course.priceCurrency,
   };
 }

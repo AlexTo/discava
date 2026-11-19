@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { formatPrice } from '@discava/common-web-utils/price';
 import { Link } from '@tanstack/react-router';
 import { BarChart3, Clock3 } from 'lucide-react';
 import {
@@ -45,6 +46,11 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
           )}
         </div>
         <CardTitle className="mt-2">{course.title}</CardTitle>
+        {course.priceAmount !== undefined && course.priceCurrency ? (
+          <p className="text-sm font-semibold">
+            {formatPrice(course.priceAmount, course.priceCurrency)}
+          </p>
+        ) : null}
         <RatingSummary
           average={course.ratingAverage}
           count={course.ratingCount}
