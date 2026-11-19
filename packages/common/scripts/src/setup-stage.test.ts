@@ -376,6 +376,46 @@ describe.concurrent('setup-stage.sh execution policy', {
     );
   });
 
+  it("allows the student portal's CloudFront functions, policies and page renderer URL", async () => {
+    // The portals' SPA rewrite and host forwarding are CloudFront Functions,
+    // and the public page renderer is a Lambda function URL origin behind its
+    // own cache and origin request policies (#287).
+    const { status, executionStatements } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'CloudFrontForDiscava',
+        Action: expect.arrayContaining([
+          'cloudfront:*CachePolicy',
+          'cloudfront:GetCachePolicyConfig',
+          'cloudfront:*OriginRequestPolicy',
+          'cloudfront:GetOriginRequestPolicyConfig',
+          'cloudfront:CreateFunction',
+          'cloudfront:UpdateFunction',
+          'cloudfront:DeleteFunction',
+          'cloudfront:DescribeFunction',
+          'cloudfront:GetFunction',
+          'cloudfront:PublishFunction',
+        ]),
+      }),
+    );
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'LambdaForDiscava',
+        Action: expect.arrayContaining([
+          'lambda:CreateFunctionUrlConfig',
+          'lambda:GetFunctionUrlConfig',
+          'lambda:UpdateFunctionUrlConfig',
+          'lambda:DeleteFunctionUrlConfig',
+        ]),
+      }),
+    );
+  });
+
   it("allows vended log delivery from the stage's buckets", async () => {
     // S3 server access logs reach CloudWatch Logs through a delivery source
     // on the bucket, which needs this on the bucket itself.
