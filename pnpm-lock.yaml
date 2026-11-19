@@ -858,9 +858,6 @@ importers:
       '@aws-sdk/client-secrets-manager':
         specifier: 'catalog:'
         version: 3.1164.0
-      '@aws-sdk/client-sesv2':
-        specifier: 'catalog:'
-        version: 3.1164.0
       '@aws-sdk/client-sqs':
         specifier: 'catalog:'
         version: 3.1164.0

@@ -1,5 +1,12 @@
 {
   "targets": {
+    "graphify-update": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "if [ -n \"$CI\" ] || ! command -v graphify >/dev/null 2>&1; then echo 'graphify not installed (or CI): skipping knowledge graph update'; else graphify update .; fi"
+      }
+    },
     "license-check": {
       "executor": "@aws/nx-plugin:license-check",
       "cache": true,

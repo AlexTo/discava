@@ -24,7 +24,9 @@ vi.mock('@aws-sdk/client-sesv2', () => ({
 }));
 
 vi.mock('@discava/common-server-utils/local-dev', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/common-server-utils/local-dev')>()),
+  ...(await importOriginal<
+    typeof import('@discava/common-server-utils/local-dev')
+  >()),
   callLocalEventRunner,
 }));
 

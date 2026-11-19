@@ -18,7 +18,9 @@ const delivery = vi.hoisted(() =>
   vi.fn(async () => ({ handled: 1, ignored: 0 })),
 );
 vi.mock('../notifications/notification-delivery.js', async (importActual) => ({
-  ...(await importActual<typeof import('../notifications/notification-delivery.js')>()),
+  ...(await importActual<
+    typeof import('../notifications/notification-delivery.js')
+  >()),
   notificationDelivery: delivery,
 }));
 

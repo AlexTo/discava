@@ -4,148 +4,33 @@
  */
 import { defineConfig } from 'rolldown';
 
-export default defineConfig([
-  {
+/** Each Lambda's bundle name and its entry file. */
+const LAMBDAS: [name: string, input: string][] = [
+  ['post-confirmation', 'src/identity/post-confirmation.ts'],
+  ['transcode-complete', 'src/media/transcode-complete.ts'],
+  ['transcribe-complete', 'src/media/transcribe-complete.ts'],
+  ['transcode-cleanup', 'src/media/transcode-cleanup.ts'],
+  ['analytics-update', 'src/analytics/analytics-update.ts'],
+  ['progress-recalculation', 'src/progress/progress-recalculation.ts'],
+  ['search-indexing', 'src/search/search-indexing.ts'],
+  ['transcode-reconciler', 'src/media/transcode-reconciler.ts'],
+  ['pre-token-generation', 'src/identity/pre-token-generation.ts'],
+  ['search-reindex', 'src/search/search-reindex.ts'],
+  ['stream-router', 'src/router/stream-router.ts'],
+  ['notification-delivery', 'src/notifications/notification-delivery.ts'],
+  ['notification-unsubscribe', 'src/notifications/notification-unsubscribe.ts'],
+];
+
+export default defineConfig(
+  LAMBDAS.map(([name, input]) => ({
     tsconfig: 'tsconfig.lib.json',
-    input: 'src/identity/post-confirmation.ts',
+    input,
     output: {
-      file: '../../dist/packages/events/bundle/lambda/post-confirmation/index.js',
+      file: `../../dist/packages/events/bundle/lambda/${name}/index.js`,
       format: 'cjs',
       codeSplitting: false,
     },
     platform: 'node',
     external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/media/transcode-complete.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/transcode-complete/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/media/transcribe-complete.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/transcribe-complete/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/media/transcode-cleanup.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/transcode-cleanup/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/analytics/analytics-update.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/analytics-update/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/progress/progress-recalculation.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/progress-recalculation/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/search/search-indexing.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/search-indexing/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/media/transcode-reconciler.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/transcode-reconciler/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/identity/pre-token-generation.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/pre-token-generation/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/search/search-reindex.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/search-reindex/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/router/stream-router.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/stream-router/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/notifications/notification-delivery.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/notification-delivery/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-  {
-    tsconfig: 'tsconfig.lib.json',
-    input: 'src/notifications/unsubscribe.ts',
-    output: {
-      file: '../../dist/packages/events/bundle/lambda/notification-unsubscribe/index.js',
-      format: 'cjs',
-      codeSplitting: false,
-    },
-    platform: 'node',
-    external: [/@aws-sdk\/.*/],
-  },
-]);
+  })),
+);

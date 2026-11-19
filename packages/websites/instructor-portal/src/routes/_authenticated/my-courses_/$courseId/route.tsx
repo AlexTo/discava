@@ -12,7 +12,15 @@ import { Card } from '@discava/common-shadcn/components/ui/card';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { BookOpen, CalendarDays, Info, Megaphone, Tags } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarDays,
+  Info,
+  ListChecks,
+  Megaphone,
+  Presentation,
+  Tags,
+} from 'lucide-react';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import { Alert } from '../../../../components/alert';
 import {
@@ -21,6 +29,7 @@ import {
 } from '../../../../components/course-status';
 import { Spinner } from '../../../../components/spinner';
 import { useInstructorApi } from '../../../../hooks/useInstructorApi';
+import { useRuntimeConfig } from '../../../../hooks/useRuntimeConfig';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
@@ -28,6 +37,8 @@ import { CourseCertificatesSwitch } from './-components/course/course-certificat
 import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
 import { CourseStatusActions } from './-components/course/course-status-actions';
+import { LandingPageCard } from './-components/course/landing-page-card';
+import { LandingPageChecklist } from './-components/course/landing-page-checklist';
 
 export const Route = createFileRoute('/_authenticated/my-courses_/$courseId')({
   component: RouteComponent,
@@ -71,6 +82,7 @@ const withoutArchived = <
 
 function RouteComponent() {
   const { courseId } = Route.useParams();
+  const { portals } = useRuntimeConfig();
   const trpc = useInstructorApi();
   const {
     isPending,
@@ -118,11 +130,13 @@ function RouteComponent() {
       <section>
         <Card className="gap-0 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <CourseImage
-              courseId={course.courseId}
-              imageKey={course.imageKey}
-              readOnly={readOnly}
-            />
+            <div id="course-image">
+              <CourseImage
+                courseId={course.courseId}
+                imageKey={course.imageKey}
+                readOnly={readOnly}
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <Badge className={courseStatusStyles[status]}>{status}</Badge>
               <h1 className="text-balance mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
@@ -171,6 +185,39 @@ function RouteComponent() {
         </Card>
       </section>
 
+      <section
+        aria-labelledby="landing-checklist-heading"
+        className="space-y-4"
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <ListChecks className="size-5 text-primary" />
+            <h2
+              id="landing-checklist-heading"
+              className="text-xl font-semibold"
+            >
+              Landing page checklist
+            </h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            What makes the public page persuasive. It's a guide only: you can
+            publish at any time.
+          </p>
+        </div>
+        <Card className="p-5 sm:p-6">
+          <LandingPageChecklist
+            publicPageUrl={
+              course.status === 'published' && portals?.StudentPortal
+                ? `${portals.StudentPortal}/learn/${course.courseId}`
+                : undefined
+            }
+            hasOutcomes={(course.learningOutcomes?.length ?? 0) > 0}
+            hasRequirements={(course.requirements?.length ?? 0) > 0}
+            hasImage={Boolean(course.imageKey)}
+          />
+        </Card>
+      </section>
+
       <section aria-labelledby="catalogue-heading" className="space-y-4">
         <div>
           <div className="flex items-center gap-2">
@@ -192,6 +239,28 @@ function RouteComponent() {
             level={course.level}
             language={course.language}
             durationHours={course.durationHours}
+            readOnly={readOnly}
+          />
+        </Card>
+      </section>
+
+      <section aria-labelledby="landing-page-heading" className="space-y-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Presentation className="size-5 text-primary" />
+            <h2 id="landing-page-heading" className="text-xl font-semibold">
+              Landing page
+            </h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            What visitors read on the public course page before they enrol.
+          </p>
+        </div>
+        <Card className="p-5 sm:p-6">
+          <LandingPageCard
+            courseId={course.courseId}
+            learningOutcomes={course.learningOutcomes}
+            requirements={course.requirements}
             readOnly={readOnly}
           />
         </Card>

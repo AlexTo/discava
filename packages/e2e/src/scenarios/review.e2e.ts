@@ -12,10 +12,16 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import {
+  createReviewedCourse,
+  postReview,
+  searchTitles,
+  waitForSearchRating,
+} from '../helpers/review.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { enrol, openCourse } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { newUser, signIn, testUser, uniqueName } from '../helpers/users.js';
 
 // Ratings and reviews on the course page: a signed-out visitor sees the
 // section, an enrolled student posts, edits and deletes their review.
@@ -181,5 +187,174 @@ test.describe('course reviews in the admin portal', () => {
     await expect(
       page.getByRole('option', { name: `${title} · 0 ratings` }),
     ).toHaveCount(1);
+  });
+});
+
+// What a visitor and other students see as reviews come and go. Reviews are
+// written through the API; the page is read in the browser.
+test.describe('course ratings across students', () => {
+  test('the summary follows posts, edits and deletes, and only enrolled students can post', async ({
+    page,
+  }) => {
+    const { title, courseId } = await createReviewedCourse('E2E ratings');
+    const first = await postReview(courseId, 4, 'Clear and well paced.', 'Sam');
+
+    // A signed-out visitor sees the summary and the review, but no form.
+    await openCourse(page, title);
+    await expect(page.getByText('Clear and well paced.')).toBeVisible();
+    await expect(page.getByText('(1 rating)')).toBeVisible();
+    await expect(page.getByText('4.0', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Sign in and enrol to review' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Post review' })).toHaveCount(
+      0,
+    );
+
+    // A student who is not enrolled is told to enrol, and the API refuses them.
+    const outsider = await apiUser('Olly', ['student']);
+    await expect(
+      outsider.core.review.post.mutate({ courseId, rating: 5 }),
+    ).rejects.toThrow();
+    await page
+      .getByRole('link', { name: 'Sign in and enrol to review' })
+      .click();
+    await signIn(page, newUser('Olly', ['student']));
+    await expect(
+      page.getByText('Enrol in this course to review it'),
+    ).toBeVisible();
+    await screenshot(page, 'a student who is not enrolled');
+
+    // Editing keeps the count and marks the review edited.
+    await first.core.review.edit.mutate({
+      courseId,
+      rating: 5,
+      text: 'Clear and well paced.',
+      version: (await first.core.review.mine.query({ courseId }))!.version,
+    });
+    await page.reload();
+    await expect(page.getByText(/· edited/)).toBeVisible();
+    await expect(page.getByText('(1 rating)')).toBeVisible();
+    await expect(page.getByText('5.0', { exact: true })).toBeVisible();
+
+    // A second student's review moves the average.
+    const second = await postReview(courseId, 4, 'Good.', 'Dee');
+    await page.reload();
+    await expect(page.getByText('(2 ratings)')).toBeVisible();
+    await expect(page.getByText('4.5', { exact: true })).toBeVisible();
+    await screenshot(page, 'two ratings');
+
+    // Deleting returns the course to its prior summary.
+    const mine = await second.core.review.mine.query({ courseId });
+    await second.core.review.delete.mutate({
+      courseId,
+      version: mine!.version,
+    });
+    await page.reload();
+    await expect(page.getByText('(1 rating)')).toBeVisible();
+    await expect(page.getByText('5.0', { exact: true })).toBeVisible();
+    await expect(page.getByText('Good.')).toHaveCount(0);
+  });
+
+  test('the catalogue card and search show ratings, and Highest rated puts the better course first', async ({
+    page,
+  }) => {
+    const label = uniqueName('rankscope').replace(/\s/g, '');
+    const better = await createReviewedCourse(`${label} better`);
+    const worse = await createReviewedCourse(`${label} worse`);
+    await postReview(better.courseId, 5, undefined, 'Amy');
+    await postReview(better.courseId, 5, undefined, 'Ben');
+    await postReview(worse.courseId, 2, undefined, 'Cat');
+    await postReview(worse.courseId, 2, undefined, 'Dom');
+
+    const viewer = await apiUser('Vic', ['student']);
+    await waitForSearchRating(viewer, better.title, {
+      count: 2,
+      average: 5,
+    });
+    await waitForSearchRating(viewer, worse.title, { count: 2, average: 2 });
+
+    await expect
+      .poll(() => searchTitles(viewer, label, 'rating'), { timeout: 30_000 })
+      .toEqual([better.title, worse.title]);
+
+    await page.goto(`${PORTALS.student}/search?query=${label}&sort=rating`);
+    // Each card has one "Preview <title>" link, in result order.
+    const previews = page.getByRole('link', { name: /^Preview / });
+    await expect(previews.first()).toHaveAccessibleName(
+      `Preview ${better.title}`,
+    );
+    await expect(previews.nth(1)).toHaveAccessibleName(
+      `Preview ${worse.title}`,
+    );
+    await expect(page.getByText('(2 ratings)').first()).toBeVisible();
+    await expect(page.getByLabel('Sort by')).toHaveValue('rating');
+    await screenshot(page, 'search sorted by highest rated');
+  });
+});
+
+// The instructor's response and the admin's removal, seen from the course page.
+test.describe('responses and removals on the course page', () => {
+  test('an instructor response shows to a signed-out visitor', async ({
+    page,
+  }) => {
+    const { instructor, title, courseId } =
+      await createReviewedCourse('E2E response');
+    const student = await postReview(courseId, 4, 'Helpful.', 'Sam');
+    const { sub } = student;
+    await instructor.instructor.review.respond.mutate({
+      courseId,
+      reviewerId: sub,
+      text: 'Thanks for the kind words.',
+    });
+
+    await openCourse(page, title);
+    await expect(page.getByText('Thanks for the kind words.')).toBeVisible();
+    await expect(page.getByText(/^Response from /)).toBeVisible();
+    await screenshot(page, 'the instructor response on the course page');
+  });
+
+  test('an admin removal drops the review everywhere and the author sees the notice', async ({
+    page,
+    browser,
+  }) => {
+    const { instructor, title, courseId } =
+      await createReviewedCourse('E2E removal');
+    const student = await postReview(courseId, 1, 'Rude words.', 'Sam');
+
+    // The admin removes it through the admin portal's Reviews screen.
+    const adminPage = await (await browser.newContext()).newPage();
+    await adminPage.goto(`${PORTALS.admin}/reviews`);
+    await signIn(adminPage, testUser('Carol'));
+    await adminPage
+      .getByLabel('Course')
+      .selectOption({ label: `${title} · 1 rating` });
+    await adminPage.getByRole('button', { name: /^Remove .* review$/ }).click();
+    const dialog = adminPage.getByRole('dialog');
+    await dialog.getByLabel('Reason').fill('Abusive language');
+    await dialog.getByRole('button', { name: 'Remove review' }).click();
+    await expect(adminPage.getByText('Removed', { exact: true })).toBeVisible();
+    await adminPage.close();
+
+    // The course page no longer counts it, and search drops the rating.
+    await openCourse(page, title);
+    await expect(page.getByText('Rude words.')).toHaveCount(0);
+    await expect(page.getByText('No ratings yet')).toBeVisible();
+    await waitForSearchRating(student, title, { count: 0 });
+
+    // The author sees the notice and no form; posting again is refused.
+    await expect(
+      student.core.review.post.mutate({ courseId, rating: 5 }),
+    ).rejects.toThrow();
+    const mine = await student.core.review.mine.query({ courseId });
+    expect(mine?.status).toBe('removed');
+
+    // An instructor of the course cannot remove reviews.
+    const asInstructor = instructor.admin.review.remove.mutate({
+      courseId,
+      reviewerId: student.sub,
+      reason: 'No',
+    });
+    await expect(asInstructor).rejects.toThrow();
   });
 });
