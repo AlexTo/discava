@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
@@ -20,8 +21,7 @@ import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CircleCheck, Paperclip } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Alert } from '../../../../components/alert';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 import {
   awaitProgressRecalculation,
   errorCode,
@@ -320,11 +320,11 @@ export function AssignmentItem({
               </ItemActions>
             </Item>
             {downloadError ? (
-              <Alert type="error" header="Couldn't download this file">
+              <ErrorAlert type="error" header="Couldn't download this file">
                 {errorCode(downloadError) === 'NOT_FOUND'
                   ? 'This submission is not available'
                   : apiErrorMessage(downloadError)}
-              </Alert>
+              </ErrorAlert>
             ) : null}
             {locked ? (
               <p className="text-sm text-muted-foreground">
@@ -349,9 +349,9 @@ export function AssignmentItem({
       </div>
 
       {readOnly ? (
-        <Alert header="This course is archived">
+        <ErrorAlert header="This course is archived">
           Work can no longer be submitted.
-        </Alert>
+        </ErrorAlert>
       ) : locked ? null : submission && !resubmitting ? (
         <Button
           type="button"
@@ -366,10 +366,10 @@ export function AssignmentItem({
       ) : !submission && done ? null : (
         <div className="space-y-3">
           {pastDue ? (
-            <Alert header="This assignment is past due">
+            <ErrorAlert header="This assignment is past due">
               This assignment is past due. Late work is accepted and marked
               late.
-            </Alert>
+            </ErrorAlert>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-3">
@@ -419,17 +419,17 @@ export function AssignmentItem({
           ) : null}
 
           {failure?.kind === 'conflict' ? (
-            <Alert type="error" header="Not submitted">
+            <ErrorAlert type="error" header="Not submitted">
               Your submission changed while you were sending it. Try again
-            </Alert>
+            </ErrorAlert>
           ) : null}
           {failure?.kind === 'unavailable' ? (
-            <Alert type="error" header="Not submitted">
+            <ErrorAlert type="error" header="Not submitted">
               This assignment is no longer available.
-            </Alert>
+            </ErrorAlert>
           ) : null}
           {failure?.kind === 'failed' ? (
-            <Alert type="error" header="Not submitted">
+            <ErrorAlert type="error" header="Not submitted">
               {failure.message}
               {submission ? (
                 <>
@@ -437,7 +437,7 @@ export function AssignmentItem({
                   Your earlier submission is unchanged
                 </>
               ) : null}
-            </Alert>
+            </ErrorAlert>
           ) : null}
 
           <div className="flex gap-2">

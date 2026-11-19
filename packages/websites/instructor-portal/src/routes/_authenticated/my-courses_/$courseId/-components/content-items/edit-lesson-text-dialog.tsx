@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -29,8 +30,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { RichTextEditor } from '../rich-text-editor';
 import { studentActivityNote } from '../student-activity';
 
@@ -130,9 +130,9 @@ export function EditLessonTextDialog({
         </DialogHeader>
 
         {saveError && (
-          <Alert type="error" header="Couldn't save the text">
+          <ErrorAlert type="error" header="Couldn't save the text">
             {saveError}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <div className="space-y-2">
@@ -265,7 +265,7 @@ export function RemoveLessonTextButton({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert
+          <ErrorAlert
             type="error"
             header={
               archive
@@ -274,7 +274,7 @@ export function RemoveLessonTextButton({
             }
           >
             {apiErrorMessage(error)}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>

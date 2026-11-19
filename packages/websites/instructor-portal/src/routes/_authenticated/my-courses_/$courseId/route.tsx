@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDescription,
   Alert as ShadcnAlert,
 } from '@discava/common-shadcn/components/ui/alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Card } from '@discava/common-shadcn/components/ui/card';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import {
@@ -21,15 +24,12 @@ import {
   Presentation,
   Tags,
 } from 'lucide-react';
+import { useInstructorApi } from '../../../../api';
 import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
-import { Alert } from '../../../../components/alert';
 import {
   type CourseStatus,
   courseStatusStyles,
 } from '../../../../components/course-status';
-import { Spinner } from '../../../../components/spinner';
-import { useInstructorApi } from '../../../../hooks/useInstructorApi';
-import { useRuntimeConfig } from '../../../../hooks/useRuntimeConfig';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
@@ -104,14 +104,14 @@ function RouteComponent() {
   if (isError) {
     const notFound = error.data?.code === 'NOT_FOUND';
     return (
-      <Alert
+      <ErrorAlert
         type="error"
         header={notFound ? 'Course not found' : "Couldn't load this course"}
       >
         {notFound
           ? "This course doesn't exist, or you don't have access to it."
           : apiErrorMessage(error)}
-      </Alert>
+      </ErrorAlert>
     );
   }
   // Archived records move out of the editor into the Archived section below;

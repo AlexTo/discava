@@ -2,22 +2,19 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  AlertDescription,
-  AlertTitle,
-  Alert as ShadcnAlert,
-} from '@discava/common-shadcn/components/ui/alert';
+
 import React from 'react';
+import { AlertDescription, AlertTitle, Alert as ShadcnAlert } from './ui/alert';
 
-type AlertType = 'info' | 'error';
+type ErrorAlertType = 'info' | 'error';
 
-export interface AlertProps {
-  type?: AlertType;
+export interface ErrorAlertProps {
+  type?: ErrorAlertType;
   header: React.ReactNode;
   children: React.ReactNode;
 }
 
-export const Alert: React.FC<AlertProps> = ({
+export const ErrorAlert: React.FC<ErrorAlertProps> = ({
   type = 'info',
   header,
   children,

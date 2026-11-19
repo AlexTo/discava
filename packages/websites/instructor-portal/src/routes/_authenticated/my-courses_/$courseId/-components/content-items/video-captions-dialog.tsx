@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -29,8 +30,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { CAPTION_LANGUAGES } from '@discava/common-web-utils/caption-languages';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useRef, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 // Native select styled like Input, as the language list is short and fixed.
 const SELECT_CLASS =
@@ -159,15 +159,15 @@ export function VideoCaptionsDialog({
         </DialogHeader>
 
         {error && (
-          <Alert type="error" header="Couldn't change the captions">
+          <ErrorAlert type="error" header="Couldn't change the captions">
             {error}
-          </Alert>
+          </ErrorAlert>
         )}
 
         {videoUrlQuery.isError && (
-          <Alert type="error" header="Couldn't load the captions">
+          <ErrorAlert type="error" header="Couldn't load the captions">
             {apiErrorMessage(videoUrlQuery.error, 'Try again in a moment.')}
-          </Alert>
+          </ErrorAlert>
         )}
 
         {videoUrlQuery.isSuccess && tracks.length === 0 && (

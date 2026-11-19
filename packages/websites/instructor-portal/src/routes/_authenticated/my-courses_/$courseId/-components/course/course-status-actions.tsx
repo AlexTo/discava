@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -18,8 +19,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Send } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 // Publish for a draft course, Restore for an archived one. A published course
 // has neither.
@@ -85,9 +85,9 @@ function PublishCourseDialog({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert type="error" header="Couldn't publish the course">
+          <ErrorAlert type="error" header="Couldn't publish the course">
             {apiErrorMessage(error)}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>
@@ -147,9 +147,9 @@ function RestoreCourseButton({ courseId }: { courseId: string }) {
         <RotateCcw /> {isPending ? 'Restoring…' : 'Restore'}
       </Button>
       {isError && (
-        <Alert type="error" header="Couldn't restore the course">
+        <ErrorAlert type="error" header="Couldn't restore the course">
           {apiErrorMessage(error)}
-        </Alert>
+        </ErrorAlert>
       )}
     </div>
   );

@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,12 +17,11 @@ import {
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
-import { Alert } from '../../components/alert';
-import { Spinner } from '../../components/spinner';
-import { useAdminApi } from '../../hooks/useAdminApi';
+import { useAdminApi } from '../../api';
 
 interface Category {
   id: string;
@@ -88,9 +89,9 @@ export function CategoriesScreen() {
       </header>
 
       {error && (
-        <Alert type="error" header="That didn't work">
+        <ErrorAlert type="error" header="That didn't work">
           {apiErrorMessage(error)}
-        </Alert>
+        </ErrorAlert>
       )}
 
       <form className="flex max-w-md items-end gap-2" onSubmit={onAdd}>
@@ -116,9 +117,9 @@ export function CategoriesScreen() {
 
       {categories.isPending && <Spinner />}
       {categories.isError && (
-        <Alert type="error" header="Couldn't load the categories">
+        <ErrorAlert type="error" header="Couldn't load the categories">
           {apiErrorMessage(categories.error)}
-        </Alert>
+        </ErrorAlert>
       )}
       {categories.data && (
         <table className="w-full max-w-3xl text-left text-sm">

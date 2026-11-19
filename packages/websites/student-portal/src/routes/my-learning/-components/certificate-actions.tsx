@@ -2,11 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useState } from 'react';
-import { Alert } from '../../../components/alert';
-import { useCoreApiClient } from '../../../hooks/useCoreApi';
+import { useCoreApiClient } from '../../../api';
 
 const certificatePath = (certificateId: string) =>
   `/certificates/${certificateId}`;
@@ -95,9 +96,9 @@ export function CertificateActions({
         ) : null}
       </div>
       {error ? (
-        <Alert type="error" header="Couldn't download your certificate">
+        <ErrorAlert type="error" header="Couldn't download your certificate">
           {apiErrorMessage(error)} Try again.
-        </Alert>
+        </ErrorAlert>
       ) : null}
     </div>
   );

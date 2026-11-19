@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { retryQuery } from '@discava/common-web-utils/query-retry';
 import {
   QueryClient,
   QueryClientProvider as QueryClientProviderInner,
 } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { ComponentProps, FC, PropsWithChildren, useState } from 'react';
+import {
+  type ComponentProps,
+  createElement,
+  type FC,
+  type PropsWithChildren,
+  useState,
+} from 'react';
+import { retryQuery } from './query-retry';
 
 type QueryClientProviderProps = PropsWithChildren & {
   client?: QueryClient;
@@ -28,13 +34,15 @@ export const QueryClientProvider: FC<QueryClientProviderProps> = ({
   devtoolsOptions,
 }) => {
   const [queryClient] = useState(client);
-  return (
-    <QueryClientProviderInner client={queryClient}>
-      {children}
-      {!disableDevtools && (
-        <ReactQueryDevtools client={queryClient} {...devtoolsOptions} />
-      )}
-    </QueryClientProviderInner>
+  return createElement(
+    QueryClientProviderInner,
+    { client: queryClient },
+    children,
+    !disableDevtools &&
+      createElement(ReactQueryDevtools, {
+        client: queryClient,
+        ...devtoolsOptions,
+      }),
   );
 };
 

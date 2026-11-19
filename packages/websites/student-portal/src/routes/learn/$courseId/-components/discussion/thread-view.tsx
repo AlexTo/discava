@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,8 +27,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useCoreApi } from '../../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../../api';
 import { usePostId } from './post-id';
 import type { LessonRef } from './question-form';
 
@@ -227,9 +228,9 @@ function ReplyForm({
         </p>
       </div>
       {reply.isError ? (
-        <Alert type="error" header="Couldn't post your reply">
+        <ErrorAlert type="error" header="Couldn't post your reply">
           {apiErrorMessage(reply.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <Button type="submit" disabled={empty || reply.isPending}>
         Post reply
@@ -278,7 +279,7 @@ export function ThreadView({
     return (
       <div className="space-y-3">
         {back}
-        <Alert type="error" header="Couldn't load the question">
+        <ErrorAlert type="error" header="Couldn't load the question">
           {apiErrorMessage(threadQuery.error)}
           <Button
             className="mt-2"
@@ -288,7 +289,7 @@ export function ThreadView({
           >
             Try again
           </Button>
-        </Alert>
+        </ErrorAlert>
       </div>
     );
   }
@@ -329,9 +330,9 @@ export function ThreadView({
         ) : null}
       </PostCard>
       {actionError ? (
-        <Alert type="error" header="That didn't work">
+        <ErrorAlert type="error" header="That didn't work">
           {apiErrorMessage(actionError)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       {open ? (
         <>

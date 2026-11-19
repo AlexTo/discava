@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import type { AppRouter } from '@discava/core-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderResult, render } from '@testing-library/react';
@@ -13,8 +14,7 @@ import {
   type TRPCOptionsProxy,
 } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
-import { CoreApiTRPCContext } from '../components/CoreApiClientProvider';
-import { RuntimeConfigContext } from '../components/RuntimeConfig';
+import { CoreApiTRPCContext } from '../api';
 import { type ApiCall, fakeFetch, type Handler } from './fake-trpc-fetch';
 
 const API_URL = 'http://core-api.test/';

@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import type { useAuth } from 'react-oidc-context';
-import type { useRuntimeConfig } from './hooks/useRuntimeConfig';
 
 // Type-only so routes/__root.tsx can use it without importing router.ts
 // (which imports routeTree.gen and would close an import cycle).

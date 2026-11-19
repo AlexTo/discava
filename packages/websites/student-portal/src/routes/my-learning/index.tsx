@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import {
   Tabs,
   TabsContent,
@@ -12,11 +14,9 @@ import {
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Alert } from '../../components/alert';
+import { useCoreApi } from '../../api';
 import { CourseProgressCard } from '../../components/course-progress-card';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
-import { Spinner } from '../../components/spinner';
-import { useCoreApi } from '../../hooks/useCoreApi';
 import { requireSignIn } from '../../lib/require-sign-in';
 import { CertificateActions } from './-components/certificate-actions';
 
@@ -61,9 +61,9 @@ function MyLearning() {
           <Spinner />
         </div>
       ) : enrolmentsQuery.isError ? (
-        <Alert type="error" header="Couldn't load your courses">
+        <ErrorAlert type="error" header="Couldn't load your courses">
           {apiErrorMessage(enrolmentsQuery.error)}
-        </Alert>
+        </ErrorAlert>
       ) : (
         <Tabs defaultValue="in-progress">
           <TabsList>

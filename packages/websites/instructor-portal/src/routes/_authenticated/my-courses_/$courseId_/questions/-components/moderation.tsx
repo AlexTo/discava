@@ -15,8 +15,7 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useCoreApi } from '../../../../../../hooks/useCoreApi';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useCoreApi, useInstructorApi } from '../../../../../../api';
 import type { LessonRef } from './lessons';
 
 export interface PostRef extends LessonRef {

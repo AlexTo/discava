@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -23,8 +25,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useCoreApi } from '../../../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../../../api';
 import type { LessonRef, LessonState } from './lessons';
 import { DeletePostButton, useModeration } from './moderation';
 import { usePostId } from './post-id';
@@ -101,9 +102,9 @@ function ReplyForm({
         </p>
       </div>
       {reply.isError ? (
-        <Alert type="error" header="Couldn't post your reply">
+        <ErrorAlert type="error" header="Couldn't post your reply">
           {apiErrorMessage(reply.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <Button type="submit" disabled={empty || reply.isPending}>
         Post reply
@@ -219,7 +220,7 @@ export function ThreadDialog({
   }
   if (query.isError) {
     content = (
-      <Alert type="error" header="Couldn't load the question">
+      <ErrorAlert type="error" header="Couldn't load the question">
         {apiErrorMessage(query.error)}
         <Button
           className="mt-2"
@@ -229,7 +230,7 @@ export function ThreadDialog({
         >
           Try again
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   } else {
     const { question, accepted } = query.data.pages[0];
@@ -238,9 +239,9 @@ export function ThreadDialog({
       <>
         {renderPost(question, false)}
         {actionError ? (
-          <Alert type="error" header="That didn't work">
+          <ErrorAlert type="error" header="That didn't work">
             {apiErrorMessage(actionError)}
-          </Alert>
+          </ErrorAlert>
         ) : null}
         {accepted ? (
           <div className="space-y-1 border-l-2 border-emerald-500 pl-3">

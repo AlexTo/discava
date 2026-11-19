@@ -2,13 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Alert } from '../components/alert';
-import { Spinner } from '../components/spinner';
-import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 
 // The link in a notification email. Public: the signed token in it says whose
 // emails these are, so nobody needs to sign in. Opening the page only reads
@@ -86,7 +87,7 @@ function Unsubscribe() {
     );
   } else if (linkQuery.isError) {
     content = (
-      <Alert type="error" header="Couldn't open this link">
+      <ErrorAlert type="error" header="Couldn't open this link">
         <p>Something went wrong. Check your connection and try again.</p>
         <Button
           type="button"
@@ -97,7 +98,7 @@ function Unsubscribe() {
         >
           Try again
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   } else if (!name) {
     content = (
@@ -161,9 +162,9 @@ function Unsubscribe() {
     <main className="mx-auto flex w-full max-w-xl flex-col items-start gap-4 px-6 py-16">
       {content}
       {change.isError && !invalid ? (
-        <Alert type="error" header="Couldn't save that">
+        <ErrorAlert type="error" header="Couldn't save that">
           <p>Something went wrong. Try again.</p>
-        </Alert>
+        </ErrorAlert>
       ) : null}
     </main>
   );

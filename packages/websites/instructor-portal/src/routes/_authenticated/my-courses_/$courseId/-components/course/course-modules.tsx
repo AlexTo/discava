@@ -18,7 +18,7 @@ import {
   PencilLine,
   Trash2,
 } from 'lucide-react';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import {
   type ContentItem,
   LessonContentItemsRow,

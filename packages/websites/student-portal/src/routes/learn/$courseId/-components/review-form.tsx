@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +20,7 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from '@discava/common-shadcn/components/ui/radio-group';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,9 +28,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { Star } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../../components/alert';
-import { Spinner } from '../../../../components/spinner';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 import { formatReviewDate } from './review-date';
 
 const TEXT_MAX = 2000;
@@ -129,9 +130,9 @@ function ReviewFields({
         </p>
       </div>
       {errored ? (
-        <Alert type="error" header="Couldn't save your review">
+        <ErrorAlert type="error" header="Couldn't save your review">
           {apiErrorMessage(error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <div className="flex gap-2">
         <Button type="submit" disabled={rating === undefined || pending}>
@@ -252,7 +253,7 @@ export function ReviewForm({ courseId }: { courseId: string }) {
   }
   if (mineQuery.isError) {
     return (
-      <Alert type="error" header="Couldn't load your review">
+      <ErrorAlert type="error" header="Couldn't load your review">
         {apiErrorMessage(mineQuery.error)}
         <Button
           className="mt-2"
@@ -262,16 +263,16 @@ export function ReviewForm({ courseId }: { courseId: string }) {
         >
           Retry
         </Button>
-      </Alert>
+      </ErrorAlert>
     );
   }
 
   const mine = mineQuery.data;
   if (mine?.status === 'removed') {
     return (
-      <Alert header="Your review was removed by a moderator">
+      <ErrorAlert header="Your review was removed by a moderator">
         {mine.removedReason ? `Reason: ${mine.removedReason}` : ''}
-      </Alert>
+      </ErrorAlert>
     );
   }
 
@@ -293,11 +294,11 @@ export function ReviewForm({ courseId }: { courseId: string }) {
     errorCode(edit.error) === 'CONFLICT' ||
     errorCode(remove.error) === 'CONFLICT';
   const conflictNotice = conflict ? (
-    <Alert type="error" header="Your review changed; reload it">
+    <ErrorAlert type="error" header="Your review changed; reload it">
       <Button className="mt-2" size="sm" variant="outline" onClick={reload}>
         Reload
       </Button>
-    </Alert>
+    </ErrorAlert>
   ) : null;
 
   if (editing) {
@@ -339,9 +340,9 @@ export function ReviewForm({ courseId }: { courseId: string }) {
         <p className="whitespace-pre-line break-words text-sm">{mine.text}</p>
       ) : null}
       {remove.isError && !conflict ? (
-        <Alert type="error" header="Couldn't delete your review">
+        <ErrorAlert type="error" header="Couldn't delete your review">
           {apiErrorMessage(remove.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={() => setEditing(true)}>

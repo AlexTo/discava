@@ -5,7 +5,7 @@
 import { NotificationPreferences } from '@discava/common-shadcn/components/notification-preferences';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useCoreApi } from '../../hooks/useCoreApi';
+import { useCoreApi } from '../../api';
 import { requireSignIn } from '../../lib/require-sign-in';
 
 // Which notification emails the user gets; the bell always lists everything.
