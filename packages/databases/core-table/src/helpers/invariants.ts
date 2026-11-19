@@ -773,6 +773,12 @@ const checkPreviewTranscodeState = (
     if (pending && preview.status !== 'processing') {
       problems.push(`transcodePending is set on a ${preview.status} preview`);
     }
+    // Every coursePreview writer (snapshot.coursePreviews): instructor-api's
+    // create and replace set it with the status, so the transcode reconciler
+    // can find a preview whose job never reports back.
+    if (!pending && preview.status === 'processing') {
+      problems.push('a processing preview is not waiting for its transcode');
+    }
     if (
       preview.status === 'ready' &&
       !preview.s3Key?.endsWith('/master.m3u8')

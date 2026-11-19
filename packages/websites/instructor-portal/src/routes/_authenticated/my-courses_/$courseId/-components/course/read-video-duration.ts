@@ -11,7 +11,13 @@ export const readVideoDuration = (file: File): Promise<number> =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
-    const done = () => URL.revokeObjectURL(url);
+    // A file the browser can neither read nor reject would leave the upload
+    // waiting for ever.
+    const timer = setTimeout(() => video.onerror?.(new Event('error')), 15_000);
+    const done = () => {
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+    };
     video.preload = 'metadata';
     video.onloadedmetadata = () => {
       done();

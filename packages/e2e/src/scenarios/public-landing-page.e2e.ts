@@ -17,7 +17,11 @@ import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
-import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
+import {
+  claimedDurationVideo,
+  expectToPlay,
+  THREE_SECOND_VIDEO,
+} from '../helpers/video.js';
 
 // The instructor writes the landing page in the portal; the public page then
 // shows what a visitor needs to decide: outcomes, requirements and who teaches.
@@ -215,35 +219,17 @@ test('an instructor uploads a preview and a signed-out visitor watches it', asyn
   });
 
   await test.step('an over-long replacement is refused and the preview keeps playing', async () => {
-    // Stands in for a file over 5 minutes: the browser reports 400 seconds for
-    // the detached element the card reads a file's length from.
-    await instructor.evaluate(() => {
-      const real = Object.getOwnPropertyDescriptor(
-        HTMLMediaElement.prototype,
-        'duration',
-      );
-      Object.defineProperty(window, '__realDuration', { value: real });
-      Object.defineProperty(HTMLMediaElement.prototype, 'duration', {
-        configurable: true,
-        get(this: HTMLMediaElement) {
-          return this.isConnected ? real?.get?.call(this) : 400;
-        },
-      });
+    await previewArea.getByLabel('Preview video file').setInputFiles({
+      name: 'six-minutes.mp4',
+      mimeType: 'video/mp4',
+      buffer: await claimedDurationVideo(360),
     });
-    await previewArea
-      .getByLabel('Preview video file')
-      .setInputFiles(THREE_SECOND_VIDEO);
     await expect(
       instructor.getByText('This video is longer than 5 minutes'),
     ).toBeVisible();
     await expect(previewArea.locator('video')).toBeAttached();
     await screenshot(instructor, 'over-long preview refused', {
       fullPage: true,
-    });
-    await instructor.evaluate(() => {
-      const real = (window as unknown as { __realDuration: PropertyDescriptor })
-        .__realDuration;
-      Object.defineProperty(HTMLMediaElement.prototype, 'duration', real);
     });
     await expect(
       signedOut.course.previewVideoUrl.query({ courseId }),
