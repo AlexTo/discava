@@ -6,7 +6,6 @@
 import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   initialVisibilityFields,
@@ -16,8 +15,9 @@ import {
   requireNotArchived,
   writeAtEnd,
   writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
-import { hashQuizQuestions } from '../lib/quiz-hash.js';
+} from '../helpers/course-lifecycle.js';
+import { hashQuizQuestions } from '../helpers/quiz-hash.js';
+import { courseProcedure } from '../init.js';
 import {
   CreateQuizAssignmentInputSchema,
   CreateQuizAssignmentOutputSchema,

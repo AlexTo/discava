@@ -73,7 +73,7 @@ vi.mock(
 
 // The S3 calls' own behaviour isn't under test; these assert the procedures
 // make them, in the right order, for the right keys.
-vi.mock('../lib/caption-files.js', () => ({
+vi.mock('../helpers/caption-files.js', () => ({
   readCaptionUpload,
   putCaptionFile,
   bestEffortDeleteCaptionFile,

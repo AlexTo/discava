@@ -4,7 +4,6 @@
  */
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   initialVisibilityFields,
@@ -13,7 +12,8 @@ import {
   requireOrdinaryLesson,
   writeAtEnd,
   writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/course-lifecycle.js';
+import { courseProcedure } from '../init.js';
 import {
   CreateContentItemTextInputSchema,
   CreateContentItemTextOutputSchema,

@@ -4,8 +4,8 @@
  */
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { bestEffortRetirePreviousVersions } from '../helpers/s3-client.js';
 import { t } from '../init.js';
-import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import { createModule, deleteModule, updateModule } from './module.js';
 
 const {
@@ -88,15 +88,15 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
 }));
 
 // bestEffortCancelTranscodeJobs's own status/job-id filtering is covered
-// directly in lib/mediaconvert-client.test.ts; here it's just a mock so
+// directly in helpers/mediaconvert-client.test.ts; here it's just a mock so
 // these tests can assert module.ts calls it correctly.
-vi.mock('../lib/mediaconvert-client.js', () => ({
+vi.mock('../helpers/mediaconvert-client.js', () => ({
   bestEffortCancelTranscodeJobs,
 }));
 

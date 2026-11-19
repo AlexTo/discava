@@ -60,7 +60,7 @@
       "packages/databases/core-table/src/helpers/course-landing.ts"
     ],
     "instructor-api": [
-      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/helpers/course-lifecycle.ts",
       "packages/apis/instructor-api/src/procedures/course-image.ts",
       "packages/apis/instructor-api/src/procedures/course.ts"
     ]
@@ -71,7 +71,7 @@
       "packages/databases/core-table/src/helpers/course-landing.ts"
     ],
     "instructor-api": [
-      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/helpers/course-lifecycle.ts",
       "packages/apis/instructor-api/src/procedures/course.ts"
     ]
   },
@@ -126,7 +126,7 @@
   },
   "lesson": {
     "instructor-api": [
-      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/helpers/course-lifecycle.ts",
       "packages/apis/instructor-api/src/procedures/assignment.ts",
       "packages/apis/instructor-api/src/procedures/lesson.ts",
       "packages/apis/instructor-api/src/procedures/module.ts"
@@ -140,7 +140,7 @@
   },
   "module": {
     "instructor-api": [
-      "packages/apis/instructor-api/src/lib/course-lifecycle.ts",
+      "packages/apis/instructor-api/src/helpers/course-lifecycle.ts",
       "packages/apis/instructor-api/src/procedures/module.ts"
     ]
   },

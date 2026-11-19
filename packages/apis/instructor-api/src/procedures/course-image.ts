@@ -8,18 +8,18 @@ import {
   isCourseImageKey,
 } from '@discava/common-server-utils/public-media';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   refreshInstructorCourseUpdatedAt,
   requireActiveCourse,
   requireCourseInstructor,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/course-lifecycle.js';
 import {
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
   headPublicMediaObject,
   presignJpegUpload,
-} from '../lib/public-media-client.js';
+} from '../helpers/public-media-client.js';
+import { courseProcedure } from '../init.js';
 import {
   COURSE_IMAGE_MAX_BYTES,
   CreateCourseImageUploadUrlInputSchema,

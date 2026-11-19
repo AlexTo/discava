@@ -11,13 +11,13 @@ import {
   transcodePendingFrom,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { writeUnderActiveAncestors } from '../lib/course-lifecycle.js';
+import { writeUnderActiveAncestors } from './course-lifecycle.js';
 import {
   bestEffortCancelTranscodeJob,
   bestEffortCancelTranscodeJobs,
   submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
-import { bestEffortDeleteContentItemVideos } from '../lib/s3-client.js';
+} from './mediaconvert-client.js';
+import { bestEffortDeleteContentItemVideos } from './s3-client.js';
 
 // The stages of replacing (or just editing) a video content item, called in
 // order by updateContentItemVideo.

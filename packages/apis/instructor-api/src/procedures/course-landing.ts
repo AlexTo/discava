@@ -10,8 +10,8 @@ import {
   InvalidRequestError,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
+import { requireCourseInstructor } from '../helpers/course-lifecycle.js';
 import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
 import {
   UpdateCourseLandingInputSchema,
   UpdateCourseLandingOutputSchema,

@@ -28,20 +28,20 @@ import {
   transcodePendingFrom,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import { requireCourseInstructor } from '../helpers/course-lifecycle.js';
 import {
   asPreviewSummary,
   previewPlayableManifest,
-} from '../lib/course-preview.js';
+} from '../helpers/course-preview.js';
 import {
   bestEffortCancelTranscodeJob,
   submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
+} from '../helpers/mediaconvert-client.js';
 import {
   bestEffortDeletePreviewUploads,
   getVideoUploadETag,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseProcedure } from '../init.js';
 import {
   CoursePreviewOutputSchema,
   CreateCoursePreviewInputSchema,

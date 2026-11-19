@@ -16,13 +16,13 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   refreshInstructorCourseUpdatedAt,
   requireCourseInstructor,
-} from '../lib/course-lifecycle.js';
-import { asPreviewSummary } from '../lib/course-preview.js';
+} from '../helpers/course-lifecycle.js';
+import { asPreviewSummary } from '../helpers/course-preview.js';
+import { courseProcedure } from '../init.js';
 import {
   ArchiveCourseInputSchema,
   ArchiveCourseOutputSchema,

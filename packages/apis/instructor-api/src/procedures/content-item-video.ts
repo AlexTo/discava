@@ -24,6 +24,19 @@ import {
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import {
+  getCourseOrThrow,
+  initialVisibilityFields,
+  requireAncestorsNotArchived,
+  requireNotArchived,
+  requireOrdinaryLesson,
+  writeAtEnd,
+} from '../helpers/course-lifecycle.js';
+import {
+  bestEffortCancelTranscodeJob,
+  submitTranscodeJob,
+} from '../helpers/mediaconvert-client.js';
+import { getVideoUploadETag } from '../helpers/s3-client.js';
+import {
   cancelAndResubmit,
   hasMetadata,
   isRetryOfInFlightSubmission,
@@ -35,19 +48,6 @@ import {
   requireObjectKeyInLesson,
 } from '../helpers/video-replacement.js';
 import { courseProcedure } from '../init.js';
-import {
-  getCourseOrThrow,
-  initialVisibilityFields,
-  requireAncestorsNotArchived,
-  requireNotArchived,
-  requireOrdinaryLesson,
-  writeAtEnd,
-} from '../lib/course-lifecycle.js';
-import {
-  bestEffortCancelTranscodeJob,
-  submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
-import { getVideoUploadETag } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
   CreateContentItemVideoOutputSchema,

@@ -14,7 +14,6 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   activeCourseCheck,
   courseNoLongerDraft,
@@ -30,12 +29,13 @@ import {
   requireNotArchived,
   writeAtEnd,
   writeInActiveCourse,
-} from '../lib/course-lifecycle.js';
-import { bestEffortCancelTranscodeJobs } from '../lib/mediaconvert-client.js';
+} from '../helpers/course-lifecycle.js';
+import { bestEffortCancelTranscodeJobs } from '../helpers/mediaconvert-client.js';
 import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseProcedure } from '../init.js';
 import {
   CreateModuleInputSchema,
   CreateModuleOutputSchema,

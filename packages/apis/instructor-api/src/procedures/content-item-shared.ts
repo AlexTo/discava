@@ -11,7 +11,6 @@ import {
   isConditionalCheckFailed,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   courseNoLongerDraft,
   draftCourseCheck,
@@ -27,16 +26,17 @@ import {
   writeAtEnd,
   writeInActiveCourse,
   writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/course-lifecycle.js';
 import {
   bestEffortCancelTranscodeJobs,
   type ICancelableVideoContentItem,
-} from '../lib/mediaconvert-client.js';
+} from '../helpers/mediaconvert-client.js';
 import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
   type IDeletableVideoContentItem,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseProcedure } from '../init.js';
 import {
   DeleteContentItemInputSchema,
   DeleteContentItemOutputSchema,
