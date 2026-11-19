@@ -78,7 +78,8 @@ const router = t.router({
 });
 
 const USER_SUB = 'student-1';
-const call = (sub: string | null = USER_SUB) => callerFor(router, { sub });
+const call = (sub: string | null = USER_SUB) =>
+  callerFor(router, { sub: sub ?? undefined });
 
 const notification = (n: number, extra: Record<string, unknown> = {}) => ({
   userId: USER_SUB,

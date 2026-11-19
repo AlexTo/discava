@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { vi } from 'vitest';
-import { t } from '../init.js';
 
 // What course*.test.ts share: the mocked tables, fixture records and
 // default mock behaviour. A test file takes its spies from `spies`, which has to

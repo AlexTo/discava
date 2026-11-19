@@ -5,12 +5,7 @@
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import {
-  course,
-  enrolment,
-  installDefaults,
-  visible,
-} from './course.fixtures.js';
+import { course, installDefaults, visible } from './course.fixtures.js';
 import { publicViewCourse } from './course.js';
 
 const {

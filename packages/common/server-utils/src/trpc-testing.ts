@@ -145,7 +145,9 @@ export const mockCoreTable = <const Spec extends CoreTableSpec>(
 const TIMESTAMP = '2024-01-01T00:00:00.000Z';
 
 /** A draft course by `instructor-1`, with the fields a test overrides. */
-export const aCourse = (overrides: Record<string, unknown> = {}) => ({
+export const aCourse = <const O extends Record<string, unknown> = {}>(
+  overrides: O = {} as O,
+) => ({
   courseId: 'course-1',
   status: 'draft' as const,
   createdAt: TIMESTAMP,
@@ -153,7 +155,9 @@ export const aCourse = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-export const aModule = (overrides: Record<string, unknown> = {}) => ({
+export const aModule = <const O extends Record<string, unknown> = {}>(
+  overrides: O = {} as O,
+) => ({
   moduleId: 'module-1',
   courseId: 'course-1',
   title: 'Module',
@@ -164,7 +168,9 @@ export const aModule = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-export const aLesson = (overrides: Record<string, unknown> = {}) => ({
+export const aLesson = <const O extends Record<string, unknown> = {}>(
+  overrides: O = {} as O,
+) => ({
   lessonId: 'lesson-1',
   moduleId: 'module-1',
   courseId: 'course-1',
@@ -177,7 +183,9 @@ export const aLesson = (overrides: Record<string, unknown> = {}) => ({
 });
 
 /** A visible, ready content item in lesson-1; pass `type` and its fields. */
-export const aContentItem = (overrides: Record<string, unknown> = {}) => ({
+export const aContentItem = <const O extends Record<string, unknown> = {}>(
+  overrides: O = {} as O,
+) => ({
   contentItemId: 'content-item-1',
   lessonId: 'lesson-1',
   moduleId: 'module-1',

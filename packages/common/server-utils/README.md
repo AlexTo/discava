@@ -32,4 +32,5 @@ A module does no work when imported: configuration and secrets are read on first
 - `unsubscribe-token`, `unsubscribe`: the signed email unsubscribe link and the route that handles it.
 - `stripe/*`: the Stripe client, connecting an account and registering its webhook, and the Stripe secrets.
 - `trpc-api-base`, `trpc-middleware`, `trpc-handler`, `trpc-local-server`: what every tRPC API is built from: the base procedures and their plugins (auth, logging, metrics, tracing, errors), the Lambda handler, and the local dev server (`nx dev`).
+- `trpc-testing`: test-only helpers for the APIs' procedure tests (`callerFor`, `mockCoreTable`, `aCourse`, `aModule`, `aLesson`, `aContentItem`), imported by tests and `*.fixtures.ts` files only, never by Lambda code.
 - `local-dev`: local dev's endpoints and helpers for the Docker stand-ins and the event runner.
