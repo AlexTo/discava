@@ -455,6 +455,38 @@ export type NotificationsComponentConfig = {
 export type AdminApiComponentConfig = InstructorApiComponentConfig;
 
 /**
+ * Per-stage settings for the Stripe webhook API (`POST /stripe/webhook`),
+ * which Stripe calls without a Cognito token: the WAF and throttling are what
+ * stand in front of it. Fully hardened by default.
+ */
+export type PaymentsComponentConfig = {
+  /** Protect the API with AWS WAF's default managed ruleset */
+  enableWaf?: boolean;
+  /** Encrypt the API's access log group with a customer-managed KMS key */
+  enableKmsEncryption?: boolean;
+  /** Rotate that key every year. Only used when `enableKmsEncryption` is true */
+  enableKeyRotation?: boolean;
+  /** Retain the access log group when the stack is deleted */
+  retainOnDelete?: boolean;
+  /** Custom domain name for the API. Requires `certificateArn` */
+  domainName?: string;
+  /** ACM certificate ARN for the custom domain. Must be in the stage's region */
+  certificateArn?: string;
+  /** Requests per second API Gateway lets through to the webhook method */
+  throttleRateLimit?: number;
+  /** Burst allowed above that rate */
+  throttleBurstLimit?: number;
+  /** Concurrent executions reserved for the webhook function */
+  reservedConcurrency?: number;
+  /** The webhook function's timeout, in seconds */
+  timeoutSeconds?: number;
+  /** The webhook function's log level */
+  logLevel?: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+  /** Trace requests with AWS X-Ray */
+  enableTracing?: boolean;
+};
+
+/**
  * Component-level settings consuming apps use to configure their constructs
  * per stage, keyed by component name. Omitted components/flags fall back to
  * whatever default the app itself chooses.
@@ -464,6 +496,7 @@ export type StageComponents = {
   coreApi?: CoreApiComponentConfig;
   instructorApi?: InstructorApiComponentConfig;
   adminApi?: AdminApiComponentConfig;
+  payments?: PaymentsComponentConfig;
   coreTable?: CoreTableComponentConfig;
   streamRouter?: StreamRouterComponentConfig;
   studentPortal?: StudentPortalComponentConfig;
@@ -473,6 +506,38 @@ export type StageComponents = {
   publicMedia?: PublicMediaComponentConfig;
   search?: SearchComponentConfig;
   notifications?: NotificationsComponentConfig;
+};
+
+/**
+ * Per-stage instructor payout settings: what the platform keeps, how long
+ * instructor earnings are held, and the smallest payout sent. Checked by
+ * `validatePayoutSettings` whenever a stage is resolved.
+ */
+export type PayoutSettings = {
+  /**
+   * The platform's fee on each sale, in basis points of the amount paid
+   * (100 basis points = 1%). An integer from 0 to 10000 inclusive.
+   * Applies to sales recorded after a change; earlier ones keep the fee they
+   * were recorded with.
+   *
+   * @default 2000
+   */
+  platformFeeBasisPoints: number;
+  /**
+   * Days a sale's earnings are held before the instructor can be paid for
+   * them, to cover the refund window. A non-negative integer.
+   *
+   * @default 14
+   */
+  holdDays: number;
+  /**
+   * The smallest payout the daily run sends, in minor units of the currency
+   * (cents for USD). Smaller balances wait for the next run. A non-negative
+   * integer.
+   *
+   * @default 1000
+   */
+  minimumPayoutMinor: number;
 };
 
 /**
@@ -489,6 +554,8 @@ export type StageConfig = {
   account?: string;
   /** Infrastructure (construct) settings for this stage */
   infra?: StageComponents;
+  /** Instructor payout settings for this stage */
+  payouts?: PayoutSettings;
 };
 
 /**

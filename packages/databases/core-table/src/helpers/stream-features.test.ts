@@ -5,6 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import {
+  EARNINGS_STREAM_FILTERS,
+  matchesEarningsStreamFilters,
+} from './earnings-stream.js';
+import {
   featuresFor,
   STREAM_FEATURES,
   type StreamFeature,
@@ -41,6 +45,48 @@ const SAMPLE = [
   record('INSERT', 'NewImage', 'notification'),
   record('INSERT', 'NewImage', 'notificationBroadcast'),
 ];
+
+describe('the earnings entities', () => {
+  const ENTITIES = [
+    'earningEntry',
+    'earningDay',
+    'earningOrder',
+    'payout',
+    'payoutAccount',
+  ];
+  const EVENTS = [
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const;
+
+  it.each(ENTITIES)(
+    'route inserts, modifications and removals of %s to no feature',
+    (entity) => {
+      for (const [eventName, image] of EVENTS) {
+        expect(featuresFor(record(eventName, image, entity))).toEqual([]);
+      }
+    },
+  );
+
+  it.each(ENTITIES)(
+    'never pass the earnings filters, so recording cannot feed itself (%s)',
+    (entity) => {
+      for (const [eventName, image] of EVENTS) {
+        const streamRecord = record(eventName, image, entity);
+        expect(matchesEarningsStreamFilters(streamRecord)).toBe(false);
+        expect(
+          EARNINGS_STREAM_FILTERS.some(
+            (filter) =>
+              filter.eventName === eventName &&
+              filter.image === image &&
+              filter.entities.includes(entity),
+          ),
+        ).toBe(false);
+      }
+    },
+  );
+});
 
 describe('featuresFor', () => {
   it('routes a record to exactly the matching feature', () => {

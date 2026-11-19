@@ -53,7 +53,7 @@ pnpm dev
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
 | OpenSearch | 9200 | OpenSearch (course search; started by `packages/databases/search`'s `dev` target, which also syncs the local indices) |
-| Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step) |
+| Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step), and Stripe (a stand-in for its API, hosted checkout page and signed webhook deliveries to `/stripe/webhook`; the saved key lives in `tmp/local-dev/secrets/`) |
 | Local OIDC server | 9400 | Cognito |
 
 **Signing in.** The portals send you to a local sign-in page: pick **Alice** (instructor and student), **Bob** (student), **Dan** (a second student, e.g. one who isn't enrolled) or **Carol** (admin). There are no passwords. Under "Someone else" you can sign in with any claims, such as other groups. Cognito itself (Managed Login, sign-up, the post-confirmation trigger) is tested on the deployed `discava-development` stage.
@@ -64,7 +64,7 @@ pnpm dev
 
 **Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/common-scripts:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
 
-**Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run:
+**Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run the command below. It also deletes `tmp/local-dev/`, which includes the Stripe key an administrator connected (`secrets/`), since the connection record it belongs to is in the table being wiped:
 
 ```sh
 pnpm nx run @discava/common-scripts:reset-local-data

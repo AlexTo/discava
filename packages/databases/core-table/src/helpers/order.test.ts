@@ -33,6 +33,7 @@ const course: OrderCourse = {
 const connection: OrderConnection & Record<string, unknown> = {
   status: 'active',
   accountId: 'acct_1',
+  mode: 'test',
   revision: 1,
 };
 
@@ -60,6 +61,7 @@ const order = (over: Partial<OrderRecord> = {}): OrderRecord => ({
   userId: 'user-1',
   courseId: 'course-1',
   accountId: 'acct_1',
+  mode: 'test',
   courseTitle: 'Intro',
   listAmount: 1999,
   amount: 1999,
@@ -80,9 +82,16 @@ describe('startOrder', () => {
       currency: 'USD',
       courseTitle: 'Intro',
       accountId: 'acct_1',
+      mode: 'test',
       expiresAt: '2026-11-19T01:00:00.000Z',
     });
     expect(fake.rows('order')).toHaveLength(1);
+  });
+
+  it('records the live mode of a live connection', async () => {
+    const { fake, start } = setup();
+    fake.rows('paymentConnection')[0].mode = 'live';
+    expect(await start()).toMatchObject({ mode: 'live' });
   });
 
   it('refuses a free course and an unpublished one, writing nothing', async () => {

@@ -4,6 +4,7 @@
  */
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
+import { PAYMENT_MODES } from './payment-connection.js';
 
 export const ORDER_STATUSES = [
   'pending',
@@ -57,6 +58,14 @@ export const createOrderEntity = async () =>
         // when the checkout started.
         accountId: {
           type: 'string',
+          required: true,
+          readOnly: true,
+        },
+        // The connection's mode when the checkout started. A test key and a
+        // live key of one Stripe account share an `accountId`, so this is what
+        // tells their orders apart.
+        mode: {
+          type: PAYMENT_MODES,
           required: true,
           readOnly: true,
         },

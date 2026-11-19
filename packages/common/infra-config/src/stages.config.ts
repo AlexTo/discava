@@ -18,6 +18,7 @@ import type { StagesConfig } from './stages.types.js';
 //     DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME            api.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME      instructor-api.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_ADMIN_API_DOMAIN_NAME           admin-api.example.com
+//     DISCAVA_DEVELOPMENT_INFRA_PAYMENTS_DOMAIN_NAME            payments.example.com   (the Stripe webhook API)
 //
 //   CloudFront (certificate in us-east-1), comma-separated domains:
 //     DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES     example.com,www.example.com
@@ -47,6 +48,12 @@ export default {
         // No credentials/region set yet — deploys use your active AWS CLI
         // credentials and CDK_DEFAULT_REGION until these are configured.
         'discava-development': {
+          // A short hold so a tester sees earnings become payable in days.
+          payouts: {
+            platformFeeBasisPoints: 2000,
+            holdDays: 1,
+            minimumPayoutMinor: 1000,
+          },
           // With WAF off, these limits are what bound the cost of a flood of
           // requests. Sized for a handful of testers:
           // - API Gateway throttles each method (one per procedure)
@@ -105,6 +112,16 @@ export default {
               logLevel: 'WARN',
               enableTracing: false,
             },
+            payments: {
+              enableWaf: false,
+              enableKmsEncryption: false,
+              retainOnDelete: false,
+              throttleRateLimit: 2,
+              throttleBurstLimit: 5,
+              reservedConcurrency: 10,
+              logLevel: 'WARN',
+              enableTracing: false,
+            },
             coreTable: {
               enableKmsEncryption: false,
               enableDeletionProtection: false,
@@ -144,6 +161,13 @@ export default {
           },
         },
         'discava-production': {
+          // 20% platform fee, earnings held 14 days (the refund window) and
+          // payouts of at least 10.00 in the currency's major unit.
+          payouts: {
+            platformFeeBasisPoints: 2000,
+            holdDays: 14,
+            minimumPayoutMinor: 1000,
+          },
           // Limits with room for real traffic, still well short of AWS's
           // defaults (10,000 requests/s, unbounded concurrency and
           // throughput). Throttles apply to each method separately, so an
