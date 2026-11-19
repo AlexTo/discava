@@ -31,5 +31,5 @@
 
 ## Notes
 
-- The debounce delay (300 ms) and the threshold (more than 3 characters, so 4 or more) are user-visible behavior, not implementation detail, so the spec states them.
+- The debounce delay (300 ms) and the threshold (3 or more characters, set in clarification) are user-visible behavior, not implementation detail, so the spec states them.
 - The spec names the existing results route (`/search?query=…`) and course page only to say they stay unchanged.

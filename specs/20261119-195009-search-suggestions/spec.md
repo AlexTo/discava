@@ -10,22 +10,30 @@
 
 **Parent issue**: none
 
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: Should suggestions start at 4 characters (literally "more than 3") or at 3? → A: At 3 or more characters after trimming spaces, so short topics such as "SQL", "Git" and "AWS" get suggestions.
+- Q: What does picking a suggestion do? → A: It opens that course's page directly. Enter with nothing highlighted still opens the full results page.
+- Q: What does the dropdown contain besides course titles? → A: Courses only, up to 10, plus the "See all results" row. Categories, tags and instructors are out of scope.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The student portal's top bar has a course search box on every page ("What do you want to learn?"). Today it does nothing until the visitor presses Enter, which opens the full results page (`/search?query=…`). This feature adds a suggestions dropdown under that box. It doesn't change the results page or what Enter does with no suggestion chosen.
 
 ### User Story 1 - Jump straight to a course from the search box (Priority: P1)
 
-A visitor, signed in or not, starts typing in the search box. Once they've typed more than 3 characters, a dropdown under the box lists up to 10 published courses whose titles match what they've typed so far, including a partly typed last word ("pyth" matches "Python for Data Analysis"). Choosing one opens that course's page.
+A visitor, signed in or not, starts typing in the search box. Once they've typed 3 or more characters, a dropdown under the box lists up to 10 published courses whose titles match what they've typed so far, including a partly typed last word ("pyth" matches "Python for Data Analysis"). Choosing one opens that course's page.
 
 **Why this priority**: This is the feature. It saves the visitor a trip through the results page when they already know roughly which course they want.
 
-**Independent Test**: With a few published courses in the catalogue, type the first 4 or more letters of one course's title and confirm that the course appears in the dropdown and that choosing it opens its page.
+**Independent Test**: With a few published courses in the catalogue, type the first 3 or more letters of one course's title and confirm that the course appears in the dropdown and that choosing it opens its page.
 
 **Acceptance Scenarios**:
 
 1. **Given** a published course titled "Python for Data Analysis", **When** the visitor types "pyth", **Then** the dropdown lists that course.
-2. **Given** the visitor has typed 3 characters or fewer (after trimming spaces), **When** they pause, **Then** no dropdown appears and no suggestion request is made.
+2. **Given** the visitor has typed 2 characters or fewer (after trimming spaces), **When** they pause, **Then** no dropdown appears and no suggestion request is made.
 3. **Given** more than 10 published courses match, **When** the dropdown opens, **Then** it lists exactly 10, the best matches first.
 4. **Given** the dropdown is open, **When** the visitor clicks or taps a suggestion, **Then** the course's page opens and the dropdown closes.
 5. **Given** a course is a draft or archived, **When** its title matches what was typed, **Then** it never appears in the dropdown.
@@ -85,8 +93,8 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 
 ### Edge Cases
 
-- **Leading or trailing spaces**: these don't count toward the more-than-3-characters threshold, and aren't sent.
-- **Text shortened to 3 characters or fewer**: the dropdown closes and any request still in flight is ignored.
+- **Leading or trailing spaces**: these don't count toward the 3-character threshold, and aren't sent.
+- **Text shortened to 2 characters or fewer**: the dropdown closes and any request still in flight is ignored.
 - **Search is cold-starting**: on a stage where search scales to zero, the first request can time out while search starts up. The dropdown shows nothing or a short "Suggestions are loading" state, never an error banner. Typing and Enter keep working.
 - **Search unavailable or request fails**: the dropdown stays closed or shows no suggestions. The failure doesn't block typing, Enter, or the results page.
 - **Slow answer**: while a request is in flight for the current text, the dropdown keeps showing the previous suggestions or a loading state, never an empty list as if nothing matched.
@@ -100,7 +108,7 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 
 ### Functional Requirements
 
-- **FR-001**: The search box MUST show a suggestions dropdown once the trimmed text is more than 3 characters long (4 or more), and MUST NOT ask for suggestions at 3 characters or fewer.
+- **FR-001**: The search box MUST show a suggestions dropdown once the trimmed text is 3 or more characters long, and MUST NOT ask for suggestions at 2 characters or fewer.
 - **FR-002**: The dropdown MUST list at most 10 course suggestions, ordered best match first.
 - **FR-003**: Suggestions MUST match a course whose title contains every typed word, with the last word matched as a prefix (so a partly typed word still matches). Matching MUST ignore case and use the same word stemming the full search uses.
 - **FR-004**: Suggestions MUST include only published courses, enforced where the suggestions are produced and not only in the portal, the same way full search enforces it.
@@ -135,7 +143,6 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 
 ## Assumptions
 
-- "More than 3 characters" means 4 or more characters after trimming spaces, taken literally from the request.
 - Suggestions are course titles only. Categories, tags, instructors, lessons and past searches are out of scope (see the Search design page's v1 scope: courses only).
 - A suggestion opens the course's page directly. The full results page stays the way to see every match, with filters.
 - 300 ms is the debounce delay, a common default for search-as-you-type that feels instant without sending a request per keystroke.
