@@ -48,6 +48,21 @@ describe('toCourseDocument', () => {
     });
   });
 
+  it('carries the price, and a price-only change changes only the price', () => {
+    const before = toCourseDocument({
+      ...base,
+      priceAmount: 500,
+      priceCurrency: 'EUR',
+    });
+    const after = toCourseDocument({
+      ...base,
+      priceAmount: 1999,
+      priceCurrency: 'EUR',
+    });
+    expect(after).toMatchObject({ priceAmount: 1999, priceCurrency: 'EUR' });
+    expect({ ...after, priceAmount: 500 }).toEqual(before);
+  });
+
   it('leaves the catalogue fields out for a course without them', () => {
     const doc = toCourseDocument(base);
     for (const field of [

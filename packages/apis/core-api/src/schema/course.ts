@@ -18,6 +18,10 @@ export const CourseSchema = z.object({
   // Key of its display image in the public media bucket (#76); portals put
   // it after runtime-config's media.PublicMediaBucket base URL.
   imageKey: z.string().optional(),
+  // What the course costs: the smallest currency unit (0 is free) and its
+  // ISO code. The price history and any order are never part of an output.
+  priceAmount: z.number(),
+  priceCurrency: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
