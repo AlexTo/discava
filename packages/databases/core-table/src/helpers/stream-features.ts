@@ -7,6 +7,10 @@ import {
   matchesAnalyticsStreamFilters,
 } from './analytics-stream.js';
 import {
+  EARNINGS_STREAM_FILTERS,
+  matchesEarningsStreamFilters,
+} from './earnings-stream.js';
+import {
   matchesNotificationStreamFilters,
   NOTIFICATION_STREAM_FILTERS,
 } from './notification-stream.js';
@@ -91,6 +95,17 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     batch: { maxRecords: 100, windowSeconds: 5 },
     maxReceiveCount: 5,
   },
+  {
+    name: 'earnings-recording',
+    filters: EARNINGS_STREAM_FILTERS,
+    handler: 'earnings-recording',
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // Sales of one course share an `earningDay` row, so batches in parallel
+    // conflict (plan risk R6); a few at a time keeps that rare. The
+    // mapping's minimum.
+    maxConcurrency: 2,
+  },
 ];
 
 // The features with their own filter module keep their own matchers, so they stay the one
@@ -101,6 +116,7 @@ const MATCHERS: Readonly<Record<string, Matcher>> = {
   'search-indexing': matchesSearchStreamFilters,
   'analytics-update': matchesAnalyticsStreamFilters,
   'notification-delivery': matchesNotificationStreamFilters,
+  'earnings-recording': matchesEarningsStreamFilters,
 };
 
 const matchesFilters = (
