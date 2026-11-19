@@ -14,7 +14,7 @@ import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import { z } from 'zod';
-import { durationSecondsOf } from '../lib/job-duration.js';
+import { durationSecondsOf } from './job-duration.js';
 import { applyTranscodeOutcome } from './transcode-outcome.js';
 
 export type { Context };

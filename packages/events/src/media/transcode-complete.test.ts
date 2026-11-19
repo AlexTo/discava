@@ -49,7 +49,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
   }),
 }));
 
-vi.mock('../lib/transcribe-client.js', () => ({ startCaptionJob }));
+vi.mock('./transcribe-client.js', () => ({ startCaptionJob }));
 
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   resolveLessonMediaUploadBucketName,

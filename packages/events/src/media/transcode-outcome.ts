@@ -20,7 +20,7 @@ import {
   TRANSCODE_PENDING_ATTRIBUTES,
   writeCaptionsFailed,
 } from '@discava/core-table';
-import { startCaptionJob } from '../lib/transcribe-client.js';
+import { startCaptionJob } from './transcribe-client.js';
 
 // S3Mock in local dev (#137).
 const s3Client = new S3Client(s3ClientConfig());

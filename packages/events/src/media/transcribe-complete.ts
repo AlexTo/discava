@@ -14,7 +14,7 @@ import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import { z } from 'zod';
-import { getCaptionJob } from '../lib/transcribe-client.js';
+import { getCaptionJob } from './transcribe-client.js';
 import { applyTranscribeOutcome } from './transcribe-outcome.js';
 
 export type { Context };

@@ -44,7 +44,16 @@
       "dependsOn": ["compile", "bundle"]
     },
     "build": {
-      "dependsOn": ["lint", "compile", "test", "bundle"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        "bundle",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
+      ]
     },
     "compile": {
       "dependsOn": ["^compile"],

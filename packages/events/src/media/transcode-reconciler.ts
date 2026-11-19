@@ -22,7 +22,7 @@ import {
 import middy from '@middy/core';
 import type { Context } from 'aws-lambda';
 import type { z } from 'zod';
-import { durationSecondsOf } from '../lib/job-duration.js';
+import { durationSecondsOf } from './job-duration.js';
 import { applyTranscodeOutcome, getCoreTable } from './transcode-outcome.js';
 
 export type { Context };

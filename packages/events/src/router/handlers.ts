@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { handler as analyticsUpdate } from '../analytics/analytics-update.js';
-import { handler as notificationDelivery } from '../notifications/delivery.js';
+import { handler as notificationDelivery } from '../notifications/notification-delivery.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
-import { handler as searchIndexing } from '../search/index-content.js';
+import { handler as searchIndexing } from '../search/search-indexing.js';
 
 /**
  * The handler each registered feature invokes, by the registration's

@@ -12,7 +12,14 @@
       "dependsOn": ["compile"]
     },
     "build": {
-      "dependsOn": ["lint", "compile"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
+      ]
     },
     "compile": {
       "executor": "nx:run-commands",

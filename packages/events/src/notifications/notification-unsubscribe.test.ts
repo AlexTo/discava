@@ -7,7 +7,7 @@
 import type { UnsubscribeDeps } from '@discava/common-server-utils/unsubscribe';
 import { signUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { notificationUnsubscribe } from './unsubscribe.js';
+import { notificationUnsubscribe } from './notification-unsubscribe.js';
 
 const SECRET = 'secret-1';
 const setEmailEnabled = vi.fn(async () => undefined);
