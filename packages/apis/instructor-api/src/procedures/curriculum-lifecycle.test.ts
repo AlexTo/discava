@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -160,7 +160,6 @@ const router = t.router({
   restoreContentItem,
   deleteContentItemPermanently,
 });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
@@ -169,17 +168,7 @@ const LESSON_ID = 'lesson-1';
 const ARCHIVED_AT = '2024-02-01T00:00:00.000Z';
 
 const callAs = () =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': ['instructor'] },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups: ['instructor'] });
 
 const timestamps = {
   createdAt: '2024-01-01T00:00:00.000Z',

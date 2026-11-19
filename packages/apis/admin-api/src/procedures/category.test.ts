@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import {
   InvalidRequestError,
   NameConflictError,
   NotFoundError,
 } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -48,18 +48,9 @@ const router = t.router({
   rename: renameCategory,
   archive: archiveCategory,
 });
-const caller = t.createCallerFactory(router);
 
 const callAs = (groups: string[] = ['admin']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: { claims: { sub: 'admin-1', 'cognito:groups': groups } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: 'admin-1', groups });
 
 const science = {
   categoryId: 'cat-1',

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { describe, expect, it, vi } from 'vitest';
 import { t } from './init.js';
 import { appRouter, PUBLIC_OPERATIONS } from './router.js';
@@ -16,11 +16,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   }),
 }));
 
-const anonymousCaller = t.createCallerFactory(appRouter)({
-  event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-  context: {} as any,
-  info: {} as any,
-});
+const anonymousCaller = callerFor(appRouter);
 
 // Calls the operation with no Cognito claims and reports whether it was
 // refused for that, as opposed to failing any other way (bad input, the

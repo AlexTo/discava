@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { connectPayment, disconnectPayment, paymentStatus } from './payment.js';
@@ -63,26 +63,14 @@ vi.mock('@discava/common-server-utils/stripe/secrets-admin', () => ({
 import { ConnectError } from '@discava/common-server-utils/stripe/connect';
 import { ChangeInProgressError, OpenCheckoutError } from '@discava/core-table';
 
-const caller = t.createCallerFactory(
-  t.router({
-    status: paymentStatus,
-    connect: connectPayment,
-    disconnect: disconnectPayment,
-  }),
-);
+const router = t.router({
+  status: paymentStatus,
+  connect: connectPayment,
+  disconnect: disconnectPayment,
+});
 
 const callAs = (groups: string[] | null = ['admin']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: groups
-          ? { claims: { sub: 'admin-1', 'cognito:groups': groups } }
-          : { claims: {} },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, groups ? { sub: 'admin-1', groups } : {});
 
 const KEY = 'sk_test_SECRETSECRETSECRET1234';
 const OLD_KEY = 'sk_test_OLDOLDOLDOLDOLD9999';

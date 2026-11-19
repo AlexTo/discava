@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { fileUrl, saveVideoPosition, videoUrl } from './content-item.js';
@@ -79,21 +79,12 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
   getSignedCloudFrontFileUrl,
 }));
 
-const caller = t.createCallerFactory(
-  t.router({ videoUrl, fileUrl, saveVideoPosition }),
-);
+const router = t.router({ videoUrl, fileUrl, saveVideoPosition });
 
 const USER_SUB = 'student-1';
 
 const call = (responseCookies: string[] = []) =>
-  caller({
-    event: {
-      requestContext: { authorizer: { claims: { sub: USER_SUB } } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-    responseCookies,
-  });
+  callerFor(router, { sub: USER_SUB, responseCookies });
 
 const ref = {
   courseId: 'course-1',
@@ -385,11 +376,7 @@ describe('contentItem.videoUrl', () => {
   });
 
   it('rejects unauthenticated callers', async () => {
-    const anonymous = caller({
-      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
-    });
+    const anonymous = callerFor(router);
 
     await expect(anonymous.videoUrl(ref)).rejects.toMatchObject({
       code: 'UNAUTHORIZED',
@@ -583,11 +570,7 @@ describe('contentItem.saveVideoPosition', () => {
   });
 
   it('rejects unauthenticated callers', async () => {
-    const anonymous = caller({
-      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
-    });
+    const anonymous = callerFor(router);
 
     await expect(
       anonymous.saveVideoPosition({

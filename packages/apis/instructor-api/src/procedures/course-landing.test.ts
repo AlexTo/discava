@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { InvalidRequestError } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { updateCourseLanding } from './course-landing.js';
@@ -34,20 +35,10 @@ vi.mock('@discava/core-table', async (importActual) => {
   };
 });
 
-const caller = t.createCallerFactory(t.router({ updateCourseLanding }));
+const router = t.router({ updateCourseLanding });
 
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: 'instructor-1', 'cognito:groups': groups },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: 'instructor-1', groups });
 
 const course = {
   courseId: 'course-1',

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -60,27 +60,15 @@ vi.mock('../helpers/public-media-client.js', () => ({
   bestEffortDetachPublicMediaObject,
 }));
 
-const caller = t.createCallerFactory(
-  t.router({
-    get: getProfile,
-    update: updateProfile,
-    createPhotoUploadUrl: createProfilePhotoUploadUrl,
-    updatePhoto: updateProfilePhoto,
-  }),
-);
+const router = t.router({
+  get: getProfile,
+  update: updateProfile,
+  createPhotoUploadUrl: createProfilePhotoUploadUrl,
+  updatePhoto: updateProfilePhoto,
+});
 
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: 'instructor-1', 'cognito:groups': groups },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: 'instructor-1', groups });
 
 const profile = {
   instructorId: 'instructor-1',

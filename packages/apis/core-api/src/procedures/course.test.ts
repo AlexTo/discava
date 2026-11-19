@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -84,24 +84,12 @@ const router = t.router({
   publicViewCourse,
   viewCourse,
 });
-const caller = t.createCallerFactory(router);
 
 const USER_SUB = 'user-1';
 
-const buildEvent = (): APIGatewayProxyEvent =>
-  ({
-    requestContext: { authorizer: { claims: { sub: USER_SUB } } },
-  }) as unknown as APIGatewayProxyEvent;
+const callAsUser = () => callerFor(router, { sub: USER_SUB });
 
-const callAsUser = () =>
-  caller({ event: buildEvent(), context: {} as any, info: {} as any });
-
-const callAnonymously = () =>
-  caller({
-    event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const callAnonymously = () => callerFor(router);
 
 // Curriculum records as stored: every module, lesson and content item has a
 // visibility. Output schemas don't expose it to students, so expectations use
@@ -1530,12 +1518,7 @@ describe('previewVideoUrl', () => {
   };
 
   const callPublicly = (responseCookies: string[] = []) =>
-    caller({
-      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
-      responseCookies,
-    });
+    callerFor(router, { responseCookies });
 
   it('plays a ready preview for an anonymous visitor, with captions', async () => {
     given(published, readyPreview);

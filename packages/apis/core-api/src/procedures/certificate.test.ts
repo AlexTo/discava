@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { PDF } from '@libpdf/core';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { drawCertificatePdf } from '../helpers/certificate-pdf.js';
 import { t } from '../init.js';
@@ -93,15 +93,9 @@ const caller = (
   { sub, origin }: { sub?: string; origin?: string } = {},
 ) =>
   (
-    t.createCallerFactory(t.router({ p: procedure }))({
-      event: {
-        headers: origin ? { origin } : {},
-        requestContext: {
-          authorizer: sub ? { claims: { sub } } : undefined,
-        },
-      } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
+    callerFor(t.router({ p: procedure }), {
+      sub,
+      headers: origin ? { origin } : {},
     }) as any
   ).p;
 

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bestEffortRetirePreviousVersions } from '../helpers/s3-client.js';
 import { t } from '../init.js';
@@ -152,7 +152,6 @@ const router = t.router({
   updateContentItemVideo,
   createContentItemVideoUrl,
 });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
@@ -244,15 +243,8 @@ const fakeTransactionWrite = (
   };
 };
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const lesson = {
   lessonId: LESSON_ID,
@@ -1047,10 +1039,9 @@ describe('createContentItemVideoUrl', () => {
 
   it('returns only a plain playback URL, with the signed cookies on the response context', async () => {
     const responseCookies: string[] = [];
-    const result = await caller({
-      event: buildEvent(['instructor']),
-      context: {} as any,
-      info: {} as any,
+    const result = await callerFor(router, {
+      sub: INSTRUCTOR_SUB,
+      groups: ['instructor'],
       responseCookies,
     }).createContentItemVideoUrl(input);
     const expectedPrefix = contentItem.s3Key.slice(

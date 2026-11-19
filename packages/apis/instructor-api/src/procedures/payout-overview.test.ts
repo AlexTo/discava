@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeCoreTable } from '../../../../databases/core-table/src/helpers/payment-fake.test.js';
 import { t } from '../init.js';
@@ -31,17 +31,9 @@ vi.mock('@discava/core-table', async (importActual) => ({
   createCoreTableService: vi.fn(async () => state.coreTable),
 }));
 
-const caller = t.createCallerFactory(t.router({ overview }));
+const router = t.router({ overview });
 const callAs = (sub = 'ins-a') =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: { claims: { sub, 'cognito:groups': ['instructor'] } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub, groups: ['instructor'] });
 
 const NOW = new Date('2026-12-10T00:00:00.000Z');
 const PAST = '2026-12-01T00:00:00.000Z';

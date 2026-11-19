@@ -2,43 +2,30 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { lines, report } from './earnings.js';
 
-const { queryEarningDays, queryEarningLines, courseGet } = vi.hoisted(() => ({
-  queryEarningDays: vi.fn(),
-  queryEarningLines: vi.fn(),
-  courseGet: vi.fn(),
-}));
+const { queryEarningDays, queryEarningLines, courseGet, mockModule } =
+  await vi.hoisted(async () => ({
+    queryEarningDays: vi.fn(),
+    queryEarningLines: vi.fn(),
+    ...(
+      await import('@discava/common-server-utils/trpc-testing')
+    ).mockCoreTable({ course: ['get'] }),
+  }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  queryEarningDays,
-  queryEarningLines,
-  createCoreTableService: vi.fn(async () => ({
-    entities: { course: { get: courseGet } },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { queryEarningDays, queryEarningLines }),
+);
 
 const router = t.router({ report, lines });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const period = { from: '2026-01-01', to: '2026-12-31' };
 

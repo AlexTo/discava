@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { NotFoundError, VersionConflictError } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -67,26 +68,17 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-const caller = t.createCallerFactory(
-  t.router({
-    list: listNotifications,
-    unreadCount: notificationUnreadCount,
-    markRead: markNotificationReadProcedure,
-    markAllRead: markAllNotificationsRead,
-    preferences: notificationPreferences,
-    setPreference: setNotificationPreferenceProcedure,
-  }),
-);
+const router = t.router({
+  list: listNotifications,
+  unreadCount: notificationUnreadCount,
+  markRead: markNotificationReadProcedure,
+  markAllRead: markAllNotificationsRead,
+  preferences: notificationPreferences,
+  setPreference: setNotificationPreferenceProcedure,
+});
 
 const USER_SUB = 'student-1';
-const call = (sub: string | null = USER_SUB) =>
-  caller({
-    event: {
-      requestContext: sub ? { authorizer: { claims: { sub } } } : {},
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const call = (sub: string | null = USER_SUB) => callerFor(router, { sub });
 
 const notification = (n: number, extra: Record<string, unknown> = {}) => ({
   userId: USER_SUB,
