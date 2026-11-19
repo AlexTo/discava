@@ -23,6 +23,7 @@ import type {
   PublicMediaComponentConfig,
   SearchComponentConfig,
 } from '@discava/common-infra-config';
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
@@ -99,25 +100,18 @@ export class DataStack extends Stack {
     this.lessonMediaBucket.restrictCorsTo(
       instructorPortal,
       studentPortal,
-      'http://localhost:4200',
-      'http://localhost:4300',
-      'http://localhost:4201',
-      'http://localhost:4301',
+      ...localPortalOrigins('instructor', 'student'),
     );
     this.lessonMediaUploadBucket.restrictCorsTo(
       instructorPortal,
       studentPortal,
-      'http://localhost:4200',
-      'http://localhost:4300',
-      'http://localhost:4201',
-      'http://localhost:4301',
+      ...localPortalOrigins('instructor', 'student'),
     );
     // Images are shown with plain <img> tags, which need no CORS; only the
     // instructor portal's uploads do.
     this.publicMediaBucket.restrictCorsTo(
       instructorPortal,
-      'http://localhost:4200',
-      'http://localhost:4300',
+      ...localPortalOrigins('instructor'),
     );
   }
 

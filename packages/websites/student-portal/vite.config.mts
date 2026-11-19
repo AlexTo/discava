@@ -8,16 +8,20 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 /// <reference types='vitest' />
 import { defineConfig } from 'vite';
+import {
+  LOCAL_PORTAL_PORTS,
+  LOCAL_PORTAL_PREVIEW_PORTS,
+} from '../../common/infra-config/src/local-portals.ts';
 
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/websites/student-portal',
   server: {
-    port: 4201,
+    port: LOCAL_PORTAL_PORTS.student,
     host: 'localhost',
   },
   preview: {
-    port: 4301,
+    port: LOCAL_PORTAL_PREVIEW_PORTS.student,
     host: 'localhost',
   },
   plugins: [

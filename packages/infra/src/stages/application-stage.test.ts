@@ -9,6 +9,7 @@ import {
   resolveStage,
   type StageComponents,
 } from '@discava/common-infra-config';
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { STREAM_FEATURES } from '@discava/core-table';
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
@@ -368,6 +369,35 @@ describe('lesson media CORS', () => {
 
 const CDK_INTERNAL =
   /^(Custom(S3AutoDeleteObjects|CrossRegionExportReader)CustomResourceProvider|.*Providerframework)/;
+
+describe('local portal origins', () => {
+  const stage = synth({});
+  const every = localPortalOrigins('instructor', 'student', 'admin');
+  const json = (template: Template, type: string) =>
+    JSON.stringify(template.findResources(type));
+
+  it('are all callback URLs of the user pool client', () => {
+    const clients = Object.values(
+      stage('Data').findResources('AWS::Cognito::UserPoolClient'),
+    ) as { Properties: { CallbackURLs: unknown } }[];
+    const callbacks = JSON.stringify(clients.map((c) => c.Properties));
+    for (const origin of every) {
+      expect(callbacks).toContain(origin);
+    }
+  });
+
+  it.each([
+    ['CoreApi', ['instructor', 'student', 'admin']],
+    ['InstructorApi', ['instructor']],
+    ['AdminApi', ['admin']],
+  ] as const)("are all in %s's CORS allow-list", (name, portals) => {
+    const functions = json(stage(name), 'AWS::Lambda::Function');
+    expect(functions).toContain('ALLOWED_ORIGINS');
+    for (const origin of localPortalOrigins(...portals)) {
+      expect(functions).toContain(origin);
+    }
+  });
+});
 
 describe('Lambda functions', () => {
   const stack = synth({});

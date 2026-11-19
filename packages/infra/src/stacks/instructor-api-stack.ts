@@ -13,6 +13,7 @@ import {
   UserIdentity,
 } from '@discava/common-constructs';
 import type { InstructorApiComponentConfig } from '@discava/common-infra-config';
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
@@ -151,8 +152,7 @@ export class InstructorApiStack extends Stack {
 
     this.instructorApi.restrictCorsTo(
       instructorPortal,
-      'http://localhost:4200',
-      'http://localhost:4300',
+      ...localPortalOrigins('instructor'),
     );
   }
 
