@@ -17,6 +17,7 @@ import {
   requireCourseInstructor,
   transactionConflict,
 } from '../lib/course-lifecycle.js';
+import { asPreviewSummary } from '../lib/course-preview.js';
 import {
   ArchiveCourseInputSchema,
   ArchiveCourseOutputSchema,
@@ -353,11 +354,14 @@ export const viewCourse = courseProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    const { data: category } = course.categoryId
-      ? await coreTable.entities.category
-          .get({ categoryId: course.categoryId })
-          .go()
-      : { data: null };
+    const [{ data: category }, { data: preview }] = await Promise.all([
+      course.categoryId
+        ? coreTable.entities.category
+            .get({ categoryId: course.categoryId })
+            .go()
+        : { data: null },
+      coreTable.entities.coursePreview.get({ courseId }).go(),
+    ]);
 
     const byOrder = (a: { order: number }, b: { order: number }) =>
       a.order - b.order;
@@ -374,6 +378,7 @@ export const viewCourse = courseProcedure
           archived: category.status === 'archived',
         },
       }),
+      ...(preview && { preview: asPreviewSummary(preview) }),
       modules: modules
         .slice()
         .sort(byOrder)

@@ -164,3 +164,28 @@ export const bestEffortRetirePreviousVersions = async (
     }),
   );
 };
+
+/**
+ * Best-effort deletes every raw upload of a course's preview video (the
+ * preview record keeps no raw key, and the transcode pipeline deletes one
+ * itself once its job ends, so what is left is an abandoned or in-flight
+ * upload). Failures are logged, never thrown.
+ */
+export const bestEffortDeletePreviewUploads = async (
+  logger: Logger | undefined,
+  courseId: string,
+): Promise<void> => {
+  try {
+    const bucket = await resolveLessonMediaUploadBucketName();
+    const keys = await listAllObjectKeys(
+      logger,
+      bucket,
+      `courses/${courseId}/preview/uploads/`,
+    );
+    if (keys.length > 0) {
+      await deleteObjectsInBatches(logger, bucket, keys);
+    }
+  } catch (error) {
+    logger?.error('Failed to delete preview uploads', { error, courseId });
+  }
+};

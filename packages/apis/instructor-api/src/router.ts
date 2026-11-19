@@ -70,6 +70,7 @@ import {
   updateCourseImage,
 } from './procedures/course-image.js';
 import { updateCourseLanding } from './procedures/course-landing.js';
+import * as coursePreview from './procedures/course-preview.js';
 import {
   dismissReports,
   hide as hideDiscussionPost,
@@ -134,6 +135,13 @@ export const appRouter = router({
     updateImage: updateCourseImage,
     updateCatalogue: updateCourseCatalogue,
     updateLanding: updateCourseLanding,
+  }),
+  coursePreview: router({
+    createUploadUrl: coursePreview.createUploadUrl,
+    create: coursePreview.create,
+    replace: coursePreview.replace,
+    remove: coursePreview.remove,
+    createVideoUrl: coursePreview.createVideoUrl,
   }),
   discussion: router({
     unanswered,

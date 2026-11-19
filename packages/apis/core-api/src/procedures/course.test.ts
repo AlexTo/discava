@@ -8,6 +8,7 @@ import { t } from '../init.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
+  previewVideoUrl,
   publicListCourses,
   publicViewCourse,
   viewCourse,
@@ -23,6 +24,8 @@ const {
   courseRatingGet,
   instructorProfileGet,
   categoryGet,
+  coursePreviewGet,
+  getSignedCloudFrontCookies,
   curriculumCollection,
 } = vi.hoisted(() => ({
   courseInstructorQueryByInstructor: vi.fn(),
@@ -34,7 +37,16 @@ const {
   courseRatingGet: vi.fn(),
   instructorProfileGet: vi.fn(),
   categoryGet: vi.fn(),
+  coursePreviewGet: vi.fn(),
+  getSignedCloudFrontCookies: vi.fn(),
   curriculumCollection: vi.fn(),
+}));
+
+vi.mock('@discava/common-server-utils/lesson-media', () => ({
+  getCloudFrontVideoUrl: vi.fn(
+    async (key: string) => `https://media.example.com/${key}`,
+  ),
+  getSignedCloudFrontCookies,
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
@@ -50,6 +62,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       courseRating: { get: courseRatingGet },
       instructorProfile: { get: instructorProfileGet },
       category: { get: categoryGet },
+      coursePreview: { get: coursePreviewGet },
       courseInstructor: {
         query: {
           byInstructor: courseInstructorQueryByInstructor,
@@ -66,6 +79,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
 const router = t.router({
   listCoursesByInstructor,
   listInstructorsForCourse,
+  previewVideoUrl,
   publicListCourses,
   publicViewCourse,
   viewCourse,
@@ -130,6 +144,11 @@ beforeEach(() => {
   categoryGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: null }),
   });
+  // A course has no preview, unless a test says otherwise.
+  coursePreviewGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: null }),
+  });
+  getSignedCloudFrontCookies.mockResolvedValue(['CloudFront-Policy=abc']);
   // The caller is enrolled, unless a test says otherwise.
   enrolmentGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: enrolment() }),
@@ -1475,5 +1494,196 @@ describe('publicViewCourse', () => {
         expect(courseInstructorQueryPrimary).not.toHaveBeenCalled();
       },
     );
+  });
+});
+
+describe('previewVideoUrl', () => {
+  const published = { ...course, status: 'published' as const };
+  const FOLDER = 'courses/course-1/preview/nonce-2/';
+  const readyPreview = {
+    courseId: 'course-1',
+    status: 'ready' as const,
+    s3Key: `${FOLDER}master.m3u8`,
+    submissionNonce: 'nonce-2',
+    durationSeconds: 90,
+    uploadedBy: 'instructor-1',
+    captionTracks: [
+      {
+        trackId: 't1',
+        language: 'en-US',
+        label: 'English',
+        isDefault: true,
+        source: 'auto',
+        key: `${FOLDER}captions/t1.vtt`,
+        nonce: 'nonce-2',
+      },
+    ],
+  };
+
+  const given = (courseRecord: unknown, preview: unknown) => {
+    courseGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: courseRecord }),
+    });
+    coursePreviewGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: preview }),
+    });
+  };
+
+  const callPublicly = (responseCookies: string[] = []) =>
+    caller({
+      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
+      context: {} as any,
+      info: {} as any,
+      responseCookies,
+    });
+
+  it('plays a ready preview for an anonymous visitor, with captions', async () => {
+    given(published, readyPreview);
+    const cookies: string[] = [];
+
+    const result = await callPublicly(cookies).previewVideoUrl({
+      courseId: 'course-1',
+    });
+
+    expect(result).toMatchObject({
+      url: `https://media.example.com/${FOLDER}master.m3u8`,
+      withCredentials: true,
+      versionId: 'nonce-2',
+      captions: [
+        {
+          trackId: 't1',
+          language: 'en-US',
+          isDefault: true,
+          url: `https://media.example.com/${FOLDER}captions/t1.vtt`,
+        },
+      ],
+    });
+    expect(result).not.toHaveProperty('resumeAt');
+    expect(cookies).toEqual(['CloudFront-Policy=abc']);
+  });
+
+  it('scopes the cookies to the played version folder only', async () => {
+    given(published, readyPreview);
+
+    await callPublicly([]).previewVideoUrl({ courseId: 'course-1' });
+
+    expect(getSignedCloudFrontCookies).toHaveBeenCalledExactlyOnceWith(FOLDER);
+  });
+
+  it('plays the previous version while a replacement processes', async () => {
+    given(published, {
+      ...readyPreview,
+      status: 'processing',
+      s3Key: undefined,
+      previousS3Key: 'courses/course-1/preview/nonce-1/master.m3u8',
+      captionTracks: [],
+    });
+
+    const result = await callPublicly().previewVideoUrl({
+      courseId: 'course-1',
+    });
+
+    expect(result.url).toBe(
+      'https://media.example.com/courses/course-1/preview/nonce-1/master.m3u8',
+    );
+    expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
+      'courses/course-1/preview/nonce-1/',
+    );
+  });
+
+  it.each([
+    ['there is no preview', published, null],
+    [
+      'a first upload is processing',
+      published,
+      { ...readyPreview, status: 'processing', s3Key: undefined },
+    ],
+    [
+      'a first upload failed',
+      published,
+      { ...readyPreview, status: 'failed', s3Key: undefined },
+    ],
+    ['the course is a draft', course, readyPreview],
+    ['the course is archived', { ...course, status: 'archived' }, readyPreview],
+    ['the course does not exist', null, readyPreview],
+  ])('is NOT_FOUND when %s', async (_name, courseRecord, preview) => {
+    given(courseRecord, preview);
+
+    await expect(
+      callPublicly().previewVideoUrl({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      message: 'This preview is not available',
+    });
+    expect(getSignedCloudFrontCookies).not.toHaveBeenCalled();
+  });
+});
+
+describe('publicViewCourse preview', () => {
+  const published = { ...course, status: 'published' as const };
+  const readyPreview = {
+    courseId: 'course-1',
+    status: 'ready' as const,
+    s3Key: 'courses/course-1/preview/nonce-2/master.m3u8',
+    previousS3Key: 'courses/course-1/preview/nonce-1/master.m3u8',
+    submissionNonce: 'nonce-2',
+    mediaConvertJobId: 'job-1',
+    durationSeconds: 90,
+    uploadedBy: 'instructor-1',
+  };
+
+  const view = async (preview: unknown) => {
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { course: [published], module: [], lesson: [], contentItem: [] },
+      }),
+    });
+    coursePreviewGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: preview }),
+    });
+    return callAnonymously().publicViewCourse({ courseId: 'course-1' });
+  };
+
+  it('has only the duration, never keys, nonces or uploadedBy', async () => {
+    const result = await view(readyPreview);
+
+    expect(result.preview).toEqual({ durationSeconds: 90 });
+    expect(JSON.stringify(result)).not.toMatch(
+      /nonce|master\.m3u8|job-1|uploadedBy|instructor-1/,
+    );
+  });
+
+  it('has a preview when a replacement processes over a playable version', async () => {
+    const result = await view({
+      ...readyPreview,
+      status: 'processing',
+      s3Key: undefined,
+    });
+
+    expect(result.preview).toEqual({ durationSeconds: 90 });
+  });
+
+  it.each([
+    ['no preview', null],
+    [
+      'a first upload processing',
+      {
+        ...readyPreview,
+        status: 'processing',
+        s3Key: undefined,
+        previousS3Key: undefined,
+      },
+    ],
+    [
+      'a failed first upload',
+      {
+        ...readyPreview,
+        status: 'failed',
+        s3Key: undefined,
+        previousS3Key: undefined,
+      },
+    ],
+  ])('has no preview for %s', async (_name, preview) => {
+    expect((await view(preview)).preview).toBeUndefined();
   });
 });

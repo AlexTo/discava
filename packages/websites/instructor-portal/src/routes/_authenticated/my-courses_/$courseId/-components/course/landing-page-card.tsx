@@ -6,10 +6,12 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import type { ICoursePreviewSummary } from '@discava/instructor-api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { Alert } from '../../../../../../components/alert';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { PreviewVideoArea } from './preview-video-area';
 
 // The limits core-table's courseLandingWrites enforces.
 const MAX_ITEMS = 10;
@@ -135,18 +137,20 @@ function ItemList({
 
 /**
  * What a visitor reads on the public course page: what they'll learn and what
- * they need first. Saving replaces both lists; the preview video joins this
- * card in a later phase.
+ * they need first, and the preview video. Saving replaces both lists; the
+ * preview video's upload, replace and remove act at once.
  */
 export function LandingPageCard({
   courseId,
   learningOutcomes,
   requirements,
+  preview,
   readOnly,
 }: {
   courseId: string;
   learningOutcomes?: string[];
   requirements?: string[];
+  preview?: ICoursePreviewSummary;
   readOnly?: boolean;
 }) {
   const trpc = useInstructorApi();
@@ -227,9 +231,11 @@ export function LandingPageCard({
         onChange={edited(setNeeds)}
         nextId={nextId}
       />
-      <p className="text-sm text-muted-foreground">
-        Preview video: coming soon. Until then the page shows the course image.
-      </p>
+      <PreviewVideoArea
+        courseId={courseId}
+        preview={preview}
+        readOnly={readOnly}
+      />
       {!readOnly && (
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={save.isPending}>

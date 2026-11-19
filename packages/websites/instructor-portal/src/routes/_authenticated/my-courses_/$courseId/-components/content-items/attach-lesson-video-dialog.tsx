@@ -38,7 +38,7 @@ import { Spinner } from '../../../../../../components/spinner';
 import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
 import { studentActivityNote } from '../student-activity';
 
-const ACCEPTED_VIDEO_TYPES = {
+export const ACCEPTED_VIDEO_TYPES = {
   'video/mp4': ['.mp4'],
   'video/webm': ['.webm'],
   'video/quicktime': ['.mov'],
@@ -52,7 +52,7 @@ type PendingUpload = {
 
 // fetch() exposes no upload progress; XMLHttpRequest does via
 // xhr.upload.onprogress, hence the lower-level API here instead of fetch.
-const putFileWithProgress = (
+export const putFileWithProgress = (
   uploadUrl: string,
   file: File,
   onProgress: (percent: number) => void,

@@ -5,10 +5,17 @@
 
 import type { Logger } from '@aws-lambda-powertools/logger';
 import {
+  getCloudFrontVideoUrl,
+  getSignedCloudFrontCookies,
+} from '@discava/common-server-utils/lesson-media';
+import { previewManifestNonce } from '@discava/common-server-utils/media-keys';
+import {
   type createCoreTableService,
   filterEffectivelyVisible,
+  tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
+import { playablePreviewManifest } from '../helpers/course-preview.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import { asStudentContentItem } from '../lib/playback.js';
 import { ratingFigures } from '../lib/rating.js';
@@ -18,6 +25,8 @@ import {
   ListCoursesByInstructorOutputSchema,
   ListInstructorsForCourseInputSchema,
   ListInstructorsForCourseOutputSchema,
+  PreviewVideoUrlInputSchema,
+  PreviewVideoUrlOutputSchema,
   PublicListCoursesInputSchema,
   PublicListCoursesOutputSchema,
   PublicViewCourseOutputSchema,
@@ -223,7 +232,7 @@ export const publicViewCourse = publicCourseProcedure
       lessonsByModuleId.set(lesson.moduleId, moduleLessons);
     }
 
-    const [instructors, category] = await Promise.all([
+    const [instructors, category, { data: preview }] = await Promise.all([
       readPublicInstructors(coreTable, course.courseId, ctx.logger),
       course.categoryId
         ? coreTable.entities.category
@@ -231,6 +240,7 @@ export const publicViewCourse = publicCourseProcedure
             .go()
             .then(({ data }) => data)
         : undefined,
+      coreTable.entities.coursePreview.get({ courseId: course.courseId }).go(),
     ]);
 
     return {
@@ -242,6 +252,9 @@ export const publicViewCourse = publicCourseProcedure
           ? { slug: category.slug, name: category.name }
           : undefined,
       instructors,
+      preview: playablePreviewManifest(course, preview)
+        ? { durationSeconds: preview!.durationSeconds }
+        : undefined,
       modules: modules
         .slice()
         .sort((a, b) => a.order - b.order)
@@ -252,6 +265,54 @@ export const publicViewCourse = publicCourseProcedure
             .sort((a, b) => a.order - b.order),
         })),
     };
+  });
+
+// A published course's preview video, for anyone including signed-out
+// visitors. Signed as contentItem.videoUrl does, with cookies scoped to the
+// played version's folder only, so no lesson video of the course is reachable
+// with them. Anything not playable is the same NOT_FOUND.
+export const previewVideoUrl = publicCourseProcedure
+  .input(PreviewVideoUrlInputSchema)
+  .output(PreviewVideoUrlOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable!;
+    const { courseId } = input;
+
+    const [{ data: course }, { data: preview }] = await Promise.all([
+      coreTable.entities.course.get({ courseId }).go(),
+      coreTable.entities.coursePreview.get({ courseId }).go(),
+    ]);
+    const manifest = playablePreviewManifest(course, preview);
+    if (!manifest) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'This preview is not available',
+      });
+    }
+
+    // The played version's folder: everything up to the slash before
+    // master.m3u8.
+    const prefixKey = manifest.slice(0, manifest.lastIndexOf('/') + 1);
+    const [url, cookies] = await Promise.all([
+      getCloudFrontVideoUrl(manifest),
+      getSignedCloudFrontCookies(prefixKey),
+    ]);
+    ctx.responseCookies?.push(...cookies);
+
+    // The folder name is the version's identity; only its tracks play.
+    const versionId = previewManifestNonce(manifest) ?? '';
+    const captions = await Promise.all(
+      tracksForPlayback(preview!.captionTracks, versionId).map(
+        async (track) => ({
+          trackId: track.trackId,
+          language: track.language,
+          label: track.label,
+          isDefault: track.isDefault,
+          url: await getCloudFrontVideoUrl(track.key),
+        }),
+      ),
+    );
+    return { url, withCredentials: cookies.length > 0, versionId, captions };
   });
 
 export const viewCourse = courseProcedure
