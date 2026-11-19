@@ -3,28 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { apiUser } from '../helpers/api.js';
+import { connectLocalPayments } from '../helpers/api.js';
 import { createCourse } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
-// The local Stripe stand-in's first account key (common-server-utils'
-// local-dev `LOCAL_STRIPE`).
-const LOCAL_STRIPE_KEY = 'sk_test_local';
-
 // An instructor prices a draft course in the course editor, changes the
-// price and clears it. A price needs payments connected, which an
-// administrator does through admin-api against the local Stripe stand-in.
+// price and clears it. A price needs payments connected, which the test
+// sets up directly.
 test('an instructor sets, changes and clears a course price', async ({
   browser,
 }) => {
   const title = uniqueName('E2E priced course');
-  const admin = await apiUser('Ada', ['admin']);
-  await admin.admin.payment.connect.mutate({
-    secretKey: LOCAL_STRIPE_KEY,
-  });
+  await connectLocalPayments();
   const instructor = await browser.newPage();
   const price = instructor.getByLabel('Price', { exact: true });
   const save = instructor.getByRole('button', { name: 'Save price' });
