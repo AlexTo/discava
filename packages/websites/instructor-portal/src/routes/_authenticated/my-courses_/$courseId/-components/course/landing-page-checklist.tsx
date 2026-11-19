@@ -5,7 +5,7 @@
 
 interface Line {
   label: string;
-  // Undefined for a line that can't be checked yet: shown as "Coming soon".
+  // Undefined while it is being worked out.
   done?: boolean;
   href?: string;
 }
@@ -23,6 +23,7 @@ export function LandingPageChecklist({
   hasRequirements,
   hasPreview,
   hasImage,
+  hasProfile,
 }: {
   /** The public page's address; given only while the course is published. */
   publicPageUrl?: string;
@@ -31,6 +32,8 @@ export function LandingPageChecklist({
   /** The preview video is ready to play. */
   hasPreview: boolean;
   hasImage: boolean;
+  /** The instructor's profile has a headline and a photo; undefined until it has loaded. */
+  hasProfile?: boolean;
 }) {
   const lines: Line[] = [
     {
@@ -45,8 +48,11 @@ export function LandingPageChecklist({
     },
     { label: 'Preview video', done: hasPreview, href: '#landing-page-heading' },
     { label: 'Course image', done: hasImage, href: '#course-image' },
-    // Unchecked: instructors can't edit their profile in the portal yet.
-    { label: 'Your profile (headline and photo)' },
+    {
+      label: 'Your profile (headline and photo)',
+      done: hasProfile,
+      href: '/profile',
+    },
   ];
 
   return (
@@ -58,7 +64,7 @@ export function LandingPageChecklist({
               <>
                 <span aria-hidden="true">–</span>
                 <span>{label}</span>
-                <span className="text-muted-foreground">Coming soon</span>
+                <span className="text-muted-foreground">Checking…</span>
               </>
             ) : (
               <>

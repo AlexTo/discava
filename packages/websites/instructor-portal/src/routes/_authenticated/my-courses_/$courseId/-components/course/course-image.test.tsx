@@ -27,7 +27,12 @@ vi.mock('react-easy-crop', () => ({
   },
 }));
 const cropToJpeg = vi.hoisted(() => vi.fn());
-vi.mock('./crop-to-jpeg', () => ({ cropToJpeg }));
+vi.mock('../../../../../../lib/crop-to-jpeg', async (importActual) => ({
+  ...(await importActual<
+    typeof import('../../../../../../lib/crop-to-jpeg')
+  >()),
+  cropToJpeg,
+}));
 
 const COURSE_ID = 'course-1';
 const OLD_KEY = 'courses/course-1/image/old.jpg';
@@ -104,7 +109,10 @@ describe('CourseImage', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
-    expect(cropToJpeg).toHaveBeenCalledWith('blob:picked', AREA);
+    expect(cropToJpeg).toHaveBeenCalledWith('blob:picked', AREA, {
+      width: 1280,
+      height: 720,
+    });
     expect(s3Put).toHaveBeenCalledWith('https://bucket.s3.test/upload', {
       method: 'PUT',
       headers: {

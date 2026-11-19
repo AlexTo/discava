@@ -3,37 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@discava/common-shadcn/components/ui/dialog';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ImageIcon, Upload } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import Cropper, { type Area } from 'react-easy-crop';
+import { ImageIcon } from 'lucide-react';
 import { useInstructorApi } from '../../../../../../api';
-import { cropToJpeg } from './crop-to-jpeg';
-
-// What the browser can draw onto a canvas to crop; whatever it is, it's
-// stored as a JPEG (see cropToJpeg).
-const ACCEPTED_IMAGE_TYPES = {
-  'image/jpeg': ['.jpg', '.jpeg'],
-  'image/png': ['.png'],
-  'image/webp': ['.webp'],
-};
-// The original never leaves the browser, so this only stops a file too big
-// to crop comfortably.
-const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
+import { ImageCropDialog } from '../../../../../../components/image-crop-dialog';
+import { COURSE_IMAGE_SIZE } from '../../../../../../lib/crop-to-jpeg';
 
 /** A course's 16:9 display image (#76), with a dialog to change it. */
 export function CourseImage({
@@ -112,15 +89,6 @@ function CourseImageDialog({
   currentImageUrl?: string;
   trigger: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  // An object URL for the picked file, which never leaves the browser
-  // uncropped.
-  const [source, setSource] = useState<string>();
-  const [crop, setCrop] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
-  const [area, setArea] = useState<Area>();
-  const [error, setError] = useState<string>();
-  const [busy, setBusy] = useState<'saving' | 'removing'>();
   const { course } = useInstructorApi();
   const queryClient = useQueryClient();
   const { mutateAsync: createUploadUrl } = useMutation(
@@ -130,198 +98,47 @@ function CourseImageDialog({
     course.updateImage.mutationOptions(),
   );
 
-  useEffect(
-    () => () => {
-      if (source) URL.revokeObjectURL(source);
-    },
-    [source],
-  );
-
-  const reset = () => {
-    setSource(undefined);
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setArea(undefined);
-    setError(undefined);
-  };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: ACCEPTED_IMAGE_TYPES,
-    maxSize: MAX_SOURCE_BYTES,
-    multiple: false,
-    disabled: busy !== undefined,
-    onDrop: ([file], [rejection]) => {
-      if (rejection) {
-        setError(
-          rejection.errors[0]?.code === 'file-too-large'
-            ? 'Choose an image under 20 MB.'
-            : 'Choose a JPEG, PNG or WebP image.',
-        );
-        return;
-      }
-      if (file) {
-        reset();
-        setSource(URL.createObjectURL(file));
-      }
-    },
-  });
-
-  const finish = async () => {
-    await queryClient.invalidateQueries({
+  const refresh = () =>
+    queryClient.invalidateQueries({
       queryKey: course.view.queryKey({ courseId }),
     });
-    setOpen(false);
-    reset();
-  };
-
-  const save = async () => {
-    if (!source || !area) return;
-    setBusy('saving');
-    setError(undefined);
-    try {
-      const image = await cropToJpeg(source, area);
-      const { uploadUrl, imageKey, headers } = await createUploadUrl({
-        courseId,
-        contentLength: image.size,
-      });
-      // The upload URL was signed for exactly these headers and this size.
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        headers,
-        body: image,
-      });
-      if (!response.ok) {
-        throw new Error("Couldn't upload the image. Please try again.");
-      }
-      await updateImage({ courseId, imageKey });
-      await finish();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(undefined);
-    }
-  };
-
-  const remove = async () => {
-    setBusy('removing');
-    setError(undefined);
-    try {
-      await updateImage({ courseId, imageKey: null });
-      await finish();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(undefined);
-    }
-  };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (busy) return;
-        setOpen(next);
-        if (!next) reset();
+    <ImageCropDialog
+      title="Course image"
+      description="Shown on course cards and the course page. Drag and zoom to choose the 16:9 area to use."
+      fileLabel="Course image file"
+      errorHeader="Couldn't save the image"
+      aspect={16 / 9}
+      output={COURSE_IMAGE_SIZE}
+      current={
+        currentImageUrl ? (
+          <CourseImagePreview src={currentImageUrl} />
+        ) : undefined
+      }
+      removeLabel="Remove image"
+      trigger={trigger}
+      onSave={async (image) => {
+        const { uploadUrl, imageKey, headers } = await createUploadUrl({
+          courseId,
+          contentLength: image.size,
+        });
+        // The upload URL was signed for exactly these headers and this size.
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers,
+          body: image,
+        });
+        if (!response.ok) {
+          throw new Error("Couldn't upload the image. Please try again.");
+        }
+        await updateImage({ courseId, imageKey });
+        await refresh();
       }}
-    >
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>Course image</DialogTitle>
-          <DialogDescription>
-            Shown on course cards and the course page. Drag and zoom to choose
-            the 16:9 area to use.
-          </DialogDescription>
-        </DialogHeader>
-
-        {source ? (
-          <div className="space-y-3">
-            <div className="relative aspect-video overflow-hidden rounded-lg bg-muted">
-              <Cropper
-                image={source}
-                crop={crop}
-                zoom={zoom}
-                aspect={16 / 9}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={(_, pixels) => setArea(pixels)}
-              />
-            </div>
-            <label className="flex items-center gap-3 text-sm text-muted-foreground">
-              Zoom
-              <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.05}
-                value={zoom}
-                onChange={(event) => setZoom(Number(event.target.value))}
-                disabled={busy !== undefined}
-                className="w-full accent-primary"
-              />
-            </label>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {currentImageUrl && <CourseImagePreview src={currentImageUrl} />}
-            <div
-              {...getRootProps()}
-              className={cn(
-                'flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground transition-colors hover:bg-accent/40',
-                isDragActive && 'border-primary bg-accent/40',
-              )}
-            >
-              <input {...getInputProps()} aria-label="Course image file" />
-              <Upload className="size-5" aria-hidden="true" />
-              <span>
-                Drop an image here, or click to browse
-                <br />
-                JPEG, PNG or WebP, up to 20 MB
-              </span>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <ErrorAlert type="error" header="Couldn't save the image">
-            {error}
-          </ErrorAlert>
-        )}
-
-        <DialogFooter className="gap-2 sm:justify-between">
-          <div>
-            {source ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={reset}
-                disabled={busy !== undefined}
-              >
-                Choose another image
-              </Button>
-            ) : (
-              currentImageUrl && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={remove}
-                  disabled={busy !== undefined}
-                >
-                  {busy === 'removing' ? 'Removing…' : 'Remove image'}
-                </Button>
-              )
-            )}
-          </div>
-          <Button
-            type="button"
-            onClick={save}
-            disabled={!source || !area || busy !== undefined}
-          >
-            {busy === 'saving' ? 'Saving…' : 'Save'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      onRemove={async () => {
+        await updateImage({ courseId, imageKey: null });
+        await refresh();
+      }}
+    />
   );
 }

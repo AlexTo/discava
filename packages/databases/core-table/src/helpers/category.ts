@@ -7,7 +7,7 @@ import {
   categoryNameKey,
   categorySlug,
   normaliseCategoryName,
-} from './catalogue.js';
+} from './catalogue-vocabulary.js';
 import {
   failedConditions,
   isConditionalCheckFailed,

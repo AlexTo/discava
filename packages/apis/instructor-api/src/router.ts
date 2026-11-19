@@ -101,6 +101,12 @@ import {
   updateModule,
 } from './procedures/module.js';
 import {
+  createProfilePhotoUploadUrl,
+  getProfile,
+  updateProfile,
+  updateProfilePhoto,
+} from './procedures/profile.js';
+import {
   deleteReviewResponse,
   listReviews,
   respondToReview,
@@ -119,6 +125,12 @@ export const appRouter = router({
     list: listAnnouncements,
     update: updateAnnouncement,
     delete: deleteAnnouncement,
+  }),
+  profile: router({
+    get: getProfile,
+    update: updateProfile,
+    createPhotoUploadUrl: createProfilePhotoUploadUrl,
+    updatePhoto: updateProfilePhoto,
   }),
   review: router({
     list: listReviews,

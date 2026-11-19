@@ -13,6 +13,7 @@ export * from './course-preview.js';
 export * from './discussion.js';
 export * from './lesson.js';
 export * from './module.js';
+export * from './profile.js';
 export * from './quiz.js';
 export * from './review.js';
 export * from './visibility.js';

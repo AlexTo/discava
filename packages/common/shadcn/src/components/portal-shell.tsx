@@ -32,7 +32,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from './ui/sidebar';
-import { UserMenu } from './user-menu';
+import { UserMenu, type UserMenuItem } from './user-menu';
 
 // A crumb links to its own path only: the current page's search params (a new
 // quiz's lesson, say) mean nothing to the pages above it.
@@ -89,6 +89,8 @@ export interface PortalShellProps {
   segmentLabels?: Record<string, string>;
   /** Shown in the header before the notification bell. */
   headerActions?: React.ReactNode;
+  /** Links only this portal has in the user menu. A module constant. */
+  userMenuItems?: UserMenuItem[];
   children: React.ReactNode;
 }
 
@@ -100,6 +102,7 @@ export const PortalShell = ({
   navItems,
   segmentLabels,
   headerActions,
+  userMenuItems,
   children,
 }: PortalShellProps) => {
   const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
@@ -190,7 +193,7 @@ export const PortalShell = ({
             <div className="ml-auto flex items-center gap-3">
               {headerActions}
               <NotificationBell portal={portal} />
-              <UserMenu />
+              <UserMenu items={userMenuItems} />
             </div>
           </header>
           <div
