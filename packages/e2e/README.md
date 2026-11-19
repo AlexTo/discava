@@ -26,7 +26,7 @@ pnpm nx e2e @discava/e2e -- learn            # only the scenarios whose file mat
 
 If `pnpm dev` is already running, the tests use it. Otherwise Playwright starts it, waits for every service to answer (see `src/global-setup.ts`), and stops it, and its containers, afterwards. In CI it always starts a fresh one.
 
-When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over four runners (`E2E_SHARD=2/4 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact.
+When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over six runners (`E2E_SHARD=2/6 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact. Files are dealt out so each runner gets about the same run time, from the seconds per file in `shard-durations.json`; a file not listed there counts as a typical one, so the list only needs refreshing (from a CI run's log) when the slices drift apart.
 
 ## Screenshots for the pull request
 
@@ -79,7 +79,7 @@ Locally, each run leaves its users and courses behind. `pnpm nx run @discava/com
 
 ## Table invariants
 
-After every scenario, the core table must still keep the rules in `@discava/core-table`'s `helpers/invariants.ts` (#57): every course has an instructor, quiz summaries agree with their attempts, progress matches completions, and so on. `test` from `table-invariants.ts` checks them automatically. A scenario fails if it leaves a violation that wasn't there when it started, so older local data can't fail a run. The check waits up to 30 seconds for the progress recalculation to catch up.
+After every scenario, the core table must still keep the rules in `@discava/core-table`'s `helpers/invariants/` (#57): every course has an instructor, quiz summaries agree with their attempts, progress matches completions, and so on. `test` from `table-invariants.ts` checks them automatically. A scenario fails if it leaves a violation that wasn't there when it started, so older local data can't fail a run. The check waits up to 30 seconds for the progress recalculation to catch up.
 
 When one fails, the message names the rule and the record. To check the whole local table yourself, with `pnpm dev` running:
 

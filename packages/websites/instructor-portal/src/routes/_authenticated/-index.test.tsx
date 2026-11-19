@@ -4,6 +4,7 @@
  */
 
 import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
+import { ApiError, fakeTrpcFetch } from '@discava/common-web-utils/testing';
 import type { AppRouter as CoreApiRouter } from '@discava/core-api';
 import type { AppRouter as InstructorApiRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,7 +15,6 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreApiTRPCContext, InstructorApiTRPCContext } from '../../api';
-import { ApiError, fakeFetch } from '../../test/fake-trpc-fetch';
 
 const authProfile = vi.hoisted(() => ({
   current: {} as Record<string, string | undefined>,
@@ -26,10 +26,8 @@ vi.mock('react-oidc-context', () => ({
 // `to`/`params` captured instead, keeps the page's own logic testable.
 const linkProps = vi.hoisted(() => [] as Record<string, unknown>[]);
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return {
-    ...actual,
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
     Link: ({
       children,
       to,
@@ -45,7 +43,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     // CreateCourseDialog navigates on save; not under test here (see
     // create-course-dialog.test.tsx).
     useNavigate: () => vi.fn(),
-  };
+  });
 });
 
 const { Route } = await import('./index');
@@ -67,7 +65,7 @@ const renderPage = (coreHandlers = {}) => {
     links: [
       httpLink({
         url: 'http://core-api.test/',
-        fetch: fakeFetch(coreHandlers, calls),
+        fetch: fakeTrpcFetch(coreHandlers, calls),
       }),
     ],
   });
@@ -75,7 +73,7 @@ const renderPage = (coreHandlers = {}) => {
     links: [
       httpLink({
         url: 'http://instructor-api.test/',
-        fetch: fakeFetch({}, []),
+        fetch: fakeTrpcFetch({}, []),
       }),
     ],
   });

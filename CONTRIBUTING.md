@@ -83,18 +83,24 @@ Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) gene
 
 Every API and event handler shares the core table, and some rules span records that different writers touch. For example, core-api counts the students who have used an item (`studentActivityCount`), and instructor-api relies on that count to refuse deleting the item. A write that keeps a rule another API or handler depends on goes in a `core-table` helper, for example `studentActivityWrites` in `helpers/student-activity.ts`, and every procedure making that write calls the helper. Don't write it by hand in each procedure. A rule that only one API keeps can stay in that API.
 
-Add a check for each such rule to `core-table`'s `helpers/invariants.ts`. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
+Add a check for each such rule to `core-table`'s `helpers/invariants/` folder. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
+
+The folder has one file per topic (`curriculum.ts`, `student-activity.ts`, `media.ts`, `analytics.ts`, `notifications.ts`, `catalogue.ts`, `discussion.ts`, `reviews.ts`…), each exporting its checks as `[{ name, check }]`, and a `<topic>.test.ts` beside it. To add a check:
+
+1. Write `check<Name>(snapshot)` in the topic's file (or a new topic file) and add `{ name: '<invariant-name>', check }` to that file's list. A new topic file's list goes into `CHECKS` in `index.ts`, which derives `INVARIANTS` from the names.
+2. If it reads records of a new entity, add the entity to `TableSnapshot` and to `SNAPSHOT_ENTITIES` in `snapshot.ts`; that map drives `loadTableSnapshot` and `emptyTableSnapshot()`.
+3. Add a `describe('<invariant-name>')` to the topic's `<topic>.test.ts`, starting from `consistentTable()` in `test-fixture.ts`, which also holds the `checkTableInvariants` wrapper the tests use.
 
 Two checks make sure a change that could need a new rule gets one:
 
-- **Every entity is in the snapshot.** A test in `core-table` (`helpers/invariants-coverage.test.ts`) fails when an entity's records aren't loaded into `TableSnapshot`. Add the new entity there, with checks for the rules it keeps, or list it in that test's `NO_INVARIANTS` with the reason it has none.
+- **Every entity is in the snapshot.** A test in `core-table` (`helpers/invariants-coverage.test.ts`) fails when an entity's records aren't loaded into `TableSnapshot`. Add the new entity to `helpers/invariants/snapshot.ts`, with checks for the rules it keeps, or list it in that test's `NO_INVARIANTS` with the reason it has none.
 - **Who writes each entity.** `core-table`'s `entity-writers.json` lists, for every entity, the files in each package that write it. It's generated from the code with the TypeScript compiler, so after changing which code writes the core table, regenerate it and commit the result:
 
   ```sh
   pnpm nx run @discava/common-scripts:entity-writers
   ```
 
-  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/common/scripts`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds to `helpers/invariants.ts` name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
+  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/common/scripts`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds under `helpers/invariants/` (not its tests) name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
 
 ### Testing Portal Components
 
@@ -122,7 +128,7 @@ await waitFor(() =>
 - Throw `ApiError(code, message)` from a handler to make the call fail the way the API does (`error.data.code` is set).
 - Find elements by role and accessible name, as a user or screen reader would, rather than by class or test id.
 - jsdom has no layout, so drag and drop can't be driven by the pointer or keyboard in these tests. Simulate the drop event instead (see `lesson-content-items-row.test.tsx`), and check real dragging in a browser.
-- A page that reads from core-api instead (the instructor portal's My Courses and Dashboard do, for the course list) uses `renderWithCoreApi` from `src/test/render-with-core-api.tsx` the same way. Both share their fake tRPC `fetch` from `src/test/fake-trpc-fetch.ts`.
+- A page that reads from core-api instead (the instructor portal's My Courses and Dashboard do, for the course list) uses `renderWithCoreApi` from `src/test/render-with-core-api.tsx` the same way. Both are built by `createRenderWithApi` from `@discava/common-web-utils/testing`, which also holds the fake tRPC `fetch` (`fakeTrpcFetch`), the jsdom stubs (`installJsdomStubs`, called from each `src/test/setup.ts`) and `mockRouter`.
 - A `route.tsx`'s component isn't exported directly; render `Route.options.component` from it. Name the test file `-route.test.tsx` (the `-` prefix), or TanStack Router's file-based routing picks it up as a route of its own.
 
 ### End-to-End Tests

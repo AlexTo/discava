@@ -5,8 +5,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createLocalUserSync,
+  LOCAL_EVENT_RUNNER,
   LOCAL_QUEUES,
+  LOCAL_STRIPE,
   localBucketName,
+  localCheckoutTtlSeconds,
   localFeatureFailureQueueName,
   localFeatureQueueName,
   s3ClientConfig,
@@ -156,5 +159,35 @@ describe('createLocalUserSync', () => {
     await sync({ email: 'no-sub@example.com' });
 
     expect(signIn).not.toHaveBeenCalled();
+  });
+});
+
+describe('LOCAL_STRIPE', () => {
+  it('reuses the event runner port and names the two documented accounts', () => {
+    expect(LOCAL_STRIPE.port).toBe(LOCAL_EVENT_RUNNER.port);
+    expect(LOCAL_STRIPE.accounts.sk_test_local?.accountId).toBe('acct_local');
+    expect(LOCAL_STRIPE.accounts.sk_test_local_2?.accountId).toBe(
+      'acct_local_2',
+    );
+  });
+});
+
+describe('localCheckoutTtlSeconds', () => {
+  it('reads a positive integer in local dev', () => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    vi.stubEnv('LOCAL_CHECKOUT_TTL_SECONDS', '45');
+    expect(localCheckoutTtlSeconds()).toBe(45);
+  });
+
+  it.each(['0', '-5', '1.5', 'abc', '', '1e3'])('ignores %j', (value) => {
+    vi.stubEnv('LOCAL_DEV', 'true');
+    vi.stubEnv('LOCAL_CHECKOUT_TTL_SECONDS', value);
+    expect(localCheckoutTtlSeconds()).toBeUndefined();
+  });
+
+  it('ignores it when deployed', () => {
+    vi.stubEnv('LOCAL_DEV', undefined);
+    vi.stubEnv('LOCAL_CHECKOUT_TTL_SECONDS', '45');
+    expect(localCheckoutTtlSeconds()).toBeUndefined();
   });
 });

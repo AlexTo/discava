@@ -1,0 +1,71 @@
+---
+title: Security model
+description: Who can reach what in Discava, the protections a stage can turn on, and how deployments are kept in bounds.
+sidebar:
+  order: 3
+---
+
+import Link from '@components/link.astro';
+
+## Who can do what
+
+Access is decided in layers, and each layer assumes the one before it could fail.
+
+| Layer | Enforces |
+| --- | --- |
+| **Cognito groups** | A user's role: `student`, `instructor` or `admin` |
+| **Separate APIs** | Instructor and admin procedures are separate deployments. A student's token is rejected by instructor-api before any procedure runs |
+| **Procedure rules** | The specific rule: this instructor owns this course, this student is enrolled in it |
+| **Signed media** | A video is served only to a request signed for it, issued after the enrolment check |
+
+A draft or archived course answers "not found" to anyone who shouldn't see it, so its existence isn't revealed.
+
+## Protections per stage
+
+Every protection is **on by default**. A stage's configuration can only turn things off, which `discava-development` does to stay cheap.
+
+| Protection | What it does | Production | Development |
+| --- | --- | --- | --- |
+| **WAF** | Web application firewall on the portals, APIs, media and user pool | On | Off |
+| **KMS encryption** | Customer-managed keys, with rotation, for the table, buckets, queues, logs and search | On | Off (AWS-managed encryption) |
+| **MFA** | A second factor at sign-in | On | Off |
+| **Deletion protection** | Refuses deleting the user pool and table | On | Off |
+| **Retain on delete** | Keeps data if a stack is removed | On | Off |
+| **Self sign-up** | Lets anyone create an account | On | Off |
+| **Tracing** | Request tracing with X-Ray | On | Off |
+
+Data is always encrypted at rest and in transit. The KMS setting decides whether the keys are yours to control and audit.
+
+On a development stage with WAF off, the request limits, function concurrency and table throughput ceilings in the stage's configuration bound what a flood of requests can cost. With self sign-up off, an outsider can't get an account to reach the signed-in procedures.
+
+## Least privilege inside the system
+
+- Each Lambda function has its own role with only the permissions its job needs.
+- Sensitive capabilities are isolated in dedicated functions. The key that signs video requests is readable by one function, not by the function serving every other core-api procedure.
+- No S3 bucket is public. Each is reachable only through its CloudFront distribution.
+- Functions read resource names from AppConfig, and credentials never appear in code or environment files.
+
+## Checks before code is deployed
+
+| Check | Where | Catches |
+| --- | --- | --- |
+| **Checkov** | Every build | Insecure infrastructure settings in the generated templates |
+| **Trivy** | CI and before each deploy | Known vulnerabilities in dependencies, and committed secrets |
+| **git-secrets** | Before each commit | Credentials about to be committed |
+| **Table invariants** | End-to-end tests | Data left in a state that breaks a rule spanning several records |
+
+## Keeping deployments in bounds
+
+The deployment pipeline is itself an attack surface, so it is constrained:
+
+- **No stored AWS credentials.** GitHub Actions signs in with a token issued for one run.
+- **The deploy role trusts one environment** of one repository. Protecting that environment with required reviewers gates the deploy.
+- **The deploy role can't create resources.** It can only ask CloudFormation to deploy stacks named for its stage.
+- **The execution role is scoped** to the stage's resources by name.
+- **A permissions boundary** caps every role a stage creates, so a deployed change can't grant itself more than the boundary allows.
+
+<Link path="deploy/ci-cd">CI/CD reference</Link> explains the sign-in and the two roles.
+
+## Reporting a vulnerability
+
+Please don't open a public issue. Follow the security notification process in [CONTRIBUTING.md](https://github.com/AlexTo/discava/blob/main/CONTRIBUTING.md#security-issue-notifications).

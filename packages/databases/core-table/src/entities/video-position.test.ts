@@ -10,7 +10,6 @@ import { createVideoPositionEntity } from './video-position.js';
 
 let videoPosition: Awaited<ReturnType<typeof createVideoPositionEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   videoPosition = await createVideoPositionEntity();
 });
 

@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createCoreTableService } from '../service.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { useCoreTable } from '../test-support/core-table.js';
+import {
+  createFakeTable,
+  type Operation,
+} from '../test-support/fake-transaction.js';
+import { uuidV7At } from '../test-support/uuid-v7.js';
 import {
   answeredState,
   checkPostId,
@@ -18,15 +23,15 @@ import {
   normaliseDiscussionText,
   postIdTime,
 } from './discussion.js';
-import { checkTableInvariants, type TableSnapshot } from './invariants.js';
+import {
+  checkTableInvariants,
+  emptyTableSnapshot,
+  type TableSnapshot,
+} from './invariants/index.js';
 
 const NOW = new Date('2026-11-16T10:00:00.000Z');
 
-// A UUID v7 whose time part is `at`.
-const v7 = (at: Date) => {
-  const hex = at.getTime().toString(16).padStart(12, '0');
-  return `${hex.slice(0, 8)}-${hex.slice(8)}-7000-8000-000000000001`;
-};
+const v7 = (at: Date) => uuidV7At(at);
 const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
 
 describe('normaliseDiscussionText', () => {
@@ -129,11 +134,7 @@ describe('answeredState', () => {
 
 // The requests ElectroDB would send, checked without a table.
 
-let coreTable: Awaited<ReturnType<typeof createCoreTableService>>;
-beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
-  coreTable = await createCoreTableService();
-});
+const coreTable = useCoreTable();
 
 interface Conditional {
   ConditionExpression?: string;
@@ -927,163 +928,41 @@ describe('lessonHasDiscussion', () => {
 // request is built from a read taken beforehand, so a later one meets what the
 // earlier one wrote.
 describe('concurrent writes against an in-memory table', () => {
-  type Row = Record<string, any>;
-  interface Operation {
-    key: string;
-    allowed: (row?: Row) => boolean;
-    apply: (row?: Row) => Row | undefined;
-  }
-
-  const KEY_FIELDS: Record<string, string[]> = {
-    course: ['courseId'],
-    module: ['courseId', 'moduleId'],
-    lesson: ['courseId', 'moduleId', 'lessonId'],
-    discussionPost: ['courseId', 'kind', 'lessonId', 'threadId', 'postId'],
-    discussionVote: ['courseId', 'userId', 'lessonId', 'threadId', 'postId'],
-  };
-  const keyOf = (entity: string, row: Row) =>
-    `${entity}|${KEY_FIELDS[entity]!.map((f) => row[f]).join('|')}`;
-
-  // A `where` callback builds its condition from the operations below, each of
-  // which returns a token standing for its predicate; DynamoDB treats a
-  // comparison with a missing attribute as false (but `<>` as true).
-  const conditionOf = (where?: (attr: any, op: any) => string) => {
-    const tests: ((row?: Row) => boolean)[] = [];
-    const token = (test: (row?: Row) => boolean) => {
-      tests.push(test);
-      return `[${tests.length - 1}]`;
-    };
-    const attr = new Proxy({}, { get: (_, name) => String(name) });
-    const op = {
-      eq: (n: string, v: unknown) => token((r) => r?.[n] === v),
-      ne: (n: string, v: unknown) => token((r) => r?.[n] !== v),
-      lt: (n: string, v: number) =>
-        token((r) => r?.[n] !== undefined && r[n] < v),
-      exists: (n: string) => token((r) => r?.[n] !== undefined),
-      notExists: (n: string) => token((r) => r?.[n] === undefined),
-      contains: (n: string, v: string) =>
-        token((r) => (r?.[n] as Set<string> | undefined)?.has(v) ?? false),
-      name: (n: string) => `@${n}`,
-      value: (_n: string, v: number) => `#${v}`,
-    };
-    let expression = where?.(attr, op) ?? '';
-    expression = expression.replace(
-      /size\(@(\w+)\) < #(\d+)/g,
-      (_all, n: string, v: string) =>
-        token((r) => r?.[n] !== undefined && r[n].size < Number(v)),
-    );
-    const source = expression
-      .replace(/ AND /g, ' && ')
-      .replace(/ OR /g, ' || ')
-      .replace(/\[(\d+)\]/g, 't($1)');
-    if (!/^[\s\d&|()t]*$/.test(source)) {
-      throw new Error(`The fake cannot read ${expression}`);
-    }
-    const evaluate = new Function('t', `return ${source || 'true'}`) as (
-      t: (n: number) => boolean,
-    ) => boolean;
-    return (row?: Row) => evaluate((n) => tests[n]!(row));
-  };
-
-  const builder = (
-    entity: string,
-    key: Row,
-    mode: 'create' | 'patch' | 'check' | 'delete',
-    item?: Row,
-  ) => {
-    let where: ((attr: any, op: any) => string) | undefined;
-    const changes: { set: Row; add: Row; subtract: Row; remove: string[] } = {
-      set: {},
-      add: {},
-      subtract: {},
-      remove: [],
-    };
-    const self: any = {
-      set: (v: Row) => (Object.assign(changes.set, v), self),
-      add: (v: Row) => (Object.assign(changes.add, v), self),
-      subtract: (v: Row) => (Object.assign(changes.subtract, v), self),
-      remove: (names: string[]) => (changes.remove.push(...names), self),
-      where: (fn: typeof where) => ((where = fn), self),
-      commit: (): Operation => {
-        const holds = conditionOf(where);
-        return {
-          key: keyOf(entity, item ?? key),
-          allowed: (row) => {
-            if (mode === 'create') {
-              return row === undefined;
-            }
-            if (mode === 'patch' && row === undefined) {
-              return false;
-            }
-            return holds(row);
-          },
-          apply: (row) => {
-            if (mode === 'create') {
-              return {
-                state: 'shown',
-                replyCount: 0,
-                instructorReplyCount: 0,
-                voteCount: 0,
-                ...item,
-              };
-            }
-            if (mode === 'delete') {
-              return undefined;
-            }
-            const next = { ...row };
-            Object.assign(next, changes.set);
-            for (const [n, v] of Object.entries(changes.add)) {
-              next[n] = Array.isArray(v)
-                ? new Set([...(next[n] ?? []), ...v])
-                : (next[n] ?? 0) + (v as number);
-            }
-            for (const [n, v] of Object.entries(changes.subtract)) {
-              next[n] = (next[n] ?? 0) - (v as number);
-            }
-            for (const n of changes.remove) {
-              delete next[n];
-            }
-            return next;
-          },
-        };
+  const table = createFakeTable({
+    keyFields: {
+      course: ['courseId'],
+      module: ['courseId', 'moduleId'],
+      lesson: ['courseId', 'moduleId', 'lessonId'],
+      discussionPost: ['courseId', 'kind', 'lessonId', 'threadId', 'postId'],
+      discussionVote: ['courseId', 'userId', 'lessonId', 'threadId', 'postId'],
+    },
+    createDefaults: {
+      discussionPost: {
+        state: 'shown',
+        replyCount: 0,
+        instructorReplyCount: 0,
+        voteCount: 0,
       },
-    };
-    return self;
-  };
+    },
+  });
+  const { keyOf, rows } = table;
+  const fakeEntities = () =>
+    table.entities<Parameters<typeof discussionWrites>[0]>();
 
-  const fakeEntities = () => {
-    const entity = (name: string) => ({
-      create: (item: Row) => builder(name, item, 'create', item),
-      patch: (key: Row) => builder(name, key, 'patch'),
-      check: (key: Row) => builder(name, key, 'check'),
-      delete: (key: Row) => builder(name, key, 'delete'),
-    });
-    return {
-      course: entity('course'),
-      module: entity('module'),
-      lesson: entity('lesson'),
-      discussionPost: entity('discussionPost'),
-      discussionVote: entity('discussionVote'),
-    } as unknown as Parameters<typeof discussionWrites>[0];
-  };
-
-  let rows: Map<string, Row>;
   const WHEN = new Date('2026-11-16T10:00:00.000Z');
   let counter: number;
   const nextId = () => {
     counter += 1;
-    const hex = (WHEN.getTime() + counter).toString(16).padStart(12, '0');
-    return `${hex.slice(0, 8)}-${hex.slice(8)}-7000-8000-${String(counter).padStart(12, '0')}`;
+    return uuidV7At(WHEN.getTime() + counter, counter);
   };
 
   // A published course with a visible module and lesson.
   const seed = () => {
     counter = 0;
-    rows = new Map([
-      [keyOf('course', scope), { courseId: 'c1', status: 'published' }],
-      [keyOf('module', scope), { ...scope, visibility: 'visible' }],
-      [keyOf('lesson', scope), { ...scope, visibility: 'visible' }],
-    ]);
+    rows.clear();
+    rows.set(keyOf('course', scope), { courseId: 'c1', status: 'published' });
+    rows.set(keyOf('module', scope), { ...scope, visibility: 'visible' });
+    rows.set(keyOf('lesson', scope), { ...scope, visibility: 'visible' });
   };
   beforeEach(seed);
 
@@ -1095,33 +974,12 @@ describe('concurrent writes against an in-memory table', () => {
     if (items === undefined) {
       return 'no-write';
     }
-    const keys = new Set(items.map((i) => i.key));
-    if (keys.size !== items.length) {
-      throw new Error('two operations on one item');
-    }
-    if (!items.every((i) => i.allowed(rows.get(i.key)))) {
-      return 'cancelled';
-    }
-    const next = items.map((i) => [i.key, i.apply(rows.get(i.key))] as const);
-    for (const [key, row] of next) {
-      if (row === undefined) {
-        rows.delete(key);
-      } else {
-        rows.set(key, row);
-      }
-    }
-    return 'ok';
+    return table.succeeds(items) ? 'ok' : 'cancelled';
   };
 
-  const posts = () =>
-    [...rows.entries()]
-      .filter(([k]) => k.startsWith('discussionPost|'))
-      .map(([, r]) => r);
+  const posts = () => table.rowsOf('discussionPost');
   const post = (postId: string) => posts().find((p) => p.postId === postId)!;
-  const votes = () =>
-    [...rows.entries()]
-      .filter(([k]) => k.startsWith('discussionVote|'))
-      .map(([, r]) => r);
+  const votes = () => table.rowsOf('discussionVote');
 
   // Reads a post as a procedure would before it builds an operation.
   const read = (postId: string): DiscussionPostRead => {
@@ -1199,18 +1057,15 @@ describe('concurrent writes against an in-memory table', () => {
 
   // The invariant checks over the fake's records.
   const violations = () => {
-    const snapshot = new Proxy(
-      {
-        lessons: [{ ...scope }],
-        discussionPosts: posts().map((p) => ({
-          ...p,
-          reportedBy:
-            p.reportedBy === undefined ? undefined : [...p.reportedBy],
-        })),
-        discussionVotes: votes(),
-      } as Record<string, unknown>,
-      { get: (target, name: string) => target[name] ?? [] },
-    ) as unknown as TableSnapshot;
+    const snapshot = {
+      ...emptyTableSnapshot(),
+      lessons: [{ ...scope }],
+      discussionPosts: posts().map((p) => ({
+        ...p,
+        reportedBy: p.reportedBy === undefined ? undefined : [...p.reportedBy],
+      })),
+      discussionVotes: votes(),
+    } as unknown as TableSnapshot;
     return checkTableInvariants(snapshot)
       .filter((v) => v.invariant.startsWith('discussion-'))
       .map((v) => `${v.invariant}: ${v.message}`);

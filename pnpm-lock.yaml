@@ -327,6 +327,9 @@ catalogs:
     starlight-blog:
       specifier: 0.30.2
       version: 0.30.2
+    stripe:
+      specifier: 23.1.0
+      version: 23.1.0
     tailwindcss:
       specifier: 4.3.5
       version: 4.3.5
@@ -641,6 +644,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -888,6 +894,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -913,9 +922,18 @@ importers:
       '@discava/common-web-utils':
         specifier: workspace:*
         version: link:../web-utils
+      '@discava/core-api':
+        specifier: workspace:*
+        version: link:../../apis/core-api
       '@tailwindcss/typography':
         specifier: 'catalog:'
         version: 0.5.20
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.107.1(@types/react@19.3.0)(react@19.3.1)
+      '@tanstack/react-router':
+        specifier: 'catalog:'
+        version: 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tiptap/core':
         specifier: 'catalog:'
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -925,6 +943,12 @@ importers:
       '@tiptap/static-renderer':
         specifier: 'catalog:'
         version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@trpc/client':
+        specifier: 'catalog:'
+        version: 11.25.0(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(typescript@6.0.3)
+      '@trpc/tanstack-react-query':
+        specifier: 'catalog:'
+        version: 11.25.0(@tanstack/react-query@5.107.1(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.25.0(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(react@19.3.1)(typescript@6.0.3)
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.1.0(vitest@5.1.0)
@@ -946,6 +970,9 @@ importers:
       lucide-react:
         specifier: 'catalog:'
         version: 1.70.0(@types/react@19.3.0)(react@19.3.1)
+      oidc-client-ts:
+        specifier: 'catalog:'
+        version: 3.5.0
       radix-ui:
         specifier: 'catalog:'
         version: 1.8.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -955,6 +982,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.1(react@19.3.1)
+      react-oidc-context:
+        specifier: 'catalog:'
+        version: 3.3.1(oidc-client-ts@3.5.0)(react@19.3.1)
       recharts:
         specifier: 'catalog:'
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react-is@17.0.2)(react@19.3.1)(redux@5.0.1)
@@ -1029,6 +1059,9 @@ importers:
       event-source-polyfill:
         specifier: 'catalog:'
         version: 1.0.31
+      oidc-client-ts:
+        specifier: 'catalog:'
+        version: 3.5.0
       react:
         specifier: 'catalog:'
         version: 19.3.1
@@ -1045,6 +1078,9 @@ importers:
       '@testing-library/react':
         specifier: 'catalog:'
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@testing-library/user-event':
+        specifier: 'catalog:'
+        version: 14.6.7(@testing-library/dom@10.4.2)
       '@types/event-source-polyfill':
         specifier: 'catalog:'
         version: 1.0.5
@@ -1063,12 +1099,18 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@discava/common-web-utils':
+        specifier: workspace:*
+        version: link:../../common/web-utils
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
+      uuid:
+        specifier: 'catalog:'
+        version: 14.0.2
     devDependencies:
       '@types/aws-lambda':
         specifier: 'catalog:'
@@ -1219,6 +1261,9 @@ importers:
       electrodb:
         specifier: 'catalog:'
         version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
+      stripe:
+        specifier: 'catalog:'
+        version: 23.1.0(@types/node@26.6.6)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
@@ -9073,6 +9118,15 @@ packages:
   strip-json-comments@3.1.1:
     resolution: {integrity: sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==}
     engines: {node: '>=8'}
+
+  stripe@23.1.0:
+    resolution: {integrity: sha512-fVUfMSfTPoukfoV//MUKAx2+YxyKmYaYtnAL9VkfnHfaPNQylFdWZMD+zgUFerI8rjbaiER8Vzj2XEUQ2AhAsQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   strnum@2.4.2:
     resolution: {integrity: sha512-rDG3Ah4TV0k1hWvLSzkZtMmLN9+eS+h3knq4MP6A42Y3Yh5qGNnOUs1jJkoSr8FG5dsL28c7KgkIBzSEykqtuw==}
@@ -18682,6 +18736,10 @@ snapshots:
       min-indent: 1.0.1
 
   strip-json-comments@3.1.1: {}
+
+  stripe@23.1.0(@types/node@26.6.6):
+    optionalDependencies:
+      '@types/node': 26.6.6
 
   strnum@2.4.2:
     dependencies:

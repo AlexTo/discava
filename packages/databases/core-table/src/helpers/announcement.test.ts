@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
+import { useCoreTable } from '../test-support/core-table.js';
+import { uuidV7At } from '../test-support/uuid-v7.js';
 import {
   AnnouncementInputError,
   announcementDeleteWrites,
@@ -24,18 +26,10 @@ vi.mock('./notification.js', async (importOriginal) => {
 });
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
-let service: CoreTable;
-beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
-  service = await createCoreTableService();
-});
+const service = useCoreTable();
 
 const NOW = new Date('2026-11-16T10:00:00.000Z');
-// A UUID v7 whose time part is `at`.
-const idAt = (at: Date, last = 1) => {
-  const ms = at.getTime().toString(16).padStart(12, '0');
-  return `${ms.slice(0, 8)}-${ms.slice(8)}-7000-8000-${String(last).padStart(12, '0')}`;
-};
+const idAt = uuidV7At;
 const ID = idAt(NOW);
 const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
 

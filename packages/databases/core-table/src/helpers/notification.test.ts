@@ -224,7 +224,6 @@ describe('notificationWrites', () => {
 describe('the requests ElectroDB would send', () => {
   let real: Awaited<ReturnType<typeof createCoreTableService>>;
   beforeAll(async () => {
-    process.env.LOCAL_DEV = 'true';
     real = await createCoreTableService();
   });
 

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import { plainTextExcerpt } from '@discava/common-tiptap';
 import {
   AnnouncementInputError,
@@ -10,15 +10,17 @@ import {
   announcementEditWrites,
   announcementPage,
   announcementWrites,
+  type CancellationReasons,
   type CoreTable,
+  cancellationReasons,
+  failedAt,
+  hasTransactionConflict,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
-  hasTransactionConflict,
   requireCourseInstructor,
-  transactionConflict,
 } from '../lib/course-lifecycle.js';
 import {
   CreateAnnouncementInputSchema,
@@ -124,10 +126,7 @@ export const createAnnouncement = courseProcedure
       .go();
 
     if (canceled) {
-      const failed = (results ?? []).map(
-        (result: { code?: string } | undefined) =>
-          result?.code === 'ConditionalCheckFailed',
-      );
+      const failed = failedChecks(results);
       const existing = await readAnnouncement(
         coreTable,
         courseId,
@@ -347,8 +346,10 @@ export const deleteAnnouncement = courseProcedure
     return { announcementId };
   });
 
-const failedChecks = (results: ({ code?: string } | undefined)[] | undefined) =>
-  (results ?? []).map((result) => result?.code === 'ConditionalCheckFailed');
+const failedChecks = (results: CancellationReasons | undefined) => {
+  const reasons = cancellationReasons(results);
+  return reasons.map((_, index) => failedAt(reasons, index));
+};
 
 const announcementNotFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Announcement not found' });

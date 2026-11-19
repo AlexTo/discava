@@ -13,10 +13,8 @@ import {
 // breadcrumb from the location; neither has a router here.
 let search: { days: 30 | 90 } = { days: 90 };
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return {
-    ...actual,
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
     useLocation: () => ({ pathname: '/dashboard/c1' }),
     // A real Link needs a router; render the target it would link to.
     Link: ({
@@ -31,7 +29,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
         {children}
       </a>
     ),
-  };
+  });
 });
 
 const { Route } = await import('./route');

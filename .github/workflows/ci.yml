@@ -29,8 +29,11 @@ jobs:
           fetch-depth: 0
 
       # infra:checkov (part of the build target) invokes checkov via `uvx`, so
-      # this job needs uv (init-monorepo's default).
+      # this job needs uv (init-monorepo's default). Its Nx cache is the one a
+      # pull request's first run falls back to.
       - uses: ./.github/actions/init-monorepo
+        with:
+          nx-cache-scope: main
 
       - name: Lint
         run: pnpm nx run-many --target lint --all
@@ -64,7 +67,7 @@ jobs:
   # scan as a gate before deploying.
   # A PR's run can only restore caches saved on its own ref or on main, and the
   # PR Checks workflow never runs on main, so the e2e job's Chromium cache would
-  # miss on every new PR. Saves it here, under the same key (keep both in step).
+  # miss on every new PR. Saves it here, with the same action.
   playwright-cache:
     name: Playwright cache
     runs-on: ubuntu-latest
@@ -76,20 +79,7 @@ jobs:
           setup-uv: "false"
           set-nx-shas: "false"
 
-      - name: Get the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm --filter @discava/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: playwright-cache
-        name: Cache Chromium for Playwright
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      - name: Download Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @discava/e2e exec playwright install chromium
+      - uses: ./.github/actions/playwright-setup
 
   trivy:
     name: Trivy

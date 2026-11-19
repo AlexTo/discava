@@ -31,7 +31,7 @@ export interface TrpcContextValue<TRouter extends AnyTRPCRouter> {
   client: TRPCClient<TRouter>;
 }
 
-export interface TrpcProviderOptions {
+export interface TrpcProviderOptions<TRouter extends AnyTRPCRouter> {
   /** The API's key under `apis` in the runtime config, e.g. 'CoreApi'. */
   apiKey: string;
   /**
@@ -41,6 +41,12 @@ export interface TrpcProviderOptions {
    * `createVideoUrl`); without it the browser ignores them.
    */
   credentials?: RequestCredentials;
+  /**
+   * The context to provide and read, for an API whose hooks a shared component
+   * calls: the component and the portal's provider must use the same one.
+   * Without it, a new context is made.
+   */
+  context?: Context<TrpcContextValue<TRouter> | null>;
 }
 
 export interface TrpcProvider<TRouter extends AnyTRPCRouter> {
@@ -60,8 +66,10 @@ export interface TrpcProvider<TRouter extends AnyTRPCRouter> {
 export const createTrpcProvider = <TRouter extends AnyTRPCRouter>({
   apiKey,
   credentials,
-}: TrpcProviderOptions): TrpcProvider<TRouter> => {
-  const TrpcContext = createContext<TrpcContextValue<TRouter> | null>(null);
+  context,
+}: TrpcProviderOptions<TRouter>): TrpcProvider<TRouter> => {
+  const TrpcContext =
+    context ?? createContext<TrpcContextValue<TRouter> | null>(null);
 
   const Provider: FC<PropsWithChildren> = ({ children }) => {
     const queryClient = useQueryClient();

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   AlertDescription,
@@ -25,7 +26,6 @@ import {
   Tags,
 } from 'lucide-react';
 import { useInstructorApi } from '../../../../api';
-import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import {
   type CourseStatus,
   courseStatusStyles,
@@ -213,6 +213,7 @@ function RouteComponent() {
             }
             hasOutcomes={(course.learningOutcomes?.length ?? 0) > 0}
             hasRequirements={(course.requirements?.length ?? 0) > 0}
+            hasPreview={course.preview?.status === 'ready'}
             hasImage={Boolean(course.imageKey)}
           />
         </Card>
@@ -261,6 +262,7 @@ function RouteComponent() {
             courseId={course.courseId}
             learningOutcomes={course.learningOutcomes}
             requirements={course.requirements}
+            preview={course.preview}
             readOnly={readOnly}
           />
         </Card>

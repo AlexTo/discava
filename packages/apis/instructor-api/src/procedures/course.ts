@@ -2,9 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
+  cancellationReasons,
   ensureInstructorProfile,
+  failedAt,
   filterEffectivelyVisible,
+  hasTransactionConflict,
   isConditionalCheckFailed,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -12,11 +16,10 @@ import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
-  hasTransactionConflict,
   refreshInstructorCourseUpdatedAt,
   requireCourseInstructor,
-  transactionConflict,
 } from '../lib/course-lifecycle.js';
+import { asPreviewSummary } from '../lib/course-preview.js';
 import {
   ArchiveCourseInputSchema,
   ArchiveCourseOutputSchema,
@@ -58,7 +61,14 @@ export const createCourse = courseProcedure
     const { canceled } = await coreTable.transaction
       .write((entities) => [
         entities.course
-          .create({ courseId, title, description, certificatesEnabled: true })
+          .create({
+            courseId,
+            title,
+            description,
+            certificatesEnabled: true,
+            priceAmount: 0,
+            priceCurrency: 'USD',
+          })
           .commit(),
         entities.courseInstructor
           .create({ courseId, instructorId: currentUser, courseUpdatedAt })
@@ -215,11 +225,8 @@ export const publishCourse = courseProcedure
       .go();
 
     if (canceled) {
-      const failed = (results ?? []).map(
-        (result: { code?: string } | undefined) =>
-          result?.code === 'ConditionalCheckFailed',
-      );
-      if (failed[0]) {
+      const reasons = cancellationReasons(results);
+      if (failedAt(reasons, 0)) {
         // Another request moved the course on between the read and the write.
         const current = await getCourseOrThrow(coreTable, courseId);
         if (current.status === 'published') {
@@ -227,7 +234,7 @@ export const publishCourse = courseProcedure
         }
         throw courseChanged();
       }
-      if (failed.slice(1).some(Boolean)) {
+      if (failedAt(reasons, 1, reasons.length)) {
         throw new TRPCError({
           code: 'CONFLICT',
           message:
@@ -353,11 +360,14 @@ export const viewCourse = courseProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    const { data: category } = course.categoryId
-      ? await coreTable.entities.category
-          .get({ categoryId: course.categoryId })
-          .go()
-      : { data: null };
+    const [{ data: category }, { data: preview }] = await Promise.all([
+      course.categoryId
+        ? coreTable.entities.category
+            .get({ categoryId: course.categoryId })
+            .go()
+        : { data: null },
+      coreTable.entities.coursePreview.get({ courseId }).go(),
+    ]);
 
     const byOrder = (a: { order: number }, b: { order: number }) =>
       a.order - b.order;
@@ -374,6 +384,7 @@ export const viewCourse = courseProcedure
           archived: category.status === 'archived',
         },
       }),
+      ...(preview && { preview: asPreviewSummary(preview) }),
       modules: modules
         .slice()
         .sort(byOrder)

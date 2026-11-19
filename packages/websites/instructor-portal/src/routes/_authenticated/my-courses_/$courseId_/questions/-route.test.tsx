@@ -10,10 +10,8 @@ import {
 } from '../../../../../test/render-questions';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@tanstack/react-router')>();
-  return {
-    ...actual,
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
     // A real Link needs a router; render the target it would link to.
     Link: ({
       to,
@@ -29,7 +27,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
         {children}
       </a>
     ),
-  };
+  });
 });
 
 const { Route } = await import('./route');

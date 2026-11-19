@@ -10,6 +10,7 @@
     "@trpc/server": "catalog:",
     "@trpc/tanstack-react-query": "catalog:",
     "event-source-polyfill": "catalog:",
+    "oidc-client-ts": "catalog:",
     "react": "catalog:",
     "react-oidc-context": "catalog:",
     "tslib": "^2.3.0"
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@testing-library/dom": "catalog:",
     "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/event-source-polyfill": "catalog:",
     "@types/node": "catalog:"
   },

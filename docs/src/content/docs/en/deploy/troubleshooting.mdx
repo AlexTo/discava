@@ -1,0 +1,58 @@
+---
+title: Troubleshooting
+description: Common reasons a setup or deploy fails, and how to fix each.
+sidebar:
+  order: 7
+---
+
+## The setup script
+
+**"Couldn't authenticate with AWS."** Your AWS CLI has no valid credentials. Sign in (`aws sso login --profile <profile>` or `aws configure`) and run the script again.
+
+**"`<stage>` is configured for account … ; switch credentials and re-run."** The stage names an account in `stages.config.ts` and you are signed in to another.
+
+**"Unknown stage."** The stage isn't in `stages.config.ts`. Add it there first.
+
+**"The origin remote isn't a GitHub repository."** Set the repository yourself: `GITHUB_REPOSITORY=<you>/discava ./scripts/setup-stage.sh`.
+
+**"uses a custom OIDC subject claim template."** Your repository or organisation customises the OIDC token's subject. Set `GITHUB_OIDC_SUBJECT_PREFIX` to the part of the subject before `:environment:` and run the script again.
+
+**"No issued certificate … covers …"** Request the certificate in ACM, in the region the message names, and wait until its status is **Issued**.
+
+## The Deploy workflow
+
+**The workflow never starts after a push to `main`.** Automatic deploys need three things: the repository variable `AUTO_DEPLOY_STAGE`, workflows enabled on the fork, and a CI run that **passed**. Check the CI run: a failed **Deploy Docs** job (GitHub Pages not enabled) or **Trivy** job fails CI as a whole.
+
+**"Unknown stage".** The stage you typed isn't in `stages.config.ts` on the commit being deployed.
+
+**"Not authorized to perform sts:AssumeRoleWithWebIdentity".** AWS refused the workflow's token. The usual causes:
+
+- The GitHub environment's name isn't exactly the stage's name
+- The setup script was run from a clone of a different repository (the original instead of your fork), so the role trusts that one
+- The fork was renamed or transferred after setup
+
+Run the setup script again from a clone of the repository that runs the workflow.
+
+**"Credentials could not be loaded" or an empty role.** The environment has no `AWS_DEPLOY_ROLE_ARN` variable. Run the setup script, or create the variables it printed.
+
+**"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** CDK isn't bootstrapped in a region the stage deploys to. Run the setup script again and accept the bootstrap, remembering `us-east-1` for stages with WAF.
+
+**Access denied while CloudFormation creates a resource.** The execution role is scoped to what Discava creates today. If you added a new kind of AWS resource, add the permission to the execution role's policies and to the permissions boundary in `scripts/setup-stage.sh`, then run the script again.
+
+**The Trivy step fails.** A dependency has a known critical vulnerability with a fix available, or a secret was committed. Update the dependency. A finding you have reviewed and accepted goes in `.trivyignore`.
+
+**A stack is stuck in `ROLLBACK_COMPLETE`.** A stack that failed on its first creation can't be updated. Delete it in the CloudFormation console and deploy again.
+
+## After deploying
+
+**A portal shows a sign-in error.** Check that the user is in the group that portal needs (`student`, `instructor` or `admin`).
+
+**A custom domain doesn't resolve.** DNS records aren't created for you. Point the domain at its CloudFront distribution or API Gateway custom domain.
+
+**API calls fail with CORS errors after adding a portal domain.** Deploy again. The APIs' allowed origins are taken from the portal domains at deploy time.
+
+**The first search is slow.** On `discava-development`, search scales to zero. The first query after a quiet spell waits 10 to 30 seconds for capacity.
+
+**No emails arrive.** Check the two `NOTIFICATIONS` variables are set, the SES identity is verified in the stage's region, and whether your SES account is still in the sandbox.
+
+**A video stays "processing".** Look at the MediaConvert console's job list in the stage's region for a failed job and its error.

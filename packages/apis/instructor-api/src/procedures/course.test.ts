@@ -17,6 +17,7 @@ import {
 const {
   courseCreate,
   courseGet,
+  coursePreviewGet,
   coursePatch,
   coursePatchSet,
   coursePatchWhere,
@@ -37,6 +38,7 @@ const {
 } = vi.hoisted(() => ({
   courseCreate: vi.fn(),
   courseGet: vi.fn(),
+  coursePreviewGet: vi.fn(),
   coursePatch: vi.fn(),
   coursePatchSet: vi.fn(),
   coursePatchWhere: vi.fn(),
@@ -66,6 +68,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
         get: courseGet,
         patch: coursePatch,
       },
+      coursePreview: { get: coursePreviewGet },
       courseInstructor: {
         create: courseInstructorCreate,
         get: courseInstructorGet,
@@ -125,6 +128,10 @@ const checkConditions: Record<string, CheckCondition> = {};
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A course has no preview, unless a test says otherwise.
+  coursePreviewGet.mockReturnValue({
+    go: vi.fn().mockResolvedValue({ data: null }),
+  });
 
   courseCreate.mockImplementation((attrs) => ({
     commit: () => ({ item: null, attrs }),
@@ -263,6 +270,14 @@ describe('createCourse', () => {
     const [courseArgs] = courseCreate.mock.calls[0];
     const [instructorArgs] = courseInstructorCreate.mock.calls[0];
     expect(instructorArgs.courseId).toBe(courseArgs.courseId);
+  });
+
+  it('creates a course free, in USD, with no pricedAt', async () => {
+    await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    expect(courseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ priceAmount: 0, priceCurrency: 'USD' }),
+    );
+    expect(courseCreate.mock.calls[0]?.[0]).not.toHaveProperty('pricedAt');
   });
 
   it('stores certificatesEnabled: true on a new course', async () => {
@@ -1039,6 +1054,42 @@ describe('viewCourse', () => {
     const result = await callAs().viewCourse({ courseId: course.courseId });
 
     expect(result.publishedAt).toBe('2024-02-01T00:00:00.000Z');
+  });
+
+  it('returns the preview as the editor needs it, without keys or uploader', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { courseId: course.courseId, instructorId: INSTRUCTOR_SUB },
+      }),
+    });
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { course: [course], module: [], lesson: [], contentItem: [] },
+      }),
+    });
+    coursePreviewGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          courseId: course.courseId,
+          status: 'failed',
+          failureReason: 'too-long',
+          durationSeconds: 120,
+          submissionNonce: 'nonce-2',
+          previousS3Key: 'courses/course-1/preview/nonce-1/master.m3u8',
+          uploadedBy: INSTRUCTOR_SUB,
+        },
+      }),
+    });
+
+    const result = await callAs().viewCourse({ courseId: course.courseId });
+
+    expect(result.preview).toEqual({
+      status: 'failed',
+      failureReason: 'too-long',
+      durationSeconds: 120,
+      hasPlayableVersion: true,
+      submissionNonce: 'nonce-2',
+    });
   });
 
   it('throws FORBIDDEN when the caller does not teach the course', async () => {

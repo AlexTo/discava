@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import {
   featuresFor,
@@ -124,9 +124,7 @@ describe('STREAM_FEATURES', () => {
   });
 
   it('filters only name entities the core table defines', async () => {
-    vi.stubEnv('LOCAL_DEV', 'true');
     const service = await createCoreTableService();
-    vi.unstubAllEnvs();
     const entities = Object.keys(service.entities);
     for (const feature of STREAM_FEATURES) {
       for (const filter of feature.filters) {
@@ -136,6 +134,23 @@ describe('STREAM_FEATURES', () => {
       }
     }
   });
+
+  it.each([
+    ['INSERT', 'NewImage'],
+    ['MODIFY', 'NewImage'],
+  ] as const)(
+    'sends a %s of an order, a connection or an audit row to no feature',
+    (eventName, image) => {
+      for (const entity of ['order', 'paymentConnection', 'paymentChange']) {
+        expect(
+          featuresFor({
+            eventName,
+            dynamodb: { [image]: { __edb_e__: { S: entity } } },
+          }),
+        ).toEqual([]);
+      }
+    },
+  );
 
   it('has filters that each match at least one sample record', () => {
     for (const feature of STREAM_FEATURES) {

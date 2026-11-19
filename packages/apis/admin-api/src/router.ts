@@ -11,6 +11,11 @@ import {
   renameCategory,
 } from './procedures/category.js';
 import {
+  connectPayment,
+  disconnectPayment,
+  paymentStatus,
+} from './procedures/payment.js';
+import {
   listAdminReviews,
   listReviewCourses,
   removeReview,
@@ -24,6 +29,11 @@ export const appRouter = router({
     create: createCategory,
     rename: renameCategory,
     archive: archiveCategory,
+  }),
+  payment: router({
+    status: paymentStatus,
+    connect: connectPayment,
+    disconnect: disconnectPayment,
   }),
   review: router({
     courses: listReviewCourses,

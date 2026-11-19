@@ -62,6 +62,28 @@ export const createCourseEntity = async () =>
           type: 'boolean',
           required: true,
         },
+        // What the course costs, in the smallest unit of `priceCurrency`
+        // (cents or pence). `0` is free; otherwise 100 to 1,000,000. Required,
+        // set to 0 on creation; nothing reads a missing value as free. Written
+        // only by instructor-api's `course.setPrice`.
+        priceAmount: {
+          type: 'number',
+          required: true,
+        },
+        // An ISO currency code from the supported list. Required, set to USD
+        // on creation and kept when the price goes back to 0, so the price form
+        // always has a value; nothing reads a missing value as USD.
+        priceCurrency: {
+          type: 'string',
+          required: true,
+        },
+        // When the price last went from 0 to a non-zero amount. Present exactly
+        // when `priceAmount` is above 0: a change between two non-zero amounts
+        // leaves it, and going back to 0 removes it. Enrolments made before it
+        // are free ones the course keeps.
+        pricedAt: {
+          type: 'string',
+        },
         // How the catalogue files and filters the course. All optional: a
         // course without them is simply under no facet value. Written only by
         // courseCatalogueWrites, which normalises and validates them.
