@@ -2,9 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
+  cancellationReasons,
   ensureInstructorProfile,
+  failedAt,
   filterEffectivelyVisible,
+  hasTransactionConflict,
   isConditionalCheckFailed,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -12,10 +16,8 @@ import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
-  hasTransactionConflict,
   refreshInstructorCourseUpdatedAt,
   requireCourseInstructor,
-  transactionConflict,
 } from '../lib/course-lifecycle.js';
 import {
   ArchiveCourseInputSchema,
@@ -215,11 +217,8 @@ export const publishCourse = courseProcedure
       .go();
 
     if (canceled) {
-      const failed = (results ?? []).map(
-        (result: { code?: string } | undefined) =>
-          result?.code === 'ConditionalCheckFailed',
-      );
-      if (failed[0]) {
+      const reasons = cancellationReasons(results);
+      if (failedAt(reasons, 0)) {
         // Another request moved the course on between the read and the write.
         const current = await getCourseOrThrow(coreTable, courseId);
         if (current.status === 'published') {
@@ -227,7 +226,7 @@ export const publishCourse = courseProcedure
         }
         throw courseChanged();
       }
-      if (failed.slice(1).some(Boolean)) {
+      if (failedAt(reasons, 1, reasons.length)) {
         throw new TRPCError({
           code: 'CONFLICT',
           message:

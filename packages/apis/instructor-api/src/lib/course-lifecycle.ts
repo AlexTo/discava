@@ -2,8 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import type { CoreTable } from '@discava/core-table';
+import {
+  cancellationReasons,
+  failedAt,
+  hasTransactionConflict,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import type { ICurriculumVisibility } from '../schema/index.js';
 
@@ -179,21 +184,6 @@ export const draftCourseCheck = (
     .where((attr, op) => op.eq(attr.status, 'draft'))
     .commit();
 
-// DynamoDB cancels one of two transactions that touch the same records at the
-// same moment with TransactionConflict, rather than a failed condition.
-// Nothing was written and a retry is safe, so it's a CONFLICT, not a server
-// error.
-export const hasTransactionConflict = (
-  results: ({ code?: string } | undefined)[] | undefined,
-) => (results ?? []).some((result) => result?.code === 'TransactionConflict');
-
-export const transactionConflict = () =>
-  new TRPCError({
-    code: 'CONFLICT',
-    message:
-      'Another request was changing the same records; nothing was changed. Please retry',
-  });
-
 export const courseNoLongerDraft = () =>
   new TRPCError({
     code: 'CONFLICT',
@@ -366,17 +356,13 @@ export const writeUnderActiveAncestors = async (
 
   // The course, the module, and the lesson when there is one.
   const ancestorCount = ancestors.lessonId === undefined ? 2 : 3;
-  const results: ({ code?: string } | undefined)[] = data ?? [];
-  const failedAt = (from: number, to?: number) =>
-    results
-      .slice(from, to)
-      .some((result) => result?.code === 'ConditionalCheckFailed');
+  const results = cancellationReasons(data);
 
-  if (failedAt(0, ancestorCount)) {
+  if (failedAt(results, 0, ancestorCount)) {
     await requireAncestorsNotArchived(coreTable, ancestors);
     throw claim ? new OrderTaken() : conflict();
   }
-  if (failedAt(ancestorCount)) {
+  if (failedAt(results, ancestorCount, results.length)) {
     await onWriteConflict();
     throw conflict();
   }
@@ -415,13 +401,9 @@ export const writeInActiveCourse = async (
     return;
   }
 
-  const results: ({ code?: string } | undefined)[] = data ?? [];
-  const failedAt = (from: number) =>
-    results
-      .slice(from)
-      .some((result) => result?.code === 'ConditionalCheckFailed');
+  const results = cancellationReasons(data);
 
-  if (results[0]?.code === 'ConditionalCheckFailed') {
+  if (failedAt(results, 0)) {
     const { data: course } = await coreTable.entities.course
       .get({ courseId })
       .go();
@@ -431,7 +413,7 @@ export const writeInActiveCourse = async (
     requireCourseNotArchived(course);
     throw claim ? new OrderTaken() : conflict();
   }
-  if (failedAt(1)) {
+  if (failedAt(results, 1, results.length)) {
     await onWriteConflict();
     throw conflict();
   }

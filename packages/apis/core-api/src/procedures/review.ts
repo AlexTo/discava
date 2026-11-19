@@ -2,9 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
+  cancellationReasons,
   classifyReviewCancellation,
+  hasTransactionConflict,
   type ReviewWrite,
   reviewerName,
   reviewNotifications,
@@ -13,11 +17,6 @@ import {
 import { TRPCError } from '@trpc/server';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import { ratingFigures } from '../lib/rating.js';
-import {
-  type CancellationReasons,
-  hasTransactionConflict,
-  transactionConflict,
-} from '../lib/transaction.js';
 import {
   DeleteReviewInputSchema,
   DeleteReviewOutputSchema,
@@ -114,7 +113,7 @@ const commit = async (
   if (!canceled) {
     return;
   }
-  const reasons: CancellationReasons = data ?? [];
+  const reasons = cancellationReasons(data);
   if (hasTransactionConflict(reasons)) {
     return onConflict ? onConflict() : Promise.reject(transactionConflict());
   }
