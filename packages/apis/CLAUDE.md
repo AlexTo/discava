@@ -6,7 +6,7 @@ Loaded when working in `core-api`, `instructor-api` or `admin-api`. The repo-wid
 
 - `core-api` (`@discava/core-api`): tRPC API behind API Gateway, for procedures any authenticated user can call: one shared router Lambda, plus dedicated functions for procedures needing more than the table (`CORE_API_DEDICATED_FUNCTIONS`, e.g. `contentItem.videoUrl` holding the CloudFront signing key)
 - `instructor-api` (`@discava/instructor-api`): separate tRPC API, separate Lambda/API Gateway, for procedures only instructors may call (e.g. creating/archiving courses); same Cognito user pool as `core-api`
-- `admin-api` (`@discava/admin-api`): separate tRPC API, own Lambda/API Gateway (`AdminApi` stack), for procedures only admins may call (the `admin` Cognito group); today the category taxonomy and the Reviews screen's `review.courses`, `review.list` and `review.remove`. Built like `instructor-api`, with `adminProcedure` for the core table
+- `admin-api` (`@discava/admin-api`): separate tRPC API, own Lambda/API Gateway (`AdminApi` stack), for procedures only admins may call (the `admin` Cognito group); today the category taxonomy, the Reviews screen's `review.courses`, `review.list` and `review.remove`, and the Stripe connection (`payment.status` on the shared router; `payment.connect`/`payment.disconnect` on the dedicated `PaymentsConnect` function, the only one that may write the two Stripe secrets, see `ADMIN_API_DEDICATED_FUNCTIONS`). Built like `instructor-api`, with `adminProcedure` for the core table
 
 ## Shape of an API
 

@@ -74,6 +74,8 @@ export const consistentTable = (): TableSnapshot => ({
       publishedAt: T,
       updatedAt: T,
       lastChildOrder: 1,
+      priceAmount: 0,
+      priceCurrency: 'USD',
     },
   ],
   modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
@@ -262,6 +264,9 @@ export const consistentTable = (): TableSnapshot => ({
   profileHandleClaims: [{ handle: 'the-teacher', instructorId: 'teacher' }],
   coupons: [],
   couponRedemptions: [],
+  orders: [],
+  paymentConnections: [],
+  paymentChanges: [],
 });
 
 // The helpers a topic's tests share, working on whichever table the test file

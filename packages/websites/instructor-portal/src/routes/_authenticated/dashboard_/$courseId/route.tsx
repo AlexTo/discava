@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
@@ -12,7 +13,6 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BarChart3, Users } from 'lucide-react';
 import { useInstructorApi } from '../../../../api';
-import { useBreadcrumbLabel } from '../../../../components/AppLayout/breadcrumb-label';
 import { DailyChart } from './-components/daily-chart';
 import { LessonDropOff } from './-components/lesson-drop-off';
 import { QuizPanel } from './-components/quiz-panel';

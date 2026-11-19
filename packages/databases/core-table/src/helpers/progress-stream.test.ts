@@ -77,6 +77,17 @@ describe('matchesProgressStreamFilters', () => {
       [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
       [`a removed ${entity}`, record('REMOVE', 'OldImage', entity)],
     ]),
+    // Payments: an order's writes and the Stripe connection records change no
+    // item, so no progress; an enrolment restored or ended by a refund is an
+    // enrolment write, which is already left out above.
+    ...['order', 'paymentConnection', 'paymentChange'].flatMap((entity) => [
+      [`a new ${entity}`, record('INSERT', 'NewImage', entity)],
+      [`a changed ${entity}`, record('MODIFY', 'NewImage', entity)],
+    ]),
+    [
+      'an enrolment restored or ended',
+      record('MODIFY', 'NewImage', 'enrolment'),
+    ],
     ['a record with no images', { eventName: 'MODIFY', dynamodb: {} }],
   ])('leaves out %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(false);

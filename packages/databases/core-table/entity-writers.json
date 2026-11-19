@@ -104,6 +104,7 @@
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
+      "packages/databases/core-table/src/helpers/order.ts",
       "packages/databases/core-table/src/helpers/student-activity.ts"
     ],
     "events": ["packages/events/src/progress/recalculate.ts"]
@@ -162,6 +163,20 @@
     "core-table": [
       "packages/databases/core-table/src/helpers/notification-read.ts",
       "packages/databases/core-table/src/helpers/notification.ts"
+    ]
+  },
+  "order": {
+    "core-table": ["packages/databases/core-table/src/helpers/order.ts"]
+  },
+  "paymentChange": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/payment-connection.ts"
+    ]
+  },
+  "paymentConnection": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/order.ts",
+      "packages/databases/core-table/src/helpers/payment-connection.ts"
     ]
   },
   "periodStats": {

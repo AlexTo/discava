@@ -142,6 +142,7 @@ export class ApplicationStage extends Stage {
       adminApi,
       identity: data.identity,
       coreTable: data.coreTable,
+      stripeSecrets: data.stripeSecrets,
       adminPortal: websites.adminPortal,
     });
 
