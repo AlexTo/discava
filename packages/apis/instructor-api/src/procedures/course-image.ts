@@ -37,7 +37,7 @@ export const createCourseImageUploadUrl = courseProcedure
   .input(CreateCourseImageUploadUrlInputSchema)
   .output(CreateCourseImageUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, contentLength } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -54,7 +54,7 @@ export const updateCourseImage = courseProcedure
   .input(UpdateCourseImageInputSchema)
   .output(UpdateCourseImageOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, imageKey } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);

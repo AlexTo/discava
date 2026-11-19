@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  type CoreTable,
   classifyReviewCancellation,
-  type createCoreTableService,
   type ReviewWrite,
   reviewerName,
   reviewNotifications,
@@ -34,7 +34,6 @@ import {
   ReviewSummaryOutputSchema,
 } from '../schema/index.js';
 
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type StoredReview = NonNullable<
   Awaited<
     ReturnType<ReturnType<CoreTable['entities']['review']['get']>['go']>
@@ -162,11 +161,7 @@ export const myReview = courseProcedure
   .input(MyReviewInputSchema)
   .output(MyReviewOutputSchema)
   .query(async ({ ctx, input }) => {
-    const review = await getReview(
-      ctx.coreTable!,
-      input.courseId,
-      ctx.user.sub,
-    );
+    const review = await getReview(ctx.coreTable, input.courseId, ctx.user.sub);
     return review ? toOwnReview(review) : null;
   });
 
@@ -176,7 +171,7 @@ export const postReview = courseProcedure
   .input(PostReviewInputSchema)
   .output(OwnReviewSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, rating, text } = input;
     const userId = ctx.user.sub;
 
@@ -280,7 +275,7 @@ export const editReview = courseProcedure
   .input(EditReviewInputSchema)
   .output(OwnReviewSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, rating, text, version } = input;
     const userId = ctx.user.sub;
 
@@ -310,7 +305,7 @@ export const deleteReview = courseProcedure
   .input(DeleteReviewInputSchema)
   .output(DeleteReviewOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, version } = input;
     const userId = ctx.user.sub;
 
@@ -339,8 +334,8 @@ export const reviewSummary = publicCourseProcedure
   .input(ReviewSummaryInputSchema)
   .output(ReviewSummaryOutputSchema)
   .query(async ({ ctx, input }) => {
-    const { data } = await ctx
-      .coreTable!.entities.courseRating.get({ courseId: input.courseId })
+    const { data } = await ctx.coreTable.entities.courseRating
+      .get({ courseId: input.courseId })
       .go();
     const { count, average, stars } = ratingFigures(data);
     return {
@@ -362,7 +357,7 @@ export const listReviews = publicCourseProcedure
   .input(ReviewListInputSchema)
   .output(ReviewListOutputSchema)
   .query(async ({ ctx, input }) => {
-    const { review } = ctx.coreTable!.entities;
+    const { review } = ctx.coreTable.entities;
     const { courseId, limit } = input;
 
     const items: IPublicReview[] = [];

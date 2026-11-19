@@ -160,3 +160,5 @@ export const createCoreTableService = async () => {
     profileHandleClaim,
   });
 };
+
+export type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;

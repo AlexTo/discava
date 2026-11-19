@@ -30,7 +30,7 @@ export const createContentItemQuiz = courseProcedure
   .input(CreateContentItemQuizInputSchema)
   .output(CreateContentItemQuizOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const {
       courseId,
       moduleId,
@@ -92,7 +92,7 @@ export const updateContentItemQuiz = courseProcedure
   .input(UpdateContentItemQuizInputSchema)
   .output(UpdateContentItemQuizOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const {
       courseId,
       moduleId,

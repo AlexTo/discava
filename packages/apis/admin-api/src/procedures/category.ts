@@ -60,7 +60,7 @@ const asTrpcError = (error: unknown) => {
 export const listCategories = adminProcedure
   .output(ListCategoriesOutputSchema)
   .query(async ({ ctx }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const [{ data: categories }, { data: courses }] = await Promise.all([
       coreTable.entities.category.query.primary({}).go({ pages: 'all' }),
       coreTable.entities.course.scan.go({ pages: 'all' }),
@@ -87,7 +87,7 @@ export const createCategory = adminProcedure
   .mutation(async ({ ctx, input }) => {
     try {
       return toCategory(
-        await categoryWrites.create(ctx.coreTable!, {
+        await categoryWrites.create(ctx.coreTable, {
           categoryId: uuidv7(),
           name: input.name,
         }),
@@ -103,7 +103,7 @@ export const renameCategory = adminProcedure
   .mutation(async ({ ctx, input }) => {
     try {
       return toCategory(
-        await categoryWrites.rename(ctx.coreTable!, {
+        await categoryWrites.rename(ctx.coreTable, {
           categoryId: input.id,
           name: input.name,
         }),
@@ -119,7 +119,7 @@ export const archiveCategory = adminProcedure
   .mutation(async ({ ctx, input }) => {
     try {
       return toCategory(
-        await categoryWrites.archive(ctx.coreTable!, { categoryId: input.id }),
+        await categoryWrites.archive(ctx.coreTable, { categoryId: input.id }),
       );
     } catch (error) {
       throw asTrpcError(error);

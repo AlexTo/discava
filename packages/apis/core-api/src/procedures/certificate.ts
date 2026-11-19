@@ -38,8 +38,8 @@ export const verifyCertificate = publicCourseProcedure
       throw notFound();
     }
 
-    const { data } = await ctx
-      .coreTable!.entities.certificate.query.byCertificateId({ certificateId })
+    const { data } = await ctx.coreTable.entities.certificate.query
+      .byCertificateId({ certificateId })
       .go();
     const [certificate] = data;
     if (!certificate) {
@@ -59,8 +59,8 @@ export const myCertificates = courseProcedure
   .input(MyCertificatesInputSchema)
   .output(MyCertificatesOutputSchema)
   .query(async ({ ctx }) => {
-    const { data } = await ctx
-      .coreTable!.entities.certificate.query.primary({ userId: ctx.user.sub })
+    const { data } = await ctx.coreTable.entities.certificate.query
+      .primary({ userId: ctx.user.sub })
       .go({ pages: 'all' });
 
     return data
@@ -84,8 +84,8 @@ export const certificatePdf = courseProcedure
   .input(CertificatePdfInputSchema)
   .output(CertificatePdfOutputSchema)
   .query(async ({ ctx, input }) => {
-    const { data: certificate } = await ctx
-      .coreTable!.entities.certificate.get({
+    const { data: certificate } = await ctx.coreTable.entities.certificate
+      .get({
         userId: ctx.user.sub,
         courseId: input.courseId,
       })

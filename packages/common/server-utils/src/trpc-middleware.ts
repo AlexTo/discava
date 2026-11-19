@@ -5,7 +5,7 @@
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { Tracer } from '@aws-lambda-powertools/tracer';
-import { createCoreTableService } from '@discava/core-table';
+import { type CoreTable, createCoreTableService } from '@discava/core-table';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { CreateAWSLambdaContextOptions } from '@trpc/server/adapters/aws-lambda';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
@@ -82,7 +82,7 @@ const parseGroupsClaim = (groups: unknown): string[] => {
 };
 
 export type ICoreTableContext = {
-  coreTable?: Awaited<ReturnType<typeof createCoreTableService>>;
+  coreTable?: CoreTable;
 };
 
 // Memoized across invocations on a warm Lambda so a request doesn't pay to

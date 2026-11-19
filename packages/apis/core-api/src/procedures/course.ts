@@ -10,7 +10,7 @@ import {
 } from '@discava/common-server-utils/lesson-media';
 import { previewManifestNonce } from '@discava/common-server-utils/media-keys';
 import {
-  type createCoreTableService,
+  type CoreTable,
   filterEffectivelyVisible,
   tracksForPlayback,
 } from '@discava/core-table';
@@ -35,8 +35,6 @@ import {
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
 
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
-
 // How often a page's ratings are asked for again when DynamoDB leaves some
 // unprocessed, before the call fails rather than show them as unrated.
 const RATING_READ_ATTEMPTS = 3;
@@ -45,7 +43,7 @@ export const listCoursesByInstructor = courseProcedure
   .input(ListCoursesByInstructorInputSchema)
   .output(ListCoursesByInstructorOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { instructorId, cursor, limit } = input;
 
     // byInstructor's sort key is courseUpdatedAt#courseId; order: 'desc'
@@ -75,7 +73,7 @@ export const listInstructorsForCourse = courseProcedure
   .input(ListInstructorsForCourseInputSchema)
   .output(ListInstructorsForCourseOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, cursor, limit } = input;
 
     const { data: memberships, cursor: nextCursor } =
@@ -100,7 +98,7 @@ export const publicListCourses = publicCourseProcedure
   .input(PublicListCoursesInputSchema)
   .output(PublicListCoursesOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { cursor, limit } = input;
 
     // byStatus's sort key is the courseId, a UUIDv7, so order: 'desc' lists
@@ -207,7 +205,7 @@ export const publicViewCourse = publicCourseProcedure
   .input(ViewCourseInputSchema)
   .output(PublicViewCourseOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
 
     // Every page: a course's curriculum can exceed a single 1 MB query page.
     const { data } = await coreTable.collections
@@ -319,7 +317,7 @@ export const viewCourse = courseProcedure
   .input(ViewCourseInputSchema)
   .output(ViewCourseOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
 
     // Course, its modules, their lessons, and each lesson's content items
     // all share the `curriculum` collection's partition (see

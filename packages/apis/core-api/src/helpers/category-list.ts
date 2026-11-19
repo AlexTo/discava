@@ -2,9 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { createCoreTableService } from '@discava/core-table';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
+import type { CoreTable } from '@discava/core-table';
 
 /**
  * Every category, archived included, from one query on the taxonomy's single

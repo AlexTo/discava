@@ -14,12 +14,12 @@ import {
   presignLessonFileUpload,
 } from '@discava/common-server-utils/lesson-files';
 import { manifestNonce } from '@discava/common-server-utils/media-keys';
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { captionLabel } from '@discava/common-web-utils/caption-languages';
 import {
   applyCaptionChange,
   type CaptionChange,
   CaptionTrackError,
+  type CoreTable,
   captionWriteCondition,
   isConditionalCheckFailed,
   tracksForPlayback,
@@ -51,8 +51,6 @@ import {
 // copied into the playing version's folder of the lesson media bucket when it
 // is attached. Every change to the list goes through applyCaptionChange and a
 // conditional write, so concurrent writers never both win.
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 interface ItemRef {
   courseId: string;
@@ -126,7 +124,7 @@ export const createContentItemCaptionUploadUrl = courseProcedure
   .input(CaptionUploadUrlInputSchema)
   .output(CaptionUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    await requireReadyVideo(ctx.coreTable!, input, ctx.user.sub);
+    await requireReadyVideo(ctx.coreTable, input, ctx.user.sub);
 
     const uploadId = randomUUID();
     const { uploadUrl, headers } = await presignLessonFileUpload(
@@ -140,7 +138,7 @@ export const attachContentItemCaption = courseProcedure
   .input(AttachCaptionInputSchema)
   .output(CaptionTracksOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { uploadId, language } = input;
     const ref: ItemRef = {
       courseId: input.courseId,
@@ -238,7 +236,7 @@ export const removeContentItemCaption = courseProcedure
   .input(RemoveCaptionInputSchema)
   .output(CaptionTracksOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { trackId, ...ref } = input;
     const { item, nonce } = await requireReadyVideo(
       coreTable,
