@@ -20,7 +20,17 @@
       }
     },
     "build": {
-      "dependsOn": ["lint", "compile", "test", "synth", "checkov"]
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        "synth",
+        "checkov",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
+      ]
     },
     "cdk": {
       "executor": "nx:run-commands",

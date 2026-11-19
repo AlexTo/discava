@@ -78,7 +78,10 @@
     },
     "build": {
       "cache": true,
-      "inputs": ["default"]
+      "inputs": ["default"],
+      "dependsOn": [
+        { "projects": ["@discava/source"], "target": "graphify-update" }
+      ]
     },
     "lint": {
       "syncGenerators": ["@aws/nx-plugin:license#sync"]
