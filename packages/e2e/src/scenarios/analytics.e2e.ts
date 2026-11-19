@@ -153,7 +153,16 @@ test('an instructor sees how their course is doing, and no one else can open its
     await expect(
       lessons.getByRole('listitem').filter({ hasText: 'Lesson one' }),
     ).toContainText('1 started, 1 completed');
-    await screenshot(instructor, 'lesson drop-off with a completed lesson');
+    await expect(instructor.getByText('Lowest completion')).toHaveCount(0);
+    await expect(
+      instructor
+        .getByRole('navigation', { name: 'breadcrumb' })
+        .getByText('Dashboard', { exact: true }),
+    ).toBeVisible();
+    await screenshot(
+      instructor,
+      'lesson drop-off with a completed lesson, no lowest badge and a labelled breadcrumb',
+    );
 
     await instructor.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
     await hideItem(instructor, 'lesson', 'Lesson one');
