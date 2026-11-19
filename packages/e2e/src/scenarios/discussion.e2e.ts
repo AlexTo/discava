@@ -179,30 +179,82 @@ test.describe('lesson discussions', () => {
       (r) => r.postId === spam.postId,
     );
     expect(hidden?.body).toBeUndefined();
+    await screenshot(page, 'after hiding the reply');
+  });
 
-    const staff = {
+  test('a reported reply is hidden, unhidden and deleted, and an archived lesson keeps its thread', async () => {
+    const { instructor, key } = await createDiscussionCourse(
+      uniqueName('E2E discussion lifecycle'),
+    );
+    const asker = await enrolledStudent('Sam', key.courseId);
+    const other = await enrolledStudent('Kim', key.courseId);
+    const question = await ask(asker, key, 'Can I see this later?');
+    const spam = await reply(other, key, question.postId, 'Buy my course.');
+    const post = { ...key, threadId: question.postId, postId: spam.postId };
+    const staff = instructor.instructor.discussion;
+    const spamAs = async (user: typeof asker) =>
+      (await readThread(user, key, question.postId)).replies.find(
+        (r) => r.postId === spam.postId,
+      );
+
+    await asker.core.discussion.report.mutate(post);
+    const queue = await staff.reported.query({ courseId: key.courseId });
+    expect(queue.items.map((item) => item.postId)).toContain(spam.postId);
+
+    await staff.hide.mutate(post);
+    expect(await spamAs(asker)).toMatchObject({ state: 'hidden' });
+    expect((await spamAs(asker))?.body).toBeUndefined();
+    await staff.unhide.mutate(post);
+    expect((await spamAs(asker))?.body).toBe('Buy my course.');
+    await staff.remove.mutate(post);
+    expect(await spamAs(asker)).toMatchObject({ state: 'deleted' });
+    expect((await spamAs(other))?.body).toBeUndefined();
+    expect((await spamAs(instructor))?.body).toBeUndefined();
+
+    // Archiving the lesson shuts students out and keeps the thread for staff.
+    await instructor.instructor.lesson.delete.mutate(key);
+    await expect(
+      asker.core.discussion.listQuestions.query(key),
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+    const kept = await readThread(instructor, key, question.postId);
+    expect(kept.question.title).toBe('Can I see this later?');
+    await expect(
+      instructor.instructor.lesson.deletePermanently.mutate(key),
+    ).rejects.toMatchObject({ data: { code: 'PRECONDITION_FAILED' } });
+
+    await instructor.instructor.lesson.restore.mutate(key);
+    const restored = await readThread(asker, key, question.postId);
+    expect(restored.question.title).toBe('Can I see this later?');
+    expect(restored.replies).toHaveLength(1);
+  });
+
+  test('a reply notifies the asker once, and accepting tells the replier', async () => {
+    const { key } = await createDiscussionCourse(
+      uniqueName('E2E discussion notifications'),
+    );
+    const asker = await enrolledStudent('Sam', key.courseId);
+    const other = await enrolledStudent('Kim', key.courseId);
+    const question = await ask(asker, key, 'Will I hear back?');
+    await reply(asker, key, question.postId, 'Answering myself.');
+    const answer = await reply(other, key, question.postId, 'Yes you will.');
+
+    const types = async (user: typeof asker) =>
+      (await user.core.notification.list.query({ limit: 50 })).items.map(
+        (item) => item.type,
+      );
+    await expect
+      .poll(async () =>
+        (await types(asker)).filter((t) => t === 'discussion.reply'),
+      )
+      .toHaveLength(1);
+
+    await asker.core.discussion.accept.mutate({
       ...key,
       threadId: question.postId,
-      postId: spam.postId,
-    };
-    const ivy = await instructorOf(page);
-    void ivy;
-    await page.reload();
-    await screenshot(page, 'after hiding the reply');
-
-    // Unhide and delete are staff calls on the same post.
-    const instructorApi = await signedInInstructor(page);
-    await instructorApi.instructor.discussion.unhide.mutate(staff);
-    expect(
-      (await readThread(asker, key, question.postId)).replies.find(
-        (r) => r.postId === spam.postId,
-      )?.body,
-    ).toBe('Buy my course.');
-    await instructorApi.instructor.discussion.remove.mutate(staff);
-    const removed = (
-      await readThread(other, key, question.postId)
-    ).replies.find((r) => r.postId === spam.postId);
-    expect(removed?.state).toBe('deleted');
-    expect(removed?.body).toBeUndefined();
+      postId: answer.postId,
+    });
+    await expect
+      .poll(async () => await types(other))
+      .toContain('discussion.accepted');
   });
 });
