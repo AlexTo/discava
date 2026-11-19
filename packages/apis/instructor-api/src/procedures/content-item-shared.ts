@@ -3,19 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Logger } from '@aws-lambda-powertools/logger';
 import {
-  type CoreTable,
   cancellationReasons,
   failedAt,
   isConditionalCheckFailed,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import {
-  MAX_TRANSACTION_ITEMS,
   writeInActiveCourse,
   writeUnderActiveAncestors,
 } from '../helpers/ancestor-writes.js';
+import {
+  asContentItemOutput,
+  cleanUpDeletedContentItem,
+  getContentItemOrThrow,
+  requireNotAssignmentItem,
+  setVisibilityUnderActiveAncestors,
+} from '../helpers/content-item.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   courseNoLongerDraft,
@@ -27,16 +31,8 @@ import {
   requireCourseNotArchived,
   requireNotArchived,
 } from '../helpers/curriculum-guards.js';
-import {
-  bestEffortCancelTranscodeJobs,
-  type ICancelableVideoContentItem,
-} from '../helpers/mediaconvert-client.js';
 import { writeAtEnd } from '../helpers/order.js';
-import {
-  bestEffortDeleteContentItemVideos,
-  bestEffortRetirePreviousVersions,
-  type IDeletableVideoContentItem,
-} from '../helpers/s3-client.js';
+import { reorderChildren } from '../helpers/reorder.js';
 import { courseInstructorProcedure } from '../init.js';
 import {
   DeleteContentItemInputSchema,
@@ -58,113 +54,6 @@ import {
   RestoreContentItemInputSchema,
   RestoreContentItemOutputSchema,
 } from '../schema/index.js';
-
-interface ContentItemKey {
-  courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
-}
-
-// ElectroDB infers a contentItem record as one flat type (every type's
-// attributes optional), not a union keyed on `type`. This cast bridges to the
-// discriminated-union API types; each call site has already branched on
-// `type` or passes the record through unchanged.
-export const asContentItemOutput = <T>(contentItem: unknown) =>
-  contentItem as T;
-
-// Sets the item's visibility (and, when publishing it for the first time,
-// its publishedAt) in one transaction with checks that its module and lesson
-// are still active, conditioned on the item itself still not being archived,
-// so an archive landing after the caller's own checks can't be written past.
-const setVisibilityUnderActiveAncestors = async (
-  coreTable: CoreTable,
-  key: ContentItemKey,
-  change: { visibility: 'hidden' | 'visible'; publishedAt?: string },
-  archivedMessage: string,
-) => {
-  await writeUnderActiveAncestors(
-    coreTable,
-    key,
-    (entities) => [
-      entities.contentItem
-        .patch(key)
-        .set(change)
-        .where((attr, op) => op.notExists(attr.archivedAt))
-        .commit(),
-    ],
-    async () => {
-      requireNotArchived(
-        await getContentItemOrThrow(coreTable, key),
-        archivedMessage,
-      );
-      throw new TRPCError({
-        code: 'CONFLICT',
-        message:
-          'The content item was modified by another request; please retry',
-      });
-    },
-  );
-  // Transactions don't return the written attributes.
-  return getContentItemOrThrow(coreTable, key);
-};
-
-const getContentItemOrThrow = async (
-  coreTable: CoreTable,
-  key: ContentItemKey,
-) => {
-  const { data: contentItem } = await coreTable.entities.contentItem
-    .get(key)
-    .go();
-  if (!contentItem) {
-    throw new TRPCError({ code: 'NOT_FOUND' });
-  }
-  return contentItem;
-};
-
-// An assignment lesson (#102) always holds its one item, so the item is
-// removed with its lesson, never on its own.
-const requireNotAssignmentItem = async (
-  coreTable: CoreTable,
-  { courseId, moduleId, lessonId }: ContentItemKey,
-) => {
-  const { data: lesson } = await coreTable.entities.lesson
-    .get({ courseId, moduleId, lessonId })
-    .go();
-  if (lesson?.kind === 'assignment') {
-    throw new TRPCError({
-      code: 'PRECONDITION_FAILED',
-      message:
-        "An assignment's content can't be deleted on its own. Delete the assignment instead",
-    });
-  }
-};
-
-// Cleans up a deleted item's external storage. Callers pass the record that
-// was actually removed (`all_old`, or a read the delete was conditioned on):
-// acting on a stale read after a concurrent replacement would cancel or
-// delete the wrong job and orphan the real one.
-const cleanUpDeletedContentItem = async (
-  logger: Logger | undefined,
-  contentItem: ICancelableVideoContentItem &
-    IDeletableVideoContentItem & { type: string; s3Key?: string },
-) => {
-  if (contentItem.type === 'video') {
-    // A still-transcoding job has nothing left to report to once its
-    // content item is gone -- cancel it so it doesn't keep running only to
-    // leave an orphaned HLS output with no record pointing at it.
-    await bestEffortCancelTranscodeJobs(logger, [contentItem]);
-    if (contentItem.s3Key) {
-      await bestEffortDeleteContentItemVideos(logger, [contentItem]);
-    }
-    await bestEffortRetirePreviousVersions(logger, [contentItem]);
-  }
-  // A file item's file sits in its own version folder, as a ready video's
-  // output does, so the same cleanup retires it (#102).
-  if (contentItem.type === 'file' && contentItem.s3Key) {
-    await bestEffortDeleteContentItemVideos(logger, [contentItem]);
-  }
-};
 
 // Works for every content item type, branching only to clean up a type's
 // own S3 storage.
@@ -433,62 +322,41 @@ export const reorderContentItems = courseInstructorProcedure(
       lessonId,
     });
 
-    if (new Set(contentItemIds).size !== contentItemIds.length) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'A content item can only appear once in the new order',
-      });
-    }
-
-    // Every page: a lesson's items can exceed a single 1 MB query page.
-    const readItems = async () => {
-      const { data } = await coreTable.entities.contentItem.query
-        .primary({ courseId, moduleId, lessonId })
-        .go({ pages: 'all' });
-      return data.filter((item) => !item.archivedAt);
-    };
-    const items = await readItems();
-    const byId = new Map(items.map((item) => [item.contentItemId, item]));
-    if (
-      byId.size !== contentItemIds.length ||
-      contentItemIds.some((id) => !byId.has(id))
-    ) {
-      throw lessonContentItemsChanged();
-    }
-
-    // The transaction also carries the checks on the course, module and lesson.
-    if (3 + contentItemIds.length > MAX_TRANSACTION_ITEMS) {
-      throw new TRPCError({
-        code: 'PRECONDITION_FAILED',
-        message: `This lesson has too many content items to reorder in one operation (the limit is ${MAX_TRANSACTION_ITEMS - 3}).`,
-      });
-    }
-
-    const unchanged = contentItemIds.every(
-      (id, index) => byId.get(id)?.order === index + 1,
-    );
-    if (!unchanged) {
-      // Each item is conditioned on still not being archived, so one archived
-      // after the read above is never moved: the whole reorder is refused.
-      await writeUnderActiveAncestors(
-        coreTable,
-        { courseId, moduleId, lessonId },
-        (entities) =>
-          contentItemIds.map((contentItemId, index) =>
-            entities.contentItem
-              .patch({ courseId, moduleId, lessonId, contentItemId })
-              .set({ order: index + 1 })
-              .where((attr, op) => op.notExists(attr.archivedAt))
-              .commit(),
-          ),
-        () => {
-          throw lessonContentItemsChanged();
-        },
-      );
-    }
-
-    // Transactions don't return the written attributes.
     return asContentItemOutput<IReorderContentItemsOutput>(
-      (await readItems()).sort((a, b) => a.order - b.order),
+      await reorderChildren({
+        ids: contentItemIds,
+        // Every page: a lesson's items can exceed a single 1 MB query page.
+        readActive: async () => {
+          const { data } = await coreTable.entities.contentItem.query
+            .primary({ courseId, moduleId, lessonId })
+            .go({ pages: 'all' });
+          return data.filter((item) => !item.archivedAt);
+        },
+        idOf: (item) => item.contentItemId,
+        // Each item is conditioned on still not being archived, so one
+        // archived after the read is never moved: the whole reorder is
+        // refused.
+        patch: (entities, contentItemId, order) =>
+          entities.contentItem
+            .patch({ courseId, moduleId, lessonId, contentItemId })
+            .set({ order })
+            .where((attr, op) => op.notExists(attr.archivedAt))
+            .commit(),
+        write: (writes, onChanged) =>
+          writeUnderActiveAncestors(
+            coreTable,
+            { courseId, moduleId, lessonId },
+            writes,
+            onChanged,
+          ),
+        // The transaction also carries the checks on the course, module and
+        // lesson.
+        checkCount: 3,
+        duplicateMessage:
+          'A content item can only appear once in the new order',
+        tooManyMessage: (limit) =>
+          `This lesson has too many content items to reorder in one operation (the limit is ${limit}).`,
+        changedError: lessonContentItemsChanged,
+      }),
     );
   });
