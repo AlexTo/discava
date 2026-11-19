@@ -12,7 +12,6 @@ import { createReviewEntity } from './review.js';
 let review: Awaited<ReturnType<typeof createReviewEntity>>;
 let submission: Awaited<ReturnType<typeof createAssignmentSubmissionEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   review = await createReviewEntity();
   submission = await createAssignmentSubmissionEntity();
 });

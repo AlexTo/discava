@@ -10,7 +10,6 @@ import { createAssignmentSubmissionEntity } from './assignment-submission.js';
 
 let submission: Awaited<ReturnType<typeof createAssignmentSubmissionEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   submission = await createAssignmentSubmissionEntity();
 });
 

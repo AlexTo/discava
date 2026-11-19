@@ -2,8 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import type { Logger } from '@aws-lambda-powertools/logger';
-import { type CoreTable, lessonHasDiscussion } from '@discava/core-table';
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
+import {
+  type CoreTable,
+  cancellationReasons,
+  failedAt,
+  hasTransactionConflict,
+  lessonHasDiscussion,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -12,7 +20,6 @@ import {
   draftCourseCheck,
   firstPublishedAt,
   getCourseOrThrow,
-  hasTransactionConflict,
   initialVisibilityFields,
   isDraftCourse,
   MAX_TRANSACTION_ITEMS,
@@ -21,7 +28,6 @@ import {
   requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
-  transactionConflict,
   writeAtEnd,
   writeInActiveCourse,
   writeUnderActiveAncestors,
@@ -167,24 +173,19 @@ const hardDeleteLesson = async (
 
   if (canceled) {
     // The lesson is the transaction's first item.
-    const results = transactionResults ?? [];
+    const results = cancellationReasons(transactionResults);
     // The draft check, when there is one, is its last.
-    if (
-      draftCourseId !== undefined &&
-      results.at(-1)?.code === 'ConditionalCheckFailed'
-    ) {
+    if (draftCourseId !== undefined && failedAt(results, results.length - 1)) {
       throw courseNoLongerDraft();
     }
-    if (results[0]?.code === 'ConditionalCheckFailed') {
+    if (failedAt(results, 0)) {
       throw new TRPCError({
         code: 'CONFLICT',
         message:
           'The lesson was restored or changed while it was being deleted; nothing was deleted',
       });
     }
-    const staleContentItem = results
-      .slice(1)
-      .some((result) => result?.code === 'ConditionalCheckFailed');
+    const staleContentItem = failedAt(results, 1, results.length);
     // Another transaction touching the same records at that moment.
     if (!staleContentItem && hasTransactionConflict(results)) {
       throw transactionConflict();

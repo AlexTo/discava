@@ -154,10 +154,20 @@ describe('LandingPageCard', () => {
     expect(outcomeInputs()[0]).toHaveValue('Build');
   });
 
-  it('notes that the preview video is coming', () => {
-    renderCard();
+  it('has the preview video area, built from the course preview', () => {
+    renderCard({
+      preview: {
+        status: 'processing',
+        durationSeconds: 60,
+        hasPlayableVersion: false,
+        submissionNonce: 'nonce-1',
+      },
+    });
 
-    expect(screen.getByText(/Preview video: coming soon/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Preview video' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Processing video/)).toBeInTheDocument();
   });
 
   it('is read-only for an archived course', () => {

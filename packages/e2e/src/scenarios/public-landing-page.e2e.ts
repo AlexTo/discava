@@ -2,7 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
+import type { AppRouter as CoreApi } from '@discava/core-api';
+import { createTRPCClient, httpLink } from '@trpc/client';
+import {
+  apiClients,
+  apiUser,
+  createPublishedCourseViaApi,
+} from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -10,11 +16,12 @@ import {
   createCourse,
   publishCourse,
 } from '../helpers/instructor-portal.js';
-import { PORTALS } from '../helpers/portals.js';
+import { PORTALS, SERVICES } from '../helpers/portals.js';
 import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 
 // The instructor writes the landing page in the portal; the public page then
 // shows what a visitor needs to decide: outcomes, requirements and who teaches.
@@ -133,4 +140,142 @@ test('an archived course is not found for a visitor or an enrolled student', asy
   await expect(
     student.core.course.publicView.query({ courseId }),
   ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+});
+
+// The instructor uploads a preview in the landing page card (the event runner
+// transcodes it with ffmpeg, standing in for MediaConvert, #137); a signed-out
+// visitor plays it, but no lesson video; an over-long replacement is refused
+// with the current preview still playing; removing it brings the image back.
+test('an instructor uploads a preview and a signed-out visitor watches it', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E preview course');
+  const instructor = await browser.newPage();
+  const visitor = await browser.newPage();
+  const signedOut = createTRPCClient<CoreApi>({
+    links: [httpLink({ url: SERVICES.coreApi })],
+  });
+  const previewArea = instructor.locator(
+    'section[aria-labelledby="preview-video-heading"]',
+  );
+  let courseId = '';
+
+  await test.step('the instructor publishes a course and uploads a preview', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course for the preview tests.',
+    });
+    courseId = instructor.url().split('/').pop() as string;
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Hello.' });
+    await publishCourse(instructor);
+
+    await previewArea
+      .getByLabel('Preview video file')
+      .setInputFiles(THREE_SECOND_VIDEO);
+    await expect(previewArea.getByText(/Processing video/)).toBeVisible();
+    await screenshot(instructor, 'preview video processing', {
+      fullPage: true,
+    });
+    // Ready once the local transcode has run: the player appears.
+    await expect(previewArea.locator('video')).toBeAttached({
+      timeout: 90_000,
+    });
+    await expect(
+      instructor
+        .getByRole('region', { name: 'Landing page checklist' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Preview video' }),
+    ).toContainText('Done');
+    await screenshot(instructor, 'preview video ready in the card', {
+      fullPage: true,
+    });
+  });
+
+  await test.step('signed out, the visitor presses play and the preview plays', async () => {
+    await visitor.goto(coursePageUrl(courseId));
+    await expect(
+      visitor.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await expect(visitor.getByText(/Preview this course/)).toBeVisible();
+    await visitor.getByRole('button', { name: 'Play preview' }).click();
+    const video = visitor.locator('video[data-slot="hls-video"]');
+    await expectToPlay(video);
+    await screenshot(visitor, 'preview playing on the public page');
+  });
+
+  await test.step('signed out, a lesson video is still refused', async () => {
+    await expect(
+      signedOut.contentItem.videoUrl.query({
+        courseId,
+        moduleId: 'module',
+        lessonId: 'lesson',
+        contentItemId: 'item',
+      }),
+    ).rejects.toMatchObject({ data: { code: 'UNAUTHORIZED' } });
+  });
+
+  await test.step('an over-long replacement is refused and the preview keeps playing', async () => {
+    // The card refuses a long file before uploading it (its component tests
+    // cover that); here the API is asked directly as the signed-in instructor,
+    // since a file over 5 minutes is too slow to make in CI.
+    const token = await instructor.evaluate(() => {
+      for (const storage of [sessionStorage, localStorage]) {
+        for (let i = 0; i < storage.length; i++) {
+          const value = storage.getItem(storage.key(i) ?? '') ?? '';
+          const found = value.match(/"access_token"\s*:\s*"([^"]+)"/)?.[1];
+          if (found) {
+            return found;
+          }
+        }
+      }
+      return undefined;
+    });
+    expect(token).toBeDefined();
+    const api = apiClients(token as string).instructor;
+    const { preview } = await api.course.view.query({ courseId });
+    await expect(
+      api.coursePreview.replace.mutate({
+        courseId,
+        rawKey: `courses/${courseId}/preview/uploads/none.mp4`,
+        durationSeconds: 301,
+        expectedSubmissionNonce: preview?.submissionNonce ?? '',
+      }),
+    ).rejects.toMatchObject({
+      message: 'A preview can be at most 5 minutes long',
+    });
+    await expect(previewArea.locator('video')).toBeAttached();
+    await screenshot(instructor, 'over-long preview refused', {
+      fullPage: true,
+    });
+    await expect(
+      signedOut.course.previewVideoUrl.query({ courseId }),
+    ).resolves.toMatchObject({ url: expect.any(String) });
+  });
+
+  await test.step('removing the preview brings the course image back', async () => {
+    await previewArea.getByRole('button', { name: 'Remove' }).click();
+    await instructor
+      .getByRole('alertdialog', { name: 'Remove the preview video' })
+      .getByRole('button', { name: 'Remove video' })
+      .click();
+    await expect(
+      previewArea.getByText('Drop a video or click to browse'),
+    ).toBeVisible();
+
+    await visitor.reload();
+    await expect(
+      visitor.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await expect(
+      visitor.getByRole('button', { name: 'Play preview' }),
+    ).toHaveCount(0);
+    await expect(
+      signedOut.course.previewVideoUrl.query({ courseId }),
+    ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
+    await screenshot(visitor, 'public page after the preview is removed');
+  });
 });

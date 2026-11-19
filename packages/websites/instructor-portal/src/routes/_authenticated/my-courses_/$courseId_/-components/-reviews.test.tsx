@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { fakeTrpcFetch, type Handler } from '@discava/common-web-utils/testing';
 import type { AppRouter as CoreRouter } from '@discava/core-api';
 import { QueryClient } from '@tanstack/react-query';
 import { screen, waitFor, within } from '@testing-library/react';
@@ -9,7 +11,6 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { describe, expect, it } from 'vitest';
 import { CoreApiTRPCContext } from '../../../../../api';
-import { fakeFetch, type Handler } from '../../../../../test/fake-trpc-fetch';
 import {
   ApiError,
   renderWithInstructorApi,
@@ -49,7 +50,7 @@ const render = ({
     links: [
       httpLink({
         url: 'http://core-api.test/',
-        fetch: fakeFetch(core, coreCalls),
+        fetch: fakeTrpcFetch(core, coreCalls),
       }),
     ],
   });

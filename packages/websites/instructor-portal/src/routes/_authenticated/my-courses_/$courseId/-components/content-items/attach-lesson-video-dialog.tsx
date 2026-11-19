@@ -39,7 +39,7 @@ import { useInstructorApi } from '../../../../../../api';
 import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 import { studentActivityNote } from '../student-activity';
 
-const ACCEPTED_VIDEO_TYPES = {
+export const ACCEPTED_VIDEO_TYPES = {
   'video/mp4': ['.mp4'],
   'video/webm': ['.webm'],
   'video/quicktime': ['.mov'],

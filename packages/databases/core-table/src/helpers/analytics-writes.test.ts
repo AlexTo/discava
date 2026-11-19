@@ -16,7 +16,6 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 let coreTable: CoreTable;
 let realWrite: CoreTable['transaction']['write'];
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   coreTable = await createCoreTableService();
   realWrite = coreTable.transaction.write.bind(coreTable.transaction);
 });
