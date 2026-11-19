@@ -24,7 +24,8 @@ type Suggestion = { courseId: string; title: string; imageKey?: string };
 /**
  * The course suggestions under the top bar's search box: a thumbnail and the
  * title, with the typed start of each word in bold. Choosing a row reports its
- * course; the box owns when the list is open.
+ * course; the box owns when the list is open. The last row, "See all results",
+ * opens the full results page, and is the row at index `items.length`.
  */
 export function SiteSearchSuggestions({
   items,
@@ -33,6 +34,7 @@ export function SiteSearchSuggestions({
   id,
   activeIndex,
   onChoose,
+  onSeeAll,
 }: {
   items: Suggestion[];
   typed: string;
@@ -40,6 +42,7 @@ export function SiteSearchSuggestions({
   id: string;
   activeIndex: number;
   onChoose: (courseId: string) => void;
+  onSeeAll: () => void;
 }) {
   const mediaUrl = usePublicMediaUrl();
   return (
@@ -50,60 +53,78 @@ export function SiteSearchSuggestions({
       {items.length === 0 && loading ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>
       ) : (
-        <ul
-          id={id}
-          role="listbox"
-          aria-label="Course suggestions"
-          className="py-1"
-        >
-          {items.map((item, index) => {
-            const src = mediaUrl(item.imageKey);
-            return (
-              <li
-                key={item.courseId}
-                id={suggestionOptionId(id, index)}
-                role="option"
-                aria-label={item.title}
-                aria-selected={index === activeIndex}
-                className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted ${index === activeIndex ? 'bg-muted' : ''}`}
-                // Keeps focus in the box: a blur would close the list
-                // before the click lands.
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onChoose(item.courseId)}
-              >
-                {src ? (
-                  <img
-                    src={src}
-                    alt=""
-                    width={64}
-                    height={36}
-                    loading="lazy"
-                    className="aspect-video w-16 shrink-0 rounded object-cover"
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className="aspect-video w-16 shrink-0 rounded bg-muted"
-                  />
-                )}
-                <span className="min-w-0 flex-1 truncate">
-                  {titleParts(item.title, typed).map(({ key, text, match }) =>
-                    match ? (
-                      <mark
-                        key={key}
-                        className="bg-transparent font-semibold text-inherit"
-                      >
-                        {text}
-                      </mark>
-                    ) : (
-                      <span key={key}>{text}</span>
-                    ),
+        <>
+          {items.length === 0 && (
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              No courses match
+            </p>
+          )}
+          <ul
+            id={id}
+            role="listbox"
+            aria-label="Course suggestions"
+            className="py-1"
+          >
+            {items.map((item, index) => {
+              const src = mediaUrl(item.imageKey);
+              return (
+                <li
+                  key={item.courseId}
+                  id={suggestionOptionId(id, index)}
+                  role="option"
+                  aria-label={item.title}
+                  aria-selected={index === activeIndex}
+                  className={`flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted ${index === activeIndex ? 'bg-muted' : ''}`}
+                  // Keeps focus in the box: a blur would close the list
+                  // before the click lands.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onChoose(item.courseId)}
+                >
+                  {src ? (
+                    <img
+                      src={src}
+                      alt=""
+                      width={64}
+                      height={36}
+                      loading="lazy"
+                      className="aspect-video w-16 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <div
+                      aria-hidden="true"
+                      className="aspect-video w-16 shrink-0 rounded bg-muted"
+                    />
                   )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+                  <span className="min-w-0 flex-1 truncate">
+                    {titleParts(item.title, typed).map(
+                      ({ key, text, match }) =>
+                        match ? (
+                          <mark
+                            key={key}
+                            className="bg-transparent font-semibold text-inherit"
+                          >
+                            {text}
+                          </mark>
+                        ) : (
+                          <span key={key}>{text}</span>
+                        ),
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+            <li
+              id={suggestionOptionId(id, items.length)}
+              role="option"
+              aria-selected={activeIndex === items.length}
+              className={`w-full cursor-pointer px-3 py-2 text-left text-sm hover:bg-muted ${activeIndex === items.length ? 'bg-muted' : ''}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onSeeAll}
+            >
+              {`See all results for '${typed}'`}
+            </li>
+          </ul>
+        </>
       )}
     </div>
   );

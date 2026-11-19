@@ -119,6 +119,22 @@ test('suggestions offer a published course by the start of its title', async ({
     await expect(box).toHaveValue(typed);
   });
 
+  await test.step('with no match it says so, and "See all results" opens the results', async () => {
+    const nonsense = uniqueName('zzq');
+    await page.goto(PORTALS.student);
+    const suggestions = await suggestInSiteSearch(page, nonsense);
+    await expect(
+      page
+        .getByTestId('site-search-suggestions')
+        .getByText('No courses match', { exact: true }),
+    ).toBeVisible();
+    await screenshot(page, 'search-suggestions-empty');
+    await suggestions
+      .getByRole('option', { name: /^See all results for/ })
+      .click();
+    await page.waitForURL(/\/search\?query=/);
+  });
+
   await test.step('archiving it removes it from the suggestions', async () => {
     await instructor.instructor.course.archive.mutate({ courseId });
     await expect(async () => {

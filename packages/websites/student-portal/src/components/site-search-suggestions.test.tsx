@@ -21,6 +21,7 @@ const render = (
       typed=""
       loading={false}
       onChoose={() => {}}
+      onSeeAll={() => {}}
       {...props}
     />,
     { signedIn: false },
@@ -32,12 +33,14 @@ describe('SiteSearchSuggestions', () => {
       items: [{ courseId: 'c1', title: 'Python for Data' }],
       typed: 'pyth da',
     });
-    await screen.findByRole('option');
+    await screen.findAllByRole('option');
 
     expect(
       [...container.querySelectorAll('mark')].map((mark) => mark.textContent),
     ).toEqual(['Pyth', 'Da']);
-    expect(screen.getByRole('option')).toHaveTextContent('Python for Data');
+    expect(screen.getAllByRole('option')[0]).toHaveTextContent(
+      'Python for Data',
+    );
   });
 
   it('shows the course image when it has one, and a placeholder otherwise', async () => {
@@ -76,5 +79,30 @@ describe('SiteSearchSuggestions', () => {
     render({ loading: true });
 
     expect(await screen.findByText('Searching…')).toBeInTheDocument();
+  });
+
+  it('ends with "See all results", also when there are no items', async () => {
+    const onSeeAll = vi.fn();
+    render({
+      items: [{ courseId: 'c1', title: 'Python Basics' }],
+      typed: 'python',
+      onSeeAll,
+    });
+    const options = await screen.findAllByRole('option');
+
+    expect(options).toHaveLength(2);
+    expect(options[1]).toHaveTextContent("See all results for 'python'");
+    expect(screen.queryByText('No courses match')).not.toBeInTheDocument();
+    fireEvent.click(options[1]);
+    expect(onSeeAll).toHaveBeenCalled();
+  });
+
+  it('says no courses match and still offers "See all results"', async () => {
+    render({ typed: 'zzzzz' });
+
+    expect(await screen.findByText('No courses match')).toBeInTheDocument();
+    expect(screen.getByRole('option')).toHaveTextContent(
+      "See all results for 'zzzzz'",
+    );
   });
 });

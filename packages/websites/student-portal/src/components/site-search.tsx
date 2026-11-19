@@ -73,7 +73,11 @@ export const SiteSearch = () => {
   const open =
     wanted &&
     typed.length >= SUGGEST_MIN_LENGTH &&
-    (items.length > 0 || suggestions.isFetching);
+    (items.length > 0 || suggestions.isFetching || suggestions.isSuccess);
+  // The rows the keyboard walks: the courses and "See all results". While the
+  // first answer is loading there is only the "Searching…" line.
+  const rowCount =
+    items.length > 0 || !suggestions.isFetching ? items.length + 1 : 0;
 
   // The highlighted row, or -1 for none. It starts over when the answer changes.
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -94,6 +98,13 @@ export const SiteSearch = () => {
     setDismissed(true);
   };
 
+  const seeAll = () => {
+    dismiss();
+    if (typed) {
+      navigate({ to: '/search', search: { query: typed } });
+    }
+  };
+
   const choose = (courseId: string) => {
     dismiss();
     navigate({ to: '/learn/$courseId', params: { courseId } });
@@ -105,11 +116,7 @@ export const SiteSearch = () => {
       className="relative w-full max-w-xl"
       onSubmit={(event) => {
         event.preventDefault();
-        dismiss();
-        const query = value.trim();
-        if (query) {
-          navigate({ to: '/search', search: { query } });
-        }
+        seeAll();
       }}
     >
       <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -143,7 +150,7 @@ export const SiteSearch = () => {
               event.preventDefault();
               dismiss();
             }
-          } else if (open && items.length > 0) {
+          } else if (open && rowCount > 0) {
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
               event.preventDefault();
               const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -151,12 +158,16 @@ export const SiteSearch = () => {
                 index < 0
                   ? step > 0
                     ? 0
-                    : items.length - 1
-                  : (index + step + items.length) % items.length,
+                    : rowCount - 1
+                  : (index + step + rowCount) % rowCount,
               );
             } else if (event.key === 'Enter' && activeIndex >= 0) {
               event.preventDefault();
-              choose(items[activeIndex].courseId);
+              if (activeIndex < items.length) {
+                choose(items[activeIndex].courseId);
+              } else {
+                seeAll();
+              }
             }
           }
         }}
@@ -171,6 +182,7 @@ export const SiteSearch = () => {
           loading={suggestions.isFetching}
           activeIndex={activeIndex}
           onChoose={choose}
+          onSeeAll={seeAll}
         />
       )}
       <div role="status" className="sr-only">
