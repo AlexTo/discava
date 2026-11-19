@@ -262,6 +262,8 @@ export const consistentTable = (): TableSnapshot => ({
     },
   ],
   profileHandleClaims: [{ handle: 'the-teacher', instructorId: 'teacher' }],
+  coupons: [],
+  couponRedemptions: [],
   orders: [],
   paymentConnections: [],
   paymentChanges: [],
