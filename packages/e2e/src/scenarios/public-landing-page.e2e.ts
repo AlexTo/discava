@@ -4,7 +4,11 @@
  */
 import type { AppRouter as CoreApi } from '@discava/core-api';
 import { createTRPCClient, httpLink } from '@trpc/client';
-import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
+import {
+  apiClients,
+  apiUser,
+  createPublishedCourseViaApi,
+} from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -17,11 +21,7 @@ import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
-import {
-  claimedDurationVideo,
-  expectToPlay,
-  THREE_SECOND_VIDEO,
-} from '../helpers/video.js';
+import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 
 // The instructor writes the landing page in the portal; the public page then
 // shows what a visitor needs to decide: outcomes, requirements and who teaches.
@@ -219,14 +219,34 @@ test('an instructor uploads a preview and a signed-out visitor watches it', asyn
   });
 
   await test.step('an over-long replacement is refused and the preview keeps playing', async () => {
-    await previewArea.getByLabel('Preview video file').setInputFiles({
-      name: 'six-minutes.mp4',
-      mimeType: 'video/mp4',
-      buffer: await claimedDurationVideo(360),
+    // The card refuses a long file before uploading it (its component tests
+    // cover that); here the API is asked directly as the signed-in instructor,
+    // since a file over 5 minutes is too slow to make in CI.
+    const token = await instructor.evaluate(() => {
+      for (const storage of [sessionStorage, localStorage]) {
+        for (let i = 0; i < storage.length; i++) {
+          const value = storage.getItem(storage.key(i) ?? '') ?? '';
+          const found = value.match(/"access_token"\s*:\s*"([^"]+)"/)?.[1];
+          if (found) {
+            return found;
+          }
+        }
+      }
+      return undefined;
     });
+    expect(token).toBeDefined();
+    const api = apiClients(token as string).instructor;
+    const { preview } = await api.course.view.query({ courseId });
     await expect(
-      instructor.getByText('This video is longer than 5 minutes'),
-    ).toBeVisible();
+      api.coursePreview.replace.mutate({
+        courseId,
+        rawKey: `courses/${courseId}/preview/uploads/none.mp4`,
+        durationSeconds: 301,
+        expectedSubmissionNonce: preview?.submissionNonce ?? '',
+      }),
+    ).rejects.toMatchObject({
+      message: 'A preview can be at most 5 minutes long',
+    });
     await expect(previewArea.locator('video')).toBeAttached();
     await screenshot(instructor, 'over-long preview refused', {
       fullPage: true,

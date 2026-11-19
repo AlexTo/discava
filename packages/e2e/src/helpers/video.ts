@@ -2,7 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, type Locator } from '@playwright/test';
 
@@ -35,20 +34,4 @@ export const expectToPlay = async (video: Locator) => {
     .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime))
     .toBeGreaterThan(1);
   expect(await video.evaluate((v: HTMLVideoElement) => v.error)).toBeNull();
-};
-
-// The three-second clip with its movie header claiming `seconds` instead, so a
-// browser reads that length from the file without it being made (or played):
-// for checking that a too-long video is refused before it is uploaded.
-export const claimedDurationVideo = async (seconds: number) => {
-  const bytes = await readFile(THREE_SECOND_VIDEO);
-  // mvhd (version 0): fourcc, version and flags, created, modified, timescale,
-  // duration.
-  const at = bytes.indexOf('mvhd');
-  if (at < 0 || bytes[at + 4] !== 0) {
-    throw new Error('Expected a version 0 movie header in the test clip');
-  }
-  const timescale = bytes.readUInt32BE(at + 16);
-  bytes.writeUInt32BE(timescale * seconds, at + 20);
-  return bytes;
 };
