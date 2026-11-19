@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -264,5 +265,30 @@ describe('PreviewVideoArea', () => {
     expect(
       screen.queryByRole('button', { name: 'Remove' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('asks for the video again when a replacement becomes ready', async () => {
+    const Harness = () => {
+      const [ready, setReady] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setReady(true)}>
+            Finish
+          </button>
+          <PreviewVideoArea
+            courseId={COURSE_ID}
+            preview={summary({ status: ready ? 'ready' : 'processing' })}
+          />
+        </>
+      );
+    };
+    const { calls, user } = renderWithInstructorApi(<Harness />, { handlers });
+    const urlCalls = () =>
+      calls.filter((call) => call.path === 'coursePreview.createVideoUrl');
+    await waitFor(() => expect(urlCalls()).toHaveLength(1));
+
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() => expect(urlCalls()).toHaveLength(2));
   });
 });

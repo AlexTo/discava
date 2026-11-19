@@ -21,7 +21,7 @@ import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { ICoursePreviewSummary } from '@discava/instructor-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
 import {
@@ -87,6 +87,16 @@ export function PreviewVideoArea({
     ...coursePreview.createVideoUrl.queryOptions({ courseId }),
     enabled: Boolean(preview?.hasPlayableVersion),
   });
+
+  // The played version moves on when a replacement becomes ready (or a new
+  // attempt starts), though the query's key does not: fetch its address again.
+  const previewState = `${preview?.status}:${preview?.submissionNonce}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: previewState is the trigger
+  useEffect(() => {
+    void queryClient.invalidateQueries({
+      queryKey: coursePreview.createVideoUrl.queryKey({ courseId }),
+    });
+  }, [previewState]);
 
   const upload = async (file: File) => {
     setError(undefined);
