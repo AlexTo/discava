@@ -1,0 +1,32 @@
+name: Cache Cleanup
+
+# A pull request's Actions caches (PR Checks saves its Nx cache per push) can
+# only be read by that pull request, and otherwise stay until GitHub evicts
+# them, counting toward the repository's 10 GB meanwhile. Deletes them when
+# the pull request closes. Runs nothing from the pull request: it only passes
+# its number to `gh`. A fork's token can't delete caches, so a fork's are left
+# to expire.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  actions: write
+
+jobs:
+  cleanup:
+    name: Delete the pull request's caches
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete caches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: refs/pull/${{ github.event.pull_request.number }}/merge
+        run: |
+          gh cache list --ref "$REF" --limit 100 --json id --jq '.[].id' |
+            while read -r id; do
+              gh cache delete "$id" || echo "::warning::Couldn't delete cache $id"
+            done
