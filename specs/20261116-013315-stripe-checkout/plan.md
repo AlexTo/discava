@@ -96,7 +96,7 @@ No violations, so Complexity Tracking is empty.
 11. **A student's refund request asks Stripe and records a time; the confirmation makes the change** (amendment 2026-11-19). `requestRefund` calls `refunds.create` with idempotency key `refund-<orderId>`, then marks the order; it never moves the order or the enrolment. One path still ends a paid enrolment (R-20).
 12. **Refund terms are one constant and one pure function**: `REFUND_WINDOW_DAYS = 14` and `refundEligibility`, used by the mutation to decide and by `payment.myOrder` to explain; a completed enrolment is not eligible (R-21).
 13. **Leaving is `dropped` for an enrolment with no order**, written in `order.ts` beside the refund-end write and conditioned on the same `orderId` attribute, so the two cannot both win; the existing free restore is the way back. A paid enrolment cannot be left (R-22).
-14. **One `order.refunded` notification per refunded order**, published by the webhook only when its conditional move succeeded (R-23).
+14. **One `order.refunded` notification per refunded order**, published by the webhook on every full-refund notice for an order that is `refunded` with reason `requested` and that its enrolment still names, with `dedupeKey: orderId`, so a redelivery retries a failed publish and a repeat is a no-op (R-23).
 
 ## Project Structure
 

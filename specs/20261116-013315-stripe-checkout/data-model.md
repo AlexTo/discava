@@ -152,7 +152,7 @@ The lifecycle is unchanged. A student's request sits on the `paid ──full ref
 - `markRefundRequested({ coreTable, order, now })`: sets `refundRequestedAt`, conditioned on `status = paid` and the attribute being absent. A failed condition is not an error: the refund notice got there first, or another request did.
 - `unenrolFromCourse({ coreTable, userId, courseId, now })`: the enrolment to `dropped`, conditioned on `status in (active, completed)` and no `orderId`, keeping `completedAt` and `progressPercent` as the refund-end write does. Returns whether it made the move; refuses (a typed error) when the enrolment has an `orderId`.
 
-`helpers/order.ts` stays the only writer of `order` and of every enrolment write to `dropped`. `refundOrder` is unchanged, except that it reports whether this call made the full-refund move, so the webhook publishes the notification once.
+`helpers/order.ts` stays the only writer of `order` and of every enrolment write to `dropped`. `refundOrder` is unchanged. The refund notice is published by the webhook on every full-refund notice, not only the one that made the move: when the order is then `refunded` with `refundReason` `requested` and the student's enrolment still names it, the handler calls `publishNotification` with `dedupeKey: orderId`. A repeat returns `'duplicate'`, so a redelivered notice is harmless, and a publish that failed after the move is retried when Stripe redelivers the notice (the handler lets the error fail the delivery).
 
 ### Notification type
 
