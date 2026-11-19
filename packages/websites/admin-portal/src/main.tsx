@@ -13,10 +13,6 @@ import {
 import { RouterProvider } from '@tanstack/react-router';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-/**
- * Copyright Discava Contributors. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
 import { useAuth } from 'react-oidc-context';
 import { AdminApiClientProvider, CoreApiClientProvider } from './api';
 import { LOCAL_DEV_CONFIG } from './local-dev-config';

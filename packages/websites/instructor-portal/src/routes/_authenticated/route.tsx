@@ -9,7 +9,7 @@ import { signOut } from '@discava/common-web-utils/sign-out';
 import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
-import AppLayout from '../../components/AppLayout';
+import AppLayout from '../../components/app-layout';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ context, location }) => {

@@ -3,10 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * Copyright Discava Contributors. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
