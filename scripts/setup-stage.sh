@@ -1046,6 +1046,22 @@ create_execution_policy_files() {
       "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:role/$RESOURCE_PREFIX*"
     },
     {
+      "Sid": "ManageDiscavaManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy"
+      ],
+      "Resource": "arn:$AWS_PARTITION:iam::$ACCOUNT_ID:policy/$RESOURCE_PREFIX*"
+    },
+    {
       "Sid": "GrantOnlyWithinStageBoundary",
       "Effect": "Allow",
       "Action": [
@@ -1139,7 +1155,9 @@ EOF
         "dynamodb:DescribeContinuousBackups",
         "dynamodb:DescribeContributorInsights",
         "dynamodb:DescribeKinesisStreamingDestination",
-        "dynamodb:GetResourcePolicy"
+        "dynamodb:GetResourcePolicy",
+        "dynamodb:PutResourcePolicy",
+        "dynamodb:DeleteResourcePolicy"
       ],
       "Resource": [
         "arn:$AWS_PARTITION:dynamodb:$AWS_REGION:$ACCOUNT_ID:table/$RESOURCE_PREFIX*",
@@ -1286,6 +1304,16 @@ EOF
         "cloudfront:*ResponseHeadersPolicy",
         "cloudfront:*PublicKey",
         "cloudfront:*KeyGroup",
+        "cloudfront:*CachePolicy",
+        "cloudfront:GetCachePolicyConfig",
+        "cloudfront:*OriginRequestPolicy",
+        "cloudfront:GetOriginRequestPolicyConfig",
+        "cloudfront:CreateFunction",
+        "cloudfront:UpdateFunction",
+        "cloudfront:DeleteFunction",
+        "cloudfront:DescribeFunction",
+        "cloudfront:GetFunction",
+        "cloudfront:PublishFunction",
         "cloudfront:AllowVendedLogDeliveryForResource"
       ],
       "Resource": "*"
@@ -1418,6 +1446,10 @@ EOF
         "lambda:PublishVersion",
         "lambda:AddPermission",
         "lambda:RemovePermission",
+        "lambda:CreateFunctionUrlConfig",
+        "lambda:GetFunctionUrlConfig",
+        "lambda:UpdateFunctionUrlConfig",
+        "lambda:DeleteFunctionUrlConfig",
         "lambda:ListVersionsByFunction",
         "lambda:ListTags",
         "lambda:TagResource",

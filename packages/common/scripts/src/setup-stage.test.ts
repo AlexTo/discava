@@ -376,6 +376,92 @@ describe.concurrent('setup-stage.sh execution policy', {
     );
   });
 
+  it("allows the student portal's CloudFront functions, policies and page renderer URL", async () => {
+    // The portals' SPA rewrite and host forwarding are CloudFront Functions,
+    // and the public page renderer is a Lambda function URL origin behind its
+    // own cache and origin request policies (#287).
+    const { status, executionStatements } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'CloudFrontForDiscava',
+        Action: expect.arrayContaining([
+          'cloudfront:*CachePolicy',
+          'cloudfront:GetCachePolicyConfig',
+          'cloudfront:*OriginRequestPolicy',
+          'cloudfront:GetOriginRequestPolicyConfig',
+          'cloudfront:CreateFunction',
+          'cloudfront:UpdateFunction',
+          'cloudfront:DeleteFunction',
+          'cloudfront:DescribeFunction',
+          'cloudfront:GetFunction',
+          'cloudfront:PublishFunction',
+        ]),
+      }),
+    );
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'LambdaForDiscava',
+        Action: expect.arrayContaining([
+          'lambda:CreateFunctionUrlConfig',
+          'lambda:GetFunctionUrlConfig',
+          'lambda:UpdateFunctionUrlConfig',
+          'lambda:DeleteFunctionUrlConfig',
+        ]),
+      }),
+    );
+  });
+
+  it("lets CloudFormation reconcile the stage's tables' resource policies", async () => {
+    // CloudFormation's table handler puts (or deletes) the resource policy
+    // on update even when the template sets none.
+    const { status, executionStatements } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'DynamoDbForDiscava',
+        Action: expect.arrayContaining([
+          'dynamodb:GetResourcePolicy',
+          'dynamodb:PutResourcePolicy',
+          'dynamodb:DeleteResourcePolicy',
+        ]),
+      }),
+    );
+  });
+
+  it("manages only the stage's own managed policies", async () => {
+    // CDK moves a role's policy into a managed "overflow" policy once it
+    // outgrows the inline size limit (the instructor API's router role). The
+    // execution role's own policies and the boundary aren't stage-prefixed,
+    // so this doesn't let it change its own permissions.
+    const { status, executionStatements } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Sid: 'ManageDiscavaManagedPolicies',
+        Action: expect.arrayContaining([
+          'iam:CreatePolicy',
+          'iam:DeletePolicy',
+          'iam:CreatePolicyVersion',
+          'iam:DeletePolicyVersion',
+        ]),
+        Resource: 'arn:aws:iam::111122223333:policy/discava-development-*',
+      }),
+    );
+  });
+
   it("allows vended log delivery from the stage's buckets", async () => {
     // S3 server access logs reach CloudWatch Logs through a delivery source
     // on the bucket, which needs this on the bucket itself.
