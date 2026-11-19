@@ -207,7 +207,7 @@ export class MediaPipelineStack extends Stack {
 
   // createContentItemVideo/updateContentItemVideo submit the MediaConvert
   // job themselves (see
-  // packages/apis/instructor-api/src/lib/mediaconvert-client.ts). Both
+  // packages/apis/instructor-api/src/helpers/mediaconvert-client.ts). Both
   // handlers already get RUNTIME_CONFIG_APP_ID/AppConfig read access from
   // InstructorApi.defaultIntegrations, so only the MediaConvert-specific
   // permissions are needed here.

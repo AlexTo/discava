@@ -53,7 +53,7 @@ vi.mock('@discava/core-table', async (importActual) => ({
   })),
 }));
 
-vi.mock('../lib/public-media-client.js', () => ({
+vi.mock('../helpers/public-media-client.js', () => ({
   presignJpegUpload,
   headPublicMediaObject,
   attachPublicMediaObject,
