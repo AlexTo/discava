@@ -35,11 +35,11 @@ import {
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../api';
+import { CreateCourseDialog } from '../../../components/create-course-dialog';
 import {
   type CourseStatus,
   courseStatusStyles,
-} from '../../../components/course-status';
-import { CreateCourseDialog } from '../../../components/create-course-dialog';
+} from '../../../lib/course-status';
 
 export const Route = createFileRoute('/_authenticated/my-courses')({
   component: RouteComponent,

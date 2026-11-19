@@ -8,8 +8,8 @@ import {
   ApiError,
   type Handler,
   renderWithAdminApi,
-} from '../test/render-with-admin-api';
-import { ReviewsScreen } from './-reviews-screen';
+} from '../../test/render-with-admin-api';
+import { ReviewsScreen } from './reviews-screen';
 
 const courses = {
   items: [

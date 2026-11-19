@@ -17,7 +17,7 @@ import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { SiteSearch } from './SiteSearch';
+import { SiteSearch } from './site-search';
 
 const DISCAVA_URL = 'https://alexto.github.io/discava';
 
