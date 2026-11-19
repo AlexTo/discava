@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { checkTableInvariants, type TableSnapshot } from './invariants/index.js';
+import {
+  checkTableInvariants,
+  type TableSnapshot,
+} from './invariants/index.js';
 import { type ReviewWrite, reviewerName, reviewWrites } from './review.js';
 
 // An in-memory stand-in for the entities reviewWrites builds its transaction

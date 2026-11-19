@@ -2,7 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { ANALYTICS_CHECKS } from './analytics.js';
+import {
+  ANALYTICS_CHECKS,
+  checkAnalyticsMatchesRecords as analyticsMatchesRecords,
+} from './analytics.js';
 import { CATALOGUE_CHECKS } from './catalogue.js';
 import { CERTIFICATES_CHECKS } from './certificates.js';
 import type { Violation } from './common.js';
@@ -53,7 +56,13 @@ export const checkTableInvariants = (
   // also reports caption-tracks-valid), so each violation keeps its own.
   CHECKS.flatMap(({ check }) => check(snapshot) as InvariantViolation[]);
 
-export { checkAnalyticsMatchesRecords } from './analytics.js';
+// Exported on its own for the e2e suite, which re-runs just this check while
+// the analytics handler catches up.
+export const checkAnalyticsMatchesRecords = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  analyticsMatchesRecords(snapshot) as InvariantViolation[];
+
 export {
   emptyTableSnapshot,
   loadTableSnapshot,

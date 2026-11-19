@@ -18,7 +18,10 @@ import {
   normaliseDiscussionText,
   postIdTime,
 } from './discussion.js';
-import { checkTableInvariants, type TableSnapshot } from './invariants/index.js';
+import {
+  checkTableInvariants,
+  type TableSnapshot,
+} from './invariants/index.js';
 
 const NOW = new Date('2026-11-16T10:00:00.000Z');
 
