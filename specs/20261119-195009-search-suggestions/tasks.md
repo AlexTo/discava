@@ -165,11 +165,11 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: The component tests for the last row and the empty state pass. The e2e test chooses "See all results".
 
-- [ ] T016 [US4] Tests first, then add the last row "See all results for '<text>'" (a `role="option"` that keyboard navigation reaches, per the contract) and the "No courses match" row to `packages/websites/student-portal/src/components/site-search-suggestions.tsx`. With no items the dropdown stays open and shows both. Choosing the last row navigates to `/search?query=<trimmed text>` and closes the dropdown, the same as submitting (`site-search.tsx`). The status text from T013 still counts courses only. Component tests cover:
+- [x] T016 [US4] Tests first, then add the last row "See all results for '<text>'" (a `role="option"` that keyboard navigation reaches, per the contract) and the "No courses match" row to `packages/websites/student-portal/src/components/site-search-suggestions.tsx`. With no items the dropdown stays open and shows both. Choosing the last row navigates to `/search?query=<trimmed text>` and closes the dropdown, the same as submitting (`site-search.tsx`). The status text from T013 still counts courses only. Component tests cover:
   - the row is present with items and with none;
   - choosing it by click and by Down, then Enter, navigates to `/search?query=…`;
   - "No courses match" shows for an empty answer.
-- [ ] T017 [US4] Extend `packages/e2e/src/scenarios/search.e2e.ts`: type a unique nonsense string (`uniqueName('zzq')`), expect "No courses match", take `screenshot(page, 'search-suggestions-empty')`, choose "See all results", and expect `/search?query=` in the URL.
+- [x] T017 [US4] Extend `packages/e2e/src/scenarios/search.e2e.ts`: type a unique nonsense string (`uniqueName('zzq')`), expect "No courses match", take `screenshot(page, 'search-suggestions-empty')`, choose "See all results", and expect `/search?query=` in the URL.
 
 ---
 

@@ -211,7 +211,8 @@ describe('SiteSearch suggestions', () => {
     await advance(300);
     await advance(50);
 
-    expect(screen.getAllByRole('option')).toHaveLength(10);
+    // The ten courses, then "See all results".
+    expect(screen.getAllByRole('option')).toHaveLength(11);
   });
 
   it('closes when the text drops under 3 characters', async () => {
@@ -268,7 +269,7 @@ describe('SiteSearch suggestions', () => {
       const list = screen.getByRole('listbox', { name: 'Course suggestions' });
       expect(box).toHaveAttribute('aria-expanded', 'true');
       expect(box).toHaveAttribute('aria-controls', list.id);
-      expect(screen.getAllByRole('option')).toHaveLength(3);
+      expect(screen.getAllByRole('option')).toHaveLength(4);
       expect(box).not.toHaveAttribute('aria-activedescendant');
     });
 
@@ -280,7 +281,10 @@ describe('SiteSearch suggestions', () => {
       expect(box).toHaveAttribute('aria-activedescendant', options[0].id);
       expect(options[0]).toHaveAttribute('aria-selected', 'true');
       key(box, 'ArrowUp');
+      expect(box).toHaveAttribute('aria-activedescendant', options[3].id);
+      key(box, 'ArrowUp');
       expect(box).toHaveAttribute('aria-activedescendant', options[2].id);
+      key(box, 'ArrowDown');
       key(box, 'ArrowDown');
       expect(box).toHaveAttribute('aria-activedescendant', options[0].id);
       expect(box).toHaveValue('python');
@@ -364,6 +368,66 @@ describe('SiteSearch suggestions', () => {
       await advance(50);
 
       expect(screen.getByRole('status')).toHaveTextContent('No courses match');
+    });
+
+    it('ends the list with "See all results", which opens the results', async () => {
+      const { router } = await openThree();
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(4);
+      fireEvent.click(options[3]);
+      await advance(0);
+
+      expect(options[3]).toHaveTextContent("See all results for 'python'");
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({ query: 'python' });
+      expect(
+        screen.queryByTestId('site-search-suggestions'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('reaches "See all results" with Up, then Enter opens the results', async () => {
+      const { box, router } = await openThree();
+
+      key(box, 'ArrowUp');
+      const last = screen.getAllByRole('option')[3];
+      expect(box).toHaveAttribute('aria-activedescendant', last.id);
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({ query: 'python' });
+    });
+
+    it('reaches "See all results" with Down, then Enter, and keeps the count to courses', async () => {
+      const { box, router, type } = await open(three);
+      await type(' python ');
+      await advance(300);
+      await advance(50);
+
+      for (let presses = 0; presses < 4; presses++) key(box, 'ArrowDown');
+      expect(screen.getByRole('status')).toHaveTextContent('3 suggestions');
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.search).toEqual({ query: 'python' });
+    });
+
+    it('keeps the dropdown open with "No courses match" and "See all results" for an empty answer', async () => {
+      const { box, router, type } = await open();
+      await type('zzzzz');
+      await advance(300);
+      await advance(50);
+
+      const list = screen.getByTestId('site-search-suggestions');
+      expect(list).toHaveTextContent('No courses match');
+      expect(box).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getAllByRole('option')).toHaveLength(1);
+      key(box, 'ArrowDown');
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.search).toEqual({ query: 'zzzzz' });
     });
   });
 });
