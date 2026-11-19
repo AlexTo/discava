@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { applyEnvOverrides } from './env-overrides.js';
+import { validatePayoutSettings } from './payout-settings.js';
 import stagesConfig from './stages.config.js';
 import type { StageConfig, StagesConfig } from './stages.types.js';
 
@@ -28,6 +29,7 @@ export function resolveStage(
   const project = config.projects?.[projectPath]?.stages?.[stageName];
   if (!shared && !project) return undefined;
   const merged = { ...shared, ...project } as StageConfig;
+  if (merged.payouts) validatePayoutSettings(stageName, merged.payouts);
   return applyEnvOverrides(stageName, merged);
 }
 

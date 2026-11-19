@@ -452,6 +452,38 @@ export type StageComponents = {
 };
 
 /**
+ * Per-stage instructor payout settings: what the platform keeps, how long
+ * instructor earnings are held, and the smallest payout sent. Checked by
+ * `validatePayoutSettings` whenever a stage is resolved.
+ */
+export type PayoutSettings = {
+  /**
+   * The platform's fee on each sale, in basis points of the amount paid
+   * (100 basis points = 1%). An integer from 0 to 10000 inclusive.
+   * Applies to sales recorded after a change; earlier ones keep the fee they
+   * were recorded with.
+   *
+   * @default 2000
+   */
+  platformFeeBasisPoints: number;
+  /**
+   * Days a sale's earnings are held before the instructor can be paid for
+   * them, to cover the refund window. A non-negative integer.
+   *
+   * @default 14
+   */
+  holdDays: number;
+  /**
+   * The smallest payout the daily run sends, in minor units of the currency
+   * (cents for USD). Smaller balances wait for the next run. A non-negative
+   * integer.
+   *
+   * @default 1000
+   */
+  minimumPayoutMinor: number;
+};
+
+/**
  * Configuration for a single CDK stage.
  * Credentials/region/account are optional — omit them to fall back to the
  * active AWS CLI/environment credentials (see resolveStage).
@@ -465,6 +497,8 @@ export type StageConfig = {
   account?: string;
   /** Infrastructure (construct) settings for this stage */
   infra?: StageComponents;
+  /** Instructor payout settings for this stage */
+  payouts?: PayoutSettings;
 };
 
 /**

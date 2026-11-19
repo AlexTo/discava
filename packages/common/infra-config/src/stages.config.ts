@@ -46,6 +46,12 @@ export default {
         // No credentials/region set yet — deploys use your active AWS CLI
         // credentials and CDK_DEFAULT_REGION until these are configured.
         'discava-development': {
+          // A short hold so a tester sees earnings become payable in days.
+          payouts: {
+            platformFeeBasisPoints: 2000,
+            holdDays: 1,
+            minimumPayoutMinor: 1000,
+          },
           // With WAF off, these limits are what bound the cost of a flood of
           // requests. Sized for a handful of testers:
           // - API Gateway throttles each method separately, so the API's
@@ -134,6 +140,13 @@ export default {
           },
         },
         'discava-production': {
+          // 20% platform fee, earnings held 14 days (the refund window) and
+          // payouts of at least 10.00 in the currency's major unit.
+          payouts: {
+            platformFeeBasisPoints: 2000,
+            holdDays: 14,
+            minimumPayoutMinor: 1000,
+          },
           // Limits with room for real traffic, still well short of AWS's
           // defaults (10,000 requests/s, unbounded concurrency and
           // throughput). Throttles apply to each method separately: ceilings
