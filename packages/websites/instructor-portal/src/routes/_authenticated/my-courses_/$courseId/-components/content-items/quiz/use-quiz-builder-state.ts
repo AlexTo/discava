@@ -37,17 +37,22 @@ export function useQuizBuilderState({
   readOnly,
   onDirtyChange,
   onCreated,
+  onAssignmentCreated,
 }: {
   courseId: string;
   moduleId: string;
-  lessonId: string;
+  // Absent for a new quiz assignment, whose lesson doesn't exist yet.
+  lessonId?: string;
   contentItemId?: string;
   quiz?: QuizItem;
   readOnly: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onCreated?: (contentItemId: string) => void;
+  // Saving creates a quiz assignment in the module (its lesson and quiz
+  // together) instead of a quiz in a lesson; called once it's saved.
+  onAssignmentCreated?: () => void;
 }) {
-  const { course, contentItem } = useInstructorApi();
+  const { course, contentItem, lesson: lessonApi } = useInstructorApi();
   const queryClient = useQueryClient();
   const initial = useMemo(
     () => (existing ? fromQuizItem(existing) : newQuiz()),
@@ -68,8 +73,13 @@ export function useQuizBuilderState({
   const [previewOpen, setPreviewOpen] = useState(false);
   const createQuiz = useMutation(contentItem.createQuiz.mutationOptions());
   const updateQuiz = useMutation(contentItem.updateQuiz.mutationOptions());
-  const saving = createQuiz.isPending || updateQuiz.isPending;
-  const saveError: SaveError | null = createQuiz.error ?? updateQuiz.error;
+  const createAssignment = useMutation(
+    lessonApi.createQuizAssignment.mutationOptions(),
+  );
+  const saving =
+    createQuiz.isPending || updateQuiz.isPending || createAssignment.isPending;
+  const saveError: SaveError | null =
+    createQuiz.error ?? updateQuiz.error ?? createAssignment.error;
 
   const errors = validateQuiz(quiz);
   const dirty = JSON.stringify(quiz) !== JSON.stringify(saved);
@@ -141,12 +151,25 @@ export function useQuizBuilderState({
   const save = async () => {
     createQuiz.reset();
     updateQuiz.reset();
+    createAssignment.reset();
     if (hasErrors(errors)) {
       showProblemsFirst();
       return;
     }
     const input = toQuizInput(quiz);
     try {
+      if (onAssignmentCreated) {
+        await createAssignment.mutateAsync({ courseId, moduleId, ...input });
+        setSaved(quiz);
+        void queryClient.invalidateQueries({
+          queryKey: course.view.queryKey({ courseId }),
+        });
+        onAssignmentCreated();
+        return;
+      }
+      if (lessonId === undefined) {
+        return;
+      }
       const result =
         savedId === undefined || version === undefined
           ? await createQuiz.mutateAsync({

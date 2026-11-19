@@ -47,6 +47,42 @@ export const addLesson = async (page: Page, title: string) => {
   ).toBeVisible();
 };
 
+// Adds an upload assignment to the course's only (or last) module, through the
+// New assignment dialog. `beforeSave` runs with the dialog filled in, for a
+// screenshot of it.
+export const addUploadAssignment = async (
+  page: Page,
+  {
+    title,
+    instructions,
+    maxPoints,
+    dueAt,
+    beforeSave,
+  }: {
+    title: string;
+    instructions: string;
+    maxPoints: number;
+    // A datetime-local value, e.g. '2099-01-01T09:00'.
+    dueAt?: string;
+    beforeSave?: () => Promise<void>;
+  },
+) => {
+  await page.getByRole('button', { name: 'New assignment' }).last().click();
+  const dialog = page.getByRole('dialog', { name: 'New assignment' });
+  await dialog.getByRole('radio', { name: /Upload/ }).check();
+  await dialog.getByLabel('Assignment title').fill(title);
+  await dialog.getByLabel('Instructions', { exact: true }).fill(instructions);
+  await dialog.getByLabel('Max points').fill(String(maxPoints));
+  if (dueAt) {
+    await dialog.getByLabel('Due date (optional)').fill(dueAt);
+  }
+  await beforeSave?.();
+  await dialog.getByRole('button', { name: 'Create assignment' }).click();
+  await expect(
+    page.getByRole('button', { name: `Hide assignment ${title}` }),
+  ).toBeVisible();
+};
+
 // Adds a text item to the last lesson.
 export const addTextItem = async (
   page: Page,
@@ -168,7 +204,13 @@ export const addQuiz = async (
 
 // What the course editor calls each kind of content item in its controls'
 // names, e.g. "Hide text Reading one".
-export type ItemKind = 'text' | 'video' | 'quiz' | 'file' | 'lesson';
+export type ItemKind =
+  | 'text'
+  | 'video'
+  | 'quiz'
+  | 'file'
+  | 'lesson'
+  | 'assignment';
 
 // Hides a published item from students, confirming in the dialog.
 export const hideItem = async (page: Page, kind: ItemKind, title: string) => {

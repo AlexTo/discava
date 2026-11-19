@@ -14,15 +14,19 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
   CirclePlus,
+  ClipboardCheck,
   FileText,
   PencilLine,
   Trash2,
 } from 'lucide-react';
 import { useInstructorApi } from '../../../../../../api';
+import { CreateAssignmentDialog } from '../assignment/create-assignment-dialog';
+import { EditAssignmentDialog } from '../assignment/edit-assignment-dialog';
 import {
   type ContentItem,
   LessonContentItemsRow,
 } from '../content-items/lesson-content-items-row';
+import { QuizBuilderDialog } from '../content-items/quiz/quiz-builder-dialog';
 import { HiddenBadge } from '../hidden-badge';
 import { CreateLessonDialog } from '../lesson/create-lesson-dialog';
 import { DeleteLessonDialog } from '../lesson/delete-lesson-dialog';
@@ -39,6 +43,8 @@ import {
 
 type Lesson = {
   lessonId: string;
+  // An assignment is a lesson holding one quiz or upload assignment (#102).
+  kind: 'lesson' | 'assignment';
   title: string;
   description?: string;
   visibility: 'hidden' | 'visible';
@@ -101,91 +107,150 @@ function ModuleLessons({
       errorHeader="Couldn't reorder the lessons"
       conflictMessage="This module changed while you were reordering its lessons. It has been reloaded, so try again."
       errorClassName="border-t px-4 py-3 sm:pl-12 sm:pr-5"
-      renderItem={(lesson, _index, row) => (
-        <article
-          ref={row?.ref}
-          className={cn(
-            'border-t first:border-t-0',
-            row?.isDragging && 'relative z-10 bg-background shadow-md',
-          )}
-        >
-          <div className="group flex items-center gap-2 px-4 py-2.5 sm:pl-12 sm:pr-5">
-            {row && (
-              <DragHandle row={row} title={lesson.title} className="-ml-2" />
+      renderItem={(lesson, _index, row) => {
+        const isAssignment = lesson.kind === 'assignment';
+        const noun = isAssignment ? 'assignment' : 'lesson';
+        // An assignment's one item is edited from its row, never added to.
+        const item = lesson.contentItems[0];
+        return (
+          <article
+            ref={row?.ref}
+            className={cn(
+              'border-t first:border-t-0',
+              row?.isDragging && 'relative z-10 bg-background shadow-md',
             )}
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-              <FileText className="size-4" />
+          >
+            <div className="group flex items-center gap-2 px-4 py-2.5 sm:pl-12 sm:pr-5">
+              {row && (
+                <DragHandle row={row} title={lesson.title} className="-ml-2" />
+              )}
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                {isAssignment ? (
+                  <ClipboardCheck className="size-4" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
+              </div>
+              <span className="font-medium">{lesson.title}</span>
+              {lesson.visibility === 'hidden' && <HiddenBadge />}
+              <Badge
+                variant="outline"
+                className="hidden text-[10px] sm:inline-flex"
+              >
+                {isAssignment ? 'Assignment' : 'Lesson'}
+              </Badge>
+              {!readOnly && (
+                <>
+                  <LessonVisibilityButton
+                    courseId={courseId}
+                    moduleId={module.moduleId}
+                    lessonId={lesson.lessonId}
+                    title={lesson.title}
+                    visibility={lesson.visibility}
+                    draft={draft}
+                    noun={noun}
+                    className="ml-auto"
+                  />
+                  {isAssignment ? (
+                    item &&
+                    (item.type === 'quiz' ? (
+                      <QuizBuilderDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        lessonId={lesson.lessonId}
+                        contentItemId={item.contentItemId}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            aria-label={`Edit assignment ${lesson.title}`}
+                            className="-ml-2"
+                          >
+                            <PencilLine />
+                          </Button>
+                        }
+                      />
+                    ) : (
+                      <EditAssignmentDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        lessonId={lesson.lessonId}
+                        contentItemId={item.contentItemId}
+                        title={lesson.title}
+                        body={item.body}
+                        maxPoints={item.maxPoints}
+                        dueAt={item.dueAt}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            aria-label={`Edit assignment ${lesson.title}`}
+                            className="-ml-2"
+                          >
+                            <PencilLine />
+                          </Button>
+                        }
+                      />
+                    ))
+                  ) : (
+                    <EditLessonDialog
+                      courseId={courseId}
+                      moduleId={module.moduleId}
+                      lessonId={lesson.lessonId}
+                      title={lesson.title}
+                      description={lesson.description}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          type="button"
+                          aria-label={`Edit lesson ${lesson.title}`}
+                          className="-ml-2"
+                        >
+                          <PencilLine />
+                        </Button>
+                      }
+                    />
+                  )}
+                  <DeleteLessonDialog
+                    courseId={courseId}
+                    moduleId={module.moduleId}
+                    lessonId={lesson.lessonId}
+                    title={lesson.title}
+                    usedItems={usedItemCount(lesson.contentItems)}
+                    archive={archive}
+                    noun={noun}
+                    trigger={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        type="button"
+                        aria-label={`Remove ${noun} ${lesson.title}`}
+                        className="-ml-2"
+                      >
+                        <Trash2 />
+                      </Button>
+                    }
+                  />
+                </>
+              )}
             </div>
-            <span className="font-medium">{lesson.title}</span>
-            {lesson.visibility === 'hidden' && <HiddenBadge />}
-            <Badge
-              variant="outline"
-              className="hidden text-[10px] sm:inline-flex"
-            >
-              Lesson
-            </Badge>
-            {!readOnly && (
-              <>
-                <LessonVisibilityButton
-                  courseId={courseId}
-                  moduleId={module.moduleId}
-                  lessonId={lesson.lessonId}
-                  title={lesson.title}
-                  visibility={lesson.visibility}
-                  draft={draft}
-                  className="ml-auto"
-                />
-                <EditLessonDialog
-                  courseId={courseId}
-                  moduleId={module.moduleId}
-                  lessonId={lesson.lessonId}
-                  title={lesson.title}
-                  description={lesson.description}
-                  trigger={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      type="button"
-                      aria-label={`Edit lesson ${lesson.title}`}
-                      className="-ml-2"
-                    >
-                      <PencilLine />
-                    </Button>
-                  }
-                />
-                <DeleteLessonDialog
-                  courseId={courseId}
-                  moduleId={module.moduleId}
-                  lessonId={lesson.lessonId}
-                  title={lesson.title}
-                  usedItems={usedItemCount(lesson.contentItems)}
-                  archive={archive}
-                  trigger={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      type="button"
-                      aria-label={`Remove lesson ${lesson.title}`}
-                      className="-ml-2"
-                    >
-                      <Trash2 />
-                    </Button>
-                  }
-                />
-              </>
+            {!isAssignment && (
+              <LessonContentItemsRow
+                courseId={courseId}
+                moduleId={module.moduleId}
+                lessonId={lesson.lessonId}
+                contentItems={lesson.contentItems}
+                archive={archive}
+                readOnly={readOnly}
+                draft={draft}
+              />
             )}
-          </div>
-          <LessonContentItemsRow
-            courseId={courseId}
-            moduleId={module.moduleId}
-            lessonId={lesson.lessonId}
-            contentItems={lesson.contentItems}
-            archive={archive}
-            readOnly={readOnly}
-            draft={draft}
-          />
-        </article>
-      )}
+          </article>
+        );
+      }}
     />
   );
 }
@@ -338,15 +403,26 @@ export function CourseModules({
                     module.
                   </p>
                   {!readOnly && (
-                    <CreateLessonDialog
-                      courseId={courseId}
-                      moduleId={module.moduleId}
-                      trigger={
-                        <Button className="mt-2" size="sm" type="button">
-                          <CirclePlus /> New lesson
-                        </Button>
-                      }
-                    />
+                    <div className="mt-2 flex flex-wrap justify-center gap-2">
+                      <CreateLessonDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        trigger={
+                          <Button size="sm" type="button">
+                            <CirclePlus /> New lesson
+                          </Button>
+                        }
+                      />
+                      <CreateAssignmentDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        trigger={
+                          <Button variant="outline" size="sm" type="button">
+                            <ClipboardCheck /> New assignment
+                          </Button>
+                        }
+                      />
+                    </div>
                   )}
                 </div>
               ) : (
@@ -354,6 +430,15 @@ export function CourseModules({
                   <ModuleLessons {...options} module={module} />
                   {!readOnly && (
                     <div className="flex flex-wrap items-center justify-end gap-2 border-t bg-muted/20 px-4 py-3 sm:pl-12 sm:pr-5">
+                      <CreateAssignmentDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        trigger={
+                          <Button variant="outline" size="sm" type="button">
+                            <ClipboardCheck /> New assignment
+                          </Button>
+                        }
+                      />
                       <CreateLessonDialog
                         courseId={courseId}
                         moduleId={module.moduleId}
