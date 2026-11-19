@@ -251,7 +251,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: An instructor edits their profile and photo. The public profile lists only published courses. A profile with no published course gives not found.
 
-- [ ] T022 [US5] Tests first, then add to `packages/databases/core-table/src/helpers/instructor-profile.ts`:
+- [x] T022 [US5] Tests first, then add to `packages/databases/core-table/src/helpers/instructor-profile.ts`:
   - `instructorProfileWrites.update({ instructorId, version, patch, now })`, conditioned on `version` and incrementing it;
   - `changeHandle({ instructorId, version, from, to, now })`: one transaction of claim create (not exists), old claim delete (condition `instructorId` = caller), and profile update (condition `handle = from` and `version`);
   - `setPhoto`;

@@ -7,10 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { isValidHandle } from '../entities/instructor-profile.js';
 import { useCoreTable } from '../test-support/core-table.js';
 import {
+  classifyProfileCancellation,
   defaultDisplayName,
   ensureInstructorProfile,
   handleCandidates,
   handleFromName,
+  instructorProfileWrites,
   RESERVED_HANDLES,
 } from './instructor-profile.js';
 
@@ -234,5 +236,140 @@ describe('ensureInstructorProfile', () => {
       status: 'exists',
     });
     expect(transactions).toHaveLength(1);
+  });
+});
+
+const NOW = new Date('2026-11-19T00:00:00.000Z');
+const expressionOf = (request: Request) =>
+  `${request.UpdateExpression ?? ''} ${request.ConditionExpression ?? ''}`;
+const valuesOf = (request: Request) =>
+  Object.values({
+    ...request.ExpressionAttributeValues,
+  }) as unknown[];
+
+describe('instructorProfileWrites.update', () => {
+  it('patches the fields, conditioned on and incrementing the version', () => {
+    const [item] = instructorProfileWrites.update(service, {
+      instructorId: 'i1',
+      version: 3,
+      patch: { displayName: 'Dr Alex', headline: 'Teacher', bio: '' },
+      now: NOW,
+    });
+    const request = part(item);
+
+    expect(request.kind).toBe('Update');
+    expect(request.ConditionExpression).toBeDefined();
+    expect(valuesOf(request)).toEqual(
+      expect.arrayContaining([3, 4, 'Dr Alex', 'Teacher']),
+    );
+    expect(request.UpdateExpression).toMatch(/REMOVE/);
+    expect(JSON.stringify(request.ExpressionAttributeNames)).toContain('bio');
+    expect(JSON.stringify(request.ExpressionAttributeNames)).not.toContain(
+      'headline"]',
+    );
+  });
+
+  it('removes nothing when no field is cleared', () => {
+    const [item] = instructorProfileWrites.update(service, {
+      instructorId: 'i1',
+      version: 1,
+      patch: { displayName: 'A' },
+      now: NOW,
+    });
+    expect(part(item).UpdateExpression).not.toMatch(/REMOVE/);
+  });
+});
+
+describe('instructorProfileWrites.changeHandle', () => {
+  const items = (patch?: Record<string, string>) =>
+    instructorProfileWrites
+      .changeHandle(service, {
+        instructorId: 'i1',
+        version: 2,
+        from: 'old-one',
+        to: 'new-one',
+        patch,
+        now: NOW,
+      })
+      .map(part);
+
+  it('creates the new claim, deletes the old and updates the profile', () => {
+    const [create, remove, update] = items();
+
+    expect(create.kind).toBe('Put');
+    expect(create.Item).toMatchObject({
+      handle: 'new-one',
+      instructorId: 'i1',
+    });
+    expect(create.ConditionExpression).toMatch(/attribute_not_exists/);
+    expect(remove.kind).toBe('Delete');
+    expect(remove.Key.pk).toContain('old-one');
+    expect(valuesOf(remove)).toContain('i1');
+    expect(update.kind).toBe('Update');
+    expect(valuesOf(update)).toEqual(
+      expect.arrayContaining(['old-one', 'new-one', 2, 3]),
+    );
+    expect(expressionOf(update)).toMatch(/AND/);
+  });
+
+  it('carries the edited fields in the profile update', () => {
+    const [, , update] = items({ displayName: 'New name' });
+    expect(valuesOf(update)).toContain('New name');
+  });
+});
+
+describe('instructorProfileWrites.setPhoto', () => {
+  it('sets the key and increments the version, unconditioned on it', () => {
+    const [item] = instructorProfileWrites.setPhoto(service, {
+      instructorId: 'i1',
+      photoKey: 'instructors/i1/a.jpg',
+      now: NOW,
+    });
+    const request = part(item);
+
+    expect(valuesOf(request)).toContain('instructors/i1/a.jpg');
+    expect(request.UpdateExpression).toMatch(/ADD/);
+    expect(request.UpdateExpression).not.toMatch(/REMOVE/);
+  });
+
+  it('removes the photo for null', () => {
+    const [item] = instructorProfileWrites.setPhoto(service, {
+      instructorId: 'i1',
+      photoKey: null,
+      now: NOW,
+    });
+    expect(part(item).UpdateExpression).toMatch(/REMOVE/);
+  });
+});
+
+describe('classifyProfileCancellation', () => {
+  const failed = { code: 'ConditionalCheckFailed' };
+  const none = { code: 'None' };
+
+  it('gives handle-taken for a failed new claim', () => {
+    expect(
+      classifyProfileCancellation('changeHandle', [failed, none, none]),
+    ).toBe('handle-taken');
+  });
+
+  it.each([[[none, failed, none]], [[none, none, failed]]])(
+    'gives stale for a failed old claim or profile %j',
+    (reasons) => {
+      expect(classifyProfileCancellation('changeHandle', reasons)).toBe(
+        'stale',
+      );
+    },
+  );
+
+  it('gives stale for a failed update', () => {
+    expect(classifyProfileCancellation('update', [failed])).toBe('stale');
+  });
+
+  it('gives nothing for a transaction conflict', () => {
+    const conflict = { code: 'TransactionConflict' };
+    expect(
+      classifyProfileCancellation('changeHandle', [conflict, none, none]),
+    ).toBeUndefined();
+    expect(classifyProfileCancellation('update', [conflict])).toBeUndefined();
   });
 });
