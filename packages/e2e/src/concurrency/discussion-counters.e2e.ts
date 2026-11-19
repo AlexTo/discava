@@ -36,22 +36,27 @@ test('replies, votes, reports and moderation at once leave the counts right', as
   const toReport = await reply(students[2], key, threadId, 'Report me.');
   const post = (postId: string) => ({ ...key, threadId, postId });
   const staff = instructor.instructor.discussion;
+  // Nobody votes on or reports their own post.
+  const voters = students.filter((_, i) => i !== 1);
+  const reporters = students.filter((_, i) => i !== 2);
 
   await Promise.all([
     // New replies, one each.
     ...students.map((student, i) =>
       reply(student, key, threadId, `Reply number ${i}.`),
     ),
-    // Votes on the answer-to-be and on the question.
-    ...students.flatMap((student) => [
+    // Votes on the answer-to-be, and on the question by everyone.
+    ...voters.map((student) =>
       student.core.discussion.vote.mutate({
         ...post(toAccept.postId),
         voted: true,
       }),
-      student.core.discussion.vote.mutate({ ...post(threadId), voted: true }),
-    ]),
-    // Reports on one reply.
+    ),
     ...students.map((student) =>
+      student.core.discussion.vote.mutate({ ...post(threadId), voted: true }),
+    ),
+    // Reports on one reply.
+    ...reporters.map((student) =>
       student.core.discussion.report.mutate(post(toReport.postId)),
     ),
     // The instructor, in the same moment.
@@ -77,7 +82,7 @@ test('replies, votes, reports and moderation at once leave the counts right', as
   // The three first replies and one more from each student.
   expect(shown).toHaveLength(3 + STUDENTS);
   expect(accepted?.postId).toBe(toAccept.postId);
-  expect(accepted?.voteCount).toBe(STUDENTS);
+  expect(accepted?.voteCount).toBe(voters.length);
   expect(read.voteCount).toBe(STUDENTS);
   expect(read.answered).toBe(true);
 
@@ -92,7 +97,7 @@ test('replies, votes, reports and moderation at once leave the counts right', as
   const reported = await staff.reported.query({ courseId: key.courseId });
   expect(
     reported.items.find((item) => item.postId === toReport.postId)?.reportCount,
-  ).toBe(STUDENTS);
+  ).toBe(reporters.length);
   const answered = await staff.unanswered.query({ courseId: key.courseId });
   expect(answered.items.map((item) => item.postId)).not.toContain(threadId);
 });
