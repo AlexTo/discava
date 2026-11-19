@@ -7,13 +7,14 @@ import {
   type PortalNavItem,
   PortalShell,
 } from '@discava/common-shadcn/components/portal-shell';
-import { Home, MessageSquareText, Tags } from 'lucide-react';
+import { CreditCard, Home, MessageSquareText, Tags } from 'lucide-react';
 import type * as React from 'react';
 
 const navItems: PortalNavItem[] = [
   { label: 'Home', to: '/', icon: Home },
   { label: 'Categories', to: '/categories', icon: Tags },
   { label: 'Reviews', to: '/reviews', icon: MessageSquareText },
+  { label: 'Payments', to: '/payments', icon: CreditCard },
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
