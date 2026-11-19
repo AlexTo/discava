@@ -58,24 +58,20 @@ jobs:
 
       - name: Check whether a tasks.md or its reader changed
         id: changed
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          if git diff --quiet "origin/$BASE_REF...HEAD" -- \
-            'specs/*/tasks.md' 'packages/common/scripts/src/agent-issues/'; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
+        uses: ./.github/actions/changed-paths
+        with:
+          paths: |
+            specs/*/tasks.md
+            packages/common/scripts/src/agent-issues/
 
       - uses: ./.github/actions/init-monorepo
-        if: steps.changed.outputs.run == 'true'
+        if: steps.changed.outputs.changed == 'true'
         with:
           setup-uv: "false"
           set-nx-shas: "false"
 
       - name: Validate every tasks.md
-        if: steps.changed.outputs.run == 'true'
+        if: steps.changed.outputs.changed == 'true'
         run: pnpm nx run @discava/common-scripts:validate-tasks
 
   # A pull request that changes portal or shared UI source must add a
@@ -124,25 +120,22 @@ jobs:
 
       - name: Check whether code that could write the core table changed
         id: changed
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          if git diff --quiet "origin/$BASE_REF...HEAD" -- \
-            packages/apis packages/events packages/databases \
-            packages/common/scripts; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
+        uses: ./.github/actions/changed-paths
+        with:
+          paths: |
+            packages/apis
+            packages/events
+            packages/databases
+            packages/common/scripts
 
       - uses: ./.github/actions/init-monorepo
-        if: steps.changed.outputs.run == 'true'
+        if: steps.changed.outputs.changed == 'true'
         with:
           setup-uv: "false"
           set-nx-shas: "false"
 
       - name: Check the pull request
-        if: steps.changed.outputs.run == 'true'
+        if: steps.changed.outputs.changed == 'true'
         run: pnpm nx run @discava/common-scripts:invariant-coverage
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -186,24 +179,9 @@ jobs:
       # Chromium's download is cached per Playwright version. Its system
       # libraries come from apt, outside the cache, so they're installed
       # either way.
-      - name: Get the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm --filter @discava/e2e exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: playwright-cache
-        name: Cache Chromium for Playwright
+      - uses: ./.github/actions/playwright-setup
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      - name: Install Chromium for Playwright
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @discava/e2e exec playwright install --with-deps chromium
-
-      - name: Install Chromium's system libraries
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @discava/e2e exec playwright install-deps chromium
+          with-deps: true
 
       # Static output, so the job log lists each test even when they all pass.
       - name: Run e2e
