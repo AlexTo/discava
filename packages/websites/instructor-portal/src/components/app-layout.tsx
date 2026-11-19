@@ -8,6 +8,7 @@ import {
   PortalShell,
 } from '@discava/common-shadcn/components/portal-shell';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import type { UserMenuItem } from '@discava/common-shadcn/components/user-menu';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { BarChart3, BookOpen, Home } from 'lucide-react';
 import type * as React from 'react';
@@ -22,6 +23,10 @@ const navItems: PortalNavItem[] = [
 // might load (e.g. a course title) - those instead go through
 // useBreadcrumbLabel.
 const segmentLabels = { 'my-courses': 'My Courses' };
+
+const userMenuItems: UserMenuItem[] = [
+  { label: 'Public profile', to: '/profile' },
+];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { portals } = useRuntimeConfig();
@@ -38,6 +43,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
       label="Instructor"
       navItems={navItems}
       segmentLabels={segmentLabels}
+      userMenuItems={userMenuItems}
       headerActions={
         studentPortal ? (
           <Button variant="ghost" asChild>

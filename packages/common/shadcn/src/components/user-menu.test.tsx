@@ -68,6 +68,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('UserMenu items', () => {
+  const openMenu = async (items?: { label: string; to: string }[]) => {
+    const auth = {
+      user: { profile: { sub: 'instructor-1', given_name: 'Alice' } },
+    } as unknown as AuthContextProps;
+    const user = userEvent.setup();
+    render(
+      <RuntimeConfigContext.Provider value={{}}>
+        <AuthContext.Provider value={auth}>
+          <UserMenu items={items} />
+        </AuthContext.Provider>
+      </RuntimeConfigContext.Provider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open user menu' }));
+    await screen.findByRole('menuitem', { name: 'Sign out' });
+  };
+
+  it('shows the links a portal passes in', async () => {
+    await openMenu([{ label: 'Public profile', to: '/profile' }]);
+
+    expect(
+      screen.getByRole('menuitem', { name: 'Public profile' }),
+    ).toHaveAttribute('href', '/profile');
+  });
+
+  it('has no portal-only links by default', async () => {
+    await openMenu();
+
+    expect(
+      screen.queryByRole('menuitem', { name: 'Public profile' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('UserMenu sign-out', () => {
   it('uses Cognito’s own logout_uri when deployed', async () => {
     const url = await signOut(

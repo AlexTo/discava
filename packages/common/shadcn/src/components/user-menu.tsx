@@ -18,7 +18,17 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-export const UserMenu = () => {
+export interface UserMenuItem {
+  label: string;
+  to: string;
+}
+
+export interface UserMenuProps {
+  /** Links only this portal has, shown above Notification settings. */
+  items?: UserMenuItem[];
+}
+
+export const UserMenu = ({ items = [] }: UserMenuProps) => {
   const auth = useAuth();
   const { user } = auth;
   const { localOidc } = useRuntimeConfig();
@@ -43,9 +53,11 @@ export const UserMenu = () => {
           Hi, {displayName}!
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild className="cursor-pointer">
-          <Link to="/profile">Public profile</Link>
-        </DropdownMenuItem>
+        {items.map((item) => (
+          <DropdownMenuItem key={item.to} asChild className="cursor-pointer">
+            <Link to={item.to}>{item.label}</Link>
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuItem asChild className="cursor-pointer">
           <Link to="/settings/notifications">Notification settings</Link>
         </DropdownMenuItem>
