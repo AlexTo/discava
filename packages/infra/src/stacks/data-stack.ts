@@ -29,7 +29,7 @@ import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
-import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Policy, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import { Key } from 'aws-cdk-lib/aws-kms';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
@@ -88,6 +88,7 @@ export class DataStack extends Stack {
     this.identity = this.createIdentity(identityConfig);
     this.coreTable = this.createCoreTable(coreTableConfig);
     this.syncUsersToCoreTable();
+    this.grantPageRenderer(studentPortal);
     this.lessonMediaBucket = this.createLessonMediaBucket(lessonMediaConfig);
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
@@ -168,6 +169,23 @@ export class DataStack extends Stack {
   // token generation runs on every sign-in, including an admin-created user's
   // first, and on every token refresh; post-confirmation misses admin-created
   // users, and managed login doesn't run post-authentication.
+  private grantPageRenderer(studentPortal: StudentPortal) {
+    if (!studentPortal.pageRendererRoleArn) {
+      return;
+    }
+    // A mutable import, so the policy is created here, in Data. Granting on
+    // the Websites-owned role would put the table's and AppConfig's ARNs in
+    // Websites, which Data already depends on: a cycle.
+    const role = Role.fromRoleArn(
+      this,
+      'PageRendererRole',
+      studentPortal.pageRendererRoleArn,
+      { mutable: true },
+    );
+    this.coreTable.grantReadData(role);
+    RuntimeConfig.ensure(this).grantReadAppConfig(role);
+  }
+
   private syncUsersToCoreTable() {
     const preTokenGeneration = new EventsPreTokenGeneration(
       this,

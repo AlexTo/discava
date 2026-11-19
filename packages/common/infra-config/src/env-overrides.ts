@@ -89,6 +89,9 @@ const COMPONENT_FIELDS: Record<
     enableKeyRotation: 'boolean',
     domainNames: 'string[]',
     certificateArn: 'string',
+    allowSearchEngineIndexing: 'boolean',
+    siteName: 'string',
+    pageRendererReservedConcurrency: 'number',
   },
   instructorPortal: {
     enableWaf: 'boolean',

@@ -24,6 +24,20 @@ import { Construct, IConstruct } from 'constructs';
 
 const RuntimeConfigKey = '__RuntimeConfig__';
 
+/**
+ * The name of the stage's AppConfig application. Computed from where the
+ * `RuntimeConfig` sits, so a stack that cannot reference the application
+ * itself (the page renderer's, in Websites, which Data depends on) can still
+ * name it for AppConfig's data API, which takes a name or an id.
+ */
+export const runtimeConfigApplicationName = (
+  runtimeConfig: RuntimeConfig,
+): string =>
+  Names.uniqueResourceName(runtimeConfig, {
+    maxLength: 64,
+    separator: '-',
+  });
+
 /** Where RuntimeConfig creates its AppConfig resources. See `placeIn`. */
 export interface RuntimeConfigPlacement {
   /**
@@ -147,10 +161,7 @@ export class RuntimeConfig extends Construct {
 
         const stack = this._placement?.applicationStack ?? node;
         const configStack = this._placement?.configurationStack ?? node;
-        const name = Names.uniqueResourceName(this, {
-          maxLength: 64,
-          separator: '-',
-        });
+        const name = runtimeConfigApplicationName(this);
 
         const app = new CfnApplication(stack, 'RcAppConfigApp', { name });
         const strategy = new CfnDeploymentStrategy(
