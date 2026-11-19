@@ -48,10 +48,13 @@ test('a student signs in to the student portal', async ({ page }) => {
 });
 
 test('an admin signs in to the admin portal', async ({ page }) => {
-  // The admin home page is still a mock-up (#6), so signing in and coming
-  // back is what there is to check.
   await page.goto(PORTALS.admin);
   await signIn(page, testUser('Carol'));
 
   await expect(page).toHaveURL(`${PORTALS.admin}/`);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Admin' }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Categories/ })).toBeVisible();
+  await screenshot(page, 'admin home');
 });
