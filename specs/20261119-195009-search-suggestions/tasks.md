@@ -82,25 +82,25 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: Component tests in `site-search.test.tsx` pass with fake timers. The e2e test "suggestions offer a published course by the start of its title" passes on PR CI, with screenshots.
 
-- [ ] T006 [P] [US2] Tests first, then add `useDebouncedValue<T>(value: T, delayMs: number): [T, () => void]` in `packages/websites/student-portal/src/hooks/use-debounced-value.ts`. It returns the value once it has stayed unchanged for `delayMs`, and a `cancel()` that drops the pending update. `hooks/use-debounced-value.test.ts` (vitest fake timers):
+- [x] T006 [P] [US2] Tests first, then add `useDebouncedValue<T>(value: T, delayMs: number): [T, () => void]` in `packages/websites/student-portal/src/hooks/use-debounced-value.ts`. It returns the value once it has stayed unchanged for `delayMs`, and a `cancel()` that drops the pending update. `hooks/use-debounced-value.test.ts` (vitest fake timers):
   - one update after a burst of changes;
   - no update before the delay;
   - `cancel()` stops a pending update;
   - unmounting clears the timer.
-- [ ] T007 [P] [US1] Tests first, then add `highlightTitle(title: string, typed: string): { text: string; match: boolean }[]` in `packages/websites/student-portal/src/lib/title-highlight.ts` (research R-5). Each word of `title` that starts with one of the typed words (case- and accent-insensitive, using `Intl.Collator` base sensitivity on the word's leading characters) has that leading part marked `match: true`. Joining the parts' text always gives back `title` exactly. `lib/title-highlight.test.ts` covers:
+- [x] T007 [P] [US1] Tests first, then add `highlightTitle(title: string, typed: string): { text: string; match: boolean }[]` in `packages/websites/student-portal/src/lib/title-highlight.ts` (research R-5). Each word of `title` that starts with one of the typed words (case- and accent-insensitive, using `Intl.Collator` base sensitivity on the word's leading characters) has that leading part marked `match: true`. Joining the parts' text always gives back `title` exactly. `lib/title-highlight.test.ts` covers:
   - "pyth" in "Python for Data Analysis";
   - "data py" (two words, either order);
   - "café" against "Cafe";
   - punctuation in the title;
   - no match;
   - empty typed text.
-- [ ] T008 [US1] Tests first, then add `SiteSearchSuggestions` in `packages/websites/student-portal/src/components/site-search-suggestions.tsx`, a presentational list under the box. It takes `items`, `typed`, `loading`, `id` and `onChoose(courseId)`.
+- [x] T008 [US1] Tests first, then add `SiteSearchSuggestions` in `packages/websites/student-portal/src/components/site-search-suggestions.tsx`, a presentational list under the box. It takes `items`, `typed`, `loading`, `id` and `onChoose(courseId)`.
   - Each row is a button-like element with the course thumbnail (`usePublicMediaUrl()(imageKey)`, or a neutral placeholder `div` when absent) and the title rendered from `highlightTitle` with matched parts in `<mark>` (bold, no background).
   - Rows use `onMouseDown={e => e.preventDefault()}`, so choosing one doesn't blur the input first.
   - Text only, no arrow icons.
   - The list is absolutely positioned under the form, full width of the box, `max-w-[calc(100vw-2rem)]`, so it never scrolls horizontally at 375 px.
   - When `loading` is set and there are no items, it shows "Searching…".
-- [ ] T009 [US1] [US2] Tests first, then wire `packages/websites/student-portal/src/components/site-search.tsx`:
+- [x] T009 [US1] [US2] Tests first, then wire `packages/websites/student-portal/src/components/site-search.tsx`:
   - `const SUGGEST_DEBOUNCE_MS = 300`, `const SUGGEST_MIN_LENGTH = 3` and `const SUGGEST_MAX_LENGTH = 200` (the input schema's bounds);
   - the trimmed text is debounced with T006;
   - `useQuery(trpc.course.publicSuggest.queryOptions({ q }, { enabled: open && q.length >= SUGGEST_MIN_LENGTH && q.length <= SUGGEST_MAX_LENGTH, staleTime: 60_000, retry: false, placeholderData: keepPreviousData }))`;
@@ -123,9 +123,9 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - on `/search?query=linear` the dropdown is closed at load;
   - 10 items render 10 rows;
   - 201 characters send no request.
-- [ ] T010 [US1] Make sure the existing student-portal tests that render the top bar still pass. `src/routes/-routes.test.tsx` and `src/routes/search/-search.test.tsx` add a `course.publicSuggest` handler returning `{ items: [] }` only where a test now fails because it's missing, without changing any existing assertion.
-- [ ] T011 [US1] Add `suggestInSiteSearch(page, text)` to `packages/e2e/src/helpers/student-portal.ts`. It fills the search box (found the same way `searchWithSiteSearch` finds it) and waits for the suggestions list (`getByRole('listbox', { name: 'Course suggestions' })`, or for this phase the list's `data-testid="site-search-suggestions"` if T013's ARIA isn't in yet, which T013 then replaces).
-- [ ] T012 [US1] Add the test "suggestions offer a published course by the start of its title" to `packages/e2e/src/scenarios/search.e2e.ts`:
+- [x] T010 [US1] Make sure the existing student-portal tests that render the top bar still pass. `src/routes/-routes.test.tsx` and `src/routes/search/-search.test.tsx` add a `course.publicSuggest` handler returning `{ items: [] }` only where a test now fails because it's missing, without changing any existing assertion.
+- [x] T011 [US1] Add `suggestInSiteSearch(page, text)` to `packages/e2e/src/helpers/student-portal.ts`. It fills the search box (found the same way `searchWithSiteSearch` finds it) and waits for the suggestions list (`getByRole('listbox', { name: 'Course suggestions' })`, or for this phase the list's `data-testid="site-search-suggestions"` if T013's ARIA isn't in yet, which T013 then replaces).
+- [x] T012 [US1] Add the test "suggestions offer a published course by the start of its title" to `packages/e2e/src/scenarios/search.e2e.ts`:
   - publish a uniquely named course (`uniqueName('Suggestible course')`) with `createPublishedCourseViaApi`, and create a draft with a title that shares the prefix;
   - signed out, type the first word of the title plus the first 3 letters of the next, using `expectAfterReloads`, since indexing lags by a few seconds;
   - expect the published course in the list and the draft absent, and take `screenshot(page, 'search-suggestions-open')`;

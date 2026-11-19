@@ -38,6 +38,16 @@ export const searchWithSiteSearch = async (page: Page, query: string) => {
   await page.waitForURL(/\/search\?query=/);
 };
 
+// Types into the top bar's search box and waits for the course suggestions
+// under it, without submitting. Typing three characters or more shows them
+// after a short pause.
+export const suggestInSiteSearch = async (page: Page, text: string) => {
+  await page.getByRole('searchbox', { name: 'Search courses' }).fill(text);
+  const suggestions = page.getByTestId('site-search-suggestions');
+  await expect(suggestions).toBeVisible();
+  return suggestions;
+};
+
 // Enrols from the course page, signing in first when signed out (the way a
 // visitor does, through the "Sign in to enrol" dialog), and starts learning.
 export const enrol = async (page: Page, user?: User) => {
