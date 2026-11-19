@@ -10,8 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Link needs a router context this test doesn't set up; the menu's sign-out is
 // what's under test.
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
+  // Passes the rest on: a menu item's `asChild` hands its role to the link.
+  Link: ({
+    children,
+    to,
+    ...props
+  }: { children: React.ReactNode; to: string } & Record<string, unknown>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
 }));
 
