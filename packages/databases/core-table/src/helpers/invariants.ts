@@ -939,7 +939,7 @@ export const checkCaptionTracksValid = (
       preview.status === 'ready' ? preview.s3Key : preview.previousS3Key;
     const problems =
       tracks.length === 0 ? [] : captionTrackProblems(tracks, manifest);
-    // A preview's captions are automatic only, so its captions being ready
+    // A coursePreview's captions are automatic only, so its captions being ready
     // means the pipeline wrote the played version's track (the transcribe
     // outcome writes the track and the status in one patch).
     const nonce = preview.s3Key?.split('/').at(-2);
