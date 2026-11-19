@@ -35,8 +35,8 @@ test('a new instructor finds the Earnings page with nothing earned', async ({
 
   await test.step('a custom range can be chosen', async () => {
     await page.getByRole('button', { name: 'Custom range' }).click();
-    await expect(page.getByLabel('From')).toBeVisible();
-    await expect(page.getByLabel('To')).toBeVisible();
+    await expect(page.getByLabel('From', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('To', { exact: true })).toBeVisible();
     await expect(page.getByText('No sales in this period')).toBeVisible();
     await screenshot(page, 'custom range picker');
   });
