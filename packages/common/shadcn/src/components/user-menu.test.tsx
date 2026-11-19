@@ -10,8 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Link needs a router context this test doesn't set up; the menu's sign-out is
 // what's under test.
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
-    <a href={to}>{children}</a>
+  // Passes the rest on: a menu item's `asChild` hands its role to the link.
+  Link: ({
+    children,
+    to,
+    ...props
+  }: { children: React.ReactNode; to: string } & Record<string, unknown>) => (
+    <a href={to} {...props}>
+      {children}
+    </a>
   ),
 }));
 
@@ -66,6 +73,40 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('UserMenu items', () => {
+  const openMenu = async (items?: { label: string; to: string }[]) => {
+    const auth = {
+      user: { profile: { sub: 'instructor-1', given_name: 'Alice' } },
+    } as unknown as AuthContextProps;
+    const user = userEvent.setup();
+    render(
+      <RuntimeConfigContext.Provider value={{}}>
+        <AuthContext.Provider value={auth}>
+          <UserMenu items={items} />
+        </AuthContext.Provider>
+      </RuntimeConfigContext.Provider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open user menu' }));
+    await screen.findByRole('menuitem', { name: 'Sign out' });
+  };
+
+  it('shows the links a portal passes in', async () => {
+    await openMenu([{ label: 'Public profile', to: '/profile' }]);
+
+    expect(
+      screen.getByRole('menuitem', { name: 'Public profile' }),
+    ).toHaveAttribute('href', '/profile');
+  });
+
+  it('has no portal-only links by default', async () => {
+    await openMenu();
+
+    expect(
+      screen.queryByRole('menuitem', { name: 'Public profile' }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe('UserMenu sign-out', () => {
