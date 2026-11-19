@@ -38,11 +38,11 @@ instr -> media
 instr -> core
 instr -> websites
 admin -> data
+admin -> core
 admin -> websites
 rc -> core
 rc -> instr
 rc -> admin
-rc -> router
 ```
 
 They deploy in this order:
@@ -54,7 +54,7 @@ Websites → Data → MediaPipeline → CoreApi → StreamRouter → InstructorA
 | Stack | Contains | Why it is separate |
 | --- | --- | --- |
 | **Websites** | The three portals: an S3 bucket and CloudFront distribution each | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
-| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the AppConfig application | Everything stateful. Changes rarely, and every other backend stack depends on it |
+| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the unsubscribe-link and Stripe secrets, the AppConfig application | Everything stateful. Changes rarely, and every other backend stack depends on it |
 | **MediaPipeline** | MediaConvert pipeline, the functions reacting to finished transcodes and transcriptions, cleanup schedules, failure queues | Video processing, used by both core-api and instructor-api |
 | **CoreApi** | core-api's API Gateway and functions, the search re-index function, the email unsubscribe route | The API every user calls |
 | **StreamRouter** | The table stream's router function, one queue and failure queue per feature, the feature handlers | Background reactions to data changes, kept out of CoreApi's resource budget |

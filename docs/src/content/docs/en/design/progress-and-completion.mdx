@@ -29,14 +29,15 @@ core-api writes `itemCompletion` records and quiz attempts. It never writes `pro
 |---|---|
 | Text | The student presses **Mark as done** |
 | Video | The student presses **Mark as done** |
+| File | The student presses **Mark as done** |
 | Quiz | Passed, or all attempts used |
 | Upload assignment | The student submits a file |
 
-Text and video never complete on their own: there is no scroll or watch-time tracking. The student decides when they're done with an item, as on most learning platforms.
+Text, video and file items never complete on their own: there is no scroll, watch-time or download tracking. The student decides when they're done with an item, as on most learning platforms.
 
 ### Recording a completion
 
-- **Text and video:** **Mark as done** in the lesson player calls core-api's `contentItem.complete`; core-api decides whether it counts. One transaction checks that the course is published, that the item, its lesson and its module are visible and not archived, and that the student is enrolled (not `dropped`). It then creates the `itemCompletion` only if there isn't one.
+- **Text, video and file:** **Mark as done** in the lesson player calls core-api's `contentItem.complete`; core-api decides whether it counts. One transaction checks that the course is published, that the item, its lesson and its module are visible and not archived, and that the student is enrolled (not `dropped`). It then creates the `itemCompletion` only if there isn't one.
   - The completion is the student's first record of the item, so the same transaction increments the item's `studentActivityCount`. Each student is counted once (see <Link path="design/live-course-editing">Live course editing</Link>).
   - Completing again returns the existing completion. An archived course is read-only, so nothing in it can be completed.
 - **Quiz:** completes itself. The attempt that passes, or that uses the last attempt, records the completion in the same transaction as the attempt (see <Link path="design/quizzes">Quizzes</Link>). It doesn't count the student again: their first attempt did.
@@ -62,7 +63,7 @@ A Lambda in `packages/events` is the single writer of lesson `progress` and of t
 
 ### Trigger
 
-DynamoDB Streams on the core table (new and old images), with event-source filters on the entity name ElectroDB stores in each record (`__edb_e__`), so the Lambda only runs for:
+The core table's stream (new and old images), through the <Link path="design/stream-event-router">stream event router</Link>: the `progress-recalculation` feature's filters (`PROGRESS_STREAM_FILTERS`) match on the entity name ElectroDB stores in each record (`__edb_e__`), so the Lambda only runs for:
 
 | Stream event | Recalculates |
 |---|---|
@@ -88,13 +89,13 @@ Students are recalculated a few at a time, and each course's curriculum is loade
 
 ### Failures
 
-A batch that fails is retried. A batch still failing after its retries is split in half until the failing records are isolated, and those records' stream positions go to a dead-letter queue instead of blocking the stream. Since every run recomputes from scratch, the next change for the same students also repairs anything a failed batch missed.
+A batch that fails returns to the feature's queue and is retried. A message still failing after `maxReceiveCount` receives moves to the feature's failure queue instead of blocking later changes (see <Link path="design/stream-event-router">Stream event router</Link>). Since every run recomputes from scratch, the next change for the same students also repairs anything a failed batch missed.
 
 Enrolments share the course's partition key, so listing the students to recalculate is one query. A curriculum change costs one query per enrolled student.
 
 ### Idempotency
 
-Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. The event source waits up to five seconds to gather a batch, and records in a batch are grouped so each student in each course is recalculated once per batch, however many records name them. Two runs for the same student at the same moment (a completion and a curriculum change land on different stream shards) both recompute from what they read. Neither can undo the other's completion, because completing writes are conditioned on not being completed already.
+Every run recomputes from scratch, so a duplicate stream record or a burst of instructor edits just produces the same result again. The feature's queue waits up to five seconds to gather a batch, and records in a batch are grouped so each student in each course is recalculated once per batch, however many records name them. Two runs for the same student at the same moment (a completion and a curriculum change land on different stream shards) both recompute from what they read. Neither can undo the other's completion, because completing writes are conditioned on not being completed already.
 
 ### Consequences
 

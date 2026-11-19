@@ -379,9 +379,9 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
   });
 
   it("allows the stage's queues and its functions' event source mappings", () => {
-    // The progress recalculation reads the core table's stream through an
-    // event source mapping, whose ARN is a UUID, so it's scoped by the
-    // function it invokes instead.
+    // The stream router reads the core table's stream, and each feature
+    // handler its queue, through an event source mapping, whose ARN is a
+    // UUID, so it's scoped by the function it invokes instead.
     const { status, executionStatements } = runSetup({
       kind: 'response',
       useDefault: true,

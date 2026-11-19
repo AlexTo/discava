@@ -130,8 +130,8 @@ const ensureTable = async (
           new DescribeTableCommand({ TableName: tblName }),
           { abortSignal: timeoutSignal() },
         );
-        // A table from before local dev had a stream (#137): add it, so the
-        // event runner sees changes without the table being recreated.
+        // A table without a stream gets one, so the event runner sees changes
+        // without the table being recreated.
         if (!Table?.StreamSpecification?.StreamEnabled) {
           await tblClient.send(
             new UpdateTableCommand({

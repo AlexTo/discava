@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect } from 'react';
 
 // Lets a route override its own breadcrumb label once it has loaded data a
 // path segment can't express on its own (e.g. a course id -> its title).
-// Keyed by pathname so AppLayout can look an override up per-crumb.
+// Keyed by pathname so PortalShell can look an override up per-crumb.
 export const BreadcrumbOverrideContext = createContext<{
   setOverride: (pathname: string, label: string | undefined) => void;
 } | null>(null);

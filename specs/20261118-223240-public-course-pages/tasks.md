@@ -295,21 +295,21 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: Fetching a published course or profile without JavaScript returns its content, tags and structured data. Unknown, draft and archived addresses return 404 with `noindex`. Outside production, everything carries `noindex`.
 
-- [ ] T029 Tests first, then add to `packages/common/infra-config/src/stages.types.ts`, `stages.config.ts` and `env-overrides.ts` the `studentPortal` settings:
+- [x] T029 Tests first, then add to `packages/common/infra-config/src/stages.types.ts`, `stages.config.ts` and `env-overrides.ts` the `studentPortal` settings:
   - `allowSearchEngineIndexing`: default `false`; `true` only under `discava-production`;
   - `siteName`: default `"Discava"`;
   - `pageRendererReservedConcurrency`: default `20`, and `5` under `discava-development`.
 
   Each gets an env override `<STAGE>_INFRA_STUDENT_PORTAL_<FIELD>`. Tests are in `env-overrides.test.ts`.
-- [ ] T030 Generate the handler with `pnpm nx g @aws/nx-plugin:ts#lambda-function --no-interactive --project=@discava/core-api --name=page-renderer --event=LambdaFunctionUrlSchema --infra=none`. Read `generator-guide` first and keep whatever bundle target it adds. Record in the PR that infra is hand-written (plan Complexity Tracking).
-- [ ] T031 Tests first, then add `packages/apis/core-api/src/page-renderer/html.ts` with:
+- [x] T030 Generate the handler with `pnpm nx g @aws/nx-plugin:ts#lambda-function --no-interactive --project=@discava/core-api --name=page-renderer --event=LambdaFunctionUrlSchema --infra=none`. Read `generator-guide` first and keep whatever bundle target it adds. Record in the PR that infra is hand-written (plan Complexity Tracking).
+- [x] T031 Tests first, then add `packages/apis/core-api/src/page-renderer/html.ts` with:
   - `escapeHtml`;
   - `jsonForScript`, which writes `<`, `>` and `&` as `<`, `>` and `&`;
   - `metaDescription(text)`, which cuts at 155 characters on a word boundary;
   - `injectIntoTemplate(template, { head, root, pageData })`, which inserts before `</head>`, replaces `<div id="root"></div>`, and throws when either marker is missing.
 
   Tests feed `</script><script>alert(1)</script>`, quotes and `&` through every helper. Add a test that reads `packages/websites/student-portal/index.html` and asserts both markers exist.
-- [ ] T032 Tests first, then add `page-renderer/render-course.ts` and `render-profile.ts`, which build the head and root per [contracts/page-renderer.md](./contracts/page-renderer.md):
+- [x] T032 Tests first, then add `page-renderer/render-course.ts` and `render-profile.ts`, which build the head and root per [contracts/page-renderer.md](./contracts/page-renderer.md):
   - the title, description, canonical, `og:*` and `twitter:*` tags;
   - `robots noindex` when search engine indexing is off;
   - JSON-LD `Course` (with `aggregateRating` only when `ratingCount >= 1`) or `ProfilePage`;
@@ -317,8 +317,8 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - the page data keyed by tRPC path.
 
   Snapshot and assertion tests cover a full course, a bare course, a profile, and a hostile string in every field.
-- [ ] T033 Tests first, then add `packages/apis/core-api/src/helpers/sitemap.ts` with `sitemapEntries(coreTable)`. It reads published courses (`byStatus`, all pages), runs `courseInstructor` queries in parallel with at most 10 in flight, batch-gets profiles, and reads active categories (reuse the category list procedure's query). It returns unique paths with `lastmod`. Also add `page-renderer/robots.ts`, which builds `robots.txt` exactly as the contract gives for search engine indexing on and off. Tests cover a draft course left out, an instructor of two courses listed once, an archived category left out, and both robots variants.
-- [ ] T034 Tests first, then implement `page-renderer/handler.ts`:
+- [x] T033 Tests first, then add `packages/apis/core-api/src/helpers/sitemap.ts` with `sitemapEntries(coreTable)`. It reads published courses (`byStatus`, all pages), runs `courseInstructor` queries in parallel with at most 10 in flight, batch-gets profiles, and reads active categories (reuse the category list procedure's query). It returns unique paths with `lastmod`. Also add `page-renderer/robots.ts`, which builds `robots.txt` exactly as the contract gives for search engine indexing on and off. Tests cover a draft course left out, an instructor of two courses listed once, an archived category left out, and both robots variants.
+- [x] T034 Tests first, then implement `page-renderer/handler.ts`:
   - **Routing**: route per the contract's table; method other than GET or HEAD → 405.
   - **Procedure calls**: call procedures through `appRouter.createCaller` with an anonymous context built the way `local-server.ts` builds one without a token.
   - **Template**: fetch `index.html` from the website bucket (env `WEBSITE_BUCKET`), revalidated on every request with `If-None-Match` against the cached `ETag` (`304` reuses the body), per the contract's template section. No fixed-time cache.
@@ -337,13 +337,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a changed `ETag` between two requests on one warm handler renders the new template; a `304` reuses the cached body; a failed template read gives `503`, not the cached body;
   - `X-Robots-Tag` follows `ALLOW_SEARCH_ENGINE_INDEXING`;
   - no response reads cookies or `Authorization`.
-- [ ] T035 Tests first, then change `packages/common/constructs/src/core/static-website.ts` per [contracts/infra.md](./contracts/infra.md):
+- [x] T035 Tests first, then change `packages/common/constructs/src/core/static-website.ts` per [contracts/infra.md](./contracts/infra.md):
   - remove the 404/403 `errorResponses`;
   - add the viewer-request CloudFront Function from new `core/spa-rewrite.js` (JS 2.0: a URI whose last segment has no `.` becomes `/index.html`) to the default behavior;
   - add the optional `extraResponseHeaders` prop to the existing `ResponseHeadersPolicy`.
 
   A unit test runs `spa-rewrite.js` against `/`, `/learn/x`, `/learn/x/lesson/y`, `/assets/a.js`, `/runtime-config.json` and `/foo.bar/baz`. Update the construct snapshot on purpose, and name in the PR the behavior change: unknown asset paths now 404 instead of returning `index.html`.
-- [ ] T036 Tests first, then extend `packages/common/constructs/src/app/static-websites/student-portal.ts` with optional `pageRenderer` props, and add a generator-owned-style wrapper in `src/app/lambda-functions/` for the `page-renderer` bundle. The construct sets up:
+- [x] T036 Tests first, then extend `packages/common/constructs/src/app/static-websites/student-portal.ts` with optional `pageRenderer` props, and add a generator-owned-style wrapper in `src/app/lambda-functions/` for the `page-renderer` bundle. The construct sets up:
   - **Function**: Node 22, 512 MB, 10 s, tracing as the APIs do, reserved concurrency from props; env `RUNTIME_CONFIG_APP_ID` (the app *name*), `WEBSITE_BUCKET`, `ALLOW_SEARCH_ENGINE_INDEXING`, `SITE_NAME`, `ALLOWED_HOSTS`.
   - **Function URL and origin**: `AuthType.AWS_IAM` with `FunctionUrlOrigin.withOriginAccessControl`.
   - **Behaviors**: `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. Each allows GET and HEAD, uses a cache policy keyed on path only that honours origin TTLs up to 300 s, and an origin request policy forwarding `x-discava-host`. Each has a viewer-request function (new `core/forward-host.js`) setting `x-discava-host` from `Host`, and uses the distribution's response headers policy.
@@ -351,13 +351,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - **Grant hook**: `pageRendererRoleArn` (the role's ARN, not an `IGrantable`; see T037).
 
   Export from `core/runtime-config.ts` the function that names the AppConfig application, and use it in both places. Construct tests use assertions, not only snapshots. Run `checkov` through `build`, and add only justified `suppressRules`.
-- [ ] T037 Tests first, then wire it into `packages/infra/src/stacks/websites-stack.ts`:
+- [x] T037 Tests first, then wire it into `packages/infra/src/stacks/websites-stack.ts`:
   - pass `pageRenderer` props from stage config, with `allowedHosts` set to the configured student portal domains;
   - when search engine indexing is off, pass `extraResponseHeaders: { 'X-Robots-Tag': 'noindex' }` for the student portal.
 
   In `packages/infra/src/stacks/data-stack.ts`, import the renderer's role with `iam.Role.fromRoleArn(this, 'PageRendererRole', websites.studentPortal.pageRendererRoleArn, { mutable: true })`, then call `coreTable.grantReadData(role)` and `runtimeConfig.grantReadAppConfig(role)` on the import, so the policy is created in Data (granting on the Websites role itself makes Websites reference Data, a cycle). Infra tests: production has no `X-Robots-Tag` header and `ALLOW_SEARCH_ENGINE_INDEXING=true`; development has both noindex and `ALLOW_SEARCH_ENGINE_INDEXING=false`; the Data template has an `AWS::IAM::Policy` attached to the renderer role with the table, KMS key (production, where the table is encrypted) and AppConfig statements; the Websites template has no `Fn::ImportValue`. `pnpm nx run @discava/infra:synth` passes for both stages.
-- [ ] T038 [P] Tests first, then add `packages/websites/student-portal/src/lib/page-data.ts` with `seedFromPageData(queryClient, trpc)`. It reads `#discava-page-data` once, calls `setQueryData` for `course.publicView`, `review.summary`, `review.list` and `instructorProfile.publicView` with the exact keys the components use, and removes the element. Call it in `main.tsx` before the first render. Add `public/og-default.png` (1200×630, the Discava wordmark on a plain background). Component tests: a seeded course page renders with no spinner and no network call; a malformed element is ignored.
-- [ ] T039 Extend `public-landing-page.e2e.ts` to fetch `LOCAL_PAGE_RENDERER_URL` with Playwright's `request` (no JavaScript):
+- [x] T038 [P] Tests first, then add `packages/websites/student-portal/src/lib/page-data.ts` with `seedFromPageData(queryClient, trpc)`. It reads `#discava-page-data` once, calls `setQueryData` for `course.publicView`, `review.summary`, `review.list` and `instructorProfile.publicView` with the exact keys the components use, and removes the element. Call it in `main.tsx` before the first render. Add `public/og-default.png` (1200×630, the Discava wordmark on a plain background). Component tests: a seeded course page renders with no spinner and no network call; a malformed element is ignored.
+- [x] T039 Extend `public-landing-page.e2e.ts` to fetch `LOCAL_PAGE_RENDERER_URL` with Playwright's `request` (no JavaScript):
   - the published course's HTML contains its title, an outcome, a lesson title, the instructor's name, `og:title`, `application/ld+json` and `noindex` (local is closed to search engines);
   - the profile's HTML contains the display name;
   - a draft course gives 404;
@@ -371,8 +371,8 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **PR title**: `docs(public-pages): document landing pages and profiles; final checks (closes #287)`
 
-- [ ] T041 [P] Add `docs/src/content/docs/en/design/public-pages.mdx`, covering the renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview's exposure rules. Add a short "Your landing page and profile" section to the instructor guide. Link both from the design index. Note "translations pending" in the PR (constitution VIII).
-- [ ] T042 [P] Add to CLAUDE.md's Architecture section one line on the page renderer (core-api's second handler, served by the student portal distribution, local port 2026), and add port 2026 to CONTRIBUTING.md's local dev ports if they are listed there.
+- [x] T041 [P] Add `docs/src/content/docs/en/design/public-pages.mdx`, covering the renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview's exposure rules. Add a short "Your landing page and profile" section to the instructor guide. Link both from the design index. Note "translations pending" in the PR (constitution VIII).
+- [x] T042 [P] Add to CLAUDE.md's Architecture section one line on the page renderer (core-api's second handler, served by the student portal distribution, local port 2026), and add port 2026 to CONTRIBUTING.md's local dev ports if they are listed there.
 - [ ] T043 (human) Run [quickstart.md](./quickstart.md) "Local, by hand" steps 1 to 6, saving screenshots to `tmp/screenshots/pr-<number>/`. Time steps 1 and 2 together for someone who has not seen the screens before, and check SC-005 (under 5 minutes).
 - [ ] T044 (human) Run quickstart "Deployed stage" steps 3, 4 and 6: link previews in two apps (SC-006), the Rich Results Test, and no visible flash on a hard reload (FR-012).
 - [ ] T045 Run `graphify update .`, then `pnpm build`, `pnpm lint` and `pnpm nx affected --target test`. Tick this spec's checklist items, and close #287 from this PR.

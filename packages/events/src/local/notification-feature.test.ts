@@ -27,10 +27,9 @@ vi.mock('../notifications/notification-delivery.js', async (importActual) => ({
 import { notificationDelivery } from '../notifications/notification-delivery.js';
 
 // The local runner builds its router and feature runners from STREAM_FEATURES
-// (event-runner.ts), and the notification-delivery registration is added with
-// the deployed wiring (T020). This runs the same pieces over the in-process
-// queue with an equivalent registration, to see a notification INSERT reach
-// the delivery handler through its queue.
+// (event-runner.ts). This runs the same pieces over the in-process queue with
+// an equivalent registration, to see a notification INSERT reach the delivery
+// handler through its queue.
 describe('the notification-delivery feature locally', () => {
   const feature: StreamFeature = {
     name: 'notification-delivery',

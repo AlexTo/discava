@@ -22,3 +22,8 @@ export const SERVICES = {
   // not just for the container to answer (#267).
   searchIndex: 'http://localhost:9200/courses',
 } as const;
+
+// The page renderer's local server (LOCAL_PAGE_RENDERER_URL in
+// common-server-utils/local-dev): the landing pages as crawlers get them.
+// Not in SERVICES: it answers 404 at `/`, which global-setup would read as down.
+export const PAGE_RENDERER = 'http://localhost:2026';

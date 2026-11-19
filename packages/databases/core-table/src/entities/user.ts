@@ -7,7 +7,7 @@ import { getDynamoDBClient, resolveTableName } from '../client.js';
 
 // Keyed by Cognito `sub`. Role (admin/instructor/student) is not stored here;
 // it lives in Cognito groups and flows into ctx.user.groups (see
-// packages/apis/core-api/src/middleware/auth.ts).
+// packages/common/server-utils/src/trpc-middleware.ts).
 export const createUserEntity = async () =>
   new Entity(
     {

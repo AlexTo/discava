@@ -23,8 +23,9 @@ import { RatingSummary } from './rating-summary';
 
 /**
  * A course in a grid of courses: its thumbnail, category, duration, title,
- * description, level and language (those it has), linking to its page. Shared by the catalogue on the
- * home page and the search results, so a course looks the same in both.
+ * description, level and language (those it has), linking to its page.
+ * Shared by the catalogue on the home page and the search results, so a
+ * course looks the same in both.
  */
 export function CourseCard({ course }: { course: DisplayCourse }) {
   return (

@@ -11,8 +11,7 @@ import {
 } from '@discava/core-table';
 
 // Setting up the catalogue through core-table's own write helpers, the ones
-// the APIs call, until the instructor and admin procedures exist to do it
-// through the portals.
+// the APIs call.
 
 process.env.LOCAL_DEV = 'true';
 

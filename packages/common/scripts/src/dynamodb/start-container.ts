@@ -9,8 +9,6 @@ const { containerEngine, containerName, image, port } = JSON.parse(
   readFileSync('config.json', 'utf-8'),
 ).localDev;
 
-// Multiple dynamo table packages run dev in parallel sharing the same
-// container (see runLocalContainer).
 runLocalContainer({
   containerEngine,
   containerName,

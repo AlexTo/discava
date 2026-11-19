@@ -20,8 +20,8 @@ export const sqsStreamRecords = (
 /**
  * A middy middleware for the feature handlers: when the event is the SQS
  * batch a feature's queue delivers, it becomes the `{ Records }` the handler
- * parses with `DynamoDBStreamSchema`, so the handler's logic is the same
- * behind the queue as it was behind the stream. An event already in the
+ * parses with `DynamoDBStreamSchema`, so the handler's logic doesn't depend
+ * on the queue. An event already in the
  * stream shape (the local runner's, or a test's) passes through.
  */
 export const sqsToStreamRecords = () => ({

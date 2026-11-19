@@ -25,10 +25,8 @@ const manifestPath = fileURLToPath(
   ),
 );
 
-// A cold JVM start (security, ML and performance-analyzer plugins all
-// loading) can take well over 30s under a contended CI runner (#267), so
-// this allows a couple of minutes rather than giving up right as it's
-// still coming up.
+// A cold JVM start can take well over 30s on a contended CI runner (#267), so
+// this allows three minutes.
 const HEALTH_CHECK_ATTEMPTS = 90;
 const HEALTH_CHECK_RETRY_DELAY_MS = 2_000;
 
