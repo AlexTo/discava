@@ -1,0 +1,115 @@
+---
+title: First deploy
+description: Run the Deploy workflow, find your portals, and create the first users and categories.
+sidebar:
+  order: 3
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+With <Link path="deploy/setup">setup</Link> done, deploying is one workflow run.
+
+## 1. Run the Deploy workflow
+
+From the **Actions** tab of your fork, choose **Deploy → Run workflow**, enter the stage name and run it. Or from your terminal:
+
+```sh
+gh workflow run deploy.yml -f stage=discava-development
+gh run watch
+```
+
+The first deploy creates every resource, including several CloudFront distributions and an OpenSearch Serverless collection, so it takes much longer than later ones.
+
+### What the workflow does
+
+<Steps>
+
+1. **Checks the stage exists** in `stages.config.ts`, so a typo fails before touching AWS.
+
+2. **Forwards configuration overrides.** Every variable on the stage's GitHub environment whose name starts with the stage's prefix (`DISCAVA_DEVELOPMENT_` for `discava-development`) is passed to the build. This is how custom domains reach it.
+
+3. **Scans with Trivy.** The deploy stops on a known critical vulnerability that has a fix, or a committed secret.
+
+4. **Signs in to AWS** as the deploy role, using a short-lived OIDC token.
+
+5. **Synthesizes** the CloudFormation templates with CDK, with the stage's permissions boundary applied to every role.
+
+6. **Deploys** each stack in dependency order. CloudFormation creates the resources as the execution role.
+
+</Steps>
+
+## 2. Find your portals
+
+Each portal is a CloudFront distribution. Their addresses are outputs of the `Websites` stack:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name discava-development-Websites \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `DistributionDomainName`)].[OutputKey,OutputValue]' \
+  --output table
+```
+
+You get one `*.cloudfront.net` address each for the student, instructor and admin portal. Open the student portal: you should see the catalogue, empty for now.
+
+## 3. Create your first users
+
+Users live in a Cognito user pool, in three groups that decide which portal and API a user may use:
+
+| Group | Can use |
+| --- | --- |
+| `student` | Student portal |
+| `instructor` | Instructor portal |
+| `admin` | Admin portal |
+
+`discava-development` has **self sign-up turned off**, so a stranger can't make an account on your test stage. You add users yourself:
+
+<Steps>
+
+1. Open the **Cognito** console in the stage's region and choose the stage's user pool. Its id is an output of the `discava-development-Data` stack.
+
+2. **Create user**, with an email address and a temporary password.
+
+3. Open the user, choose **Add user to group**, and add each group they need. Add yourself to all three to see everything.
+
+4. Sign in on a portal. Cognito asks you to set a permanent password.
+
+</Steps>
+
+On `discava-production`, self sign-up is on: people who sign up are added to the `student` and `instructor` groups automatically. Admins are always added by hand.
+
+## 4. Add categories
+
+Courses are organised by categories that an admin manages. Either sign in to the admin portal and create them, or write the starting set (Science, Technology, Mathematics, Communication, Business) from your machine:
+
+```sh
+APP_ID=$(aws cloudformation describe-stacks \
+  --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `RuntimeConfigApplicationId`)].OutputValue' \
+  --output text)
+
+RUNTIME_CONFIG_APP_ID=$APP_ID pnpm nx run @discava/common-scripts:seed-categories
+```
+
+It uses your AWS credentials and region, and skips categories that already exist.
+
+## 5. Try it end to end
+
+<Steps>
+
+1. In the **instructor portal**, create a course, add a lesson with a video and publish it. The video is transcoded by MediaConvert and is playable a few minutes after uploading.
+
+2. In the **student portal**, find the course, enrol and play the lesson.
+
+3. In the **admin portal**, check the category list.
+
+</Steps>
+
+## Later deploys
+
+- **Automatically:** if you set `AUTO_DEPLOY_STAGE`, every push to `main` that passes CI deploys that stage. A deploy is skipped when a newer commit has reached `main` in the meantime.
+- **Manually:** run the Deploy workflow again. It deploys the commit you run it from, which is also how you roll back: run it from an older commit.
+
+Deploys to one stage never overlap. A second run waits for the first.
+
+Next: <Link path="deploy/configuration">configure your stage</Link> with custom domains and email.

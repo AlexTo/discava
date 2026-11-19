@@ -1,0 +1,69 @@
+---
+title: Deploy from your machine
+description: Deploy, update and destroy a stage with your own AWS credentials, without GitHub Actions.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+GitHub Actions is the recommended way to deploy. Deploying from your machine is useful for a personal test stage or when debugging a deployment.
+
+## Before you start
+
+- AWS credentials in your shell for the target account (`aws sts get-caller-identity` works)
+- A region, in `AWS_REGION` or your AWS profile
+- CDK bootstrapped in that region, once per account and region:
+
+  ```sh
+  pnpm exec cdk bootstrap aws://<account-id>/<region>
+  ```
+
+  A stage with WAF on its portals or media also needs `us-east-1` bootstrapped.
+
+## Deploy
+
+```sh
+pnpm nx deploy @discava/infra "discava-development/*"
+```
+
+The pattern `<stage>/*` selects every stack in the stage. This builds the portals and Lambda functions, synthesizes the templates and deploys them.
+
+To use a named AWS profile for a stage every time, set its `credentials` in `stages.config.ts`:
+
+```ts
+'discava-development': {
+  credentials: { type: 'profile', profile: 'my-profile' },
+  region: 'eu-west-1',
+  infra: { /* … */ },
+},
+```
+
+## Differences from a GitHub deploy
+
+| | GitHub Actions | Your machine |
+| --- | --- | --- |
+| Credentials | The stage's scoped deploy and execution roles | Yours, through CDK's bootstrap roles |
+| Permissions boundary | Applied to every role | Not applied |
+| Configuration overrides | Read from the GitHub environment's variables | Read from your shell: `export DISCAVA_DEVELOPMENT_INFRA_…` before deploying |
+| Vulnerability scan | Runs first | Run `pnpm trivy` yourself |
+
+Because overrides come from your shell, a local deploy of a stage that uses custom domains on GitHub **removes them** unless you export the same variables. Pick one way to deploy each stage and stay with it.
+
+## After changing search mappings
+
+Published courses are indexed as they change. To rebuild the search index for a whole stage:
+
+```sh
+pnpm nx run @discava/common-scripts:reindex-search --stage discava-development
+```
+
+## Destroy
+
+```sh
+pnpm nx destroy @discava/infra "discava-development/*"
+```
+
+`discava-development` deletes everything, data included. `discava-production` keeps its stateful resources (the user pool, table, media buckets and search collection) when its stacks are deleted, and has deletion protection on: removing those is a deliberate, manual step.
+
+The roles and policies the <Link path="deploy/setup">setup script</Link> created aren't part of any stack. Delete them in the IAM console if you no longer need them.

@@ -5,6 +5,7 @@
 import { LANGUAGES, LEVELS } from '@discava/core-table';
 import { z } from 'zod';
 import { ContentItemSchema } from './content-item.js';
+import { CoursePreviewSummarySchema } from './course-preview.js';
 import { LessonSchema } from './lesson.js';
 import { ModuleSchema } from './module.js';
 
@@ -144,6 +145,8 @@ export const ViewCourseOutputSchema = CourseSchema.extend({
   category: z
     .object({ id: z.string(), name: z.string(), archived: z.boolean() })
     .optional(),
+  // Absent when the course has no preview video.
+  preview: CoursePreviewSummarySchema.optional(),
   modules: z.array(
     ModuleSchema.extend({
       lessons: z.array(

@@ -1,33 +1,46 @@
 ---
-title: docs
-description: Documentation for docs.
+title: Discava
+description: Documentation for Discava, the serverless, AWS-native Learning Management System.
 template: splash
 hero:
-  title: docs
-  tagline: Project documentation built with Astro and Starlight.
-  actions:
-    - text: Get started
-      link: /en/guides/getting-started
-      icon: right-arrow
+  title: Discava
+  tagline: The serverless Learning Management System that runs in your own AWS account.
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
 import { ContributorList } from 'astro-contributors';
+import Link from '@components/link.astro';
+
+## Pick your path
 
 <CardGrid>
-  <Card title="Guides" icon="open-book">
-    Reference documentation for docs.
+  <Card title="I want to try it" icon="laptop">
+    Run the whole system on your machine with Docker. No AWS account needed.
+
+    <Link path="guides/getting-started">Run Discava locally</Link>
   </Card>
-  <Card title="Blog" icon="pencil">
-    News and updates from the team.
+  <Card title="I want to deploy it" icon="rocket">
+    Fork the repository, connect it to your AWS account and let GitHub Actions deploy it.
+
+    <Link path="deploy">Deployment guide</Link>
   </Card>
-  <Card title="Snippets" icon="seti:config">
-    Reusable content fragments used across the docs.
+  <Card title="I want to understand it" icon="puzzle">
+    The components, how they are deployed on AWS and how a request travels through them.
+
+    <Link path="architecture">Architecture</Link>
   </Card>
-  <Card title="Localised" icon="translate">
-    Localisation is configured out of the box — add target locales in `astro.config.mjs`.
+  <Card title="I want to change it" icon="pencil">
+    How each feature works: data model, rules and the code that keeps them.
+
+    <Link path="design">Design</Link>
   </Card>
 </CardGrid>
+
+## What Discava is
+
+Discava is a free, open source learning platform. Instructors build courses from video, text, quizzes and assignments. Students enrol, learn and track their progress. Admins manage the catalogue and moderate reviews.
+
+It is opinionated by design: one cloud provider (AWS), one way to deploy (CDK), and every part is serverless, so an idle installation costs close to nothing.
 
 ## Thank you to our amazing contributors!
 

@@ -7,14 +7,6 @@
 // Library unmounts what each test rendered by itself, since `globals` is on.
 import '@testing-library/jest-dom/vitest';
 
-// Radix popovers and selects need these, which jsdom doesn't implement.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-globalThis.ResizeObserver ??=
-  ResizeObserverStub as unknown as typeof ResizeObserver;
-Element.prototype.hasPointerCapture ??= () => false;
-Element.prototype.releasePointerCapture ??= () => {};
-Element.prototype.scrollIntoView ??= () => {};
+import { installJsdomStubs } from '@discava/common-web-utils/testing';
+
+installJsdomStubs();

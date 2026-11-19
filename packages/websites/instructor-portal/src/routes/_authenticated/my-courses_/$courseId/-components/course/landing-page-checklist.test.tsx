@@ -16,19 +16,17 @@ const renderChecklist = (
     <LandingPageChecklist
       hasOutcomes={false}
       hasRequirements={false}
+      hasPreview={false}
       hasImage={false}
       {...props}
     />,
   );
 
 describe('LandingPageChecklist', () => {
-  it('shows five lines, with Coming soon for preview and profile', () => {
+  it('shows five lines, with Coming soon for the profile', () => {
     renderChecklist();
 
     expect(screen.getAllByRole('listitem')).toHaveLength(5);
-    expect(
-      within(line('Preview video')).getByText('Coming soon'),
-    ).toBeVisible();
     expect(
       within(line('Your profile (headline and photo)')).getByText(
         'Coming soon',
@@ -39,6 +37,7 @@ describe('LandingPageChecklist', () => {
   it.each([
     ['Learning outcomes', { hasOutcomes: true }],
     ['Requirements', { hasRequirements: true }],
+    ['Preview video', { hasPreview: true }],
     ['Course image', { hasImage: true }],
   ])('%s is done when present', (label, props) => {
     renderChecklist(props);
@@ -50,6 +49,7 @@ describe('LandingPageChecklist', () => {
   it.each([
     ['Learning outcomes', '#landing-page-heading'],
     ['Requirements', '#landing-page-heading'],
+    ['Preview video', '#landing-page-heading'],
     ['Course image', '#course-image'],
   ])('%s links to its fix when missing', (label, href) => {
     renderChecklist();
@@ -69,6 +69,7 @@ describe('LandingPageChecklist', () => {
         publicPageUrl="http://student.test/learn/c1"
         hasOutcomes={false}
         hasRequirements={false}
+        hasPreview={false}
         hasImage={false}
       />,
     );

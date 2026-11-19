@@ -29,6 +29,14 @@ const renderLayout = (auth: Partial<AuthContextProps>) =>
   });
 
 describe('SiteLayout', () => {
+  it('credits Discava in the footer, linking to the project site', async () => {
+    renderLayout(signedInAs(['student']));
+
+    expect(
+      await screen.findByRole('link', { name: 'Discava' }),
+    ).toHaveAttribute('href', 'https://alexto.github.io/discava');
+  });
+
   it("links an instructor to the instructor portal's My Courses, before My Learning (#67)", async () => {
     renderLayout(signedInAs(['instructor', 'student']));
 

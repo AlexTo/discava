@@ -213,6 +213,7 @@ function RouteComponent() {
             }
             hasOutcomes={(course.learningOutcomes?.length ?? 0) > 0}
             hasRequirements={(course.requirements?.length ?? 0) > 0}
+            hasPreview={course.preview?.status === 'ready'}
             hasImage={Boolean(course.imageKey)}
           />
         </Card>
@@ -261,6 +262,7 @@ function RouteComponent() {
             courseId={course.courseId}
             learningOutcomes={course.learningOutcomes}
             requirements={course.requirements}
+            preview={course.preview}
             readOnly={readOnly}
           />
         </Card>

@@ -14,10 +14,12 @@ import { NotificationBell } from './notification-bell-container';
 
 // There's no router in these renders; the portal's navigation is a spy.
 const navigate = vi.fn();
-vi.mock('@tanstack/react-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/react-router')>()),
-  useRouter: () => ({ navigate }),
-}));
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
+    useRouter: () => ({ navigate }),
+  });
+});
 
 afterEach(() => {
   navigate.mockReset();

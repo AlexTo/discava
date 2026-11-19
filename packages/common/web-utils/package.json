@@ -18,6 +18,7 @@
   "devDependencies": {
     "@testing-library/dom": "catalog:",
     "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
     "@types/event-source-polyfill": "catalog:",
     "@types/node": "catalog:"
   },

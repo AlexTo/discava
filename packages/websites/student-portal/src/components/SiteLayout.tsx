@@ -19,6 +19,8 @@ import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { SiteSearch } from './SiteSearch';
 
+const DISCAVA_URL = 'https://alexto.github.io/discava';
+
 // The one layout every page uses, signed in or not: a top bar with the
 // course search and, once signed in, My Learning (and, for an instructor, a
 // link to the instructor portal), then the page.
@@ -87,6 +89,17 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
         >
           {children}
         </div>
+        <footer className="border-t px-6 py-4 text-center text-xs text-muted-foreground lg:px-8">
+          Powered by{' '}
+          <a
+            href={DISCAVA_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            Discava
+          </a>
+        </footer>
       </div>
     </TooltipProvider>
   );
