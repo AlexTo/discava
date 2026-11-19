@@ -279,8 +279,14 @@ test.describe('course ratings across students', () => {
       .toEqual([better.title, worse.title]);
 
     await page.goto(`${PORTALS.student}/search?query=${label}&sort=rating`);
-    const links = page.getByRole('link', { name: new RegExp(label) });
-    await expect(links.first()).toHaveText(new RegExp(`${label} better`));
+    // Each card has one "Preview <title>" link, in result order.
+    const previews = page.getByRole('link', { name: /^Preview / });
+    await expect(previews.first()).toHaveAccessibleName(
+      `Preview ${better.title}`,
+    );
+    await expect(previews.nth(1)).toHaveAccessibleName(
+      `Preview ${worse.title}`,
+    );
     await expect(page.getByText('(2 ratings)').first()).toBeVisible();
     await expect(page.getByLabel('Sort by')).toHaveValue('rating');
     await screenshot(page, 'search sorted by highest rated');
