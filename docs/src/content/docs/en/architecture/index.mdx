@@ -85,7 +85,7 @@ Each API is an API Gateway REST API in front of Lambda functions, speaking [tRPC
 | --- | --- | --- |
 | **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, lesson content, quizzes, discussions, search |
 | **instructor-api** | Members of `instructor` | Creating and editing courses, uploading media, analytics |
-| **admin-api** | Members of `admin` | Category taxonomy, review moderation |
+| **admin-api** | Members of `admin` | Category taxonomy, review moderation, the Stripe connection |
 
 Splitting by audience means each API has its own function, permissions, request limits and firewall. An instructor-only bug can't be reached with a student's token, and a flood of student traffic can't starve the instructor API.
 

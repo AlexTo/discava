@@ -4,8 +4,8 @@ This library was generated with [Nx](https://nx.dev).
 
 ## Building
 
-Run `nx build instructor-api` to build the library.
+Run `pnpm nx build @discava/instructor-api` to build the library.
 
 ## Running unit tests
 
-Run `nx test instructor-api` to execute the unit tests via [Vitest](https://vitest.dev/).
+Run `pnpm nx test @discava/instructor-api` to execute the unit tests via [Vitest](https://vitest.dev/).

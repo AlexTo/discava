@@ -24,24 +24,17 @@ export interface VideoTranscodePipelineProps {
 // https://docs.aws.amazon.com/mediaconvert/latest/ug/video-quality.html
 //
 // Deliberately manual, not Automated ABR: Automated ABR requires
-// Professional-tier 2-pass encoding unconditionally (~2.8x the per-minute
-// cost of Basic-tier single-pass, per https://aws.amazon.com/mediaconvert/pricing/),
-// just to get "don't upscale past source resolution" -- not worth it here.
-// Each rendition below uses ScalingBehavior: FIT_NO_UPSCALE instead, so a
-// source narrower than a given rung's target comes out at its own native
-// resolution rather than blurrily upscaled -- but the rung is still
-// produced (as a near-duplicate of a lower rung, just a different
-// bitrate), since avoiding that entirely needs knowing the source
-// resolution before the job is submitted, which needs real probing
-// infrastructure we don't have. Accepted trade-off for now.
+// Professional-tier 2-pass encoding (~2.8x the per-minute cost of Basic-tier
+// single-pass, per https://aws.amazon.com/mediaconvert/pricing/) just to
+// avoid upscaling past the source. Each rendition uses FIT_NO_UPSCALE
+// instead, so a small source isn't upscaled, though every rung is still
+// produced (skipping rungs would need the source's resolution before
+// submitting the job).
 //
-// `Destination` is a placeholder -- each CreateJob call overrides it with
-// the specific content item's output prefix, merged on top of this
-// template's encode settings. A job template's SettingsJson has no `Inputs`
-// property at all -- MediaConvert's CreateJobTemplate API rejects one
-// outright ("isn't supported: FileInput") -- the input is only ever
-// specified per job, which submitTranscodeJob (mediaconvert-client.ts)
-// already does via CreateJob's own Settings.Inputs.
+// `Destination` is a placeholder: each CreateJob call overrides it with the
+// content item's output prefix. The template has no `Inputs`, which
+// CreateJobTemplate rejects ("isn't supported: FileInput"); submitTranscodeJob
+// (mediaconvert-client.ts) sets them per job.
 const buildSettingsJson = () => ({
   OutputGroups: [
     {
@@ -108,11 +101,9 @@ const buildRendition = (
   VideoDescription: {
     Width: width,
     Height: height,
-    // Shrinks to fit when the source is smaller than this rendition's
-    // target, with no padding -- a 720p source assigned to the "1080p"
-    // slot comes out at its native 1280x720, not upscaled/blurred to fill
-    // 1920x1080. Doesn't reduce the *number* of renditions produced (see
-    // module comment above), but avoids wasting bitrate on fake detail.
+    // Keeps a source smaller than this rendition's target at its own size,
+    // with no padding: a 720p source in the "1080p" slot comes out at
+    // 1280x720, not upscaled to 1920x1080.
     // https://docs.aws.amazon.com/mediaconvert/latest/ug/video-scaling-fit-without-upscaling.html
     ScalingBehavior: 'FIT_NO_UPSCALE',
     CodecSettings: {
@@ -163,9 +154,9 @@ const buildRendition = (
 /**
  * The AWS MediaConvert side of the transcode pipeline: an ABR-ladder job
  * template shared by every transcode job, and the service role MediaConvert
- * assumes to read the raw upload and write HLS output. Job submission and
- * the completion callback are standalone Lambdas (`packages/events`), not
- * part of this construct.
+ * assumes to read the raw upload and write HLS output. instructor-api submits
+ * the jobs, and the completion handlers are Lambdas in `packages/events`
+ * (see MediaPipelineStack); neither is part of this construct.
  */
 export class VideoTranscodePipeline extends Construct {
   public readonly role: Role;

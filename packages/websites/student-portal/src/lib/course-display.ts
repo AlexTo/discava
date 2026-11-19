@@ -5,8 +5,8 @@
 
 // A course's look is cosmetic and has no backend: an icon and colour filled
 // in deterministically from courseId (not random) so a given course keeps the
-// same look everywhere it's shown (landing page card, preview page) across
-// refetches/re-renders instead of flickering or disagreeing. Its category,
+// same look everywhere it's shown, across refetches and re-renders, instead
+// of flickering or disagreeing. Its category,
 // level, language and duration are real, from the catalogue.
 const ICONS = ['🧬', '∑', '⌁', '✎', '◉', '↗', '📊', '🗂', '🎤'];
 const SURFACES = [

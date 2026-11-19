@@ -48,10 +48,12 @@ export interface MediaPipelineStackProps extends StackProps {
 }
 
 /**
- * Video transcoding: the MediaConvert pipeline plus the event handlers that
- * react to its jobs (TranscodeComplete) and clean up after canceled ones
- * (TranscodeCleanup). instructor-api submits and cancels the jobs; use
- * grantSubmitTranscodeJob/grantCancelTranscodeJob for its handlers.
+ * Video transcoding and automatic captions: the MediaConvert pipeline, the
+ * handlers that apply a job's outcome (TranscodeComplete, and
+ * TranscodeReconciler for stuck videos), TranscribeComplete, and
+ * TranscodeCleanup, which one-time schedules invoke to delete retired media.
+ * The APIs' handlers get their rights through grantSubmitTranscodeJob,
+ * grantCancelTranscodeJob and grantScheduleCleanup.
  */
 export class MediaPipelineStack extends Stack {
   public readonly videoTranscodePipeline: VideoTranscodePipeline;
@@ -205,12 +207,10 @@ export class MediaPipelineStack extends Stack {
     return reconciler;
   }
 
-  // createContentItemVideo/updateContentItemVideo submit the MediaConvert
-  // job themselves (see
-  // packages/apis/instructor-api/src/helpers/mediaconvert-client.ts). Both
-  // handlers already get RUNTIME_CONFIG_APP_ID/AppConfig read access from
-  // InstructorApi.defaultIntegrations, so only the MediaConvert-specific
-  // permissions are needed here.
+  // instructor-api's video procedures submit the MediaConvert job themselves
+  // (packages/apis/instructor-api/src/helpers/mediaconvert-client.ts).
+  // InstructorApi.defaultIntegrations already gives them AppConfig read, so
+  // only MediaConvert's permissions are added here.
   public grantSubmitTranscodeJob(handler: LambdaFunctionHandler) {
     // MediaConvert's CreateJob isn't meaningfully resource-scoped for a
     // submitter role (the job doesn't exist yet), so this is the widest
@@ -237,10 +237,9 @@ export class MediaPipelineStack extends Stack {
     );
   }
 
-  // Replacing or deleting a still-transcoding video cancels its job (see
-  // #123 and the delete-mid-transcode follow-up) -- unlike CreateJob, a job
-  // to cancel already exists here, so this can be scoped to the resource
-  // type instead of needing a suppression. Every caller of
+  // Replacing or deleting a still-transcoding video cancels its job (#123).
+  // Unlike CreateJob, the job already exists, so this is scoped to the jobs
+  // resource type with no suppression. Every caller of
   // bestEffortCancelTranscodeJob(s) also schedules that job's delayed S3
   // cleanup, so both grants go together.
   public grantCancelTranscodeJob(handler: LambdaFunctionHandler) {
@@ -265,12 +264,10 @@ export class MediaPipelineStack extends Stack {
     this.grantScheduleCleanupWrite(handler);
   }
 
-  // Grants permission to create/update a one-time cleanup schedule in
-  // scheduleGroup, targeting schedulerRole -- shared by every handler that
-  // can end up retiring a submission's nonce-scoped S3 output, whether by
-  // canceling its job early (bestEffortCancelTranscodeJob) or, lacking a
-  // job id to cancel with, reacting to that job's own completion event
-  // once it finishes on its own (transcode-complete.ts).
+  // Lets a handler create or update a one-time cleanup schedule in
+  // scheduleGroup that targets schedulerRole: every handler that can retire
+  // lesson media, whether by canceling a job, replacing a version, or
+  // applying a finished job's outcome.
   private grantScheduleCleanupWrite(handler: IGrantable) {
     this.scheduleGroup.grantWriteSchedules(handler);
     // Creating a schedule with a target role requires the creator to be
@@ -398,11 +395,9 @@ export class MediaPipelineStack extends Stack {
     return transcribeComplete;
   }
 
-  // bestEffortCancelTranscodeJob schedules a one-time, delayed invocation
-  // of this Lambda for the exact job it just canceled (see
-  // mediaconvert-client.ts) -- invoked directly by EventBridge Scheduler,
-  // not via a persistent Rule like TranscodeComplete, since each
-  // invocation is its own one-off event rather than a recurring pattern.
+  // Invoked directly by EventBridge Scheduler, one one-time schedule per
+  // cleanup (a canceled job's output, a retired version, a student's
+  // submission folder), rather than by a Rule like TranscodeComplete.
   private createTranscodeCleanupLambda(
     lessonMediaBucket: LessonMediaBucket,
     coreTable: CoreTable,
@@ -435,9 +430,8 @@ export class MediaPipelineStack extends Stack {
       removalPolicy: RemovalPolicy.DESTROY,
     });
 
-    // EventBridge Scheduler assumes this to invoke the cleanup Lambda on
-    // each schedule's behalf -- distinct from the instructor-api handlers'
-    // own role, which only needs to create the schedule, not run it.
+    // EventBridge Scheduler assumes this to invoke the cleanup Lambda;
+    // the handlers that create schedules only pass it, never run them.
     const schedulerRole = new Role(this, 'TranscodeCleanupSchedulerRole', {
       assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
     });

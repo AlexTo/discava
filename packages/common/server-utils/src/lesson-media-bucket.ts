@@ -137,9 +137,8 @@ export const deleteObjectsInBatches = async (
         }),
       );
       // DeleteObjects can resolve successfully and still fail individual
-      // keys -- doesn't throw, so has to be checked explicitly or it's
-      // silently lost. Logged, not thrown: this function is best-effort
-      // by contract (see bestEffortDeleteContentItemVideos's docstring).
+      // keys, so they're checked explicitly. Logged, not thrown: this
+      // function is best-effort, like the list above.
       if (Errors && Errors.length > 0) {
         logger?.error('Failed to delete some lesson media objects from S3', {
           bucket,

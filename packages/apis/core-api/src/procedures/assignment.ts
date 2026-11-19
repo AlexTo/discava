@@ -61,7 +61,7 @@ import { getEnrolment, requireEnrolment } from './enrolment.js';
 const MAX_SUBMIT_TRIES = 3;
 
 // How long the local event runner waits before an attempt's guard cleanup:
-// longer than the submit function's timeout, unlike its default few seconds.
+// longer than the submit function's timeout.
 const LOCAL_ATTEMPT_GUARD_SECONDS = LOCAL_EVENT_RUNNER.cleanupDelaySeconds;
 
 // What every procedure reads and checks first (contracts/core-api-assignment):

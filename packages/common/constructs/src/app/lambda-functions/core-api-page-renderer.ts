@@ -17,9 +17,8 @@ import * as url from 'url';
 
 /**
  * Core API's page renderer: the Lambda behind the student portal's landing
- * page, site map and robots.txt paths. Wraps the `page-renderer` bundle from
- * `ts#lambda-function`, which was generated without infrastructure because
- * its Function URL and CloudFront wiring are in `StudentPortal`.
+ * pages, instructor profiles, site map and robots.txt. Its Function URL and
+ * CloudFront wiring are in `StudentPortal`.
  */
 export class CoreApiPageRenderer extends Function {
   constructor(

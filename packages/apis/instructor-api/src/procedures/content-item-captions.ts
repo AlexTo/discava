@@ -46,7 +46,7 @@ import {
   RemoveCaptionInputSchema,
 } from '../schema/index.js';
 
-// Caption tracks an instructor manages (US5). A track's file is uploaded to
+// Caption tracks an instructor manages. A track's file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then checked and
 // copied into the playing version's folder of the lesson media bucket when it
 // is attached. Every change to the list goes through applyCaptionChange and a

@@ -5,7 +5,7 @@
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
-// 21 (certificates). A certificate's ID is 16 characters of the Crockford
+// A certificate's ID is 16 characters of the Crockford
 // alphabet and unique across certificates, it carries the name, title and
 // dates printed on it, and it wasn't issued before the course was completed.
 export const checkCertificateShape = (snapshot: TableSnapshot): Violation[] => {
@@ -48,10 +48,10 @@ export const checkCertificateShape = (snapshot: TableSnapshot): Violation[] => {
   });
 };
 
-// 22 (certificates). A certificate is for a completed enrolment, with the
-// same completedAt, in a course that exists. A refunded student keeps their
-// certificate, so the enrolment may also be `dropped` with that completedAt. Certificates off for the course
-// is not a violation (the setting isn't retroactive), nor is a completed
+// A certificate is for a completed enrolment, with the same completedAt, in a
+// course that exists. A refunded student keeps their certificate, so the
+// enrolment may also be `dropped` with that completedAt. Certificates off for
+// the course is not a violation (the setting isn't retroactive), nor is a completed
 // enrolment without a certificate (no backfill).
 export const checkCertificateHasCompletedEnrolment = (
   snapshot: TableSnapshot,

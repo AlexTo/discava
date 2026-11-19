@@ -345,8 +345,8 @@ describe('transcodeComplete', () => {
     });
 
     // A replacement stamps a fresh submissionNonce onto the record before
-    // this (superseded) job's own completion event could ever arrive --
-    // this is what the condition actually keys off now, not jobId.
+    // this (superseded) job's own completion event could ever arrive; the
+    // condition keys off it, not jobId.
     await transcodeComplete(
       buildEvent('COMPLETE', JOB_ID, 'superseded-nonce') as any,
     );
@@ -356,7 +356,7 @@ describe('transcodeComplete', () => {
 
   // The record no longer owning this submission doesn't mean the job's
   // own S3 output isn't real -- a submission whose mediaConvertJobId was
-  // never stamped (see item 20) can't have had its output scheduled for
+  // never stamped can't have had its output scheduled for
   // cleanup any other way, so this event is the only remaining trigger.
   it('schedules cleanup of this job own nonce-scoped output when the record no longer owns it, on COMPLETE', async () => {
     contentItemPatchWhere.mockReturnValue({
