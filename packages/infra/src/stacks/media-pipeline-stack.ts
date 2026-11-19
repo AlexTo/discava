@@ -208,7 +208,7 @@ export class MediaPipelineStack extends Stack {
   }
 
   // instructor-api's video procedures submit the MediaConvert job themselves
-  // (packages/apis/instructor-api/src/lib/mediaconvert-client.ts).
+  // (packages/apis/instructor-api/src/helpers/mediaconvert-client.ts).
   // InstructorApi.defaultIntegrations already gives them AppConfig read, so
   // only MediaConvert's permissions are added here.
   public grantSubmitTranscodeJob(handler: LambdaFunctionHandler) {

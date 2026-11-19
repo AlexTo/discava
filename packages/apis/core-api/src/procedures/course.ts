@@ -16,9 +16,9 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { playablePreviewManifest } from '../helpers/course-preview.js';
+import { asStudentContentItem } from '../helpers/playback.js';
+import { ratingFigures } from '../helpers/rating.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
-import { asStudentContentItem } from '../lib/playback.js';
-import { ratingFigures } from '../lib/rating.js';
 import {
   type IViewCourseOutput,
   ListCoursesByInstructorInputSchema,

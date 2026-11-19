@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { playableManifest } from '../lib/playback.js';
+import { playableManifest } from './playback.js';
 
 /**
  * The manifest a visitor plays as a course's preview: the course must be

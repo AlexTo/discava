@@ -14,29 +14,30 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
+import {
+  MAX_TRANSACTION_ITEMS,
+  writeInActiveCourse,
+  writeUnderActiveAncestors,
+} from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   courseNoLongerDraft,
   draftCourseCheck,
   firstPublishedAt,
-  getCourseOrThrow,
   initialVisibilityFields,
   isDraftCourse,
-  MAX_TRANSACTION_ITEMS,
   requireActiveCourse,
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
-  writeAtEnd,
-  writeInActiveCourse,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
-import { bestEffortCancelTranscodeJobs } from '../lib/mediaconvert-client.js';
+} from '../helpers/curriculum-guards.js';
+import { bestEffortCancelTranscodeJobs } from '../helpers/mediaconvert-client.js';
+import { writeAtEnd } from '../helpers/order.js';
 import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   CreateLessonInputSchema,
   CreateLessonOutputSchema,
@@ -216,14 +217,11 @@ const hardDeleteLesson = async (
   await bestEffortRetirePreviousVersions(logger, videoContentItems);
 };
 
-export const createLesson = courseProcedure
-  .input(CreateLessonInputSchema)
+export const createLesson = courseInstructorProcedure(CreateLessonInputSchema)
   .output(CreateLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, title, description } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const course = await getCourseOrThrow(coreTable, courseId);
     requireCourseNotArchived(course);
@@ -260,14 +258,12 @@ export const createLesson = courseProcedure
     return getLessonOrThrow(coreTable, { courseId, moduleId, lessonId });
   });
 
-export const updateLesson = courseProcedure
-  .input(UpdateLessonInputSchema)
+export const updateLesson = courseInstructorProcedure(UpdateLessonInputSchema)
   .output(UpdateLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, title, description } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, {
       courseId,
       moduleId,
@@ -309,15 +305,13 @@ export const updateLesson = courseProcedure
 // course it archives the lesson instead, keeping it, its content items, and
 // every student's data for them restorable; see deleteLessonPermanently for
 // removing an archived lesson for good.
-export const deleteLesson = courseProcedure
-  .input(DeleteLessonInputSchema)
+export const deleteLesson = courseInstructorProcedure(DeleteLessonInputSchema)
   .output(DeleteLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId } = input;
     const key = { courseId, moduleId, lessonId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, key);
     const course = await getCourseOrThrow(coreTable, courseId);
 
@@ -361,15 +355,13 @@ export const deleteLesson = courseProcedure
 // any item that was hidden on purpose, which has to be hidden again
 // afterwards if it should stay hidden. Students still don't see the lesson
 // until its module is visible too.
-export const publishLesson = courseProcedure
-  .input(PublishLessonInputSchema)
+export const publishLesson = courseInstructorProcedure(PublishLessonInputSchema)
   .output(PublishLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId } = input;
     const key = { courseId, moduleId, lessonId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, key);
     requireNotArchived(existing, 'Restore the lesson before publishing it');
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
@@ -445,15 +437,13 @@ export const publishLesson = courseProcedure
 // under a visible lesson. Publishing the lesson again also publishes every
 // hidden item in it (see publishLesson), so an item meant to stay hidden has
 // to be hidden again afterwards.
-export const hideLesson = courseProcedure
-  .input(HideLessonInputSchema)
+export const hideLesson = courseInstructorProcedure(HideLessonInputSchema)
   .output(HideLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId } = input;
     const key = { courseId, moduleId, lessonId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, key);
     requireNotArchived(existing, 'Restore the lesson before hiding it');
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
@@ -488,15 +478,13 @@ export const hideLesson = courseProcedure
 
 // A lesson under an archived module can't be restored on its own: it would
 // still be hidden by its module, so the module has to come back first.
-export const restoreLesson = courseProcedure
-  .input(RestoreLessonInputSchema)
+export const restoreLesson = courseInstructorProcedure(RestoreLessonInputSchema)
   .output(RestoreLessonOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId } = input;
     const key = { courseId, moduleId, lessonId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, key);
     if (!existing.archivedAt) {
       return existing;
@@ -526,15 +514,15 @@ export const restoreLesson = courseProcedure
 // Removes an archived lesson and its content items for good. Refused while
 // any content item in it has student activity: that data must survive
 // curriculum edits, so such a lesson can stay archived but never be deleted.
-export const deleteLessonPermanently = courseProcedure
-  .input(DeleteLessonPermanentlyInputSchema)
+export const deleteLessonPermanently = courseInstructorProcedure(
+  DeleteLessonPermanentlyInputSchema,
+)
   .output(DeleteLessonPermanentlyOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId } = input;
     const key = { courseId, moduleId, lessonId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getLessonOrThrow(coreTable, key);
     if (!existing.archivedAt) {
       throw new TRPCError({
@@ -596,14 +584,14 @@ const moduleLessonsChanged = () =>
 // client that missed a lesson added, archived or removed in the meantime gets
 // `CONFLICT` and reloads rather than overwriting what it never saw. Repeating
 // an order the module already has writes nothing.
-export const reorderLessons = courseProcedure
-  .input(ReorderLessonsInputSchema)
+export const reorderLessons = courseInstructorProcedure(
+  ReorderLessonsInputSchema,
+)
   .output(ReorderLessonsOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonIds } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
 
     if (new Set(lessonIds).size !== lessonIds.length) {

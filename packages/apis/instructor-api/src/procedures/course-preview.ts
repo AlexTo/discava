@@ -28,20 +28,20 @@ import {
   transcodePendingFrom,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import {} from '../helpers/course-access.js';
 import {
   asPreviewSummary,
   previewPlayableManifest,
-} from '../lib/course-preview.js';
+} from '../helpers/course-preview.js';
 import {
   bestEffortCancelTranscodeJob,
   submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
+} from '../helpers/mediaconvert-client.js';
 import {
   bestEffortDeletePreviewUploads,
   getVideoUploadETag,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   CoursePreviewOutputSchema,
   CreateCoursePreviewInputSchema,
@@ -86,12 +86,12 @@ const requireUploadedKey = async (courseId: string, rawKey: string) => {
   return etag;
 };
 
-export const createUploadUrl = courseProcedure
-  .input(CreateCoursePreviewUploadUrlInputSchema)
+export const createUploadUrl = courseInstructorProcedure(
+  CreateCoursePreviewUploadUrlInputSchema,
+)
   .output(CreateCoursePreviewUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const { courseId, fileName } = input;
-    await requireCourseInstructor(ctx.coreTable!, courseId, ctx.user.sub);
 
     const ext = extname(fileName).slice(1).toLowerCase();
     const contentType = ALLOWED_VIDEO_TYPES[ext];
@@ -179,13 +179,12 @@ const startTranscode = async (
   }
 };
 
-export const create = courseProcedure
-  .input(CreateCoursePreviewInputSchema)
+export const create = courseInstructorProcedure(CreateCoursePreviewInputSchema)
   .output(CoursePreviewOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const { courseId, rawKey, durationSeconds } = input;
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+
     requireDuration(durationSeconds);
     const etag = await requireUploadedKey(courseId, rawKey);
 
@@ -234,14 +233,15 @@ export const create = courseProcedure
     return asPreviewSummary(data);
   });
 
-export const replace = courseProcedure
-  .input(ReplaceCoursePreviewInputSchema)
+export const replace = courseInstructorProcedure(
+  ReplaceCoursePreviewInputSchema,
+)
   .output(CoursePreviewOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const { courseId, rawKey, durationSeconds, expectedSubmissionNonce } =
       input;
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
+
     requireDuration(durationSeconds);
 
     const { data: existing } = await coreTable.entities.coursePreview
@@ -343,13 +343,11 @@ export const replace = courseProcedure
     return asPreviewSummary(data);
   });
 
-export const remove = courseProcedure
-  .input(RemoveCoursePreviewInputSchema)
+export const remove = courseInstructorProcedure(RemoveCoursePreviewInputSchema)
   .output(RemoveCoursePreviewOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const { courseId, expectedSubmissionNonce } = input;
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     let old:
       | {
@@ -414,13 +412,13 @@ export const remove = courseProcedure
     return { removed: true as const };
   });
 
-export const createVideoUrl = courseProcedure
-  .input(CreateCoursePreviewVideoUrlInputSchema)
+export const createVideoUrl = courseInstructorProcedure(
+  CreateCoursePreviewVideoUrlInputSchema,
+)
   .output(CreateCoursePreviewVideoUrlOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable!;
     const { courseId } = input;
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const { data: preview } = await coreTable.entities.coursePreview
       .get({ courseId })
