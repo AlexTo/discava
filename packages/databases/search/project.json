@@ -65,15 +65,12 @@
     "dev": {
       "executor": "nx:run-commands",
       "continuous": true,
-      "dependsOn": ["pull-image", "generate-indices-manifest"],
-      "options": {
-        "commands": [
-          "tsx ../../common/scripts/src/opensearch/start-container.ts",
-          "tsx ../../common/scripts/src/opensearch/sync-local-indices.ts"
-        ],
-        "parallel": true,
-        "cwd": "{projectRoot}"
-      }
+      "dependsOn": [
+        {
+          "projects": ["@discava/tooling-local-dev"],
+          "target": "opensearch"
+        }
+      ]
     },
     "format": {
       "executor": "nx:run-commands",
@@ -112,13 +109,6 @@
         "skip-lint": {
           "command": "node -e \"\""
         }
-      }
-    },
-    "pull-image": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx ../../common/scripts/src/opensearch/pull-image.ts",
-        "cwd": "{projectRoot}"
       }
     }
   }

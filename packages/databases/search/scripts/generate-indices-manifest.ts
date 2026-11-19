@@ -8,7 +8,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { INDICES } from '../src/indices/index.js';
 
-// The one manifest both local dev (common-scripts' sync-local-indices.ts) and CDK
+// The one manifest both local dev (tooling-local-dev's sync-local-indices.ts) and CDK
 // (OpenSearchCollection's index-sync custom resource) read, so they can
 // never see a different set of indices. Only settings/mappings are kept --
 // the zod schema stays in src/indices, used only by the indexing Lambda.

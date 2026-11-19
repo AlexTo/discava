@@ -48,8 +48,8 @@ Every email carries an unsubscribe link, signed so it can't be changed, and the 
 With `pnpm dev` running, publish with the `notify-local` target:
 
 ```sh
-pnpm nx run @discava/common-scripts:notify-local -- --user <sub> --type announcement.posted
-pnpm nx run @discava/common-scripts:notify-local -- --course <courseId> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type announcement.posted
+pnpm nx run @discava/tooling-local-dev:notify-local -- --course <courseId> --type announcement.posted
 ```
 
 Repeat the command with the same `--key` to see a duplicate do nothing. Emails don't leave your machine: they are kept in the local inbox at `http://localhost:2024/inbox` (`GET /emails` lists them as JSON), which `reset-local-data` empties.

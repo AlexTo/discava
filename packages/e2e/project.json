@@ -96,6 +96,6 @@
     "@discava/instructor-api",
     "@discava/admin-api",
     "@discava/events",
-    "@discava/common-scripts"
+    "@discava/tooling-local-dev"
   ]
 }

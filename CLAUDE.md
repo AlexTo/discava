@@ -48,7 +48,7 @@ Local dev needs Docker running and no AWS account or deployed stage. Ports, the 
 
 ```sh
 pnpm dev                                              # portals, APIs and local stand-ins for the AWS services they use
-pnpm nx run @discava/common-scripts:reset-local-data  # wipe local data (stop pnpm dev first)
+pnpm nx run @discava/tooling-local-dev:reset-local-data  # wipe local data (stop pnpm dev first)
 ```
 
 Cognito itself is only exercised on a deployed stage:
@@ -70,7 +70,9 @@ Nested `CLAUDE.md` files hold the detail for the packages below that name one; C
 - `packages/databases/core-table`: single-table DynamoDB access via ElectroDB; see `packages/databases/core-table/CLAUDE.md`
 - `packages/databases/search`: OpenSearch (`@discava/search`): the client (`getOpenSearchClient`, endpoint and index-name resolution), the index definitions in `src/indices/` (today the `courses` index and its zod document schema), and `src/index-sync/`, the Lambda handler and `syncIndices` that create or update indices from the generated indices manifest. Its `dev` target starts OpenSearch in Docker and syncs the local indices; the search-indexing stream feature writes to it and core-api's search procedure reads from it
 - `packages/common/tiptap`: rich-text document helpers (`@discava/common-tiptap`) shared by the portals and the APIs: `createContentExtensions` (the Tiptap schema, StarterKit plus LaTeX maths), `isValidTiptapDocument` / `parseTiptapDocument` for stored JSON, `renderLatex` and `plainTextExcerpt`. Extensions are added there, never in one consumer
-- `packages/common/scripts`: deploy/destroy tooling and the Docker services local dev runs instead of AWS; see `packages/common/scripts/CLAUDE.md`
+- `packages/tooling/local-dev`: the Docker services local dev runs instead of AWS (DynamoDB local, OpenSearch, S3Mock, ElasticMQ, the local OIDC server) and the local-data scripts; see `packages/tooling/local-dev/CLAUDE.md`
+- `packages/tooling/agent`: the agent and PR tooling CI runs (issue picking, CI and review status, UI screenshots, invariant coverage); see `packages/tooling/agent/CLAUDE.md`
+- `packages/tooling/deploy`: deploy and ops scripts (stage credentials for deploy/destroy, search reindex, category seeding, analytics rebuild) and the tests for `scripts/setup-stage.sh`; see `packages/tooling/deploy/CLAUDE.md`
 - `packages/events`: standalone Lambda handlers for AWS-triggered events and the local event runner; see `packages/events/CLAUDE.md`
 - `packages/infra`: CDK stacks and stages; see `packages/infra/CLAUDE.md`
 - `packages/common/constructs`: all CDK constructs; see `packages/common/constructs/CLAUDE.md`
