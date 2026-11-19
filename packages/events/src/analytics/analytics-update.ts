@@ -50,8 +50,8 @@ type Image = Record<string, unknown> | undefined;
 // change is turned into the counts it adds (core-table's `contributions`) and
 // applied once.
 //
-// How it tolerates the router's at-least-once, unordered delivery (router
-// FR-011), and so duplicate and reordered records and redelivered batches:
+// How it tolerates the router's at-least-once, unordered delivery, and so
+// duplicate and reordered records and redelivered batches:
 // - Duplicates: every change is written with an `EVENT#<eventID>` marker in
 //   the same transaction, so a record seen again changes nothing; a learner's
 //   activity in a day or week has a `MEMBER#` marker for the same reason, so

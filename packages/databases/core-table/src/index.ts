@@ -44,7 +44,7 @@ export {
   mergeCounts,
   sumContributions,
   weekKey,
-} from './helpers/analytics.js';
+} from './helpers/analytics-contributions.js';
 export {
   type CourseAnalytics,
   type CourseDay,
@@ -136,7 +136,7 @@ export {
   normaliseCategoryName,
   normaliseTags,
   TAG_MAX_LENGTH,
-} from './helpers/catalogue.js';
+} from './helpers/catalogue-vocabulary.js';
 export { type CategoryCreate, categoryWrites } from './helpers/category.js';
 export {
   type Certificate,
@@ -189,27 +189,13 @@ export {
   isShown,
 } from './helpers/curriculum.js';
 export {
-  type AnsweredState,
-  answeredState,
-  checkPostId,
-  DISCUSSION_BODY_MAX,
-  DISCUSSION_MAX_REPORTERS,
-  DISCUSSION_MAX_VISIBLE_REPLIES,
-  DISCUSSION_POST_ID_WINDOW_MS,
-  DISCUSSION_TITLE_MAX,
   type DiscussionAuthor,
   DiscussionInputError,
   type DiscussionOperation,
   type DiscussionPostRead,
   type DiscussionQuestionRead,
-  type DiscussionTextProblem,
   discussionWrites,
   lessonHasDiscussion,
-  type NormalisedDiscussionText,
-  normaliseDiscussionText,
-  type PostIdCheck,
-  type PostIdProblem,
-  postIdTime,
   toPostRead,
   toQuestionRead,
 } from './helpers/discussion.js';
@@ -220,6 +206,22 @@ export {
   discussionExcerpt,
   discussionNotificationWrites,
 } from './helpers/discussion-notifications.js';
+export {
+  type AnsweredState,
+  answeredState,
+  checkPostId,
+  DISCUSSION_BODY_MAX,
+  DISCUSSION_MAX_REPORTERS,
+  DISCUSSION_MAX_VISIBLE_REPLIES,
+  DISCUSSION_POST_ID_WINDOW_MS,
+  DISCUSSION_TITLE_MAX,
+  type DiscussionTextProblem,
+  type NormalisedDiscussionText,
+  normaliseDiscussionText,
+  type PostIdCheck,
+  type PostIdProblem,
+  postIdTime,
+} from './helpers/discussion-text.js';
 export {
   type EarningDayRecord,
   type EarningEntryRecord,
@@ -251,12 +253,15 @@ export {
   VersionConflictError,
 } from './helpers/errors.js';
 export {
+  classifyProfileCancellation,
   defaultDisplayName,
   type EnsureInstructorProfileResult,
   ensureInstructorProfile,
   handleCandidates,
   handleFromName,
+  type InstructorProfilePatch,
   instructorProfileWrites,
+  type ProfileCancellation,
   RESERVED_HANDLES,
 } from './helpers/instructor-profile.js';
 export {

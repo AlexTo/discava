@@ -11,13 +11,13 @@ import {
   transcodePendingFrom,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { writeUnderActiveAncestors } from '../lib/course-lifecycle.js';
+import { writeUnderActiveAncestors } from './ancestor-writes.js';
 import {
   bestEffortCancelTranscodeJob,
   bestEffortCancelTranscodeJobs,
   submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
-import { bestEffortDeleteContentItemVideos } from '../lib/s3-client.js';
+} from './mediaconvert-client.js';
+import { bestEffortDeleteContentItemVideos } from './s3-client.js';
 
 // The stages of replacing (or just editing) a video content item, called in
 // order by updateContentItemVideo.
@@ -76,13 +76,10 @@ export const requireObjectKeyInLesson = (
   { courseId, moduleId, lessonId }: VideoKey,
   objectKey: string,
 ) => {
-  // Replacing the underlying video: the object key must at least be
-  // scoped to this lesson, so a caller can't point the record at an
-  // object outside its lesson's prefix (e.g. another lesson's video).
-  // createContentItemVideoUploadUrl reuses this contentItemId in the key
-  // when told it's a replacement, but doesn't have to be -- a caller
-  // could still supply an unrelated key from within this lesson, so this
-  // check doesn't require an exact contentItemId match.
+  // The key must be scoped to this lesson, so a caller can't point the
+  // record at another lesson's object. It isn't required to contain this
+  // contentItemId: createContentItemVideoUploadUrl only reuses the id when
+  // told the upload is a replacement.
   if (
     !objectKey.startsWith(
       `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/`,
@@ -95,19 +92,11 @@ export const requireObjectKeyInLesson = (
   }
 };
 
-// A caller retrying this exact mutation (e.g. after a client-side
-// timeout, even though the original call actually succeeded) would
-// otherwise cancel the job that submission started and resubmit a
-// redundant one -- interrupting work that was already proceeding
-// correctly. objectKey alone can't detect this (it's deterministic
-// from contentItemId + extension, so it stays the same across a
-// genuine replacement too), but objectKey *and* the raw upload's
-// content both matching what's already mid-transcode means nothing
-// about the *video* has changed since that submission, so the
-// transcode itself is left alone. That says nothing about the rest
-// of the mutation, though -- title/description/etc can still differ
-// from what's on the record (e.g. the caller edited them after the
-// first, still-in-flight attempt), and those still need to land.
+// A caller retrying this exact mutation (e.g. after a client-side timeout)
+// would otherwise cancel the job the first call started and resubmit. When
+// the objectKey and the raw upload's ETag both match what's mid-transcode,
+// the video hasn't changed, so the transcode is left alone; title,
+// description etc. may still differ and are still applied.
 export const isRetryOfInFlightSubmission = (
   existing: StoredVideoItem,
   objectKey: string,
@@ -118,17 +107,11 @@ export const isRetryOfInFlightSubmission = (
   existing.mediaConvertJobId !== undefined &&
   existing.rawObjectETag === objectETag;
 
-// A crashed retry (submitTranscodeJob succeeded, but the process
-// died before the follow-up patch below could stamp mediaConvertJobId
-// onto the record) targets the exact same still-pending replacement
-// this record already has in flight, just without a job id recorded
-// yet -- status/s3Key already prove that, durably, regardless of how
-// long ago the crash happened. Reusing its nonce lets
-// submitTranscodeJob's ClientRequestToken reconnect to whatever job
-// that attempt already created instead of starting a duplicate. Any
-// other case -- the content actually changed, the key differs, or
-// the item wasn't pending at all -- is a genuinely new submission
-// and gets a fresh nonce that can never collide with anything.
+// A retry after a crash between submitTranscodeJob and stamping
+// mediaConvertJobId finds the same pending item and key with no job id.
+// Reusing its nonce lets submitTranscodeJob's ClientRequestToken reconnect to
+// the job already created. Anything else is a new submission with a fresh
+// nonce.
 export const pickSubmissionNonce = (
   existing: StoredVideoItem,
   objectKey: string,
@@ -145,16 +128,9 @@ export const patchInFlightMetadata = async (
   metadata: VideoMetadata,
 ) => {
   const metadataUpdates = metadataSet(metadata);
-  // Same ownership check as every other write in this file -- proves
-  // the record is still genuinely this exact submission's before
-  // applying an edit that has nothing to do with the transcode dedup
-  // above -- plus the module, lesson and item still not archived.
-  // Losing ownership means a concurrent replacement or delete has
-  // already superseded this record since it was read above (an
-  // ordinary transcode completion never touches submissionNonce).
-  // Reporting success with the earlier snapshot would be wrong: the
-  // caller's edit was rejected, not applied, so it's the same CONFLICT
-  // the replacement branch below throws for the same kind of race.
+  // Conditioned on the record still being this submission's (a transcode
+  // completion never changes submissionNonce) and nothing being archived.
+  // Losing that means a concurrent replacement or delete won: CONFLICT.
   await writeUnderActiveAncestors(
     coreTable,
     videoKey,
@@ -211,34 +187,15 @@ export const patchReplacement = async (
           ...(mimeType !== undefined && { mimeType }),
           ...(durationSeconds !== undefined && { durationSeconds }),
         })
-        // Clearing mediaConvertJobId here (rather than leaving whatever
-        // job, if any, the video being replaced previously had) makes it
-        // an unambiguous signal for a future read of this record: still
-        // undefined means no job has been stamped for *this* submission
-        // attempt yet. Without this, a retry after a crash between
-        // submitTranscodeJob succeeding and the follow-up stamp below
-        // would see a defined-but-stale id here, fail the crash-gap
-        // nonce-reuse check above, and submit a duplicate job instead of
-        // reconnecting to the one that attempt already created. A
-        // no-op when there was nothing to clear (a fresh item, or a
-        // retry already resuming this same attempt).
+        // Cleared so an undefined mediaConvertJobId means no job is stamped
+        // for this submission yet: pickSubmissionNonce relies on that to
+        // reconnect a crashed retry instead of submitting a duplicate.
         .remove(['mediaConvertJobId'])
-        // Guards against a second updateContentItemVideo replace racing
-        // this one: if status/s3Key/submissionNonce have changed since
-        // the .get() above, another replace already landed first, and
-        // proceeding here would submit a second job writing to the same
-        // S3 destination as that one (#123). A concurrent metadata-only
-        // edit never touches these fields, so it can never trip this
-        // check -- only two concurrent replacements can. submissionNonce
-        // is included alongside status/s3Key because objectKey is
-        // deterministic from contentItemId + extension: two concurrent
-        // same-extension replacements of an already-pending item can
-        // read identical status/s3Key values on both sides of the race,
-        // so those two alone wouldn't always catch it; submissionNonce is
-        // freshly randomized per call and can never coincidentally match.
-        // Older records from before submissionNonce existed have nothing
-        // to compare, so the check falls back to status/s3Key only for
-        // them, same as it always has.
+        // Fails if another replace landed since the read, which would
+        // otherwise submit a second job for the same item (#123). A
+        // metadata-only edit never changes these fields. status and s3Key
+        // can read the same on both sides of a race, so submissionNonce is
+        // compared too when the item has one.
         .where((attr, op) => {
           const condition = `${op.eq(attr.status, existing.status)} AND ${op.eq(attr.s3Key, existing.s3Key!)}`;
           const owned = existing.submissionNonce
@@ -282,17 +239,9 @@ export const cancelAndResubmit = async (
   submissionNonce: string,
 ) => {
   const { courseId, moduleId, lessonId, contentItemId } = videoKey;
-  // Only reachable once the patch above has actually landed -- this
-  // request's view of the record it just replaced is now provably
-  // current, not stale. Canceling (and scheduling cleanup for) the
-  // previous job here, rather than before the patch, matters
-  // specifically when that job already finished for real in the
-  // window between this request's initial .get() and now: the patch's
-  // own status/s3Key/submissionNonce condition would already have
-  // caught that (the row no longer matches what this request read)
-  // and thrown CONFLICT above, so a job scheduleTranscodeCleanup would
-  // otherwise queue for deletion is never a job whose output is still
-  // the record's own current, legitimate content.
+  // Called only after patchReplacement landed, so `existing` was current:
+  // had the previous job finished in between, the patch's condition would
+  // have thrown CONFLICT, and this never cleans up output the record uses.
   await bestEffortCancelTranscodeJobs(logger, [existing]);
 
   // Best-effort: the patch above already orphaned the old raw upload of
@@ -311,8 +260,8 @@ export const cancelAndResubmit = async (
 
   let mediaConvertJobId: string;
   try {
-    // Submitted only after the patch above has landed -- see the same
-    // note in createContentItemVideo.
+    // Submitted only after the record is patched, so the completion
+    // callback can't race ahead of it.
     mediaConvertJobId = await submitTranscodeJob({
       courseId,
       moduleId,
@@ -322,17 +271,10 @@ export const cancelAndResubmit = async (
       submissionNonce: submissionNonce!,
     });
   } catch (error) {
-    // Job submission itself failed -- the record was already patched
-    // to point at the new upload, and any job for the previous video
-    // has already been canceled above too, so there's no working
-    // state left to restore. Mark it failed, the same terminal state a
-    // genuine MediaConvert ERROR would produce, so the instructor gets
-    // an accurate signal instead of an indefinite "processing" spinner.
-    // Conditioned on submissionNonce still being this exact attempt's:
-    // a second concurrent replacement could have already superseded
-    // this record with its own nonce/job while this attempt was still
-    // waiting on submitTranscodeJob, and this attempt's own failure
-    // has nothing to do with that newer, legitimate replacement.
+    // Submission failed after the record moved to the new upload and the
+    // previous job was canceled, so there's nothing to restore: mark it
+    // failed, as a MediaConvert error would. Conditioned on submissionNonce,
+    // so a concurrent replacement that superseded this one is untouched.
     await coreTable.entities.contentItem
       .patch({ courseId, moduleId, lessonId, contentItemId })
       .set({ status: 'failed' })
@@ -355,16 +297,10 @@ export const cancelAndResubmit = async (
   }
 
   try {
-    // Lets transcode-complete.ts recognize a stale completion event
-    // from a job a later replacement has since superseded.
-    // rawObjectETag lets a later retry of this exact submission be
-    // told apart from a genuine subsequent replacement. Conditioned on
-    // submissionNonce still being this exact attempt's, for the same
-    // reason as the mark-failed patch above -- a concurrent
-    // replacement may have already moved the record onto its own
-    // nonce/job, and this stamp landing anyway would silently
-    // repoint mediaConvertJobId/rawObjectETag at this attempt's job
-    // while leaving that replacement's own s3Key/status in place.
+    // mediaConvertJobId lets transcode-complete.ts ignore a superseded
+    // job's completion; rawObjectETag lets a retry of this submission be
+    // told from a real replacement. Conditioned on submissionNonce so it
+    // can't repoint a concurrent replacement's record at this job.
     await coreTable.entities.contentItem
       .patch({ courseId, moduleId, lessonId, contentItemId })
       .set({ mediaConvertJobId, rawObjectETag: objectETag })
@@ -372,11 +308,8 @@ export const cancelAndResubmit = async (
       .go();
   } catch (error) {
     if (isConditionalCheckFailed(error)) {
-      // Lost ownership, not a transient failure: a concurrent
-      // replacement already moved this record onto its own nonce, so
-      // this attempt's job has nothing left pointing at it and needs
-      // its own cleanup -- otherwise nothing else will ever cancel or
-      // clean it up.
+      // A concurrent replacement took the record over, so nothing points
+      // at this attempt's job and nothing else will cancel or clean it up.
       await bestEffortCancelTranscodeJob(logger, {
         jobId: mediaConvertJobId,
         courseId,
@@ -386,14 +319,10 @@ export const cancelAndResubmit = async (
         submissionNonce: submissionNonce!,
       });
     } else {
-      // The job itself is real and already running regardless of
-      // whether this stamp lands -- marking the record failed here
-      // would orphan it. submissionNonce is already durable from the
-      // patch above, so a later retry's crash-gap check reconnects to
-      // this exact job via ClientRequestToken, and
-      // transcode-complete.ts's own nonce-conditioned patch
-      // reconciles the record once the job actually finishes,
-      // regardless of whether this stamp ever lands.
+      // The job is running, so marking the record failed would orphan it.
+      // The stored submissionNonce lets a retry reconnect via
+      // ClientRequestToken, and transcode-complete.ts's nonce-conditioned
+      // patch reconciles the record when it finishes.
       logger?.error(
         'Failed to stamp mediaConvertJobId after transcode submission',
         {

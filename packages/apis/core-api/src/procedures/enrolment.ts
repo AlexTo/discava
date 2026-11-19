@@ -9,6 +9,7 @@ import {
   cancellationReasons,
   failedAt,
   hasTransactionConflict,
+  restoreFreeEnrolment,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -47,10 +48,29 @@ export const requireEnrolment = (
   }
 };
 
-// Enrols the caller in a published course. The course's status is checked in
-// the same transaction as the write, so a course archived (or deleted) while
-// this runs can't take a new enrolment. Enrolling again returns the existing
-// enrolment, whatever the course's status now.
+// Why the course can't be entered by this route: a published course with a
+// price is entered only by a paid order (`settleOrderPaid`); a draft, archived
+// or missing one is NOT_FOUND, as publicView does, so a draft's existence
+// isn't leaked.
+const courseUnavailable = async (coreTable: CoreTable, courseId: string) => {
+  const { data: course } = await coreTable.entities.course
+    .get({ courseId })
+    .go();
+  return course?.status === 'published' && course.priceAmount > 0
+    ? new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'This course must be purchased',
+      })
+    : new TRPCError({ code: 'NOT_FOUND' });
+};
+
+// Enrols the caller in a published, free course. The course's status and price
+// are checked in the same transaction as the write, so a course archived (or
+// deleted) or priced while this runs can't take a new enrolment. A priced
+// course is entered only by a paid order (`settleOrderPaid`), never here, and
+// `enrol` never writes `orderId`. Enrolling again returns the existing
+// enrolment, whatever the course's status or price now. A refunded student
+// (`dropped`) re-enters a course that is free again here.
 export const enrol = courseProcedure
   .input(EnrolInputSchema)
   .output(EnrolOutputSchema)
@@ -63,7 +83,10 @@ export const enrol = courseProcedure
       .write(({ course, enrolment }) => [
         course
           .check({ courseId })
-          .where((attr, op) => op.eq(attr.status, 'published'))
+          .where(
+            (attr, op) =>
+              `${op.eq(attr.status, 'published')} AND ${op.eq(attr.priceAmount, 0)}`,
+          )
           .commit(),
         enrolment.create({ courseId, userId }).commit(),
       ])
@@ -72,17 +95,29 @@ export const enrol = courseProcedure
     if (canceled) {
       const reasons = cancellationReasons(data);
       // Already enrolled. Checked first: a student enrolled before the course
-      // was archived is still enrolled.
+      // was archived or priced is still enrolled.
       if (failedAt(reasons, 1)) {
         const existing = await getEnrolment(coreTable, courseId, userId);
-        if (existing) {
+        if (existing?.status === 'dropped') {
+          const restored = await restoreFreeEnrolment({
+            coreTable,
+            courseId,
+            userId,
+          });
+          if (restored === 'course-unavailable') {
+            throw await courseUnavailable(coreTable, courseId);
+          }
+          // Restored, or someone else got there first: read it again.
+          const current = await getEnrolment(coreTable, courseId, userId);
+          if (current) {
+            return current;
+          }
+        } else if (existing) {
           return existing;
         }
       }
-      // Draft, archived or missing: NOT_FOUND either way, as publicView does,
-      // so a draft's existence isn't leaked.
       if (failedAt(reasons, 0)) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+        throw await courseUnavailable(coreTable, courseId);
       }
       if (hasTransactionConflict(reasons)) {
         throw transactionConflict();

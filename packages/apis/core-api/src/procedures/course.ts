@@ -16,9 +16,9 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { playablePreviewManifest } from '../helpers/course-preview.js';
+import { asStudentContentItem } from '../helpers/playback.js';
+import { ratingFigures } from '../helpers/rating.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
-import { asStudentContentItem } from '../lib/playback.js';
-import { ratingFigures } from '../lib/rating.js';
 import {
   type IViewCourseOutput,
   ListCoursesByInstructorInputSchema,
@@ -138,11 +138,6 @@ export const publicListCourses = publicCourseProcedure
     };
   });
 
-// Anonymous course preview for the public landing page's "Learn more" link.
-// Unlike viewCourse, this never returns content items (previewing a course's
-// shape shouldn't expose its actual lesson content) and only ever resolves
-// published courses - draft/archived courses 404 the same as a courseId that
-// doesn't exist, so their existence isn't leaked to anonymous callers.
 // Reads the profiles of a course's instructors, in the order of their
 // courseInstructor records. An instructor without a profile is left out and
 // logged: the instructor-has-profile invariant makes that impossible.
@@ -201,6 +196,10 @@ const readPublicInstructors = async (
   });
 };
 
+// Anonymous course preview for the public landing page's "Learn more" link.
+// Unlike viewCourse, this never returns content items and only ever resolves
+// published courses: a draft or archived course is NOT_FOUND, the same as a
+// courseId that doesn't exist, so its existence isn't leaked.
 export const publicViewCourse = publicCourseProcedure
   .input(ViewCourseInputSchema)
   .output(PublicViewCourseOutputSchema)

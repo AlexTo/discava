@@ -23,6 +23,19 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
+import { getCourseOrThrow } from '../helpers/course-access.js';
+import {
+  initialVisibilityFields,
+  requireAncestorsNotArchived,
+  requireNotArchived,
+  requireOrdinaryLesson,
+} from '../helpers/curriculum-guards.js';
+import {
+  bestEffortCancelTranscodeJob,
+  submitTranscodeJob,
+} from '../helpers/mediaconvert-client.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { getVideoUploadETag } from '../helpers/s3-client.js';
 import {
   cancelAndResubmit,
   hasMetadata,
@@ -35,19 +48,6 @@ import {
   requireObjectKeyInLesson,
 } from '../helpers/video-replacement.js';
 import { courseProcedure } from '../init.js';
-import {
-  getCourseOrThrow,
-  initialVisibilityFields,
-  requireAncestorsNotArchived,
-  requireNotArchived,
-  requireOrdinaryLesson,
-  writeAtEnd,
-} from '../lib/course-lifecycle.js';
-import {
-  bestEffortCancelTranscodeJob,
-  submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
-import { getVideoUploadETag } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
   CreateContentItemVideoOutputSchema,
@@ -113,12 +113,8 @@ export const createContentItemVideoUploadUrl = courseProcedure
       });
     }
 
-    // When replacing an existing video, reuse its id in the object key
-    // instead of minting a fresh one, so the key's id segment always
-    // matches a real content item -- createContentItemVideo/
-    // updateContentItemVideo validate the key against the ids they
-    // already have from context, rather than trusting anything parsed
-    // back out of it.
+    // A replacement reuses the existing item's id in the object key, so the
+    // key's id segment always names a real content item.
     if (input.contentItemId !== undefined) {
       const { data: existing } = await coreTable.entities.contentItem
         .get({
@@ -138,16 +134,10 @@ export const createContentItemVideoUploadUrl = courseProcedure
     }
 
     const contentItemId = input.contentItemId ?? uuidv7();
-    // A fresh id per upload attempt, always -- unlike contentItemId (which
-    // a replace deliberately reuses), this must never repeat, or two
-    // different uploads (e.g. successive replacements of the same video)
-    // land at the same S3 key and can overwrite or delete each other:
-    // DynamoDB's own conditions (see updateContentItemVideo) can't protect
-    // a plain S3 object from a second, unrelated write to the same path.
-    // Mirrors submissionNonce scoping the transcode *output* the same way
-    // (see submitTranscodeJob's Destination) -- this scopes the raw
-    // *input* identically, just one level shallower (a single object, not
-    // a directory of segments).
+    // A fresh id per upload attempt, so two uploads (e.g. successive
+    // replacements of one video) never share an S3 key and overwrite or
+    // delete each other; DynamoDB conditions can't guard a plain S3 object.
+    // submissionNonce scopes the transcode output the same way.
     const uploadId = randomUUID();
     const objectKey = `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${uploadId}.${ext}`;
 
@@ -228,12 +218,8 @@ export const createContentItemVideo = courseProcedure
       });
     }
 
-    // Feeds submitTranscodeJob's ClientRequestToken -- see its docstring
-    // for why a nonce, not the upload's own content, is what that token is
-    // derived from. Widened to plain string: ElectroDB's generated
-    // attribute type for submissionNonce is 'string', and randomUUID()'s
-    // own narrower template-literal return type doesn't structurally
-    // match that when passed into op.eq() further down.
+    // Feeds submitTranscodeJob's ClientRequestToken. Typed as plain string
+    // because randomUUID()'s template-literal type doesn't fit op.eq() below.
     const submissionNonce: string = randomUUID();
 
     // Appended to the lesson in the same transaction as checks that the
@@ -278,16 +264,10 @@ export const createContentItemVideo = courseProcedure
         submissionNonce,
       });
     } catch (error) {
-      // Job submission itself failed -- delete the record so a retry
-      // (even with the exact same input) starts clean instead of leaving
-      // a permanently broken 'pending' record with no job behind it, or
-      // piling a duplicate alongside it. Conditioned on submissionNonce
-      // still being this exact attempt's: a concurrent updateContentItemVideo
-      // could have already read this just-created record and replaced it
-      // with its own submission before this rollback runs, and deleting
-      // the record out from under that legitimate, newer replacement would
-      // corrupt it for no reason -- this attempt's own failure has nothing
-      // to do with a submission that came after it.
+      // Submission failed: delete the record so a retry starts clean rather
+      // than leaving a 'pending' item with no job. Conditioned on
+      // submissionNonce, so a concurrent updateContentItemVideo that already
+      // replaced this record isn't deleted out from under it.
       await coreTable.entities.contentItem
         .delete({ courseId, moduleId, lessonId, contentItemId })
         .where((attr, op) => op.eq(attr.submissionNonce, submissionNonce))
@@ -302,16 +282,11 @@ export const createContentItemVideo = courseProcedure
     }
 
     try {
-      // Lets transcode-complete.ts recognize a stale completion event from
-      // a job a later replacement has since superseded. rawObjectETag lets
-      // a future updateContentItemVideo call tell a genuine replacement
-      // apart from a retry of this exact submission. Conditioned on
-      // submissionNonce still being this exact attempt's, for the same
-      // reason as the rollback delete above -- a concurrent replacement
-      // may have already superseded this record with its own nonce/job,
-      // and this stamp landing anyway would silently repoint the record
-      // at this attempt's job while leaving that replacement's own
-      // s3Key/status in place.
+      // mediaConvertJobId lets transcode-complete.ts ignore a superseded
+      // job's completion; rawObjectETag lets updateContentItemVideo tell a
+      // retry of this submission from a real replacement. Conditioned on
+      // submissionNonce so it can't repoint a concurrent replacement's record
+      // at this attempt's job.
       await coreTable.entities.contentItem
         .patch({ courseId, moduleId, lessonId, contentItemId })
         .set({ mediaConvertJobId, rawObjectETag: objectETag })
@@ -319,10 +294,8 @@ export const createContentItemVideo = courseProcedure
         .go();
     } catch (error) {
       if (isConditionalCheckFailed(error)) {
-        // Lost ownership, not a transient failure: a concurrent replacement
-        // already moved this record onto its own nonce, so this attempt's
-        // job has nothing left pointing at it and needs its own cleanup --
-        // otherwise nothing else will ever cancel or clean it up.
+        // A concurrent replacement took the record over, so nothing points
+        // at this attempt's job and nothing else will cancel or clean it up.
         await bestEffortCancelTranscodeJob(ctx.logger, {
           jobId: mediaConvertJobId,
           courseId,
@@ -332,14 +305,10 @@ export const createContentItemVideo = courseProcedure
           submissionNonce,
         });
       } else {
-        // The job itself is real and already running regardless of
-        // whether this stamp lands -- rolling back here (deleting the
-        // record, or marking it failed) would orphan it. submissionNonce
-        // is already durable from the .create() above, so a later retry's
-        // crash-gap check reconnects to this exact job via
-        // ClientRequestToken, and transcode-complete.ts's own
-        // nonce-conditioned patch reconciles the record once the job
-        // actually finishes, regardless of whether this stamp ever lands.
+        // The job is running, so rolling back would orphan it. The stored
+        // submissionNonce lets a retry reconnect to it via
+        // ClientRequestToken, and transcode-complete.ts's nonce-conditioned
+        // patch reconciles the record when it finishes.
         ctx.logger?.error(
           'Failed to stamp mediaConvertJobId after transcode submission',
           {
@@ -477,10 +446,8 @@ export const createContentItemVideoUrl = courseProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    // Everything up to and including the trailing slash before
-    // master.m3u8 -- the nonce-scoped (or, for pre-nonce records, just
-    // content-item-scoped) directory this submission's manifest,
-    // rendition playlists, and segments all live under.
+    // The folder holding this version's manifest, rendition playlists and
+    // segments, up to and including the trailing slash.
     const prefixKey = contentItem.s3Key.slice(
       0,
       contentItem.s3Key.lastIndexOf('/') + 1,

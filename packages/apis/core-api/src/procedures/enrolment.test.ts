@@ -14,6 +14,8 @@ const {
   courseCheckWhere,
   transactionWrite,
   transactionGo,
+  courseGet,
+  restoreFreeEnrolment,
 } = vi.hoisted(() => ({
   enrolmentGet: vi.fn(),
   enrolmentCreate: vi.fn(),
@@ -21,12 +23,15 @@ const {
   courseCheckWhere: vi.fn(),
   transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
+  courseGet: vi.fn(),
+  restoreFreeEnrolment: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
+  restoreFreeEnrolment,
   createCoreTableService: vi.fn(async () => ({
-    entities: { enrolment: { get: enrolmentGet } },
+    entities: { enrolment: { get: enrolmentGet }, course: { get: courseGet } },
     transaction: { write: transactionWrite },
   })),
 }));
@@ -64,6 +69,9 @@ const enrolment = {
 const storedEnrolment = (data: unknown) =>
   enrolmentGet.mockReturnValue({ go: vi.fn().mockResolvedValue({ data }) });
 
+const storedCourse = (data: unknown) =>
+  courseGet.mockReturnValue({ go: vi.fn().mockResolvedValue({ data }) });
+
 // The transaction is cancelled, with these reasons for its two items: the
 // course's status check, then the enrolment write.
 const cancelled = (
@@ -93,6 +101,7 @@ beforeEach(() => {
   }));
   transactionGo.mockResolvedValue({ canceled: false, data: [] });
   storedEnrolment(enrolment);
+  storedCourse({ status: 'published', priceAmount: 0 });
 });
 
 describe('enrol', () => {
@@ -113,9 +122,15 @@ describe('enrol', () => {
       'enrolment-create',
     ]);
     expect(courseCheck).toHaveBeenCalledWith({ courseId: 'course-1' });
-    const eq = vi.fn();
-    courseCheckWhere.mock.calls[0][0]({ status: 'status' }, { eq });
+    // Published and free: a priced course is entered by a paid order only.
+    const eq = vi.fn((name: string, value: unknown) => `${name} = ${value}`);
+    const condition = courseCheckWhere.mock.calls[0][0](
+      { status: 'status', priceAmount: 'priceAmount' },
+      { eq },
+    );
     expect(eq).toHaveBeenCalledWith('status', 'published');
+    expect(eq).toHaveBeenCalledWith('priceAmount', 0);
+    expect(condition).toBe('status = published AND priceAmount = 0');
     // For the caller, never for a user named in the input.
     expect(enrolmentCreate).toHaveBeenCalledWith({
       courseId: 'course-1',
@@ -150,6 +165,104 @@ describe('enrol', () => {
     await expect(
       callAsUser().enrol({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  // A priced course is entered by a paid order, never by this route.
+  it('is PRECONDITION_FAILED for a published course with a price, and writes nothing', async () => {
+    cancelled('ConditionalCheckFailed', undefined);
+    storedEnrolment(null);
+    storedCourse({ status: 'published', priceAmount: 4900 });
+
+    await expect(
+      callAsUser().enrol({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This course must be purchased',
+    });
+    expect(transactionWrite).toHaveBeenCalledTimes(1);
+    expect(restoreFreeEnrolment).not.toHaveBeenCalled();
+  });
+
+  it.each(['draft', 'archived'])(
+    'is still NOT_FOUND for a priced %s course',
+    async (status) => {
+      cancelled('ConditionalCheckFailed', undefined);
+      storedEnrolment(null);
+      storedCourse({ status, priceAmount: 4900 });
+
+      await expect(
+        callAsUser().enrol({ courseId: 'course-1' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
+  it('returns the existing enrolment of a student who enrolled before the course was priced', async () => {
+    cancelled('ConditionalCheckFailed', 'ConditionalCheckFailed');
+    storedCourse({ status: 'published', priceAmount: 4900 });
+
+    await expect(callAsUser().enrol({ courseId: 'course-1' })).resolves.toEqual(
+      enrolment,
+    );
+    expect(restoreFreeEnrolment).not.toHaveBeenCalled();
+  });
+
+  describe('a dropped enrolment', () => {
+    const dropped = { ...enrolment, status: 'dropped' as const };
+    const readAfter = (...reads: unknown[]) => {
+      for (const data of reads) {
+        enrolmentGet.mockReturnValueOnce({
+          go: vi.fn().mockResolvedValue({ data }),
+        });
+      }
+    };
+
+    beforeEach(() => cancelled(undefined, 'ConditionalCheckFailed'));
+
+    it('is restored in a free published course and returned', async () => {
+      readAfter(dropped, enrolment);
+      restoreFreeEnrolment.mockResolvedValue('restored');
+
+      await expect(
+        callAsUser().enrol({ courseId: 'course-1' }),
+      ).resolves.toEqual(enrolment);
+      expect(restoreFreeEnrolment).toHaveBeenCalledWith({
+        coreTable: expect.anything(),
+        courseId: 'course-1',
+        userId: USER_SUB,
+      });
+    });
+
+    it('is PRECONDITION_FAILED in a priced published course', async () => {
+      readAfter(dropped);
+      restoreFreeEnrolment.mockResolvedValue('course-unavailable');
+      storedCourse({ status: 'published', priceAmount: 4900 });
+
+      await expect(
+        callAsUser().enrol({ courseId: 'course-1' }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    });
+
+    it.each(['draft', 'archived'])(
+      'is NOT_FOUND in a %s course',
+      async (status) => {
+        readAfter(dropped);
+        restoreFreeEnrolment.mockResolvedValue('course-unavailable');
+        storedCourse({ status, priceAmount: 0 });
+
+        await expect(
+          callAsUser().enrol({ courseId: 'course-1' }),
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      },
+    );
+
+    it('is read again and returned when it is no longer dropped', async () => {
+      readAfter(dropped, enrolment);
+      restoreFreeEnrolment.mockResolvedValue('not-dropped');
+
+      await expect(
+        callAsUser().enrol({ courseId: 'course-1' }),
+      ).resolves.toEqual(enrolment);
+    });
   });
 
   it('is a CONFLICT when another transaction touched the same records', async () => {

@@ -81,7 +81,6 @@ export function QuizBuilderDialog({
             ? 'This quiz is archived. Restore it from the course page to edit it.'
             : undefined;
 
-  // Closing with unsaved changes asks first.
   const requestClose = () => {
     if (dirty) {
       setConfirmDiscard(true);

@@ -10,21 +10,22 @@ import {
   SCORE_BANDS,
   scoreStatsSk,
   sumContributions,
-} from '../analytics.js';
+} from '../analytics-contributions.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
 // A course's analytics aggregates equal the sums of what its records
-// contribute: `contributions` (helpers/analytics.ts) summed over its
+// contribute: `contributions` (helpers/analytics-contributions.ts) summed over its
 // enrolments, completions and quiz attempts. The stream handler keeps them
 // current a few seconds behind the records, so a check right after a change
 // may see a difference that closes (the e2e suite waits, see
 // `waitForAnalytics`). A missing item counts as zeros. The summary, period,
 // lesson and quiz items are compared. A question's counts come from the
 // attempts' `answers` and `correctQuestionIds`, a quiz's score bands from the
-// students' `bestScore` (it only rises, check 3 holding it to the best
-// attempt, and attempts are never rewritten). A lesson's counts come from each student's `progress` against their
-// enrolment (a dropped one counts nothing); the funnel markers are ignored.
+// students' `bestScore` (it only rises, quiz-summary-matches-attempts holding
+// it to the best attempt, and attempts are never rewritten). A lesson's counts
+// come from each student's `progress` against their enrolment (a dropped one
+// counts nothing); the funnel markers are ignored.
 export const checkAnalyticsMatchesRecords = (
   snapshot: TableSnapshot,
 ): Violation[] => {

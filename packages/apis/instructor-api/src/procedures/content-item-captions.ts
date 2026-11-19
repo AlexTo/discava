@@ -25,18 +25,18 @@ import {
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
   putCaptionFile,
   readCaptionUpload,
-} from '../lib/caption-files.js';
+} from '../helpers/caption-files.js';
+import { requireCourseInstructor } from '../helpers/course-access.js';
 import {
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireNotArchived,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/curriculum-guards.js';
+import { courseProcedure } from '../init.js';
 import {
   AttachCaptionInputSchema,
   CaptionTracksOutputSchema,
@@ -46,7 +46,7 @@ import {
   RemoveCaptionInputSchema,
 } from '../schema/index.js';
 
-// Caption tracks an instructor manages (US5). A track's file is uploaded to
+// Caption tracks an instructor manages. A track's file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then checked and
 // copied into the playing version's folder of the lesson media bucket when it
 // is attached. Every change to the list goes through applyCaptionChange and a

@@ -74,9 +74,9 @@ export const localObjectUrl = (runtimeConfigKey: string, key: string): string =>
 
 /**
  * Local dev's event runner (packages/events, `src/local/event-runner.ts`),
- * which also stands in for MediaConvert, Transcribe and EventBridge Scheduler (#137):
- * instructor-api and the event handlers call it instead of those services
- * in local dev.
+ * which also stands in for MediaConvert, Transcribe, EventBridge Scheduler and
+ * Cognito's pre token generation trigger (#137): the APIs and the event
+ * handlers call it instead of those services in local dev.
  */
 export const LOCAL_EVENT_RUNNER = {
   port: 2024,
@@ -218,6 +218,9 @@ export interface LocalEmailRequest {
  */
 export const LOCAL_PORTAL_URLS = LOCAL_PORTAL_ORIGINS;
 export const LOCAL_CORE_API_URL = 'http://localhost:2022';
+
+/** Local dev's page renderer (core-api's `src/local-page-renderer.ts`): the landing pages as crawlers get them. */
+export const LOCAL_PAGE_RENDERER_URL = 'http://localhost:2026';
 
 /** The sender local dev's notification emails come from, so email counts as configured. */
 export const LOCAL_NOTIFICATIONS_FROM = 'notifications@discava.local';

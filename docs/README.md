@@ -29,15 +29,9 @@ This project is pre-wired with a translation script that uses a
 the source language (`en` by default) into every locale listed in
 `scripts/translate.config.json`.
 
-By default the `targetLanguages` list is empty — add the locale codes you want
-to ship, for example:
-
-```json
-"targetLanguages": ["fr", "de", "es", "ja", "ko"]
-```
-
-Make sure each locale you list is also configured in `astro.config.mjs` under
-`locales`.
+The `targetLanguages` list holds the locales the site ships (`jp`, `ko`, `es`,
+`pt`, `fr`, `it`, `zh`, `vi`). Each locale listed there must also be configured
+in `astro.config.mjs` under `locales`.
 
 Run the translator manually with:
 
@@ -45,8 +39,8 @@ Run the translator manually with:
 pnpm nx translate @discava/docs -- --all
 ```
 
-Translate only the files that changed since the last `docs: update translations`
-commit:
+Translate only the files changed on your branch since it left `main`, or since
+the branch's last `docs: update translations` commit:
 
 ```bash
 pnpm nx translate @discava/docs

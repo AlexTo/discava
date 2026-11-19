@@ -11,7 +11,7 @@ import {
   LEVELS,
   type Level,
   normaliseTags,
-} from './catalogue.js';
+} from './catalogue-vocabulary.js';
 import {
   failedConditions,
   InvalidRequestError,

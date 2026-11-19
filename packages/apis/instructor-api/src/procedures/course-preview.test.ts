@@ -90,11 +90,11 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
 vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
   scheduleTranscodeCleanup,
 }));
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('../helpers/s3-client.js', () => ({
   getVideoUploadETag,
   bestEffortDeletePreviewUploads,
 }));
-vi.mock('../lib/mediaconvert-client.js', () => ({
+vi.mock('../helpers/mediaconvert-client.js', () => ({
   submitTranscodeJob,
   bestEffortCancelTranscodeJob,
 }));

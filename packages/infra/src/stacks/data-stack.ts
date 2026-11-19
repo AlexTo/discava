@@ -25,11 +25,11 @@ import type {
   SearchComponentConfig,
 } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Names, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
-import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Policy, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import { Key } from 'aws-cdk-lib/aws-kms';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
@@ -52,9 +52,10 @@ export interface DataStackProps extends StackProps {
 }
 
 /**
- * Stateful resources: users, the core table, lesson media and public media. Kept apart
- * from the stacks that change on most deploys, and depended on by every API
- * and event handler stack.
+ * Stateful resources: users, the core table, lesson and public media, the
+ * search collection, and the notification and Stripe secrets. Kept apart from
+ * the stacks that change on most deploys, and depended on by every API and
+ * event handler stack.
  */
 export class DataStack extends Stack {
   public readonly identity: UserIdentity;
@@ -87,6 +88,7 @@ export class DataStack extends Stack {
     this.identity = this.createIdentity(identityConfig);
     this.coreTable = this.createCoreTable(coreTableConfig);
     this.syncUsersToCoreTable();
+    this.grantPageRenderer(studentPortal);
     this.lessonMediaBucket = this.createLessonMediaBucket(lessonMediaConfig);
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
@@ -138,7 +140,7 @@ export class DataStack extends Stack {
           : RemovalPolicy.DESTROY,
     });
 
-    // Adds every self-signed-up user to the `student` group
+    // Adds every self-signed-up user to the `student` and `instructor` groups.
     const postConfirmation = new EventsPostConfirmation(
       this,
       'PostConfirmation',
@@ -161,6 +163,23 @@ export class DataStack extends Stack {
     );
 
     return identity;
+  }
+
+  private grantPageRenderer(studentPortal: StudentPortal) {
+    if (!studentPortal.pageRendererRoleArn) {
+      return;
+    }
+    // A mutable import, so the policy is created here, in Data. Granting on
+    // the Websites-owned role would put the table's and AppConfig's ARNs in
+    // Websites, which Data already depends on: a cycle.
+    const role = Role.fromRoleArn(
+      this,
+      'PageRendererRole',
+      studentPortal.pageRendererRoleArn,
+      { mutable: true },
+    );
+    this.coreTable.grantReadData(role);
+    RuntimeConfig.ensure(this).grantReadAppConfig(role);
   }
 
   // Keeps each user's core table record in step with Cognito (#230). Pre
@@ -222,12 +241,14 @@ export class DataStack extends Stack {
   // Signs the unsubscribe links in notification emails (HMAC-SHA256); the
   // delivery function signs with it and the unsubscribe function verifies.
   // Replacing it would invalidate every link already sent, so it is kept like
-  // the table, and follows the table's encryption setting.
+  // the table, and follows the table's encryption setting. Named under the
+  // stage's prefix, which CI's execution role is scoped to.
   private createNotificationUnsubscribeSecret(
     coreTableConfig?: CoreTableComponentConfig,
   ) {
     const kmsEnabled = coreTableConfig?.enableKmsEncryption ?? true;
     const secret = new Secret(this, 'NotificationUnsubscribeSecret', {
+      secretName: `${Names.uniqueResourceName(this, { maxLength: 100, separator: '/' })}/NotificationUnsubscribe`,
       description: 'HMAC key that signs notification unsubscribe links',
       generateSecretString: {
         passwordLength: 64,
@@ -305,9 +326,9 @@ export class DataStack extends Stack {
     const lessonMediaKmsEnabled =
       lessonMediaConfig?.enableKmsEncryption ?? true;
 
-    // Raw, untranscoded uploads land here instead -- see decision log in
-    // #110. Once transcoding completes, TranscodeComplete deletes the raw
-    // object and lessonMediaBucket takes over serving the result.
+    // Raw uploads land here, not behind CloudFront (decision log in #110).
+    // Once a video's transcode completes, TranscodeComplete deletes the raw
+    // object and the lesson media bucket serves the result.
     const lessonMediaUploadBucket = new LessonMediaUploadBucket(
       this,
       'LessonMediaUploadBucket',
@@ -330,12 +351,10 @@ export class DataStack extends Stack {
   }
 
   private createSearchCollection(searchConfig?: SearchComponentConfig) {
-    // Not suppressing a checkov rule for AWSOwnedKey encryption here, unlike
-    // the other resources' enableKmsEncryption toggles: checkov had no
-    // documented rule for AWS::OpenSearchServerless::Collection as of this
-    // writing. Re-check `pnpm nx run @discava/infra:checkov` once this
-    // deploys, and add the rule here (with suppressRules, matching
-    // createCoreTable above) if one flags it.
+    // No checkov suppression for AWS-owned-key encryption here, unlike the
+    // other enableKmsEncryption toggles: checkov has no rule for
+    // OpenSearch Serverless encryption. If `pnpm nx run @discava/infra:checkov`
+    // starts flagging one, suppress it here as createCoreTable does.
     return new SearchCollection(this, 'SearchCollection', {
       enableKmsEncryption: searchConfig?.enableKmsEncryption ?? true,
       enableKeyRotation: searchConfig?.enableKeyRotation ?? true,

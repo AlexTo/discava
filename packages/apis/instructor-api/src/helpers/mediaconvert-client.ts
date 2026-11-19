@@ -22,9 +22,8 @@ import {
   type LocalTranscodeJobRequest,
 } from '@discava/common-server-utils/local-dev';
 
-// MediaConvert's DescribeEndpoints-based account-endpoint discovery is
-// deprecated -- requests can go straight to the regional endpoint now, so a
-// plain client is enough (no per-account endpoint to resolve/cache).
+// MediaConvert accepts requests at the regional endpoint, so no
+// DescribeEndpoints lookup is needed.
 let _client: MediaConvertClient | undefined;
 
 const getMediaConvertClient = (): MediaConvertClient => {
@@ -47,8 +46,8 @@ const resolveVideoTranscodePipelineConfig =
     );
 
 /**
- * What to transcode: a lesson's content item (the original shape, `target`
- * left out) or a course's preview video.
+ * What to transcode: a lesson's content item (`target` omitted) or a course's
+ * preview video.
  */
 export type TranscodeJobRequest =
   | {
@@ -69,37 +68,26 @@ export type TranscodeJobRequest =
 
 /**
  * Submits a MediaConvert job transcoding a just-uploaded video into HLS.
- * Called from createContentItemVideo/updateContentItemVideo only after the
- * DynamoDB record they write has been created/updated, so the completion
+ * Callers call it only after writing the DynamoDB record, so the completion
  * callback that later patches that record can never fire first. Returns the
  * new job's id so the caller can stamp it onto that same record --
  * transcode-complete.ts uses it to ignore a stale completion event from a
  * job a later replacement has since superseded.
  *
- * `submissionNonce` becomes MediaConvert's `ClientRequestToken`. It's the
- * caller's own durable record of "is this the same submission attempt as
- * before" (see content-item-video.ts), not a fingerprint of the uploaded
- * file -- a caller retrying this exact mutation after a crash (e.g. the
- * process died after this function returned but before the caller could
- * stamp the job id onto its record) passes back the *same* nonce it
- * already persisted, so CreateJob recognizes the token it already handled
- * and returns the existing job instead of starting a redundant one. A
- * genuinely new submission always gets a fresh nonce from the caller, so
- * it can never collide with anything, no matter how much time has passed
- * or how identical the uploaded content happens to be to something past.
- * (An earlier version derived this token from the raw upload's S3 ETag
- * instead -- abandoned because MediaConvert's own token-reuse window
- * turned out to be far less bounded in practice than documented, so a
- * coincidental content match could dedupe onto an unrelated, long-dead
- * job. The nonce sidesteps that entirely by never depending on content.)
+ * `submissionNonce` (hashed) becomes MediaConvert's `ClientRequestToken`. A
+ * caller retrying after a crash (e.g. between this returning and the job id
+ * being stamped) passes the nonce it already persisted, so CreateJob returns
+ * the existing job; a new submission always gets a fresh nonce. The token
+ * never depends on the file's content, so an identical upload can't dedupe
+ * onto an unrelated old job.
  */
 export const submitTranscodeJob = async (
   job: TranscodeJobRequest,
 ): Promise<string> => {
   const { courseId, objectKey, submissionNonce } = job;
-  // A lesson video's job carries no `target` in its metadata, so jobs in
-  // flight and the handlers agree (a handler reads none as `contentItem`); a
-  // preview's does, and its output goes under the course's preview folder.
+  // A lesson video's job carries no `target` in its metadata (handlers read
+  // none as `contentItem`); a preview's does, and its output goes under the
+  // course's preview folder.
   const isPreview = job.target === 'coursePreview';
   const { moduleId, lessonId, contentItemId } = isPreview
     ? { moduleId: '', lessonId: '', contentItemId: '' }
@@ -147,17 +135,11 @@ export const submitTranscodeJob = async (
       resolveLessonMediaBucketName(),
     ]);
 
-  // Scoped by submissionNonce, not just contentItemId: every submission
-  // attempt (including one a cancellation supersedes) writes to its own
-  // subdirectory, so a canceled job's in-flight writes never share a path
-  // with -- and can never be confused for -- the job that replaces it.
-  // MediaConvert's own job id can't serve this role: it doesn't exist
-  // until after CreateJob returns, by which point Destination has already
-  // had to be specified. MediaConvert derives every output filename in the
-  // group from the last path segment of `Destination` (the "base
-  // filename") -- "master" here is what makes the multivariant playlist
-  // come out as master.m3u8, with renditions as master_1080p.m3u8 etc.
-  // alongside it.
+  // Scoped by submissionNonce so a canceled job's in-flight writes never
+  // share a path with the job replacing it (MediaConvert's job id doesn't
+  // exist until CreateJob returns, too late for Destination). MediaConvert
+  // names every output from Destination's last segment: "master" gives
+  // master.m3u8 with renditions like master_1080p.m3u8 beside it.
   const destination = `s3://${mediaBucketName}/${outputFolder}/master`;
 
   // The audio-only group's file for Transcribe: MediaConvert appends the
@@ -286,9 +268,7 @@ export const bestEffortCancelTranscodeJob = async (
     });
   }
 
-  // Older records from before submissionNonce existed have nothing to
-  // scope a cleanup to -- best-effort, so this is silently skipped for
-  // them rather than treated as an error.
+  // A job with no submissionNonce has no folder to scope a cleanup to.
   if (job.submissionNonce !== undefined) {
     await scheduleTranscodeCleanup(
       logger,

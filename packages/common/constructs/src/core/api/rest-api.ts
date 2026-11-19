@@ -62,9 +62,6 @@ export interface RestApiProps<
    * Map of operation names to their API path and HTTP method details
    */
   readonly operations: Record<TOperation, OperationDetails>;
-  /**
-   * Map of integration keys to their API Gateway integrations
-   */
   readonly integrations: TIntegrations;
   /**
    * Whether to enable AWS WAFv2 with the default managed ruleset
@@ -119,10 +116,8 @@ export class RestApi<
   TOperation extends string,
   TIntegrations extends ApiIntegrations<TOperation, RestApiIntegration>,
 > extends Construct {
-  /** The underlying CDK RestApi instance */
   public readonly api: _RestApi;
 
-  /** Map of integration keys to their API Gateway integrations */
   public readonly integrations: TIntegrations;
 
   /** The WAFv2 Web ACL associated with the API's default stage, if WAF is enabled */
@@ -180,7 +175,6 @@ export class RestApi<
         ? SecurityPolicy.TLS13_2025_EDGE
         : SecurityPolicy.TLS13_1_3_2025_09;
 
-    // Create the API Gateway REST API
     this.api = new _RestApi(this, 'Api', {
       // Without this the console shows every API by its construct id
       // ("Api"); prefixing the stage tells stages sharing an account apart.
@@ -314,8 +308,7 @@ export class RestApi<
       );
     }
 
-    // Resolve the integration for a given operation.
-    // If the operation has a dedicated integration, use it; otherwise fall back to $router.
+    // An operation without an integration of its own falls back to $router.
     const resolveIntegration = (op: TOperation): RestApiIntegration => {
       const record = integrations as Record<string, RestApiIntegration>;
       if (op in record) {
@@ -329,7 +322,6 @@ export class RestApi<
       );
     };
 
-    // Create API resources and methods for each operation
     (Object.entries(operations) as [TOperation, OperationDetails][]).forEach(
       ([op, details]) => {
         const integration = resolveIntegration(op);
@@ -376,7 +368,6 @@ export class RestApi<
     // The API Gateway hostname a custom domain's DNS record points at (a
     // d-*.execute-api.<region>.amazonaws.com name), which differs from the
     // execute-api URL in the Endpoint output RestApi adds by default.
-    // Target for the custom domain's DNS record
     if (domainName) {
       new CfnOutput(this, `${apiName}DomainNameAlias`, {
         value: this.api.domainName!.domainNameAliasDomainName,
@@ -387,13 +378,6 @@ export class RestApi<
     }
   }
 
-  /**
-   * Recursively creates or retrieves API Gateway resources based on a path pattern.
-   *
-   * @param resource - The parent API Gateway resource
-   * @param pathParts - Array of path segments to create or retrieve
-   * @returns The API Gateway resource at the end of the path
-   */
   private getOrCreateResource(
     resource: IResource,
     [nextPathPart, ...pathParts]: string[],

@@ -10,7 +10,7 @@ import {
   contributions,
   funnelContributions,
   sumContributions,
-} from '../analytics.js';
+} from '../analytics-contributions.js';
 import type { InvariantName } from './index.js';
 import { checkTableInvariants as checkAllInvariants } from './index.js';
 import type { TableSnapshot } from './snapshot.js';
@@ -287,7 +287,7 @@ export const testHelpers = (getTable: () => TableSnapshot) => {
 
   // The lesson figures the records add up to, as the analytics handler would
   // have left them, for a test that changes progress or an enrolment to try
-  // another rule; rule 26 is tried against its own figures below.
+  // another rule; analytics-matches-records is tried on its own below.
   const settleLessonStats = () => {
     getTable().lessonStats = aggregatesOf(
       sumContributions(

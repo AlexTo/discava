@@ -7,7 +7,7 @@ import { getDynamoDBClient, resolveTableName } from '../client.js';
 
 // A course's all-time counts for the instructor dashboard. Counters are
 // changed only with `add`, by the analytics handler and the rebuild, from
-// the stream's changes to enrolments; see helpers/analytics.ts.
+// the stream's changes to enrolments; see helpers/analytics-contributions.ts.
 export const createCourseStatsEntity = async () =>
   new Entity(
     {

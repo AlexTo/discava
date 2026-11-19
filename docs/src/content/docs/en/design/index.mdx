@@ -14,16 +14,19 @@ This section describes **how Discava's features work**. Each page covers one fea
 | Page | Covers |
 |---|---|
 | <Link path="design/catalogue-categories">Catalogue categories</Link> | The admin-managed category taxonomy, the catalogue fields on a course, and how they feed search facets |
+| <Link path="design/certificates">Certificates</Link> | How a certificate of completion is issued, switched on or off per course, shared and verified |
 | <Link path="design/course-analytics">Course analytics</Link> | The instructor dashboard and course analytics page: what each figure means, and why the figures lag the records by a few seconds |
 | <Link path="design/live-course-editing">Live course editing</Link> | Adding, removing, hiding, restoring and editing modules, lessons and content items after a course is published |
 | <Link path="design/progress-and-completion">Progress and completion</Link> | How item, lesson and course completion are recorded, and the server-side recalculation that owns them |
+| <Link path="design/public-pages">Public pages</Link> | Course landing pages and instructor profiles for crawlers and link previews: the page renderer, caching and freshness, the SPA rewrite, the indexing setting and the preview video's exposure rules |
 | <Link path="design/quizzes">Quizzes</Link> | The quiz content item: data model, grading, attempts, and the student and instructor experience |
 | <Link path="design/search">Search</Link> | Cross-content-type search: the OpenSearch Serverless collection, the indexing pipeline, and how visibility is enforced |
 | <Link path="design/stream-event-router">Stream event router</Link> | How a feature reacts to core table changes: its registration, queue, failure queue, alarm and handler obligations, and the local router |
+| <Link path="design/video-player">Video player and captions</Link> | How the lesson video player resumes, changes speed, responds to the keyboard and shows captions, and how captions are generated or uploaded |
 
 ## Shared concepts
 
-**Curriculum hierarchy.** A course contains modules, a module contains lessons, and a lesson contains an ordered list of content items (video, text, quiz). All four live in one DynamoDB partition (`COURSE#<courseId>`) through ElectroDB's `curriculum` collection, so a whole course is one query. That query reads every page, since a course's curriculum can exceed DynamoDB's 1 MB per page.
+**Curriculum hierarchy.** A course contains modules, a module contains lessons, and a lesson contains an ordered list of content items (video, text, file, quiz, assignment). All four live in one DynamoDB partition (`COURSE#<courseId>`) through ElectroDB's `curriculum` collection, so a whole course is one query. That query reads every page, since a course's curriculum can exceed DynamoDB's 1 MB per page.
 
 **Effective visibility.** A module, lesson or content item is shown to students only if it **and every ancestor** is `visible` and not archived. Student reads, student writes and progress calculations all use effective visibility, never a record's own `visibility` alone. The rule is implemented once, as `filterEffectivelyVisible` in `@discava/core-table`.
 

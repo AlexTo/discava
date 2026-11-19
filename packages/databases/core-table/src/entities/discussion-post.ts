@@ -82,30 +82,26 @@ export const createDiscussionPostEntity = async () =>
           required: true,
           default: 'shown',
         },
-        // Questions only: replies with state `shown`, at most 500. Only
-        // `discussionWrites` writes this.
+        // Questions only: replies with state `shown`, at most 500.
         replyCount: {
           type: 'number',
           default: 0,
         },
-        // Questions only: shown replies by instructors. Only
-        // `discussionWrites` writes this.
+        // Questions only: shown replies by instructors.
         instructorReplyCount: {
           type: 'number',
           default: 0,
         },
-        // Upvotes on this post. Only `discussionWrites` writes this.
+        // Upvotes on this post.
         voteCount: {
           type: 'number',
           default: 0,
         },
-        // Questions only: a shown reply of this question. Only
-        // `discussionWrites` writes this.
+        // Questions only: a shown reply of this question.
         acceptedPostId: {
           type: 'string',
         },
-        // At most 20 user ids; absent when there are no open reports. Only
-        // `discussionWrites` writes this.
+        // At most 20 user ids; absent when there are no open reports.
         reportedBy: {
           type: 'set',
           items: 'string',

@@ -75,6 +75,7 @@ export default defineConfig({
         {
           label: 'Feature guides',
           items: [
+            'guides/instructor-guide',
             'guides/announcements',
             'guides/notifications',
             'guides/lesson-discussions',

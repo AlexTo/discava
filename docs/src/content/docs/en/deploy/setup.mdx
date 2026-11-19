@@ -73,7 +73,7 @@ It asks a series of questions, each with a detected default you accept with Ente
 | **CDK bootstrap** | Yes, for each region it reports as not bootstrapped |
 | **GitHub environment** | Yes, to create the environment named after the stage and set its variables |
 | **Deploy automatically?** | Yes to deploy this stage whenever CI passes on `main`. No to deploy only when you run the workflow. Only one stage can deploy automatically |
-| **Custom domains** | Leave every answer blank for now. You can run the script again later to add them |
+| **Root domain** | Leave blank for now. You can run the script again later to serve every component from a subdomain of it, using certificates it finds in ACM (see <Link path="deploy/configuration">Stage configuration</Link>) |
 
 ### What it creates
 

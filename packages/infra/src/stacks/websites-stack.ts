@@ -6,9 +6,10 @@ import {
   AdminPortal,
   InstructorPortal,
   RuntimeConfig,
+  runtimeConfigApplicationName,
   StaticWebsite,
-  StaticWebsiteProps,
   StudentPortal,
+  StudentPortalProps,
   suppressRules,
 } from '@discava/common-constructs';
 import type {
@@ -73,6 +74,7 @@ export class WebsitesStack extends Stack {
       'StudentPortal',
       studentPortal,
       runtimeConfigScope,
+      this.studentPortalProps(studentPortal),
     );
     this.instructorPortal = this.createPortal(
       InstructorPortal,
@@ -93,19 +95,41 @@ export class WebsitesStack extends Stack {
     };
   }
 
+  /**
+   * The student portal's page renderer, and `noindex` on every response of a
+   * stage closed to search engines.
+   */
+  private studentPortalProps(
+    config: StudentPortalComponentConfig | undefined,
+  ): Partial<StudentPortalProps> {
+    const allowSearchEngineIndexing =
+      config?.allowSearchEngineIndexing ?? false;
+    return {
+      ...(!allowSearchEngineIndexing && {
+        extraResponseHeaders: { 'X-Robots-Tag': 'noindex' },
+      }),
+      pageRenderer: {
+        allowSearchEngineIndexing,
+        siteName: config?.siteName ?? 'Discava',
+        reservedConcurrency: config?.pageRendererReservedConcurrency ?? 20,
+        runtimeConfigAppName: runtimeConfigApplicationName(
+          RuntimeConfig.ensure(this),
+        ),
+        allowedHosts: config?.domainNames ?? [],
+      },
+    };
+  }
+
   private portalUrl(portal: StaticWebsite, config: PortalConfig | undefined) {
     return `https://${config?.domainNames?.[0] ?? portal.cloudFrontDistribution.distributionDomainName}`;
   }
 
   private createPortal<T extends StaticWebsite>(
-    Portal: new (
-      scope: Construct,
-      id: string,
-      props?: Omit<StaticWebsiteProps, 'websiteName' | 'websiteFilePath'>,
-    ) => T,
+    Portal: new (scope: Construct, id: string, props?: StudentPortalProps) => T,
     id: string,
     config: PortalConfig | undefined,
     runtimeConfigScope: Construct,
+    extraProps: Partial<StudentPortalProps> = {},
   ): T {
     const wafEnabled = config?.enableWaf ?? true;
     const kmsEnabled = config?.enableKmsEncryption ?? true;
@@ -124,6 +148,7 @@ export class WebsitesStack extends Stack {
       certificate,
       runtimeConfigScope,
       ...(kmsEnabled ? {} : { encryption: BucketEncryption.S3_MANAGED }),
+      ...extraProps,
     });
     if (!wafEnabled) {
       suppressRules(

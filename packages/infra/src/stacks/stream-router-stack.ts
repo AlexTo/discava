@@ -44,9 +44,10 @@ export interface StreamRouterStackProps extends StackProps {
  * The only reader of the core table's stream and everything it feeds: the
  * router Lambda, one queue (with a failure queue and an alarm) per registered
  * feature in core-table's `STREAM_FEATURES`, and the feature handlers those
- * queues invoke (progress recalculation, search indexing and analytics). Kept apart from
- * CoreApi so a feature's queues and handler don't count against that stack's
- * resource limit, and depends on Data only.
+ * queues invoke (progress recalculation, search indexing, analytics and
+ * notification delivery). Kept apart from CoreApi so a feature's queues and
+ * handler don't count against that stack's resource limit. Depends on Data,
+ * and on Websites and CoreApi for the addresses notification emails link to.
  */
 export class StreamRouterStack extends Stack {
   public readonly streamRouter: StreamRouter;

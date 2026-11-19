@@ -19,6 +19,17 @@ describe('instructor profiles', () => {
     expect(broken().invariants).toEqual([]);
   });
 
+  it('passes the records instructorProfileWrites.changeHandle writes', () => {
+    // The new claim is created, the old one deleted and the profile moved, in
+    // one transaction.
+    table.profileHandleClaims = [
+      { handle: 'new-handle', instructorId: 'teacher' },
+    ];
+    profile().handle = 'new-handle';
+    profile().version = 2;
+    expect(broken().invariants).toEqual([]);
+  });
+
   describe('instructor-has-profile', () => {
     it('reports a courseInstructor with no profile', () => {
       table.courseInstructors.push({

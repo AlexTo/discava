@@ -5,7 +5,7 @@
 // @vitest-environment node
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
-import type { Delta, Member } from './analytics.js';
+import type { Delta, Member } from './analytics-contributions.js';
 import { applyAnalyticsChange } from './analytics-writes.js';
 
 // ElectroDB builds the requests for real; a small in-memory table applies

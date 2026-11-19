@@ -8,8 +8,8 @@ import {
   NotFoundError,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import {} from '../helpers/course-access.js';
+import { courseInstructorProcedure, courseProcedure } from '../init.js';
 import {
   ListActiveCategoriesOutputSchema,
   UpdateCourseCatalogueInputSchema,
@@ -21,14 +21,13 @@ import {
  * lot (a field left out is cleared). Allowed on a course in any status; for a
  * published one the stream indexer updates its search entry.
  */
-export const updateCourseCatalogue = courseProcedure
-  .input(UpdateCourseCatalogueInputSchema)
+export const updateCourseCatalogue = courseInstructorProcedure(
+  UpdateCourseCatalogueInputSchema,
+)
   .output(UpdateCourseCatalogueOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, ...catalogue } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     try {
       await courseCatalogueWrites(coreTable, { courseId, ...catalogue });

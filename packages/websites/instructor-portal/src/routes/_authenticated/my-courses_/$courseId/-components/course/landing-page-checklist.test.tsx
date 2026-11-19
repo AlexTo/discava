@@ -23,15 +23,30 @@ const renderChecklist = (
   );
 
 describe('LandingPageChecklist', () => {
-  it('shows five lines, with Coming soon for the profile', () => {
+  it('shows five lines, checking the profile until it has loaded', () => {
     renderChecklist();
 
     expect(screen.getAllByRole('listitem')).toHaveLength(5);
     expect(
-      within(line('Your profile (headline and photo)')).getByText(
-        'Coming soon',
-      ),
+      within(line('Your profile (headline and photo)')).getByText('Checking…'),
     ).toBeVisible();
+  });
+
+  it('ticks the profile when it has a headline and photo', () => {
+    renderChecklist({ hasProfile: true });
+    expect(
+      within(line('Your profile (headline and photo)')).getByText('Done'),
+    ).toBeVisible();
+  });
+
+  it('links to the profile editor when it lacks one', () => {
+    renderChecklist({ hasProfile: false });
+    const profile = line('Your profile (headline and photo)');
+    expect(within(profile).getByText('Not yet')).toBeVisible();
+    expect(within(profile).getByRole('link')).toHaveAttribute(
+      'href',
+      '/profile',
+    );
   });
 
   it.each([

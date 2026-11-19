@@ -100,8 +100,17 @@ describe('ThreadView', () => {
             : { question: question(), replies: [post()], cursor: 'c2' },
       },
     );
-    await user.click(await screen.findByRole('button', { name: 'Load more' }));
-    expect(await screen.findByText('Later')).toBeInTheDocument();
+    // Waits longer than the default: CI runs this file beside much heavier ones.
+    await user.click(
+      await screen.findByRole(
+        'button',
+        { name: 'Load more' },
+        { timeout: 10_000 },
+      ),
+    );
+    expect(
+      await screen.findByText('Later', undefined, { timeout: 10_000 }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Try the basics.')).toBeInTheDocument();
     expect(
       calls.filter((c) => c.path === 'discussion.thread')[1].input,

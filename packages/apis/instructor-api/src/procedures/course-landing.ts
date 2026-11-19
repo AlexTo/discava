@@ -10,8 +10,8 @@ import {
   InvalidRequestError,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
-import { requireCourseInstructor } from '../lib/course-lifecycle.js';
+import {} from '../helpers/course-access.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   UpdateCourseLandingInputSchema,
   UpdateCourseLandingOutputSchema,
@@ -23,14 +23,13 @@ import {
  * just not public then. One transaction writes the course and its
  * instructors' copy of its updatedAt.
  */
-export const updateCourseLanding = courseProcedure
-  .input(UpdateCourseLandingInputSchema)
+export const updateCourseLanding = courseInstructorProcedure(
+  UpdateCourseLandingInputSchema,
+)
   .output(UpdateCourseLandingOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, learningOutcomes, requirements } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     try {
       const items = await courseLandingWrites.set(coreTable, {

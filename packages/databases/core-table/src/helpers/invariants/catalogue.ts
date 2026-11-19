@@ -10,7 +10,7 @@ import {
   MAX_TAGS,
   normaliseCategoryName,
   normaliseTags,
-} from '../catalogue.js';
+} from '../catalogue-vocabulary.js';
 import {
   LANDING_ITEM_MAX_LENGTH,
   LANDING_LIST_MAX_ITEMS,

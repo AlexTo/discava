@@ -76,8 +76,8 @@ export const VideoContentItemSchema = z.object({
   durationSeconds: z.number().optional(),
   // For the row's caption badge: the automatic captioning's status (a
   // pending one older than two hours is reported failed) and how many tracks
-  // there are (both absent on a video never captioned). The tracks themselves, with their S3 keys, are never returned
-  // here; createVideoUrl lists them.
+  // there are (both absent on a video never captioned). The tracks, with
+  // their S3 keys, are never returned here; createVideoUrl lists them.
   captionsStatus: CaptionsStatusSchema.optional(),
   captionTrackCount: z.number().int().min(0).optional(),
 });
@@ -142,9 +142,7 @@ export const CreateContentItemVideoUploadUrlInputSchema = z.object({
   lessonId: z.string(),
   fileName: z.string().min(1),
   // Set when replacing an existing video's file, so the object key's id
-  // segment matches the content item being updated instead of a fresh,
-  // unrelated one -- the transcode pipeline parses this id straight out of
-  // the S3 key.
+  // segment names the content item being updated rather than a fresh id.
   contentItemId: z.string().optional(),
 });
 

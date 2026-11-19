@@ -8,13 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { LOCAL_S3 } from '@discava/common-server-utils/local-dev';
 import { clearLocalDevFiles } from './local-dev-files.js';
 
-// Deletes local dev's data, for a fresh start: DynamoDB local's table,
-// S3Mock's objects and the local OpenSearch container's indices (their
-// containers and named volumes), and the event runner's working files in
-// tmp/local-dev/ (its transcode jobs and the local inbox's emails). Stop `pnpm dev` first. Nothing deployed is touched. Each
-// service creates itself afresh on the next `pnpm dev`. ElasticMQ holds no
-// data to delete: its queues are in memory, so stopping `pnpm dev` already
-// empties them.
+// Deletes local dev's data, for a fresh start: the DynamoDB local, S3Mock,
+// local OIDC and OpenSearch containers and their named volumes, and
+// tmp/local-dev/ (transcode jobs, sent emails, local Stripe secrets). Stop
+// `pnpm dev` first. Nothing deployed is touched. Each service creates itself
+// afresh on the next `pnpm dev`. ElasticMQ holds no data to delete: its
+// queues are in memory, so stopping `pnpm dev` already empties them.
 
 const dynamodb = JSON.parse(
   readFileSync(

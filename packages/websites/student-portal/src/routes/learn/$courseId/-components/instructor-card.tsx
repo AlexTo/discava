@@ -9,6 +9,8 @@ import {
 } from '@discava/common-shadcn/components/ui/avatar';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
+import { Link } from '@tanstack/react-router';
+import { initialsOf } from '../../../../lib/initials';
 
 export interface InstructorCardData {
   handle: string;
@@ -17,20 +19,10 @@ export interface InstructorCardData {
   photoKey?: string;
 }
 
-// Up to two letters from the first and last word of the name.
-const initialsOf = (name: string) => {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  const letters =
-    words.length > 1
-      ? [words[0], words[words.length - 1]].map((word) => word[0])
-      : [words[0]?.[0] ?? '?'];
-  return letters.join('').toUpperCase();
-};
-
 /**
  * One of a course's instructors: photo (or initials), name and headline. The
- * "View profile" text stays plain until the profile route exists. Every value
- * is rendered as text.
+ * "View profile" link goes to the instructor's public profile. Every value is
+ * rendered as text.
  */
 export function InstructorCard({
   instructor,
@@ -54,7 +46,13 @@ export function InstructorCard({
               {instructor.headline}
             </p>
           ) : null}
-          <p className="mt-2 text-sm font-medium">View profile</p>
+          <Link
+            to="/instructors/$handle"
+            params={{ handle: instructor.handle }}
+            className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            View profile
+          </Link>
         </div>
       </CardContent>
     </Card>
