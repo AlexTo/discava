@@ -10,6 +10,8 @@
 
 **Parent issue**: #283
 
+**Design page**: [`design/catalogue-categories`](../../docs/src/content/docs/en/design/catalogue-categories.mdx)
+
 ## Clarifications
 
 ### Session 2026-11-15

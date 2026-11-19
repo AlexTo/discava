@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { isSpecFolderName } from './issue.js';
+import { ARCHIVE_FOLDER, isSpecFolderName } from './issue.js';
 
 /** The issue a pull request says it closes, e.g. "Closes #42". */
 export const closedIssue = (prBody: string | null): number | undefined => {
@@ -17,7 +17,9 @@ export const specFolders = (files: string[]): string[] => [
   ...new Set(
     files.flatMap((file) => {
       const match = /^specs\/([^/]+)\//.exec(file);
-      return match && isSpecFolderName(match[1]) ? [match[1]] : [];
+      return match && match[1] !== ARCHIVE_FOLDER && isSpecFolderName(match[1])
+        ? [match[1]]
+        : [];
     }),
   ),
 ];

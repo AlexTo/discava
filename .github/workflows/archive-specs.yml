@@ -1,0 +1,60 @@
+name: Archive Specs
+
+# Opens a pull request that moves each finished spec (every task in its
+# tasks.md ticked, (human) ones too) to specs/_archive/ and fixes the links to
+# and from it. Runs when a live spec's tasks.md changes on main, which is how
+# the last task gets ticked, whoever ticks it; the Agent Issues workflow only
+# runs for spec and agent pull requests. It can also be run by hand, e.g. to
+# archive specs that were already finished.
+# Skips a spec with an open agent issue, and one that already had an archive
+# pull request (closing it unmerged keeps the spec live).
+# Needs the repository setting "Allow GitHub Actions to create and approve
+# pull requests". The rules are in
+# packages/common/scripts/src/agent-issues/archive-specs.ts.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'specs/*/tasks.md'
+  workflow_dispatch:
+
+concurrency:
+  # One run at a time, so two never race to open the same pull request.
+  group: archive-specs
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  # The commit is made by the workflow: no git hooks.
+  HUSKY: "0"
+
+permissions:
+  # To push the archive branch.
+  contents: write
+  # To read the open agent issues.
+  issues: read
+  pull-requests: write
+
+jobs:
+  archive:
+    name: Open archive pull requests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Set the commit author
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+
+      - name: Open the pull requests
+        run: pnpm nx run @discava/common-scripts:archive-specs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

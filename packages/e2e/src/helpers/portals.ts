@@ -2,13 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { LOCAL_PORTAL_ORIGINS } from '@discava/common-infra-config/local-portals';
 
-// Where `pnpm dev` serves the portals (their project.json ports).
-export const PORTALS = {
-  instructor: 'http://localhost:4200',
-  student: 'http://localhost:4201',
-  admin: 'http://localhost:4202',
-} as const;
+// Where `pnpm dev` serves the portals (from common-infra-config).
+export const PORTALS = LOCAL_PORTAL_ORIGINS;
 
 // What else must answer before a scenario can run: the APIs, the event runner
 // and the local stand-ins for S3 and Cognito (see common-server-utils'

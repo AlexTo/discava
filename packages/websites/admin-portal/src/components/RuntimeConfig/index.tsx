@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { LOCAL_PORTAL_ORIGINS } from '@discava/common-infra-config/local-portals';
 import React, {
   createContext,
   PropsWithChildren,
@@ -35,9 +36,9 @@ const LOCAL_DEV_CONFIG: IRuntimeConfig = {
   // Where `pnpm dev` serves each portal, as the deployed config has their
   // addresses (#235).
   portals: {
-    StudentPortal: 'http://localhost:4201',
-    InstructorPortal: 'http://localhost:4200',
-    AdminPortal: 'http://localhost:4202',
+    StudentPortal: LOCAL_PORTAL_ORIGINS.student,
+    InstructorPortal: LOCAL_PORTAL_ORIGINS.instructor,
+    AdminPortal: LOCAL_PORTAL_ORIGINS.admin,
   },
   apis: {
     CoreApi: 'http://localhost:2022/',

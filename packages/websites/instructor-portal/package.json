@@ -32,7 +32,8 @@
     "tailwindcss": "catalog:",
     "uuid": "catalog:",
     "zod": "catalog:",
-    "@discava/common-web-utils": "workspace:*"
+    "@discava/common-web-utils": "workspace:*",
+    "@discava/common-infra-config": "workspace:*"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",
