@@ -45,7 +45,6 @@ import { suppressRules } from '../../core/checkov.js';
 import { findCloudFrontDomainNames } from '../../core/cloudfront.js';
 import { RuntimeConfig } from '../../core/runtime-config.js';
 
-// String union type for all API operation names
 type Operations = Procedures<AppRouter>;
 
 // Operations callable without a Cognito token: the method skips the API's
@@ -94,11 +93,6 @@ const functionNameFor = (op: Operations | '$router'): string =>
   )?.[0] ?? 'Router';
 
 /**
- * Properties for creating a CoreApi construct
- *
- * @template TIntegrations - Map of operation names to their integrations
- */
-/**
  * A route beside the tRPC router's operations, such as a link opened from an
  * email that no tRPC client calls.
  */
@@ -118,13 +112,7 @@ export interface CoreApiExtraRoute {
 export interface CoreApiProps<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
 > {
-  /**
-   * Map of operation names to their API Gateway integrations
-   */
   integrations: TIntegrations;
-  /**
-   * Identity details for Cognito Authentication
-   */
   identity: {
     userPool: IUserPool;
   };
@@ -198,7 +186,6 @@ export interface CoreApiProps<
 /**
  * A CDK construct that creates and configures an AWS API Gateway REST API
  * specifically for CoreApi.
- * @template TIntegrations - Map of operation names to their integrations
  */
 export class CoreApi<
   TIntegrations extends ApiIntegrations<Operations, RestApiIntegration>,
@@ -221,10 +208,8 @@ export class CoreApi<
    * gets its own integration entry, so per-operation method options (e.g. the
    * public operations' auth) and grants keep working.
    *
-   * @param scope - The CDK construct scope
    * @param functionOptions - The stage's timeout, reserved concurrency, log
    *   level and tracing for the API's functions
-   * @returns An IntegrationBuilder with default lambda integrations
    */
   public static defaultIntegrations = (
     scope: Construct,
@@ -379,15 +364,11 @@ export class CoreApi<
   }
 
   /**
-   * Restricts CORS to the provided origins
-   *
    * Configures the provided CloudFront distribution domains or origin strings
    * as the only permitted CORS origins in API Gateway preflight responses and the
    * AWS Lambda integrations. Any custom domain names (aliases) configured on a
    * CloudFront distribution are included automatically alongside its default
    * `*.cloudfront.net` domain.
-   *
-   * @param origins - The origin strings, CloudFront distributions, or objects containing a CloudFront distribution to grant CORS from
    */
   public restrictCorsTo(
     ...origins: (
@@ -408,7 +389,6 @@ export class CoreApi<
 
     this.allowedOrigins = allowedOrigins;
 
-    // Set ALLOWED_ORIGINS environment variable for all Lambda integrations
     [
       ...Object.values(this.integrations),
       ...this.extraRoutes.map((route) => route.integration),

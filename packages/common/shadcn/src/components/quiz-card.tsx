@@ -78,8 +78,8 @@ export interface QuizCardProps {
  *
  * If the questions change while the student is answering (a new `quiz` with
  * a different `questionsHash`, or `onSubmit` reporting `updated`), their
- * answers are carried over (see reconcile in @discava/common-web-utils/quiz), changed questions
- * are marked New or Updated, and the review screen says so.
+ * answers are carried over (see reconcile in @discava/common-web-utils/quiz),
+ * changed questions are marked New or Updated, and the review screen says so.
  */
 export function QuizCard({
   quiz,

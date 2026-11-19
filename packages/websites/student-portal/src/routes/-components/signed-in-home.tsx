@@ -80,7 +80,7 @@ function ResumeHero({
 /**
  * What `/` shows a signed-in student: the course they were last active in,
  * their other courses in progress, and published courses they haven't
- * started. Goals and streaks come later (#194).
+ * started.
  */
 export function SignedInHome() {
   const { user } = useAuth();

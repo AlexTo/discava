@@ -48,6 +48,7 @@ pnpm dev
 | --- | --- | --- |
 | Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
 | core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway and Lambda |
+| Page renderer | 2026 | The core-api Lambda behind the student portal's CloudFront distribution that answers crawlers with HTML (landing pages, profiles, site map, robots) |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
@@ -104,9 +105,9 @@ Two checks make sure a change that could need a new rule gets one:
 
 ### Testing Portal Components
 
-The instructor portal's components are tested with [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com/docs/react-testing-library/intro), in jsdom. Put a test next to the component as `<name>.test.tsx`.
+The portals' components are tested with [Vitest](https://vitest.dev) and [Testing Library](https://testing-library.com/docs/react-testing-library/intro), in jsdom. Put a test next to the component as `<name>.test.tsx`.
 
-Render it with `renderWithInstructorApi` from `src/test/render-with-instructor-api.tsx`. It wraps the component in a fresh React Query client and the real tRPC client, answered by handlers you give per procedure instead of the network:
+Render it with the portal's helper in `src/test/`, such as the instructor portal's `renderWithInstructorApi` from `src/test/render-with-instructor-api.tsx` (the admin portal has `renderWithAdminApi`). It wraps the component in a fresh React Query client and the real tRPC client, answered by handlers you give per procedure instead of the network:
 
 ```tsx
 const { calls, user } = renderWithInstructorApi(<MyComponent courseId="course-1" />, {
@@ -128,7 +129,7 @@ await waitFor(() =>
 - Throw `ApiError(code, message)` from a handler to make the call fail the way the API does (`error.data.code` is set).
 - Find elements by role and accessible name, as a user or screen reader would, rather than by class or test id.
 - jsdom has no layout, so drag and drop can't be driven by the pointer or keyboard in these tests. Simulate the drop event instead (see `lesson-content-items-row.test.tsx`), and check real dragging in a browser.
-- A page that reads from core-api instead (the instructor portal's My Courses and Dashboard do, for the course list) uses `renderWithCoreApi` from `src/test/render-with-core-api.tsx` the same way. Both are built by `createRenderWithApi` from `@discava/common-web-utils/testing`, which also holds the fake tRPC `fetch` (`fakeTrpcFetch`), the jsdom stubs (`installJsdomStubs`, called from each `src/test/setup.ts`) and `mockRouter`.
+- A page that reads from core-api instead (the instructor portal's home page and My Courses do, for the course list, and every student portal page) uses `renderWithCoreApi` from `src/test/render-with-core-api.tsx` the same way. Both are built by `createRenderWithApi` from `@discava/common-web-utils/testing`, which also holds the fake tRPC `fetch` (`fakeTrpcFetch`), the jsdom stubs (`installJsdomStubs`, called from each `src/test/setup.ts`) and `mockRouter`.
 - A `route.tsx`'s component isn't exported directly; render `Route.options.component` from it. Name the test file `-route.test.tsx` (the `-` prefix), or TanStack Router's file-based routing picks it up as a route of its own.
 
 ### End-to-End Tests

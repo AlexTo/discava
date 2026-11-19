@@ -36,9 +36,9 @@ export const LADDER = [
 export type Rendition = (typeof LADDER)[number];
 
 /**
- * The renditions to make from a source this tall: none taller than it (where
- * MediaConvert would upscale, this saves time), but always at least the
- * smallest. `only` (LOCAL_TRANSCODE_RENDITIONS) narrows them further, for
+ * The renditions to make from a source this tall: none taller than it
+ * (MediaConvert still makes those, at no more than the source's size;
+ * skipping them saves time), but always at least the smallest. `only` (LOCAL_TRANSCODE_RENDITIONS) narrows them further, for
  * speed; if it leaves none, the smallest is made.
  */
 export const renditionsFor = (
@@ -58,7 +58,7 @@ export const renditionsFor = (
  * produces it: H.264 renditions capped at the template's bitrates, AAC
  * 128 kbps 48 kHz stereo, 6 s segments, and the same file names --
  * master.m3u8, master_<rendition>.m3u8, master_<rendition>_NNNNN.ts. ffmpeg
- * applies rotation metadata by default, like the job's `Rotate: AUTO`.
+ * applies rotation metadata by default.
  */
 export const ffmpegArgs = (
   renditions: readonly Rendition[],
@@ -102,7 +102,7 @@ export const ffmpegArgs = (
   ];
 };
 
-/** Runs `docker` with these arguments; `kill` stops the container named. */
+/** Runs `docker` with these arguments. */
 export type Docker = (args: string[]) => Promise<{
   code: number;
   stdout: string;

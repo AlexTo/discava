@@ -4,8 +4,8 @@
  */
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { bestEffortRetirePreviousVersions } from '../helpers/s3-client.js';
 import { t } from '../init.js';
-import { bestEffortRetirePreviousVersions } from '../lib/s3-client.js';
 import {
   createContentItemVideo,
   createContentItemVideoUploadUrl,
@@ -115,14 +115,14 @@ vi.mock('@aws-sdk/s3-request-presigner', () => ({
 }));
 
 // bestEffortDeleteContentItemVideos's own error-swallowing/bucket-selection
-// behavior is covered directly in lib/s3-client.test.ts; here it's just a
+// behavior is covered directly in helpers/s3-client.test.ts; here it's just a
 // mock so these tests can assert content-item-video.ts calls it correctly.
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
   getS3Client: () => ({ send: s3Send }),
   resolveLessonMediaUploadBucketName,
 }));
 
-vi.mock('../lib/s3-client.js', () => ({
+vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions: vi.fn(async () => {}),
   getVideoUploadETag,
@@ -138,9 +138,9 @@ vi.mock('@discava/common-server-utils/lesson-media', () => ({
 }));
 
 // submitTranscodeJob's own MediaConvert-request-shape behavior is covered
-// directly in lib/mediaconvert-client.test.ts; here it's just a mock so
+// directly in helpers/mediaconvert-client.test.ts; here it's just a mock so
 // these tests can assert create/updateContentItemVideo call it correctly.
-vi.mock('../lib/mediaconvert-client.js', () => ({
+vi.mock('../helpers/mediaconvert-client.js', () => ({
   submitTranscodeJob,
   bestEffortCancelTranscodeJob,
   bestEffortCancelTranscodeJobs,
@@ -557,11 +557,9 @@ describe('createContentItemVideoUploadUrl', () => {
     expect(result.contentItemId).toBeTruthy();
   });
 
-  // Invariant: a replacement upload must reuse the existing content item's
-  // real id in the key instead of minting an unrelated one -- the id
-  // segment is what createContentItemVideo/updateContentItemVideo validate
-  // the key against, and a mismatch there means a replacement can never be
-  // recorded against the right content item.
+  // Invariant: a replacement upload reuses the existing content item's id
+  // in the key rather than minting an unrelated one, so the key's id
+  // segment always names a real content item.
   it('reuses the given contentItemId in the object key when replacing an existing video', async () => {
     const result = await callAs().createContentItemVideoUploadUrl({
       courseId: COURSE_ID,
@@ -1559,11 +1557,9 @@ describe('updateContentItemVideo', () => {
     });
   });
 
-  // The nonce feeds submitTranscodeJob's ClientRequestToken -- reusing the
-  // record's own nonce (rather than a fresh one) is what lets a crashed
-  // retry reconnect to whatever job that attempt already created, instead
-  // of MediaConvert being asked to dedupe on a content fingerprint (see
-  // mediaconvert-client.ts's docstring for why that was abandoned).
+  // The nonce feeds submitTranscodeJob's ClientRequestToken: reusing the
+  // record's own nonce is what lets a crashed retry reconnect to the job
+  // that attempt already created.
   describe('submissionNonce', () => {
     const pendingObjectKey = `${OBJECT_KEY_PREFIX}some-other-fresh-id.mp4`;
 
@@ -1664,13 +1660,9 @@ describe('updateContentItemVideo', () => {
     });
   });
 
-  // Invariant: replacing a video's underlying file must not leave the old
-  // object in the bucket, or the lesson media bucket accumulates orphans
-  // every time an instructor swaps a video out. While
-  // createContentItemVideoUploadUrl now reuses the real contentItemId in
-  // the key when told it's a replacement (see its own tests above), this
-  // procedure doesn't require that -- an objectKey scoped to the lesson but
-  // carrying an unrelated id must still be accepted and cleaned up.
+  // Invariant: a replaced ready video isn't deleted here; it stays as the
+  // previous version until transcode-complete retires it. The new objectKey
+  // only has to be scoped to the lesson, not carry this item's id.
   it('keeps a ready video playing as the previous version while its replacement transcodes (#209)', async () => {
     const newObjectKey = `${OBJECT_KEY_PREFIX}some-other-fresh-id.mp4`;
 
@@ -2067,11 +2059,9 @@ describe('updateContentItemVideo', () => {
     );
   });
 
-  // Invariant: objectKey is deterministic from contentItemId + extension,
-  // so two concurrent same-extension replacements of an already-pending
-  // item can read identical status/s3Key values on both sides of the race
-  // -- status/s3Key alone wouldn't always catch that second race. Also
-  // including submissionNonce (freshly randomized per call) closes it.
+  // Invariant: status and s3Key can read the same on both sides of a race
+  // between two replacements of a pending item, so the patch is also
+  // conditioned on submissionNonce, which each new submission changes.
   it('also conditions the patch on submissionNonce when the existing record has one', async () => {
     const pendingObjectKey = `${OBJECT_KEY_PREFIX}some-other-fresh-id.mp4`;
     const pendingItem = {

@@ -9,16 +9,12 @@ type FieldKind = 'boolean' | 'string' | 'string[]' | 'number' | 'logLevel';
 const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
 
 /**
- * Every env-var-overridable field, keyed by component then field name.
- * Kept in sync by hand with `StageComponents` in stages.types.ts (the same
- * way the infra stacks' props already hand-duplicate this field list) --
- * add a line here when a new overridable field is added to a component
- * config type.
+ * Every env-var-overridable field, keyed by component then field name. The
+ * type checks only the component keys, so add a line here by hand when a
+ * component config type in stages.types.ts gains a field.
  *
- * `credentials` is deliberately not overridable here: unlike these fields,
- * it determines which IAM identity a deploy assumes, which is a bigger,
- * more security-sensitive surface than this override mechanism is meant to
- * cover.
+ * `credentials` is deliberately not overridable: it decides which IAM
+ * identity a deploy assumes, too sensitive for this mechanism.
  */
 const COMPONENT_FIELDS: Record<
   keyof StageComponents,
@@ -107,6 +103,9 @@ const COMPONENT_FIELDS: Record<
     enableKeyRotation: 'boolean',
     domainNames: 'string[]',
     certificateArn: 'string',
+    allowSearchEngineIndexing: 'boolean',
+    siteName: 'string',
+    pageRendererReservedConcurrency: 'number',
   },
   instructorPortal: {
     enableWaf: 'boolean',
@@ -154,17 +153,17 @@ const COMPONENT_FIELDS: Record<
   },
 };
 
-/**
- * Converts a stage name or camelCase identifier into the SCREAMING_SNAKE_CASE
- * segment used in override env var names, e.g. `'studentPortal'` ->
- * `'STUDENT_PORTAL'`, `'discava-development'` -> `'DISCAVA_DEVELOPMENT'`.
- */
 // Component settings live under `infra` in a stage's config, so their
 // variables carry that segment too: <STAGE>_INFRA_<COMPONENT>_<FIELD>. It
 // keeps them apart from any other kind of per-stage setting added beside
 // `infra`.
 const INFRA_SEGMENT = 'INFRA';
 
+/**
+ * Converts a stage name or camelCase identifier into the SCREAMING_SNAKE_CASE
+ * segment used in override env var names, e.g. `'studentPortal'` ->
+ * `'STUDENT_PORTAL'`, `'discava-development'` -> `'DISCAVA_DEVELOPMENT'`.
+ */
 function toEnvSegment(value: string): string {
   return value
     .replace(/[^a-zA-Z0-9]+/g, '_')
@@ -231,11 +230,8 @@ export function applyEnvOverrides(
   const region = process.env[`${stageSegment}_REGION`];
   const account = process.env[`${stageSegment}_ACCOUNT`];
 
-  // Built as a plain record (rather than StageComponents) because TS can't
-  // safely narrow a write through a `keyof StageComponents`-indexed access --
-  // each component key has its own value type, so `components[component] =`
-  // would need to satisfy every possible component type at once. Cast once
-  // at the end instead.
+  // A plain record, cast once at the end: TS can't narrow a write through a
+  // `keyof StageComponents` index, since each component has its own type.
   const components: Record<
     string,
     Record<string, boolean | string | string[] | number>

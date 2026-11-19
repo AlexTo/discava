@@ -44,6 +44,7 @@ import {
   vote,
 } from './procedures/discussion.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
+import { instructorProfilePublicView } from './procedures/instructor-profile.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
 import {
@@ -95,6 +96,9 @@ export const appRouter = router({
     submit,
     mySubmission,
     submissionFileUrl,
+  }),
+  instructorProfile: router({
+    publicView: instructorProfilePublicView,
   }),
   category: router({
     list: listCategories,
@@ -150,8 +154,8 @@ export const appRouter = router({
 
 export type AppRouter = typeof appRouter;
 
-// The operations anonymous callers may use: those built on publicProcedure or
-// publicCourseProcedure. API Gateway skips its Cognito authorizer for these
+// The operations anonymous callers may use: those built on publicCourseProcedure
+// or publicSearchProcedure. API Gateway skips its Cognito authorizer for these
 // only (see CoreApi in @discava/common-constructs), so a new public procedure
 // must be added here or signed-out callers get a 401 before reaching it.
 // router.test.ts checks this list against how each procedure treats an
@@ -165,5 +169,6 @@ export const PUBLIC_OPERATIONS = [
   'review.list',
   'category.list',
   'category.bySlug',
+  'instructorProfile.publicView',
   'certificate.verify',
 ] as const;

@@ -759,8 +759,6 @@ describe('viewCourse', () => {
     });
   });
 
-  // #102: a student opening a course with an assignment used to fail output
-  // validation, and the lesson's kind was stripped.
   it('serves assignment lessons: kind, due date and points, but no key', async () => {
     const stamps = {
       createdAt: '2024-01-01T00:00:00.000Z',

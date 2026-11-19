@@ -184,7 +184,7 @@ describe('studentsToRecalculate', () => {
     expect(asLists(result)).toEqual({});
   });
 
-  // Queues deliver a message twice, or out of order (FR-014): what is
+  // Queues deliver a message twice, or out of order: what is
   // recalculated depends on which records are in the batch, never on their
   // order or on how often one appears.
   describe('duplicate and reordered batches', () => {

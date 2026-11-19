@@ -32,6 +32,9 @@
 
 **Discava is a free, open source learning platform that runs in your own AWS account.** Publish courses, teach with video, quizzes and assignments, and let learners track their progress. An AI assistant is coming as part of the core experience.
 
+> [!IMPORTANT]
+> Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
+
 ## What you get
 
 ### 🎓 For learners
@@ -68,9 +71,6 @@
 - 🛡️ **Hardened production defaults.** WAF and KMS encryption.
 - 🆓 **Free and open source.** Apache 2.0.
 - 🤖 **Built with AI in mind** from the start.
-
-> [!IMPORTANT]
-> Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
 
 ## For developers
 

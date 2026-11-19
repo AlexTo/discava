@@ -6,7 +6,7 @@
 // Which of the pictures an e2e run took belong to this pull request: the ones
 // whose `screenshot(page, 'name')` call the diff adds. The rest come from
 // earlier pull requests' scenarios, which still run and still take theirs.
-// Used by the `E2E screenshots` comment (main-comment.ts).
+// Used by the `E2E screenshots` comment (comment-main.ts).
 
 import type { ChangedFile } from './check.js';
 

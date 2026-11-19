@@ -226,12 +226,15 @@ export {
   VersionConflictError,
 } from './helpers/errors.js';
 export {
+  classifyProfileCancellation,
   defaultDisplayName,
   type EnsureInstructorProfileResult,
   ensureInstructorProfile,
   handleCandidates,
   handleFromName,
+  type InstructorProfilePatch,
   instructorProfileWrites,
+  type ProfileCancellation,
   RESERVED_HANDLES,
 } from './helpers/instructor-profile.js';
 export {

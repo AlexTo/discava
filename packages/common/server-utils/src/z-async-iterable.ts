@@ -68,7 +68,6 @@ export function ZodAsyncIterable<
   >
 >;
 
-// Implementation
 export function ZodAsyncIterable<
   TYieldIn,
   TYieldOut,

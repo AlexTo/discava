@@ -48,9 +48,8 @@ const COURSE_ID = 'course-1';
 const MODULE_ID = 'module-1';
 const LESSON_ID = 'lesson-1';
 
-// The common case going forward: every 'ready' item created since
-// submissionNonce existed has one. Its cleanup is scheduled, not deleted
-// inline -- see readyItemWithoutNonce below for the legacy fallback path.
+// A 'ready' item with a submissionNonce: its cleanup is scheduled, not
+// deleted inline.
 const readyItem = (contentItemId: string, submissionNonce = 'nonce-1') => ({
   status: 'ready',
   s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${contentItemId}/${submissionNonce}/master.m3u8`,
@@ -61,8 +60,8 @@ const readyItem = (contentItemId: string, submissionNonce = 'nonce-1') => ({
   submissionNonce,
 });
 
-// A 'ready' item from before submissionNonce existed -- falls back to the
-// old inline list+delete of the whole content-item prefix.
+// A 'ready' item with no submissionNonce: its whole content-item prefix is
+// listed and deleted inline.
 const readyItemWithoutNonce = (contentItemId: string) => ({
   status: 'ready',
   s3Key: `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${contentItemId}/master.m3u8`,
@@ -109,11 +108,9 @@ describe('bestEffortDeleteContentItemVideos', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  // The common case: a paginated inline list+delete across a ready
-  // video's (potentially many) segments would delay this response for no
-  // benefit, since nothing about it needs to happen before responding --
-  // scheduling reuses the exact mechanism a canceled job's own cleanup
-  // already goes through.
+  // An inline list+delete of a ready video's many segments would delay the
+  // response for nothing, so it goes through the same scheduled cleanup as a
+  // canceled job's output.
   it('schedules a cleanup instead of deleting inline for a ready item with a submissionNonce', async () => {
     await bestEffortDeleteContentItemVideos(undefined, [
       readyItem('content-item-1', 'nonce-1'),
@@ -185,8 +182,8 @@ describe('bestEffortDeleteContentItemVideos', () => {
   // S3's ListObjectsV2 caps a single page at 1,000 keys; a lesson video's
   // HLS output (4 renditions x 6s segments) can exceed that on its own, so
   // this must keep paging until IsTruncated is false or it silently misses
-  // everything past the first page. Exercised via the no-nonce fallback
-  // path -- the only one that still does this listing inline.
+  // everything past the first page. Exercised via a ready item with no
+  // nonce, the only path that lists inline.
   it('paginates ListObjectsV2 until IsTruncated is false', async () => {
     const prefix = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/content-item-1/`;
     send.mockImplementation((command: any) => {

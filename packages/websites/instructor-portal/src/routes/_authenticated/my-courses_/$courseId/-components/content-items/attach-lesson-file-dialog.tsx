@@ -35,7 +35,7 @@ import { type FileRejection, useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
 import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 
-// What a file item may be, as instructor-api allows it (its
+// What a file item may be, as instructor-api allows it (common-server-utils'
 // LESSON_FILE_TYPES): documents, spreadsheets, slides, plain text, images and
 // zip archives (#102).
 const ACCEPTED_FILE_TYPES = {
@@ -64,7 +64,7 @@ const ACCEPTED_FILE_TYPES = {
 
 const ALLOWED_LIST = Object.values(ACCEPTED_FILE_TYPES).flat().join(', ');
 
-// As instructor-api's LESSON_FILE_MAX_BYTES.
+// As common-server-utils' LESSON_FILE_MAX_BYTES, which instructor-api enforces.
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 type PendingUpload = {

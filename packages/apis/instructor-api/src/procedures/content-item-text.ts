@@ -4,16 +4,16 @@
  */
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
+import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
-  getCourseOrThrow,
   initialVisibilityFields,
   requireAncestorsNotArchived,
   requireNotArchived,
   requireOrdinaryLesson,
-  writeAtEnd,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/curriculum-guards.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { courseProcedure } from '../init.js';
 import {
   CreateContentItemTextInputSchema,
   CreateContentItemTextOutputSchema,

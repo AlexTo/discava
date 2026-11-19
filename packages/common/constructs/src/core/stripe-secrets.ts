@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { RemovalPolicy } from 'aws-cdk-lib';
+import { Names, RemovalPolicy } from 'aws-cdk-lib';
 import type { IGrantable } from 'aws-cdk-lib/aws-iam';
 import { Key } from 'aws-cdk-lib/aws-kms';
 import { ISecret, Secret } from 'aws-cdk-lib/aws-secretsmanager';
@@ -67,8 +67,11 @@ export class StripeSecrets extends StripeSecretGrants {
         })
       : undefined;
 
+    // Named under the stage's prefix (`discavadevelopment...`): CI's
+    // CloudFormation execution role may only manage secrets named that way.
     const create = (name: string, description: string) => {
       const secret = new Secret(this, name, {
+        secretName: `${Names.uniqueResourceName(this, { maxLength: 100, separator: '/' })}/${name}`,
         description,
         encryptionKey,
         removalPolicy,

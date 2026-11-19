@@ -100,6 +100,8 @@ export interface UserIdentityProps {
    *
    * @default true
    */
+  readonly deletionProtection?: boolean;
+
   /**
    * Let anyone create an account from the sign-in page. When false, only an
    * administrator can create users.
@@ -107,7 +109,6 @@ export interface UserIdentityProps {
    * @default true
    */
   readonly selfSignUpEnabled?: boolean;
-  readonly deletionProtection?: boolean;
 }
 
 /**

@@ -9,7 +9,11 @@ import {
   HANDLE_MIN,
 } from '../entities/instructor-profile.js';
 import type { createCoreTableService } from '../service.js';
-import { failedConditions } from './errors.js';
+import {
+  failedAt,
+  failedConditions,
+  hasTransactionConflict,
+} from './errors.js';
 import {
   type NotificationTransactionItems,
   transactionEntities,
@@ -22,11 +26,16 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 // checkProfileHandleClaimsConsistent):
 // - a profile and the claim on its handle are created in one transaction,
 //   each conditioned on not existing, so two instructors never share a handle
-//   and an instructor never has two profiles.
+//   and an instructor never has two profiles;
+// - a handle change creates the new claim, deletes the old one and moves the
+//   profile's handle in one transaction, so the profile always has exactly one
+//   claim;
+// - every edit is conditioned on the profile's `version` and increments it.
 
 const FALLBACK_HANDLE = 'instructor';
 const FALLBACK_DISPLAY_NAME = 'Discava instructor';
 const RANDOM_CANDIDATES = 4;
+const MAX_CONFLICT_ATTEMPTS = 3;
 const RANDOM_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 // Handles that would collide with a route or a file served beside the profiles.
@@ -105,6 +114,59 @@ export interface InstructorProfileEnsure {
   now: Date;
 }
 
+export interface InstructorProfilePatch {
+  displayName?: string;
+  /** An empty string removes the headline. */
+  headline?: string;
+  /** An empty string removes the bio. */
+  bio?: string;
+}
+
+export interface InstructorProfileUpdate {
+  instructorId: string;
+  /** The version the caller read; the edit fails if the profile moved on. */
+  version: number;
+  patch: InstructorProfilePatch;
+  now: Date;
+}
+
+export interface InstructorProfileHandleChange {
+  instructorId: string;
+  version: number;
+  from: string;
+  to: string;
+  /** Fields to change in the same write, so one transaction holds the edit. */
+  patch?: InstructorProfilePatch;
+  now: Date;
+}
+
+// The profile patch for the fields of `patch` (an empty text removes its
+// attribute) and the new version.
+const patchProfile = (
+  service: CoreTable,
+  instructorId: string,
+  version: number,
+  patch: InstructorProfilePatch,
+  now: Date,
+) => {
+  const { displayName, headline, bio } = patch;
+  const set = {
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(headline ? { headline } : {}),
+    ...(bio ? { bio } : {}),
+    version: version + 1,
+    updatedAt: now.toISOString(),
+  };
+  const remove = [
+    ...(headline === '' ? ['headline'] : []),
+    ...(bio === '' ? ['bio'] : []),
+  ];
+  return transactionEntities(service)
+    .instructorProfile.patch({ instructorId })
+    .set(set as never)
+    .remove(remove as never);
+};
+
 export const instructorProfileWrites = {
   /**
    * The items that create a profile and claim its handle: a profile create and
@@ -136,6 +198,105 @@ export const instructorProfileWrites = {
         .commit(),
     ];
   },
+
+  /**
+   * The item of an edit of the profile's text fields: a patch conditioned on
+   * `version`, which it increments. Cancelled as `stale` (see
+   * classifyProfileCancellation) when the profile moved on or is missing.
+   */
+  update: (
+    service: CoreTable,
+    { instructorId, version, patch, now }: InstructorProfileUpdate,
+  ): NotificationTransactionItems => [
+    patchProfile(service, instructorId, version, patch, now)
+      .where((attr, op) => op.eq(attr.version, version))
+      .commit(),
+  ],
+
+  /**
+   * The items of a handle change, in the order classifyProfileCancellation
+   * reads: the new claim (created, so the handle must be free), the old claim
+   * (deleted, so it must belong to the instructor) and the profile (its handle
+   * must still be `from` and its `version` match), which may carry `patch`.
+   */
+  changeHandle: (
+    service: CoreTable,
+    {
+      instructorId,
+      version,
+      from,
+      to,
+      patch,
+      now,
+    }: InstructorProfileHandleChange,
+  ): NotificationTransactionItems => {
+    const { profileHandleClaim } = transactionEntities(service);
+    return [
+      profileHandleClaim
+        .create({ handle: to, instructorId, createdAt: now.toISOString() })
+        .commit(),
+      profileHandleClaim
+        .delete({ handle: from })
+        .where((attr, op) => op.eq(attr.instructorId, instructorId))
+        .commit(),
+      patchProfile(service, instructorId, version, patch ?? {}, now)
+        .set({ handle: to } as never)
+        .where(
+          (attr, op) =>
+            `${op.eq(attr.handle, from)} AND ${op.eq(attr.version, version)}`,
+        )
+        .commit(),
+    ];
+  },
+
+  /**
+   * The item that sets (or, with `photoKey` null, removes) the photo. It is not
+   * conditioned on `version`, since a photo is uploaded apart from the form,
+   * but it increments it, so a form read before the photo changed is stale.
+   */
+  setPhoto: (
+    service: CoreTable,
+    {
+      instructorId,
+      photoKey,
+      now,
+    }: { instructorId: string; photoKey: string | null; now: Date },
+  ): NotificationTransactionItems => {
+    const patch = transactionEntities(service)
+      .instructorProfile.patch({ instructorId })
+      .add({ version: 1 } as never);
+    return [
+      (photoKey
+        ? patch.set({ photoKey, updatedAt: now.toISOString() } as never)
+        : patch
+            .set({ updatedAt: now.toISOString() } as never)
+            .remove(['photoKey'] as never)
+      ).commit(),
+    ];
+  },
+};
+
+export type ProfileCancellation = 'handle-taken' | 'stale';
+
+/**
+ * What cancelled a profile transaction, from the reason DynamoDB gave for each
+ * of its items. For `changeHandle` they are the items of
+ * instructorProfileWrites.changeHandle: a failed new claim is `handle-taken`;
+ * a failed old claim or profile is `stale`. For `update` the one item is the
+ * profile. Undefined when no condition failed (e.g. a TransactionConflict,
+ * which is safe to retry).
+ */
+export const classifyProfileCancellation = (
+  action: 'update' | 'changeHandle',
+  reasons: ({ code?: string } | undefined)[],
+): ProfileCancellation | undefined => {
+  if (action === 'update') {
+    return failedAt(reasons, 0) ? 'stale' : undefined;
+  }
+  if (failedAt(reasons, 0)) {
+    return 'handle-taken';
+  }
+  return failedAt(reasons, 1, 3) ? 'stale' : undefined;
 };
 
 export type EnsureInstructorProfileResult =
@@ -176,26 +337,37 @@ export const ensureInstructorProfile = async (
     ? [handle]
     : handleCandidates(handleFromName(user?.givenName, user?.familyName));
   for (const candidate of candidates) {
-    const { canceled, data: results } = await service.transaction
-      .write(() =>
-        instructorProfileWrites.ensure(service, {
-          instructorId,
-          user: user ?? undefined,
-          candidate,
-          fields,
-          now: new Date(),
-        }),
-      )
-      .go();
-    if (!canceled) {
-      return { status: 'created', handle: candidate };
-    }
-    const failed = failedConditions(results);
-    if (failed[0]) {
-      return { status: 'exists' };
-    }
-    if (!failed[1]) {
-      throw new Error('The instructor profile could not be created');
+    // Two creates racing on a claim can be cancelled with a
+    // TransactionConflict rather than a failed condition: nothing was
+    // written, and asking again finds the claim taken or the profile there.
+    for (let attempt = 1; ; attempt++) {
+      const { canceled, data: results } = await service.transaction
+        .write(() =>
+          instructorProfileWrites.ensure(service, {
+            instructorId,
+            user: user ?? undefined,
+            candidate,
+            fields,
+            now: new Date(),
+          }),
+        )
+        .go();
+      if (!canceled) {
+        return { status: 'created', handle: candidate };
+      }
+      const failed = failedConditions(results);
+      if (failed[0]) {
+        return { status: 'exists' };
+      }
+      if (failed[1]) {
+        break;
+      }
+      if (
+        !hasTransactionConflict(results) ||
+        attempt === MAX_CONFLICT_ATTEMPTS
+      ) {
+        throw new Error('The instructor profile could not be created');
+      }
     }
   }
   return { status: 'handle-taken' };

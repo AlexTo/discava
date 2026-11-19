@@ -4,18 +4,17 @@
  */
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
+import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
-  getCourseOrThrow,
   initialVisibilityFields,
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireNotArchived,
   requireOrdinaryLesson,
-  writeAtEnd,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
-import { hashQuizQuestions } from '../lib/quiz-hash.js';
+} from '../helpers/curriculum-guards.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { hashQuizQuestions } from '../helpers/quiz-hash.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   CreateContentItemQuizInputSchema,
   CreateContentItemQuizOutputSchema,
@@ -26,8 +25,9 @@ import {
 } from '../schema/index.js';
 import { asContentItemOutput } from './content-item-shared.js';
 
-export const createContentItemQuiz = courseProcedure
-  .input(CreateContentItemQuizInputSchema)
+export const createContentItemQuiz = courseInstructorProcedure(
+  CreateContentItemQuizInputSchema,
+)
   .output(CreateContentItemQuizOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
@@ -41,8 +41,6 @@ export const createContentItemQuiz = courseProcedure
       answerKey,
       settings,
     } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const { data: lesson } = await coreTable.entities.lesson
       .get({ courseId, moduleId, lessonId })
@@ -88,8 +86,9 @@ export const createContentItemQuiz = courseProcedure
     return asContentItemOutput<ICreateContentItemQuizOutput>(contentItem);
   });
 
-export const updateContentItemQuiz = courseProcedure
-  .input(UpdateContentItemQuizInputSchema)
+export const updateContentItemQuiz = courseInstructorProcedure(
+  UpdateContentItemQuizInputSchema,
+)
   .output(UpdateContentItemQuizOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
@@ -105,8 +104,6 @@ export const updateContentItemQuiz = courseProcedure
       answerKey,
       settings,
     } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const { data: existing } = await coreTable.entities.contentItem
       .get({ courseId, moduleId, lessonId, contentItemId })

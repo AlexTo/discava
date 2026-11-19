@@ -56,9 +56,9 @@ export interface CoreApiStackProps extends StackProps {
 }
 
 /**
- * The tRPC API any authenticated user can call, plus the search re-index
- * Lambda. The stream-driven handlers (progress recalculation, search
- * indexing) are in StreamRouterStack.
+ * The tRPC API every portal calls, its notification unsubscribe route, and
+ * the search re-index Lambda. The stream-driven handlers are in
+ * StreamRouterStack.
  */
 export class CoreApiStack extends Stack {
   public readonly coreApi: CoreApi<CoreApiIntegrations>;
@@ -193,10 +193,10 @@ export class CoreApiStack extends Stack {
     }
   }
 
-  // Every grant beyond the baseline (table + AppConfig) goes through this,
-  // so a procedure missing from CORE_API_DEDICATED_FUNCTIONS fails synth
-  // instead of silently handing its permissions to the shared router function
-  // that serves every other core-api procedure.
+  // Every grant beyond the baseline (table, AppConfig, search read) goes
+  // through this, so a procedure missing from CORE_API_DEDICATED_FUNCTIONS
+  // fails synth instead of silently handing its permissions to the shared
+  // router function that serves every other core-api procedure.
   private privilegedHandler(
     integrations: CoreApiIntegrations,
     op: keyof CoreApiIntegrations & string,

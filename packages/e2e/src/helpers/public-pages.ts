@@ -7,8 +7,8 @@ import { PORTALS } from './portals.js';
 
 // Steps for the public course pages, for scenarios to build on.
 
-// Sets a course's outcomes and requirements through instructor-api, as the
-// instructor portal's landing page card will once it exists.
+// Sets a course's outcomes and requirements through instructor-api's
+// `course.updateLanding`, as the instructor portal's landing page card does.
 export const setLandingViaApi = async (
   instructor: ApiUser,
   courseId: string,

@@ -1,6 +1,6 @@
 # @discava/e2e
 
-End-to-end tests for Discava (#3). [Playwright](https://playwright.dev) drives the portals in Chromium against the whole local stack from `pnpm dev`: the portals, both APIs and the event runner, with DynamoDB local, S3Mock and the local OIDC server standing in for AWS. Nothing calls AWS.
+End-to-end tests for Discava (#3). [Playwright](https://playwright.dev) drives the portals in Chromium against the whole local stack from `pnpm dev`: the portals, the three APIs and the event runner, with DynamoDB local, S3Mock, ElasticMQ, OpenSearch and the local OIDC server standing in for AWS. Nothing calls AWS.
 
 They check what unit tests can't, because unit tests mock the table and the other services:
 - a portal and an API working together;
@@ -44,7 +44,7 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
   - changing a published course: `hideItem`, `publishItem`, `archiveItem`, `restoreItem`, `moveItemUp`;
   - the course image: `setCourseImage`, `removeCourseImage`, `courseImagePreview`.
 - `student-portal.ts`:
-  - getting in: `openCourse`, `enrol`, `startFirstLesson`;
+  - getting in: `openCourse`, `searchWithSiteSearch`, `enrol`, `startFirstLesson`;
   - in a lesson: `lessonItem`, `lessonVideo`, `downloadLessonFile`, `markItemDone`, `takeQuiz`;
   - the result: `expectCourseCompleted`;
   - after an instructor's change, or a page loaded before background work finished: `expectAfterReloads`.
@@ -52,8 +52,9 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
 - `video.ts`: `expectToPlay`, which checks a `<video>` really plays, and `THREE_SECOND_VIDEO`, the test video.
 - `files.ts`: `WORKSHEET_PDF`, the test file for file items.
 - `portals.ts`: where everything runs.
-- `discussion.ts`: steps for lesson discussions, a course with a visible lesson, enrolled students, `ask`, `reply` and `readThread`. For `scenarios/discussion.e2e.ts` and `concurrency/discussion-counters.e2e.ts`.
-- `api.ts`: `apiUser`, a new user signed in on the local OIDC server without a browser, with a typed client for each API; and `createPublishedCourseViaApi`. For `src/concurrency/`.
+- `discussion.ts`: steps for lesson discussions, a course with a visible lesson, enrolled students, `ask`, `reply` and `readThread`. For `scenarios/discussion.e2e.ts`, `scenarios/discussion-instructor.e2e.ts` and `concurrency/discussion-counters.e2e.ts`.
+- `api.ts`: `apiUser`, a new user signed in on the local OIDC server without a browser, with a typed client for each API; and setup steps such as `createPublishedCourseViaApi` and `createCaptionedVideoViaApi`. For `src/concurrency/` and scenarios that only need data to exist.
+- One file per feature for the rest (`announcement.ts`, `assignment.ts`, `captions.ts`, `catalogue.ts`, `certificate.ts`, `notification.ts`, `public-pages.ts`, `review.ts`, `router.ts`, `wait-for-analytics.ts`, …): check there before writing a step.
 
 Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, two small 1600×900 JPEGs for course images, and `worksheet.pdf`, a 596-byte one-page PDF. The video and images are made with ffmpeg, the commands in `src/helpers/video.ts` and `src/helpers/images.ts`; the PDF is written by hand (see `src/helpers/files.ts`). Keep fixtures synthetic and small, never real course material.
 

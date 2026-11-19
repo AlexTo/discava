@@ -14,28 +14,29 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   activeCourseCheck,
+  MAX_TRANSACTION_ITEMS,
+  writeInActiveCourse,
+} from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
+import {
   courseNoLongerDraft,
   draftCourseCheck,
   firstPublishedAt,
-  getCourseOrThrow,
   initialVisibilityFields,
   isDraftCourse,
-  MAX_TRANSACTION_ITEMS,
   requireActiveCourse,
-  requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
-  writeAtEnd,
-  writeInActiveCourse,
-} from '../lib/course-lifecycle.js';
-import { bestEffortCancelTranscodeJobs } from '../lib/mediaconvert-client.js';
+} from '../helpers/curriculum-guards.js';
+import { bestEffortCancelTranscodeJobs } from '../helpers/mediaconvert-client.js';
+import { writeAtEnd } from '../helpers/order.js';
 import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   CreateModuleInputSchema,
   CreateModuleOutputSchema,
@@ -162,8 +163,7 @@ const hardDeleteModule = async (
     });
   }
 
-  // Each content item delete is conditioned on two things -- see the
-  // equivalent comment in lesson.ts's hardDeleteLesson for why:
+  // Each content item delete is conditioned on (as in hardDeleteLesson):
   // - updatedAt (bumped by every write -- see the contentItem entity's
   //   `watch: '*'`) still matching the queried snapshot, so a transcode
   //   completing in between isn't cleaned up from stale data;
@@ -247,14 +247,12 @@ const hardDeleteModule = async (
   await bestEffortRetirePreviousVersions(logger, videoContentItems);
 };
 
-export const createModule = courseProcedure
-  .input(CreateModuleInputSchema)
+export const createModule = courseInstructorProcedure(CreateModuleInputSchema)
   .output(CreateModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, title, description } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const course = await getCourseOrThrow(coreTable, courseId);
     requireCourseNotArchived(course);
 
@@ -277,14 +275,12 @@ export const createModule = courseProcedure
     return getModuleOrThrow(coreTable, courseId, moduleId);
   });
 
-export const updateModule = courseProcedure
-  .input(UpdateModuleInputSchema)
+export const updateModule = courseInstructorProcedure(UpdateModuleInputSchema)
   .output(UpdateModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, title, description } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     requireNotArchived(existing, 'Restore the module before editing it');
@@ -305,14 +301,12 @@ export const updateModule = courseProcedure
 // course it archives the module instead, keeping it and everything under it
 // (and every student's data for it) restorable; see deleteModulePermanently
 // for removing an archived module for good.
-export const deleteModule = courseProcedure
-  .input(DeleteModuleInputSchema)
+export const deleteModule = courseInstructorProcedure(DeleteModuleInputSchema)
   .output(DeleteModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     const course = await getCourseOrThrow(coreTable, courseId);
 
@@ -326,9 +320,7 @@ export const deleteModule = courseProcedure
         undefined,
         courseId,
       );
-      // DynamoDB transactions don't return the deleted attributes, but we
-      // already fetched the module's pre-delete state above for the
-      // existence check.
+      // Transactions don't return the deleted attributes.
       return existing;
     }
 
@@ -362,14 +354,12 @@ export const deleteModule = courseProcedure
 // purpose, which have to be hidden again afterwards if they should stay
 // hidden. Archived descendants, and content items under an archived lesson,
 // are left as they are.
-export const publishModule = courseProcedure
-  .input(PublishModuleInputSchema)
+export const publishModule = courseInstructorProcedure(PublishModuleInputSchema)
   .output(PublishModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     requireNotArchived(existing, 'Restore the module before publishing it');
@@ -507,14 +497,12 @@ export const publishModule = courseProcedure
 // under visible ancestors. Publishing the module again also publishes every
 // hidden lesson and item under it (see publishModule), so one meant to stay
 // hidden has to be hidden again afterwards.
-export const hideModule = courseProcedure
-  .input(HideModuleInputSchema)
+export const hideModule = courseInstructorProcedure(HideModuleInputSchema)
   .output(HideModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     requireNotArchived(existing, 'Restore the module before hiding it');
@@ -531,14 +519,12 @@ export const hideModule = courseProcedure
     );
   });
 
-export const restoreModule = courseProcedure
-  .input(RestoreModuleInputSchema)
+export const restoreModule = courseInstructorProcedure(RestoreModuleInputSchema)
   .output(RestoreModuleOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     if (!existing.archivedAt) {
       return existing;
@@ -562,14 +548,14 @@ export const restoreModule = courseProcedure
 // Removes an archived module and everything under it for good. Refused while
 // any content item in it has student activity: that data must survive
 // curriculum edits, so such a module can stay archived but never be deleted.
-export const deleteModulePermanently = courseProcedure
-  .input(DeleteModulePermanentlyInputSchema)
+export const deleteModulePermanently = courseInstructorProcedure(
+  DeleteModulePermanentlyInputSchema,
+)
   .output(DeleteModulePermanentlyOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getModuleOrThrow(coreTable, courseId, moduleId);
     if (!existing.archivedAt) {
       throw new TRPCError({
@@ -641,14 +627,14 @@ const courseModulesChanged = () =>
 // client that missed a module added, archived or removed in the meantime gets
 // `CONFLICT` and reloads rather than overwriting what it never saw. Repeating
 // an order the course already has writes nothing.
-export const reorderModules = courseProcedure
-  .input(ReorderModulesInputSchema)
+export const reorderModules = courseInstructorProcedure(
+  ReorderModulesInputSchema,
+)
   .output(ReorderModulesOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleIds } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireActiveCourse(coreTable, courseId);
 
     if (new Set(moduleIds).size !== moduleIds.length) {

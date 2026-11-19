@@ -83,7 +83,7 @@ export const startCaptionJob = async (
   target: CaptionJobTarget,
 ): Promise<void> => {
   const { nonce } = target;
-  // A lesson video's job is tagged as before, with no `target`.
+  // A lesson video's job is tagged with no `target`.
   const { jobName, outputKey, tags } =
     target.target === 'coursePreview'
       ? {

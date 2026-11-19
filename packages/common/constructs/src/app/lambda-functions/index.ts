@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export * from './core-api-page-renderer.js';
 export * from './events-analytics-update.js';
 export * from './events-notification-delivery.js';
 export * from './events-notification-unsubscribe.js';

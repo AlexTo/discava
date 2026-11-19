@@ -123,8 +123,6 @@ export class UploadBucket extends Construct {
 
   /**
    * Restricts the bucket's CORS configuration to the provided origins.
-   *
-   * @param origins - The origin strings, CloudFront distributions, or objects containing a CloudFront distribution to grant CORS from
    */
   public restrictCorsTo(
     ...origins: (

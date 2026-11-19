@@ -11,32 +11,33 @@ import {
   isConditionalCheckFailed,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
+import {
+  MAX_TRANSACTION_ITEMS,
+  writeInActiveCourse,
+  writeUnderActiveAncestors,
+} from '../helpers/ancestor-writes.js';
+import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   courseNoLongerDraft,
   draftCourseCheck,
   firstPublishedAt,
-  getCourseOrThrow,
   isDraftCourse,
-  MAX_TRANSACTION_ITEMS,
   requireActiveCourse,
   requireAncestorsNotArchived,
-  requireCourseInstructor,
   requireCourseNotArchived,
   requireNotArchived,
-  writeAtEnd,
-  writeInActiveCourse,
-  writeUnderActiveAncestors,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/curriculum-guards.js';
 import {
   bestEffortCancelTranscodeJobs,
   type ICancelableVideoContentItem,
-} from '../lib/mediaconvert-client.js';
+} from '../helpers/mediaconvert-client.js';
+import { writeAtEnd } from '../helpers/order.js';
 import {
   bestEffortDeleteContentItemVideos,
   bestEffortRetirePreviousVersions,
   type IDeletableVideoContentItem,
-} from '../lib/s3-client.js';
+} from '../helpers/s3-client.js';
+import { courseInstructorProcedure } from '../init.js';
 import {
   DeleteContentItemInputSchema,
   DeleteContentItemOutputSchema,
@@ -65,14 +66,10 @@ interface ContentItemKey {
   contentItemId: string;
 }
 
-// ElectroDB has no native discriminated-attribute support, so a contentItem
-// record's inferred type is flat (every type's attributes present as
-// optional alongside `type` itself) rather than a proper union keyed on
-// `type`. These casts bridge that gap to the discriminated-union API types
-// -- safe because each cast site has already checked/branched on `type` (or,
-// for the type-agnostic procedures below, is just passing through whatever
-// record it read or wrote). Shared across every content-item-<type>.ts
-// procedures file.
+// ElectroDB infers a contentItem record as one flat type (every type's
+// attributes optional), not a union keyed on `type`. This cast bridges to the
+// discriminated-union API types; each call site has already branched on
+// `type` or passes the record through unchanged.
 export const asContentItemOutput = <T>(contentItem: unknown) =>
   contentItem as T;
 
@@ -143,11 +140,10 @@ const requireNotAssignmentItem = async (
   }
 };
 
-// Removes the record for good, then its external storage. Uses the record
-// DeleteItem actually removed (response: 'all_old'), not an earlier read -- a
-// concurrent replacement could have landed between the two, and cleaning up
-// based on stale state would cancel/delete the wrong job and orphan the real
-// one.
+// Cleans up a deleted item's external storage. Callers pass the record that
+// was actually removed (`all_old`, or a read the delete was conditioned on):
+// acting on a stale read after a concurrent replacement would cancel or
+// delete the wrong job and orphan the real one.
 const cleanUpDeletedContentItem = async (
   logger: Logger | undefined,
   contentItem: ICancelableVideoContentItem &
@@ -170,24 +166,22 @@ const cleanUpDeletedContentItem = async (
   }
 };
 
-// Type-agnostic: works the same for every content item type (video, text,
-// and whatever else lands here -- quiz, image, etc.), only branching to
-// clean up a type's own external storage (e.g. video's S3 object) where
-// that type has any.
+// Works for every content item type, branching only to clean up a type's
+// own S3 storage.
 //
 // In a draft course this deletes the item for good. In any other course it
 // archives the item instead, keeping it and every student's data for it
 // restorable; see deleteContentItemPermanently for removing an archived item
 // for good.
-export const deleteContentItem = courseProcedure
-  .input(DeleteContentItemInputSchema)
+export const deleteContentItem = courseInstructorProcedure(
+  DeleteContentItemInputSchema,
+)
   .output(DeleteContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getContentItemOrThrow(coreTable, key);
     await requireNotAssignmentItem(coreTable, key);
     const course = await getCourseOrThrow(coreTable, courseId);
@@ -246,15 +240,15 @@ export const deleteContentItem = courseProcedure
 
 // Students still don't see the item until its lesson and module are visible
 // too.
-export const publishContentItem = courseProcedure
-  .input(PublishContentItemInputSchema)
+export const publishContentItem = courseInstructorProcedure(
+  PublishContentItemInputSchema,
+)
   .output(PublishContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getContentItemOrThrow(coreTable, key);
     requireNotArchived(
       existing,
@@ -275,15 +269,15 @@ export const publishContentItem = courseProcedure
     );
   });
 
-export const hideContentItem = courseProcedure
-  .input(HideContentItemInputSchema)
+export const hideContentItem = courseInstructorProcedure(
+  HideContentItemInputSchema,
+)
   .output(HideContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getContentItemOrThrow(coreTable, key);
     requireNotArchived(existing, 'Restore the content item before hiding it');
     await requireAncestorsNotArchived(coreTable, key);
@@ -304,15 +298,15 @@ export const hideContentItem = courseProcedure
 // A content item under an archived lesson or module can't be restored on its
 // own: it would still be hidden by that ancestor, so the ancestor has to come
 // back first.
-export const restoreContentItem = courseProcedure
-  .input(RestoreContentItemInputSchema)
+export const restoreContentItem = courseInstructorProcedure(
+  RestoreContentItemInputSchema,
+)
   .output(RestoreContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     const existing = await getContentItemOrThrow(coreTable, key);
     if (!existing.archivedAt) {
       return asContentItemOutput<IRestoreContentItemOutput>(existing);
@@ -350,15 +344,15 @@ export const restoreContentItem = courseProcedure
 // Removes an archived content item for good. Refused once any student has
 // activity on it: that data must survive curriculum edits, so such an item
 // can stay archived but never be deleted.
-export const deleteContentItemPermanently = courseProcedure
-  .input(DeleteContentItemPermanentlyInputSchema)
+export const deleteContentItemPermanently = courseInstructorProcedure(
+  DeleteContentItemPermanentlyInputSchema,
+)
   .output(DeleteContentItemPermanentlyOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireNotAssignmentItem(coreTable, key);
     const existing = await getContentItemOrThrow(coreTable, key);
     if (!existing.archivedAt) {
@@ -425,14 +419,14 @@ const lessonContentItemsChanged = () =>
 // client that missed an item added, archived or removed in the meantime gets
 // `CONFLICT` and reloads rather than overwriting what it never saw. Repeating
 // an order the lesson already has writes nothing.
-export const reorderContentItems = courseProcedure
-  .input(ReorderContentItemsInputSchema)
+export const reorderContentItems = courseInstructorProcedure(
+  ReorderContentItemsInputSchema,
+)
   .output(ReorderContentItemsOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemIds } = input;
 
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     await requireAncestorsNotArchived(coreTable, {
       courseId,
       moduleId,

@@ -41,7 +41,7 @@ const formatDate = (iso: string) =>
     year: 'numeric',
   });
 
-// The course preview's call to action: sign in, enrol, or continue learning,
+// The course page's call to action: sign in, enrol, or continue learning,
 // depending on who is looking. Enrolling calls core-api's course.enrol, which
 // is idempotent, so a double click or a stale page can't enrol twice.
 export function EnrolmentActions({

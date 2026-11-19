@@ -7,8 +7,7 @@ import { PORTALS } from '../helpers/portals.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
-// Sample content the home page used to invent. A real instructor's page must
-// never show any of it.
+// Sample content a real instructor's home page must never show.
 const SAMPLE_STRINGS = [
   'Applied Mathematics',
   'Foundations of Biology',

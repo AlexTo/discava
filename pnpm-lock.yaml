@@ -593,6 +593,9 @@ importers:
       '@aws-lambda-powertools/parameters':
         specifier: 'catalog:'
         version: 2.36.0(@aws-sdk/client-appconfigdata@3.1164.0)(@aws-sdk/client-dynamodb@3.1164.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1164.0))(@middy/core@7.9.2)
+      '@aws-lambda-powertools/parser':
+        specifier: 'catalog:'
+        version: 2.36.0(@middy/core@7.9.2)(zod@4.6.7)
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
@@ -626,6 +629,9 @@ importers:
       '@libpdf/core':
         specifier: 'catalog:'
         version: 0.5.3
+      '@middy/core':
+        specifier: 'catalog:'
+        version: 7.9.2
       '@opensearch-project/opensearch':
         specifier: 'catalog:'
         version: 3.9.0(supports-color@7.2.0)

@@ -21,11 +21,9 @@ function RouteComponent() {
   const auth = useAuth();
   const navigate = useNavigate();
   const returnTo = safeReturnTo(Route.useSearch().redirect);
-  // `auth` is a fresh object on every render, so this effect must guard
-  // against re-invoking signinRedirect() on each re-render — otherwise a
-  // signinRedirect() call that doesn't navigate away (e.g. it rejects
-  // because no Cognito domain is configured yet) causes an infinite
-  // render loop instead of just failing once.
+  // `auth` is a fresh object on every render, so without this guard a
+  // signinRedirect() that doesn't navigate away (e.g. it rejects) would be
+  // retried on every render, looping forever instead of failing once.
   const signinAttempted = useRef(false);
 
   useEffect(() => {
@@ -42,7 +40,8 @@ function RouteComponent() {
     }
     if (!signinAttempted.current) {
       signinAttempted.current = true;
-      // Cognito hands the state back to CognitoAuth's onSigninCallback.
+      // The sign-in provider hands the state back to CognitoAuth's
+      // onSigninCallback.
       auth.signinRedirect({ state: { returnTo } });
     }
   }, [auth, navigate, returnTo]);

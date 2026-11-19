@@ -38,9 +38,10 @@ export type CoreTableProps = Omit<DynamoDBTableProps, 'runtimeConfigKey'>;
 export class CoreTable extends DynamoDBTable {
   constructor(scope: Construct, id: string, props?: CoreTableProps) {
     super(scope, id, {
-      // The progress recalculation reads the stream. It needs both images:
-      // the old one for a removed record, and both to tell whether what
-      // students see (visibility, archivedAt) changed.
+      // Read by the stream router, which passes both images on: the old one
+      // for a removed record, and both so a feature (e.g. progress
+      // recalculation) can tell whether what students see (visibility,
+      // archivedAt) changed.
       stream: StreamViewType.NEW_AND_OLD_IMAGES,
       // Expires the analytics markers (see core-table's analytics-writes),
       // the only records with a `ttl` attribute.
