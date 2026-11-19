@@ -10,7 +10,7 @@ import {
   contributions,
   funnelContributions,
   sumContributions,
-} from '../analytics.js';
+} from '../analytics-contributions.js';
 import type { InvariantName } from './index.js';
 import { checkTableInvariants as checkAllInvariants } from './index.js';
 import type { TableSnapshot } from './snapshot.js';

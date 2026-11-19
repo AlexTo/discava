@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
-import { dayKey, SCORE_BANDS, weekKey } from './analytics.js';
+import { dayKey, SCORE_BANDS, weekKey } from './analytics-contributions.js';
 import { filterEffectivelyVisible } from './curriculum.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;

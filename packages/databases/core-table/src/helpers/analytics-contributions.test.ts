@@ -14,7 +14,7 @@ import {
   mergeCounts,
   sumContributions,
   weekKey,
-} from './analytics.js';
+} from './analytics-contributions.js';
 import { rebuildCourseAnalytics } from './analytics-rebuild.js';
 
 const enrolment = (overrides: Record<string, unknown> = {}) => ({

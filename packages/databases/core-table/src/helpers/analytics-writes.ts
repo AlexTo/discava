@@ -8,7 +8,7 @@ import {
   type FunnelStatus,
   funnelStatus,
   type Member,
-} from './analytics.js';
+} from './analytics-contributions.js';
 import {
   cancellationReasons,
   failedAt,

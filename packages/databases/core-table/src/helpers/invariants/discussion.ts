@@ -9,7 +9,7 @@ import {
   DISCUSSION_MAX_REPORTERS,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DISCUSSION_TITLE_MAX,
-} from '../discussion.js';
+} from '../discussion-text.js';
 import { uuidV7Time } from '../uuid-v7.js';
 import { type Check, groupBy, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
