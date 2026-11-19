@@ -16,4 +16,15 @@ export default defineConfig([
     platform: 'node',
     external: [/@aws-sdk\/.*/],
   },
+  {
+    tsconfig: 'tsconfig.lib.json',
+    input: 'src/page-renderer/handler.ts',
+    output: {
+      file: '../../../dist/packages/apis/core-api/page-renderer-bundle/index.js',
+      format: 'cjs',
+      codeSplitting: false,
+    },
+    platform: 'node',
+    external: [/@aws-sdk\/.*/],
+  },
 ]);

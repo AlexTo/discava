@@ -17,8 +17,8 @@ import {
   createCourse,
   publishCourse,
 } from '../helpers/instructor-portal.js';
-import { PORTALS, SERVICES } from '../helpers/portals.js';
-import { coursePageUrl } from '../helpers/public-pages.js';
+import { PAGE_RENDERER, PORTALS, SERVICES } from '../helpers/portals.js';
+import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -380,5 +380,90 @@ test('an instructor edits their profile and a signed-out visitor opens it from t
         .getByText(title),
     ).toBeVisible();
     await screenshot(visitor, 'public instructor profile', { fullPage: true });
+  });
+});
+
+// Crawlers and link previews fetch the page without running JavaScript: the
+// page renderer (a Lambda behind CloudFront when deployed) answers with the
+// content, tags and structured data in the HTML itself. Local dev is closed to
+// search engines, so every page carries `noindex`.
+test('the page renderer serves landing pages, the site map and robots.txt without JavaScript', async ({
+  browser,
+  request,
+}) => {
+  const title = uniqueName('E2E crawler course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  await setLandingViaApi(instructor, courseId, {
+    learningOutcomes: ['Be found by crawlers'],
+    requirements: ['A browser'],
+  });
+  const draft = await instructor.instructor.course.create.mutate({
+    title: uniqueName('E2E crawler draft'),
+  });
+  const profile = await instructor.instructor.profile.get.query();
+  const page = (path: string) => request.get(`${PAGE_RENDERER}${path}`);
+
+  await test.step('a published course has its content, tags and structured data', async () => {
+    const response = await page(`/learn/${courseId}`);
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    expect(html).toContain(`<h1`);
+    expect(html).toContain(title);
+    expect(html).toContain('Be found by crawlers');
+    expect(html).toContain('Lesson 1');
+    expect(html).toContain(profile.displayName);
+    expect(html).toContain('property="og:title"');
+    expect(html).toContain('application/ld+json');
+    expect(html).toContain('noindex');
+    expect(response.headers()['x-robots-tag']).toBe('noindex');
+
+    // What a crawler's HTML shows with scripts off (unstyled: the renderer's
+    // local server doesn't serve the portal's assets).
+    const crawler = await browser.newContext({ javaScriptEnabled: false });
+    const crawlerPage = await crawler.newPage();
+    await crawlerPage.goto(`${PAGE_RENDERER}/learn/${courseId}`);
+    await expect(
+      crawlerPage.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await screenshot(crawlerPage, 'course page as a crawler gets it', {
+      fullPage: true,
+    });
+    await crawler.close();
+
+    // The same page in the portal, seeded from the page data: no spinner.
+    const visitor = await browser.newPage();
+    await visitor.goto(coursePageUrl(courseId));
+    await expect(
+      visitor.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await screenshot(visitor, 'course page in the portal', { fullPage: true });
+    await visitor.close();
+  });
+
+  await test.step('the instructor profile has the display name', async () => {
+    const response = await page(`/instructors/${profile.handle}`);
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toContain(profile.displayName);
+  });
+
+  await test.step('a draft course is not found', async () => {
+    const response = await page(`/learn/${draft.courseId}`);
+    expect(response.status()).toBe(404);
+    expect(await response.text()).not.toContain('discava-page-data');
+  });
+
+  await test.step('the site map lists the course and the profile', async () => {
+    const response = await page('/sitemap.xml');
+    expect(response.status()).toBe(200);
+    const xml = await response.text();
+    expect(xml).toContain(`/learn/${courseId}</loc>`);
+    expect(xml).toContain(`/instructors/${profile.handle.toLowerCase()}</loc>`);
+  });
+
+  await test.step('robots.txt disallows everything', async () => {
+    const response = await page('/robots.txt');
+    expect(response.status()).toBe(200);
+    expect(await response.text()).toBe('User-agent: *\nDisallow: /\n');
   });
 });

@@ -13,7 +13,11 @@ import {
 } from 'aws-cdk-lib';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import {
+  Function as CloudFrontFunction,
   Distribution,
+  FunctionCode,
+  FunctionEventType,
+  FunctionRuntime,
   HeadersFrameOption,
   HeadersReferrerPolicy,
   ResponseHeadersPolicy,
@@ -44,6 +48,7 @@ import {
 } from 'aws-cdk-lib/aws-s3-deployment';
 import { CfnWebACL } from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
+import * as url from 'url';
 import { suppressRules } from './checkov.js';
 import { RuntimeConfig } from './runtime-config.js';
 
@@ -117,6 +122,12 @@ export interface StaticWebsiteProps {
    * @default this construct
    */
   readonly runtimeConfigScope?: Construct;
+  /**
+   * Headers the distribution adds to every response, besides the security
+   * headers: e.g. `X-Robots-Tag: noindex` for a stage closed to search
+   * engines.
+   */
+  readonly extraResponseHeaders?: Record<string, string>;
 }
 
 /**
@@ -131,6 +142,8 @@ export class StaticWebsite extends Construct {
   public readonly websiteBucket: IBucket;
   public readonly cloudFrontDistribution: Distribution;
   public readonly bucketDeployment: BucketDeployment;
+  /** The headers policy every behavior of the distribution uses. */
+  public readonly responseHeadersPolicy: ResponseHeadersPolicy;
 
   constructor(
     scope: Construct,
@@ -145,6 +158,7 @@ export class StaticWebsite extends Construct {
       encryptionKey,
       enableKeyRotation = true,
       runtimeConfigScope,
+      extraResponseHeaders,
     }: StaticWebsiteProps,
   ) {
     super(scope, id);
@@ -235,10 +249,8 @@ export class StaticWebsite extends Construct {
     this.deliverAccessLogsToCloudWatch('Distribution', logBucket, accessLogs);
 
     // Security headers applied to all responses.
-    const responseHeadersPolicy = new ResponseHeadersPolicy(
-      this,
-      'ResponseHeadersPolicy',
-      {
+    const responseHeadersPolicy = (this.responseHeadersPolicy =
+      new ResponseHeadersPolicy(this, 'ResponseHeadersPolicy', {
         securityHeadersBehavior: {
           strictTransportSecurity: {
             accessControlMaxAge: Duration.days(730),
@@ -261,8 +273,26 @@ export class StaticWebsite extends Construct {
             override: true,
           },
         },
-      },
-    );
+        ...(extraResponseHeaders && {
+          customHeadersBehavior: {
+            customHeaders: Object.entries(extraResponseHeaders).map(
+              ([header, value]) => ({ header, value, override: true }),
+            ),
+          },
+        }),
+      }));
+
+    // A single-page app's routes have no file behind them: a path whose last
+    // segment has no dot is the app, and one with a dot is a file, which is a
+    // real 404 when missing (instead of the app answering 200 for it).
+    const spaRewrite = new CloudFrontFunction(this, 'SpaRewrite', {
+      runtime: FunctionRuntime.JS_2_0,
+      code: FunctionCode.fromFile({
+        filePath: url.fileURLToPath(
+          new URL('./spa-rewrite.js', import.meta.url),
+        ),
+      }),
+    });
 
     const defaultRootObject = 'index.html';
     this.cloudFrontDistribution = new Distribution(
@@ -283,20 +313,14 @@ export class StaticWebsite extends Construct {
           origin: S3BucketOrigin.withOriginAccessControl(this.websiteBucket),
           viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           responseHeadersPolicy,
+          functionAssociations: [
+            {
+              function: spaRewrite,
+              eventType: FunctionEventType.VIEWER_REQUEST,
+            },
+          ],
         },
         defaultRootObject,
-        errorResponses: [
-          {
-            httpStatus: 404, // We need to redirect "key not found errors" to index.html for single page apps
-            responseHttpStatus: 200,
-            responsePagePath: `/${defaultRootObject}`,
-          },
-          {
-            httpStatus: 403, // We need to redirect reloads from paths (e.g. /foo/bar) to index.html for single page apps
-            responseHttpStatus: 200,
-            responsePagePath: `/${defaultRootObject}`,
-          },
-        ],
       },
     );
     if (!certificate) {
