@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -16,7 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const SCRIPT = join(REPO_ROOT, 'scripts/setup-stage.sh');
@@ -115,12 +115,45 @@ const EXECUTION_POLICY_FILES = [
   'cfn-execution-discava-development-compute.json',
 ];
 
+// Removed once every test is done, not after each: the tests run at the same
+// time, so one finishing mustn't delete the directories of those still going.
 const tempDirs: string[] = [];
-afterEach(() => {
+afterAll(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true });
 });
 
-const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
+/** Runs a command to its end without blocking the tests running beside it. */
+const run = (
+  command: string,
+  args: string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv },
+) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>(
+    (resolve, reject) => {
+      const child = spawn(command, args, {
+        ...options,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8').on('data', (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.setEncoding('utf8').on('data', (chunk) => {
+        stderr += chunk;
+      });
+      child.on('error', reject);
+      child.on('close', (status) => resolve({ status, stdout, stderr }));
+    },
+  );
+
+// Each run takes a few seconds, nearly all of it the script reading the stage
+// config through tsx, so the tests in a `describe.concurrent` below run their
+// scripts side by side. Each gets a directory, stubs and call log of its own.
+const runSetup = async (
+  settings: OidcSettings,
+  env: Record<string, string> = {},
+) => {
   const dir = mkdtempSync(join(tmpdir(), 'setup-stage-'));
   tempDirs.push(dir);
   const bin = join(dir, 'bin');
@@ -132,9 +165,8 @@ const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
   writeFileSync(join(bin, 'git'), GIT_STUB);
   for (const stub of ['aws', 'gh', 'git']) chmodSync(join(bin, stub), 0o755);
 
-  const result = spawnSync('bash', [SCRIPT, '--yes', 'discava-development'], {
+  const result = await run('bash', [SCRIPT, '--yes', 'discava-development'], {
     cwd: REPO_ROOT,
-    encoding: 'utf8',
     env: {
       ...process.env,
       PATH: `${bin}:${process.env.PATH}`,
@@ -176,9 +208,9 @@ const runSetup = (settings: OidcSettings, env: Record<string, string> = {}) => {
   };
 };
 
-describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
-  it("trusts the repository's immutable subject prefix", () => {
-    const { trustedSubject } = runSetup({
+describe.concurrent('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
+  it("trusts the repository's immutable subject prefix", async () => {
+    const { trustedSubject } = await runSetup({
       kind: 'response',
       useDefault: true,
       prefix: IMMUTABLE_PREFIX,
@@ -189,16 +221,19 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
     );
   });
 
-  it('trusts repo:<owner>/<repo> when GitHub reports no prefix', () => {
-    const { trustedSubject } = runSetup({ kind: 'response', useDefault: true });
+  it('trusts repo:<owner>/<repo> when GitHub reports no prefix', async () => {
+    const { trustedSubject } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
 
     expect(trustedSubject).toBe(
       `repo:${REPOSITORY}:environment:discava-development`,
     );
   });
 
-  it('stops before touching IAM when the settings request fails', () => {
-    const { status, output, iamCalls, trustedSubject } = runSetup({
+  it('stops before touching IAM when the settings request fails', async () => {
+    const { status, output, iamCalls, trustedSubject } = await runSetup({
       kind: 'request-fails',
     });
 
@@ -208,8 +243,8 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
     expect(trustedSubject).toBeUndefined();
   });
 
-  it('stops before touching IAM for a custom subject claim template', () => {
-    const { status, output, iamCalls } = runSetup({
+  it('stops before touching IAM for a custom subject claim template', async () => {
+    const { status, output, iamCalls } = await runSetup({
       kind: 'response',
       useDefault: false,
     });
@@ -219,8 +254,8 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
     expect(iamCalls).toEqual([]);
   });
 
-  it('warns and assumes the default prefix without an authenticated gh', () => {
-    const { output, trustedSubject } = runSetup({ kind: 'no-gh' });
+  it('warns and assumes the default prefix without an authenticated gh', async () => {
+    const { output, trustedSubject } = await runSetup({ kind: 'no-gh' });
 
     expect(output).toContain('assuming the default prefix');
     expect(trustedSubject).toBe(
@@ -228,8 +263,8 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
     );
   });
 
-  it('uses GITHUB_OIDC_SUBJECT_PREFIX without asking GitHub', () => {
-    const { trustedSubject } = runSetup(
+  it('uses GITHUB_OIDC_SUBJECT_PREFIX without asking GitHub', async () => {
+    const { trustedSubject } = await runSetup(
       { kind: 'request-fails' },
       { GITHUB_OIDC_SUBJECT_PREFIX: 'repo:someone/fork' },
     );
@@ -240,15 +275,15 @@ describe('setup-stage.sh OIDC subject', { timeout: 60_000 }, () => {
   });
 });
 
-describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
+describe.concurrent('setup-stage.sh repository', { timeout: 60_000 }, () => {
   const DEFAULT_OIDC: OidcSettings = { kind: 'response', useDefault: true };
 
   it.each([
     ['an HTTPS URL', 'https://github.com/AlexTo/discava.git'],
     ['an SSH URL', 'git@github.com:AlexTo/discava.git'],
     ['an SSH host alias', 'git@github.com-work:AlexTo/discava.git'],
-  ])('trusts the origin remote’s repository, from %s', (_, url) => {
-    const { trustedSubject, output } = runSetup(DEFAULT_OIDC, {
+  ])('trusts the origin remote’s repository, from %s', async (_, url) => {
+    const { trustedSubject, output } = await runSetup(DEFAULT_OIDC, {
       GITHUB_REPOSITORY: '',
       ORIGIN_URL: url,
     });
@@ -259,8 +294,8 @@ describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
     expect(output).toContain('Deploying from AlexTo/discava');
   });
 
-  it('trusts GITHUB_REPOSITORY over the origin remote, e.g. for a fork', () => {
-    const { trustedSubject } = runSetup(DEFAULT_OIDC, {
+  it('trusts GITHUB_REPOSITORY over the origin remote, e.g. for a fork', async () => {
+    const { trustedSubject } = await runSetup(DEFAULT_OIDC, {
       GITHUB_REPOSITORY: 'someone/discava-fork',
       ORIGIN_URL: 'https://github.com/AlexTo/discava.git',
     });
@@ -274,8 +309,8 @@ describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
     ['isn’t on GitHub', 'https://gitlab.com/AlexTo/discava.git'],
     ['only looks like GitHub', 'https://notgithub.com/AlexTo/discava.git'],
     ['is missing', ''],
-  ])('stops before touching IAM when origin %s', (_, url) => {
-    const { status, output, iamCalls } = runSetup(DEFAULT_OIDC, {
+  ])('stops before touching IAM when origin %s', async (_, url) => {
+    const { status, output, iamCalls } = await runSetup(DEFAULT_OIDC, {
       GITHUB_REPOSITORY: '',
       ORIGIN_URL: url,
     });
@@ -286,12 +321,14 @@ describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
   });
 });
 
-describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
-  it("lets CloudFormation manage the stage's secrets and generate their values", () => {
+describe.concurrent('setup-stage.sh execution policy', {
+  timeout: 60_000,
+}, () => {
+  it("lets CloudFormation manage the stage's secrets and generate their values", async () => {
     // The Data stack's secrets are native AWS::SecretsManager::Secret
     // resources, so CloudFormation itself creates them, and generating a
     // value has no resource-level scoping.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -320,10 +357,10 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it('allows tagging MediaConvert job templates as they are created', () => {
+  it('allows tagging MediaConvert job templates as they are created', async () => {
     // Tag-on-create is authorized against jobTemplates/*, not the template's
     // own ARN, so the stage-prefixed job template statement doesn't cover it.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -339,10 +376,10 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it("allows vended log delivery from the stage's buckets", () => {
+  it("allows vended log delivery from the stage's buckets", async () => {
     // S3 server access logs reach CloudWatch Logs through a delivery source
     // on the bucket, which needs this on the bucket itself.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -359,10 +396,10 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it("allows deleting the schedules left in the stage's schedule groups", () => {
+  it("allows deleting the schedules left in the stage's schedule groups", async () => {
     // Deleting a schedule group deletes its schedules first, each authorized
     // on the schedule itself rather than the group.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -378,11 +415,11 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it("allows the stage's queues and its functions' event source mappings", () => {
+  it("allows the stage's queues and its functions' event source mappings", async () => {
     // The stream router reads the core table's stream, and each feature
     // handler its queue, through an event source mapping, whose ARN is a
     // UUID, so it's scoped by the function it invokes instead.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -424,11 +461,11 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     });
   });
 
-  it("allows managing the stage's search collection, which is named by a generated id", () => {
+  it("allows managing the stage's search collection, which is named by a generated id", async () => {
     // OpenSearch Serverless ARNs end in a generated collection id, unknown
     // until the collection exists, so creating one can't be scoped by name.
     // Policies and reads have no resource type at all.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -461,9 +498,9 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it('only lets it create the OpenSearch Serverless service-linked role', () => {
+  it('only lets it create the OpenSearch Serverless service-linked role', async () => {
     // The first collection in an account creates the role.
-    const { status, executionStatements } = runSetup({
+    const { status, executionStatements } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -484,12 +521,12 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     );
   });
 
-  it('fits each of its policies within the size IAM allows', () => {
+  it('fits each of its policies within the size IAM allows', async () => {
     // Whitespace excluded, IAM allows 10,240 characters across a role's
     // inline policies and 6,144 per managed policy. The test account ID and
     // region are as long as real ones; discava-production's names are 1
     // character longer per stage-prefixed ARN, so leave room for that too.
-    const { status, executionPolicies } = runSetup({
+    const { status, executionPolicies } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -505,8 +542,8 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
     }
   });
 
-  it('attaches its managed policies to the execution role', () => {
-    const { status, iamCalls } = runSetup({
+  it('attaches its managed policies to the execution role', async () => {
+    const { status, iamCalls } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -522,10 +559,12 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
   });
 });
 
-describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
-  it("lets the stage's functions write its secrets", () => {
+describe.concurrent('setup-stage.sh permissions boundary', {
+  timeout: 60_000,
+}, () => {
+  it("lets the stage's functions write its secrets", async () => {
     // The admin function saves the Stripe keys an administrator connects.
-    const { status, policyDocument } = runSetup({
+    const { status, policyDocument } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -548,11 +587,11 @@ describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
     );
   });
 
-  it("lets the stage's functions use the search collection's data plane", () => {
+  it("lets the stage's functions use the search collection's data plane", async () => {
     // Every function's role is capped by the boundary, so without this the
     // indexing Lambda, the search API and the index-sync handler are denied
     // however their own policies read.
-    const { status, policyDocument } = runSetup({
+    const { status, policyDocument } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -570,8 +609,8 @@ describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
     );
   });
 
-  it("lets the stage's functions read table streams and send to or consume from its queues", () => {
-    const { status, policyDocument } = runSetup({
+  it("lets the stage's functions read table streams and send to or consume from its queues", async () => {
+    const { status, policyDocument } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -615,11 +654,13 @@ describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
   });
 });
 
-describe('setup-stage.sh Docker login role', { timeout: 60_000 }, () => {
+describe.concurrent('setup-stage.sh Docker login role', {
+  timeout: 60_000,
+}, () => {
   const ROLE_NAME = 'github-docker-login-discava';
 
-  it('lets any workflow in the repository assume it', () => {
-    const { status, policyDocument } = runSetup({
+  it('lets any workflow in the repository assume it', async () => {
+    const { status, policyDocument } = await runSetup({
       kind: 'response',
       useDefault: true,
       prefix: IMMUTABLE_PREFIX,
@@ -638,8 +679,8 @@ describe('setup-stage.sh Docker login role', { timeout: 60_000 }, () => {
     });
   });
 
-  it('only grants an ECR Public pull token', () => {
-    const { status, policyDocument } = runSetup({
+  it('only grants an ECR Public pull token', async () => {
+    const { status, policyDocument } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -663,8 +704,8 @@ describe('setup-stage.sh Docker login role', { timeout: 60_000 }, () => {
     ]);
   });
 
-  it('is created without a stage tag, since every stage shares it', () => {
-    const { status, iamCalls } = runSetup({
+  it('is created without a stage tag, since every stage shares it', async () => {
+    const { status, iamCalls } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -679,8 +720,8 @@ describe('setup-stage.sh Docker login role', { timeout: 60_000 }, () => {
     expect(createRole).not.toContain('Key=Stage');
   });
 
-  it('stores its ARN as a repository variable', () => {
-    const { status, ghVariableCalls } = runSetup({
+  it('stores its ARN as a repository variable', async () => {
+    const { status, ghVariableCalls } = await runSetup({
       kind: 'response',
       useDefault: true,
     });
@@ -714,9 +755,11 @@ const EXAMPLE_COM_CERTIFICATES = {
 const set = (name: string, body: string) =>
   `gh variable set DISCAVA_DEVELOPMENT_INFRA_${name} --repo ${REPOSITORY} --env discava-development --body ${body}`;
 
-describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
-  it('sets no domain variables without a root domain', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY);
+describe.concurrent('setup-stage.sh custom domains', {
+  timeout: 60_000,
+}, () => {
+  it('sets no domain variables without a root domain', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY);
 
     expect(status).toBe(0);
     expect(ghVariableCalls.filter((call) => call.includes('DOMAIN'))).toEqual(
@@ -724,8 +767,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('serves every component from a subdomain of the root, with the certificate found for it', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
+  it('serves every component from a subdomain of the root, with the certificate found for it', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'Example.com',
       ...EXAMPLE_COM_CERTIFICATES,
     });
@@ -748,8 +791,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('uses the root domain as the HLS cookie domain', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
+  it('uses the root domain as the HLS cookie domain', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
       ...EXAMPLE_COM_CERTIFICATES,
     });
@@ -760,8 +803,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('defaults the root domain to the one the student portal already uses', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
+  it('defaults the root domain to the one the student portal already uses', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
       GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
         'example.com,www.example.com',
       ...EXAMPLE_COM_CERTIFICATES,
@@ -773,8 +816,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('finds ECDSA certificates, which ACM only lists when asked for', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
+  it('finds ECDSA certificates, which ACM only lists when asked for', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
       ...EXAMPLE_COM_CERTIFICATES,
       ACM_KEY_TYPE: 'EC_prime256v1',
@@ -786,12 +829,15 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('stops before touching IAM when a component has no certificate, naming each one missing', () => {
-    const { status, output, iamCalls, ghVariableCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
-      ...EXAMPLE_COM_CERTIFICATES,
-      ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\tother.example.org`,
-    });
+  it('stops before touching IAM when a component has no certificate, naming each one missing', async () => {
+    const { status, output, iamCalls, ghVariableCalls } = await runSetup(
+      GH_READY,
+      {
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\tother.example.org`,
+      },
+    );
 
     expect(status).not.toBe(0);
     expect(output).toContain(
@@ -804,8 +850,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     expect(ghVariableCalls).toEqual([]);
   });
 
-  it('rejects an invalid root domain before touching IAM', () => {
-    const { status, output, iamCalls } = runSetup(GH_READY, {
+  it('rejects an invalid root domain before touching IAM', async () => {
+    const { status, output, iamCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example_com',
     });
 
@@ -814,8 +860,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     expect(iamCalls).toEqual([]);
   });
 
-  it('removes the domain variables a previous run stored when the root is left blank', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
+  it('removes the domain variables a previous run stored when the root is left blank', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
       GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
         'example.com',
@@ -840,8 +886,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
   // single certificate covers both and they resolve to the same address, and
   // API Gateway then rejects the requests that reach the wrong API.
   describe('API certificates', () => {
-    it('passes over a wildcard for each API', () => {
-      const { status, ghVariableCalls } = runSetup(GH_READY, {
+    it('passes over a wildcard for each API', async () => {
+      const { status, ghVariableCalls } = await runSetup(GH_READY, {
         DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
         ...EXAMPLE_COM_CERTIFICATES,
       });
@@ -852,8 +898,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
       );
     });
 
-    it('stops before touching IAM when an API has only a wildcard', () => {
-      const { status, output, iamCalls } = runSetup(GH_READY, {
+    it('stops before touching IAM when an API has only a wildcard', async () => {
+      const { status, output, iamCalls } = await runSetup(GH_READY, {
         DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
         ...EXAMPLE_COM_CERTIFICATES,
         ACM_CERTIFICATES_ap_southeast_2: `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
@@ -865,8 +911,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
       expect(iamCalls).toEqual([]);
     });
 
-    it('passes over one certificate naming both APIs', () => {
-      const { status, output } = runSetup(GH_READY, {
+    it('passes over one certificate naming both APIs', async () => {
+      const { status, output } = await runSetup(GH_READY, {
         DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
         ...EXAMPLE_COM_CERTIFICATES,
         ACM_CERTIFICATES_ap_southeast_2: `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com,instructor-api.example.com`,
@@ -876,8 +922,8 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
       expect(output).toContain('and not also instructor-api.example.com');
     });
 
-    it('skips an RSA key over 2048 bits, which API Gateway rejects', () => {
-      const { status, output } = runSetup(GH_READY, {
+    it('skips an RSA key over 2048 bits, which API Gateway rejects', async () => {
+      const { status, output } = await runSetup(GH_READY, {
         DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
         ...EXAMPLE_COM_CERTIFICATES,
         ACM_KEY_TYPE: 'RSA_4096',

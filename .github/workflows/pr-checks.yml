@@ -31,13 +31,22 @@ jobs:
       # Only the build target invokes checkov (via infra:checkov's `uvx`), so
       # only that leg needs uv. init-monorepo also sets NX_BASE/NX_HEAD so
       # `nx affected` diffs against the PR's target branch.
+      #
+      # The lint leg restores main's Nx cache but saves none of its own: Biome
+      # lints the projects a pull request changed in seconds, less time than
+      # saving a cache takes, and the cache would count toward the
+      # repository's 10 GB.
       - uses: ./.github/actions/init-monorepo
         with:
           setup-uv: ${{ matrix.target == 'build' }}
           nx-cache-scope: ${{ matrix.target }}
+          nx-cache-save: ${{ matrix.target != 'lint' }}
 
+      # Four tasks at a time, not nx.json's eight: each Vitest task starts
+      # workers of its own, and eight of them on a runner's few cores took
+      # about 13% longer than four when timed on four cores.
       - name: Run ${{ matrix.target }}
-        run: pnpm nx affected --target ${{ matrix.target }}
+        run: pnpm nx affected --target ${{ matrix.target }} --parallel=4
 
       - name: Upload coverage reports to Codecov
         if: matrix.target == 'test'
