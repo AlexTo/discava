@@ -141,7 +141,7 @@ Adds to the sections above for User Stories 7 and 8 (spec FR-031 to FR-040). Not
 |-----------|------|-------|
 | `refundRequestedAt` | string (ISO), optional | set once, when the student's refund request was accepted and Stripe was asked; never cleared. Absent on an operator's refund. It is not a status: the order stays `paid` until `charge.refunded` arrives |
 
-`refundReason` keeps its four values: a student's request and an operator's refund are both `requested`, told apart by `refundRequestedAt`.
+`refundReason` keeps its four values: a student's request and an operator's refund are both `requested`, told apart by `refundRequestedAt`. The instructor earnings recording (`packages/events/src/earnings/earnings-from-order.ts`) counts any order that is `paid`, or `refunded` with `refundReason` `requested`, as a sale, so a student's refund reaches the earnings ledger as a sale and a refund with no extra field.
 
 The lifecycle is unchanged. A student's request sits on the `paid ──full refund──► refunded` edge: it causes the refund at Stripe, and Stripe's notice makes the move.
 
