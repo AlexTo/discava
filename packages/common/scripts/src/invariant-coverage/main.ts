@@ -10,8 +10,9 @@ import {
   checkInvariantCoverage,
   failureMessage,
   findTriggers,
-  INVARIANTS_PATH,
+  INVARIANTS_PATHSPEC,
   sameWriterMap,
+  SNAPSHOT_PATH,
   snapshotKeys,
   WRITER_MAP_PATH,
   type WriterMap,
@@ -22,7 +23,7 @@ import { scanEntityWriters, WORKSPACE_ROOT } from './scan.js';
 // for the `Invariant coverage` job in .github/workflows/pr-checks.yml, and
 // locally against origin/main. First, the committed entity-writers.json must
 // match the code; then the writers it gained over the base branch's copy
-// must come with an invariants.ts change naming each entity, or the waiver
+// must come with an invariants-folder change naming each entity, or the waiver
 // label.
 const baseRef = process.env.BASE_REF || 'main';
 
@@ -57,10 +58,15 @@ try {
 }
 
 const keys = snapshotKeys(
-  readFileSync(path.join(WORKSPACE_ROOT, INVARIANTS_PATH), 'utf8'),
+  readFileSync(path.join(WORKSPACE_ROOT, SNAPSHOT_PATH), 'utf8'),
 );
 const added = addedLines(
-  run('git', ['diff', `origin/${baseRef}...HEAD`, '--', INVARIANTS_PATH]),
+  run('git', [
+    'diff',
+    `origin/${baseRef}...HEAD`,
+    '--',
+    ...INVARIANTS_PATHSPEC,
+  ]),
 );
 
 // Read from the API when it runs, not the event's, so a waiver label takes

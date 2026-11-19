@@ -4,7 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { waitForAnalytics } from './analytics-wait.js';
-import type { InvariantViolation } from './invariants.js';
+import type { InvariantViolation } from './invariants/index.js';
 
 const violation: InvariantViolation = {
   invariant: 'analytics-matches-records',

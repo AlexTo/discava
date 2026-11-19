@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { InvariantViolation } from './invariants.js';
+import type { InvariantViolation } from './invariants/index.js';
 
 export interface WaitForAnalyticsOptions {
   /** Reads the table and returns the `analytics-matches-records` violations. */

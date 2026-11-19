@@ -79,7 +79,7 @@ Locally, each run leaves its users and courses behind. `pnpm nx run @discava/com
 
 ## Table invariants
 
-After every scenario, the core table must still keep the rules in `@discava/core-table`'s `helpers/invariants.ts` (#57): every course has an instructor, quiz summaries agree with their attempts, progress matches completions, and so on. `test` from `table-invariants.ts` checks them automatically. A scenario fails if it leaves a violation that wasn't there when it started, so older local data can't fail a run. The check waits up to 30 seconds for the progress recalculation to catch up.
+After every scenario, the core table must still keep the rules in `@discava/core-table`'s `helpers/invariants/` (#57): every course has an instructor, quiz summaries agree with their attempts, progress matches completions, and so on. `test` from `table-invariants.ts` checks them automatically. A scenario fails if it leaves a violation that wasn't there when it started, so older local data can't fail a run. The check waits up to 30 seconds for the progress recalculation to catch up.
 
 When one fails, the message names the rule and the record. To check the whole local table yourself, with `pnpm dev` running:
 
