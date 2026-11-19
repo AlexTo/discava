@@ -2500,6 +2500,32 @@ describe('discussion', () => {
     ).toEqual([]);
   });
 
+  it('keeps the discussion rules with discussion notifications present', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-16T12:00:00.000Z'));
+    try {
+      table.notifications = [
+        ...[
+          'discussion.reply',
+          'discussion.answered',
+          'discussion.accepted',
+        ].map((type, i) => ({
+          userId: 'asker',
+          occurredAt: `2026-11-16T10:0${i}:00.000Z`,
+          id: `${i}`.repeat(16),
+          type,
+          link: { portal: 'student' as const, path: '/learn/c1/lesson/l1' },
+          email: { state: 'skipped' as const, reason: 'never' as const },
+          createdAt: `2026-11-16T10:0${i}:00.000Z`,
+        })),
+      ];
+      table.notificationStates = [{ userId: 'asker', unreadCount: 3 }];
+      expect(checkTableInvariants(table)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('leaves a certificate-style record of another entity untouched', () => {
     const before = checkTableInvariants(table);
     table.certificates.push({

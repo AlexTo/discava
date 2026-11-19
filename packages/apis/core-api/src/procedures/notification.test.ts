@@ -246,12 +246,16 @@ describe('notification.preferences', () => {
       'assignment.returned',
       'announcement.posted',
       'discussion.reply',
+      'discussion.answered',
+      'discussion.accepted',
       'review.received',
     ]);
     expect(result.map((p) => p.emailEnabled)).toEqual([
       true,
       true,
       true,
+      true,
+      false,
       false,
     ]);
     expect(result.every((p) => !p.required)).toBe(true);
@@ -274,6 +278,8 @@ describe('notification.preferences', () => {
       false,
       true,
       true,
+      true,
+      false,
       true,
     ]);
   });

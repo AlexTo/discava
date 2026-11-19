@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { postIdTime } from '@discava/core-table';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
@@ -16,15 +18,18 @@ import {
   vote,
 } from './discussion.js';
 
-const { discussionWrites, state, write } = vi.hoisted(() => ({
-  discussionWrites: vi.fn(),
-  write: vi.fn(),
-  state: {} as Record<string, any>,
-}));
+const { discussionWrites, discussionNotificationWrites, state, write } =
+  vi.hoisted(() => ({
+    discussionWrites: vi.fn(),
+    discussionNotificationWrites: vi.fn(),
+    write: vi.fn(),
+    state: {} as Record<string, any>,
+  }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
   discussionWrites,
+  discussionNotificationWrites,
   createCoreTableService: vi.fn(async () => table()),
 }));
 
@@ -88,7 +93,7 @@ const table = () => ({
   transaction: {
     write: (build: (entities: unknown) => unknown) => ({
       go: async () => {
-        build({});
+        state.built = build({});
         return write();
       },
     }),
@@ -177,7 +182,8 @@ beforeEach(() => {
     nextCursor: undefined,
   });
   write.mockResolvedValue({ canceled: false });
-  discussionWrites.mockReturnValue([]);
+  discussionWrites.mockReturnValue(['post-item']);
+  discussionNotificationWrites.mockResolvedValue(['notification-item']);
 });
 
 const asInstructor = () => {
@@ -566,6 +572,48 @@ describe('reply', () => {
     });
   });
 
+  it('adds the notification items to the same transaction', async () => {
+    write.mockImplementation(async () => (created(), { canceled: false }));
+    // The post id's own time, so that it is within the 10 minute window.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(postIdTime(NEW_ID));
+    try {
+      await as(ME).reply(input);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(state.built).toEqual(['post-item', 'notification-item']);
+    expect(discussionNotificationWrites.mock.calls[0][1]).toMatchObject({
+      kind: 'reply',
+      question: { authorId: ASKER, postId: 'q1' },
+      reply: { authorId: ME, postId: NEW_ID, body: 'Because', state: 'shown' },
+    });
+  });
+
+  it('adds no notification items when the helper returns none (a self-reply)', async () => {
+    discussionNotificationWrites.mockResolvedValue([]);
+    write.mockImplementation(async () => (created(), { canceled: false }));
+    await as(ME).reply(input);
+    expect(state.built).toEqual(['post-item']);
+  });
+
+  it('leaves no notification when the post fails: a cancelled write is retried, then CONFLICT', async () => {
+    write.mockResolvedValue({ canceled: true });
+    await expect(as(ME).reply(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(state.posts.has(`reply/q1/${NEW_ID}`)).toBe(false);
+  });
+
+  it('treats a duplicate notification cancellation as already done', async () => {
+    write
+      .mockImplementationOnce(async () => (created(), { canceled: true }))
+      .mockResolvedValue({ canceled: false });
+    await expect(as(ME).reply(input)).resolves.toMatchObject({ mine: true });
+    // The second pass found the reply and wrote nothing more.
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
   it("badges an instructor's reply, without enrolment", async () => {
     write.mockImplementation(async () => (created(), { canceled: false }));
     await asInstructor().reply(input);
@@ -747,6 +795,24 @@ describe('accept', () => {
       replyId: 'r1',
       question: { threadId: 'q1' },
     });
+  });
+
+  it('adds the notification items to the same transaction', async () => {
+    await as(ME).accept(input);
+    expect(state.built).toEqual(['post-item', 'notification-item']);
+    expect(discussionNotificationWrites.mock.calls[0][1]).toMatchObject({
+      kind: 'accepted',
+      acceptedBy: ME,
+      question: { postId: 'q1' },
+      reply: { postId: 'r1' },
+    });
+  });
+
+  it('notifies nobody when the answer is removed or repeated', async () => {
+    await as(ME).accept({ ...input, postId: null });
+    put(question({ authorId: ME, acceptedPostId: 'r1' }));
+    await as(ME).accept(input);
+    expect(discussionNotificationWrites).not.toHaveBeenCalled();
   });
 
   it('lets an instructor of the course mark an answer', async () => {
