@@ -279,8 +279,8 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - the public-status line from `isPublic`.
 
   Wire the checklist's profile line (T016). Component tests.
-- [ ] T027 [US5] Concurrency test in `packages/e2e/src/concurrency/profile-handle.e2e.ts`: two new instructors send `profile.update` at the same moment claiming the same new handle. Exactly one succeeds, the other gets `CONFLICT` "That handle is taken", and the invariants pass.
-- [ ] T028 [US5] Extend `public-landing-page.e2e.ts`:
+- [x] T027 [US5] Concurrency test in `packages/e2e/src/concurrency/profile-handle.e2e.ts`: two new instructors send `profile.update` at the same moment claiming the same new handle. Exactly one succeeds, the other gets `CONFLICT` "That handle is taken", and the invariants pass.
+- [x] T028 [US5] Extend `public-landing-page.e2e.ts`:
   1. The instructor fills in the profile and uploads a photo. Take a `screenshot()` of the editor.
   2. Signed out, open the profile from the course's card. Take a `screenshot()`.
   3. Archive the instructor's only published course. The profile gives "Instructor not found".

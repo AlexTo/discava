@@ -9,7 +9,11 @@ import {
   HANDLE_MIN,
 } from '../entities/instructor-profile.js';
 import type { createCoreTableService } from '../service.js';
-import { failedAt, failedConditions } from './errors.js';
+import {
+  failedAt,
+  failedConditions,
+  hasTransactionConflict,
+} from './errors.js';
 import {
   type NotificationTransactionItems,
   transactionEntities,
@@ -31,6 +35,7 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 const FALLBACK_HANDLE = 'instructor';
 const FALLBACK_DISPLAY_NAME = 'Discava instructor';
 const RANDOM_CANDIDATES = 4;
+const MAX_CONFLICT_ATTEMPTS = 3;
 const RANDOM_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 // Handles that would collide with a route or a file served beside the profiles.
@@ -332,26 +337,37 @@ export const ensureInstructorProfile = async (
     ? [handle]
     : handleCandidates(handleFromName(user?.givenName, user?.familyName));
   for (const candidate of candidates) {
-    const { canceled, data: results } = await service.transaction
-      .write(() =>
-        instructorProfileWrites.ensure(service, {
-          instructorId,
-          user: user ?? undefined,
-          candidate,
-          fields,
-          now: new Date(),
-        }),
-      )
-      .go();
-    if (!canceled) {
-      return { status: 'created', handle: candidate };
-    }
-    const failed = failedConditions(results);
-    if (failed[0]) {
-      return { status: 'exists' };
-    }
-    if (!failed[1]) {
-      throw new Error('The instructor profile could not be created');
+    // Two creates racing on a claim can be cancelled with a
+    // TransactionConflict rather than a failed condition: nothing was
+    // written, and asking again finds the claim taken or the profile there.
+    for (let attempt = 1; ; attempt++) {
+      const { canceled, data: results } = await service.transaction
+        .write(() =>
+          instructorProfileWrites.ensure(service, {
+            instructorId,
+            user: user ?? undefined,
+            candidate,
+            fields,
+            now: new Date(),
+          }),
+        )
+        .go();
+      if (!canceled) {
+        return { status: 'created', handle: candidate };
+      }
+      const failed = failedConditions(results);
+      if (failed[0]) {
+        return { status: 'exists' };
+      }
+      if (failed[1]) {
+        break;
+      }
+      if (
+        !hasTransactionConflict(results) ||
+        attempt === MAX_CONFLICT_ATTEMPTS
+      ) {
+        throw new Error('The instructor profile could not be created');
+      }
     }
   }
   return { status: 'handle-taken' };

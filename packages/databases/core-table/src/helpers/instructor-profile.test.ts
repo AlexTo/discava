@@ -137,6 +137,57 @@ const claimOwner = (handle: string) =>
     .flat()
     .find((item) => item.Item.handle === handle && !item.Item.displayName);
 
+describe('ensureInstructorProfile racing on a claim', () => {
+  const conflicting = (times: number) => {
+    let left = times;
+    const write = service.transaction.write as unknown as {
+      getMockImplementation: () => (build: () => unknown[]) => {
+        go: () => Promise<unknown>;
+      };
+    };
+    const real = write.getMockImplementation();
+    vi.spyOn(service.transaction, 'write').mockImplementation(((
+      build: () => unknown[],
+    ) => {
+      if (left-- > 0) {
+        return {
+          go: async () => ({
+            canceled: true,
+            data: [
+              { code: 'TransactionConflict' },
+              { code: 'TransactionConflict' },
+            ],
+          }),
+        };
+      }
+      return real(build);
+    }) as never);
+  };
+
+  it('asks again after a transaction conflict', async () => {
+    conflicting(1);
+    expect(await ensureInstructorProfile(service, 'i1')).toEqual({
+      status: 'created',
+      handle: 'alex-to',
+    });
+  });
+
+  it('reports the handle taken once the other claim is visible', async () => {
+    await ensureInstructorProfile(service, 'other', { handle: 'same' });
+    conflicting(1);
+    expect(
+      await ensureInstructorProfile(service, 'i1', { handle: 'same' }),
+    ).toEqual({ status: 'handle-taken' });
+  });
+
+  it('gives up after repeated conflicts', async () => {
+    conflicting(10);
+    await expect(ensureInstructorProfile(service, 'i1')).rejects.toThrow(
+      'could not be created',
+    );
+  });
+});
+
 describe('ensureInstructorProfile', () => {
   it('creates the profile and its claim in one transaction', async () => {
     const result = await ensureInstructorProfile(service, 'i1');
