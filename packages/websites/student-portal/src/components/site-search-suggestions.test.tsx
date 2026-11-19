@@ -16,6 +16,7 @@ const render = (
   renderWithCoreApi(
     <SiteSearchSuggestions
       id="list"
+      activeIndex={-1}
       items={[]}
       typed=""
       loading={false}
@@ -31,12 +32,12 @@ describe('SiteSearchSuggestions', () => {
       items: [{ courseId: 'c1', title: 'Python for Data' }],
       typed: 'pyth da',
     });
-    await screen.findByRole('button');
+    await screen.findByRole('option');
 
     expect(
       [...container.querySelectorAll('mark')].map((mark) => mark.textContent),
     ).toEqual(['Pyth', 'Da']);
-    expect(screen.getByRole('button')).toHaveTextContent('Python for Data');
+    expect(screen.getByRole('option')).toHaveTextContent('Python for Data');
   });
 
   it('shows the course image when it has one, and a placeholder otherwise', async () => {
@@ -46,7 +47,7 @@ describe('SiteSearchSuggestions', () => {
         { courseId: 'c2', title: 'Without image' },
       ],
     });
-    await screen.findAllByRole('button');
+    await screen.findAllByRole('option');
 
     const images = container.querySelectorAll('img');
     expect(images).toHaveLength(1);
@@ -62,7 +63,7 @@ describe('SiteSearchSuggestions', () => {
       items: [{ courseId: 'c1', title: 'Python Basics' }],
       onChoose,
     });
-    const row = await screen.findByRole('button', { name: 'Python Basics' });
+    const row = await screen.findByRole('option', { name: 'Python Basics' });
 
     const notPrevented = fireEvent.mouseDown(row);
     fireEvent.click(row);
