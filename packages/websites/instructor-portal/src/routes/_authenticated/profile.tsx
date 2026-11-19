@@ -71,7 +71,9 @@ const initialsOf = (name: string) =>
 function ProfilePage() {
   const trpc = useInstructorApi();
   const profileQuery = useQuery(trpc.profile.get.queryOptions());
-  // Kept here, since the form below starts again when a save bumps the version.
+  // The form keeps what was typed when a photo change bumps the version; it
+  // starts again from the saved profile only on Reload.
+  const [generation, setGeneration] = useState(0);
   const [saved, setSaved] = useState(false);
 
   if (profileQuery.isPending) {
@@ -97,14 +99,17 @@ function ProfilePage() {
       </ErrorAlert>
     );
   }
-  // Keyed on the version, so the form starts again from what was saved.
   return (
     <ProfileForm
-      key={profileQuery.data.version}
+      key={generation}
       profile={profileQuery.data}
       saved={saved}
       onSaved={setSaved}
-      reload={() => profileQuery.refetch()}
+      reload={async () => {
+        await profileQuery.refetch();
+        setSaved(false);
+        setGeneration((n) => n + 1);
+      }}
     />
   );
 }
@@ -118,7 +123,7 @@ function ProfileForm({
   profile: ProfileData;
   saved: boolean;
   onSaved: (saved: boolean) => void;
-  reload: () => void;
+  reload: () => Promise<void>;
 }) {
   const trpc = useInstructorApi();
   const queryClient = useQueryClient();

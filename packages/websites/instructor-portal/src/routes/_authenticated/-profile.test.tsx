@@ -124,6 +124,50 @@ describe('profile editor', () => {
     expect(await screen.findByText('Profile saved.')).toBeVisible();
   });
 
+  it('keeps unsaved edits when the photo changes, and saves with the new version', async () => {
+    let version = 2;
+    const { calls, user } = open({
+      'profile.get': () => ({ ...profile, version }),
+      'profile.createPhotoUploadUrl': () => ({
+        uploadUrl: 'https://bucket.s3.test/upload',
+        photoKey: 'instructors/i1/new.jpg',
+        headers: {},
+      }),
+      'profile.updatePhoto': () => {
+        version = 3;
+        return { ...profile, version };
+      },
+      'profile.update': () => ({ ...profile, version: 4 }),
+    });
+    await field('Display name');
+    await user.type(screen.getByLabelText('Bio'), ' unsaved');
+
+    await user.click(screen.getByRole('button', { name: 'Add photo' }));
+    await user.upload(
+      screen.getByLabelText('Profile photo file'),
+      new File(['png'], 'me.png', { type: 'image/png' }),
+    );
+    await screen.findByTestId('cropper');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        calls.filter(({ path }) => path === 'profile.get').length,
+      ).toBeGreaterThan(1),
+    );
+
+    expect(screen.getByLabelText('Bio')).toHaveValue('Hello unsaved');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(calls.find(({ path }) => path === 'profile.update')).toBeDefined(),
+    );
+    expect(
+      calls.find(({ path }) => path === 'profile.update')?.input,
+    ).toMatchObject({ version: 3, bio: 'Hello unsaved' });
+  });
+
   it('keeps "Profile saved." once the refetch brings the new version', async () => {
     let saved = false;
     const { user } = open({
@@ -138,10 +182,6 @@ describe('profile editor', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByText('Profile saved.')).toBeVisible();
-    // The form has started again from the saved profile by now.
-    await waitFor(() =>
-      expect(screen.getByLabelText('Bio')).toHaveValue('Hello'),
-    );
     expect(screen.getByText('Profile saved.')).toBeVisible();
   });
 
