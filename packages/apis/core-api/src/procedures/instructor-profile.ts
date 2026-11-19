@@ -81,7 +81,9 @@ export const instructorProfilePublicView = publicCourseProcedure
       .get(memberships.map(({ courseId }) => ({ courseId })))
       .go({ preserveBatchOrder: true });
     const published = found
-      .filter((course) => course !== null && course.status === 'published')
+      .flatMap((course) =>
+        course !== null && course.status === 'published' ? [course] : [],
+      )
       .sort((a, b) => (b.publishedAt ?? '').localeCompare(a.publishedAt ?? ''))
       .slice(0, MAX_COURSES);
     if (published.length === 0) {
