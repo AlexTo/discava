@@ -17,13 +17,13 @@ import {
   instructorProfileWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
   headPublicMediaObject,
   presignJpegUpload,
-} from '../lib/public-media-client.js';
+} from '../helpers/public-media-client.js';
+import { courseProcedure } from '../init.js';
 import {
   CreateProfilePhotoUploadUrlInputSchema,
   CreateProfilePhotoUploadUrlOutputSchema,

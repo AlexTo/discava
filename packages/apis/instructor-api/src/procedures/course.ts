@@ -16,13 +16,12 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
-import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   refreshInstructorCourseUpdatedAt,
-  requireCourseInstructor,
-} from '../lib/course-lifecycle.js';
-import { asPreviewSummary } from '../lib/course-preview.js';
+} from '../helpers/course-access.js';
+import { asPreviewSummary } from '../helpers/course-preview.js';
+import { courseInstructorProcedure, courseProcedure } from '../init.js';
 import {
   ArchiveCourseInputSchema,
   ArchiveCourseOutputSchema,
@@ -150,14 +149,11 @@ const courseChanged = () =>
 // A draft course becomes visible to students: published. Only a draft can
 // be published, and only once it has content, so a course isn't opened up
 // empty. Repeating it on a published course writes nothing.
-export const publishCourse = courseProcedure
-  .input(PublishCourseInputSchema)
+export const publishCourse = courseInstructorProcedure(PublishCourseInputSchema)
   .output(PublishCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const course = await getCourseOrThrow(coreTable, courseId);
     if (course.status === 'published') {
@@ -269,14 +265,11 @@ export const publishCourse = courseProcedure
 // published, otherwise to draft. A course that has been open to students
 // never returns to draft, where deletes are permanent. Repeating it on a
 // course that isn't archived writes nothing.
-export const restoreCourse = courseProcedure
-  .input(RestoreCourseInputSchema)
+export const restoreCourse = courseInstructorProcedure(RestoreCourseInputSchema)
   .output(RestoreCourseOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const course = await getCourseOrThrow(coreTable, courseId);
     if (course.status !== 'archived') {
@@ -310,14 +303,13 @@ export const restoreCourse = courseProcedure
 // Whether completing the course issues a certificate. It only decides what
 // happens from now on: certificates already issued are neither read nor
 // written. Allowed in any course status.
-export const setCourseCertificates = courseProcedure
-  .input(SetCourseCertificatesInputSchema)
+export const setCourseCertificates = courseInstructorProcedure(
+  SetCourseCertificatesInputSchema,
+)
   .output(SetCourseCertificatesOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, enabled } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const { data: course } = await coreTable.entities.course
       .patch({ courseId })
@@ -341,14 +333,13 @@ export const setCourseCertificates = courseProcedure
 // The patch is conditioned on the amount just read, so two edits at once
 // can't leave `pricedAt` out of step; the loser retries once from the new
 // state. Allowed in any course status.
-export const setCoursePrice = courseProcedure
-  .input(SetCoursePriceInputSchema)
+export const setCoursePrice = courseInstructorProcedure(
+  SetCoursePriceInputSchema,
+)
   .output(SetCoursePriceOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, priceAmount, priceCurrency } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     const invalid = validatePrice({
       amount: priceAmount,
@@ -404,14 +395,11 @@ export const setCoursePrice = courseProcedure
 // archived modules, lessons and content items, for instructors teaching the
 // course. Students read the course through core-api's course.view, which
 // only returns what they may see.
-export const viewCourse = courseProcedure
-  .input(ViewCourseInputSchema)
+export const viewCourse = courseInstructorProcedure(ViewCourseInputSchema)
   .output(ViewCourseOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     // Course, its modules, their lessons, and each lesson's content items
     // all share the `curriculum` collection's partition, so one query

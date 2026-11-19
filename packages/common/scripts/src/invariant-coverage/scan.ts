@@ -94,23 +94,36 @@ const receiverEntities = (
   });
 };
 
-const programFor = (configPath: string): ts.Program => {
-  const config = ts.getParsedCommandLineOfConfigFile(
-    configPath,
-    {},
-    {
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
-        throw new Error(
-          ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
-        );
+// One program for every writer package: they share ElectroDB's types and
+// core-table, so parsing and checking them once, not per package, is what
+// keeps the scan quick. The packages' compiler options differ only in
+// `types`, so those are merged.
+const programFor = (configPaths: string[]): ts.Program => {
+  const configs = configPaths.map((configPath) => {
+    const config = ts.getParsedCommandLineOfConfigFile(
+      configPath,
+      {},
+      {
+        ...ts.sys,
+        onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+          throw new Error(
+            ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+          );
+        },
       },
-    },
+    );
+    if (!config) {
+      throw new Error(`Cannot read ${configPath}`);
+    }
+    return config;
+  });
+  const types = [
+    ...new Set(configs.flatMap((config) => config.options.types ?? [])),
+  ];
+  return ts.createProgram(
+    [...new Set(configs.flatMap((config) => config.fileNames))],
+    { ...configs[0].options, types },
   );
-  if (!config) {
-    throw new Error(`Cannot read ${configPath}`);
-  }
-  return ts.createProgram(config.fileNames, config.options);
 };
 
 // Every entity's name, from its file, so one nothing writes is still listed.
@@ -143,16 +156,16 @@ export const scanEntityWriters = (
     'src/entities',
   );
   const writes = new Map<string, Map<string, Set<string>>>();
+  const program = programFor(
+    Object.values(packages).map((dir) =>
+      path.join(root, dir, 'tsconfig.lib.json'),
+    ),
+  );
+  const checker = program.getTypeChecker();
+  for (const entity of allEntities(program, entitiesDir)) {
+    writes.set(entity, writes.get(entity) ?? new Map());
+  }
   for (const [writer, packageDir] of Object.entries(packages)) {
-    const program = programFor(
-      path.join(root, packageDir, 'tsconfig.lib.json'),
-    );
-    const checker = program.getTypeChecker();
-    if (writer === ENTITIES_PACKAGE) {
-      for (const entity of allEntities(program, entitiesDir)) {
-        writes.set(entity, writes.get(entity) ?? new Map());
-      }
-    }
     const sourceRoot = path.join(root, packageDir, 'src') + path.sep;
     for (const file of program.getSourceFiles()) {
       if (!file.fileName.startsWith(sourceRoot)) {

@@ -61,7 +61,7 @@ You need to be able to fork the repository and, on the fork, change settings and
 
 ## Optional, decide later
 
-- **Custom domains.** Without them, the portals are served from `*.cloudfront.net` and the APIs from `*.execute-api.amazonaws.com`. To use your own, you need a domain, DNS you control and ACM certificates. See <Link path="deploy/configuration">Stage configuration</Link>.
+- **Custom domains.** Without them, the portals are served from `*.cloudfront.net` and the APIs from `*.execute-api.amazonaws.com`. To use your own, you need a root domain whose DNS you control, and issued ACM certificates: one each for `core-api.<root>` and `instructor-api.<root>` in the stage's region, and one for `<root>` and `*.<root>` in `us-east-1`. See <Link path="deploy/configuration">Stage configuration</Link>.
 - **Email.** Notification emails need a verified SES identity. Without one, no email is sent and everything else works.
 
 Next: <Link path="deploy/setup">fork and set up</Link>.

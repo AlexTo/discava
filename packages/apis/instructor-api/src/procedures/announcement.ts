@@ -17,11 +17,11 @@ import {
   hasTransactionConflict,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { courseProcedure } from '../init.js';
 import {
   getCourseOrThrow,
   requireCourseInstructor,
-} from '../lib/course-lifecycle.js';
+} from '../helpers/course-access.js';
+import { courseInstructorProcedure, courseProcedure } from '../init.js';
 import {
   CreateAnnouncementInputSchema,
   CreateAnnouncementOutputSchema,
@@ -183,14 +183,13 @@ export const createAnnouncement = courseProcedure
 
 // A course's announcements, newest first, for the instructors teaching it.
 // Allowed at any course status, so an archived course's can still be read.
-export const listAnnouncements = courseProcedure
-  .input(ListAnnouncementsInputSchema)
+export const listAnnouncements = courseInstructorProcedure(
+  ListAnnouncementsInputSchema,
+)
   .output(ListAnnouncementsOutputSchema)
   .query(async ({ ctx, input }) => {
     const coreTable = ctx.coreTable;
     const { courseId, cursor, limit } = input;
-
-    await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
 
     let page: Awaited<ReturnType<typeof announcementPage>>;
     try {

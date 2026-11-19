@@ -23,6 +23,19 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
+import { getCourseOrThrow } from '../helpers/course-access.js';
+import {
+  initialVisibilityFields,
+  requireAncestorsNotArchived,
+  requireNotArchived,
+  requireOrdinaryLesson,
+} from '../helpers/curriculum-guards.js';
+import {
+  bestEffortCancelTranscodeJob,
+  submitTranscodeJob,
+} from '../helpers/mediaconvert-client.js';
+import { writeAtEnd } from '../helpers/order.js';
+import { getVideoUploadETag } from '../helpers/s3-client.js';
 import {
   cancelAndResubmit,
   hasMetadata,
@@ -35,19 +48,6 @@ import {
   requireObjectKeyInLesson,
 } from '../helpers/video-replacement.js';
 import { courseProcedure } from '../init.js';
-import {
-  getCourseOrThrow,
-  initialVisibilityFields,
-  requireAncestorsNotArchived,
-  requireNotArchived,
-  requireOrdinaryLesson,
-  writeAtEnd,
-} from '../lib/course-lifecycle.js';
-import {
-  bestEffortCancelTranscodeJob,
-  submitTranscodeJob,
-} from '../lib/mediaconvert-client.js';
-import { getVideoUploadETag } from '../lib/s3-client.js';
 import {
   CreateContentItemVideoInputSchema,
   CreateContentItemVideoOutputSchema,

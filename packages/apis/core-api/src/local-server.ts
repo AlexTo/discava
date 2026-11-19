@@ -10,7 +10,7 @@ import {
   NOTIFICATION_TYPES,
   setNotificationPreference,
 } from '@discava/core-table';
-import { unsubscribeMiddleware } from './local-unsubscribe.js';
+import { unsubscribeMiddleware } from './helpers/local-unsubscribe.js';
 import { appRouter } from './router.js';
 
 const PORT = 2022;
