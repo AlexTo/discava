@@ -106,6 +106,8 @@ export class InstructorApiStack extends Stack {
     for (const op of [
       'course.createImageUploadUrl',
       'course.updateImage',
+      'profile.createPhotoUploadUrl',
+      'profile.updatePhoto',
     ] as const) {
       publicMediaBucket.grantManageObjects(this.privilegedHandler(op));
     }

@@ -258,7 +258,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - `classifyProfileCancellation`, giving `handle-taken` or `stale`.
 
   Tests cover every item and condition. Extend the T009 invariants with a snapshot written by `changeHandle` that satisfies `profile-handle-claims-consistent`.
-- [ ] T023 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/profile.ts` with `get`, `update`, `createPhotoUploadUrl` and `updatePhoto` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
+- [x] T023 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/profile.ts` with `get`, `update`, `createPhotoUploadUrl` and `updatePhoto` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
   - `get` returns a default with `version: 0` and writes nothing when there is no profile; `isPublic` is true if any taught course is `published` (`courseInstructor.byInstructor` and a batch get of courses);
   - `update` validates "1 to 60", "Up to 100" and "Up to 2,000" characters, the handle pattern and reserved words; `version: 0` calls `ensureInstructorProfile(caller, { fields, handle })` with the explicit handle (`handle-taken` → `CONFLICT` "That handle is taken"; `exists` → `CONFLICT` "Your profile changed; reload and try again");
   - errors are `CONFLICT` "That handle is taken" and "Your profile changed; reload and try again";
