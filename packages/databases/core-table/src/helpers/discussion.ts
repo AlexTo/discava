@@ -10,13 +10,12 @@ import {
   DISCUSSION_MAX_REPORTERS,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DISCUSSION_TITLE_MAX,
-  type DiscussionTextProblem,
   normaliseDiscussionText,
-  postIdTime,
 } from './discussion-text.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
+type TransactionEntities = Parameters<TransactionWrites>[0];
 
 // The input names something a discussion can't have or do: callers map it to a
 // BAD_REQUEST (or CONFLICT, as the operation says).
