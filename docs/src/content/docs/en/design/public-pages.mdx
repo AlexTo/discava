@@ -1,0 +1,77 @@
+---
+title: Public pages
+description: "How course landing pages and instructor profiles reach crawlers and link previews: the page renderer, caching and freshness, the SPA rewrite, the indexing setting and what the preview video exposes."
+sidebar:
+  order: 9
+---
+
+import Link from '@components/link.astro';
+
+A course's landing page (`/learn/<courseId>`) and an instructor's profile (`/instructors/<handle>`) are public: anyone can open them signed out. The student portal is a single-page app, so a crawler or a link preview that doesn't run scripts would see an empty shell. The **page renderer** fixes that by answering those addresses with real HTML.
+
+## The page renderer
+
+The renderer is a second Lambda handler in `@discava/core-api` (`src/page-renderer/handler.ts`), behind the student portal's CloudFront distribution as the origin for `/learn/*`, `/instructors/*`, `/sitemap.xml` and `/robots.txt`. It lives in the Websites stack, with a Function URL that only CloudFront can call. Locally, `pnpm dev` starts it on port 2026 (`src/local-page-renderer.ts`); browsers keep using the Vite server, and crawler responses are fetched from that port.
+
+| Path | Answer |
+|---|---|
+| `/learn/<courseId>` | The landing page of a published course, otherwise a `404` |
+| `/learn/<courseId>/<anything>` | The plain `index.html` with `noindex` (the signed-in learning routes) |
+| `/instructors/<handle>` | The profile of an instructor who teaches a published course, otherwise a `404` |
+| `/sitemap.xml` | Every published course, public profile and active category, with `lastmod` |
+| `/robots.txt` | See [the indexing setting](#the-indexing-setting) |
+
+For a page, the renderer takes the built `index.html` and adds:
+
+- the head tags: title, description, canonical address, Open Graph and Twitter card tags, and schema.org JSON-LD (`Course`, or `ProfilePage` with a `Person`);
+- a static rendering inside `#root`: title, image, key facts, outcomes, requirements, description, the curriculum outline, the rating summary, the first page of reviews and the instructor cards;
+- a `<script type="application/json" id="discava-page-data">` element holding the procedure outputs it used.
+
+On boot the portal reads and removes that element and seeds React Query with it, so the app's first render is the full page and there is no flash when it replaces the static markup. All text is HTML-escaped, and the JSON is serialised with `<`, `>` and `&` escaped, so a course title can't break out of the page.
+
+**One source of truth for what is public.** The renderer calls `course.publicView`, `instructorProfile.publicView`, `review.summary` and `review.list` in-process through `appRouter.createCaller` with an anonymous context. A crawler therefore never sees more than the API returns. A draft course, an archived course and an unknown ID give byte-identical `404` pages. This holds for everyone, including students enrolled in the course; their access through My Learning doesn't change.
+
+The canonical address uses the viewer's host, copied by a CloudFront Function into `x-discava-host`, and only if it is one of the stage's student portal domains (or a `*.cloudfront.net` host when none is configured). Any other host falls back to the first configured domain, so pointing a domain at the distribution can't poison canonicals.
+
+If the table, AppConfig or the `index.html` read fails, the answer is a `503` with `no-store` and the plain `index.html`: the app still boots, and the failure is never cached or turned into a `404`.
+
+## Caching and freshness
+
+CloudFront caches each answer: `s-maxage=300` for a page, `60` for a not-found, and browsers always revalidate (`max-age=0`). The cache key ignores the query string, and no cookies or `Authorization` header are forwarded, so an answer never depends on who asked.
+
+That bounds staleness to **5 minutes** with no invalidation. A change to a course or profile reaches crawlers and link previews within 5 minutes, and an archived course or a profile that stops being public starts answering `404` within the same time. Visitors in a browser see the change on the next load, because the app reads the API.
+
+The renderer checks the portal's `index.html` on every cache miss with a conditional `GetObject` (`If-None-Match`, usually a `304`), and never falls back to an older copy. A portal deploy prunes old hashed assets and then invalidates the whole distribution, so no cached page keeps pointing at a bundle that no longer exists.
+
+## The single-page app rewrite
+
+The shared `StaticWebsite` construct used to turn every `404` and `403` into `/index.html` with a `200`. That setting applies to every origin of a distribution, so it would have turned the renderer's `404` into a success page that search engines treat as a soft 404. A CloudFront Function on the default behavior now rewrites any path whose last segment has no file extension to `/index.html`, and the distribution-wide error responses are gone. A missing asset gets S3's error, and the renderer's `404` reaches the viewer. All three portals get this from the shared construct.
+
+## The indexing setting
+
+`studentPortal.allowSearchEngineIndexing` is a per-stage setting that defaults to `false` and is `true` for `discava-production` only. (It isn't called "indexing" alone, because that already means OpenSearch indexing here.)
+
+| | Setting off (every other stage, local dev) | Setting on (production) |
+|---|---|---|
+| Pages | `<meta name="robots" content="noindex">` and `X-Robots-Tag: noindex` on every renderer response | `noindex` only on not-found answers and non-landing `/learn/*` shells |
+| Files from S3 | The response headers policy adds `X-Robots-Tag: noindex` | No marker |
+| `/robots.txt` | `Disallow: /` | Disallows `/learn/*/`, `/my-learning`, `/signin` and `/search`, allows the rest and lists the site map |
+
+Crawler content and social cards are served on every stage, so they can be tested before production. The site map is built on request from keyed reads and declared indexes (never a scan), and one file holds up to 50,000 URLs; a site map index is a follow-up beyond that.
+
+## The preview video's exposure rules
+
+A course can have one preview video, uploaded by an instructor as its own file and no longer than 5 minutes. It is transcoded and captioned like a lesson video, and a replacement keeps the previous version playing until the new one is ready. Its record, `coursePreview`, is separate from `course`, so a transcode or caption status change doesn't move `course.updatedAt` or trigger a search re-index.
+
+Anyone can play it, signed in or not, but only under these rules:
+
+- `course.previewVideoUrl` is public, and answers only while the course is **published** and the preview has a **playable version**. Otherwise it behaves as for a course that doesn't exist.
+- The signed cookies it sets cover **that version's folder only** (its renditions and caption tracks), with the same lifetime as an enrolled student's. No lesson video, file or other content of the course becomes reachable without enrolment.
+- An archived course stops serving its preview at once, and plays it again if restored. A replaced or removed version issues no new addresses, and its files are deleted later, as for lesson videos.
+- The procedure is in `PUBLIC_OPERATIONS`, so it gets the public request limits, and the stage's web firewall where enabled.
+
+## Profiles and handles
+
+An instructor's profile is created with their first course (`ensureInstructorProfile`, in the same transaction as `createCourse`), so an instructor card always has somewhere to link to. The URL uses a **handle**, never the account ID: 3 to 30 characters of lower-case letters, digits and single hyphens, unique across instructors through a claim record, as category names are. A profile is public if and only if its owner teaches at least one published course, and it lists exactly those courses. There is no opt-out. Public output carries no email addresses and no account identifiers.
+
+<Link path="guides/instructor-guide">The instructor guide</Link> covers the instructor side.

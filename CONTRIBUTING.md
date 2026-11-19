@@ -48,6 +48,7 @@ pnpm dev
 | --- | --- | --- |
 | Student / instructor / admin portal | 4201 / 4200 / 4202 | CloudFront |
 | core-api / instructor-api / admin-api | 2022 / 2023 / 2025 | API Gateway and Lambda |
+| Page renderer | 2026 | The core-api Lambda behind the student portal's CloudFront distribution that answers crawlers with HTML (landing pages, profiles, site map, robots) |
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
