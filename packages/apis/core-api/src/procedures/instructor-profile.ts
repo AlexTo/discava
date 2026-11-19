@@ -4,8 +4,8 @@
  */
 import { type CoreTable, isValidHandle } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
+import { ratingFigures } from '../helpers/rating.js';
 import { publicCourseProcedure } from '../init.js';
-import { ratingFigures } from '../lib/rating.js';
 import {
   InstructorProfilePublicViewInputSchema,
   InstructorProfilePublicViewOutputSchema,
