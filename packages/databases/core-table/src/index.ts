@@ -333,6 +333,16 @@ export {
   type ProgressStreamRecord,
 } from './helpers/progress-stream.js';
 export {
+  calculateFee,
+  calculateRefund,
+  calculateSale,
+  type InstructorRefund,
+  type InstructorSale,
+  type RefundInput,
+  type SaleInput,
+  splitAmount,
+} from './helpers/revenue.js';
+export {
   classifyReviewCancellation,
   type ReviewCancellation,
   type ReviewDelete,
