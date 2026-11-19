@@ -310,13 +310,11 @@ export abstract class OpenSearchCollection extends Construct {
       ]),
     });
 
-    // NextGen (as opposed to the classic generation, which has a fixed
-    // 2-OCU floor whether or not anything is happening): capacity -- and so
-    // cost -- is set per collection *group*, not per collection. Standby
-    // replicas move here too (CfnCollectionGroupProps requires it; the
-    // member collection no longer sets its own). Always ENABLED: a NextGen
-    // group rejects DISABLED ("StandbyReplicas cannot be set to DISABLED for
-    // NEXTGEN collection groups", InvalidRequest), so there's no toggle.
+    // NextGen sets capacity (and so cost) per collection *group*, with no
+    // fixed floor (classic's is 2 OCUs). Standby replicas are set on the
+    // group too, always ENABLED: a NextGen group rejects DISABLED
+    // ("StandbyReplicas cannot be set to DISABLED for NEXTGEN collection
+    // groups", InvalidRequest), so there's no toggle.
     const collectionGroup = new CfnCollectionGroup(this, 'CollectionGroup', {
       name: `${collectionName}-group`,
       generation: 'NEXTGEN',
@@ -414,12 +412,10 @@ export abstract class OpenSearchCollection extends Construct {
     this.grant(grantee, WRITE_INDEX_PERMISSIONS, WRITE_COLLECTION_PERMISSIONS);
   }
 
-  // The index-sync handler always lives in this construct's own stack (it's
-  // created right below), so its self-grant gets its own policy, eager and
-  // same-stack, instead of going through the deferred mechanism above: the
+  // The index-sync handler gets its own same-stack access policy rather than
+  // going through grant(), whose policy lands in the grantee's stack: the
   // custom resource that invokes it runs during this stack's own deploy, so
-  // its grant must already exist by then, not merely by the time
-  // grantRead/grantWrite's (possibly later-deploying) policy lands.
+  // its access must exist by then.
   private createIndexSync(
     collectionName: string,
     code: Code,
@@ -434,12 +430,10 @@ export abstract class OpenSearchCollection extends Construct {
       timeout: Duration.minutes(5),
       tracing: Tracing.ACTIVE,
       // The collection's endpoint, directly: this runs while this stack
-      // deploys, before RuntimeConfig's AppConfig content (which reads from
-      // every stack, so deploys last) exists to look it up in. Only ever
-      // holds that (a GetAtt); checkov's secret scan also reads a __file__
-      // key its own parser injects (the template's path), and this
-      // construct's CDK-hashed template file name trips CKV_AWS_45 on it, the
-      // same false positive data-stack.ts suppresses for PreTokenGeneration.
+      // deploys, before RuntimeConfig's AppConfig content (deployed last)
+      // exists to look it up in. CKV_AWS_45 is suppressed below: checkov's
+      // secret scan trips on a __file__ key its own parser injects (the
+      // CDK-hashed template path), not on this value.
       environment: {
         OPENSEARCH_ENDPOINT: this.collection.attrCollectionEndpoint,
       },

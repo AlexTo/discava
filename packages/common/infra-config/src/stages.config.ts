@@ -13,10 +13,11 @@ import type { StagesConfig } from './stages.types.js';
 //
 //   APIs (API Gateway; certificate in the stage's region), one domain each,
 //   each with a certificate of its own naming exactly that domain -- not a
-//   wildcard or one shared with the other API, or browsers can reuse one
-//   connection for both APIs and get 403s from the wrong one (#224):
+//   wildcard or one shared with another API, or browsers can reuse one
+//   connection for several APIs and get 403s from the wrong one (#224):
 //     DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME            api.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME      instructor-api.example.com
+//     DISCAVA_DEVELOPMENT_INFRA_ADMIN_API_DOMAIN_NAME           admin-api.example.com
 //
 //   CloudFront (certificate in us-east-1), comma-separated domains:
 //     DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES     example.com,www.example.com
@@ -48,12 +49,12 @@ export default {
         'discava-development': {
           // With WAF off, these limits are what bound the cost of a flood of
           // requests. Sized for a handful of testers:
-          // - API Gateway throttles each method separately, so the API's
-          //   ceiling is the sum over its methods: core-api 10 x 2 + 2 x 1 =
-          //   22 requests/s, instructor-api 33 x 2 = 66, admin-api 4 x 2 = 8. Anonymous callers
-          //   reach only the 2 public methods: 2 requests/s in all.
+          // - API Gateway throttles each method (one per procedure)
+          //   separately, so an API's ceiling is its rate limit times its
+          //   method count, and grows with every procedure added. Anonymous
+          //   callers reach only core-api's public methods, at the public rate.
           // - Reserved concurrency caps how many requests each function
-          //   runs at once. core-api serves every operation from one
+          //   runs at once. core-api serves most operations from one router
           //   function, and a page fires several queries at once, so not
           //   lower than 10.
           // - The table's maximum throughput caps DynamoDB.
@@ -136,9 +137,9 @@ export default {
         'discava-production': {
           // Limits with room for real traffic, still well short of AWS's
           // defaults (10,000 requests/s, unbounded concurrency and
-          // throughput). Throttles apply to each method separately: ceilings
-          // of about 540 requests/s for core-api and 660 for instructor-api.
-          // Raise them as usage grows.
+          // throughput). Throttles apply to each method separately, so an
+          // API's ceiling is its rate limit times its method count. Raise
+          // them as usage grows.
           infra: {
             identity: {
               enableWaf: true,

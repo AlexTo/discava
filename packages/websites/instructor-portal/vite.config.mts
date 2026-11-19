@@ -32,10 +32,6 @@ export default defineConfig(() => ({
     react(),
     tailwindcss(),
   ],
-  // Uncomment this if you are using workers.
-  // worker: {
-  //  plugins: [],
-  // },
   build: {
     outDir: '../../../dist/packages/websites/instructor-portal/bundle',
     emptyOutDir: true,

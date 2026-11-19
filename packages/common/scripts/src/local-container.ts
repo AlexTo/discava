@@ -45,7 +45,6 @@ export const runLocalContainer = ({
     return result.status === 0 && result.stdout.trim() === 'true';
   };
 
-  // Ensure the image is available locally before starting the container.
   if (
     spawnSync(containerEngine, ['image', 'inspect', image], { stdio: 'ignore' })
       .status !== 0

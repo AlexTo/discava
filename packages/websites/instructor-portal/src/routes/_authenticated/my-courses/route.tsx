@@ -45,8 +45,8 @@ export const Route = createFileRoute('/_authenticated/my-courses')({
   component: RouteComponent,
 });
 
-// Not yet backed by an API, so every course card shows this same mock
-// workload/scheduling info until grading, enrolment, and module data exist.
+// Placeholder workload and scheduling figures, the same on every card:
+// course.listByInstructor returns only the course records.
 const mockCourseDetails = {
   term: 'Semester 2, 2026',
   students: 24,

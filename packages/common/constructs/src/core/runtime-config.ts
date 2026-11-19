@@ -24,17 +24,6 @@ import { Construct, IConstruct } from 'constructs';
 
 const RuntimeConfigKey = '__RuntimeConfig__';
 
-/**
- * Stage-scoped singleton that collects runtime configuration from CDK constructs
- * and delivers it to server-side (AppConfig) and client-side (S3) consumers.
- *
- * Configuration is organised into namespaces (mapped to AppConfig Configuration Profiles):
- * ```ts
- * const rc = RuntimeConfig.ensure(this);
- * rc.set('connection', 'cognitoProps', { region: '...', userPoolId: '...' });
- * rc.set('tables', 'users', { tableName: '...', arn: '...' });
- * ```
- */
 /** Where RuntimeConfig creates its AppConfig resources. See `placeIn`. */
 export interface RuntimeConfigPlacement {
   /**
@@ -51,6 +40,17 @@ export interface RuntimeConfigPlacement {
   readonly configurationStack: Stack;
 }
 
+/**
+ * Stage-scoped singleton that collects runtime configuration from CDK constructs
+ * and delivers it to server-side (AppConfig) and client-side (S3) consumers.
+ *
+ * Configuration is organised into namespaces (mapped to AppConfig Configuration Profiles):
+ * ```ts
+ * const rc = RuntimeConfig.ensure(this);
+ * rc.set('connection', 'cognitoProps', { region: '...', userPoolId: '...' });
+ * rc.set('dynamodb', 'coreTable', { tableName: '...' });
+ * ```
+ */
 export class RuntimeConfig extends Construct {
   private readonly _namespaces = new Map<string, Record<string, any>>();
   private _appConfigApplicationId?: string;

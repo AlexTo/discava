@@ -128,8 +128,8 @@ export type CoreApiComponentConfig = {
   enableTracing?: boolean;
   /**
    * Requests per second API Gateway lets through to each operation anyone
-   * may call without signing in (course.publicList, course.publicView):
-   * the only ones a bot can reach without an account.
+   * may call without signing in (core-api's PUBLIC_OPERATIONS and the
+   * unsubscribe route): the only ones a bot can reach without an account.
    *
    * @default 20
    */
@@ -338,13 +338,14 @@ export type LessonMediaComponentConfig = {
   /** ACM certificate ARN for the custom domain names. Must be in us-east-1. */
   certificateArn?: string;
   /**
-   * `Domain=` attribute for the CloudFront signed cookies issued when an
-   * instructor plays back a video's HLS output. Must be a shared parent
-   * domain of both `domainNames` here and `instructorApi.domainName` (e.g.
-   * `alexto.net` when those are `lesson-media.alexto.net` and
-   * `instructor-api.alexto.net`) -- a cookie can only be set for the
-   * issuing domain or one of its parents, and instructor-api is what
-   * issues these cookies. Required for HLS playback to work at all: the
+   * `Domain=` attribute for the CloudFront signed cookies issued when a
+   * student or instructor plays back a video's HLS output. Must be a shared
+   * parent domain of `domainNames` here and of the APIs that issue these
+   * cookies, `coreApi.domainName` and `instructorApi.domainName` (e.g.
+   * `example.com` when those are `lesson-media.example.com`,
+   * `api.example.com` and `instructor-api.example.com`): a cookie can only
+   * be set for the issuing domain or one of its parents. Required for HLS
+   * playback to work at all: the
    * manifest, rendition playlists, and segments are separate CloudFront
    * requests that only a cookie (not a signed URL) can authorize
    * uniformly. See https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-choosing-signed-urls-cookies.html

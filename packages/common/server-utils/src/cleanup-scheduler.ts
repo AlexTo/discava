@@ -44,17 +44,11 @@ const resolveTranscodeCleanupConfig = (): Promise<TranscodeCleanupConfig> =>
     'TranscodeCleanup',
   );
 
-// How long to wait before deleting a job's own S3 output. For a canceled
-// job specifically, this also has to be long enough to clear MediaConvert's
-// async write tail -- direct testing observed writes continuing for ~30s
-// after CancelJob -- and once destinations are nonce-scoped, a longer
-// delay costs nothing there (nothing else will ever reference that prefix
-// again). For an already-`ready` video being superseded or removed, there's
-// no write-tail concern at all (it's long since finished transcoding) --
-// the delay here is purely to keep the caller's own response fast, by
-// moving a potentially-large paginated list+delete off the request path
-// entirely; the same delay is reused for both rather than introducing a
-// second constant needing its own justification.
+// How long to wait before deleting a job's own S3 output. A canceled job's
+// must outlast MediaConvert's async write tail (writes were observed ~30s
+// after CancelJob); since the folder is nonce-scoped, nothing else will ever
+// reference it, so a longer delay costs nothing. Other callers reuse it just
+// to keep a potentially large list+delete off the request path.
 const TRANSCODE_CLEANUP_DELAY_MINUTES = 10;
 
 export interface ContentItemCleanupParams {
@@ -72,7 +66,7 @@ export interface CoursePreviewCleanupParams {
   submissionNonce: string;
 }
 
-// A lesson item's payload carries no `target`, as before preview videos.
+// A lesson item's payload carries no `target`.
 export type TranscodeCleanupParams =
   | ContentItemCleanupParams
   | CoursePreviewCleanupParams;

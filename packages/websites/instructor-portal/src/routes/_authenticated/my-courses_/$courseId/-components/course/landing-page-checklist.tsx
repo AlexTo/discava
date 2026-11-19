@@ -5,7 +5,7 @@
 
 interface Line {
   label: string;
-  // Undefined while the phase that computes it hasn't landed.
+  // Undefined for a line that can't be checked yet: shown as "Coming soon".
   done?: boolean;
   href?: string;
 }
@@ -44,8 +44,8 @@ export function LandingPageChecklist({
       href: '#landing-page-heading',
     },
     { label: 'Preview video', done: hasPreview, href: '#landing-page-heading' },
-    // The instructor profile comes in a later phase.
     { label: 'Course image', done: hasImage, href: '#course-image' },
+    // Unchecked: instructors can't edit their profile in the portal yet.
     { label: 'Your profile (headline and photo)' },
   ];
 

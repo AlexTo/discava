@@ -74,9 +74,9 @@ export const localObjectUrl = (runtimeConfigKey: string, key: string): string =>
 
 /**
  * Local dev's event runner (packages/events, `src/local/event-runner.ts`),
- * which also stands in for MediaConvert, Transcribe and EventBridge Scheduler (#137):
- * instructor-api and the event handlers call it instead of those services
- * in local dev.
+ * which also stands in for MediaConvert, Transcribe, EventBridge Scheduler and
+ * Cognito's pre token generation trigger (#137): the APIs and the event
+ * handlers call it instead of those services in local dev.
  */
 export const LOCAL_EVENT_RUNNER = {
   port: 2024,

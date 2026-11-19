@@ -82,10 +82,9 @@ export const createContentItemEntity = async () =>
           type: ['video', 'text', 'quiz', 'file', 'assignment'] as const,
           required: true,
         },
-        // 'ready' by default so synchronous types (text, and any future
-        // non-video type from #102) need no code changes -- only video's
-        // create path (async, transcoded by MediaConvert) overrides this to
-        // 'pending'.
+        // 'ready' by default for the synchronous types (text, file, quiz,
+        // assignment); only a video's create and replace (transcoded by
+        // MediaConvert) set 'pending'.
         status: {
           type: ['pending', 'ready', 'failed'] as const,
           required: true,

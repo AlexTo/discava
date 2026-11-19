@@ -52,9 +52,10 @@ export interface DataStackProps extends StackProps {
 }
 
 /**
- * Stateful resources: users, the core table, lesson media and public media. Kept apart
- * from the stacks that change on most deploys, and depended on by every API
- * and event handler stack.
+ * Stateful resources: users, the core table, lesson and public media, the
+ * search collection, and the notification and Stripe secrets. Kept apart from
+ * the stacks that change on most deploys, and depended on by every API and
+ * event handler stack.
  */
 export class DataStack extends Stack {
   public readonly identity: UserIdentity;
@@ -138,7 +139,7 @@ export class DataStack extends Stack {
           : RemovalPolicy.DESTROY,
     });
 
-    // Adds every self-signed-up user to the `student` group
+    // Adds every self-signed-up user to the `student` and `instructor` groups.
     const postConfirmation = new EventsPostConfirmation(
       this,
       'PostConfirmation',
@@ -305,9 +306,9 @@ export class DataStack extends Stack {
     const lessonMediaKmsEnabled =
       lessonMediaConfig?.enableKmsEncryption ?? true;
 
-    // Raw, untranscoded uploads land here instead -- see decision log in
-    // #110. Once transcoding completes, TranscodeComplete deletes the raw
-    // object and lessonMediaBucket takes over serving the result.
+    // Raw uploads land here, not behind CloudFront (decision log in #110).
+    // Once a video's transcode completes, TranscodeComplete deletes the raw
+    // object and the lesson media bucket serves the result.
     const lessonMediaUploadBucket = new LessonMediaUploadBucket(
       this,
       'LessonMediaUploadBucket',
@@ -330,12 +331,10 @@ export class DataStack extends Stack {
   }
 
   private createSearchCollection(searchConfig?: SearchComponentConfig) {
-    // Not suppressing a checkov rule for AWSOwnedKey encryption here, unlike
-    // the other resources' enableKmsEncryption toggles: checkov had no
-    // documented rule for AWS::OpenSearchServerless::Collection as of this
-    // writing. Re-check `pnpm nx run @discava/infra:checkov` once this
-    // deploys, and add the rule here (with suppressRules, matching
-    // createCoreTable above) if one flags it.
+    // No checkov suppression for AWS-owned-key encryption here, unlike the
+    // other enableKmsEncryption toggles: checkov has no rule for
+    // OpenSearch Serverless encryption. If `pnpm nx run @discava/infra:checkov`
+    // starts flagging one, suppress it here as createCoreTable does.
     return new SearchCollection(this, 'SearchCollection', {
       enableKmsEncryption: searchConfig?.enableKmsEncryption ?? true,
       enableKeyRotation: searchConfig?.enableKeyRotation ?? true,

@@ -22,9 +22,10 @@ import type { TableSnapshot } from './snapshot.js';
 // `waitForAnalytics`). A missing item counts as zeros. The summary, period,
 // lesson and quiz items are compared. A question's counts come from the
 // attempts' `answers` and `correctQuestionIds`, a quiz's score bands from the
-// students' `bestScore` (it only rises, check 3 holding it to the best
-// attempt, and attempts are never rewritten). A lesson's counts come from each student's `progress` against their
-// enrolment (a dropped one counts nothing); the funnel markers are ignored.
+// students' `bestScore` (it only rises, quiz-summary-matches-attempts holding
+// it to the best attempt, and attempts are never rewritten). A lesson's counts
+// come from each student's `progress` against their enrolment (a dropped one
+// counts nothing); the funnel markers are ignored.
 export const checkAnalyticsMatchesRecords = (
   snapshot: TableSnapshot,
 ): Violation[] => {

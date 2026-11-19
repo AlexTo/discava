@@ -114,9 +114,8 @@ describe('scheduleTranscodeCleanupOrThrow', () => {
     ).resolves.toBeUndefined();
   });
 
-  // Any other failure has to propagate -- this isn't best-effort like
-  // instructor-api's own scheduler (see the module docstring): it's the
-  // only remaining cleanup path for a submission whose mediaConvertJobId
+  // Any other failure has to propagate, unlike scheduleTranscodeCleanup: it's
+  // the only remaining cleanup path for a submission whose mediaConvertJobId
   // was never stamped, so a caller has to be able to retry it.
   it('propagates a genuine scheduling failure', async () => {
     schedulerSend.mockRejectedValue(new Error('Access denied'));

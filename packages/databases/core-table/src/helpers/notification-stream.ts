@@ -15,9 +15,9 @@ const NOTIFICATION_ENTITIES = [
  * handles: an INSERT of a `notification` or `notificationBroadcast`.
  * ElectroDB stores each record's entity name in `__edb_e__`.
  *
- * The one definition both the deployed event source mapping's filters and
- * local dev's event runner are built from, the same pattern as
- * SEARCH_STREAM_FILTERS.
+ * The one definition the `notification-delivery` entry in STREAM_FEATURES
+ * (and so the deployed stream router and local dev's event runner) is built
+ * from.
  */
 export const NOTIFICATION_STREAM_FILTERS: readonly {
   eventName: 'INSERT';

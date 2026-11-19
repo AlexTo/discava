@@ -65,14 +65,10 @@ interface ContentItemKey {
   contentItemId: string;
 }
 
-// ElectroDB has no native discriminated-attribute support, so a contentItem
-// record's inferred type is flat (every type's attributes present as
-// optional alongside `type` itself) rather than a proper union keyed on
-// `type`. These casts bridge that gap to the discriminated-union API types
-// -- safe because each cast site has already checked/branched on `type` (or,
-// for the type-agnostic procedures below, is just passing through whatever
-// record it read or wrote). Shared across every content-item-<type>.ts
-// procedures file.
+// ElectroDB infers a contentItem record as one flat type (every type's
+// attributes optional), not a union keyed on `type`. This cast bridges to the
+// discriminated-union API types; each call site has already branched on
+// `type` or passes the record through unchanged.
 export const asContentItemOutput = <T>(contentItem: unknown) =>
   contentItem as T;
 
@@ -143,11 +139,10 @@ const requireNotAssignmentItem = async (
   }
 };
 
-// Removes the record for good, then its external storage. Uses the record
-// DeleteItem actually removed (response: 'all_old'), not an earlier read -- a
-// concurrent replacement could have landed between the two, and cleaning up
-// based on stale state would cancel/delete the wrong job and orphan the real
-// one.
+// Cleans up a deleted item's external storage. Callers pass the record that
+// was actually removed (`all_old`, or a read the delete was conditioned on):
+// acting on a stale read after a concurrent replacement would cancel or
+// delete the wrong job and orphan the real one.
 const cleanUpDeletedContentItem = async (
   logger: Logger | undefined,
   contentItem: ICancelableVideoContentItem &
@@ -170,10 +165,8 @@ const cleanUpDeletedContentItem = async (
   }
 };
 
-// Type-agnostic: works the same for every content item type (video, text,
-// and whatever else lands here -- quiz, image, etc.), only branching to
-// clean up a type's own external storage (e.g. video's S3 object) where
-// that type has any.
+// Works for every content item type, branching only to clean up a type's
+// own S3 storage.
 //
 // In a draft course this deletes the item for good. In any other course it
 // archives the item instead, keeping it and every student's data for it

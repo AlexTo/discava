@@ -103,8 +103,8 @@ describe('AttachLessonFileDialog', () => {
   });
 
   // Invariant: once the instructor types in the title, the upload finishing
-  // never changes it (#256). Typing over a title empties the field for a
-  // moment; the name used to be filled in then, landing among the keystrokes.
+  // never changes it (#256), even in the moment typing over a title empties
+  // the field.
   it('leaves a title being typed alone, even while it is empty', async () => {
     const { user } = openDialog();
 

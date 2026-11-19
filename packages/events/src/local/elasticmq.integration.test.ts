@@ -19,8 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createSqsQueueClient } from '../router/queue-client.js';
 
 // Runs the calls the local event runner makes against a real ElasticMQ
-// container, beside the spike's (research R-2). Skipped when Docker isn't
-// available; PR CI has it.
+// container. Skipped when Docker isn't available; PR CI has it.
 const dockerAvailable =
   spawnSync('docker', ['info'], { stdio: 'ignore' }).status === 0;
 
