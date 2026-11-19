@@ -44,6 +44,8 @@ const SAMPLE = [
   record('MODIFY', 'NewImage', 'quizSummary'),
   record('INSERT', 'NewImage', 'notification'),
   record('INSERT', 'NewImage', 'notificationBroadcast'),
+  record('INSERT', 'NewImage', 'order'),
+  record('MODIFY', 'NewImage', 'order'),
 ];
 
 describe('the earnings entities', () => {
@@ -142,6 +144,15 @@ describe('featuresFor', () => {
     );
   });
 
+  it('routes an inserted or modified order to earnings recording only', () => {
+    for (const eventName of ['INSERT', 'MODIFY']) {
+      expect(featuresFor(record(eventName, 'NewImage', 'order'))).toEqual([
+        'earnings-recording',
+      ]);
+    }
+    expect(featuresFor(record('REMOVE', 'OldImage', 'order'))).toEqual([]);
+  });
+
   it('routes a record matching two features to both', () => {
     const features: readonly StreamFeature[] = [
       ...STREAM_FEATURES,
@@ -185,9 +196,9 @@ describe('STREAM_FEATURES', () => {
     ['INSERT', 'NewImage'],
     ['MODIFY', 'NewImage'],
   ] as const)(
-    'sends a %s of an order, a connection or an audit row to no feature',
+    'sends a %s of a payment connection or an audit row to no feature (an order goes to earnings recording only)',
     (eventName, image) => {
-      for (const entity of ['order', 'paymentConnection', 'paymentChange']) {
+      for (const entity of ['paymentConnection', 'paymentChange']) {
         expect(
           featuresFor({
             eventName,

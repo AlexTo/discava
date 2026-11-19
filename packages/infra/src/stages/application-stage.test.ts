@@ -16,6 +16,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import {
   actionsByRole,
+  actionsOf,
   methodSettings,
   resources,
   stackTemplates,
@@ -665,5 +666,77 @@ describe('payments (the Stripe webhook and checkout)', () => {
       stack('AdminApi').findResources('AWS::Lambda::Function'),
     );
     expect(functions.match(/STRIPE_WEBHOOK_URL/g)?.length).toBe(2);
+  });
+});
+
+describe('earnings recording', () => {
+  const recordingFunction = (payouts?: {
+    platformFeeBasisPoints: number;
+    holdDays: number;
+  }) => {
+    const [fn] = resources(
+      synth({ payouts })('StreamRouter'),
+      'AWS::Lambda::Function',
+      'EarningsRecording',
+    );
+    return fn as { Environment: { Variables: Record<string, string> } };
+  };
+
+  it('has a queue, failure queue and alarm of its own, and still one stream mapping', () => {
+    const template = synth({})('StreamRouter');
+    for (const type of ['AWS::SQS::Queue', 'AWS::CloudWatch::Alarm']) {
+      expect(
+        Object.keys(template.findResources(type)).filter((id) =>
+          id.startsWith('StreamRouterEarningsRecording'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterEarningsRecordingFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      stackTemplates({}).flatMap(([name, t]) =>
+        Object.values(t.findResources('AWS::Lambda::EventSourceMapping'))
+          .filter((m) =>
+            JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+          )
+          .map(() => name),
+      ),
+    ).toEqual(['StreamRouter']);
+  });
+
+  it("is invoked only by its feature's queue", () => {
+    const template = synth({})('StreamRouter');
+    const mappings = Object.values(
+      template.findResources('AWS::Lambda::EventSourceMapping'),
+    ).filter((m) =>
+      JSON.stringify(m.Properties.FunctionName).includes('EarningsRecording'),
+    );
+    expect(mappings).toHaveLength(1);
+    expect(JSON.stringify(mappings[0].Properties.EventSourceArn)).toContain(
+      'StreamRouterEarningsRecordingQueue',
+    );
+  });
+
+  it("carries the stage's fee and hold", () => {
+    expect(
+      recordingFunction({ platformFeeBasisPoints: 1500, holdDays: 7 })
+        .Environment.Variables,
+    ).toMatchObject({
+      PLATFORM_FEE_BASIS_POINTS: '1500',
+      PAYOUT_HOLD_DAYS: '7',
+    });
+  });
+
+  it('reads and writes the table and reads no secret', () => {
+    const actions = actionsOf(
+      synth({})('StreamRouter'),
+      'EarningsRecordingServiceRole',
+    );
+    expect(actions).toContain('dynamodb:PutItem');
+    expect(actions).not.toContain('secretsmanager:GetSecretValue');
   });
 });

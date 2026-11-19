@@ -225,6 +225,9 @@ export const LOCAL_PAGE_RENDERER_URL = 'http://localhost:2026';
 /** The sender local dev's notification emails come from, so email counts as configured. */
 export const LOCAL_NOTIFICATIONS_FROM = 'notifications@discava.local';
 
+/** The platform fee and earnings hold in local dev (the stage settings' documented defaults, with a one-day hold as discava-development has). */
+export const LOCAL_PAYOUTS = { platformFeeBasisPoints: 2000, holdDays: 1 };
+
 /** The unsubscribe-token secret in local dev, where there is no Secrets Manager. */
 export const LOCAL_UNSUBSCRIBE_SECRET = 'local-dev-unsubscribe-secret';
 

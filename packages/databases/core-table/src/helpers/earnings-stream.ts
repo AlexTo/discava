@@ -11,9 +11,8 @@
  * `payout`, `payoutAccount`) are not in the list, so what the handler
  * writes never comes back to it.
  *
- * The one definition the `earnings-recording` entry in STREAM_FEATURES will
- * be built from. It is not registered there yet: a registration needs its
- * handler and Lambda.
+ * The one definition the `earnings-recording` entry in STREAM_FEATURES is
+ * built from.
  */
 export const EARNINGS_STREAM_FILTERS: readonly {
   eventName: 'INSERT' | 'MODIFY' | 'REMOVE';
