@@ -265,7 +265,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - photo procedures mirror `course-image.ts`, with key `instructors/<sub>/<uuid>.jpg` and a 2 MB JPEG limit.
 
   Register them under `profile` in `src/router.ts`. If course image procedures run in a dedicated function with public media rights, put the photo procedures in the same function in `packages/common/constructs/src/app/apis/instructor-api.ts`; otherwise leave them on the router. Tests in `procedures/profile.test.ts` cover every path, and confirm the caller's `sub` is the only profile key ever used.
-- [ ] T024 [US5] Tests first, then add `packages/apis/core-api/src/procedures/instructor-profile.ts` with `publicView` (a `publicCourseProcedure`) per the contract:
+- [x] T024 [US5] Tests first, then add `packages/apis/core-api/src/procedures/instructor-profile.ts` with `publicView` (a `publicCourseProcedure`) per the contract:
   - the handle is lower-cased, and a pattern miss gives `NOT_FOUND`;
   - reads go claim → profile → `courseInstructor.byInstructor` → batch get of courses (keep `published`, sorted by `publishedAt` descending, at most 100) → batch get of `courseRating`;
   - no published course gives `NOT_FOUND`.
