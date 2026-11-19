@@ -81,6 +81,10 @@ import {
   unhide as unhideDiscussionPost,
 } from './procedures/discussion.js';
 import {
+  lines as earningsLines,
+  report as earningsReport,
+} from './procedures/earnings.js';
+import {
   createLesson,
   deleteLesson,
   deleteLessonPermanently,
@@ -164,6 +168,10 @@ export const appRouter = router({
     unhide: unhideDiscussionPost,
     remove: removeDiscussionPost,
     dismissReports,
+  }),
+  earnings: router({
+    report: earningsReport,
+    lines: earningsLines,
   }),
   category: router({
     listActive: listActiveCategories,

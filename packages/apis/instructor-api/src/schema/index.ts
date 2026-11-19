@@ -11,6 +11,7 @@ export * from './course-catalogue.js';
 export * from './course-landing.js';
 export * from './course-preview.js';
 export * from './discussion.js';
+export * from './earnings.js';
 export * from './lesson.js';
 export * from './module.js';
 export * from './profile.js';
