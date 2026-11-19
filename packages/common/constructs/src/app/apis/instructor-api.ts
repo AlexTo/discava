@@ -94,6 +94,9 @@ export const INSTRUCTOR_API_DEDICATED_FUNCTIONS = {
     'profile.createPhotoUploadUrl',
     'profile.updatePhoto',
   ],
+  // Sets up and reads instructors' Stripe payout accounts: the only
+  // instructor-api function that reads the Stripe API key
+  Payouts: ['payout.account', 'payout.startOnboarding', 'payout.dashboardLink'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 const functionNameFor = (op: Operations | '$router'): string =>

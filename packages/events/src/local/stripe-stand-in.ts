@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createHmac, randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { LOCAL_STRIPE } from '@discava/common-server-utils/local-dev';
 
 // Local dev's stand-in for the part of Stripe the platform uses (see
@@ -14,7 +16,9 @@ import { LOCAL_STRIPE } from '@discava/common-server-utils/local-dev';
 // slice: which accounts a key belongs to, and the endpoints each registers,
 // each with a signing secret of its own. Anything else answers 404 in Stripe's
 // error shape, so a code path that starts to use more of Stripe fails here
-// instead of silently. The rest of the slice is Checkout (sessions, the hosted
+// instead of silently. The Connect slice (Express accounts, onboarding links,
+// transfers) keeps its state in a file, so a restart of `pnpm dev` doesn't
+// strand stored payout accounts. The rest of the slice is Checkout (sessions, the hosted
 // page), payment intents and refunds, and the signed delivery of events to the
 // endpoints an account registered.
 
@@ -64,6 +68,39 @@ interface StripeEvent {
   api_version: string;
   created: number;
   data: { object: Record<string, unknown> };
+}
+
+type ConnectedStatus = 'in_progress' | 'complete' | 'restricted';
+
+interface ConnectedAccount {
+  id: string;
+  /** The platform account whose key created it: the only one that sees it. */
+  platformAccountId: string;
+  status: ConnectedStatus;
+  metadata: Record<string, string>;
+  created: number;
+}
+
+interface Transfer {
+  id: string;
+  platformAccountId: string;
+  amount: number;
+  currency: string;
+  destination: string;
+  transfer_group: string | null;
+  metadata: Record<string, string>;
+  created: number;
+}
+
+type TransferFailure = 'rejected' | 'idempotency_conflict' | 'timeout';
+
+interface ConnectState {
+  accounts: Record<string, ConnectedAccount>;
+  transfers: Transfer[];
+  /** Idempotency keys already used, by platform account and key. */
+  keys: Record<string, { kind: 'account' | 'transfer'; id: string }>;
+  /** Onboarding link tokens and where each returns to. */
+  links: Record<string, { accountId: string; returnUrl: string }>;
 }
 
 type Form = { [key: string]: string | Form };
@@ -128,18 +165,50 @@ const id = (prefix: string) => `${prefix}_${randomBytes(12).toString('hex')}`;
 // Stripe retries a message that wasn't answered with a 2xx; so does this.
 const DELIVERY_ATTEMPTS = 3;
 
+const DEFAULT_CONNECT_STATE_FILE = new URL(
+  '../../../../tmp/local-dev/stripe-connect.json',
+  import.meta.url,
+);
+
 export const createStripeStandIn = ({
   log = () => {},
   retryDelayMs = 500,
+  connectStateFile = DEFAULT_CONNECT_STATE_FILE,
 }: {
   log?: (message: string) => void;
   retryDelayMs?: number;
+  /** Where connected accounts and transfers are kept between restarts. */
+  connectStateFile?: URL | string;
 } = {}) => {
   const endpoints = new Map<string, Endpoint>();
   const sessions = new Map<string, Session>();
   const intents = new Map<string, PaymentIntent>();
   // What an `Idempotency-Key` already created, by account and key.
   const idempotent = new Map<string, unknown>();
+  const connectPath =
+    typeof connectStateFile === 'string'
+      ? connectStateFile
+      : fileURLToPath(connectStateFile);
+  const loadConnect = (): ConnectState => {
+    try {
+      return {
+        accounts: {},
+        transfers: [],
+        keys: {},
+        links: {},
+        ...JSON.parse(readFileSync(connectPath, 'utf-8')),
+      };
+    } catch {
+      return { accounts: {}, transfers: [], keys: {}, links: {} };
+    }
+  };
+  const connect = loadConnect();
+  const saveConnect = () => {
+    mkdirSync(dirname(connectPath), { recursive: true });
+    writeFileSync(connectPath, JSON.stringify(connect, null, 2));
+  };
+  // What the next transfer request does instead of succeeding, once.
+  let nextTransferFailure: TransferFailure | undefined;
   const origin = `${LOCAL_STRIPE.protocol}://${LOCAL_STRIPE.host}:${LOCAL_STRIPE.port}`;
 
   const send = (response: ServerResponse, status: number, body: unknown) => {
@@ -415,6 +484,370 @@ export const createStripeStandIn = ({
     return true;
   };
 
+  const connectedObject = (account: ConnectedAccount) => {
+    const complete = account.status === 'complete';
+    return {
+      id: account.id,
+      object: 'account',
+      type: 'express',
+      created: account.created,
+      metadata: account.metadata,
+      details_submitted: account.status !== 'in_progress',
+      payouts_enabled: complete,
+      charges_enabled: false,
+      capabilities: { transfers: complete ? 'active' : 'inactive' },
+    };
+  };
+
+  const transferObject = (transfer: Transfer) => ({
+    ...transfer,
+    object: 'transfer',
+    platformAccountId: undefined,
+    livemode: false,
+    reversed: false,
+  });
+
+  const notFound = (
+    response: ServerResponse,
+    what: string,
+    idValue: string | undefined,
+  ) =>
+    error(
+      response,
+      404,
+      'invalid_request_error',
+      `No such ${what}: '${idValue}'`,
+      'resource_missing',
+    );
+
+  // The onboarding page a link opens, and its two buttons.
+  const handleOnboardingPage = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+    path: string,
+  ): Promise<boolean> => {
+    if (path.startsWith('/stripe/connect/dashboard/')) {
+      sendHtml(response, 200, '<h1>Stripe Express dashboard (local)</h1>');
+      return true;
+    }
+    const match =
+      /^\/stripe\/connect\/onboard\/([^/]+)(?:\/(complete|leave))?$/.exec(path);
+    if (!match) return false;
+    const link = connect.links[decodeURIComponent(match[1] as string)];
+    const account = link ? connect.accounts[link.accountId] : undefined;
+    if (!link || !account) {
+      sendHtml(
+        response,
+        200,
+        '<p>This onboarding link is no longer valid.</p>',
+      );
+      return true;
+    }
+    const action = match[2];
+    if (!action && request.method === 'GET') {
+      sendHtml(
+        response,
+        200,
+        `<!doctype html><title>Stripe onboarding</title><h1>Stripe Express onboarding (local)</h1><p>Account ${escapeHtml(account.id)}</p>` +
+          ['complete', 'leave']
+            .map(
+              (name) =>
+                `<form method="post" action="${escapeHtml(path)}/${name}"><button type="submit">${name === 'complete' ? 'Complete' : 'Leave unfinished'}</button></form>`,
+            )
+            .join(''),
+      );
+      return true;
+    }
+    if (action && request.method === 'POST') {
+      await readBody(request);
+      if (action === 'complete') {
+        account.status = 'complete';
+        saveConnect();
+      }
+      redirect(response, link.returnUrl);
+      return true;
+    }
+    return false;
+  };
+
+  // Controls for e2e and manual use; they exist only here.
+  const handleConnectControl = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+    path: string,
+  ): Promise<boolean> => {
+    if (path === '/stripe/test/transfers' && request.method === 'GET') {
+      send(response, 200, { transfers: connect.transfers });
+      return true;
+    }
+    if (request.method !== 'POST') return false;
+    const status = /^\/stripe\/test\/connected-accounts\/([^/]+)\/status$/.exec(
+      path,
+    );
+    if (status) {
+      const input = JSON.parse((await readBody(request)) || '{}') as {
+        status?: ConnectedStatus;
+      };
+      const account = connect.accounts[decodeURIComponent(status[1] as string)];
+      if (
+        !account ||
+        !['in_progress', 'complete', 'restricted'].includes(input.status ?? '')
+      ) {
+        notFound(response, 'account', status[1]);
+        return true;
+      }
+      account.status = input.status as ConnectedStatus;
+      saveConnect();
+      send(response, 200, connectedObject(account));
+      return true;
+    }
+    if (path === '/stripe/test/transfers/fail-next') {
+      const input = JSON.parse((await readBody(request)) || '{}') as {
+        mode?: TransferFailure;
+      };
+      if (
+        !['rejected', 'idempotency_conflict', 'timeout'].includes(
+          input.mode ?? '',
+        )
+      ) {
+        error(response, 400, 'invalid_request_error', 'Unknown failure mode');
+        return true;
+      }
+      nextTransferFailure = input.mode;
+      send(response, 200, { next: nextTransferFailure });
+      return true;
+    }
+    return false;
+  };
+
+  // The Connect slice of /v1: accounts, account links, login links and
+  // transfers, each visible only to the platform account whose key made it.
+  const handleConnect = async (
+    request: IncomingMessage,
+    response: ServerResponse,
+    path: string,
+    who: { accountId: string; restricted: boolean },
+  ): Promise<boolean> => {
+    const isConnect =
+      path === '/v1/accounts' ||
+      path === '/v1/account_links' ||
+      path === '/v1/transfers' ||
+      /^\/v1\/accounts\/[^/]+(?:\/login_links)?$/.test(path);
+    if (!isConnect) return false;
+    if (who.restricted) {
+      error(
+        response,
+        403,
+        'invalid_request_error',
+        'The provided key does not have the required permissions for this endpoint.',
+        'permission_denied',
+      );
+      return true;
+    }
+    const key = request.headers['idempotency-key'];
+    const slot =
+      typeof key === 'string' ? `${who.accountId}:${key}` : undefined;
+    const owned = (accountId: string | undefined) => {
+      const account = accountId ? connect.accounts[accountId] : undefined;
+      return account?.platformAccountId === who.accountId ? account : undefined;
+    };
+
+    if (path === '/v1/accounts' && request.method === 'POST') {
+      const form = parseForm(await readBody(request));
+      const known = slot ? connect.keys[slot] : undefined;
+      const existing = known?.kind === 'account' ? owned(known.id) : undefined;
+      if (existing) {
+        send(response, 200, connectedObject(existing));
+        return true;
+      }
+      if (form.type !== 'express') {
+        error(
+          response,
+          400,
+          'invalid_request_error',
+          'Only Express accounts are supported here.',
+          'parameter_invalid_enum',
+        );
+        return true;
+      }
+      const account: ConnectedAccount = {
+        id: id('acct'),
+        platformAccountId: who.accountId,
+        status: 'in_progress',
+        metadata: metadataOf(form.metadata),
+        created: Math.floor(Date.now() / 1000),
+      };
+      connect.accounts[account.id] = account;
+      if (slot) connect.keys[slot] = { kind: 'account', id: account.id };
+      saveConnect();
+      log(`stripe: ${who.accountId} created ${account.id}`);
+      send(response, 200, connectedObject(account));
+      return true;
+    }
+
+    const one = /^\/v1\/accounts\/([^/]+)$/.exec(path);
+    if (one && request.method === 'GET') {
+      const account = owned(decodeURIComponent(one[1] as string));
+      if (!account) notFound(response, 'account', one[1]);
+      else send(response, 200, connectedObject(account));
+      return true;
+    }
+
+    const login = /^\/v1\/accounts\/([^/]+)\/login_links$/.exec(path);
+    if (login && request.method === 'POST') {
+      const account = owned(decodeURIComponent(login[1] as string));
+      if (!account) notFound(response, 'account', login[1]);
+      else
+        send(response, 200, {
+          object: 'login_link',
+          created: Math.floor(Date.now() / 1000),
+          url: `${origin}/stripe/connect/dashboard/${account.id}`,
+        });
+      return true;
+    }
+
+    if (path === '/v1/account_links' && request.method === 'POST') {
+      const form = parseForm(await readBody(request));
+      const account = owned(
+        typeof form.account === 'string' ? form.account : undefined,
+      );
+      if (!account) {
+        notFound(response, 'account', String(form.account));
+        return true;
+      }
+      if (
+        form.type !== 'account_onboarding' ||
+        typeof form.return_url !== 'string' ||
+        typeof form.refresh_url !== 'string'
+      ) {
+        error(
+          response,
+          400,
+          'invalid_request_error',
+          'type, return_url and refresh_url are needed.',
+          'parameter_missing',
+        );
+        return true;
+      }
+      const token = id('link');
+      connect.links[token] = {
+        accountId: account.id,
+        returnUrl: form.return_url,
+      };
+      saveConnect();
+      const created = Math.floor(Date.now() / 1000);
+      send(response, 200, {
+        object: 'account_link',
+        created,
+        expires_at: created + 300,
+        url: `${origin}/stripe/connect/onboard/${token}`,
+      });
+      return true;
+    }
+
+    if (path === '/v1/transfers' && request.method === 'POST') {
+      const form = parseForm(await readBody(request));
+      const known = slot ? connect.keys[slot] : undefined;
+      const replay =
+        known?.kind === 'transfer'
+          ? connect.transfers.find((t) => t.id === known.id)
+          : undefined;
+      if (replay) {
+        send(response, 200, transferObject(replay));
+        return true;
+      }
+      const failure = nextTransferFailure;
+      nextTransferFailure = undefined;
+      if (failure === 'rejected') {
+        error(
+          response,
+          400,
+          'invalid_request_error',
+          'Your platform balance is too low to make this transfer.',
+          'balance_insufficient',
+        );
+        return true;
+      }
+      if (failure === 'idempotency_conflict') {
+        error(
+          response,
+          400,
+          'idempotency_error',
+          'There is currently another in-progress request using this Stripe-Idempotency-Key.',
+          'idempotency_key_in_use',
+        );
+        return true;
+      }
+      const destination = owned(
+        typeof form.destination === 'string' ? form.destination : undefined,
+      );
+      const amount = Number(form.amount);
+      if (
+        !destination ||
+        destination.status !== 'complete' ||
+        !Number.isInteger(amount) ||
+        amount <= 0 ||
+        typeof form.currency !== 'string'
+      ) {
+        error(
+          response,
+          400,
+          'invalid_request_error',
+          !destination
+            ? `No such destination: '${String(form.destination)}'`
+            : destination.status !== 'complete'
+              ? 'Your destination account needs to have the transfers capability enabled.'
+              : 'A positive integer amount and a currency are needed.',
+          'parameter_invalid_empty',
+        );
+        return true;
+      }
+      const transfer: Transfer = {
+        id: id('tr'),
+        platformAccountId: who.accountId,
+        amount,
+        currency: form.currency.toLowerCase(),
+        destination: destination.id,
+        transfer_group:
+          typeof form.transfer_group === 'string' ? form.transfer_group : null,
+        metadata: metadataOf(form.metadata),
+        created: Math.floor(Date.now() / 1000),
+      };
+      connect.transfers.push(transfer);
+      if (slot) connect.keys[slot] = { kind: 'transfer', id: transfer.id };
+      saveConnect();
+      log(
+        `stripe: ${who.accountId} transferred ${amount} to ${destination.id}`,
+      );
+      if (failure === 'timeout') {
+        // Created, but never answered: the caller's request times out.
+        return true;
+      }
+      send(response, 200, transferObject(transfer));
+      return true;
+    }
+
+    if (path === '/v1/transfers' && request.method === 'GET') {
+      const group = new URL(request.url ?? '', origin).searchParams.get(
+        'transfer_group',
+      );
+      send(response, 200, {
+        object: 'list',
+        url: '/v1/transfers',
+        has_more: false,
+        data: connect.transfers
+          .filter(
+            (t) =>
+              t.platformAccountId === who.accountId &&
+              (group === null || t.transfer_group === group),
+          )
+          .map(transferObject),
+      });
+      return true;
+    }
+    return false;
+  };
+
   const handle = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -434,6 +867,8 @@ export const createStripeStandIn = ({
       return true;
     }
     if (await handleHostedPage(request, response, path)) return true;
+    if (await handleOnboardingPage(request, response, path)) return true;
+    if (await handleConnectControl(request, response, path)) return true;
     if (await handleTestControl(request, response, path)) return true;
     if (!path.startsWith('/v1/')) return false;
 
@@ -458,6 +893,8 @@ export const createStripeStandIn = ({
       });
       return true;
     }
+
+    if (await handleConnect(request, response, path, who)) return true;
 
     if (path === '/v1/checkout/sessions' && request.method === 'POST') {
       const form = parseForm(await readBody(request));

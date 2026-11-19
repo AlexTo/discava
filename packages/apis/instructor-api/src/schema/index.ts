@@ -14,6 +14,7 @@ export * from './discussion.js';
 export * from './earnings.js';
 export * from './lesson.js';
 export * from './module.js';
+export * from './payout.js';
 export * from './profile.js';
 export * from './quiz.js';
 export * from './review.js';

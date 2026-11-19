@@ -650,6 +650,36 @@ describe('payments (the Stripe webhook and checkout)', () => {
     expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
   });
 
+  it('gives the payouts function of instructor-api the API key to read, and neither write nor the signing secret', () => {
+    const instructorApi = stack('InstructorApi');
+    const policies = policiesOf(
+      instructorApi,
+      'InstructorApiPayoutsHandler',
+    ).join('');
+    expect(policies).toContain('ApiKey');
+    expect(policies).toContain('secretsmanager:GetSecretValue');
+    expect(policies).not.toContain('WebhookSigningSecret');
+    expect(policies).not.toContain('secretsmanager:PutSecretValue');
+    const [fn] = resources(
+      instructorApi,
+      'AWS::Lambda::Function',
+      'InstructorApiPayoutsHandler',
+    );
+    const variables = JSON.stringify(
+      (fn as { Environment: { Variables: object } }).Environment.Variables,
+    );
+    expect(variables).toContain('STRIPE_API_KEY_SECRET_ARN');
+    expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
+  });
+
+  it("keeps the Stripe key out of instructor-api's shared router function", () => {
+    const policies = policiesOf(
+      stack('InstructorApi'),
+      'InstructorApiRouterHandler',
+    ).join('');
+    expect(policies).not.toContain('ApiKey');
+  });
+
   it('lets no role but the admin connect function write either secret', () => {
     for (const [name, template] of stackTemplates({})) {
       for (const [role, actions] of Object.entries(actionsByRole(template))) {
