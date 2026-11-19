@@ -1,0 +1,131 @@
+---
+title: Fork and set up
+description: Fork Discava, prepare the fork's GitHub settings and run the setup script that connects it to your AWS account.
+sidebar:
+  order: 2
+---
+
+import { Steps } from '@astrojs/starlight/components';
+import Link from '@components/link.astro';
+
+This page connects a fork of Discava to your AWS account. At the end, your fork has everything the Deploy workflow needs, and nothing is deployed yet.
+
+## 1. Fork and clone
+
+<Steps>
+
+1. Fork [AlexTo/discava](https://github.com/AlexTo/discava) on GitHub. Keep the name `discava` unless you have a reason to change it.
+
+2. Clone **your fork**, not the original. The setup script reads the repository to trust from the `origin` remote.
+
+   ```sh
+   git clone https://github.com/<you>/discava.git
+   cd discava
+   ```
+
+3. Install the dependencies. The setup script needs them to read the stage list.
+
+   ```sh
+   corepack enable
+   pnpm i
+   ```
+
+</Steps>
+
+## 2. Prepare the fork on GitHub
+
+Three settings in your fork, all under its **Settings** or **Actions** tab.
+
+<Steps>
+
+1. **Enable workflows.** GitHub disables workflows on a new fork. Open the **Actions** tab and choose **I understand my workflows, go ahead and enable them**.
+
+2. **Enable GitHub Pages.** Go to **Settings → Pages** and set **Source** to **GitHub Actions**.
+
+   The CI workflow publishes this documentation site to Pages on every push to `main`. If Pages is off, that job fails, CI is marked failed, and the automatic deploy that waits for CI never starts. Manual deploys work either way.
+
+3. **Optional: add `CODECOV_TOKEN`.** CI uploads test coverage to Codecov. To see coverage for your fork, add the token from Codecov as a repository secret under **Settings → Secrets and variables → Actions**.
+
+</Steps>
+
+:::note[Renamed your fork?]
+The docs site is built for the path `/discava`. If your fork has another name, set `DOCS_BASE_PATH` (for example `/my-lms`) where the docs are built, or change the default in `docs/astro.config.mjs`.
+:::
+
+## 3. Run the setup script
+
+The script is `scripts/setup-stage.sh`. Run it once for each stage you deploy.
+
+```sh
+./scripts/setup-stage.sh discava-development
+```
+
+It asks a series of questions, each with a detected default you accept with Enter. Nothing is created until you confirm the summary at the end. It is safe to run again: every step creates what is missing and updates what exists.
+
+### What it asks
+
+| Prompt | What to answer |
+| --- | --- |
+| **Stage** | The stage to set up. Stages come from `stages.config.ts` |
+| **GitHub** | Nothing to answer if `origin` is your fork. It prints the repository it will trust: check it is yours |
+| **AWS credentials** | The AWS CLI profile for the target account, or blank for your default credentials. It prints who you are signed in as |
+| **Region** | The stage's main region. Not asked if `stages.config.ts` sets one |
+| **CDK bootstrap** | Yes, for each region it reports as not bootstrapped |
+| **GitHub environment** | Yes, to create the environment named after the stage and set its variables |
+| **Deploy automatically?** | Yes to deploy this stage whenever CI passes on `main`. No to deploy only when you run the workflow. Only one stage can deploy automatically |
+| **Custom domains** | Leave every answer blank for now. You can run the script again later to add them |
+
+### What it creates
+
+In **AWS**:
+
+| Resource | Name | Purpose |
+| --- | --- | --- |
+| OIDC provider | `token.actions.githubusercontent.com` | Lets GitHub Actions sign in to this account. Shared by every stage |
+| Deploy role | `github-deploy-<stage>` | Assumed by the Deploy workflow. Trusts only your repository's environment named `<stage>`. Can publish assets and manage the stage's CloudFormation stacks |
+| Execution role | `cfn-execution-<stage>` | Used by CloudFormation to create the stage's resources. Its permissions are in three managed policies: `-data`, `-edge` and `-compute` |
+| Permissions boundary | `permissions-boundary-<stage>` | Every IAM role the stage creates must carry it, which caps what a deployed stack can grant itself |
+| Docker login role | `github-docker-login-<repo>` | Lets CI sign in to Amazon ECR Public, so image pulls aren't rate limited. Shared by every stage |
+| CDK bootstrap stack | `CDKToolkit` | The asset bucket and roles CDK needs, in each region you agreed to |
+
+On **GitHub**:
+
+| Where | Variable | Value |
+| --- | --- | --- |
+| Environment `<stage>` | `AWS_REGION` | The stage's region |
+| Environment `<stage>` | `AWS_DEPLOY_ROLE_ARN` | The deploy role |
+| Environment `<stage>` | `AWS_EXECUTION_ROLE_ARN` | The execution role |
+| Repository | `AWS_DOCKER_LOGIN_ROLE_ARN` | The Docker login role |
+| Repository | `AUTO_DEPLOY_STAGE` | The stage name, only if you chose automatic deploys |
+
+These are **variables, not secrets**. A role ARN isn't sensitive: the role can only be assumed by a workflow running in your repository's matching environment.
+
+### Without the GitHub CLI
+
+If `gh` isn't installed or signed in, the script still creates everything in AWS, then prints the environment and variables for you to create by hand under **Settings → Environments** and **Settings → Secrets and variables → Actions → Variables**.
+
+### Running it unattended
+
+```sh
+AWS_PROFILE=my-profile AWS_REGION=eu-west-1 ./scripts/setup-stage.sh --yes discava-development
+```
+
+`--yes` accepts every default. `./scripts/setup-stage.sh --help` lists the environment variables that preset each answer.
+
+## 4. Protect production
+
+Anyone who can run workflows in your fork can deploy a stage. For `discava-production`, or any stage with real users, open **Settings → Environments → `<stage>`** and:
+
+- Add **required reviewers**, so each deploy waits for approval
+- Restrict **deployment branches** to `main`
+
+## Check your work
+
+```sh
+gh variable list --env discava-development
+gh variable list
+```
+
+The first should list the three `AWS_*` variables, the second `AWS_DOCKER_LOGIN_ROLE_ARN`.
+
+Next: <Link path="deploy/first-deploy">your first deploy</Link>.
