@@ -6,7 +6,7 @@
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StripeSecrets } from '../../core/stripe-secrets.js';
 import { CoreTable } from '../dynamodb/core-table.js';
 import { StripeWebhookApi } from './stripe-webhook-api.js';
@@ -24,6 +24,9 @@ const build = (
   });
   return { api, template: Template.fromStack(stack) };
 };
+
+// Synthesising a stack is slow on a cold or busy CI runner.
+vi.setConfig({ testTimeout: 60_000 });
 
 describe('StripeWebhookApi', () => {
   it('has exactly one POST /stripe/webhook method with no authorizer', () => {

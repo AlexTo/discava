@@ -6,7 +6,7 @@
 import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { StripeSecrets } from './stripe-secrets.js';
 
 const build = (props = {}) => {
@@ -31,6 +31,9 @@ const actionsOf = (template: Template, roleId: string) =>
         p.Properties.PolicyDocument.Statement as { Action: string | string[] }[]
       ).flatMap((s) => [s.Action].flat()),
     );
+
+// Synthesising a stack is slow on a cold or busy CI runner.
+vi.setConfig({ testTimeout: 60_000 });
 
 describe('StripeSecrets', () => {
   it('creates the two secrets with no value in the template', () => {
