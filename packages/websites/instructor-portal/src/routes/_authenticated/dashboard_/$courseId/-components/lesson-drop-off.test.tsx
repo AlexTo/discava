@@ -1,0 +1,44 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { LessonDropOff, type LessonFigures } from './lesson-drop-off';
+
+const lesson = (id: string, share: number | null): LessonFigures => ({
+  lessonId: id,
+  title: `Lesson ${id}`,
+  started: share === null ? 0 : 2,
+  completed: share === null ? 0 : 1,
+  completionShare: share,
+});
+
+const badged = () =>
+  screen
+    .queryAllByText('Lowest completion')
+    .map((badge) => badge.closest('li')?.textContent ?? '');
+
+describe('LessonDropOff', () => {
+  it('marks no lesson when every share is the same', () => {
+    render(<LessonDropOff lessons={[lesson('a', 100), lesson('b', 100)]} />);
+    expect(badged()).toEqual([]);
+  });
+
+  it('marks every lesson tied at the lowest share below another', () => {
+    render(
+      <LessonDropOff
+        lessons={[lesson('a', 100), lesson('b', 50), lesson('c', 50)]}
+      />,
+    );
+    const marked = badged();
+    expect(marked).toHaveLength(2);
+    expect(marked[0]).toContain('Lesson b');
+    expect(marked[1]).toContain('Lesson c');
+  });
+
+  it('marks nothing with only one lesson that has a share', () => {
+    render(<LessonDropOff lessons={[lesson('a', 100), lesson('b', null)]} />);
+    expect(badged()).toEqual([]);
+  });
+});
