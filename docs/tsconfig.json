@@ -69,6 +69,9 @@
       ],
       "@discava/search": [
         "../packages/databases/search/src/index.ts"
+      ],
+      "@discava/common-infra-config/*": [
+        "../packages/common/infra-config/src/*.ts"
       ]
     }
   }

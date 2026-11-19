@@ -14,7 +14,8 @@
     "@aws-sdk/client-sesv2": "catalog:",
     "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "@discava/common-infra-config": "workspace:*"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",
