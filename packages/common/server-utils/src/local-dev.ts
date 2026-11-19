@@ -87,6 +87,44 @@ export const LOCAL_EVENT_RUNNER = {
 };
 
 /**
+ * The Stripe stand-in, part of the event runner (packages/events,
+ * `src/local/stripe-stand-in.ts`): backend code points the `stripe` SDK at it
+ * whenever `isLocalDev()`, as S3 is pointed at S3Mock. Its two accounts are
+ * documented here for tests and the quickstart only: no backend code reads
+ * them as credentials. An administrator connects one through admin-api like
+ * any other key, and the key then lives in the local secrets store
+ * (`stripe/secrets-store.ts`), never in a constant.
+ */
+export const LOCAL_STRIPE = {
+  protocol: 'http' as const,
+  host: LOCAL_HOST,
+  port: LOCAL_EVENT_RUNNER.port,
+  accounts: {
+    sk_test_local: { accountId: 'acct_local', name: 'Local Stripe Account' },
+    sk_test_local_2: {
+      accountId: 'acct_local_2',
+      name: 'Second Local Stripe Account',
+    },
+  } as Record<string, { accountId: string; name: string }>,
+  /** A restricted key without permission to manage webhook endpoints. */
+  restrictedKeyWithoutWebhooks: 'rk_test_local_nowebhook',
+};
+
+/**
+ * How long a checkout lives, in seconds, instead of an hour: a positive
+ * integer in `LOCAL_CHECKOUT_TTL_SECONDS`, honoured only in local dev, so a
+ * contributor and the e2e switch scenario need not wait out the open-checkout
+ * window. `undefined` when unset, invalid or deployed.
+ */
+export const localCheckoutTtlSeconds = (): number | undefined => {
+  if (!isLocalDev()) return undefined;
+  const raw = process.env.LOCAL_CHECKOUT_TTL_SECONDS;
+  if (raw === undefined || !/^[1-9]\d*$/.test(raw)) return undefined;
+  const seconds = Number(raw);
+  return Number.isSafeInteger(seconds) ? seconds : undefined;
+};
+
+/**
  * ElasticMQ, which stands in for SQS in local dev: the queues local dev's
  * stream router and feature runners use. Each registered stream feature
  * (core-table's `STREAM_FEATURES`) has a queue and a failure queue named from

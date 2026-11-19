@@ -272,6 +272,14 @@ describe('createCourse', () => {
     expect(instructorArgs.courseId).toBe(courseArgs.courseId);
   });
 
+  it('creates a course free, in USD, with no pricedAt', async () => {
+    await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    expect(courseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ priceAmount: 0, priceCurrency: 'USD' }),
+    );
+    expect(courseCreate.mock.calls[0]?.[0]).not.toHaveProperty('pricedAt');
+  });
+
   it('stores certificatesEnabled: true on a new course', async () => {
     await callAs().createCourse({ title: 'Intro to DynamoDB' });
     expect(courseCreate).toHaveBeenCalledWith(

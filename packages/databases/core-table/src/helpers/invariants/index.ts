@@ -14,6 +14,7 @@ import { DISCUSSION_CHECKS } from './discussion.js';
 import { INSTRUCTOR_PROFILES_CHECKS } from './instructor-profiles.js';
 import { MEDIA_CHECKS } from './media.js';
 import { NOTIFICATIONS_CHECKS } from './notifications.js';
+import { PAYMENTS_CHECKS } from './payments.js';
 import { REVIEWS_CHECKS } from './reviews.js';
 import type { TableSnapshot } from './snapshot.js';
 import { STUDENT_ACTIVITY_CHECKS } from './student-activity.js';
@@ -31,6 +32,7 @@ const CHECKS = [
   ...DISCUSSION_CHECKS,
   ...REVIEWS_CHECKS,
   ...INSTRUCTOR_PROFILES_CHECKS,
+  ...PAYMENTS_CHECKS,
 ] as const;
 
 export type InvariantName = (typeof CHECKS)[number]['name'];

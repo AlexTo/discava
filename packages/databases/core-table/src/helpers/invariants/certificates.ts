@@ -49,7 +49,8 @@ export const checkCertificateShape = (snapshot: TableSnapshot): Violation[] => {
 };
 
 // 22 (certificates). A certificate is for a completed enrolment, with the
-// same completedAt, in a course that exists. Certificates off for the course
+// same completedAt, in a course that exists. A refunded student keeps their
+// certificate, so the enrolment may also be `dropped` with that completedAt. Certificates off for the course
 // is not a violation (the setting isn't retroactive), nor is a completed
 // enrolment without a certificate (no backfill).
 export const checkCertificateHasCompletedEnrolment = (
@@ -65,7 +66,10 @@ export const checkCertificateHasCompletedEnrolment = (
     const problems: string[] = [];
     if (!enrolment) {
       problems.push('certificate for a student not enrolled in the course');
-    } else if (enrolment.status !== 'completed') {
+    } else if (
+      enrolment.status !== 'completed' &&
+      !(enrolment.status === 'dropped' && enrolment.completedAt)
+    ) {
       problems.push(`enrolment is ${enrolment.status}, not completed`);
     } else if (enrolment.completedAt !== completedAt) {
       problems.push("completedAt differs from the enrolment's");

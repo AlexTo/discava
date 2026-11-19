@@ -26,6 +26,9 @@ import type { createNotificationEntity } from '../../entities/notification.js';
 import type { createNotificationBroadcastEntity } from '../../entities/notification-broadcast.js';
 import type { createNotificationPreferenceEntity } from '../../entities/notification-preference.js';
 import type { createNotificationStateEntity } from '../../entities/notification-state.js';
+import type { createOrderEntity } from '../../entities/order.js';
+import type { createPaymentChangeEntity } from '../../entities/payment-change.js';
+import type { createPaymentConnectionEntity } from '../../entities/payment-connection.js';
 import type { createPeriodStatsEntity } from '../../entities/period-stats.js';
 import type { createProfileHandleClaimEntity } from '../../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../../entities/progress.js';
@@ -57,6 +60,9 @@ export interface TableSnapshot {
     | 'durationHours'
     | 'learningOutcomes'
     | 'requirements'
+    | 'priceAmount'
+    | 'priceCurrency'
+    | 'pricedAt'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -135,6 +141,7 @@ export interface TableSnapshot {
     | 'completedAt'
     | 'lastActivityAt'
     | 'createdAt'
+    | 'orderId'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -344,6 +351,53 @@ export interface TableSnapshot {
     Item<typeof createProfileHandleClaimEntity>,
     'handle' | 'instructorId'
   >[];
+  orders: Pick<
+    Item<typeof createOrderEntity>,
+    | 'orderId'
+    | 'userId'
+    | 'courseId'
+    | 'accountId'
+    | 'listAmount'
+    | 'amount'
+    | 'currency'
+    | 'status'
+    | 'expiresAt'
+    | 'checkoutSessionId'
+    | 'paymentIntentId'
+    | 'paidAt'
+    | 'refundedAt'
+    | 'refundedAmount'
+    | 'refundReason'
+    | 'createdAt'
+  >[];
+  // At most one (a singleton); a list so a stray second one is seen.
+  paymentConnections: Pick<
+    Item<typeof createPaymentConnectionEntity>,
+    | 'status'
+    | 'mode'
+    | 'accountId'
+    | 'accountName'
+    | 'keyLast4'
+    | 'webhookEndpointId'
+    | 'webhookUrl'
+    | 'latestCheckoutExpiresAt'
+    | 'leaseUntil'
+    | 'previousStatus'
+    | 'revision'
+    | 'changedAt'
+  >[];
+  paymentChanges: Pick<
+    Item<typeof createPaymentChangeEntity>,
+    | 'changeId'
+    | 'kind'
+    | 'byUserId'
+    | 'byName'
+    | 'at'
+    | 'mode'
+    | 'accountId'
+    | 'keyLast4'
+    | 'step'
+  >[];
 }
 
 // Each snapshot key and the entity whose records it holds. Adding an entity
@@ -382,6 +436,9 @@ export const SNAPSHOT_ENTITIES = {
   courseRatings: 'courseRating',
   instructorProfiles: 'instructorProfile',
   profileHandleClaims: 'profileHandleClaim',
+  orders: 'order',
+  paymentConnections: 'paymentConnection',
+  paymentChanges: 'paymentChange',
 } as const satisfies Record<
   keyof TableSnapshot,
   keyof Awaited<ReturnType<typeof createCoreTableService>>['entities']
