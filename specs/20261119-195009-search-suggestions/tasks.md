@@ -140,7 +140,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: The keyboard and ARIA cases in `site-search.test.tsx` pass. The e2e test drives the dropdown by keyboard only.
 
-- [ ] T013 [US3] Tests first, then apply [contracts/site-search-ui.md](./contracts/site-search-ui.md)'s ARIA and keyboard table to `packages/websites/student-portal/src/components/site-search.tsx` and `site-search-suggestions.tsx`:
+- [x] T013 [US3] Tests first, then apply [contracts/site-search-ui.md](./contracts/site-search-ui.md)'s ARIA and keyboard table to `packages/websites/student-portal/src/components/site-search.tsx` and `site-search-suggestions.tsx`:
   - the input gets `role="combobox"`, `aria-autocomplete="list"`, `aria-expanded`, `aria-controls` (from `useId`) and `aria-activedescendant`;
   - the list gets `role="listbox"` and `aria-label="Course suggestions"`, and each row `role="option"`, a stable `id` and `aria-selected`;
   - a visually hidden `role="status"` region says "<n> suggestions" or "No courses match" when an answer is shown;
@@ -151,8 +151,8 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - remove the `data-testid` fallback from T011.
 
   Component tests: every row in the keyboard table, `aria-expanded` toggling, `aria-activedescendant` following the highlight, and the status text for 3 items and for 0 items. Use `getByRole('combobox', { name: 'Search courses' })`.
-- [ ] T014 [US3] Change `searchWithSiteSearch` in `packages/e2e/src/helpers/student-portal.ts` to find the box with `getByRole('combobox', { name: 'Search courses' })` instead of `getByRole('searchbox', …)`. This is an intended locator change: the box's ARIA role changed (FR-012), and its fill, Enter and wait-for-`/search` behavior stays the same. Update the other tests that find this box by `getByRole('searchbox', { name: 'Search courses' })` the same way, changing nothing else: today `packages/websites/student-portal/src/routes/search/-search.test.tsx` and `src/routes/-routes.test.tsx`. Don't touch other search boxes, such as the category page's "Search <category>" box in `routes/category/-category.test.tsx`. List the changed tests in the PR description.
-- [ ] T015 [US3] Extend the Phase 2 e2e test in `packages/e2e/src/scenarios/search.e2e.ts` with a keyboard-only step:
+- [x] T014 [US3] Change `searchWithSiteSearch` in `packages/e2e/src/helpers/student-portal.ts` to find the box with `getByRole('combobox', { name: 'Search courses' })` instead of `getByRole('searchbox', …)`. This is an intended locator change: the box's ARIA role changed (FR-012), and its fill, Enter and wait-for-`/search` behavior stays the same. Update the other tests that find this box by `getByRole('searchbox', { name: 'Search courses' })` the same way, changing nothing else: today `packages/websites/student-portal/src/routes/search/-search.test.tsx` and `src/routes/-routes.test.tsx`. Don't touch other search boxes, such as the category page's "Search <category>" box in `routes/category/-category.test.tsx`. List the changed tests in the PR description.
+- [x] T015 [US3] Extend the Phase 2 e2e test in `packages/e2e/src/scenarios/search.e2e.ts` with a keyboard-only step:
   - type, press Down until the course is highlighted, and take `screenshot(page, 'search-suggestions-keyboard')`;
   - press Enter and expect the course page;
   - then type again, press Escape, and expect the listbox hidden and the text kept.

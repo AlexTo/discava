@@ -10,7 +10,10 @@ import { Search } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { useCoreApi } from '../api';
 import { useDebouncedValue } from '../hooks/use-debounced-value';
-import { SiteSearchSuggestions } from './site-search-suggestions';
+import {
+  SiteSearchSuggestions,
+  suggestionOptionId,
+} from './site-search-suggestions';
 
 const SUGGEST_DEBOUNCE_MS = 300;
 const SUGGEST_MIN_LENGTH = 3;
@@ -72,9 +75,28 @@ export const SiteSearch = () => {
     typed.length >= SUGGEST_MIN_LENGTH &&
     (items.length > 0 || suggestions.isFetching);
 
+  // The highlighted row, or -1 for none. It starts over when the answer changes.
+  const [activeIndex, setActiveIndex] = useState(-1);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resets on a new answer
+  useEffect(() => setActiveIndex(-1), [suggestions.data]);
+
+  let status = '';
+  if (wanted && typed.length >= SUGGEST_MIN_LENGTH && !suggestions.isFetching) {
+    if (items.length > 0) {
+      status = `${items.length} ${items.length === 1 ? 'suggestion' : 'suggestions'}`;
+    } else if (suggestions.isSuccess) {
+      status = 'No courses match';
+    }
+  }
+
   const dismiss = () => {
     cancelDebounce();
     setDismissed(true);
+  };
+
+  const choose = (courseId: string) => {
+    dismiss();
+    navigate({ to: '/learn/$courseId', params: { courseId } });
   };
 
   return (
@@ -93,6 +115,15 @@ export const SiteSearch = () => {
       <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         type="search"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={suggestionsId}
+        aria-activedescendant={
+          open && activeIndex >= 0
+            ? suggestionOptionId(suggestionsId, activeIndex)
+            : undefined
+        }
         autoComplete="off"
         aria-label="Search courses"
         placeholder="What do you want to learn?"
@@ -102,6 +133,32 @@ export const SiteSearch = () => {
           setValue(event.target.value);
           setTouched(true);
           setDismissed(false);
+          // The highlighted row belongs to the text before this edit.
+          setActiveIndex(-1);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            if (open) {
+              // Keeps the text, which the browser would otherwise clear.
+              event.preventDefault();
+              dismiss();
+            }
+          } else if (open && items.length > 0) {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              const step = event.key === 'ArrowDown' ? 1 : -1;
+              setActiveIndex((index) =>
+                index < 0
+                  ? step > 0
+                    ? 0
+                    : items.length - 1
+                  : (index + step + items.length) % items.length,
+              );
+            } else if (event.key === 'Enter' && activeIndex >= 0) {
+              event.preventDefault();
+              choose(items[activeIndex].courseId);
+            }
+          }
         }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -112,12 +169,13 @@ export const SiteSearch = () => {
           items={items}
           typed={typed}
           loading={suggestions.isFetching}
-          onChoose={(courseId) => {
-            dismiss();
-            navigate({ to: '/learn/$courseId', params: { courseId } });
-          }}
+          activeIndex={activeIndex}
+          onChoose={choose}
         />
       )}
+      <div role="status" className="sr-only">
+        {status}
+      </div>
     </form>
   );
 };

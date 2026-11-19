@@ -187,7 +187,7 @@ describe('the top bar', () => {
     const { router, user } = open('/learn/course-1');
 
     await user.type(
-      await screen.findByRole('searchbox', { name: 'Search courses' }),
+      await screen.findByRole('combobox', { name: 'Search courses' }),
       '  linear algebra {Enter}',
     );
 
