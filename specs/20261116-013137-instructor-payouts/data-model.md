@@ -55,21 +55,6 @@ Created by `recordSale` in the same transaction as the order's entries; updated 
 
 Keys: primary pk `orderId`, sk constant `earning`. No index.
 
-## `earningOrder` (new, one per paid order with earnings)
-
-Created by `recordSale` in the same transaction as the order's entries; updated only by `recordRefund`. It is the snapshot refunds are computed from and the per-order counter that serialises them (research R-3, R-5).
-
-| Attribute | Type | Notes |
-|-----------|------|-------|
-| `orderId`, `courseId`, `currency` | string, required | |
-| `grossMinor`, `discountMinor`, `paidMinor`, `feeMinor` | integer, required, read-only | the order's figures and the total fee (round-half-up of `paidMinor` x `feeBasisPoints` / 10000) |
-| `feeBasisPoints` | integer, required, read-only | the fee in effect when the sale was recorded |
-| `instructorIds` | list of strings, required, read-only | the split recipients, sorted ascending, fixed at payment time |
-| `refundedMinor` | integer, required | amount already recorded as refunded; starts at 0, at most `paidMinor`, only increases |
-| `createdAt`, `updatedAt` | as other entities | |
-
-Keys: primary pk `orderId`, sk constant `earning`. No index.
-
 ## `earningDay` (new, maintained by `recordSale` / `recordRefund`)
 
 One row per instructor, course, currency and UTC day with activity.
@@ -93,13 +78,12 @@ Keys: primary pk `instructorId`, sk `D#<day>#<courseId>#<currency>` (a day range
 | `amountMinor` | integer > 0, required | sum of the entries |
 | `status` | `pending` / `sent` / `failed`, required | |
 | `attemptedAt` | ISO string, required | when a run last tried to send it (set at creation; moved by the recovery claim, conditioned on its old value, so overlapping runs cannot both resend) |
-| `attemptedAt` | ISO string, required | when a run last tried to send it (set at creation; moved by the recovery claim, conditioned on its old value, so overlapping runs cannot both resend) |
 | `entryKeys` | list of strings, required | sort keys of the entries it carries, so settlement can update them without a query |
 | `stripeTransferId` | string, optional | set when `sent` |
 | `failureReason` | string, optional | set when `failed` |
 | `createdAt`, `updatedAt`, `settledAt` | ISO strings | |
 
-Keys: primary pk `instructorId`, sk `P#<createdAt>#<payoutId>` (an instructor's payouts, newest last, one query). Index `payoutsByStatus` on `gsi1pk-gsi1sk-index`: `gsi1pk` = `status`, `gsi1sk` = `payoutId` (finds `pending` payouts across all instructors for recovery, including instructors whose account is no longer active; the `pending` partition is small because payouts leave it as soon as they settle). Index `payoutsByStatus` on `gsi1pk-gsi1sk-index`: `gsi1pk` = `status`, `gsi1sk` = `payoutId` (finds `pending` payouts across all instructors for recovery, including instructors whose account is no longer active; the `pending` partition is small because payouts leave it as soon as they settle). A payout's entries are those with its `payoutId` and are listed in its `entryKeys`; finding them by `payoutId` alone would need a scan, which only invariant tooling does.
+Keys: primary pk `instructorId`, sk `P#<createdAt>#<payoutId>` (an instructor's payouts, newest last, one query). Index `payoutsByStatus` on `gsi1pk-gsi1sk-index`: `gsi1pk` = `status`, `gsi1sk` = `payoutId` (finds `pending` payouts across all instructors for recovery, including instructors whose account is no longer active; the `pending` partition is small because payouts leave it as soon as they settle). A payout's entries are those with its `payoutId` and are listed in its `entryKeys`; finding them by `payoutId` alone would need a scan, which only invariant tooling does.
 
 ## Statuses the Earnings page shows (derived, not stored)
 
@@ -125,7 +109,11 @@ Keys: primary pk `instructorId`, sk `P#<createdAt>#<payoutId>` (an instructor's 
 | Open entries for an instructor | `byOpen` | `payout-run`, `payout.overview` |
 | Instructors of a course | `courseInstructor` primary query (existing) | `recordSale` |
 
-No scans. Ledger, summary, payout and account records match none of `PROGRESS_STREAM_FILTERS`, `SEARCH_STREAM_FILTERS` or `EARNINGS_STREAM_FILTERS`.
+No scans.
+
+## Stream routing (`STREAM_FEATURES`)
+
+One new registration, `earnings-recording` (filters `EARNINGS_STREAM_FILTERS`; contract in [contracts/events-earnings-and-payout-run.md](./contracts/events-earnings-and-payout-run.md)). `featuresFor` routes an inserted or modified `order` and an inserted `refund` to it. Inserts, updates and removals of `earningEntry`, `earningDay`, `earningOrder`, `payout` and `payoutAccount` are routed to no feature, so no handler's own writes come back to it. No existing feature's filters change.
 
 ## Rules and where they live
 

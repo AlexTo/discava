@@ -1,17 +1,29 @@
 # Contract: events handlers
 
-## `events-earnings-recording` (DynamoDB stream handler)
+## `events-earnings-recording` (stream router feature `earnings-recording`)
 
-Trigger: the core table's stream, filtered by `EARNINGS_STREAM_FILTERS` (core-table `helpers/earnings-stream.ts`, also used by the deployed event source mapping and the local event runner): a paid `order` record and a new `refund` record.
+Trigger: the feature's queue. Earnings recording is registered in core-table's `STREAM_FEATURES` as `earnings-recording` and never reads the table's stream itself; the `StreamRouter` is the stream's only reader and copies each matching record to this feature's queue.
+
+| Registration field | Value |
+|---|---|
+| `name`, `handler` | `earnings-recording` |
+| `filters` | `EARNINGS_STREAM_FILTERS` (core-table `helpers/earnings-stream.ts`): INSERT and MODIFY of `order`, INSERT of `refund` |
+| `batch` | 100 records / 5 s |
+| `maxReceiveCount` | 5 |
+| `maxConcurrency` | 2 (sales of one course share an `earningDay` row; plan risk R6) |
+
+The queue, failure queue, alarm and the queue's event source mapping come from the `StreamRouter` construct, and the local event runner builds the same from the entry over ElasticMQ. The handler reads its records through `sqsToStreamRecords` (`packages/events/src/router/sqs-stream-records.ts`).
 
 Behaviour:
 
-- Paid order: read the course's `courseInstructor` records, call `recordSale` with the stage's fee. No instructors, or `paidMinor` of 0, records nothing.
+- Paid order: an `order` record counts once it carries `paidAt` (assumed shape, T010); any other order record is skipped. Read the course's `courseInstructor` records, call `recordSale` with the stage's fee. No instructors, or `paidMinor` of 0, records nothing.
 - Refund: read the order's `earningOrder` (its fee, instructors and `refundedMinor`), then call `recordRefund`, which computes the share from the amount already recorded as refunded (not from refund timestamps), serialises per order with a condition on `earningOrder.refundedMinor` and retries the read-compute-write up to 5 times if another refund was recorded first. An order with no sale entries because it was free or unpaid is ignored without error.
-- Both helpers are idempotent by entry key. A thrown error fails the batch so the stream retries. A refund that arrives before its paid order has been recorded (a paid order with no `earningOrder`) fails the batch and retries until the sale exists. Refunds may be processed in any order: the entries always sum to the sale's fee and amounts once the recorded total equals the amount paid.
-- Its writes match none of the three stream filters.
+- Delivery is at least once and in no guaranteed order (router handler obligations, FR-011), and the handler is safe under both. Both helpers are idempotent by entry key, so a duplicate or redelivered record changes nothing. Refunds may be processed in any order: the entries always sum to the sale's fee and amounts once the recorded total equals the amount paid. A later change to a paid order (for example its status after a refund) delivered before or after the paid one records the sale once. The handler's header comment says this.
+- Within a batch the handler applies order records before refund records, so a refund batched with its sale succeeds the first time. A refund that arrives before its paid order has been recorded (a paid order with no `earningOrder`) throws.
+- Failures: the handler applies every record it can, then throws if any failed (no `batchItemFailures`), so the queue redelivers the whole batch after its visibility timeout and the redelivery changes nothing already applied. After 5 receives the message moves to the `earnings-recording` failure queue and its alarm fires. Nothing is lost or half-recorded: redriving the failure queue once the cause is fixed (`POST /router/redrive/earnings-recording` locally, the SQS redrive when deployed) records what is missing.
+- Its writes are routed to no feature: `featuresFor` returns nothing for `earningEntry`, `earningDay` and `earningOrder` records (no feedback loop, FR-015).
 
-Environment: table name, `PLATFORM_FEE_BASIS_POINTS`, `PAYOUT_HOLD_DAYS` (from stage config).
+Environment: table name, `PLATFORM_FEE_BASIS_POINTS`, `PAYOUT_HOLD_DAYS` (from stage config, set by the router's stack; by the event runner locally).
 
 ## `events-payout-run` (scheduled, daily)
 

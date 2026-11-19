@@ -7,7 +7,7 @@ Prerequisites: Docker running; `pnpm i`; once, `pnpm --filter @discava/e2e exec 
 ```sh
 pnpm nx run-many --target test --projects=@discava/core-table,@discava/instructor-api,@discava/events,@discava/instructor-portal,@discava/common-infra-config
 pnpm nx e2e @discava/e2e        # includes earnings.e2e.ts and the double-delivery race
-pnpm build                      # includes synth and checkov for the Payouts stack
+pnpm build                      # includes synth and checkov for the router's stack and the Payouts stack
 ```
 
 ## By hand (local stack)
