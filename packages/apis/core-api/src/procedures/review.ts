@@ -98,14 +98,16 @@ const requireOwnVisibleReview = async (
   return review;
 };
 
-// Runs the write; on a cancellation, works out why and throws. `reread` runs
-// once a condition failed, to say what changed.
+// Runs the write; on a cancellation, works out why and throws. `onCancelled`
+// runs once a condition failed, to say what changed. `onConflict`, when
+// given, takes the place of the CONFLICT a TransactionConflict answers.
 const commit = async (
   coreTable: CoreTable,
   write: ReviewWrite,
   onCancelled: (
     cancellation: ReturnType<typeof classifyReviewCancellation>,
   ) => Promise<void>,
+  onConflict?: () => Promise<void>,
 ) => {
   const { canceled, data } = await coreTable.transaction
     .write((entities) => reviewWrites(entities, write))
@@ -115,7 +117,7 @@ const commit = async (
   }
   const reasons: CancellationReasons = data ?? [];
   if (hasTransactionConflict(reasons)) {
-    throw transactionConflict();
+    return onConflict ? onConflict() : Promise.reject(transactionConflict());
   }
   return onCancelled(classifyReviewCancellation(write.action, reasons));
 };
@@ -192,23 +194,26 @@ export const postReview = courseProcedure
 
     // The instructors are told in the same transaction as the post. Anything
     // the transaction cancels over that the review itself doesn't explain (an
-    // instructor's unread count changed meanwhile, or the same student's
-    // earlier review was deleted and posted again, which names the same
-    // notification) is retried without the notifications: the review matters
-    // more than the notice.
+    // instructor's unread count changed or was held by another transaction,
+    // or the same student's earlier review was deleted and posted again,
+    // which names the same notification) is retried without the
+    // notifications: the review matters more than the notice.
     const notifications = await instructorNotifications(coreTable, post);
+    const withoutNotifications = () =>
+      commit(coreTable, post, (retried) =>
+        postCancelled(coreTable, courseId, userId, retried),
+      );
 
     await commit(
       coreTable,
       { ...post, notifications },
       async (cancellation) => {
         if (cancellation === undefined && notifications.length > 0) {
-          return commit(coreTable, post, (retried) =>
-            postCancelled(coreTable, courseId, userId, retried),
-          );
+          return withoutNotifications();
         }
         return postCancelled(coreTable, courseId, userId, cancellation);
       },
+      notifications.length > 0 ? withoutNotifications : undefined,
     );
 
     return requireWritten(coreTable, courseId, userId);

@@ -414,6 +414,40 @@ describe('postReview notifications', () => {
     expect(reviewWrites.mock.calls[1][1].notifications).toBeUndefined();
   });
 
+  it('posts the review without notices when a notice item was held by another transaction', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    transactionGo
+      .mockResolvedValueOnce({
+        canceled: true,
+        data: ['None', 'None', 'None', 'None', 'TransactionConflict'].map(
+          (code) => ({ code }),
+        ),
+      })
+      .mockResolvedValueOnce({ canceled: false, data: [] });
+    reviewRecord(stored());
+
+    const result = await callAsUser().postReview({
+      courseId: 'course-1',
+      rating: 4,
+    });
+
+    expect(result).toMatchObject({ rating: 4 });
+    expect(transactionGo).toHaveBeenCalledTimes(2);
+    expect(reviewWrites.mock.calls[1][1].notifications).toBeUndefined();
+  });
+
+  it('still answers CONFLICT when the retry without notices is held too', async () => {
+    instructors('teacher-1');
+    reviewNotifications.mockResolvedValue(['notice-items']);
+    cancelled('TransactionConflict', 'None', 'None', 'TransactionConflict');
+
+    await expect(
+      callAsUser().postReview({ courseId: 'course-1', rating: 4 }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(transactionGo).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ['an edit', 'editReview', { courseId: 'course-1', rating: 5, version: 1 }],
     ['a delete', 'deleteReview', { courseId: 'course-1', version: 1 }],
