@@ -21,6 +21,7 @@ import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { asContentItemOutput } from '../helpers/content-item.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   initialVisibilityFields,
@@ -42,7 +43,6 @@ import {
   UpdateContentItemFileInputSchema,
   UpdateContentItemFileOutputSchema,
 } from '../schema/index.js';
-import { asContentItemOutput } from './content-item-shared.js';
 
 // File items (#102): a document students download. The file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then copied into
