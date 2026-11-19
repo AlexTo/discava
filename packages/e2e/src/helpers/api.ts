@@ -139,10 +139,24 @@ export const connectLocalPayments = async (
 export const connectLocalStripe = async () => {
   const apiKey = 'sk_test_local';
   const runner = 'http://localhost:2024';
+  const authorization = `Bearer ${apiKey}`;
+  // A retried scenario must not leave an earlier endpoint behind: the stand-in
+  // delivers every event to each endpoint, signed with that endpoint's secret.
+  const existing = (await (
+    await fetch(`${runner}/v1/webhook_endpoints`, {
+      headers: { authorization },
+    })
+  ).json()) as { data?: { id: string }[] };
+  for (const { id } of existing.data ?? []) {
+    await fetch(`${runner}/v1/webhook_endpoints/${id}`, {
+      method: 'DELETE',
+      headers: { authorization },
+    });
+  }
   const response = await fetch(`${runner}/v1/webhook_endpoints`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${apiKey}`,
+      authorization,
       'content-type': 'application/x-www-form-urlencoded',
     },
     body: new URLSearchParams({
