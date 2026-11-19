@@ -272,7 +272,7 @@ export type StudentPortalComponentConfig = {
   domainNames?: string[];
   /** ACM certificate ARN for the custom domain names. Must be in us-east-1. */
   certificateArn?: string;
-  /** Let search engines index the landing pages. Default `false`; `true` only in production. When off, every response carries `noindex` */
+  /** Let search engines index the public pages. Default `false`. When off, every response carries `noindex` */
   allowSearchEngineIndexing?: boolean;
   /** Site name shown in page titles and social cards. Default `"Discava"` */
   siteName?: string;

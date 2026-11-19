@@ -9,12 +9,12 @@ import {
   type PageRendererEvent,
 } from './page-renderer/handler.js';
 
-// Local dev is closed to search engines; the e2e checks the tags with this.
 const PORT = Number(new URL(LOCAL_PAGE_RENDERER_URL).port);
 
 const render = createConfiguredPageRenderer();
 
-/** The deployed Function URL, locally: the same handler over plain HTTP. */
+// The deployed Function URL, locally: the same handler over plain HTTP. The
+// e2e reads crawler HTML from it; local dev is closed to search engines.
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', LOCAL_PAGE_RENDERER_URL);
   const event: PageRendererEvent = {

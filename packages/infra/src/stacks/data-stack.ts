@@ -165,10 +165,6 @@ export class DataStack extends Stack {
     return identity;
   }
 
-  // Keeps each user's core table record in step with Cognito (#230). Pre
-  // token generation runs on every sign-in, including an admin-created user's
-  // first, and on every token refresh; post-confirmation misses admin-created
-  // users, and managed login doesn't run post-authentication.
   private grantPageRenderer(studentPortal: StudentPortal) {
     if (!studentPortal.pageRendererRoleArn) {
       return;
@@ -186,6 +182,10 @@ export class DataStack extends Stack {
     RuntimeConfig.ensure(this).grantReadAppConfig(role);
   }
 
+  // Keeps each user's core table record in step with Cognito (#230). Pre
+  // token generation runs on every sign-in, including an admin-created user's
+  // first, and on every token refresh; post-confirmation misses admin-created
+  // users, and managed login doesn't run post-authentication.
   private syncUsersToCoreTable() {
     const preTokenGeneration = new EventsPreTokenGeneration(
       this,

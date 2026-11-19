@@ -32,7 +32,7 @@ const App = () => {
 
 // A landing page or profile from the page renderer arrives with its data in
 // the HTML: put it in the cache before the first render. Query keys don't
-// depend on the client, so this proxy's is never called.
+// depend on the client, so this proxy's client is never called.
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: retryQuery } },
 });
