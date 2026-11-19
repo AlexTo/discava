@@ -9,34 +9,26 @@ import { listAdminReviews, listReviewCourses, removeReview } from './review.js';
 
 const {
   courseGet,
-  courseByStatus,
+  courseQueryByStatus,
   courseRatingGet,
   reviewGet,
-  reviewByCourse,
+  reviewQueryByCourse,
   reviewWrites,
   transactionWrite,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseByStatus: vi.fn(),
-  courseRatingGet: vi.fn(),
-  reviewGet: vi.fn(),
-  reviewByCourse: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   reviewWrites: vi.fn(),
-  transactionWrite: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get', 'query.byStatus'],
+    courseRating: ['get'],
+    review: ['get', 'query.byCourse'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  reviewWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet, query: { byStatus: courseByStatus } },
-      courseRating: { get: courseRatingGet },
-      review: { get: reviewGet, query: { byCourse: reviewByCourse } },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { reviewWrites }),
+);
 
 const router = t.router({
   courses: listReviewCourses,
@@ -119,7 +111,7 @@ describe('every procedure', () => {
 
 describe('courses', () => {
   it('lists published courses then archived, with rating counts', async () => {
-    courseByStatus
+    courseQueryByStatus
       .mockReturnValueOnce(
         resolves([{ courseId: 'c2', title: 'Two', status: 'published' }]),
       )
@@ -138,13 +130,17 @@ describe('courses', () => {
         { courseId: 'c1', title: 'One', status: 'archived', ratingCount: 0 },
       ],
     });
-    expect(courseByStatus).toHaveBeenNthCalledWith(1, { status: 'published' });
-    expect(courseByStatus).toHaveBeenNthCalledWith(2, { status: 'archived' });
+    expect(courseQueryByStatus).toHaveBeenNthCalledWith(1, {
+      status: 'published',
+    });
+    expect(courseQueryByStatus).toHaveBeenNthCalledWith(2, {
+      status: 'archived',
+    });
     expect(courseRatingGet).toHaveBeenCalledTimes(1);
   });
 
   it('returns a cursor naming the query it stopped in', async () => {
-    courseByStatus.mockReturnValueOnce(
+    courseQueryByStatus.mockReturnValueOnce(
       resolves([{ courseId: 'c2', title: 'Two' }], 'next-page'),
     );
     courseRatingGet.mockReturnValue(resolves([]));
@@ -152,17 +148,17 @@ describe('courses', () => {
     const result = await callAs().courses({ limit: 1 });
 
     expect(result.cursor).toBe('published:next-page');
-    expect(courseByStatus).toHaveBeenCalledTimes(1);
+    expect(courseQueryByStatus).toHaveBeenCalledTimes(1);
   });
 
   it('resumes from a cursor in the archived query', async () => {
-    courseByStatus.mockReturnValueOnce(resolves([]));
+    courseQueryByStatus.mockReturnValueOnce(resolves([]));
     courseRatingGet.mockReturnValue(resolves([]));
 
     await callAs().courses({ cursor: 'archived:abc' });
 
-    expect(courseByStatus).toHaveBeenCalledWith({ status: 'archived' });
-    expect(courseByStatus).toHaveBeenCalledTimes(1);
+    expect(courseQueryByStatus).toHaveBeenCalledWith({ status: 'archived' });
+    expect(courseQueryByStatus).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a cursor it did not make', async () => {
@@ -174,7 +170,7 @@ describe('courses', () => {
 
 describe('list', () => {
   it('shows removed reviews with their reason, and no email or version', async () => {
-    reviewByCourse.mockReturnValue(
+    reviewQueryByCourse.mockReturnValue(
       resolves([
         {
           ...visible,

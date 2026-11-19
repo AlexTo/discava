@@ -23,49 +23,24 @@ const {
   contentItemPatch,
   contentItemPatchSet,
   contentItemPatchWhere,
-} = vi.hoisted(() => ({
-  transactionWrite: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   transactionGo: vi.fn(),
-  moduleGet: vi.fn(),
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  lessonGet: vi.fn(),
-  contentItemQueryPrimary: vi.fn(),
-  contentItemCreate: vi.fn(),
-  contentItemGet: vi.fn(),
-  contentItemPatch: vi.fn(),
   contentItemPatchSet: vi.fn(),
   contentItemPatchWhere: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    module: ['get'],
+    lesson: ['get'],
+    contentItem: ['query.primary', 'create', 'get', 'patch'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-      },
-      module: {
-        get: moduleGet,
-      },
-      lesson: {
-        get: lessonGet,
-      },
-      contentItem: {
-        query: {
-          primary: contentItemQueryPrimary,
-        },
-        create: contentItemCreate,
-        get: contentItemGet,
-        patch: contentItemPatch,
-      },
-    },
-    transaction: {
-      write: transactionWrite,
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 const router = t.router({
   createContentItemQuiz,

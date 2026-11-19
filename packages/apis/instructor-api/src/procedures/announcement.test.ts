@@ -27,39 +27,34 @@ const {
   userGet,
   transactionWrite,
   transactionGo,
-} = vi.hoisted(() => ({
+  mockModule,
+} = await vi.hoisted(async () => ({
   announcementDeleteWrites: vi.fn(),
   announcementEditWrites: vi.fn(),
-  announcementGet: vi.fn(),
   announcementPage: vi.fn(),
   announcementWrites: vi.fn(),
   notifyCourseStudents: vi.fn(),
   publishNotification: vi.fn(),
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  userGet: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    announcement: ['get'],
+    course: ['get'],
+    courseInstructor: ['get'],
+    user: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  announcementDeleteWrites,
-  announcementEditWrites,
-  announcementPage,
-  announcementWrites,
-  notifyCourseStudents,
-  publishNotification,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      announcement: { get: announcementGet },
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      user: { get: userGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), {
+    announcementDeleteWrites,
+    announcementEditWrites,
+    announcementPage,
+    announcementWrites,
+    notifyCourseStudents,
+    publishNotification,
+  }),
+);
 
 const router = t.router({
   createAnnouncement,

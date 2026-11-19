@@ -25,57 +25,26 @@ const {
   transactionGo,
   bestEffortDeleteContentItemVideos,
   bestEffortCancelTranscodeJobs,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  moduleGet: vi.fn(),
-  lessonQueryPrimary: vi.fn(),
-  lessonCreate: vi.fn(),
-  lessonGet: vi.fn(),
-  lessonPatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   lessonPatchSet: vi.fn(),
-  lessonDelete: vi.fn(),
-  contentItemQueryPrimary: vi.fn(),
-  contentItemDelete: vi.fn(),
   contentItemDeleteWhere: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   bestEffortDeleteContentItemVideos: vi.fn(),
   bestEffortCancelTranscodeJobs: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    module: ['get'],
+    lesson: ['query.primary', 'create', 'get', 'patch', 'delete'],
+    contentItem: ['query.primary', 'delete'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-      },
-      module: {
-        get: moduleGet,
-      },
-      lesson: {
-        query: {
-          primary: lessonQueryPrimary,
-        },
-        create: lessonCreate,
-        get: lessonGet,
-        patch: lessonPatch,
-        delete: lessonDelete,
-      },
-      contentItem: {
-        query: {
-          primary: contentItemQueryPrimary,
-        },
-        delete: contentItemDelete,
-      },
-    },
-    transaction: {
-      write: transactionWrite,
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,

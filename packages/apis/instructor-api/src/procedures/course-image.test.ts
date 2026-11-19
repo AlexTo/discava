@@ -23,34 +23,24 @@ const {
   headPublicMediaObject,
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  coursePatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   coursePatchSet: vi.fn(),
   coursePatchRemove: vi.fn(),
   coursePatchGo: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  courseInstructorQueryPrimary: vi.fn(),
-  courseInstructorPatch: vi.fn(),
   presignJpegUpload: vi.fn(),
   headPublicMediaObject: vi.fn(),
   attachPublicMediaObject: vi.fn(),
   bestEffortDetachPublicMediaObject: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get', 'patch'],
+    courseInstructor: ['get', 'query.primary', 'patch'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet, patch: coursePatch },
-      courseInstructor: {
-        get: courseInstructorGet,
-        query: { primary: courseInstructorQueryPrimary },
-        patch: courseInstructorPatch,
-      },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual()),
+);
 
 vi.mock('../helpers/public-media-client.js', () => ({
   presignJpegUpload,

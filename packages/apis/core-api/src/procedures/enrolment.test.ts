@@ -16,25 +16,23 @@ const {
   transactionGo,
   courseGet,
   restoreFreeEnrolment,
-} = vi.hoisted(() => ({
-  enrolmentGet: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   enrolmentCreate: vi.fn(),
   courseCheck: vi.fn(),
   courseCheckWhere: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
-  courseGet: vi.fn(),
   restoreFreeEnrolment: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    enrolment: ['get'],
+    course: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  restoreFreeEnrolment,
-  createCoreTableService: vi.fn(async () => ({
-    entities: { enrolment: { get: enrolmentGet }, course: { get: courseGet } },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal(), { restoreFreeEnrolment }),
+);
 
 const router = t.router({ enrol, myEnrolment });
 

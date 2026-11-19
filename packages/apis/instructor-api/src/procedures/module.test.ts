@@ -28,65 +28,26 @@ const {
   transactionGo,
   bestEffortDeleteContentItemVideos,
   bestEffortCancelTranscodeJobs,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  courseInstructorQueryPrimary: vi.fn(),
-  courseInstructorPatch: vi.fn(),
-  moduleQueryPrimary: vi.fn(),
-  moduleCreate: vi.fn(),
-  moduleGet: vi.fn(),
-  moduleDelete: vi.fn(),
-  modulePatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   modulePatchSet: vi.fn(),
-  lessonQueryPrimary: vi.fn(),
-  lessonDelete: vi.fn(),
-  contentItemQueryPrimary: vi.fn(),
-  contentItemDelete: vi.fn(),
   contentItemDeleteWhere: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   bestEffortDeleteContentItemVideos: vi.fn(),
   bestEffortCancelTranscodeJobs: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get', 'query.primary', 'patch'],
+    module: ['query.primary', 'create', 'get', 'delete', 'patch'],
+    lesson: ['query.primary', 'delete'],
+    contentItem: ['query.primary', 'delete'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-        query: { primary: courseInstructorQueryPrimary },
-        patch: courseInstructorPatch,
-      },
-      module: {
-        query: {
-          primary: moduleQueryPrimary,
-        },
-        create: moduleCreate,
-        get: moduleGet,
-        delete: moduleDelete,
-        patch: modulePatch,
-      },
-      lesson: {
-        query: {
-          primary: lessonQueryPrimary,
-        },
-        delete: lessonDelete,
-      },
-      contentItem: {
-        query: {
-          primary: contentItemQueryPrimary,
-        },
-        delete: contentItemDelete,
-      },
-    },
-    transaction: {
-      write: transactionWrite,
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,

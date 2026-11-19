@@ -31,45 +31,30 @@ const {
   getSignedUrl,
   getSignedCloudFrontFileUrl,
   scheduleTranscodeCleanup,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  moduleGet: vi.fn(),
-  lessonGet: vi.fn(),
-  contentItemQueryPrimary: vi.fn(),
-  contentItemCreate: vi.fn(),
-  contentItemGet: vi.fn(),
-  contentItemPatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   contentItemPatchSet: vi.fn(),
   contentItemPatchWhere: vi.fn(),
   courseCheck: vi.fn(),
   moduleCheck: vi.fn(),
   lessonCheck: vi.fn(),
-  transactionWrite: vi.fn(),
   s3Send: vi.fn(),
   getSignedUrl: vi.fn(),
   getSignedCloudFrontFileUrl: vi.fn(),
   scheduleTranscodeCleanup: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    module: ['get'],
+    lesson: ['get'],
+    contentItem: ['query.primary', 'create', 'get', 'patch'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      module: { get: moduleGet },
-      lesson: { get: lessonGet },
-      contentItem: {
-        query: { primary: contentItemQueryPrimary },
-        create: contentItemCreate,
-        get: contentItemGet,
-        patch: contentItemPatch,
-      },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 // Each command is a plain object tagged with its name, so a test can tell
 // what was sent. Function expressions, as they're constructed with `new`.

@@ -18,40 +18,28 @@ const {
   courseGet,
   courseInstructorGet,
   lessonGet,
-  postGet,
-  byUnanswered,
-  byReported,
+  discussionPostGet,
+  discussionPostQueryByUnanswered,
+  discussionPostQueryByReported,
   transactionWrite,
   transactionGo,
   discussionWrites,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  lessonGet: vi.fn(),
-  postGet: vi.fn(),
-  byUnanswered: vi.fn(),
-  byReported: vi.fn(),
-  transactionWrite: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   transactionGo: vi.fn(),
   discussionWrites: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    lesson: ['get'],
+    discussionPost: ['get', 'query.byUnanswered', 'query.byReported'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  discussionWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      lesson: { get: lessonGet },
-      discussionPost: {
-        get: postGet,
-        query: { byUnanswered, byReported },
-      },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal(), { discussionWrites }),
+);
 
 const router = t.router({
   unanswered,
@@ -111,9 +99,9 @@ const ref = {
 };
 const replyRef = { ...ref, postId: 'r1' };
 
-// postGet answers by the post's kind and id, as the table does.
+// discussionPostGet answers by the post's kind and id, as the table does.
 const posts = (...all: Record<string, unknown>[]) =>
-  postGet.mockImplementation(
+  discussionPostGet.mockImplementation(
     (key: { courseId: string; kind: string; postId: string }) =>
       resolves(
         all.find(
@@ -216,11 +204,13 @@ describe('unanswered and reported', () => {
       ],
       'next',
     );
-    byUnanswered.mockReturnValue(query);
+    discussionPostQueryByUnanswered.mockReturnValue(query);
 
     const page = await callAs().unanswered({ courseId: COURSE_ID });
 
-    expect(byUnanswered).toHaveBeenCalledWith({ unanswered: COURSE_ID });
+    expect(discussionPostQueryByUnanswered).toHaveBeenCalledWith({
+      unanswered: COURSE_ID,
+    });
     expect(query.go).toHaveBeenCalledWith({ limit: 20, cursor: undefined });
     expect(page.items.map((p) => [p.postId, p.lessonTitle])).toEqual([
       ['q1', 'Title of l1'],
@@ -244,7 +234,7 @@ describe('unanswered and reported', () => {
   });
 
   it('returns an empty page without reading lessons', async () => {
-    byUnanswered.mockReturnValue(resolves([]));
+    discussionPostQueryByUnanswered.mockReturnValue(resolves([]));
 
     expect(await callAs().unanswered({ courseId: COURSE_ID })).toEqual({
       items: [],
@@ -254,7 +244,7 @@ describe('unanswered and reported', () => {
 
   it('pages with the cursor it is given', async () => {
     const query = resolves([stored()]);
-    byUnanswered.mockReturnValue(query);
+    discussionPostQueryByUnanswered.mockReturnValue(query);
     const cursor = encode({ pk: `$core#courseid_${COURSE_ID}` });
 
     const page = await callAs().unanswered({ courseId: COURSE_ID, cursor });
@@ -275,13 +265,13 @@ describe('unanswered and reported', () => {
       await expect(
         callAs()[name]({ courseId: COURSE_ID, cursor: 'not-a-cursor' }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-      expect(byUnanswered).not.toHaveBeenCalled();
-      expect(byReported).not.toHaveBeenCalled();
+      expect(discussionPostQueryByUnanswered).not.toHaveBeenCalled();
+      expect(discussionPostQueryByReported).not.toHaveBeenCalled();
     },
   );
 
   it('gives reportCount as the size of the set and never the reporters', async () => {
-    byUnanswered.mockReturnValue(resolves([stored()]));
+    discussionPostQueryByUnanswered.mockReturnValue(resolves([stored()]));
 
     const { items } = await callAs().unanswered({ courseId: COURSE_ID });
 
@@ -296,13 +286,15 @@ describe('unanswered and reported', () => {
     });
   });
 
-  it('lists reported questions and replies from the byReported index', async () => {
+  it('lists reported questions and replies from the discussionPostQueryByReported index', async () => {
     const query = resolves([stored(), reply()]);
-    byReported.mockReturnValue(query);
+    discussionPostQueryByReported.mockReturnValue(query);
 
     const { items } = await callAs().reported({ courseId: COURSE_ID });
 
-    expect(byReported).toHaveBeenCalledWith({ reported: COURSE_ID });
+    expect(discussionPostQueryByReported).toHaveBeenCalledWith({
+      reported: COURSE_ID,
+    });
     expect(query.go).toHaveBeenCalledWith({ limit: 20, cursor: undefined });
     expect(items.map((p) => [p.kind, p.threadId, p.postId])).toEqual([
       ['question', 'q1', 'q1'],
@@ -312,7 +304,7 @@ describe('unanswered and reported', () => {
   });
 
   it('gives a deleted post no text', async () => {
-    byReported.mockReturnValue(
+    discussionPostQueryByReported.mockReturnValue(
       resolves([
         stored({ state: 'deleted', title: undefined, body: undefined }),
       ]),
@@ -326,7 +318,7 @@ describe('unanswered and reported', () => {
   });
 
   it('marks a question answered by an accepted answer or an instructor reply', async () => {
-    byUnanswered.mockReturnValue(
+    discussionPostQueryByUnanswered.mockReturnValue(
       resolves([
         stored({ acceptedPostId: 'r1' }),
         stored({ postId: 'q2', instructorReplyCount: 1 }),
@@ -347,7 +339,7 @@ const ops = () => discussionWrites.mock.calls.map(([, op]) => op);
 describe('hide and unhide', () => {
   it('hides a shown question and returns it', async () => {
     posts(stored(), stored({ state: 'hidden' }));
-    postGet
+    discussionPostGet
       .mockReturnValueOnce(resolves(stored()))
       .mockReturnValueOnce(resolves(stored({ state: 'hidden' })));
     transactionWrite.mockImplementation((build: any) => {
@@ -472,7 +464,7 @@ describe('hide and unhide', () => {
 
   it('decides on fresh state after a cancelled transaction', async () => {
     transactionGo.mockResolvedValueOnce({ canceled: true });
-    postGet
+    discussionPostGet
       .mockReturnValueOnce(resolves(stored()))
       .mockReturnValueOnce(resolves(stored({ state: 'hidden' })));
 

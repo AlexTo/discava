@@ -20,37 +20,25 @@ const {
   transactionGo,
   bestEffortDeleteContentItemVideos,
   bestEffortCancelTranscodeJobs,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  contentItemGet: vi.fn(),
-  lessonGet: vi.fn(),
-  contentItemDelete: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   contentItemDeleteWhere: vi.fn(),
   courseCheck: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   bestEffortDeleteContentItemVideos: vi.fn(),
   bestEffortCancelTranscodeJobs: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    contentItem: ['get', 'delete'],
+    lesson: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-      },
-      contentItem: {
-        get: contentItemGet,
-        delete: contentItemDelete,
-      },
-      lesson: { get: lessonGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 // bestEffortDeleteContentItemVideos's own error-swallowing/bucket-selection
 // behavior is covered directly in helpers/s3-client.test.ts; here it's just a

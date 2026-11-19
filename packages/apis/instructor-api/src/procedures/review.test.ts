@@ -14,33 +14,26 @@ import {
 const {
   courseInstructorGet,
   reviewGet,
-  reviewByCourse,
+  reviewQueryByCourse,
   userGet,
   reviewWrites,
   transactionWrite,
   transactionGo,
-} = vi.hoisted(() => ({
-  courseInstructorGet: vi.fn(),
-  reviewGet: vi.fn(),
-  reviewByCourse: vi.fn(),
-  userGet: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   reviewWrites: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    courseInstructor: ['get'],
+    review: ['get', 'query.byCourse'],
+    user: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  reviewWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      courseInstructor: { get: courseInstructorGet },
-      review: { get: reviewGet, query: { byCourse: reviewByCourse } },
-      user: { get: userGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { reviewWrites }),
+);
 
 const router = t.router({
   list: listReviews,
@@ -148,11 +141,11 @@ describe('list', () => {
 
   it('returns visible reviews newest first with the reviewer ID and no email', async () => {
     const byCourse = page([answered], null);
-    reviewByCourse.mockReturnValue(byCourse);
+    reviewQueryByCourse.mockReturnValue(byCourse);
 
     const result = await callAs().list({ courseId: 'course-1' });
 
-    expect(reviewByCourse).toHaveBeenCalledWith({ courseId: 'course-1' });
+    expect(reviewQueryByCourse).toHaveBeenCalledWith({ courseId: 'course-1' });
     expect(byCourse.go).toHaveBeenCalledWith(
       expect.objectContaining({ order: 'desc', limit: 20 }),
     );
@@ -182,7 +175,7 @@ describe('list', () => {
       .fn()
       .mockResolvedValueOnce({ data: [removed], cursor: 'c1' })
       .mockResolvedValueOnce({ data: [stored], cursor: 'c2' });
-    reviewByCourse.mockReturnValue({ go });
+    reviewQueryByCourse.mockReturnValue({ go });
 
     const result = await callAs().list({ courseId: 'course-1', limit: 1 });
 

@@ -17,27 +17,22 @@ const {
   courseInstructorGet,
   categoryQueryPrimary,
   courseCatalogueWrites,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  categoryQueryPrimary: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   courseCatalogueWrites: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    category: ['query.primary'],
+  }),
 }));
 
 // The helper's own rules (normalising, ranges, the category check) are tested
 // in core-table; here it is replaced to check what the procedure hands it and
 // how it maps its errors.
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  courseCatalogueWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      category: { query: { primary: categoryQueryPrimary } },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { courseCatalogueWrites }),
+);
 
 const router = t.router({ updateCourseCatalogue, listActiveCategories });
 

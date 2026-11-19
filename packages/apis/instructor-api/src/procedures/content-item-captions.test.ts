@@ -28,13 +28,8 @@ const {
   putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
-} = vi.hoisted(() => ({
-  courseInstructorGet: vi.fn(),
-  courseGet: vi.fn(),
-  moduleGet: vi.fn(),
-  lessonGet: vi.fn(),
-  contentItemGet: vi.fn(),
-  contentItemPatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   patchSet: vi.fn(),
   patchRemove: vi.fn(),
   patchWhere: vi.fn(),
@@ -45,20 +40,18 @@ const {
   putCaptionFile: vi.fn(),
   bestEffortDeleteCaptionFile: vi.fn(),
   bestEffortDeleteCaptionUpload: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    courseInstructor: ['get'],
+    course: ['get'],
+    module: ['get'],
+    lesson: ['get'],
+    contentItem: ['get', 'patch'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      courseInstructor: { get: courseInstructorGet },
-      course: { get: courseGet },
-      module: { get: moduleGet },
-      lesson: { get: lessonGet },
-      contentItem: { get: contentItemGet, patch: contentItemPatch },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock(
   '@discava/common-server-utils/lesson-files',
