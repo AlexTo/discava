@@ -16,6 +16,7 @@
     "@aws-sdk/client-secrets-manager": "catalog:",
     "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
+    "@discava/common-infra-config": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@trpc/server": "catalog:",
     "aws-xray-sdk-core": "catalog:",

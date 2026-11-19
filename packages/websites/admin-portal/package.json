@@ -19,7 +19,8 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-oidc-context": "catalog:",
-    "tailwindcss": "catalog:"
+    "tailwindcss": "catalog:",
+    "@discava/common-infra-config": "workspace:*"
   },
   "devDependencies": {
     "@smithy/types": "catalog:",

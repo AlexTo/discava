@@ -15,6 +15,9 @@
   "references": [
     {
       "path": "../../databases/core-table/tsconfig.lib.json"
+    },
+    {
+      "path": "../infra-config/tsconfig.lib.json"
     }
   ],
   "exclude": [

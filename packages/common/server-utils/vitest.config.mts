@@ -9,6 +9,9 @@ export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/common/server-utils',
   resolve: {
+    // @discava/common-infra-config/* resolves through tsconfig `paths`, which
+    // Vite ignores unless asked.
+    tsconfigPaths: true,
     alias: {
       // @discava/core-table has no package.json `main`/`exports`, so it
       // resolves for tsc via tsconfig `paths` but not for Vite; alias it

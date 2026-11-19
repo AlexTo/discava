@@ -41,16 +41,19 @@
   ],
   "references": [
     {
-      "path": "../../common/web-utils/tsconfig.lib.json"
+      "path": "../../common/infra-config/tsconfig.lib.json"
     },
     {
       "path": "../../apis/core-api/tsconfig.lib.json"
     },
     {
-      "path": "../../apis/admin-api/tsconfig.lib.json"
+      "path": "../../common/web-utils/tsconfig.lib.json"
     },
     {
       "path": "../../common/shadcn/tsconfig.lib.json"
+    },
+    {
+      "path": "../../apis/admin-api/tsconfig.lib.json"
     }
   ]
 }
