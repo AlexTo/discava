@@ -30,7 +30,7 @@
 
 ---
 
-**Discava is a free, open source learning platform that runs in your own AWS account.** Publish courses, teach with video, quizzes and assignments, and let learners track their progress, all with an AI assistant built in.
+**Discava is a free, open source learning platform that runs in your own AWS account.** Publish courses, teach with video, quizzes and assignments, and let learners track their progress. An AI assistant is coming as part of the core experience.
 
 ## What you get
 
