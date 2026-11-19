@@ -5,8 +5,9 @@
 import { errors as openSearchErrors } from '@opensearch-project/opensearch';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildSuggestRequest } from '../helpers/suggest-query.js';
 import { t } from '../init.js';
-import { publicSearchCourses } from './search.js';
+import { publicSearchCourses, publicSuggestCourses } from './search.js';
 
 const { searchMock, categoryQuery } = vi.hoisted(() => ({
   searchMock: vi.fn(),
@@ -25,7 +26,10 @@ vi.mock('@discava/search', async (importOriginal) => ({
   getOpenSearchClient: vi.fn(async () => ({ search: searchMock })),
 }));
 
-const router = t.router({ publicSearch: publicSearchCourses });
+const router = t.router({
+  publicSearch: publicSearchCourses,
+  publicSuggest: publicSuggestCourses,
+});
 const caller = t.createCallerFactory(router);
 
 const callAnonymously = () =>
@@ -417,5 +421,71 @@ describe('course.publicSearch', () => {
       expect(result.items).toEqual([]);
       expect(result.cursor).toBeNull();
     });
+  });
+});
+
+describe('course.publicSuggest', () => {
+  it('maps hits to suggestions for an anonymous caller', async () => {
+    searchMock.mockResolvedValue(
+      esResponse([
+        {
+          _source: {
+            courseId: 'c1',
+            title: 'Python for Data Analysis',
+            imageKey: 'courses/c1/image.png',
+          },
+        },
+        { _source: { courseId: 'c2', title: 'Python Basics' } },
+      ]),
+    );
+
+    const result = await callAnonymously().publicSuggest({ q: ' pyth ' });
+
+    expect(result).toEqual({
+      items: [
+        {
+          courseId: 'c1',
+          title: 'Python for Data Analysis',
+          imageKey: 'courses/c1/image.png',
+        },
+        { courseId: 'c2', title: 'Python Basics' },
+      ],
+    });
+  });
+
+  it('returns no items when nothing matches', async () => {
+    searchMock.mockResolvedValue(esResponse([]));
+
+    expect(await callAnonymously().publicSuggest({ q: 'zzz' })).toEqual({
+      items: [],
+    });
+  });
+
+  it('sends the suggest request to the courses index without reading categories', async () => {
+    searchMock.mockResolvedValue(esResponse([]));
+
+    await callAnonymously().publicSuggest({ q: 'pyth' });
+
+    const [[request, options]] = searchMock.mock.calls;
+    expect(request.index).toBe('courses');
+    expect(request.body).toEqual(buildSuggestRequest({ q: 'pyth' }));
+    expect(options.requestTimeout).toBe(3_000);
+    expect(categoryQuery).not.toHaveBeenCalled();
+  });
+
+  it('turns a cold-start timeout into a clear, retriable error', async () => {
+    searchMock.mockRejectedValue(
+      new openSearchErrors.TimeoutError('Request timed out', {} as never),
+    );
+
+    await expect(
+      callAnonymously().publicSuggest({ q: 'pyth' }),
+    ).rejects.toMatchObject({ code: 'TIMEOUT' });
+  });
+
+  it('refuses text under 3 characters', async () => {
+    await expect(
+      callAnonymously().publicSuggest({ q: 'py' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

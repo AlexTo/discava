@@ -7,6 +7,7 @@ import { errors as openSearchErrors } from '@opensearch-project/opensearch';
 import { TRPCError } from '@trpc/server';
 import { readCategories } from '../helpers/category-list.js';
 import { buildSearchRequest } from '../helpers/search-query.js';
+import { buildSuggestRequest } from '../helpers/suggest-query.js';
 import { publicSearchProcedure } from '../init.js';
 import {
   DURATION_BANDS,
@@ -14,6 +15,8 @@ import {
   type ISearchFacets,
   SearchCoursesInputSchema,
   SearchCoursesOutputSchema,
+  SuggestCoursesInputSchema,
+  SuggestCoursesOutputSchema,
 } from '../schema/index.js';
 
 // A NextGen OpenSearch Serverless collection scales to zero after 10 minutes
@@ -24,6 +27,21 @@ import {
 // message. Timing the request out first, with room to spare under the
 // Lambda's budget, lets this return a clear, retriable error instead.
 const SEARCH_REQUEST_TIMEOUT_MS = 8_000;
+
+// Suggestions fire on every typing pause, so a cold search collection must
+// fail fast and quietly (research R-6) instead of holding the box for 8s.
+const SUGGEST_REQUEST_TIMEOUT_MS = 3_000;
+
+const mapSearchError = (error: unknown): never => {
+  if (error instanceof openSearchErrors.TimeoutError) {
+    throw new TRPCError({
+      code: 'TIMEOUT',
+      message: 'Search is starting up. Try again in a few seconds.',
+      cause: error,
+    });
+  }
+  throw error;
+};
 
 type Bucket = { key: string | number; doc_count: number };
 type Aggregations = Record<string, { values?: { buckets?: Bucket[] } }>;
@@ -111,16 +129,7 @@ export const publicSearchCourses = publicSearchProcedure
           },
           { requestTimeout: SEARCH_REQUEST_TIMEOUT_MS },
         )
-        .catch((error: unknown) => {
-          if (error instanceof openSearchErrors.TimeoutError) {
-            throw new TRPCError({
-              code: 'TIMEOUT',
-              message: 'Search is starting up. Try again in a few seconds.',
-              cause: error,
-            });
-          }
-          throw error;
-        }),
+        .catch(mapSearchError),
       readCategories(ctx.coreTable),
     ]);
 
@@ -170,5 +179,34 @@ export const publicSearchCourses = publicSearchProcedure
         input,
         categories,
       ),
+    };
+  });
+
+/**
+ * Title suggestions for the search box: up to 10 published courses whose title
+ * starts with the typed words. Read from the index alone, with no core-table
+ * read, so it stays cheap enough to call on every typing pause.
+ */
+export const publicSuggestCourses = publicSearchProcedure
+  .input(SuggestCoursesInputSchema)
+  .output(SuggestCoursesOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const { body } = await ctx
+      .search!.search(
+        {
+          index: resolveIndexName('courses'),
+          body: buildSuggestRequest(input) as never,
+        },
+        { requestTimeout: SUGGEST_REQUEST_TIMEOUT_MS },
+      )
+      .catch(mapSearchError);
+
+    const hits = body.hits.hits as { _source: ICourseDocument }[];
+    return {
+      items: hits.map(({ _source: doc }) => ({
+        courseId: doc.courseId,
+        title: doc.title,
+        ...(doc.imageKey && { imageKey: doc.imageKey }),
+      })),
     };
   });

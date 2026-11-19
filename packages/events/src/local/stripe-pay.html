@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Local Stripe checkout</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 28rem; margin: 4rem auto; padding: 0 1rem; }
+      .card { border: 1px solid #ccc; border-radius: 0.5rem; padding: 1.5rem; }
+      .error { color: #b00020; }
+      button { font: inherit; padding: 0.5rem 1rem; margin-right: 0.5rem; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <p><small>Local Stripe stand-in: no real payment is made.</small></p>
+      <h1>{{title}}</h1>
+      <p data-testid="amount">{{amount}}</p>
+      <p class="error" role="alert">{{error}}</p>
+      <form method="post" action="/stripe/pay/{{sessionId}}/pay" style="display:inline">
+        <button type="submit">Pay</button>
+      </form>
+      <form method="post" action="/stripe/pay/{{sessionId}}/decline" style="display:inline">
+        <button type="submit">Decline card</button>
+      </form>
+      <form method="post" action="/stripe/pay/{{sessionId}}/cancel" style="display:inline">
+        <button type="submit">Cancel</button>
+      </form>
+    </div>
+  </body>
+</html>

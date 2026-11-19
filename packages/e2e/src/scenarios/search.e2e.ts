@@ -10,6 +10,7 @@ import { screenshot } from '../helpers/screenshots.js';
 import {
   expectAfterReloads,
   searchWithSiteSearch,
+  suggestInSiteSearch,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { uniqueName } from '../helpers/users.js';
@@ -40,6 +41,64 @@ test('a published course is searchable, and gone once archived', async ({
     await expectAfterReloads(page, async () => {
       await expect(page.getByRole('link', { name: title })).toHaveCount(0);
     });
+  });
+});
+
+// Suggestions under the search box (#587): the same index as course.publicSearch,
+// so a published course takes a few seconds to appear and to go, and the
+// check reloads until it does.
+test('suggestions offer a published course by the start of its title', async ({
+  page,
+}) => {
+  const title = uniqueName('Suggestible course');
+  // The first word and the start of the next, as someone typing would stop.
+  const [first, second] = title.split(' ');
+  const typed = `${first} ${second?.slice(0, 3)}`;
+  const instructor = await apiUser('Sue', ['instructor']);
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  await instructor.instructor.course.create.mutate({
+    title: `${title} draft`,
+  });
+
+  await test.step('it is offered, and a draft with the same start is not', async () => {
+    await page.goto(PORTALS.student);
+    await expectAfterReloads(page, async () => {
+      const suggestions = await suggestInSiteSearch(page, typed);
+      await expect(
+        suggestions.getByRole('button', { name: title, exact: true }),
+      ).toBeVisible({ timeout: 2_000 });
+    });
+    await expect(
+      page.getByTestId('site-search-suggestions').getByRole('button', {
+        name: `${title} draft`,
+      }),
+    ).toHaveCount(0);
+    await screenshot(page, 'search-suggestions-open');
+  });
+
+  await test.step('choosing it opens the course page', async () => {
+    await page
+      .getByTestId('site-search-suggestions')
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    await page.waitForURL(new RegExp(`/learn/${courseId}`));
+    await expect(
+      page.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await screenshot(page, 'search-suggestion-course-page');
+  });
+
+  await test.step('archiving it removes it from the suggestions', async () => {
+    await instructor.instructor.course.archive.mutate({ courseId });
+    await expect(async () => {
+      await page.goto(PORTALS.student);
+      await page.getByRole('searchbox', { name: 'Search courses' }).fill(typed);
+      // Past the pause, so a suggestion would be showing by now.
+      await page.waitForTimeout(1_000);
+      await expect(
+        page.getByRole('button', { name: title, exact: true }),
+      ).toHaveCount(0);
+    }).toPass({ timeout: 30_000 });
   });
 });
 

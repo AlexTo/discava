@@ -20,6 +20,9 @@ import {
   createCourseStatsEntity,
   createDiscussionPostEntity,
   createDiscussionVoteEntity,
+  createEarningDayEntity,
+  createEarningEntryEntity,
+  createEarningOrderEntity,
   createEnrolmentEntity,
   createInstructorProfileEntity,
   createItemCompletionEntity,
@@ -33,6 +36,8 @@ import {
   createOrderEntity,
   createPaymentChangeEntity,
   createPaymentConnectionEntity,
+  createPayoutAccountEntity,
+  createPayoutEntity,
   createPeriodStatsEntity,
   createProfileHandleClaimEntity,
   createProgressEntity,
@@ -93,6 +98,11 @@ export const createCoreTableService = async () => {
     profileHandleClaim,
     coupon,
     couponRedemption,
+    payoutAccount,
+    earningEntry,
+    earningDay,
+    earningOrder,
+    payout,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -133,6 +143,11 @@ export const createCoreTableService = async () => {
     createProfileHandleClaimEntity(),
     createCouponEntity(),
     createCouponRedemptionEntity(),
+    createPayoutAccountEntity(),
+    createEarningEntryEntity(),
+    createEarningDayEntity(),
+    createEarningOrderEntity(),
+    createPayoutEntity(),
   ]);
 
   return new Service({
@@ -175,6 +190,11 @@ export const createCoreTableService = async () => {
     profileHandleClaim,
     coupon,
     couponRedemption,
+    payoutAccount,
+    earningEntry,
+    earningDay,
+    earningOrder,
+    payout,
   });
 };
 

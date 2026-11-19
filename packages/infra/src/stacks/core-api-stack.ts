@@ -8,11 +8,13 @@ import {
   CoreTable,
   EventsNotificationUnsubscribe,
   EventsSearchReindex,
+  ImportedStripeSecrets,
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
   RuntimeConfig,
   SearchCollection,
+  type StripeSecrets,
   StudentPortal,
   UserIdentity,
 } from '@discava/common-constructs';
@@ -22,7 +24,7 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
-import { publicThrottle } from './api-limits.js';
+import { publicSuggestThrottle, publicThrottle } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 import { privilegedHandler, trpcApiProps } from './trpc-api-props.js';
@@ -37,6 +39,8 @@ export interface CoreApiStackProps extends StackProps {
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** The Stripe secrets; checkout reads the API key only. */
+  readonly stripeSecrets: StripeSecrets;
   /** Signs the unsubscribe links in notification emails; the unsubscribe route verifies them. */
   readonly notificationUnsubscribeSecret: ISecret;
   /** Lesson videos, whose signing key contentItem.videoUrl signs cookies with. */
@@ -69,6 +73,7 @@ export class CoreApiStack extends Stack {
       identity,
       coreTable,
       searchCollection,
+      stripeSecrets,
       notificationUnsubscribeSecret,
       lessonMediaBucket,
       lessonMediaUploadBucket,
@@ -112,6 +117,7 @@ export class CoreApiStack extends Stack {
       })),
       identity,
       publicThrottle: publicThrottle(coreApiConfig),
+      publicSuggestThrottle: publicSuggestThrottle(coreApiConfig),
       ...apiProps,
     });
     // With a custom domain the base path mapping serves the API without the
@@ -136,6 +142,20 @@ export class CoreApiStack extends Stack {
         this.privilegedHandler(integrations, op),
       );
     }
+
+    // The secrets are imported, so the grant lands on the function's role and
+    // not on the Data stack's key policy (a cycle otherwise).
+    const secrets = new ImportedStripeSecrets(
+      this,
+      'StripeSecrets',
+      stripeSecrets,
+    );
+    const checkout = this.privilegedHandler(integrations, 'payment.checkout');
+    secrets.grantReadApiKey(checkout);
+    checkout.addEnvironment(
+      'STRIPE_API_KEY_SECRET_ARN',
+      secrets.apiKey.secretArn,
+    );
 
     this.grantAssignmentSubmitAccess(
       integrations,
