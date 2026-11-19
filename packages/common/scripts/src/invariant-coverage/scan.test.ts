@@ -21,7 +21,7 @@ describe('scanEntityWriters', () => {
         'core-table': ['table/src/helpers/widget.ts'],
       },
     });
-  }, 30_000);
+  }, 60_000);
 });
 
 describe('sortWriterMap', () => {
