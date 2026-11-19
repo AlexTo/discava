@@ -54,11 +54,11 @@ index -> search: "index / delete"
 
 The core table's stream has one reader, the <Link path="design/stream-event-router">stream router</Link>, which sends each change to the queue of every feature registered for it. Search indexing is one such feature (`search-indexing`), with its own filter (`SEARCH_STREAM_FILTERS`, in `core-table/src/helpers`), queue and failure queue, so a failure in it never blocks progress recalculation.
 
-`search-indexing.ts` re-derives a course's document from the record's full image rather than applying the stream record as a diff, the same philosophy as progress recalculation:
+`search-indexing.ts` uses a change only to learn which course changed, then reads that course as the table holds it now, the same philosophy as progress recalculation:
 
-- A **course** record carries its own `status`; if it's `'published'` the document is written (validated against `CourseDocumentSchema` first), otherwise it's deleted. Everything the document needs is on the record, so the Lambda never reads the table.
-- Every `REMOVE` deletes the course's document by its old image's key.
-- A document's id is always the course's own key (`courseId`), so a replayed or retried record writes the same document again rather than a duplicate -- idempotent, the same requirement the core table's own writers hold to.
+- A **course** or **course rating** record names its `courseId`. Each distinct course in the batch is read once by key, consistently, with its rating tally.
+- If the course is `'published'`, its document is written (built by `toCourseDocument`, validated against `CourseDocumentSchema`); if it isn't published or is gone, its document is deleted.
+- A document's id is always the course's own key (`courseId`), so a replayed, retried or reordered record converges on the same document rather than a duplicate -- idempotent, the same requirement the core table's own writers hold to.
 
 A freshly created index starts empty: the stream only carries changes made after its mapping exists, so a course published before then isn't searchable until it's next written.
 
@@ -90,7 +90,7 @@ It rebuilds every published course's document, with the fields, from the course 
 
 ## The search procedure
 
-`core-api`'s `course.publicSearch` is built on a hand-written `searchProcedure` middleware (`packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table middleware -- the `connection` generator has no tRPC → OpenSearch combination yet.
+`core-api`'s `course.publicSearch` is built on `publicSearchProcedure` (in `src/init.ts`), which adds a hand-written search plugin (`createSearchPlugin`, in `packages/apis/core-api/src/middleware/search.ts`), the same pattern as `courseProcedure`'s core-table plugin -- the `connection` generator has no tRPC → OpenSearch combination yet.
 
 It's public, like `course.publicList`: a signed-out caller can search too. Visibility is enforced twice, once at index time (above) and again in the query itself, which always filters to `status: 'published'` even though every indexed course already is one. A bug in one isn't then the only thing standing between a caller and a draft or archived course.
 

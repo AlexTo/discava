@@ -12,7 +12,7 @@ const { containerEngine, containerName, image, port } = JSON.parse(
 // Single-node, security plugin disabled (local dev only -- it has no SigV4
 // signing and no local equivalent of the collection's data access policy
 // anyway), memory capped so it doesn't dominate a laptop running everything
-// else in parallel (#53's "Local dev" scope note).
+// else in parallel.
 runLocalContainer({
   containerEngine,
   containerName,

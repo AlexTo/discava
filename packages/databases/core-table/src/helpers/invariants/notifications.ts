@@ -12,7 +12,7 @@ import { uuidV7Time } from '../uuid-v7.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
-// 27-31 (notifications). Written only by the helpers in notification.ts,
+// Notifications are written only by the helpers in notification.ts,
 // notification-read.ts and notification-email.ts; these rules catch a writer
 // that went around them. The hour-long limits give delivery's retries and the
 // stream router's failure queue time to finish before anything is reported.

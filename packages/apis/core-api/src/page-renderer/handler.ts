@@ -264,8 +264,6 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
   };
 };
 
-// --- Deployed wiring ---
-
 const tracer = new Tracer();
 const logger = new Logger();
 const metrics = new Metrics();

@@ -28,8 +28,8 @@ export const createCourseInstructorEntity = async () =>
         },
         // Denormalized from Course.updatedAt so byInstructor can list an
         // instructor's courses sorted by recency without an extra fetch per
-        // page. Kept in sync by every procedure that writes Course - see
-        // createCourse/archiveCourse in @discava/instructor-api.
+        // page. Every writer of Course copies it here (checked by
+        // checkInstructorCourseUpdatedAt).
         courseUpdatedAt: {
           type: 'string',
           required: true,

@@ -57,18 +57,17 @@ import { waitForQueue } from './wait-for-queue.js';
 // handler. Failures are logged, not retried (the stream features below have
 // their own retries and failure queues); AWS's batch bisecting is only on dev.
 //
-// Triggers so far:
+// Triggers:
 // - the core table's stream -> the stream router (the deployed router's
 //   code, over the same STREAM_FEATURES registry) -> one queue per feature ->
-//   one feature runner per feature, which batches by the registration (100
-//   records or 5 s), runs the handler (progress-recalculation,
-//   search-indexing) and retries a failed batch after the queue's visibility
-//   timeout, moving a message to the feature's failure queue after its
-//   maxReceiveCount receives. The queues are ElasticMQ's (Docker, in memory,
-//   so a restart empties them), the one stand-in for SQS. GET /router/queues,
+//   one feature runner per feature, which batches by the registration's
+//   `batch`, runs its handler (HANDLERS in router/handlers.ts) and retries a
+//   failed batch after the queue's visibility timeout, moving a message to
+//   the feature's failure queue after its maxReceiveCount receives. The
+//   queues are ElasticMQ's (Docker, in memory, so a restart empties them),
+//   the one stand-in for SQS. GET /router/queues,
 //   POST /router/redrive/<feature> and POST /router/fail/<feature> inspect,
-//   replay and fail them; reset-local-data
-//   also wipes the local OpenSearch container's indices (#53). The
+//   replay and fail them. The
 //   notification-delivery feature's handler gets its sender and portal URLs
 //   from the environment set below, and its emails (sendEmail posts them to
 //   POST /emails; the stand-in for SES) are kept in tmp/local-dev/emails/ and

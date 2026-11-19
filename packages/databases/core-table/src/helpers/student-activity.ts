@@ -8,8 +8,8 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
 type TransactionEntities = Parameters<TransactionWrites>[0];
 
-// A student's activity on an item: completing it, or submitting a quiz
-// attempt. Every procedure that records one builds its transaction from
+// A student's activity on an item: completing it, submitting a quiz attempt
+// or submitting an upload assignment. Every procedure that records one builds its transaction from
 // studentActivityWrites, so the rules other writers rely on are kept in one
 // place (#71):
 // - the course is published and the item, its lesson and its module are

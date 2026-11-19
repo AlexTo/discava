@@ -316,7 +316,7 @@ export const checkChildOrderClaimed = (
   ];
 };
 
-// 19 (assignments, #102). An assignment lesson holds exactly one content item,
+// An assignment lesson holds exactly one content item,
 // a quiz or an upload assignment, and an upload assignment is only ever in an
 // assignment lesson. Creating one writes the lesson and its item together, and
 // the item can't be added to, removed or archived separately from its lesson,

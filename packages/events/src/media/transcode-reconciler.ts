@@ -194,8 +194,8 @@ const reconcile = async (
 };
 
 /**
- * Finds lesson videos stuck waiting for a transcode and settles them (#125),
- * on a schedule. A video is stuck when its transcode finished but the
+ * Finds lesson videos and course previews stuck waiting for a transcode and
+ * settles them (#125), on a schedule. A video is stuck when its transcode finished but the
  * completion event never arrived or kept failing (#185), or when it never got
  * a job at all. Each is checked with MediaConvert and settled through the same
  * applyTranscodeOutcome as transcode-complete, or marked failed if nothing

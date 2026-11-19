@@ -14,7 +14,7 @@ Run `pnpm nx test @discava/common-scripts` to execute the unit tests via Vitest.
 
 To update snapshots, run the following command:
 
-`pnpm nx test @discava/common-scripts --configuration=update-snapshot`
+`pnpm nx test @discava/common-scripts -u`
 
 ## Run lint
 
@@ -22,12 +22,11 @@ Run `pnpm nx lint @discava/common-scripts`
 
 ### Fixable issues
 
-You can also automatiaclly fix some lint errors by running the following command:
+You can also automatically fix some lint errors by running the following command:
 
 `pnpm nx lint @discava/common-scripts --configuration=fix`
 
 ## Useful links
 
-- [common-scripts reference docs](TODO)
 - [Learn more about NX](https://nx.dev/getting-started/intro)
 

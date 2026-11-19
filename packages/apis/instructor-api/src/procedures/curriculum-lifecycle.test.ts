@@ -1748,8 +1748,6 @@ describe('DynamoDB 100-item transaction limit', () => {
     expect(transactionWrite).not.toHaveBeenCalled();
   });
 
-  // The module, a check on the items' (unpublished) lesson, and 98 items.
-  // The transaction also carries the check on the course.
   it('publishModule publishes exactly 100 records in one transaction', async () => {
     moduleGet.mockReturnValue(resolves({ ...module, visibility: 'hidden' }));
     // The module, the course check, the lesson check and 97 items.
@@ -2118,10 +2116,8 @@ describe('100-record boundary', () => {
       textItem(`item-${index}`, overrides),
     );
 
-  // Exactly 100 records still fits in one transaction.
-  // The transaction also carries the module's check, so a hidden lesson
-  // fits 98 hidden items.
-  // The transaction also carries the checks on the course and the module.
+  // Exactly 100 records still fits in one transaction: the course and module
+  // checks, the hidden lesson and 97 hidden items.
   it('publishLesson publishes a hidden lesson with 97 hidden items', async () => {
     lessonGet
       .mockReturnValueOnce(resolves({ ...lesson, visibility: 'hidden' }))
@@ -2519,7 +2515,8 @@ describe('a descendant archived while a publish is in flight', () => {
     contentItemQueryPrimary.mockReturnValue(
       resolves([textItem('item-a', { visibility: 'hidden' })]),
     );
-    // [module check, lesson check, item patch]: the item's condition failed.
+    // [course check, module check, lesson check, item patch]: a write past
+    // the ancestor checks (index 2 here) failed its condition.
     transactionGo.mockResolvedValue(refusedAt(2, 3));
 
     await expect(callAs().publishLesson(lessonKey)).rejects.toMatchObject({
@@ -2591,8 +2588,8 @@ describe('a descendant archived while a publish is in flight', () => {
     ]);
   });
 
-  // The transaction is [module check, lesson patch or check, item patch];
-  // the module is visible, so it's only checked.
+  // The transaction is [module check, lesson patch or check, item patch,
+  // course check]; the module is visible, so it's only checked.
   it.each([
     ['a lesson it publishes', 'hidden', 1],
     ["an item's lesson it doesn't publish", 'visible', 1],

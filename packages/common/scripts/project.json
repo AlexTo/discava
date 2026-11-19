@@ -216,11 +216,26 @@
       }
     },
     "test": {
+      "dependsOn": ["^build", "test-setup-stage"],
+      "inputs": ["default", "^default"]
+    },
+    "test-setup-stage": {
+      "executor": "nx:run-commands",
+      "cache": true,
       "inputs": [
-        "default",
-        "^default",
-        "{workspaceRoot}/scripts/setup-stage.sh"
-      ]
+        "{workspaceRoot}/scripts/setup-stage.sh",
+        "{projectRoot}/src/setup-stage.test.ts",
+        "{projectRoot}/vitest.setup-stage.config.mts",
+        {
+          "input": "production",
+          "projects": ["@discava/common-infra-config"]
+        },
+        "{workspaceRoot}/pnpm-lock.yaml"
+      ],
+      "options": {
+        "command": "vitest run --config vitest.setup-stage.config.mts",
+        "cwd": "{projectRoot}"
+      }
     }
   }
 }

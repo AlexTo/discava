@@ -32,7 +32,7 @@ export const createAuthPlugin = () => {
   return t.procedure.use(async (opts) => {
     // In the deployed API, API Gateway's CognitoUserPoolsAuthorizer flattens every
     // claim to a string before it reaches the handler. Locally there's no API Gateway
-    // (local-server.ts decodes the raw JWT payload itself), so claims keep their real
+    // (trpc-local-server.ts decodes the raw JWT payload itself), so claims keep their real
     // JSON types instead — e.g. `cognito:groups` is a string array, not a string.
     const claims = opts.ctx.event?.requestContext?.authorizer?.claims as
       | Record<string, unknown>

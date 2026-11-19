@@ -42,10 +42,9 @@ const getCoreTable = () => {
 // How many students are recalculated at once.
 const CONCURRENCY = 10;
 
-// The curriculum entities whose changes the event source mapping lets
-// through, alongside new item completions: see
-// CoreApiStack.createProgressRecalculationLambda for the filters. ElectroDB
-// stores each record's entity name in `__edb_e__`.
+// The curriculum entities whose changes reach this feature, alongside new
+// item completions: see PROGRESS_STREAM_FILTERS in core-table's stream
+// feature registry. ElectroDB stores each record's entity name in `__edb_e__`.
 const curriculumEntities = new Set<string>(CURRICULUM_ENTITIES);
 
 type StreamRecord = z.infer<typeof DynamoDBStreamSchema>['Records'][number];
@@ -122,8 +121,7 @@ const forEachLimited = async <T>(
 // The single writer of lesson progress and of the enrolment's
 // progressPercent, status and completedAt. Every run recomputes from scratch,
 // so a duplicate stream record or a burst of edits only produces the same
-// result again. A failure fails the batch, which the event source mapping
-// retries.
+// result again. A failure fails the batch, which the feature's queue retries.
 export const progressRecalculation = async (
   event: z.infer<typeof DynamoDBStreamSchema>,
 ): Promise<void> => {

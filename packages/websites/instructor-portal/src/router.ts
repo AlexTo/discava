@@ -5,9 +5,8 @@
 import { createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 
-// Exported so code outside the React tree (e.g. CognitoAuth's
-// onSigninCallback, which runs above <RouterProvider> and can't use the
-// useNavigate hook) can still navigate via router.navigate(...).
+// Exported so code outside the router (e.g. CognitoAuth's onReturn, which runs
+// above <RouterProvider> and can't use useNavigate) can navigate with it.
 export const router = createRouter({
   routeTree,
   context: { runtimeConfig: undefined, auth: undefined },
