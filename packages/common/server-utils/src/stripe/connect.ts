@@ -45,7 +45,8 @@ export class ConnectError extends Error {
   }
 }
 
-const KEY_PATTERN = /^(?:sk|rk)_(test|live)_[A-Za-z0-9]+$/;
+// Underscores too: the local Stripe stand-in's keys are `sk_test_local_2`.
+const KEY_PATTERN = /^(?:sk|rk)_(test|live)_[A-Za-z0-9_]+$/;
 
 export interface VerifiedKey {
   mode: 'test' | 'live';
