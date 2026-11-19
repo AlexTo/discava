@@ -1,0 +1,41 @@
+name: Agent Status
+
+# The steps agent-ci.yml and agent-review.yml share: post the
+# `software-factory/review` status that sends the implementing agent back to
+# fix a pull request (see those workflows for when and why). A caller passes
+# the Nx target that holds its rules and keeps its own trigger, `if`,
+# concurrency and permissions (`statuses`, `issues` and `pull-requests` write).
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: The @discava/common-scripts Nx target that posts the status.
+        required: true
+        type: string
+
+# A called workflow doesn't inherit the caller's env.
+env:
+  CI: "true"
+
+jobs:
+  post-status:
+    name: Post the status
+    runs-on: ubuntu-latest
+    steps:
+      # The default branch, never the pull request's code: this job holds a
+      # token that can write statuses, labels and comments, and it must not
+      # run anything the agent (or a contributor) wrote.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Post the status
+        run: pnpm nx run @discava/common-scripts:${{ inputs.target }}
+        env:
+          GH_TOKEN: ${{ github.token }}
