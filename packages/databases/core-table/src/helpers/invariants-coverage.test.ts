@@ -33,7 +33,7 @@ const factoryName = (entityFile: string) =>
     .join('')}Entity`;
 
 const invariants = readFileSync(
-  path.join(src, 'helpers', 'invariants.ts'),
+  path.join(src, 'helpers', 'invariants', 'snapshot.ts'),
   'utf8',
 );
 
@@ -46,8 +46,8 @@ describe('invariant coverage', () => {
           invariants,
         ),
     );
-    // A new entity: add its records to TableSnapshot in helpers/invariants.ts
-    // (and a check for each rule it keeps), or list it in NO_INVARIANTS above.
+    // A new entity: add its records to TableSnapshot and SNAPSHOT_ENTITIES in
+    // helpers/invariants/snapshot.ts (and a check for each rule it keeps), or list it in NO_INVARIANTS above.
     expect(missing).toEqual([]);
   });
 

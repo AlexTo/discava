@@ -33,12 +33,12 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@discava/common-shadcn/components/ui/sidebar';
+import Config from '@discava/common-web-utils/app-config';
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import * as React from 'react';
 import { useAuth } from 'react-oidc-context';
-import Config from '../../config';
-import { useRuntimeConfig } from '../../hooks/useRuntimeConfig';
 import { AppSidebar } from '../app-sidebar';
 import { NotificationBell } from '../NotificationBell';
 

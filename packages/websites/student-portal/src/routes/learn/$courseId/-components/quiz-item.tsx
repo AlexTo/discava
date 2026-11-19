@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import {
   QuizCard,
   type QuizSubmitResult,
 } from '@discava/common-shadcn/components/quiz-card';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import type { QuizAnswers } from '@discava/common-web-utils/quiz';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../../components/alert';
-import { Spinner } from '../../../../components/spinner';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 import {
   awaitProgressRecalculation,
   errorCode,
@@ -138,9 +138,9 @@ export function QuizItem({
   }
   if (quizQuery.isError || attemptsQuery.isError) {
     return (
-      <Alert type="error" header="Couldn't load this quiz">
+      <ErrorAlert type="error" header="Couldn't load this quiz">
         {(quizQuery.error ?? attemptsQuery.error)?.message}
-      </Alert>
+      </ErrorAlert>
     );
   }
 

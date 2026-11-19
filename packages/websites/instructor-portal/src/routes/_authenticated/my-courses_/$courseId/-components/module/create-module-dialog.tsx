@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -20,8 +21,7 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 const moduleFormSchema = z.object({
   title: z.string().trim().min(1, 'Module title is required').max(200),
@@ -97,9 +97,9 @@ export function CreateModuleDialog({
           }}
         >
           {isError && (
-            <Alert type="error" header="Couldn't create the module">
+            <ErrorAlert type="error" header="Couldn't create the module">
               {apiErrorMessage(error)}
-            </Alert>
+            </ErrorAlert>
           )}
 
           <form.Field name="title">

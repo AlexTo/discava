@@ -11,6 +11,7 @@ import {
   failureMessage,
   findTriggers,
   INVARIANTS_PATH,
+  SNAPSHOT_PATH,
   sameWriterMap,
   snapshotKeys,
   WAIVER_LABEL,
@@ -212,9 +213,9 @@ describe('snapshotKeys', () => {
     ).toEqual({ category: 'categories', quizSummary: 'quizSummaries' });
   });
 
-  it('finds every entity but the markers in the real invariants.ts', () => {
+  it('finds every entity but the markers in the real invariants snapshot.ts', () => {
     const keys = snapshotKeys(
-      readFileSync(path.join(WORKSPACE_ROOT, INVARIANTS_PATH), 'utf8'),
+      readFileSync(path.join(WORKSPACE_ROOT, SNAPSHOT_PATH), 'utf8'),
     );
     const entities = Object.keys(
       JSON.parse(

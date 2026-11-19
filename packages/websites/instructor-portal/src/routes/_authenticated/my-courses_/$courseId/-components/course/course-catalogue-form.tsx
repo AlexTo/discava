@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
@@ -10,8 +11,7 @@ import { Label } from '@discava/common-shadcn/components/ui/label';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type KeyboardEvent, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 
 const SELECT_CLASS =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50';
@@ -162,9 +162,9 @@ export function CourseCatalogueForm({
       }}
     >
       {save.isError && (
-        <Alert type="error" header="Couldn't save the catalogue details">
+        <ErrorAlert type="error" header="Couldn't save the catalogue details">
           {apiErrorMessage(save.error)}
-        </Alert>
+        </ErrorAlert>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">

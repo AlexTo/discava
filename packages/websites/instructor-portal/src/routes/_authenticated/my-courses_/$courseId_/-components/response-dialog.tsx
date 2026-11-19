@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -18,8 +19,7 @@ import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../api';
 
 export const RESPONSE_MAX = 1000;
 
@@ -93,9 +93,9 @@ export function ResponseDialog({
           </DialogHeader>
 
           {respond.isError && (
-            <Alert type="error" header="Couldn't save the response">
+            <ErrorAlert type="error" header="Couldn't save the response">
               {apiErrorMessage(respond.error)}
-            </Alert>
+            </ErrorAlert>
           )}
 
           <div className="space-y-2">

@@ -4,6 +4,7 @@
  */
 
 import type { AppRouter } from '@discava/admin-api';
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderResult, render } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
@@ -13,8 +14,7 @@ import {
   type TRPCOptionsProxy,
 } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
-import { AdminApiTRPCContext } from '../components/AdminApiClientProvider';
-import { RuntimeConfigContext } from '../components/RuntimeConfig';
+import { AdminApiTRPCContext } from '../api';
 import { type ApiCall, fakeFetch, type Handler } from './fake-trpc-fetch';
 
 const API_URL = 'http://admin-api.test/';

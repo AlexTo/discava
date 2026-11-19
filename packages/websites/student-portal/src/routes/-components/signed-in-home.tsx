@@ -3,15 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { IMyEnrolment } from '@discava/core-api';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { BookOpen, Sparkles } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../components/alert';
+import { useCoreApi } from '../../api';
 import {
   ContinueLink,
   CourseProgress,
@@ -19,9 +21,7 @@ import {
   UpNext,
 } from '../../components/course-progress-card';
 import { CourseThumbnail } from '../../components/course-thumbnail';
-import { Spinner } from '../../components/spinner';
 import { getUserIdentity } from '../../components/UserMenu/user-profile';
-import { useCoreApi } from '../../hooks/useCoreApi';
 import { toDisplayCourse } from '../../lib/course-display';
 
 // How many of the student's other courses the home shows; My Learning has
@@ -113,9 +113,9 @@ export function SignedInHome() {
   return (
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 pt-6 pb-10 lg:px-8">
       {enrolmentsQuery.isError ? (
-        <Alert type="error" header="Couldn't load your courses">
+        <ErrorAlert type="error" header="Couldn't load your courses">
           {apiErrorMessage(enrolmentsQuery.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <ResumeHero firstName={firstName} course={resume} />
 
@@ -155,9 +155,9 @@ export function SignedInHome() {
             <Spinner />
           </div>
         ) : newCoursesQuery.isError ? (
-          <Alert type="error" header="Couldn't load courses">
+          <ErrorAlert type="error" header="Couldn't load courses">
             {apiErrorMessage(newCoursesQuery.error)}
-          </Alert>
+          </ErrorAlert>
         ) : newCourses.length === 0 ? (
           <div className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
             You're enrolled in every course there is. New ones will show up

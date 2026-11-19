@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { cn } from '@discava/common-shadcn/lib/utils';
-import { usePublicMediaUrl } from '../hooks/usePublicMediaUrl';
+import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { toDisplayCourse } from '../lib/course-display';
 
 /**

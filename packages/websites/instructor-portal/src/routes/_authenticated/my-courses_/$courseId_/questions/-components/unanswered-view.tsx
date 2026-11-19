@@ -7,7 +7,7 @@ import { PostText } from '@discava/common-shadcn/discussion/post-text';
 import { relativeTime } from '@discava/common-web-utils/discussion';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { lessonStateLabel, useCourseLessons } from './lessons';
 import { PagedList } from './paged-list';
 import { ThreadDialog } from './thread-dialog';

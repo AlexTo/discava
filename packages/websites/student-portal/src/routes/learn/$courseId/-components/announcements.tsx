@@ -13,7 +13,7 @@ import {
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 
 const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 60 * 60_000],

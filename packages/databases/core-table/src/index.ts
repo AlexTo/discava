@@ -234,7 +234,7 @@ export {
   loadTableSnapshot,
   type TableSnapshot,
   violationId,
-} from './helpers/invariants.js';
+} from './helpers/invariants/index.js';
 export {
   type NotificationInput,
   type NotificationTransactionItems,

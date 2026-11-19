@@ -15,7 +15,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { HiddenBadge } from '../hidden-badge';
 import { DragHandle, SortableList } from '../sortable-list';
 import { ContentItemVisibilityButton } from '../visibility-buttons';

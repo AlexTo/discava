@@ -4,7 +4,7 @@
  */
 
 // Holds a pull request that changes who writes the core table until it also
-// changes the invariant checks (core-table's helpers/invariants.ts), since a
+// changes the invariant checks (core-table's helpers/invariants/), since a
 // rule spanning records written by more than one package is what those
 // checks are for (CONTRIBUTING.md, "Rules That Span Records"). It can't tell
 // whether a rule is really at stake, so a maintainer waives it with a label
@@ -15,7 +15,14 @@ export const WAIVER_LABEL = 'no-new-invariant';
 export const WRITER_MAP_PATH =
   'packages/databases/core-table/entity-writers.json';
 export const INVARIANTS_PATH =
-  'packages/databases/core-table/src/helpers/invariants.ts';
+  'packages/databases/core-table/src/helpers/invariants';
+export const SNAPSHOT_PATH = `${INVARIANTS_PATH}/snapshot.ts`;
+// The tests in that folder don't answer for a writer, only the checks do.
+export const INVARIANTS_PATHSPEC = [
+  INVARIANTS_PATH,
+  `:(exclude)${INVARIANTS_PATH}/*.test.ts`,
+  `:(exclude)${INVARIANTS_PATH}/test-fixture.ts`,
+];
 
 // The core-table helpers are where a shared rule is kept, so a new helper
 // writing a shared entity isn't itself a reason to check again; a new
@@ -79,7 +86,7 @@ export type Verdict =
   | { ok: false; triggers: Trigger[] };
 
 /**
- * entity → its key in invariants.ts's TableSnapshot (`categories` for
+ * entity → its key in invariants/snapshot.ts's TableSnapshot (`categories` for
  * `category`), read from the `Item<typeof create<Entity>Entity>` it holds.
  */
 export const snapshotKeys = (
@@ -103,7 +110,7 @@ export const addedLines = (diff: string): string[] =>
     .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
     .map((line) => line.slice(1));
 
-// An invariants.ts change answers for an entity when a line it adds names
+// A change in the invariants folder answers for an entity when a line it adds names
 // the entity or its snapshot key as a whole word, or as the middle of an
 // entity factory's name: `snapshot.enrolments`, a comment about `enrolment`
 // records, `Item<typeof createEnrolmentEntity>`. Not `userId` for `user`.
@@ -127,9 +134,9 @@ const answersFor = (
 };
 
 export interface InvariantsChange {
-  /** The lines the pull request adds to invariants.ts. */
+  /** The lines the pull request adds to the invariants folder. */
   added: string[];
-  /** entity → TableSnapshot key, from the pull request's invariants.ts. */
+  /** entity → TableSnapshot key, from the pull request's snapshot.ts. */
   snapshotKeys: Record<string, string>;
 }
 

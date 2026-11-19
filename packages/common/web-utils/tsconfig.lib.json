@@ -6,8 +6,11 @@
     "tsBuildInfoFile": "../../../dist/packages/common/web-utils/tsc/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ],
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "lib": [
       "es2022",
       "DOM"

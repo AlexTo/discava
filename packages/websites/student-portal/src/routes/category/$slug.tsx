@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useState } from 'react';
-import { Alert } from '../../components/alert';
+import { useCoreApi } from '../../api';
 import { CatalogueResults } from '../../components/catalogue-results';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
-import { Spinner } from '../../components/spinner';
-import { useCoreApi } from '../../hooks/useCoreApi';
 import {
   type CatalogueFilters,
   catalogueFiltersToSearch,
@@ -99,7 +99,7 @@ function RouteComponent() {
           message="There is no category at this address."
         />
       ) : categoryQuery.isError || !category ? (
-        <Alert type="error" header="Couldn't load this category">
+        <ErrorAlert type="error" header="Couldn't load this category">
           <p>{apiErrorMessage(categoryQuery.error)}</p>
           <Button
             type="button"
@@ -110,7 +110,7 @@ function RouteComponent() {
           >
             Try again
           </Button>
-        </Alert>
+        </ErrorAlert>
       ) : category.status === 'archived' ? (
         <Unavailable
           title={`${category.name} is no longer available`}
