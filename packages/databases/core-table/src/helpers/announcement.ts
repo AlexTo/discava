@@ -4,6 +4,7 @@
  */
 import type { createCoreTableService } from '../service.js';
 import { notifyCourseStudents, transactionEntities } from './notification.js';
+import { idTimeWithin } from './uuid-v7.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -28,9 +29,6 @@ export const ANNOUNCEMENT_PAGE_MAX = 20;
 const MAX_AHEAD_MS = 60_000;
 const MAX_BEHIND_MS = 10 * 60_000;
 
-const UUID_V7 =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
 // The input names something an announcement can't be: callers map it to a
 // BAD_REQUEST.
 export class AnnouncementInputError extends Error {
@@ -40,34 +38,21 @@ export class AnnouncementInputError extends Error {
   }
 }
 
-/** The ISO instant in a well-formed UUID v7, or undefined for anything else. */
-export const uuidV7Time = (id: string): string | undefined => {
-  if (!UUID_V7.test(id)) {
-    return undefined;
-  }
-  const time = new Date(
-    Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16),
-  );
-  return Number.isNaN(time.getTime()) ? undefined : time.toISOString();
-};
-
 /**
  * The instant an announcement id was minted, which is the announcement's
  * `createdAt`. Throws unless the id is a UUID v7 whose time is at most 1
  * minute after and at most 10 minutes before `now`.
  */
 export const announcementIdTime = (id: string, now: Date): string => {
-  const time = uuidV7Time(id);
-  if (time === undefined) {
-    throw new AnnouncementInputError('announcementId must be a UUID v7');
+  const check = idTimeWithin(id, now, MAX_AHEAD_MS, MAX_BEHIND_MS);
+  if (check.reason === undefined) {
+    return check.time;
   }
-  const offset = new Date(time).getTime() - now.getTime();
-  if (offset > MAX_AHEAD_MS || offset < -MAX_BEHIND_MS) {
-    throw new AnnouncementInputError(
-      'announcementId must have been created within the last 10 minutes',
-    );
-  }
-  return time;
+  throw new AnnouncementInputError(
+    check.reason === 'not-uuid-v7'
+      ? 'announcementId must be a UUID v7'
+      : 'announcementId must have been created within the last 10 minutes',
+  );
 };
 
 const validTitle = (title: string) => {

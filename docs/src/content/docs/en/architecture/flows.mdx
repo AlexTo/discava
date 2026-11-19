@@ -1,0 +1,147 @@
+---
+title: Request and data flows
+description: How sign-in, an API call, a video upload and a data change travel through Discava's components.
+sidebar:
+  order: 2
+---
+
+import Link from '@components/link.astro';
+
+Four flows explain most of the system.
+
+## Signing in
+
+```d2 title="Sign-in"
+shape: sequence_diagram
+browser: "Browser"
+portal: "Portal (CloudFront)"
+cognito: "Cognito"
+trigger: "Pre token generation"
+table: "Core table"
+
+browser -> portal: "load app and runtime-config.json"
+browser -> cognito: "redirect to sign-in page"
+cognito -> trigger: "before issuing tokens"
+trigger -> table: "write the user record"
+cognito -> browser: "tokens, with the user's groups"
+```
+
+1. The portal loads and reads `runtime-config.json` to find Cognito.
+2. The user signs in on Cognito's hosted page.
+3. Before issuing tokens, Cognito calls a function that writes the user's record to the core table, so the application always has a row for anyone holding a token.
+4. The browser receives tokens that include the user's groups.
+
+When someone signs up themselves, a second trigger adds them to the `student` and `instructor` groups.
+
+## Calling an API
+
+```d2 title="An API call"
+shape: sequence_diagram
+browser: "Browser"
+waf: "WAF"
+gw: "API Gateway"
+fn: "API function"
+table: "Core table"
+
+browser -> waf: "tRPC call with token"
+waf -> gw: "allowed"
+gw -> gw: "verify token with Cognito, throttle"
+gw -> fn: "invoke"
+fn -> fn: "check group, validate input"
+fn -> table: "read or write"
+fn -> browser: "result"
+```
+
+A request is checked three times before it touches data:
+
+1. **WAF**, when the stage has it on, filters common attacks.
+2. **API Gateway** verifies the token against the user pool and applies the request limits. A few public procedures, such as viewing a published course's landing page, skip the token check.
+3. **The function** checks the caller's group (instructor-api requires `instructor`, admin-api requires `admin`), validates the input, and applies the rule for that procedure, such as "the caller is enrolled in this course".
+
+## A video's journey
+
+```d2 title="From upload to playback"
+direction: right
+instructor: "Instructor"
+api: "instructor-api"
+upload: "Upload bucket"
+mc: "MediaConvert"
+lesson: "Lesson media bucket"
+done: "transcode-complete"
+tr: "Transcribe"
+cap: "transcribe-complete"
+table: "Core table"
+cf: "CloudFront"
+student: "Student"
+
+instructor -> api: "1. ask to upload"
+instructor -> upload: "2. PUT file (presigned URL)"
+api -> mc: "3. submit job"
+mc -> lesson: "4. HLS renditions"
+mc -> done: "5. job finished (EventBridge)"
+done -> table: "mark ready"
+done -> tr: "6. start captions"
+tr -> cap: "7. finished (EventBridge)"
+cap -> lesson: "caption track"
+student -> cf: "8. play (signed)"
+cf -> lesson
+```
+
+**Uploading.** The browser uploads straight to S3 with a presigned URL from instructor-api, so large files never pass through a Lambda function.
+
+**Transcoding.** MediaConvert turns the upload into HLS renditions at several qualities, so the player adapts to the viewer's connection. When the job finishes, an EventBridge rule invokes a function that marks the video ready and starts a Transcribe job for captions.
+
+**Recovering.** A scheduled function finds videos stuck in processing. Each completion handler has a failure queue, and temporary files are removed by scheduled cleanups.
+
+**Playing.** Lesson media is private. When an enrolled student opens a lesson, core-api checks the enrolment and issues a short-lived CloudFront signature. CloudFront serves the video only to requests carrying it. The signing key is held by one dedicated function, not by the API's shared function.
+
+## Reacting to a change
+
+Some results depend on many records: a student's course progress, a course's search entry, an instructor's analytics. They aren't computed inside the request that changes the data. They are recomputed afterwards from the table's change stream.
+
+```d2 title="One stream reader, one queue per feature"
+direction: right
+api: "Any API write"
+table: "Core table"
+stream: "Change stream"
+router: "Stream router"
+q1: "progress queue"
+q2: "search queue"
+q3: "analytics queue"
+q4: "notification queue"
+h1: "Progress recalculation"
+h2: "Search indexing"
+h3: "Analytics update"
+h4: "Notification delivery"
+os: "OpenSearch"
+ses: "SES"
+
+api -> table
+table -> stream
+stream -> router
+router -> q1
+router -> q2
+router -> q3
+router -> q4
+q1 -> h1
+q2 -> h2
+q3 -> h3
+q4 -> h4
+h1 -> table
+h3 -> table
+h2 -> os
+h4 -> ses
+```
+
+- The **stream router** is the stream's only reader. It copies each change to the queue of every feature whose filter matches.
+- Each **feature** has its own queue, so a slow or failing feature never delays another.
+- A message that keeps failing moves to that feature's **failure queue**, which raises an alarm. An operator fixes the cause and redrives the queue.
+- Handlers can receive a change twice or out of order, so each is written to give the same result either way.
+
+The consequence for users: figures such as progress and analytics update a few seconds after the action that caused them.
+
+<Link path="design/stream-event-router">Stream event router</Link> has the full design, and <Link path="design/search">Search</Link> and <Link path="design/progress-and-completion">Progress and completion</Link> cover two of its features.
+
+## Searching
+
+Search reads only from OpenSearch. core-api's search procedure sends the query and filters, and returns published courses ranked by relevance and rating. Because the index is fed from the stream, a newly published course appears in search a few seconds after publishing.

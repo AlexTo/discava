@@ -12,7 +12,6 @@ import { createCoursePreviewEntity } from './course-preview.js';
 let preview: Awaited<ReturnType<typeof createCoursePreviewEntity>>;
 let contentItem: Awaited<ReturnType<typeof createContentItemEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   preview = await createCoursePreviewEntity();
   contentItem = await createContentItemEntity();
 });

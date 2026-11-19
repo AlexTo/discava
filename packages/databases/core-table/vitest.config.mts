@@ -18,6 +18,8 @@ export default defineConfig(() => ({
     watch: false,
     globals: true,
     environment: 'jsdom',
+    // The entities and service resolve their table the way local dev does.
+    env: { LOCAL_DEV: 'true' },
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     reporters: ['default'],
     coverage: {

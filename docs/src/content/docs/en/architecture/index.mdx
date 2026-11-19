@@ -1,0 +1,128 @@
+---
+title: Architecture overview
+description: The components that make up Discava, what each is responsible for, and how they connect.
+sidebar:
+  order: 0
+  label: Overview
+---
+
+import Link from '@components/link.astro';
+
+Discava is a set of serverless components on AWS. Nothing runs when nobody is using it: there are no servers, containers or clusters to keep alive.
+
+## The system at a glance
+
+```d2 title="Components and how they connect"
+direction: down
+
+users: "Students, instructors, admins"
+
+edge: "Websites" {
+  student: "Student portal"
+  instructor: "Instructor portal"
+  admin: "Admin portal"
+}
+
+identity: "Cognito\n(sign-in, groups)"
+
+apis: "APIs" {
+  core: "core-api"
+  instr: "instructor-api"
+  adm: "admin-api"
+}
+
+data: "Data" {
+  table: "Core table\n(DynamoDB)"
+  search: "Search\n(OpenSearch Serverless)"
+  lesson: "Lesson media\n(S3 + CloudFront)"
+  public: "Public media\n(S3 + CloudFront)"
+}
+
+async: "Background work" {
+  router: "Stream router"
+  handlers: "Feature handlers"
+  media: "Media pipeline\n(MediaConvert, Transcribe)"
+  router -> handlers: "one queue each"
+}
+
+email: "SES"
+
+users -> edge
+users -> identity: "sign in"
+edge -> apis: "tRPC over HTTPS"
+apis -> data.table
+apis.core -> data.search: "query"
+apis.instr -> async.media: "submit video"
+data.table -> async.router: "change stream"
+async.handlers -> data.table
+async.handlers -> data.search: "index"
+async.handlers -> email
+async.media -> data.lesson: "renditions"
+users -> data.lesson: "watch"
+```
+
+## The components
+
+### Three portals
+
+| Portal | For | Talks to |
+| --- | --- | --- |
+| **Student portal** | Browsing the catalogue, learning, quizzes, discussions | core-api |
+| **Instructor portal** | Building courses, analytics, answering students | core-api, instructor-api |
+| **Admin portal** | Categories and review moderation | core-api, admin-api |
+
+Each is a React single-page application: static files in a private S3 bucket, served by CloudFront. A portal learns where its APIs and sign-in page are from a `runtime-config.json` file deployed beside it, so the same build works on every stage.
+
+### One identity provider
+
+A Cognito user pool holds every user. Three groups, `student`, `instructor` and `admin`, decide what a user may do. Sign-in happens on Cognito's hosted page, and the portal receives tokens it sends with each API call.
+
+### Three APIs
+
+Each API is an API Gateway REST API in front of Lambda functions, speaking [tRPC](https://trpc.io/).
+
+| API | Who may call it | Examples |
+| --- | --- | --- |
+| **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, lesson content, quizzes, discussions, search |
+| **instructor-api** | Members of `instructor` | Creating and editing courses, uploading media, analytics |
+| **admin-api** | Members of `admin` | Category taxonomy, review moderation |
+
+Splitting by audience means each API has its own function, permissions, request limits and firewall. An instructor-only bug can't be reached with a student's token, and a flood of student traffic can't starve the instructor API.
+
+### One table
+
+All application data is in a single DynamoDB table, the **core table**: courses, modules, lessons, enrolments, progress, quiz attempts, discussions, reviews and notifications. Related records share a partition, so a whole course's curriculum is one query.
+
+### Search
+
+Published courses are copied into an OpenSearch Serverless collection, which answers the catalogue's search and filters. The table is the source of truth: the index is rebuilt from it and never written to directly by an API.
+
+### Media
+
+| Store | Holds | Access |
+| --- | --- | --- |
+| **Lesson media** | Lesson videos, captions and files | Private. Served by CloudFront only to requests carrying a signature the API issued to an enrolled student |
+| **Upload bucket** | Files on their way in | Write-only by presigned URL, read by the processing job, short-lived |
+| **Public media** | Course images on catalogue cards | Readable by anyone through CloudFront |
+
+### Background work
+
+Two things happen outside a request:
+
+- **Reacting to data changes.** The table's change stream has one reader, the **stream router**, which hands each change to the queue of every feature that wants it: progress recalculation, search indexing, analytics and notification delivery.
+- **Processing video.** An uploaded video is transcoded into adaptive streaming renditions by MediaConvert, then captioned by Transcribe.
+
+## Design principles
+
+- **Serverless only.** Every component bills by use and scales to zero.
+- **One way to do it.** One cloud, one deployment tool, one table. Fewer options to configure, document and test.
+- **Secure by default.** Every protection is on unless a stage turns it off.
+- **Runs locally.** Every AWS service has a local stand-in, so development needs no AWS account.
+
+## Read on
+
+- <Link path="architecture/aws">Deployment on AWS</Link>: the stacks, what each contains and the order they deploy in
+- <Link path="architecture/flows">Request and data flows</Link>: sign-in, an API call, a video's journey, and how changes propagate
+- <Link path="architecture/security">Security model</Link>: who can reach what, and the protections each stage can turn on
+- <Link path="architecture/codebase">Codebase map</Link>: where each component's code lives
+- <Link path="design">Design</Link>: how individual features work

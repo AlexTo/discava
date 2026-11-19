@@ -1,0 +1,67 @@
+---
+title: Prerequisites
+description: The AWS account, permissions and tools you need before deploying Discava.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+## An AWS account
+
+You need one AWS account to deploy into. A dedicated account, or at least one with nothing else important in it, is the safest choice while you are learning the system.
+
+Stages can share an account. Each stage gets its own IAM roles, and one stage's deploys can't reach another's resources.
+
+### Permissions for the one-time setup
+
+The setup script runs **once per stage, from your machine, with your own AWS credentials**. Those credentials must be able to:
+
+- Create an IAM OIDC provider, IAM roles and IAM managed policies
+- Bootstrap CDK (`cdk bootstrap`), which creates a CloudFormation stack with an S3 bucket, an ECR repository and IAM roles
+- Read ACM certificates, if you use custom domains
+
+`AdministratorAccess` covers all of it. After setup, deploys use the scoped roles the script created, not your credentials.
+
+### A region
+
+Pick the region your stage lives in. It must offer every service Discava uses, among them **OpenSearch Serverless**, **MediaConvert**, **Transcribe** and, for notification emails, **SES**. Check the [AWS regional services list](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/) if you are unsure.
+
+CloudFront's WAF rules always live in `us-east-1`. A stage with WAF on its portals or media (such as `discava-production`) also deploys small stacks there, whatever its main region.
+
+### What it costs
+
+Everything is serverless and billed by use. `discava-development` is configured to scale to zero: no cost while idle, and a 10 to 30 second delay on the first search after a quiet spell. `discava-production` keeps a small warm search capacity and turns on WAF and KMS keys, which have fixed monthly charges.
+
+## Tools on your machine
+
+| Tool | Why |
+| --- | --- |
+| [Git](https://git-scm.com/) | To clone your fork |
+| [Node.js 24](https://nodejs.org/) | The setup script reads the stage list from the TypeScript config |
+| [pnpm](https://pnpm.io/) | Installs the workspace. `corepack enable` gives you the version the repository pins |
+| [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | The setup script creates the IAM resources with it |
+| [GitHub CLI (`gh`)](https://cli.github.com/) | Lets the setup script create the GitHub environment and its variables. Optional: without it, the script prints the values for you to enter by hand |
+| Bash | The setup script. The bash that ships with macOS works |
+
+Docker is **not** needed to deploy. It is only needed to <Link path="guides/getting-started">run Discava locally</Link>.
+
+### Sign in to both CLIs
+
+```sh
+aws sts get-caller-identity   # should print your account and identity
+gh auth status                # should say you are logged in
+```
+
+If the first fails, sign in with `aws sso login --profile <profile>` or `aws configure`. If the second fails, run `gh auth login`.
+
+## A GitHub account
+
+You need to be able to fork the repository and, on the fork, change settings and run workflows. A personal account on the free plan is enough for a public fork.
+
+## Optional, decide later
+
+- **Custom domains.** Without them, the portals are served from `*.cloudfront.net` and the APIs from `*.execute-api.amazonaws.com`. To use your own, you need a domain, DNS you control and ACM certificates. See <Link path="deploy/configuration">Stage configuration</Link>.
+- **Email.** Notification emails need a verified SES identity. Without one, no email is sent and everything else works.
+
+Next: <Link path="deploy/setup">fork and set up</Link>.

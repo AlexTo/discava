@@ -1,0 +1,114 @@
+---
+title: CI/CD reference
+description: What each GitHub Actions workflow does, when it runs, and every variable and secret it reads.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+The workflows live in `.github/workflows/`. Two matter for deploying: **CI** and **Deploy**.
+
+## The pipeline
+
+```d2 title="What runs when"
+direction: right
+pr: "Pull request"
+main: "Push to main"
+checks: "PR Checks"
+ci: "CI" {
+  build: "Build\n(lint, test, build)"
+  trivy: "Trivy scan"
+  docs: "Deploy Docs"
+  build -> docs
+}
+deploy: "Deploy"
+manual: "Run workflow\n(manual)"
+pages: "GitHub Pages"
+aws: "AWS stage"
+
+pr -> checks
+main -> ci
+ci -> deploy: "passed and\nAUTO_DEPLOY_STAGE set"
+manual -> deploy
+ci.docs -> pages
+deploy -> aws
+```
+
+## Workflows
+
+### CI (`ci.yml`)
+
+Runs on every push to `main`.
+
+| Job | Does |
+| --- | --- |
+| **Build** | Lints, tests and builds every project. The build synthesizes the CDK app and scans the templates with Checkov. Fails if the build changed any committed file |
+| **Trivy** | Scans dependencies for known vulnerabilities and the repository for secrets |
+| **Playwright cache** | Saves the browser the end-to-end tests use, so pull requests start faster |
+| **Deploy Docs** | Publishes this site to GitHub Pages |
+
+CI needs no AWS access, apart from the optional Docker login role.
+
+### Deploy (`deploy.yml`)
+
+Runs in two ways:
+
+- **Manually**, with a stage name. Deploys the commit it is run from.
+- **After CI passes on `main`**, if the repository variable `AUTO_DEPLOY_STAGE` is set. Deploys the commit CI verified, and skips if `main` has moved on since.
+
+The job runs in the GitHub environment named after the stage. That is what makes the stage's variables available and what the AWS deploy role trusts. <Link path="deploy/first-deploy">First deploy</Link> lists its steps.
+
+### PR Checks (`pr-checks.yml`)
+
+Runs on pull requests to `main`: lint, test and build for the projects the change affects, the end-to-end tests against the local stack, and a few repository-specific checks. It needs no AWS access.
+
+### Maintainer automation
+
+The `agent-*.yml` workflows and `archive-specs.yml` drive the project's spec-driven development process. They do nothing unless you use that process and can be left alone in a fork.
+
+## Variables and secrets
+
+Everything the workflows read. The setup script sets all the variables for you.
+
+### Repository variables
+
+| Variable | Set by | Used for |
+| --- | --- | --- |
+| `AUTO_DEPLOY_STAGE` | Setup script, if you chose it | The one stage to deploy whenever CI passes on `main`. Unset means manual deploys only |
+| `AWS_DOCKER_LOGIN_ROLE_ARN` | Setup script | Signing Docker in to Amazon ECR Public so image pulls aren't rate limited. Unset means anonymous pulls |
+
+### Environment variables, one set per stage
+
+| Variable | Set by | Used for |
+| --- | --- | --- |
+| `AWS_REGION` | Setup script | The region the deploy signs in to |
+| `AWS_DEPLOY_ROLE_ARN` | Setup script | The role the workflow assumes |
+| `AWS_EXECUTION_ROLE_ARN` | Setup script | The role CloudFormation creates resources with |
+| `<STAGE>_INFRA_…` | Setup script or you | <Link path="deploy/configuration">Configuration overrides</Link>, such as custom domains |
+
+### Secrets
+
+| Secret | Required | Used for |
+| --- | --- | --- |
+| `CODECOV_TOKEN` | No | Uploading test coverage to Codecov |
+
+There are **no AWS secrets**. The workflow proves its identity to AWS with a token GitHub issues for that one run.
+
+## How GitHub signs in to AWS
+
+1. The Deploy job asks GitHub for an OIDC token. The token's subject names the repository and the environment: `repo:<owner>/<repo>:environment:<stage>`.
+2. AWS's OIDC provider for GitHub verifies the token.
+3. The deploy role's trust policy accepts only that exact subject, so only a job in your repository, running in that environment, can assume it.
+4. The job receives credentials that last for the run.
+
+This is why the environment's protection rules are your deployment gate: whoever may run a job in the environment may deploy the stage.
+
+## Two roles, on purpose
+
+| Role | Who uses it | What it can do |
+| --- | --- | --- |
+| **Deploy role** | The workflow | Upload the stage's assets, and create or update CloudFormation stacks named `<stage>-*`. It can't create resources itself |
+| **Execution role** | CloudFormation | Create the stage's resources. Any IAM role it creates must carry the stage's permissions boundary |
+
+Splitting them means a compromised workflow can only do what a CloudFormation deploy of that stage can do, and nothing it deploys can grant itself more than the boundary allows.

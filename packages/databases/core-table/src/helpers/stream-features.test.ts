@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import {
   featuresFor,
@@ -124,9 +124,7 @@ describe('STREAM_FEATURES', () => {
   });
 
   it('filters only name entities the core table defines', async () => {
-    vi.stubEnv('LOCAL_DEV', 'true');
     const service = await createCoreTableService();
-    vi.unstubAllEnvs();
     const entities = Object.keys(service.entities);
     for (const feature of STREAM_FEATURES) {
       for (const filter of feature.filters) {
