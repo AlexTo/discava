@@ -93,9 +93,9 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - The list is absolutely positioned under the form, full width of the box, `max-w-[calc(100vw-2rem)]`, so it never scrolls horizontally at 375 px.
   - When `loading` is set and there are no items, it shows "Searching…".
 - [ ] T009 [US1] [US2] Tests first, then wire `packages/websites/student-portal/src/components/site-search.tsx`:
-  - `const SUGGEST_DEBOUNCE_MS = 300` and `const SUGGEST_MIN_LENGTH = 3`;
+  - `const SUGGEST_DEBOUNCE_MS = 300`, `const SUGGEST_MIN_LENGTH = 3` and `const SUGGEST_MAX_LENGTH = 200` (the input schema's bounds);
   - the trimmed text is debounced with T006;
-  - `useQuery(trpc.course.publicSuggest.queryOptions({ q }, { enabled: open && q.length >= SUGGEST_MIN_LENGTH, staleTime: 60_000, retry: false, placeholderData: keepPreviousData }))`;
+  - `useQuery(trpc.course.publicSuggest.queryOptions({ q }, { enabled: open && q.length >= SUGGEST_MIN_LENGTH && q.length <= SUGGEST_MAX_LENGTH, staleTime: 60_000, retry: false, placeholderData: keepPreviousData }))`;
   - the dropdown is open while the box has focus, the trimmed text is at least 3 characters, and there are items (or loading with previous items);
   - it closes when the text drops under 3 characters;
   - on `/search` the box starts with the current query and the dropdown closed, until the text is edited (track a `touched` flag reset whenever `currentQuery` changes);
@@ -113,7 +113,8 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - Enter before 300 ms navigates to `/search?query=…` and sends no suggestion request;
   - a handler that throws (an `ApiError` with `TIMEOUT`) shows no alert, and the box still submits;
   - on `/search?query=linear` the dropdown is closed at load;
-  - 10 items render 10 rows.
+  - 10 items render 10 rows;
+  - 201 characters send no request.
 - [ ] T010 [US1] Make sure the existing student-portal tests that render the top bar still pass. `src/routes/-routes.test.tsx` and `src/routes/search/-search.test.tsx` add a `course.publicSuggest` handler returning `{ items: [] }` only where a test now fails because it's missing, without changing any existing assertion.
 - [ ] T011 [US1] Add `suggestInSiteSearch(page, text)` to `packages/e2e/src/helpers/student-portal.ts`. It fills the search box (found the same way `searchWithSiteSearch` finds it) and waits for the suggestions list (`getByRole('listbox', { name: 'Course suggestions' })`, or for this phase the list's `data-testid="site-search-suggestions"` if T013's ARIA isn't in yet, which T013 then replaces).
 - [ ] T012 [US1] Add the test "suggestions offer a published course by the start of its title" to `packages/e2e/src/scenarios/search.e2e.ts`:
@@ -142,7 +143,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - remove the `data-testid` fallback from T011.
 
   Component tests: every row in the keyboard table, `aria-expanded` toggling, `aria-activedescendant` following the highlight, and the status text for 3 items and for 0 items. Use `getByRole('combobox', { name: 'Search courses' })`.
-- [ ] T014 [US3] Change `searchWithSiteSearch` in `packages/e2e/src/helpers/student-portal.ts` to find the box with `getByRole('combobox', { name: 'Search courses' })` instead of `getByRole('searchbox', …)`. This is an intended locator change: the box's ARIA role changed (FR-012), and its fill, Enter and wait-for-`/search` behavior stays the same. Update any other e2e or portal test that finds it by role `searchbox` the same way, changing nothing else. List them in the PR description.
+- [ ] T014 [US3] Change `searchWithSiteSearch` in `packages/e2e/src/helpers/student-portal.ts` to find the box with `getByRole('combobox', { name: 'Search courses' })` instead of `getByRole('searchbox', …)`. This is an intended locator change: the box's ARIA role changed (FR-012), and its fill, Enter and wait-for-`/search` behavior stays the same. Update the other tests that find this box by `getByRole('searchbox', { name: 'Search courses' })` the same way, changing nothing else: today `packages/websites/student-portal/src/routes/search/-search.test.tsx` and `src/routes/-routes.test.tsx`. Don't touch other search boxes, such as the category page's "Search <category>" box in `routes/category/-category.test.tsx`. List the changed tests in the PR description.
 - [ ] T015 [US3] Extend the Phase 2 e2e test in `packages/e2e/src/scenarios/search.e2e.ts` with a keyboard-only step:
   - type, press Down until the course is highlighted, and take `screenshot(page, 'search-suggestions-keyboard')`;
   - press Enter and expect the course page;
@@ -175,7 +176,6 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - the 3 s timeout and silent failure (R-6).
 
   Add a "Spec" link to `specs/20261119-195009-search-suggestions/spec.md` in the page's existing link style. Note in the PR that translations of the other locales are pending.
-- [ ] T019 [P] Update the core-api README's procedure list (`packages/apis/core-api/README.md`), if it lists the public procedures, with `course.publicSuggest`.
 - [ ] T020 (human) Run [quickstart.md](./quickstart.md) steps 1 to 6 and 8 to 10 against `pnpm dev`, saving screenshots to `tmp/screenshots/pr-<number>/`. Confirm in the browser's network panel that one `course.publicSuggest` request is sent per pause (SC-002), and that suggestions appear within 1 s of pausing with search warm (SC-001).
 - [ ] T021 (human) Run quickstart step 7 with VoiceOver or NVDA. The suggestion count and the highlighted course are announced, and focus stays in the box (FR-012, SC-005).
 
@@ -183,7 +183,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 ## Dependencies
 
-- Phase 1 → Phase 2 (the portal calls `course.publicSuggest`) → Phase 3 (ARIA on the Phase 2 component) → Phase 4 (the last row joins Phase 3's keyboard navigation). Phase 5's T018 and T019 can start any time after Phase 1. T020 and T021 come after Phase 4.
+- Phase 1 → Phase 2 (the portal calls `course.publicSuggest`) → Phase 3 (ARIA on the Phase 2 component) → Phase 4 (the last row joins Phase 3's keyboard navigation). Phase 5's T018 can start any time after Phase 1. T020 and T021 come after Phase 4.
 - Within Phase 1: T001 and T002 in parallel, then T003, then T004, then T005.
 - Within Phase 2: T006 and T007 in parallel, then T008, then T009, then T010. T011 and T012 can be written alongside T009.
 
@@ -192,7 +192,6 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 ```text
 Phase 1:  T001 (schema)  ║  T002 (query builder)
 Phase 2:  T006 (debounce hook)  ║  T007 (title highlight)
-Phase 5:  T018 (design page)  ║  T019 (README)
 ```
 
 ## Implementation strategy

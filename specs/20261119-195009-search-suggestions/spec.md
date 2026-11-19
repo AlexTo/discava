@@ -97,7 +97,7 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 
 - **Leading or trailing spaces**: these don't count toward the 3-character threshold, and aren't sent.
 - **Text shortened to 2 characters or fewer**: the dropdown closes and any request still in flight is ignored.
-- **Search is cold-starting**: on a stage where search scales to zero, the first request can time out while search starts up. The dropdown shows nothing or a short "Suggestions are loading" state, never an error banner. Typing and Enter keep working.
+- **Search is cold-starting**: on a stage where search scales to zero, the first request can time out while search starts up. The dropdown shows nothing or a short "Searching…" row, never an error banner. Typing and Enter keep working.
 - **Search unavailable or request fails**: the dropdown stays closed or shows no suggestions. The failure doesn't block typing, Enter, or the results page.
 - **Slow answer**: while a request is in flight for the current text, the dropdown keeps showing the previous suggestions or a loading state, never an empty list as if nothing matched.
 - **On the results page**: the box shows the current query, as it does today. The dropdown opens only after the visitor edits the text, not when the page loads with the query already filled in.
@@ -151,4 +151,5 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 - Suggestions respect no filters: they search the whole published catalogue even when the visitor is on the results page with filters selected.
 - Only the student portal has this search box; the instructor and admin portals are out of scope.
 - No search history or analytics of what visitors type is recorded.
+- Half-typed words are matched against the same stemmed words full search uses. A few half-typed words whose stem isn't the start of the full word's stem (for example "designi") may not match until the next letter is typed. Whole words, and most half-typed ones such as "pyth" or "javas", match.
 - It reuses the existing course search index and the indexing pipeline that keeps it in sync, and nothing new is written to the core table.
