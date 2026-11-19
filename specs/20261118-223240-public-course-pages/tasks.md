@@ -271,7 +271,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - no published course gives `NOT_FOUND`.
 
   Register it as `instructorProfile.publicView` and add it to `PUBLIC_OPERATIONS`, with a `router.test.ts` case. Tests: draft and archived courses never listed; no IDs of people in the output; the three `NOT_FOUND` causes give identical errors.
-- [ ] T025 [P] [US5] Tests first, then add `packages/websites/student-portal/src/routes/instructors/$handle.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): photo, name, headline, bio paragraphs (split on blank lines, rendered as text), and "Courses by <name>" using the catalogue card component. Not found shows "Instructor not found" with a "Browse courses" button. Make the instructor card's "View profile" a `Link` to it. Component tests cover each state and that bio markup renders as text.
+- [x] T025 [P] [US5] Tests first, then add `packages/websites/student-portal/src/routes/instructors/$handle.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): photo, name, headline, bio paragraphs (split on blank lines, rendered as text), and "Courses by <name>" using the catalogue card component. Not found shows "Instructor not found" with a "Browse courses" button. Make the instructor card's "View profile" a `Link` to it. Component tests cover each state and that bio markup renders as text.
 - [ ] T026 [P] [US5] Tests first, then add `packages/websites/instructor-portal/src/routes/_authenticated/profile.tsx`, and a "Public profile" item in the account menu:
   - fields for display name, handle (showing the address `/instructors/<handle>` live), headline, bio, and a photo using the existing course image crop dialog at a 1:1 aspect, output 512×512;
   - Save;

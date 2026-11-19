@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as CategorySlugRouteImport } from './routes/category/$slug'
+import { Route as InstructorsHandleRouteImport } from './routes/instructors/$handle'
 import { Route as MyLearningIndexRouteImport } from './routes/my-learning/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
@@ -34,6 +35,11 @@ const UnsubscribeRoute = UnsubscribeRouteImport.update({
 const CategorySlugRoute = CategorySlugRouteImport.update({
   id: '/category/$slug',
   path: '/category/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstructorsHandleRoute = InstructorsHandleRouteImport.update({
+  id: '/instructors/$handle',
+  path: '/instructors/$handle',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MyLearningIndexRoute = MyLearningIndexRouteImport.update({
@@ -83,6 +89,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning': typeof MyLearningIndexRoute
   '/search': typeof SearchIndexRoute
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
@@ -125,6 +134,7 @@ export interface FileRouteTypes {
     | '/'
     | '/unsubscribe'
     | '/category/$slug'
+    | '/instructors/$handle'
     | '/settings/notifications'
     | '/my-learning/'
     | '/search/'
@@ -138,6 +148,7 @@ export interface FileRouteTypes {
     | '/'
     | '/unsubscribe'
     | '/category/$slug'
+    | '/instructors/$handle'
     | '/settings/notifications'
     | '/my-learning'
     | '/search'
@@ -151,6 +162,7 @@ export interface FileRouteTypes {
     | '/'
     | '/unsubscribe'
     | '/category/$slug'
+    | '/instructors/$handle'
     | '/settings/notifications'
     | '/my-learning/'
     | '/search/'
@@ -165,6 +177,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   CategorySlugRoute: typeof CategorySlugRoute
+  InstructorsHandleRoute: typeof InstructorsHandleRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   MyLearningIndexRoute: typeof MyLearningIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
@@ -196,6 +209,13 @@ declare module '@tanstack/react-router' {
       path: '/category/$slug'
       fullPath: '/category/$slug'
       preLoaderRoute: typeof CategorySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instructors/$handle': {
+      id: '/instructors/$handle'
+      path: '/instructors/$handle'
+      fullPath: '/instructors/$handle'
+      preLoaderRoute: typeof InstructorsHandleRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/my-learning/': {
@@ -261,6 +281,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   CategorySlugRoute: CategorySlugRoute,
+  InstructorsHandleRoute: InstructorsHandleRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
   MyLearningIndexRoute: MyLearningIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
