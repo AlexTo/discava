@@ -102,6 +102,15 @@
   "discussionVote": {
     "core-table": ["packages/databases/core-table/src/helpers/discussion.ts"]
   },
+  "earningDay": {
+    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+  },
+  "earningEntry": {
+    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+  },
+  "earningOrder": {
+    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+  },
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
@@ -180,6 +189,8 @@
       "packages/databases/core-table/src/helpers/payment-connection.ts"
     ]
   },
+  "payout": {},
+  "payoutAccount": {},
   "periodStats": {
     "core-table": [
       "packages/databases/core-table/src/helpers/analytics-rebuild.ts",

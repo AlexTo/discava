@@ -221,6 +221,17 @@ export {
   discussionNotificationWrites,
 } from './helpers/discussion-notifications.js';
 export {
+  type EarningDayRecord,
+  type EarningEntryRecord,
+  type EarningOrderRecord,
+  type EarningSaleOrder,
+  earningDayOf,
+  queryEarningDays,
+  queryEarningLines,
+  recordRefund,
+  recordSale,
+} from './helpers/earning.js';
+export {
   type CancellationReasons,
   cancellationReasons,
   failedAt,

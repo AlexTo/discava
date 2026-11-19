@@ -373,6 +373,7 @@ export interface TableSnapshot {
     | 'userId'
     | 'courseId'
     | 'accountId'
+    | 'mode'
     | 'listAmount'
     | 'amount'
     | 'currency'

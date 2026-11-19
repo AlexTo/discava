@@ -24,6 +24,21 @@ const KEYS: Record<string, (key: Row) => string> = {
   paymentConnection: () => 'singleton',
   paymentChange: (k) => k.changeId,
   certificate: (k) => `${k.userId}|${k.courseId}`,
+  earningOrder: (k) => k.orderId,
+  earningEntry: (k) =>
+    `${k.instructorId}|${k.courseId}|${k.occurredAt}|${k.entryId}`,
+  earningDay: (k) => `${k.instructorId}|${k.day}|${k.courseId}|${k.currency}`,
+};
+
+// The sort keys of the entities a range query reads, as their templates build
+// them, and the partial key a `between` bound stands for.
+const SORT_KEYS: Record<string, (k: Row) => string> = {
+  earningDay: (k) => `D#${k.day}#${k.courseId}#${k.currency}`,
+  earningEntry: (k) => `L#${k.courseId}#${k.occurredAt}#${k.entryId}`,
+};
+const BOUNDS: Record<string, (k: Row) => string> = {
+  earningDay: (k) => `D#${k.day}`,
+  earningEntry: (k) => `L#${k.courseId}#${k.occurredAt}`,
 };
 
 type Test = (row?: Row) => boolean;
@@ -67,7 +82,7 @@ const evaluate = (where?: (attr: any, op: any) => string): Test => {
 export interface Operation {
   entity: string;
   id: string;
-  kind: 'create' | 'patch' | 'check';
+  kind: 'create' | 'patch' | 'check' | 'upsert';
   holds: Test;
   apply: (row: Row | undefined) => Row | undefined;
 }
@@ -106,6 +121,44 @@ export const createFakeCoreTable = () => {
       if (next) table(o.entity).set(o.id, next);
     }
     return true;
+  };
+
+  // A query on an instructor's partition, optionally `between` two bounds,
+  // paged by `limit` and a cursor (the last sort key returned).
+  const rangeQuery = (name: string, key: Row) => {
+    let low = '';
+    let high = '\uffff';
+    const chain: any = {
+      between: (from: Row, to: Row) => {
+        low = BOUNDS[name]!(from);
+        high = BOUNDS[name]!(to);
+        return chain;
+      },
+      go: async ({
+        cursor,
+        limit,
+      }: {
+        cursor?: string;
+        limit?: number;
+        pages?: 'all';
+      } = {}) => {
+        const sorted = [...table(name).values()]
+          .filter((row) => row.instructorId === key.instructorId)
+          .map((row) => ({ sk: SORT_KEYS[name]!(row), row }))
+          .filter(({ sk }) => sk >= low && sk <= high)
+          .sort((a, b) => (a.sk < b.sk ? -1 : 1))
+          .filter(({ sk }) => cursor === undefined || sk > cursor);
+        const page = limit === undefined ? sorted : sorted.slice(0, limit);
+        return {
+          data: page.map(({ row }) => structuredClone(row)),
+          cursor:
+            limit !== undefined && sorted.length > limit
+              ? page[page.length - 1]!.sk
+              : null,
+        };
+      },
+    };
+    return chain;
   };
 
   const entity = (name: string) => {
@@ -178,6 +231,33 @@ export const createFakeCoreTable = () => {
         return chain;
       },
       patch,
+      // An update that creates the item when it is missing and adds to its
+      // numbers, as DynamoDB's ADD does.
+      update: (key: Row) => {
+        let adds: Row = {};
+        const build = (): Operation => ({
+          entity: name,
+          id: idOf(key),
+          kind: 'upsert',
+          holds: () => true,
+          apply: (row) => {
+            const next = { ...key, ...row };
+            for (const [field, amount] of Object.entries(adds)) {
+              next[field] = (next[field] ?? 0) + (amount as number);
+            }
+            return next;
+          },
+        });
+        const chain: any = {
+          add: (values: Row) => ((adds = values), chain),
+          commit: build,
+          go: async () => {
+            run([build()]);
+            return { data: structuredClone(table(name).get(idOf(key))) };
+          },
+        };
+        return chain;
+      },
       query: {
         // Orders of one student for one course, oldest first.
         byStudentCourse: ({ userId, courseId }: Row) => ({
@@ -188,13 +268,16 @@ export const createFakeCoreTable = () => {
               .map((r) => structuredClone(r)),
           }),
         }),
-        primary: () => ({
-          go: async () => ({
-            data: [...table(name).values()]
-              .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
-              .map((r) => structuredClone(r)),
-          }),
-        }),
+        primary: (key: Row) =>
+          SORT_KEYS[name]
+            ? rangeQuery(name, key)
+            : {
+                go: async () => ({
+                  data: [...table(name).values()]
+                    .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
+                    .map((r) => structuredClone(r)),
+                }),
+              },
       },
     };
   };
