@@ -63,8 +63,7 @@
       }
     },
     "dev": {
-      "executor": "nx:run-commands",
-      "continuous": true,
+      "executor": "nx:noop",
       "dependsOn": [
         {
           "projects": ["@discava/tooling-local-dev"],
