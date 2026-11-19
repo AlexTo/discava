@@ -232,6 +232,11 @@ export {
   recordSale,
 } from './helpers/earning.js';
 export {
+  EARNINGS_STREAM_FILTERS,
+  type EarningsStreamRecord,
+  matchesEarningsStreamFilters,
+} from './helpers/earnings-stream.js';
+export {
   type CancellationReasons,
   cancellationReasons,
   failedAt,
