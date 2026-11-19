@@ -177,7 +177,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Goal**: The design page describes suggestions. Reviewers confirm timing, screen reader output and phone layout by hand.
 
-- [ ] T018 [P] Add a "Suggestions" section to `docs/src/content/docs/en/design/search.mdx` after "The search procedure":
+- [x] T018 [P] Add a "Suggestions" section to `docs/src/content/docs/en/design/search.mdx` after "The search procedure":
   - `course.publicSuggest`, and why it's separate from `publicSearch` (research R-2);
   - the `match_bool_prefix` query and its known stemming limit, with `search_as_you_type` as the follow-up (R-1);
   - the 3-character threshold, the 300 ms debounce and last-text-wins caching (R-3);

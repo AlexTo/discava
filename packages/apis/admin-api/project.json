@@ -69,7 +69,8 @@
         "commands": ["tsx --watch src/local-server.ts"],
         "cwd": "{projectRoot}",
         "env": {
-          "LOCAL_DEV": "true"
+          "LOCAL_DEV": "true",
+          "STRIPE_WEBHOOK_URL": "http://localhost:2024/stripe/webhook"
         }
       }
     },

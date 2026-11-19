@@ -60,6 +60,7 @@ describe('verifyKey', () => {
     ['sk_live_abc123', 'live'],
     ['rk_test_abc123', 'test'],
     ['rk_live_abc123', 'live'],
+    ['sk_test_local_2', 'test'],
   ] as const)(
     'accepts %s and reads the mode from the prefix',
     async (key, mode) => {
