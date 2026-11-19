@@ -4,11 +4,13 @@
  */
 import {
   CoreTable,
+  ImportedStripeSecrets,
   InstructorApi,
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
   PublicMediaBucket,
+  type StripeSecrets,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { InstructorApiComponentConfig } from '@discava/common-infra-config';
@@ -49,6 +51,8 @@ export interface InstructorApiStackProps extends StackProps {
   readonly lessonMediaUploadBucket: LessonMediaUploadBucket;
   readonly publicMediaBucket: PublicMediaBucket;
   readonly mediaPipeline: MediaPipelineStack;
+  /** The Stripe secrets; payout onboarding reads the API key. */
+  readonly stripeSecrets: StripeSecrets;
   /** The only portal that calls instructor-api. */
   readonly instructorPortal: InstructorPortal;
 }
@@ -74,6 +78,7 @@ export class InstructorApiStack extends Stack {
       lessonMediaUploadBucket,
       publicMediaBucket,
       mediaPipeline,
+      stripeSecrets,
       instructorPortal,
       ...props
     }: InstructorApiStackProps,
@@ -123,6 +128,21 @@ export class InstructorApiStack extends Stack {
     // A replaced file's old version is retired by a scheduled cleanup (#102).
     mediaPipeline.grantScheduleCleanup(
       this.privilegedHandler('contentItem.updateFile'),
+    );
+
+    // The secrets are imported, so the grant lands on the function's role and
+    // not on the Data stack's key policy (a cycle otherwise). Only the API
+    // key is readable: no write, and no signing secret.
+    const secrets = new ImportedStripeSecrets(
+      this,
+      'StripeSecrets',
+      stripeSecrets,
+    );
+    const payouts = this.privilegedHandler('payout.startOnboarding');
+    secrets.grantReadApiKey(payouts);
+    payouts.addEnvironment(
+      'STRIPE_API_KEY_SECRET_ARN',
+      secrets.apiKey.secretArn,
     );
 
     this.instructorApi.restrictCorsTo(

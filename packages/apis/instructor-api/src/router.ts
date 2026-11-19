@@ -105,6 +105,11 @@ import {
   updateModule,
 } from './procedures/module.js';
 import {
+  account as payoutAccount,
+  dashboardLink as payoutDashboardLink,
+  startOnboarding as payoutStartOnboarding,
+} from './procedures/payout.js';
+import {
   createProfilePhotoUploadUrl,
   getProfile,
   updateProfile,
@@ -172,6 +177,11 @@ export const appRouter = router({
   earnings: router({
     report: earningsReport,
     lines: earningsLines,
+  }),
+  payout: router({
+    account: payoutAccount,
+    startOnboarding: payoutStartOnboarding,
+    dashboardLink: payoutDashboardLink,
   }),
   category: router({
     listActive: listActiveCategories,

@@ -152,6 +152,7 @@ export class ApplicationStage extends Stage {
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
       publicMediaBucket: data.publicMediaBucket,
       mediaPipeline,
+      stripeSecrets: data.stripeSecrets,
       instructorPortal: websites.instructorPortal,
     });
 
