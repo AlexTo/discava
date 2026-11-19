@@ -56,9 +56,9 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     const student = await browser.newPage();
     await student.goto(PORTALS.instructor);
     await signIn(student, newUser('Bob', ['student', 'instructor']));
-    await expect(student.getByRole('link', { name: 'Payments' })).toHaveCount(
-      0,
-    );
+    await expect(
+      student.getByRole('link', { name: 'Payments', exact: true }),
+    ).toHaveCount(0);
   });
 
   await test.step('Carol opens the Payments page', async () => {
@@ -67,7 +67,9 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await expect(
       admin.getByRole('heading', { name: 'Payments' }),
     ).toBeVisible();
-    await expect(admin.getByRole('link', { name: 'Payments' })).toBeVisible();
+    await expect(
+      admin.getByRole('link', { name: 'Payments', exact: true }),
+    ).toBeVisible();
   });
 
   await test.step('a priced course cannot be priced before the connection', async () => {
