@@ -1888,6 +1888,12 @@ upsert_boundary_policy() {
       "Resource": "arn:$AWS_PARTITION:secretsmanager:$AWS_REGION:$ACCOUNT_ID:secret:$COMPACT_PREFIX*"
     },
     {
+      "Sid": "GenerateSecretValues",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetRandomPassword",
+      "Resource": "*"
+    },
+    {
       "Sid": "StageCrossRegionExports",
       "Effect": "Allow",
       "Action": [
