@@ -113,3 +113,35 @@ describe('createTranscriber', () => {
     await expect(transcriber.idle()).resolves.toBeUndefined();
   });
 });
+
+describe('for a course preview', () => {
+  it('reports the outcome with the preview target', async () => {
+    const { transcriber, onFinished } = build();
+    const request = {
+      ...REQUEST,
+      jobName: 'captions-preview-course-1-nonce-1',
+      tags: { target: 'coursePreview', courseId: 'course-1', nonce: 'nonce-1' },
+      outputKey: 'courses/course-1/preview/transcribe-output/nonce-1/',
+    };
+
+    transcriber.submit(request);
+    await transcriber.idle();
+
+    expect(onFinished).toHaveBeenCalledExactlyOnceWith({
+      jobName: request.jobName,
+      status: 'COMPLETED',
+      target: 'coursePreview',
+      courseId: 'course-1',
+      nonce: 'nonce-1',
+      vttKey: `${request.outputKey}${request.jobName}.vtt`,
+    });
+  });
+
+  it('refuses a preview job without its tags', () => {
+    const { transcriber } = build();
+
+    expect(() =>
+      transcriber.submit({ ...REQUEST, tags: { target: 'coursePreview' } }),
+    ).toThrow('preview job');
+  });
+});

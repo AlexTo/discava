@@ -52,3 +52,17 @@ describe('preTokenGenerationEvent', () => {
     });
   });
 });
+
+describe('transcodeCompletionEvent output details', () => {
+  it('reports the duration as MediaConvert’s output details do', () => {
+    expect(
+      transcodeCompletionEvent('job-1', 'COMPLETE', USER_METADATA, 12.3456)
+        .detail,
+    ).toMatchObject({
+      outputGroupDetails: [{ outputDetails: [{ durationInMs: 12346 }] }],
+    });
+    expect(
+      transcodeCompletionEvent('job-1', 'ERROR', USER_METADATA).detail,
+    ).not.toHaveProperty('outputGroupDetails');
+  });
+});

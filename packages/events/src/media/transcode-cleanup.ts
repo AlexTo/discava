@@ -37,10 +37,12 @@ const s3Client = new S3Client(s3ClientConfig());
 const S3_PAGE_SIZE = 1000;
 
 const CleanupEventSchema = z.object({
+  // A course preview's folder (no lesson ids); no `target` is a content item's.
+  target: z.enum(['contentItem', 'coursePreview']).optional(),
   courseId: z.string(),
-  moduleId: z.string(),
-  lessonId: z.string(),
-  contentItemId: z.string(),
+  moduleId: z.string().optional(),
+  lessonId: z.string().optional(),
+  contentItemId: z.string().optional(),
   submissionNonce: z.string(),
   // A student's user id, for a folder of their assignment submissions: the
   // cleanup then deletes nothing while their submission's file is in it.
@@ -105,14 +107,42 @@ const keepsSubmissionFolder = async ({
 export const transcodeCleanup = async (event: unknown): Promise<void> => {
   logger.info('Received event', event as Record<string, unknown>);
 
-  const { courseId, moduleId, lessonId, contentItemId, submissionNonce } =
-    CleanupEventSchema.parse(event);
-
-  const { keepIfCurrentFor, purpose } = CleanupEventSchema.parse(event);
+  const {
+    target,
+    courseId,
+    moduleId,
+    lessonId,
+    contentItemId,
+    submissionNonce,
+    keepIfCurrentFor,
+    purpose,
+  } = CleanupEventSchema.parse(event);
   const bucket = await resolveLessonMediaBucketName();
-  const prefix = `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/`;
+  const isPreview = target === 'coursePreview';
+  if (!isPreview && !(moduleId && lessonId && contentItemId)) {
+    throw new Error('A content item cleanup needs its module, lesson and item');
+  }
+  const prefix = isPreview
+    ? `courses/${courseId}/preview/${submissionNonce}/`
+    : `courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/content-items/${contentItemId}/${submissionNonce}/`;
 
-  if (keepIfCurrentFor !== undefined) {
+  if (isPreview) {
+    // A preview's folder is kept while its record still plays that version
+    // (or keeps it as the one to fall back on), read consistently.
+    coreTablePromise ??= createCoreTableService();
+    const { entities } = await coreTablePromise;
+    const { data: preview } = await entities.coursePreview
+      .get({ courseId })
+      .go({ consistent: true });
+    const holds = (key: string | undefined) =>
+      key !== undefined && key.startsWith(prefix);
+    if (holds(preview?.s3Key) || holds(preview?.previousS3Key)) {
+      logger.info('Keeping a preview folder still in use', { prefix });
+      return;
+    }
+  }
+
+  if (keepIfCurrentFor !== undefined && contentItemId !== undefined) {
     const kept = await keepsSubmissionFolder({
       courseId,
       contentItemId,

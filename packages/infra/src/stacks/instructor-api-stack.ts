@@ -9,16 +9,14 @@ import {
   LessonMediaBucket,
   LessonMediaUploadBucket,
   PublicMediaBucket,
-  suppressRules,
   UserIdentity,
 } from '@discava/common-constructs';
 import type { InstructorApiComponentConfig } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { CfnResource, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
-import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { apiLimits } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
+import { privilegedHandler, trpcApiProps } from './trpc-api-props.js';
 
 type InstructorApiIntegrations = ReturnType<
   ReturnType<typeof InstructorApi.defaultIntegrations>['build']
@@ -82,47 +80,22 @@ export class InstructorApiStack extends Stack {
   ) {
     super(scope, id, props);
 
-    const instructorApiKmsEnabled =
-      instructorApiConfig?.enableKmsEncryption ?? true;
-    const limits = apiLimits(instructorApiConfig);
+    const {
+      limits,
+      props: apiProps,
+      suppressLogGroupKmsRule,
+    } = trpcApiProps(this, 'InstructorApi', instructorApiConfig);
     this.integrations = InstructorApi.defaultIntegrations(
       this,
       limits.functionOptions,
     ).build();
-    const instructorApiCertificate = instructorApiConfig?.certificateArn
-      ? Certificate.fromCertificateArn(
-          this,
-          'InstructorApiCertificate',
-          instructorApiConfig.certificateArn,
-        )
-      : undefined;
 
     this.instructorApi = new InstructorApi(this, 'InstructorApi', {
       integrations: this.integrations,
       identity,
-      enableWaf: instructorApiConfig?.enableWaf ?? true,
-      throttle: limits.throttle,
-      enableTracing: limits.enableTracing,
-      enableKmsEncryption: instructorApiKmsEnabled,
-      enableKeyRotation: instructorApiConfig?.enableKeyRotation ?? true,
-      removalPolicy:
-        (instructorApiConfig?.retainOnDelete ?? true)
-          ? RemovalPolicy.RETAIN
-          : RemovalPolicy.DESTROY,
-      domainName: instructorApiConfig?.domainName,
-      certificate: instructorApiCertificate,
+      ...apiProps,
     });
-    if (!instructorApiKmsEnabled) {
-      suppressRules(
-        this,
-        ['CKV_AWS_158'],
-        'KMS encryption disabled for this stage',
-        (c) =>
-          CfnResource.isCfnResource(c) &&
-          c.cfnResourceType === 'AWS::Logs::LogGroup' &&
-          c.node.path.includes('/InstructorApi/AccessLogs'),
-      );
-    }
+    suppressLogGroupKmsRule();
 
     Object.values(this.integrations).forEach(({ handler }) =>
       coreTable.grantReadWriteData(handler),
@@ -160,13 +133,13 @@ export class InstructorApiStack extends Stack {
   // so a procedure missing from INSTRUCTOR_API_DEDICATED_FUNCTIONS fails
   // synth instead of silently handing its permissions to the shared router
   // function that serves every other instructor procedure.
-  private privilegedHandler(op: keyof InstructorApiIntegrations) {
-    if (!InstructorApi.hasDedicatedFunction(op)) {
-      throw new Error(
-        `instructor-api operation '${op}' is served by the shared router; add it to INSTRUCTOR_API_DEDICATED_FUNCTIONS before granting it extra permissions`,
-      );
-    }
-    return this.integrations[op].handler;
+  private privilegedHandler(op: keyof InstructorApiIntegrations & string) {
+    return privilegedHandler(
+      InstructorApi,
+      'instructor-api',
+      this.integrations,
+      op,
+    );
   }
 
   private grantLessonMediaAccess(lessonMediaBucket: LessonMediaBucket) {
