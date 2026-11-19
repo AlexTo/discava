@@ -22,7 +22,15 @@ const navItems: PortalNavItem[] = [
 // Static labels for path segments that don't come from an entity a route
 // might load (e.g. a course title) - those instead go through
 // useBreadcrumbLabel.
-const segmentLabels = { 'my-courses': 'My Courses' };
+const segmentLabels = {
+  dashboard: 'Dashboard',
+  'my-courses': 'My Courses',
+  questions: 'Questions',
+  reviews: 'Reviews',
+  profile: 'Profile',
+  settings: 'Settings',
+  notifications: 'Notifications',
+};
 
 const userMenuItems: UserMenuItem[] = [
   { label: 'Public profile', to: '/profile' },

@@ -19,7 +19,8 @@ export interface LessonFigures {
 }
 
 // The lessons with the lowest share among those anyone started. Marked only
-// when at least two lessons have a share to compare.
+// when at least two lessons have a share to compare and they don't all match
+// (a course with no drop-off has no lowest).
 const lowestShare = (lessons: LessonFigures[]): Set<string> => {
   const shares = lessons.flatMap(({ completionShare }) =>
     completionShare === null ? [] : [completionShare],
@@ -28,6 +29,9 @@ const lowestShare = (lessons: LessonFigures[]): Set<string> => {
     return new Set();
   }
   const lowest = Math.min(...shares);
+  if (shares.every((share) => share === lowest)) {
+    return new Set();
+  }
   return new Set(
     lessons
       .filter(({ completionShare }) => completionShare === lowest)
