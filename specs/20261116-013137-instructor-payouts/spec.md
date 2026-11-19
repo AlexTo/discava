@@ -10,7 +10,7 @@
 
 **Parent issue**: #286
 
-**Depends on**: #284 (Stripe checkout and orders) and #285 (coupons), both being specified in parallel. Their specs are not on `main` yet; the order, refund and discount concepts this spec relies on are listed in Assumptions.
+**Depends on**: #284 (Stripe checkout and orders) and #285 (coupons). Both specs are on `main`, and so is #284's order record; what this spec takes from them is listed in Assumptions.
 
 ## Clarifications
 
@@ -18,11 +18,21 @@
 
 Resolved without asking, using the recommended defaults below (non-interactive run).
 
-- Q: Who bears a lost dispute (chargeback) and Stripe's dispute fee? → A: The instructor amount of that order is reversed in full, like a full refund; Stripe's dispute fee and any shortfall are borne by the platform.
+- Q: Who bears a lost dispute (chargeback) and Stripe's dispute fee? → A: The instructor amount of that order is reversed in full, like a full refund; Stripe's dispute fee and any shortfall are borne by the platform. *(Superseded on 2026-11-19, below.)*
 - Q: Can an instructor's course be sold, and earnings accrue, before they have connected a payout account? → A: Yes. Earnings accrue as "Waiting for account setup" and are sent once the account is active; nothing blocks the sale.
 - Q: What periods can the report cover? → A: A UTC calendar month (default: the current month) or a custom date range of at most 366 days; longer or inverted ranges are refused with a clear message.
 - Q: Does the report let an instructor see the orders behind each figure? → A: Yes. Each course row expands to a paged list of its sales and refunds in the period (order reference, date, amount lines), with no buyer identity, so totals can be checked line by line.
 - Q: How is an order shared among a course's instructors, and can the fee differ per course? → A: Equally among the instructors at payment time, and the fee is one percentage per stage, never per course or per instructor.
+
+### Session 2026-11-19
+
+Reconciled with the checkout spec (#284) once it and its order record landed on `main`. Resolved without asking, using the defaults below; the ones that are product choices are listed as open questions on the pull request.
+
+- Q: #284 keeps no record per refund, only the order's running refunded total. What is an adjustment tied to? → A: To the order's refunded total. Each time the total rises, one adjustment per instructor brings the earnings up to it, so the adjustments for an order always sum to the share of its refunded total. Two refunds noticed out of order may be recorded as one adjustment.
+- Q: #284 also marks a payment as paid when it refunds it automatically because it could not be delivered (a duplicate payment, a course no longer on sale, a payment that does not match its order). Are those sales? → A: No. They were never sales and appear nowhere in earnings or reports.
+- Q: #284 handles disputes by hand and sends no dispute event. What happens to earnings on a lost dispute? → A: Nothing, in this feature. Disputes are out of scope: the earning stands and the platform bears the loss and the dispute fee. A dispute the operator settles by refunding is recorded as that refund.
+- Q: #284 lets an administrator connect Stripe at run time and later switch to another Stripe account, or from test to live. What happens to payout accounts and unpaid earnings? → A: Payout accounts and transfers belong to one Stripe account in one mode (a "payment account"). After a switch, instructors set up payouts again for the new one. Earnings from the old one stay in reports, are shown as Held, and are never paid from the new one; they are paid if the administrator switches back, and otherwise the operator settles them outside Discava.
+- Q: What if the platform has not connected Stripe at all? → A: Earnings are still recorded and reported. Payout setup shows "Payouts aren't available yet" and nothing is sent.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -68,7 +78,7 @@ An instructor starts payout setup from the Earnings page, completes Stripe's hos
 
 ### User Story 3 - Earnings follow orders, discounts and refunds automatically (Priority: P1)
 
-Whenever a student's payment for a course succeeds, the instructor's earnings for it are recorded: the amount the student actually paid (after any coupon), less the platform fee for the stage, shared among the course's instructors. When that payment is later refunded (fully or partly), or a dispute is lost, a matching negative adjustment is recorded. Nothing is recorded twice when Stripe resends an event.
+Whenever a student's payment for a course succeeds, the instructor's earnings for it are recorded: the amount the student actually paid (after any coupon), less the platform fee for the stage, shared among the course's instructors. When that payment is later refunded (fully or partly), a matching negative adjustment is recorded. Nothing is recorded twice when Stripe resends an event.
 
 **Why this priority**: The report and every payout are only as right as these records. Exactly-once recording and exact refund adjustment are the rules most likely to break.
 
@@ -79,9 +89,10 @@ Whenever a student's payment for a course succeeds, the instructor's earnings fo
 1. **Given** a paid order, **When** the payment is confirmed, **Then** the course's instructors' earnings are recorded once, from the amount paid after discount, with the platform fee in effect at that time.
 2. **Given** the same payment event delivered again or at the same time as itself, **Then** no second record is created.
 3. **Given** a partial refund, **Then** a negative adjustment is recorded for the refunded share of the instructor amount and of the fee; further refunds adjust again, and total adjustments never exceed the original earning.
-4. **Given** a full refund or a lost dispute, **Then** the order's earning nets to exactly zero.
+4. **Given** a full refund, **Then** the order's earning nets to exactly zero, for the order and for each instructor.
 5. **Given** an order paid in full by a 100% coupon (amount paid is zero), **Then** no earning is recorded.
 6. **Given** the platform fee setting changes, **Then** earnings already recorded keep the fee they were recorded with.
+7. **Given** a payment that checkout refunded automatically because it could not be delivered, **Then** no earning and no adjustment is recorded, and it is in no report.
 
 ---
 
@@ -102,6 +113,9 @@ Once an instructor's account is active, earnings that have passed the stage's ho
 5. **Given** a payout that Stripe rejects, **Then** it shows as Failed with a reason, its earnings go back to ready, and a later run retries them.
 6. **Given** a refund after the money was sent, **Then** the adjustment is deducted from the instructor's next payout (money is not pulled back from their Stripe account), and the balance never silently hides a negative amount.
 7. **Given** a balance below the stage's minimum payout amount, **Then** it is held as Ready until it reaches the minimum.
+8. **Given** an instructor with more released earnings than fit in one database write (hundreds of sales), **Then** they are still paid as one payout, and a run interrupted partway sends nothing and leaves the earnings ready for the next run.
+9. **Given** the platform switched to another Stripe account, or from test to live, **Then** earnings from the old one show as Held and are not sent, the instructor is asked to set up payouts again, and earnings from the new one are paid as normal once they do.
+10. **Given** the platform has no Stripe connection, **Then** the run sends nothing and the page says payouts aren't available yet.
 
 ---
 
@@ -123,17 +137,19 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 
 ### Edge Cases
 
-- Rounding: the platform fee is rounded to the nearest minor unit (half up) and the instructor amount is the remainder, so fee plus instructor amount always equals the amount paid. Splitting among instructors gives any leftover minor units to the first instructor by ID, deterministically.
-- A course whose instructors change after a sale: the split is fixed when the earning is recorded; later changes do not move past earnings.
+- Rounding: the platform fee is rounded to the nearest minor unit (half up) and the instructor amount is the remainder, so fee plus instructor amount always equals the amount paid. Splitting among instructors gives any leftover minor units one each to the first instructors by ID, deterministically, and the same rule applied to a refund makes a full refund return each instructor exactly what the sale gave them.
+- A course whose instructors change after a sale: the split is fixed when the earning is recorded (normally within seconds of the payment); later changes do not move past earnings.
 - A course taught by an instructor with no account: their share accrues as Waiting for account setup; other instructors are paid.
 - A refund larger than what remains of an earning (duplicate refund events): adjustments are capped so an order never nets below zero.
-- A refund event for an order that has no earning (unpaid, free, or recorded before this feature): ignored with no error.
+- A refund of an order that has no earning (free, or refunded automatically as undeliverable): ignored with no error.
+- A payment that could not be delivered and was refunded automatically (a duplicate payment, a course no longer on sale, a payment that does not match its order): never a sale, so nothing is recorded.
 - Orders in different currencies: figures are never summed across currencies; the report shows a section per currency.
-- A dispute (chargeback) lost: treated as a full refund of that order; a dispute won after loss is out of scope.
+- A dispute (chargeback): out of scope, as in #284. A lost dispute changes no earning; the platform bears it and the dispute fee. A dispute the operator settles by refunding is recorded as a refund.
 - A refund arriving after the instructor's account was closed: stays as a negative balance, shown as such.
-- Stripe retries or reorders events (refund before paid event is processed): the records settle to the same result once both are processed.
+- Stripe retries or reorders events, or changes reach this feature out of order: the earnings settle to the same totals. Two refunds of one order noticed out of order may show as one adjustment dated by the later one.
 - A report period that starts in the future: an empty state. A range that ends before it starts or is longer than 366 days: a clear validation message, never a crash.
-- A lost dispute: the instructor amount is reversed in full; Stripe's dispute fee is the platform's cost and never shown to or charged to the instructor.
+- The platform switches its Stripe account or mode: see User Story 4, scenario 9. Test-mode earnings are never paid with live money.
+- A payout interrupted before its transfer (a crash, or two runs at once): nothing is sent, and its earnings are ready again for a later run.
 - Taxes: out of scope; amounts are as recorded on the order (see Assumptions).
 
 ## Requirements *(mandatory)*
@@ -143,16 +159,16 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - **FR-001**: When an order's payment is confirmed, the system MUST record exactly one earning per instructor of the order's course, derived from the amount the student actually paid (after discounts). Recording MUST be idempotent against repeated, retried and concurrent events.
 - **FR-002**: The platform fee MUST be a percentage set per stage in the stage configuration, defaulting to a documented value, and MUST be validated at build time to be between 0 and 100 inclusive. The fee in effect when an earning is recorded MUST be stored with it and never recalculated.
 - **FR-003**: Fee and instructor amount MUST always add up exactly to the amount paid, in the order's currency's minor units, with the rounding rule in Edge Cases.
-- **FR-004**: When an order is refunded (in part or in full) or a dispute is lost, the system MUST record a negative adjustment for the refunded share of the instructors' amounts and of the fee, idempotently per refund, capped so the order's earning never goes below zero.
+- **FR-004**: When an order's refunded total rises (a partial or full refund), the system MUST record a negative adjustment that brings the instructors' amounts and the fee up to the share of that total, idempotently (a total already recorded changes nothing), capped so the order's earning never goes below zero. Once an order is refunded in full, its earning MUST net to exactly zero for each instructor and for the fee.
 - **FR-005**: Earnings and adjustments MUST be recorded only through one shared `core-table` helper that every writer calls. The invariant checks MUST include that, per order, adjustments never exceed the earning, fee plus instructor amounts equal the amount paid, and each earning matches a paid order and a course instructor at the time.
 - **FR-006**: Instructors MUST be able to read an earnings report for a period (calendar month or custom range, in UTC), showing per course and in total: paid orders, gross, discounts, refunds, platform fee and net, per currency.
 - **FR-007**: Report figures MUST reconcile: for every row and total, gross minus discounts minus refunds minus fee equals net, and the figures MUST equal the sums of the underlying earnings and adjustments. A test MUST fail when they diverge, and the invariant checks MUST include the same identity per order.
-- **FR-008**: A sale counts in the period of its payment time and a refund in the period of the refund, so a period's report never changes after the period ends except for late-arriving refunds, which appear in their own period.
+- **FR-008**: A sale counts in the period of its payment time and a refund in the period in which the order recorded it, so a period's report never changes after the period ends except for late-arriving refunds, which appear in their own period.
 - **FR-009**: The report and every earnings read MUST be limited to the calling instructor's own share of their own courses and MUST NOT expose buyer identity or other instructors' figures.
 - **FR-010**: Instructors MUST be able to start, resume and finish Stripe Connect onboarding from the portal, see their account's status (not started, in progress, active, restricted), and open their Stripe dashboard. Discava MUST NOT store bank or identity details.
 - **FR-011**: The account status MUST be refreshed from Stripe when the instructor opens the Earnings page, when they return from onboarding, and before each payout, so a stale status never causes money to be sent to a restricted account.
-- **FR-012**: Earnings MUST be sent to an instructor's Stripe account automatically, only when the account is active, only after the stage's hold period, only when the balance reaches the stage's minimum payout, and never twice for the same earnings.
-- **FR-013**: The Earnings page MUST show payout status per amount: On hold (with release date), Waiting for account setup, Ready, Sent (date, amount), Failed (reason), plus the current balance and any negative balance.
+- **FR-012**: Earnings MUST be sent to an instructor's Stripe account automatically, only when the account is active, only after the stage's hold period, only when the balance reaches the stage's minimum payout, and never twice for the same earnings. This MUST hold however many earnings an instructor has, and an interrupted payout MUST leave either a completed transfer or its earnings ready again, never earnings that are neither paid nor payable.
+- **FR-013**: The Earnings page MUST show payout status per amount: On hold (with release date), Waiting for account setup, Ready, Held (earned under a payment account the platform no longer uses), Pending, Sent (date, amount), Failed (reason), plus the current balance and any negative balance.
 - **FR-014**: A refund after sending MUST be carried as a deduction on the instructor's next payout, MUST NOT be pulled back from their Stripe account in this feature, and MUST be visible to them as a negative balance.
 - **FR-015**: The hold period and minimum payout amount MUST be per-stage configuration, validated at build time.
 - **FR-016**: Students, other instructors and anonymous users MUST NOT be able to read any earning, payout or payout account; only instructors read their own, and only an instructor may start onboarding.
@@ -162,13 +178,17 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - **FR-020**: Money amounts MUST be stored and calculated as integers in minor units, never floating point, and shown formatted for the instructor's locale and the order's currency.
 - **FR-021**: Each course row MUST expand to a paged list of that period's sales and refunds (order reference, date, gross, discount, refund, fee, net) that sums to the row, without buyer identity. A period is a UTC calendar month or a custom range of at most 366 days, and any other range MUST be refused with a clear message.
 - **FR-022**: A course's earnings MUST accrue even when an instructor has no active payout account; the sale is never blocked by payout setup.
+- **FR-023**: Stripe MUST be called with the connection an administrator saved (#284), never a separate key. Every earning, payout account and payout MUST record the payment account (Stripe account and test or live mode) of its order, and money MUST only move inside one payment account: the payout run pays only earnings of the platform's current payment account, to payout accounts set up under it, and sends nothing when no connection is active. Earnings of another payment account MUST stay recorded and visible as Held and MUST NOT be paid from the current one.
+- **FR-024**: Only an order that was actually sold counts as a sale: one that is paid, or was paid and then refunded by an operator. A payment refunded automatically as undeliverable, an unpaid or expired checkout and a fully discounted order MUST record no earning and no adjustment.
+- **FR-025**: Disputes are out of scope: the feature MUST NOT record an adjustment for a dispute as such, only for a refund.
 
 ### Key Entities
 
-- **Order**: Existing from #284: the buyer, the course, the gross price, any discount from a coupon (#285), the amount paid, the currency, and its paid or refunded state.
+- **Order**: Existing from #284: the buyer, the course, the list price, the amount charged (lower after a coupon, #285), the currency, its state, the total refunded so far, and the Stripe account that took the payment. This feature adds the mode (test or live) of that account.
 - **Earning**: One per order per instructor (stored as a sale entry in the instructor's ledger), recording the instructor's amount, their share of the platform fee, the fee percentage used, the currency, and when it was recorded. Never edited after it is recorded.
-- **Adjustment**: A negative entry (a refund entry in the same ledger) tied to one earning and one refund or dispute, with the refunded amounts and when it happened.
-- **Payout account**: One per instructor: the link to their Stripe account and its status.
+- **Adjustment**: A negative entry (a refund entry in the same ledger) tied to one earning and to the refunded total it brings that order up to, with the refunded amounts and when it happened.
+- **Payment account**: The platform's Stripe account in one mode (test or live), as connected by an administrator (#284). Earnings, payout accounts and payouts each belong to one.
+- **Payout account**: One per instructor and payment account: the link to their Stripe account and its status.
 - **Payout**: A transfer of a set of earnings and adjustments to the instructor's Stripe account, with amount, status, date and failure reason.
 - **Stage payout settings**: The platform fee percentage, hold days and minimum payout, from stage configuration.
 
@@ -177,16 +197,18 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 ### Measurable Outcomes
 
 - **SC-001**: In 100% of test runs, the report totals equal the sum of the underlying orders and refunds to the minor unit, and the data-consistency check passes after every test.
-- **SC-002**: However many times or how concurrently a paid or refund event is delivered, each order has exactly one earning per instructor and each refund exactly one adjustment.
+- **SC-002**: However many times, how concurrently or in what order a paid or refunded order is noticed, each order has exactly one earning per instructor, and its adjustments sum exactly to the share of the order's refunded total.
 - **SC-003**: An instructor sees a paid order in their report within 30 seconds of the payment.
 - **SC-004**: An instructor opens a month's report in under 3 seconds regardless of how many orders their courses have had.
 - **SC-005**: An instructor can complete payout setup and see their account status in under 5 minutes of their own time, with Stripe's hosted flow doing the identity and bank steps.
-- **SC-006**: 0 cases where an earning is paid out twice, or paid out to an account that is not active.
+- **SC-006**: 0 cases where an earning is paid out twice, paid out to an account that is not active, or paid from a payment account other than the one that took its order.
 - **SC-007**: 0 cases where a student, another instructor or an anonymous user can read an instructor's earnings or payout account.
 
 ## Assumptions
 
-- **Order concepts from #284 and #285** (those specs are not yet on `main`; reconcile when they merge): an order record carries the buyer, course, gross price, discount amount, amount paid, currency in minor units, and a status moving from paid to refunded or partially refunded, driven by Stripe webhook events; refunds arrive as events identified by a refund ID, and a lost dispute is delivered like a full refund. All reporting reads these through one revenue-calculation helper, so a mismatch with the final order shape touches that helper and the event mapping only.
+- **What this takes from #284 and #285** (both specs, and #284's order record, are on `main`): an order carries the buyer, course, list price, amount charged, currency, a state (pending, paid, expired, refunded, with the reason it was refunded), the total refunded so far, and the Stripe account that took the payment. There is no record per refund and no dispute event. A coupon (#285) lowers the amount charged; the discount is the list price minus the amount charged. This feature reads the order in one place, so a change to its shape touches that mapping only, and adds one field to it: the mode (test or live) of the account that took the payment.
+- **Stripe is connected at run time** by an administrator (#284), who can rotate the key, switch to another Stripe account or disconnect. This feature uses that connection and has no key of its own. The key must be allowed to use Stripe Connect; #284 does not check that, so the docs say what it needs and payout setup reports clearly when it cannot.
+- **A stage normally keeps one payment account.** A switch (including test to live) is rare; its effect on payouts is in Clarifications. Reports cover every sale whatever account took it, so test-mode sales made on a stage before it went live stay in its reports.
 - Coupons are funded by the instructor: the platform fee and the instructor amount are both computed on the amount paid after discount. Platform-funded promotions are out of scope.
 - Taxes are out of scope: the order's amount is treated as the revenue to split. If checkout later collects tax, the order must expose the tax-exclusive amount, and this feature reads that.
 - The platform fee covers Stripe's own processing fees; instructors are never shown or charged them separately.
@@ -195,8 +217,8 @@ A maintainer sets the platform fee percentage, the hold period in days and the m
 - The hold period defaults to 14 days, the minimum payout to a small stage-set amount, and the fee to a documented default; the payout run is automatic and daily. Instructors cannot request an early payout.
 - Reports are in UTC and in the order's currency; no conversion across currencies.
 - Earnings recorded before this feature (any orders paid before it ships) do not exist: Discava has not launched, so there is no historical data to backfill.
-- Locally, the Stripe Connect calls run against a stand-in (the same one #284's checkout uses, extended with accounts, transfers and reversals, or a stand-in added here if it has none); payout transfers, account verification and real money movement are checked only on a deployed stage in Stripe test mode.
-- Out of scope: reversing transfers on Stripe's side (refunds after sending are deducted from the next payout instead), a Stripe webhook for account changes (status is pulled when needed), tax, invoices, instructor-visible buyer data, admin payout dashboards, currency conversion, platform-funded coupons, manual payout requests, payout schedule choice per instructor, subscriptions and revenue sharing rules other than equal split.
+- Locally, the Stripe Connect calls run against #284's Stripe stand-in, extended with payout accounts, onboarding and transfers; payout transfers, account verification and real money movement are checked only on a deployed stage in Stripe test mode.
+- Out of scope: reversing transfers on Stripe's side (refunds after sending are deducted from the next payout instead), a Stripe webhook for account changes (status is pulled when needed), disputes, paying out earnings of a payment account the platform has left, tax, invoices, instructor-visible buyer data, admin payout dashboards, currency conversion, platform-funded coupons, manual payout requests, payout schedule choice per instructor, subscriptions and revenue sharing rules other than equal split.
 - Discava has not launched: no old data or URLs to preserve, so the new records, routes and stage settings are added outright.
 - The instructor dashboard spec (#332) may later surface a revenue summary; this feature exposes the report procedure it can reuse and adds no dashboard card itself.
 - Only the final implementation PR may close #286.
