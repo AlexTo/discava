@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
-import { uuidV7Time } from './announcement.js';
+import {
+  type IdTimeCheck,
+  type IdTimeProblem,
+  idTimeWithin,
+  uuidV7Time,
+} from './uuid-v7.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -51,26 +56,21 @@ export const postIdTime = (id: string): number | undefined => {
   return time === undefined ? undefined : new Date(time).getTime();
 };
 
-export type PostIdProblem = 'not-uuid-v7' | 'outside-window';
+export type PostIdProblem = IdTimeProblem;
 
-export type PostIdCheck =
-  | { time: string; reason?: undefined }
-  | { time?: undefined; reason: PostIdProblem };
+export type PostIdCheck = IdTimeCheck;
 
 /**
  * Whether `id` is a UUID v7 minted within 10 minutes of `now` (either side),
  * with its ISO time (the post's createdAt) when it is.
  */
-export const checkPostId = (id: string, now: Date): PostIdCheck => {
-  const time = postIdTime(id);
-  if (time === undefined) {
-    return { reason: 'not-uuid-v7' };
-  }
-  if (Math.abs(time - now.getTime()) > DISCUSSION_POST_ID_WINDOW_MS) {
-    return { reason: 'outside-window' };
-  }
-  return { time: new Date(time).toISOString() };
-};
+export const checkPostId = (id: string, now: Date): PostIdCheck =>
+  idTimeWithin(
+    id,
+    now,
+    DISCUSSION_POST_ID_WINDOW_MS,
+    DISCUSSION_POST_ID_WINDOW_MS,
+  );
 
 export type AnsweredState = 'unanswered' | 'answered' | 'not-open';
 

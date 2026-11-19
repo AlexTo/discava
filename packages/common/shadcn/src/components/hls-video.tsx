@@ -181,6 +181,7 @@ export function HlsVideo({
   className,
   captions,
   resumeAt = 0,
+  autoPlay = false,
   onPositionChange,
 }: {
   url: string;
@@ -193,6 +194,9 @@ export function HlsVideo({
   captions?: PlayerCaption[];
   // Seconds to start from; 0 starts at the beginning.
   resumeAt?: number;
+  // Starts playing as soon as it can, for a video the viewer just asked to
+  // play (the browser allows it after their click).
+  autoPlay?: boolean;
   onPositionChange?: (position: PlayerPosition) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -327,6 +331,7 @@ export function HlsVideo({
       <video
         ref={videoRef}
         data-slot="hls-video"
+        autoPlay={autoPlay}
         controlsList="nodownload noremoteplayback"
         onContextMenu={(event) => event.preventDefault()}
         aria-label={title}

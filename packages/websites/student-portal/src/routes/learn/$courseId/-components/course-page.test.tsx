@@ -2,13 +2,22 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithCoreApi,
 } from '../../../../test/render-with-core-api';
 import { CoursePage } from './course-page';
+
+// The player itself is covered in common-shadcn; here it only shows what it got.
+vi.mock('@discava/common-shadcn/components/hls-video', () => ({
+  HlsVideo: ({ url, autoPlay }: { url: string; autoPlay?: boolean }) => (
+    <div data-testid="player" data-autoplay={String(autoPlay)}>
+      {url}
+    </div>
+  ),
+}));
 
 const course = {
   courseId: 'course-1',
@@ -261,5 +270,67 @@ describe('CoursePage', () => {
     expect(
       screen.getByRole('link', { name: /Browse courses/ }),
     ).toHaveAttribute('href', '/');
+  });
+
+  describe('preview video', () => {
+    const previewUrl = {
+      url: 'https://media.test/courses/course-1/preview/n/master.m3u8',
+      withCredentials: true,
+      versionId: 'n',
+      captions: [],
+    };
+    const renderWithPreview = (preview?: { durationSeconds: number }) =>
+      renderWithCoreApi(<CoursePage courseId="course-1" />, {
+        signedIn: false,
+        handlers: {
+          'course.publicView': () => ({ ...course, preview }),
+          'course.previewVideoUrl': () => previewUrl,
+        },
+      });
+
+    it('shows the poster, label and duration without asking for the video', async () => {
+      const { calls } = renderWithPreview({ durationSeconds: 95 });
+
+      expect(
+        await screen.findByRole('button', { name: 'Play preview' }),
+      ).toBeVisible();
+      expect(screen.getByText(/Preview this course/)).toHaveTextContent(
+        'Preview this course · 1:35',
+      );
+      expect(screen.queryByTestId('player')).not.toBeInTheDocument();
+      expect(calls.map((call) => call.path)).not.toContain(
+        'course.previewVideoUrl',
+      );
+    });
+
+    it('asks for the video exactly once, when play is pressed', async () => {
+      const { user, calls } = renderWithPreview({ durationSeconds: 95 });
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Play preview' }),
+      );
+
+      const player = await screen.findByTestId('player');
+      expect(player).toHaveTextContent(previewUrl.url);
+      expect(player).toHaveAttribute('data-autoplay', 'true');
+      await waitFor(() =>
+        expect(
+          calls.filter((call) => call.path === 'course.previewVideoUrl'),
+        ).toHaveLength(1),
+      );
+    });
+
+    it('shows the course image, and no player, without a preview', async () => {
+      const { calls } = renderWithPreview(undefined);
+
+      await screen.findByRole('heading', { name: 'Linear Algebra' });
+      expect(
+        screen.queryByRole('button', { name: 'Play preview' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Preview this course/)).not.toBeInTheDocument();
+      expect(calls.map((call) => call.path)).not.toContain(
+        'course.previewVideoUrl',
+      );
+    });
   });
 });

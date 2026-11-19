@@ -64,13 +64,13 @@ import { asContentItemOutput } from './content-item-shared.js';
 
 // Extension -> content type allowlist for lesson videos. Anything else is
 // rejected with BAD_REQUEST before a presigned URL is ever issued.
-const ALLOWED_VIDEO_TYPES: Record<string, string> = {
+export const ALLOWED_VIDEO_TYPES: Record<string, string> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
   mov: 'video/quicktime',
 };
 
-const UPLOAD_URL_EXPIRY_SECONDS = 15 * 60;
+export const UPLOAD_URL_EXPIRY_SECONDS = 15 * 60;
 
 export const createContentItemVideoUploadUrl = courseProcedure
   .input(CreateContentItemVideoUploadUrlInputSchema)

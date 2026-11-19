@@ -32,6 +32,7 @@ import {
   LANGUAGE_LABELS,
   LEVEL_LABELS,
 } from '../../../../lib/catalogue-filters';
+import { CoursePreview } from './course-preview';
 import { EnrolmentActions } from './enrolment-actions';
 import { InstructorCard } from './instructor-card';
 import { CourseReviews } from './reviews';
@@ -158,7 +159,17 @@ export function CoursePage({ courseId }: { courseId: string }) {
                 />
               </div>
             </div>
-            <CourseThumbnail course={course} className="rounded-xl shadow-sm" />
+            {course.preview ? (
+              <CoursePreview
+                course={course}
+                durationSeconds={course.preview.durationSeconds}
+              />
+            ) : (
+              <CourseThumbnail
+                course={course}
+                className="rounded-xl shadow-sm"
+              />
+            )}
           </div>
           <Card className="mt-8 py-0 shadow-sm">
             <CardContent className="grid divide-y p-0 sm:grid-cols-2 sm:divide-x sm:divide-y-0">

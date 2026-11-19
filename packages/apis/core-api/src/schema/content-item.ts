@@ -42,6 +42,17 @@ export const VideoUrlOutputSchema = z.object({
 
 export type IVideoUrlOutput = z.output<typeof VideoUrlOutputSchema>;
 
+export const PreviewVideoUrlInputSchema = z.object({ courseId: z.string() });
+
+// As a lesson video's URL, without a saved position: a preview has none.
+export const PreviewVideoUrlOutputSchema = VideoUrlOutputSchema.omit({
+  resumeAt: true,
+});
+
+export type IPreviewVideoUrlOutput = z.output<
+  typeof PreviewVideoUrlOutputSchema
+>;
+
 // A day, as core-table's VIDEO_POSITION_MAX_SECONDS; not imported, so the
 // schema (which the portals import for types) doesn't pull in the table.
 const VIDEO_POSITION_MAX_SECONDS = 86_400;

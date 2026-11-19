@@ -28,6 +28,7 @@ import {
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
+  previewVideoUrl,
   publicListCourses,
   publicViewCourse,
   viewCourse,
@@ -82,6 +83,7 @@ export const appRouter = router({
     publicList: publicListCourses,
     publicSearch: publicSearchCourses,
     publicView: publicViewCourse,
+    previewVideoUrl,
     view: viewCourse,
   }),
   announcement: router({
@@ -153,6 +155,7 @@ export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
+  'course.previewVideoUrl',
   'review.summary',
   'review.list',
   'category.list',

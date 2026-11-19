@@ -10,7 +10,6 @@ import { createEnrolmentEntity } from './enrolment.js';
 let certificate: Awaited<ReturnType<typeof createCertificateEntity>>;
 let enrolment: Awaited<ReturnType<typeof createEnrolmentEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   certificate = await createCertificateEntity();
   enrolment = await createEnrolmentEntity();
 });

@@ -10,7 +10,6 @@ import { createDiscussionPostEntity } from './discussion-post.js';
 let post: Awaited<ReturnType<typeof createDiscussionPostEntity>>;
 let contentItem: Awaited<ReturnType<typeof createContentItemEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   post = await createDiscussionPostEntity();
   contentItem = await createContentItemEntity();
 });

@@ -203,6 +203,9 @@ export const PublicViewCourseOutputSchema = CourseSchema.extend({
   durationHours: z.number().optional(),
   category: z.object({ slug: z.string(), name: z.string() }).optional(),
   instructors: z.array(PublicInstructorSchema),
+  // Only while the course's preview video can be played right now; never its
+  // keys or nonces.
+  preview: z.object({ durationSeconds: z.number() }).optional(),
 });
 
 export type IPublicViewCourseOutput = z.output<

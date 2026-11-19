@@ -72,6 +72,9 @@
     "events": [
       "packages/events/src/media/transcode-outcome.ts",
       "packages/events/src/media/transcode-reconciler.ts"
+    ],
+    "instructor-api": [
+      "packages/apis/instructor-api/src/procedures/course-preview.ts"
     ]
   },
   "courseRating": {
