@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import {
   CfnOutput,
   CfnResource,
@@ -44,14 +45,11 @@ import { RuntimeConfig } from './runtime-config.js';
 const WEB_CLIENT_ID = 'WebClient';
 
 /** Local dev server origins permitted to complete the sign-in redirect */
-const LOCAL_CALLBACK_URLS = [
-  'http://localhost:4200',
-  'http://localhost:4300',
-  'http://localhost:4201',
-  'http://localhost:4301',
-  'http://localhost:4202',
-  'http://localhost:4302',
-];
+export const LOCAL_CALLBACK_URLS = localPortalOrigins(
+  'instructor',
+  'student',
+  'admin',
+);
 
 /**
  * The set of portal roles provisioned as Cognito user pool groups. Lower

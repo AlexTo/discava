@@ -1,0 +1,8 @@
+.specify/
+.agents/
+pnpm-lock.yaml
+pnpm-workspace.yaml
+**/dist/
+docs/dist/
+**/routeTree.gen.ts
+tmp/

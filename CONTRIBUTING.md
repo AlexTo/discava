@@ -51,6 +51,7 @@ pnpm dev
 | DynamoDB local | 8001 | DynamoDB |
 | S3Mock | 9090 | S3 (uploads, lesson media, course images) |
 | ElasticMQ | 9324 | SQS (the stream router's queues and failure queues) |
+| OpenSearch | 9200 | OpenSearch (course search; started by `packages/databases/search`'s `dev` target, which also syncs the local indices) |
 | Event runner | 2024 | MediaConvert (ffmpeg in Docker), Amazon Transcribe (writes a placeholder track), SES (sent emails are kept in `tmp/local-dev/emails/`; inbox at `http://localhost:2024/inbox`), EventBridge, Scheduler, the table's stream and its consumers (the stream router and each feature's queue, such as notification delivery), and Cognito's pre token generation trigger (which keeps user records in step) |
 | Local OIDC server | 9400 | Cognito |
 
@@ -83,6 +84,17 @@ Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) gene
 Every API and event handler shares the core table, and some rules span records that different writers touch. For example, core-api counts the students who have used an item (`studentActivityCount`), and instructor-api relies on that count to refuse deleting the item. A write that keeps a rule another API or handler depends on goes in a `core-table` helper, for example `studentActivityWrites` in `helpers/student-activity.ts`, and every procedure making that write calls the helper. Don't write it by hand in each procedure. A rule that only one API keeps can stay in that API.
 
 Add a check for each such rule to `core-table`'s `helpers/invariants.ts`. The e2e suite runs those checks after every scenario (see [End-to-End Tests](#end-to-end-tests)).
+
+Two checks make sure a change that could need a new rule gets one:
+
+- **Every entity is in the snapshot.** A test in `core-table` (`helpers/invariants-coverage.test.ts`) fails when an entity's records aren't loaded into `TableSnapshot`. Add the new entity there, with checks for the rules it keeps, or list it in that test's `NO_INVARIANTS` with the reason it has none.
+- **Who writes each entity.** `core-table`'s `entity-writers.json` lists, for every entity, the files in each package that write it. It's generated from the code with the TypeScript compiler, so after changing which code writes the core table, regenerate it and commit the result:
+
+  ```sh
+  pnpm nx run @discava/common-scripts:entity-writers
+  ```
+
+  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/common/scripts`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds to `helpers/invariants.ts` name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
 
 ### Testing Portal Components
 

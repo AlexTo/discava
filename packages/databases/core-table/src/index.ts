@@ -7,7 +7,17 @@ export {
   getDynamoDBClient,
   resolveTableName,
 } from './client.js';
+export { PREVIEW_MAX_SECONDS } from './entities/course-preview.js';
 export * from './entities/index.js';
+export {
+  BIO_MAX,
+  DISPLAY_NAME_MAX,
+  HANDLE_MAX,
+  HANDLE_MIN,
+  HANDLE_PATTERN,
+  HEADLINE_MAX,
+  isValidHandle,
+} from './entities/instructor-profile.js';
 export {
   aggregatesOf,
   type Contributions,
@@ -128,6 +138,13 @@ export {
   courseCatalogueWrites,
 } from './helpers/course-catalogue.js';
 export {
+  type CourseLandingSet,
+  courseLandingWrites,
+  LANDING_ITEM_MAX_LENGTH,
+  LANDING_LIST_MAX_ITEMS,
+  normaliseLandingList,
+} from './helpers/course-landing.js';
+export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,
   isShown,
@@ -156,6 +173,13 @@ export {
   postIdTime,
 } from './helpers/discussion.js';
 export {
+  DISCUSSION_EXCERPT_MAX,
+  type DiscussionNotificationEvent,
+  type DiscussionNotificationPost,
+  discussionExcerpt,
+  discussionNotificationWrites,
+} from './helpers/discussion-notifications.js';
+export {
   InvalidRequestError,
   isConditionalCheckFailed,
   NameConflictError,
@@ -163,6 +187,15 @@ export {
   SlugUnavailableError,
   VersionConflictError,
 } from './helpers/errors.js';
+export {
+  defaultDisplayName,
+  type EnsureInstructorProfileResult,
+  ensureInstructorProfile,
+  handleCandidates,
+  handleFromName,
+  instructorProfileWrites,
+  RESERVED_HANDLES,
+} from './helpers/instructor-profile.js';
 export {
   checkAnalyticsMatchesRecords,
   checkTableInvariants,
@@ -231,10 +264,16 @@ export {
   classifyReviewCancellation,
   type ReviewCancellation,
   type ReviewDelete,
+  type ReviewDeleteResponse,
   type ReviewEdit,
   type ReviewPost,
+  type ReviewRemove,
+  type ReviewRespond,
   type ReviewWrite,
+  removalReason,
+  responseText,
   reviewerName,
+  reviewNotifications,
   reviewText,
   reviewWrites,
 } from './helpers/review.js';

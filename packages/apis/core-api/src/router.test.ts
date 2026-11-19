@@ -62,3 +62,32 @@ describe('PUBLIC_OPERATIONS', () => {
     );
   });
 });
+
+describe('discussion', () => {
+  const procedures = [
+    'listQuestions',
+    'thread',
+    'ask',
+    'reply',
+    'vote',
+    'accept',
+    'report',
+    'removeOwn',
+  ].map((name) => `discussion.${name}`);
+
+  it('mounts every procedure of the contract', () => {
+    expect(Object.keys(appRouter._def.procedures)).toEqual(
+      expect.arrayContaining(procedures),
+    );
+  });
+
+  it.each(procedures)('refuses an anonymous caller on %s', async (path) => {
+    expect(await refusesAnonymousCallers(path)).toBe(true);
+  });
+
+  it('lists none as public', () => {
+    expect(
+      PUBLIC_OPERATIONS.filter((path) => path.startsWith('discussion.')),
+    ).toEqual([]);
+  });
+});

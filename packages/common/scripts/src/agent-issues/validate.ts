@@ -97,6 +97,23 @@ export const validateTasks = (tasksMd: string): Problem[] => {
 };
 
 /**
+ * Holds an archived spec's tasks.md to what archiving promises: every task is
+ * ticked, the ones marked (human) too. Archived specs are not checked against
+ * the format, only for work left behind.
+ */
+export const validateArchivedTasks = (tasksMd: string): Problem[] =>
+  scanLines(tasksMd).flatMap((line) =>
+    line.kind === 'task' && !line.done
+      ? [
+          {
+            line: line.line,
+            message: `${line.id} is not ticked; a spec in specs/_archive/ must have every task ticked, (human) ones too. Finish it, or move the spec back out of _archive/`,
+          },
+        ]
+      : [],
+  );
+
+/**
  * One problem as a line of output: a GitHub Actions error annotation on the
  * file when `annotate`, else `file:line: message`. `file` is repo-relative.
  */

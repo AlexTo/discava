@@ -2,7 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { filterEffectivelyVisible } from '@discava/core-table';
+
+import type { Logger } from '@aws-lambda-powertools/logger';
+import {
+  type createCoreTableService,
+  filterEffectivelyVisible,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import { asStudentContentItem } from '../lib/playback.js';
@@ -20,6 +25,8 @@ import {
   ViewCourseOutputSchema,
 } from '../schema/index.js';
 import { getEnrolment, requireEnrolment } from './enrolment.js';
+
+type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // How often a page's ratings are asked for again when DynamoDB leaves some
 // unprocessed, before the call fails rather than show them as unrated.
@@ -129,6 +136,64 @@ export const publicListCourses = publicCourseProcedure
 // shape shouldn't expose its actual lesson content) and only ever resolves
 // published courses - draft/archived courses 404 the same as a courseId that
 // doesn't exist, so their existence isn't leaked to anonymous callers.
+// Reads the profiles of a course's instructors, in the order of their
+// courseInstructor records. An instructor without a profile is left out and
+// logged: the instructor-has-profile invariant makes that impossible.
+const readPublicInstructors = async (
+  coreTable: CoreTable,
+  courseId: string,
+  logger?: Pick<Logger, 'warn'>,
+) => {
+  const { data: memberships } = await coreTable.entities.courseInstructor.query
+    .primary({ courseId })
+    .go({ pages: 'all' });
+  if (memberships.length === 0) {
+    return [];
+  }
+  const ordered = memberships
+    .slice()
+    .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+
+  const profiles = new Map<
+    string,
+    {
+      handle: string;
+      displayName: string;
+      headline?: string;
+      photoKey?: string;
+    }
+  >();
+  let pending = ordered.map(({ instructorId }) => ({ instructorId }));
+  for (let attempt = 0; pending.length > 0; attempt++) {
+    if (attempt === RATING_READ_ATTEMPTS) {
+      throw new Error('Instructor profiles could not be read: throttled');
+    }
+    const { data, unprocessed } = await coreTable.entities.instructorProfile
+      .get(pending)
+      .go();
+    for (const profile of data) {
+      profiles.set(profile.instructorId, profile);
+    }
+    pending = unprocessed;
+  }
+
+  return ordered.flatMap(({ instructorId }) => {
+    const profile = profiles.get(instructorId);
+    if (!profile) {
+      logger?.warn('A course instructor has no profile', { courseId });
+      return [];
+    }
+    return [
+      {
+        handle: profile.handle,
+        displayName: profile.displayName,
+        headline: profile.headline,
+        photoKey: profile.photoKey,
+      },
+    ];
+  });
+};
+
 export const publicViewCourse = publicCourseProcedure
   .input(ViewCourseInputSchema)
   .output(PublicViewCourseOutputSchema)
@@ -158,8 +223,25 @@ export const publicViewCourse = publicCourseProcedure
       lessonsByModuleId.set(lesson.moduleId, moduleLessons);
     }
 
+    const [instructors, category] = await Promise.all([
+      readPublicInstructors(coreTable, course.courseId, ctx.logger),
+      course.categoryId
+        ? coreTable.entities.category
+            .get({ categoryId: course.categoryId })
+            .go()
+            .then(({ data }) => data)
+        : undefined,
+    ]);
+
     return {
       ...course,
+      learningOutcomes: course.learningOutcomes ?? [],
+      requirements: course.requirements ?? [],
+      category:
+        category?.status === 'active'
+          ? { slug: category.slug, name: category.name }
+          : undefined,
+      instructors,
       modules: modules
         .slice()
         .sort((a, b) => a.order - b.order)

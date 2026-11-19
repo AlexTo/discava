@@ -15,7 +15,7 @@ vi.mock('@discava/search', () => ({
   resolveIndexName: (name: string) => name,
 }));
 
-import { searchIndexing } from '../search/index-content.js';
+import { searchIndexing } from '../search/search-indexing.js';
 import { routeRecords } from './route-records.js';
 import { sqsStreamRecords } from './sqs-stream-records.js';
 

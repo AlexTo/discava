@@ -13,11 +13,13 @@ import {
   createContentItemEntity,
   createCourseEntity,
   createCourseInstructorEntity,
+  createCoursePreviewEntity,
   createCourseRatingEntity,
   createCourseStatsEntity,
   createDiscussionPostEntity,
   createDiscussionVoteEntity,
   createEnrolmentEntity,
+  createInstructorProfileEntity,
   createItemCompletionEntity,
   createLessonEntity,
   createLessonStatsEntity,
@@ -27,6 +29,7 @@ import {
   createNotificationPreferenceEntity,
   createNotificationStateEntity,
   createPeriodStatsEntity,
+  createProfileHandleClaimEntity,
   createProgressEntity,
   createQuizAttemptEntity,
   createQuizQuestionStatsEntity,
@@ -53,6 +56,7 @@ export const createCoreTableService = async () => {
     contentItem,
     enrolment,
     courseInstructor,
+    coursePreview,
     assignmentSubmission,
     progress,
     quizAttempt,
@@ -78,6 +82,8 @@ export const createCoreTableService = async () => {
 
     review,
     courseRating,
+    instructorProfile,
+    profileHandleClaim,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -86,6 +92,7 @@ export const createCoreTableService = async () => {
     createContentItemEntity(),
     createEnrolmentEntity(),
     createCourseInstructorEntity(),
+    createCoursePreviewEntity(),
     createAssignmentSubmissionEntity(),
     createProgressEntity(),
     createQuizAttemptEntity(),
@@ -111,6 +118,8 @@ export const createCoreTableService = async () => {
 
     createReviewEntity(),
     createCourseRatingEntity(),
+    createInstructorProfileEntity(),
+    createProfileHandleClaimEntity(),
   ]);
 
   return new Service({
@@ -121,6 +130,7 @@ export const createCoreTableService = async () => {
     contentItem,
     enrolment,
     courseInstructor,
+    coursePreview,
     assignmentSubmission,
     progress,
     quizAttempt,
@@ -146,5 +156,7 @@ export const createCoreTableService = async () => {
 
     review,
     courseRating,
+    instructorProfile,
+    profileHandleClaim,
   });
 };

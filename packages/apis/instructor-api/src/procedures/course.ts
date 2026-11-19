@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  ensureInstructorProfile,
   filterEffectivelyVisible,
   isConditionalCheckFailed,
 } from '@discava/core-table';
@@ -44,6 +45,11 @@ export const createCourse = courseProcedure
     // here), so this is only an approximation of its real value, corrected
     // below once the course is read back.
     const courseUpdatedAt = new Date().toISOString();
+
+    // The instructor's public profile, created with their first course. It
+    // runs before the course transaction (its handle retries can't run inside
+    // one) and is idempotent: a profile without a course breaks no invariant.
+    await ensureInstructorProfile(coreTable, currentUser);
 
     // A course must always have at least one instructor, so the course and
     // its initial CourseInstructor row are written transactionally: either

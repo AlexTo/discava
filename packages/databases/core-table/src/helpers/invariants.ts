@@ -11,11 +11,24 @@ import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createContentItemEntity } from '../entities/content-item.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createCourseInstructorEntity } from '../entities/course-instructor.js';
+import {
+  type createCoursePreviewEntity,
+  PREVIEW_MAX_SECONDS,
+} from '../entities/course-preview.js';
 import type { createCourseRatingEntity } from '../entities/course-rating.js';
 import type { createCourseStatsEntity } from '../entities/course-stats.js';
 import type { createDiscussionPostEntity } from '../entities/discussion-post.js';
 import type { createDiscussionVoteEntity } from '../entities/discussion-vote.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
+import {
+  BIO_MAX,
+  type createInstructorProfileEntity,
+  DISPLAY_NAME_MAX,
+  HANDLE_MAX,
+  HANDLE_MIN,
+  HANDLE_PATTERN,
+  HEADLINE_MAX,
+} from '../entities/instructor-profile.js';
 import type { createItemCompletionEntity } from '../entities/item-completion.js';
 import type { createLessonEntity } from '../entities/lesson.js';
 import type { createLessonStatsEntity } from '../entities/lesson-stats.js';
@@ -25,6 +38,7 @@ import type { createNotificationBroadcastEntity } from '../entities/notification
 import type { createNotificationPreferenceEntity } from '../entities/notification-preference.js';
 import type { createNotificationStateEntity } from '../entities/notification-state.js';
 import type { createPeriodStatsEntity } from '../entities/period-stats.js';
+import type { createProfileHandleClaimEntity } from '../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../entities/progress.js';
 import type { createQuizAttemptEntity } from '../entities/quiz-attempt.js';
 import type { createQuizQuestionStatsEntity } from '../entities/quiz-question-stats.js';
@@ -64,6 +78,10 @@ import {
   normaliseTags,
 } from './catalogue.js';
 import {
+  LANDING_ITEM_MAX_LENGTH,
+  LANDING_LIST_MAX_ITEMS,
+} from './course-landing.js';
+import {
   answeredState,
   DISCUSSION_BODY_MAX,
   DISCUSSION_MAX_REPORTERS,
@@ -98,6 +116,8 @@ export interface TableSnapshot {
     | 'level'
     | 'language'
     | 'durationHours'
+    | 'learningOutcomes'
+    | 'requirements'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -146,6 +166,22 @@ export interface TableSnapshot {
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
+  >[];
+  coursePreviews: Pick<
+    Item<typeof createCoursePreviewEntity>,
+    | 'courseId'
+    | 'status'
+    | 's3Key'
+    | 'previousS3Key'
+    | 'submissionNonce'
+    | 'transcodePending'
+    | 'transcodePendingSince'
+    | 'failureReason'
+    | 'durationSeconds'
+    | 'captionTracks'
+    | 'captionTracksRev'
+    | 'captionsStatus'
+    | 'captionsPendingSince'
   >[];
   courseInstructors: Pick<
     Item<typeof createCourseInstructorEntity>,
@@ -361,6 +397,14 @@ export interface TableSnapshot {
     Item<typeof createCourseRatingEntity>,
     'courseId' | 'stars1' | 'stars2' | 'stars3' | 'stars4' | 'stars5'
   >[];
+  instructorProfiles: Pick<
+    Item<typeof createInstructorProfileEntity>,
+    'instructorId' | 'handle' | 'displayName' | 'headline' | 'bio' | 'version'
+  >[];
+  profileHandleClaims: Pick<
+    Item<typeof createProfileHandleClaimEntity>,
+    'handle' | 'instructorId'
+  >[];
 }
 
 export const INVARIANTS = [
@@ -397,6 +441,8 @@ export const INVARIANTS = [
   'notification-broadcast-done-complete',
   'announcement-shape',
   'announcement-has-broadcast',
+  'course-landing-shape',
+  'course-preview-shape',
   'course-category-exists',
   'category-claims-consistent',
   'course-catalogue-shape',
@@ -411,6 +457,9 @@ export const INVARIANTS = [
   'review-shape',
   'review-has-enrolment',
   'course-rating-matches-reviews',
+  'instructor-has-profile',
+  'profile-handle-claims-consistent',
+  'instructor-profile-shape',
 ] as const;
 
 export type InvariantName = (typeof INVARIANTS)[number];
@@ -705,6 +754,50 @@ export const checkInstructorCourseUpdatedAt = (
   );
 };
 
+// The lesson-video rules, for a course's preview: transcodePending and
+// transcodePendingSince are set together and only while processing, a ready
+// preview plays from a master.m3u8, and captionsStatus: pending needs
+// captionsPendingSince and a ready preview.
+const checkPreviewTranscodeState = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.coursePreviews.flatMap((preview) => {
+    const record = { courseId: preview.courseId };
+    const problems: string[] = [];
+    const pending = preview.transcodePending !== undefined;
+    if (pending !== (preview.transcodePendingSince !== undefined)) {
+      problems.push(
+        'transcodePending and transcodePendingSince are not set together',
+      );
+    }
+    if (pending && preview.status !== 'processing') {
+      problems.push(`transcodePending is set on a ${preview.status} preview`);
+    }
+    if (
+      preview.status === 'ready' &&
+      !preview.s3Key?.endsWith('/master.m3u8')
+    ) {
+      problems.push(`a ready preview's s3Key is ${preview.s3Key ?? 'not set'}`);
+    }
+    if (preview.captionsStatus === 'pending') {
+      if (preview.captionsPendingSince === undefined) {
+        problems.push('captionsStatus is pending without captionsPendingSince');
+      }
+      if (preview.status !== 'ready') {
+        problems.push(
+          `captionsStatus is pending on a ${preview.status} preview`,
+        );
+      }
+    } else if (preview.captionsPendingSince !== undefined) {
+      problems.push(
+        'captionsPendingSince is set while captions are not pending',
+      );
+    }
+    return problems.map((message) =>
+      violation('video-transcode-state', record, message),
+    );
+  });
+
 // 6. A video's transcode state is consistent: transcodePending and
 // transcodePendingSince are set together, and only while it's pending (they
 // put it in byTranscodePending); a ready video plays from a master.m3u8.
@@ -713,8 +806,9 @@ export const checkInstructorCourseUpdatedAt = (
 // video.
 export const checkVideoTranscodeState = (
   snapshot: TableSnapshot,
-): InvariantViolation[] =>
-  snapshot.contentItems.flatMap((item) => {
+): InvariantViolation[] => [
+  ...checkPreviewTranscodeState(snapshot),
+  ...snapshot.contentItems.flatMap((item) => {
     const record = {
       courseId: item.courseId,
       contentItemId: item.contentItemId,
@@ -762,17 +856,67 @@ export const checkVideoTranscodeState = (
     return problems.map((message) =>
       violation('video-transcode-state', record, message),
     );
-  });
+  }),
+];
 
 // 24 (captions). A video's caption tracks are valid: at most 10, one per
 // language, exactly one default when there are any, each of the item's
 // played version (the version swap drops every other nonce in the same patch
 // that sets status: ready), and each file under that version's captions
 // folder.
+// The caption-track problems of one video, whose played version is `manifest`
+// (a lesson video's .../content-items/<id>/<nonce>/master.m3u8 or a preview's
+// courses/<id>/preview/<nonce>/master.m3u8).
+const captionTrackProblems = (
+  tracks: NonNullable<TableSnapshot['contentItems'][number]['captionTracks']>,
+  manifest: string | undefined,
+): string[] => {
+  // The nonce the manifest lives under (as server-utils' manifestNonce).
+  const nonce = manifest?.match(
+    /\/(?:content-items\/[^/]+|preview)\/([^/]+)\/[^/]+$/,
+  )?.[1];
+  // The video's folder: everything before the version's nonce.
+  const folder =
+    manifest && nonce
+      ? manifest.slice(0, manifest.length - `/${nonce}/master.m3u8`.length)
+      : undefined;
+  const problems: string[] = [];
+  if (tracks.length > MAX_CAPTION_TRACKS) {
+    problems.push(
+      `${tracks.length} caption tracks, at most ${MAX_CAPTION_TRACKS}`,
+    );
+  }
+  const languages = new Set<string>();
+  for (const track of tracks) {
+    if (languages.has(track.language)) {
+      problems.push(`two caption tracks in ${track.language}`);
+    }
+    languages.add(track.language);
+    if (track.nonce !== nonce) {
+      problems.push(
+        `track ${track.trackId} is for version ${track.nonce}, not the current ${nonce}`,
+      );
+    }
+    if (
+      !folder ||
+      !track.key.startsWith(`${folder}/${track.nonce}/captions/`)
+    ) {
+      problems.push(
+        `track ${track.trackId} key ${track.key} is outside the version's captions folder`,
+      );
+    }
+  }
+  const defaults = tracks.filter((track) => track.isDefault).length;
+  if (defaults !== 1) {
+    problems.push(`${defaults} default caption tracks, expected 1`);
+  }
+  return problems;
+};
+
 export const checkCaptionTracksValid = (
   snapshot: TableSnapshot,
-): InvariantViolation[] =>
-  snapshot.contentItems.flatMap((item) => {
+): InvariantViolation[] => [
+  ...snapshot.contentItems.flatMap((item) => {
     const tracks = item.captionTracks ?? [];
     if (tracks.length === 0) {
       return [];
@@ -785,49 +929,26 @@ export const checkCaptionTracksValid = (
     // previous one kept while a replacement transcodes (or after it failed),
     // whose tracks stay with it until the swap.
     const manifest = item.status === 'ready' ? item.s3Key : item.previousS3Key;
-    // The nonce the manifest lives under (as server-utils' manifestNonce).
-    const nonce = manifest?.match(
-      /\/content-items\/[^/]+\/([^/]+)\/[^/]+$/,
-    )?.[1];
-    // The item's folder: everything before the version's nonce.
-    const folder =
-      manifest && nonce
-        ? manifest.slice(0, manifest.length - `/${nonce}/master.m3u8`.length)
-        : undefined;
-    const problems: string[] = [];
-    if (tracks.length > MAX_CAPTION_TRACKS) {
-      problems.push(
-        `${tracks.length} caption tracks, at most ${MAX_CAPTION_TRACKS}`,
-      );
-    }
-    const languages = new Set<string>();
-    for (const track of tracks) {
-      if (languages.has(track.language)) {
-        problems.push(`two caption tracks in ${track.language}`);
-      }
-      languages.add(track.language);
-      if (track.nonce !== nonce) {
-        problems.push(
-          `track ${track.trackId} is for version ${track.nonce}, not the current ${nonce}`,
-        );
-      }
-      if (
-        !folder ||
-        !track.key.startsWith(`${folder}/${track.nonce}/captions/`)
-      ) {
-        problems.push(
-          `track ${track.trackId} key ${track.key} is outside the version's captions folder`,
-        );
-      }
-    }
-    const defaults = tracks.filter((track) => track.isDefault).length;
-    if (defaults !== 1) {
-      problems.push(`${defaults} default caption tracks, expected 1`);
-    }
-    return problems.map((message) =>
+    return captionTrackProblems(tracks, manifest).map((message) =>
       violation('caption-tracks-valid', record, message),
     );
-  });
+  }),
+  ...snapshot.coursePreviews.flatMap((preview) => {
+    const tracks = preview.captionTracks ?? [];
+    if (tracks.length === 0) {
+      return [];
+    }
+    const manifest =
+      preview.status === 'ready' ? preview.s3Key : preview.previousS3Key;
+    return captionTrackProblems(tracks, manifest).map((message) =>
+      violation(
+        'caption-tracks-valid',
+        { courseId: preview.courseId },
+        message,
+      ),
+    );
+  }),
+];
 
 // 6 (files, #102). A file item has its file: the key, name, size and type,
 // with the key in the version folder its submissionNonce names, which is what
@@ -2502,6 +2623,187 @@ export const checkCourseRatingMatchesReviews = (
   return [...mismatches, ...orphans];
 };
 
+// A course's landing page lists are well formed: at most 10 items each, every
+// item 1 to 160 characters and already trimmed. A course without them is fine.
+export const checkCourseLandingShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.courses.flatMap((c) =>
+    (['learningOutcomes', 'requirements'] as const).flatMap((field) => {
+      const items = c[field];
+      if (items === undefined) {
+        return [];
+      }
+      const problems: string[] = [];
+      if (items.length > LANDING_LIST_MAX_ITEMS) {
+        problems.push(
+          `${field} has ${items.length} items, at most ${LANDING_LIST_MAX_ITEMS}`,
+        );
+      }
+      items.forEach((item, i) => {
+        if (item.length < 1 || item.length > LANDING_ITEM_MAX_LENGTH) {
+          problems.push(
+            `${field} item ${i + 1} is ${item.length} characters, not 1 to ${LANDING_ITEM_MAX_LENGTH}`,
+          );
+        } else if (item !== item.trim()) {
+          problems.push(`${field} item ${i + 1} is not trimmed`);
+        }
+      });
+      return problems.map((problem) =>
+        violation('course-landing-shape', { courseId: c.courseId }, problem),
+      );
+    }),
+  );
+
+// A course's preview video is well formed: it has a course, its duration is 1
+// to 300 seconds, a ready one has a manifest under its own attempt's folder,
+// failureReason is set only when failed (and then always), and a previous
+// version is under the same course's preview folder.
+export const checkCoursePreviewShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const courses = new Set(snapshot.courses.map(({ courseId }) => courseId));
+  return snapshot.coursePreviews.flatMap((p) => {
+    const folder = `courses/${p.courseId}/preview/`;
+    const problems: string[] = [];
+    if (!courses.has(p.courseId)) {
+      problems.push('its course does not exist');
+    }
+    if (
+      !Number.isFinite(p.durationSeconds) ||
+      p.durationSeconds < 1 ||
+      p.durationSeconds > PREVIEW_MAX_SECONDS
+    ) {
+      problems.push(
+        `durationSeconds is ${p.durationSeconds}, not 1 to ${PREVIEW_MAX_SECONDS}`,
+      );
+    }
+    if (!['processing', 'ready', 'failed'].includes(p.status)) {
+      problems.push(`status ${p.status} is not allowed`);
+    }
+    if (
+      p.status === 'ready' &&
+      p.s3Key !== `${folder}${p.submissionNonce}/master.m3u8`
+    ) {
+      problems.push(
+        `a ready preview's s3Key is ${p.s3Key ?? 'not set'}, not under its own ${folder}${p.submissionNonce}/ folder`,
+      );
+    }
+    if (p.status === 'failed' && p.failureReason === undefined) {
+      problems.push('a failed preview has no failureReason');
+    }
+    if (p.status !== 'failed' && p.failureReason !== undefined) {
+      problems.push(`failureReason is set on a ${p.status} preview`);
+    }
+    if (p.previousS3Key !== undefined && !p.previousS3Key.startsWith(folder)) {
+      problems.push(`previousS3Key ${p.previousS3Key} is outside ${folder}`);
+    }
+    return problems.map((problem) =>
+      violation('course-preview-shape', { courseId: p.courseId }, problem),
+    );
+  });
+};
+
+// Every instructor of a course has a public profile record, created with their
+// first course (ensureInstructorProfile).
+export const checkInstructorHasProfile = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const profiles = new Set(
+    snapshot.instructorProfiles.map((p) => p.instructorId),
+  );
+  return snapshot.courseInstructors
+    .filter((ci) => !profiles.has(ci.instructorId))
+    .map((ci) =>
+      violation(
+        'instructor-has-profile',
+        { courseId: ci.courseId, instructorId: ci.instructorId },
+        'the instructor has no profile',
+      ),
+    );
+};
+
+// A profile's handle has exactly one claim, owned by that profile, and every
+// claim's owner is a profile with that handle: instructorProfileWrites keeps
+// the pair in one transaction.
+export const checkProfileHandleClaimsConsistent = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] => {
+  const profiles = new Map(
+    snapshot.instructorProfiles.map((p) => [p.instructorId, p]),
+  );
+  const problems = snapshot.instructorProfiles.flatMap((p) => {
+    const claims = snapshot.profileHandleClaims.filter(
+      (c) => c.handle === p.handle,
+    );
+    if (claims.length === 0) {
+      return [
+        violation(
+          'profile-handle-claims-consistent',
+          { instructorId: p.instructorId, handle: p.handle },
+          'its handle has no claim',
+        ),
+      ];
+    }
+    return claims
+      .filter((c) => c.instructorId !== p.instructorId)
+      .map((c) =>
+        violation(
+          'profile-handle-claims-consistent',
+          { instructorId: p.instructorId, handle: p.handle },
+          `its handle is claimed by ${c.instructorId}`,
+        ),
+      );
+  });
+  const orphans = snapshot.profileHandleClaims
+    .filter((c) => profiles.get(c.instructorId)?.handle !== c.handle)
+    .map((c) =>
+      violation(
+        'profile-handle-claims-consistent',
+        { instructorId: c.instructorId, handle: c.handle },
+        "the claim's owner has no profile with that handle",
+      ),
+    );
+  return [...problems, ...orphans];
+};
+
+// A profile's fields are within the entity's limits, and its version starts at
+// 1.
+export const checkInstructorProfileShape = (
+  snapshot: TableSnapshot,
+): InvariantViolation[] =>
+  snapshot.instructorProfiles.flatMap((p) => {
+    const problems: string[] = [];
+    if (
+      p.handle.length < HANDLE_MIN ||
+      p.handle.length > HANDLE_MAX ||
+      !HANDLE_PATTERN.test(p.handle)
+    ) {
+      problems.push(`handle ${p.handle} is not a valid handle`);
+    }
+    if (p.displayName.length < 1 || p.displayName.length > DISPLAY_NAME_MAX) {
+      problems.push(
+        `displayName is ${p.displayName.length} characters, not 1 to ${DISPLAY_NAME_MAX}`,
+      );
+    }
+    if (p.headline !== undefined && p.headline.length > HEADLINE_MAX) {
+      problems.push(`headline is over ${HEADLINE_MAX} characters`);
+    }
+    if (p.bio !== undefined && p.bio.length > BIO_MAX) {
+      problems.push(`bio is over ${BIO_MAX} characters`);
+    }
+    if (!(p.version >= 1)) {
+      problems.push(`version is ${p.version}, not at least 1`);
+    }
+    return problems.map((problem) =>
+      violation(
+        'instructor-profile-shape',
+        { instructorId: p.instructorId },
+        problem,
+      ),
+    );
+  });
+
 const CHECKS = [
   checkCourseHasInstructor,
   checkActivityCountMatchesStudents,
@@ -2536,6 +2838,8 @@ const CHECKS = [
   checkNotificationBroadcastDoneComplete,
   checkAnnouncementShape,
   checkAnnouncementHasBroadcast,
+  checkCourseLandingShape,
+  checkCoursePreviewShape,
   checkCourseCategoryExists,
   checkCategoryClaimsConsistent,
   checkCourseCatalogueShape,
@@ -2550,6 +2854,9 @@ const CHECKS = [
   checkReviewShape,
   checkReviewHasEnrolment,
   checkCourseRatingMatchesReviews,
+  checkInstructorHasProfile,
+  checkProfileHandleClaimsConsistent,
+  checkInstructorProfileShape,
 ];
 
 // Every violation in the snapshot, by every check.
@@ -2569,6 +2876,7 @@ export const loadTableSnapshot = async (
     modules,
     lessons,
     contentItems,
+    coursePreviews,
     courseInstructors,
     enrolments,
     itemCompletions,
@@ -2596,11 +2904,14 @@ export const loadTableSnapshot = async (
 
     reviews,
     courseRatings,
+    instructorProfiles,
+    profileHandleClaims,
   ] = await Promise.all([
     entities.course.scan.go(all),
     entities.module.scan.go(all),
     entities.lesson.scan.go(all),
     entities.contentItem.scan.go(all),
+    entities.coursePreview.scan.go(all),
     entities.courseInstructor.scan.go(all),
     entities.enrolment.scan.go(all),
     entities.itemCompletion.scan.go(all),
@@ -2628,12 +2939,15 @@ export const loadTableSnapshot = async (
 
     entities.review.scan.go(all),
     entities.courseRating.scan.go(all),
+    entities.instructorProfile.scan.go(all),
+    entities.profileHandleClaim.scan.go(all),
   ]);
   return {
     courses: courses.data,
     modules: modules.data,
     lessons: lessons.data,
     contentItems: contentItems.data,
+    coursePreviews: coursePreviews.data,
     courseInstructors: courseInstructors.data,
     enrolments: enrolments.data,
     itemCompletions: itemCompletions.data,
@@ -2661,5 +2975,7 @@ export const loadTableSnapshot = async (
 
     reviews: reviews.data,
     courseRatings: courseRatings.data,
+    instructorProfiles: instructorProfiles.data,
+    profileHandleClaims: profileHandleClaims.data,
   };
 };

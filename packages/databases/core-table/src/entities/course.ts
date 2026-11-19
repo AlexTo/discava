@@ -81,6 +81,17 @@ export const createCourseEntity = async () =>
         durationHours: {
           type: 'number',
         },
+        // What a learner will be able to do, and what they need first, shown
+        // on the public landing page. Optional lists of up to 10 short items.
+        // Written only by courseLandingWrites, which normalises them.
+        learningOutcomes: {
+          type: 'list',
+          items: { type: 'string' },
+        },
+        requirements: {
+          type: 'list',
+          items: { type: 'string' },
+        },
         createdAt: {
           type: 'string',
           required: true,
@@ -92,7 +103,10 @@ export const createCourseEntity = async () =>
           required: true,
           default: () => new Date().toISOString(),
           watch: '*',
-          set: () => new Date().toISOString(),
+          // A writer may pass the instant itself, so it can copy the same
+          // value to the course's instructors in one transaction
+          // (courseLandingWrites); any other write stamps the time.
+          set: (value?: string) => value ?? new Date().toISOString(),
         },
       },
       indexes: {

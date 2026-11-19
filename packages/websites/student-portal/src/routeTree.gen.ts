@@ -10,9 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as CategorySlugRouteImport } from './routes/category/$slug'
 import { Route as MyLearningIndexRouteImport } from './routes/my-learning/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
+import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
 import { Route as SigninIndexRouteImport } from './routes/signin/index'
 import { Route as CertificatesCertificateIdIndexRouteImport } from './routes/certificates/$certificateId/index'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
@@ -22,6 +24,11 @@ import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CategorySlugRoute = CategorySlugRouteImport.update({
@@ -37,6 +44,11 @@ const MyLearningIndexRoute = MyLearningIndexRouteImport.update({
 const SearchIndexRoute = SearchIndexRouteImport.update({
   id: '/search/',
   path: '/search/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
+  id: '/settings/notifications',
+  path: '/settings/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SigninIndexRoute = SigninIndexRouteImport.update({
@@ -69,7 +81,9 @@ const LearnCourseIdLessonLessonIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
@@ -80,7 +94,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning': typeof MyLearningIndexRoute
   '/search': typeof SearchIndexRoute
   '/signin': typeof SigninIndexRoute
@@ -92,7 +108,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/unsubscribe': typeof UnsubscribeRoute
   '/category/$slug': typeof CategorySlugRoute
+  '/settings/notifications': typeof SettingsNotificationsRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
@@ -105,7 +123,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/unsubscribe'
     | '/category/$slug'
+    | '/settings/notifications'
     | '/my-learning/'
     | '/search/'
     | '/signin/'
@@ -116,7 +136,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/unsubscribe'
     | '/category/$slug'
+    | '/settings/notifications'
     | '/my-learning'
     | '/search'
     | '/signin'
@@ -127,7 +149,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/unsubscribe'
     | '/category/$slug'
+    | '/settings/notifications'
     | '/my-learning/'
     | '/search/'
     | '/signin/'
@@ -139,7 +163,9 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  UnsubscribeRoute: typeof UnsubscribeRoute
   CategorySlugRoute: typeof CategorySlugRoute
+  SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   MyLearningIndexRoute: typeof MyLearningIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   SigninIndexRoute: typeof SigninIndexRoute
@@ -156,6 +182,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/category/$slug': {
@@ -177,6 +210,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search/'
       preLoaderRoute: typeof SearchIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings/notifications': {
+      id: '/settings/notifications'
+      path: '/settings/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof SettingsNotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signin/': {
@@ -219,7 +259,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  UnsubscribeRoute: UnsubscribeRoute,
   CategorySlugRoute: CategorySlugRoute,
+  SettingsNotificationsRoute: SettingsNotificationsRoute,
   MyLearningIndexRoute: MyLearningIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   SigninIndexRoute: SigninIndexRoute,

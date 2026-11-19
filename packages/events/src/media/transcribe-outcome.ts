@@ -21,7 +21,7 @@ import {
   captionWriteCondition,
   isConditionalCheckFailed,
 } from '@discava/core-table';
-import { stillPending } from '../lib/caption-conditions.js';
+import { stillPending } from './caption-conditions.js';
 import { getCoreTable } from './transcode-outcome.js';
 
 // S3Mock in local dev (#137).

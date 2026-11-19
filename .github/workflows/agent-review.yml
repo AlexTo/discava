@@ -8,8 +8,8 @@ name: Agent Review Status
 # `software-factory/review` in state `failure` or `error`. The reviewer's
 # "🔄 CHANGES REQUESTED" verdict sets no status, so nothing woke the agent.
 # This posts it when the reviewer submits such a review on an agent's branch
-# (`openhands/issue-<n>`), at most three times per pull request (labels
-# `review-fix-1` to `review-fix-3`), then comments and stops
+# (`openhands/issue-<n>`), at most five times per pull request (labels
+# `review-fix-1` to `review-fix-5`), then comments and stops
 # (`review-fix-exhausted`). The reviewer looks again by itself once the agent
 # pushes: a new head commit is a new review for its scan.
 # The rules are in packages/common/scripts/src/agent-review/.

@@ -16,6 +16,7 @@ const input = (
   link: { path: '/courses/c1' },
   portalUrl: 'https://student.example.com',
   unsubscribeUrl: 'https://api.example.com/unsubscribe/tok',
+  unsubscribePageUrl: 'https://student.example.com/unsubscribe?token=tok',
   settingsUrl: 'https://student.example.com/settings',
   typeName: 'Grade',
   ...overrides,
@@ -26,9 +27,14 @@ describe('renderNotificationEmail', () => {
     const email = renderNotificationEmail(input());
     expect(email.subject).toBe('Assignment graded');
     expect(email.text).toContain(
-      'You get this because you have Grade emails on. Stop these emails: https://api.example.com/unsubscribe/tok',
+      'You get this because you have Grade emails on. Stop these emails: https://student.example.com/unsubscribe?token=tok',
     );
-    expect(email.html).toContain('https://api.example.com/unsubscribe/tok');
+    expect(email.html).toContain(
+      'href="https://student.example.com/unsubscribe?token=tok"',
+    );
+    // The API route is for the mail client's one-click POST, not for people.
+    expect(email.text).not.toContain('https://api.example.com');
+    expect(email.html).not.toContain('https://api.example.com');
     expect(email.html).toContain('https://student.example.com/settings');
   });
 

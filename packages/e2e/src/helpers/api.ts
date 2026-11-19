@@ -6,7 +6,10 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { AppRouter as AdminApi } from '@discava/admin-api';
 import type { AppRouter as CoreApi } from '@discava/core-api';
-import { createCoreTableService } from '@discava/core-table';
+import {
+  createCoreTableService,
+  ensureInstructorProfile,
+} from '@discava/core-table';
 import type { AppRouter as InstructorApi } from '@discava/instructor-api';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { SERVICES } from './portals.js';
@@ -234,6 +237,8 @@ export const addCourseInstructor = async (
   if (!course) {
     throw new Error(`no course ${courseId}`);
   }
+  // Every instructor has a profile (created with their first course).
+  await ensureInstructorProfile(coreTable, instructor.sub);
   await coreTable.entities.courseInstructor
     .create({
       courseId,

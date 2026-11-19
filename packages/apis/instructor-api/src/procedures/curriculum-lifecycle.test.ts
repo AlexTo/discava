@@ -64,6 +64,7 @@ const {
   contentItemQueryPrimary,
   contentItemPatch,
   contentItemDelete,
+  discussionPostQueryPrimary,
   transactionWrite,
   transactionGo,
   bestEffortDeleteContentItemVideos,
@@ -86,6 +87,7 @@ const {
   contentItemQueryPrimary: vi.fn(),
   contentItemPatch: vi.fn(),
   contentItemDelete: vi.fn(),
+  discussionPostQueryPrimary: vi.fn(),
   transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   bestEffortDeleteContentItemVideos: vi.fn(),
@@ -121,6 +123,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
         patch: contentItemPatch,
         delete: contentItemDelete,
       },
+      discussionPost: { query: { primary: discussionPostQueryPrimary } },
     },
     transaction: { write: transactionWrite },
   })),
@@ -391,6 +394,7 @@ beforeEach(() => {
   moduleQueryPrimary.mockReturnValue(resolves([]));
   lessonQueryPrimary.mockReturnValue(resolves([]));
   contentItemQueryPrimary.mockReturnValue(resolves([]));
+  discussionPostQueryPrimary.mockReturnValue(resolves([]));
   moduleCreate.mockImplementation((values) =>
     resolves({ ...timestamps, ...values }),
   );
@@ -1359,6 +1363,64 @@ describe('descendants spanning more than one query page', () => {
       callAs().deleteLessonPermanently(lessonKey),
     ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  // Invariant: questions are student data too. A lesson that was ever asked
+  // about can stay archived but is never deleted permanently, and neither is
+  // a module holding one.
+  it('deleteLessonPermanently refuses a lesson that has questions', async () => {
+    lessonGet.mockReturnValue(resolves({ ...lesson, archivedAt: ARCHIVED_AT }));
+    discussionPostQueryPrimary.mockReturnValue(
+      resolves([{ lessonId: LESSON_ID }]),
+    );
+
+    await expect(
+      callAs().deleteLessonPermanently(lessonKey),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message:
+        'This lesson has questions, so it can stay archived but cannot be deleted permanently',
+    });
+    expect(discussionPostQueryPrimary).toHaveBeenCalledWith({
+      courseId: COURSE_ID,
+      kind: 'question',
+      lessonId: LESSON_ID,
+    });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  it('deleteModulePermanently refuses a module with a lesson that has questions', async () => {
+    moduleGet.mockReturnValue(resolves({ ...module, archivedAt: ARCHIVED_AT }));
+    lessonQueryPrimary.mockReturnValue(
+      resolves([lesson, { ...lesson, lessonId: 'lesson-2' }]),
+    );
+    discussionPostQueryPrimary.mockImplementation(
+      ({ lessonId }: { lessonId: string }) =>
+        resolves(lessonId === 'lesson-2' ? [{ lessonId }] : []),
+    );
+
+    await expect(
+      callAs().deleteModulePermanently(moduleKey),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+
+  // A draft course has never been open to students, so it has no questions
+  // and deletes outright; once published, a delete archives instead and
+  // never reaches the permanent path.
+  it('deleteLesson in a published course archives the lesson and never deletes it', async () => {
+    setCourseStatus('published');
+
+    await callAs().deleteLesson(lessonKey);
+
+    expect(transactionWrites.map(({ op }) => op)).not.toContain('delete');
+    expect(transactionWrites).toContainEqual(
+      expect.objectContaining({
+        entity: 'lesson',
+        op: 'patch',
+        set: { archivedAt: expect.any(String) },
+      }),
+    );
   });
 
   it('a permanent delete removes descendants on every page', async () => {

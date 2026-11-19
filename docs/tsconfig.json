@@ -43,9 +43,6 @@
       "@discava/common-infra-config": [
         "../packages/common/infra-config/src/index.ts"
       ],
-      "@discava/events": [
-        "../packages/events/src/index.ts"
-      ],
       "@discava/instructor-portal": [
         "../packages/websites/instructor-portal/src/index.ts"
       ],
@@ -69,6 +66,9 @@
       ],
       "@discava/search": [
         "../packages/databases/search/src/index.ts"
+      ],
+      "@discava/common-infra-config/*": [
+        "../packages/common/infra-config/src/*.ts"
       ]
     }
   }

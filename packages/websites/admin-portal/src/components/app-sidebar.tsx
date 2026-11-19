@@ -14,7 +14,7 @@ import {
   SidebarMenuItem,
 } from '@discava/common-shadcn/components/ui/sidebar';
 import { Link } from '@tanstack/react-router';
-import { Home, Tags } from 'lucide-react';
+import { Home, MessageSquareText, Tags } from 'lucide-react';
 
 export function AppSidebar() {
   // Menu items.
@@ -28,6 +28,11 @@ export function AppSidebar() {
       label: 'Categories',
       to: '/categories',
       icon: Tags,
+    },
+    {
+      label: 'Reviews',
+      to: '/reviews',
+      icon: MessageSquareText,
     },
   ];
   return (

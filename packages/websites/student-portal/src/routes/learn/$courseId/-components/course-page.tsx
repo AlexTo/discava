@@ -14,25 +14,48 @@ import {
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, ClipboardList, FileText, Search } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ClipboardList,
+  FileText,
+  Search,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Alert } from '../../../../components/alert';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
 import { Spinner } from '../../../../components/spinner';
 import { useCoreApi } from '../../../../hooks/useCoreApi';
+import {
+  formatDuration,
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '../../../../lib/catalogue-filters';
 import { EnrolmentActions } from './enrolment-actions';
+import { InstructorCard } from './instructor-card';
 import { CourseReviews } from './reviews';
 
 const count = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
-// The sections the tab bar jumps to, in page order.
-const SECTIONS = [
+// The sections the tab bar jumps to, in page order, built from the ones the
+// page shows: a course without outcomes, requirements or instructors has no
+// tab for them.
+const sectionsOf = (present: {
+  outcomes: boolean;
+  requirements: boolean;
+  instructors: boolean;
+}) => [
+  ...(present.outcomes ? [{ id: 'outcomes', label: "What you'll learn" }] : []),
   { id: 'about', label: 'About' },
+  ...(present.requirements
+    ? [{ id: 'requirements', label: 'Requirements' }]
+    : []),
   { id: 'modules', label: 'Modules' },
+  ...(present.instructors ? [{ id: 'instructors', label: 'Instructors' }] : []),
   { id: 'reviews', label: 'Reviews' },
-] as const;
+];
 
 // A course's page, as on Coursera's /learn/<course>: a header with the
 // course's title and the enrolment action, a strip of key facts, then a tab
@@ -87,10 +110,33 @@ export function CoursePage({ courseId }: { courseId: string }) {
 
   const course = courseQuery.data;
   const { modules } = course;
+  const learningOutcomes = course.learningOutcomes ?? [];
+  const requirements = course.requirements ?? [];
+  const instructors = course.instructors ?? [];
+  const sections = sectionsOf({
+    outcomes: learningOutcomes.length > 0,
+    requirements: requirements.length > 0,
+    instructors: instructors.length > 0,
+  });
   const lessonCount = modules.reduce(
     (total, module) => total + module.lessons.length,
     0,
   );
+
+  const facts = [
+    course.level && {
+      label: 'Level',
+      value: LEVEL_LABELS[course.level] ?? course.level,
+    },
+    course.language && {
+      label: 'Language',
+      value: LANGUAGE_LABELS[course.language] ?? course.language,
+    },
+    course.durationHours !== undefined && {
+      label: 'Estimated time',
+      value: formatDuration(course.durationHours),
+    },
+  ].filter((fact): fact is { label: string; value: string } => !!fact);
 
   return (
     <main className="w-full">
@@ -135,6 +181,12 @@ export function CoursePage({ courseId }: { courseId: string }) {
                   Across {count(modules.length, 'module', 'modules')}.
                 </p>
               </div>
+              {facts.map(({ label, value }) => (
+                <div key={label} className="px-5 py-4">
+                  <p className="font-semibold">{value}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{label}</p>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -145,7 +197,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
         className="sticky top-16 z-40 border-b bg-background/95 backdrop-blur"
       >
         <div className="mx-auto flex max-w-5xl gap-1 px-6 lg:px-8">
-          {SECTIONS.map(({ id, label }) => (
+          {sections.map(({ id, label }) => (
             <a
               key={id}
               href={`#${id}`}
@@ -158,6 +210,33 @@ export function CoursePage({ courseId }: { courseId: string }) {
       </nav>
 
       <div className="mx-auto max-w-5xl space-y-12 px-6 py-10 lg:px-8">
+        {learningOutcomes.length > 0 ? (
+          <section
+            id="outcomes"
+            aria-labelledby="outcomes-heading"
+            className="scroll-mt-32"
+          >
+            <h2 id="outcomes-heading" className="text-xl font-semibold">
+              What you'll learn
+            </h2>
+            <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+              {learningOutcomes.map((outcome, index) => (
+                <li
+                  // biome-ignore lint/suspicious/noArrayIndexKey: an outcome has no id, and the list never reorders on this page
+                  key={index}
+                  className="flex items-start gap-3 text-sm"
+                >
+                  <Check
+                    className="mt-0.5 size-4 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <span>{outcome}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <section
           id="about"
           aria-labelledby="about-heading"
@@ -171,6 +250,24 @@ export function CoursePage({ courseId }: { courseId: string }) {
               "The instructor hasn't described this course yet."}
           </p>
         </section>
+
+        {requirements.length > 0 ? (
+          <section
+            id="requirements"
+            aria-labelledby="requirements-heading"
+            className="scroll-mt-32"
+          >
+            <h2 id="requirements-heading" className="text-xl font-semibold">
+              Requirements
+            </h2>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+              {requirements.map((requirement, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: a requirement has no id, and the list never reorders on this page
+                <li key={index}>{requirement}</li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <section
           id="modules"
@@ -257,6 +354,26 @@ export function CoursePage({ courseId }: { courseId: string }) {
             <Badge variant="secondary">Content is on its way</Badge>
           ) : null}
         </section>
+
+        {instructors.length > 0 ? (
+          <section
+            id="instructors"
+            aria-labelledby="instructors-heading"
+            className="scroll-mt-32 space-y-4"
+          >
+            <h2 id="instructors-heading" className="text-xl font-semibold">
+              Instructors
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {instructors.map((instructor) => (
+                <InstructorCard
+                  key={instructor.handle}
+                  instructor={instructor}
+                />
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <CourseReviews courseId={courseId} />
       </div>

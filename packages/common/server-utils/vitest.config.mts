@@ -7,6 +7,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../../node_modules/.vite/packages/common/server-utils',
+  // @discava/common-infra-config/* resolves through tsconfig `paths`, which
+  // Vite ignores unless asked.
+  resolve: { tsconfigPaths: true },
   test: {
     passWithNoTests: true,
     name: '@discava/common-server-utils',

@@ -111,7 +111,7 @@ describe('a review asking for changes on an agent pull request', () => {
         fields: [
           'state=failure',
           'context=software-factory/review',
-          'description=Review requested changes (fix attempt 1 of 3): see the review',
+          'description=Review requested changes (fix attempt 1 of 5): see the review',
           'target_url=https://github.com/AlexTo/discava/pull/362#review-1',
         ].join(' | '),
       },
@@ -128,13 +128,21 @@ describe('a review asking for changes on an agent pull request', () => {
 
   it('gives up with a label and one comment after the attempt limit', () => {
     const { written, comments } = runScenario({
-      pr: { labels: ['review-fix-1', 'review-fix-2', 'review-fix-3'] },
+      pr: {
+        labels: [
+          'review-fix-1',
+          'review-fix-2',
+          'review-fix-3',
+          'review-fix-4',
+          'review-fix-5',
+        ],
+      },
     });
     expect(
       written.map(({ path }) => path.split('/').slice(-2).join('/')),
     ).toEqual(['362/labels', '362/comments']);
     expect(written[0].fields).toBe('labels[]=review-fix-exhausted');
-    expect(comments[0]).toContain('after 3 automatic fix attempts');
+    expect(comments[0]).toContain('after 5 automatic fix attempts');
   });
 
   it('writes nothing for a review of a commit that is no longer the head', () => {
