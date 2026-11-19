@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import type { AppRouter as CoreApiRouter } from '@discava/core-api';
 import type { AppRouter as InstructorApiRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,9 +13,7 @@ import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CoreApiTRPCContext } from '../../../components/CoreApiClientProvider';
-import { InstructorApiTRPCContext } from '../../../components/InstructorApiClientProvider';
-import { RuntimeConfigContext } from '../../../components/RuntimeConfig';
+import { CoreApiTRPCContext, InstructorApiTRPCContext } from '../../../api';
 import { ApiError, fakeFetch } from '../../../test/fake-trpc-fetch';
 
 vi.mock('react-oidc-context', () => ({

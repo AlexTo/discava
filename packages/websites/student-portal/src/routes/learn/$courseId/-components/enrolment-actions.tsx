@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -21,8 +22,7 @@ import { Link, useLocation } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Alert } from '../../../../components/alert';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../../api';
 
 const errorCode = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code;
@@ -140,9 +140,9 @@ export function EnrolmentActions({
     // Enrolling again returns the dropped enrolment, so there's nothing to
     // offer here yet.
     action = (
-      <Alert header="You're no longer enrolled">
+      <ErrorAlert header="You're no longer enrolled">
         Your enrolment in this course has ended.
-      </Alert>
+      </ErrorAlert>
     );
   } else {
     action = (
@@ -160,15 +160,15 @@ export function EnrolmentActions({
   return (
     <>
       {isAuthenticated && enrolmentQuery.isError ? (
-        <Alert type="error" header="Couldn't check your enrolment">
+        <ErrorAlert type="error" header="Couldn't check your enrolment">
           {apiErrorMessage(enrolmentQuery.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       {action}
       {enrol.isError ? (
-        <Alert type="error" header="Couldn't enrol you">
+        <ErrorAlert type="error" header="Couldn't enrol you">
           {enrolErrorMessage(enrol.error)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
 
       <Dialog open={enrolledOpen} onOpenChange={setEnrolledOpen}>

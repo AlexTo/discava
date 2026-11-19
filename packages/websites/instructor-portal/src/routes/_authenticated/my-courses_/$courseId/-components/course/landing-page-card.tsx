@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { ICoursePreviewSummary } from '@discava/instructor-api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { PreviewVideoArea } from './preview-video-area';
 
 // The limits core-table's courseLandingWrites enforces.
@@ -211,9 +211,9 @@ export function LandingPageCard({
       }}
     >
       {save.isError && (
-        <Alert type="error" header="Couldn't save the landing page">
+        <ErrorAlert type="error" header="Couldn't save the landing page">
           {apiErrorMessage(save.error)}
-        </Alert>
+        </ErrorAlert>
       )}
       <ItemList
         label="What students will learn"

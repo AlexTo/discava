@@ -6,8 +6,7 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useCoreApi } from '../../../../../hooks/useCoreApi';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { useCoreApi, useInstructorApi } from '../../../../../api';
 import { DeleteResponseDialog } from './delete-response-dialog';
 import { ResponseDialog } from './response-dialog';
 

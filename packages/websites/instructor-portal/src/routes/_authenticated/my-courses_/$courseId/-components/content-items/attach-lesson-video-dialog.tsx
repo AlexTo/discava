@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import {
   AlertDialog,
@@ -26,6 +27,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -33,9 +35,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Upload } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Alert } from '../../../../../../components/alert';
-import { Spinner } from '../../../../../../components/spinner';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { studentActivityNote } from '../student-activity';
 
 export const ACCEPTED_VIDEO_TYPES = {
@@ -269,14 +269,14 @@ export function AttachLessonVideoDialog({
         </DialogHeader>
 
         {uploadError && (
-          <Alert type="error" header="Couldn't save the video">
+          <ErrorAlert type="error" header="Couldn't save the video">
             {uploadError}
-          </Alert>
+          </ErrorAlert>
         )}
         {isVideoError && (
-          <Alert type="error" header="Couldn't load the video">
+          <ErrorAlert type="error" header="Couldn't load the video">
             The attached video couldn't be loaded for playback.
-          </Alert>
+          </ErrorAlert>
         )}
 
         <div className="space-y-2">
@@ -317,13 +317,13 @@ export function AttachLessonVideoDialog({
               ) : null}
             </div>
           ) : isFailedTranscode ? (
-            <Alert type="error" header="Video processing failed">
+            <ErrorAlert type="error" header="Video processing failed">
               Something went wrong processing this video.{' '}
               {hasPreviousVersion
                 ? 'Students still see the previous version. '
                 : ''}
               Drop a new file below to retry.
-            </Alert>
+            </ErrorAlert>
           ) : isLoadingVideo ? (
             <div className="flex justify-center py-6">
               <Spinner />
@@ -473,7 +473,7 @@ export function RemoveLessonVideoButton({
         </AlertDialogHeader>
 
         {isError && (
-          <Alert
+          <ErrorAlert
             type="error"
             header={
               archive
@@ -482,7 +482,7 @@ export function RemoveLessonVideoButton({
             }
           >
             {apiErrorMessage(error)}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <AlertDialogFooter>

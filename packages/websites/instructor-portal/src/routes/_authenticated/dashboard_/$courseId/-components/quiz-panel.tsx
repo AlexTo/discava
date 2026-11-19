@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
@@ -13,8 +15,7 @@ import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../components/alert';
-import { useInstructorApi } from '../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../api';
 import { ScoreChart } from './score-chart';
 
 export interface QuizFigures {
@@ -75,9 +76,9 @@ export function QuizPanel({
         <CardContent>
           {query.isError ? (
             <div className="space-y-3">
-              <Alert type="error" header="Couldn't load this quiz">
+              <ErrorAlert type="error" header="Couldn't load this quiz">
                 {apiErrorMessage(query.error)}
-              </Alert>
+              </ErrorAlert>
               <Button
                 type="button"
                 size="sm"

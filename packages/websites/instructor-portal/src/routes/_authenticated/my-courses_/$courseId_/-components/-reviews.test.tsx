@@ -8,7 +8,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { describe, expect, it } from 'vitest';
-import { CoreApiTRPCContext } from '../../../../../components/CoreApiClientProvider';
+import { CoreApiTRPCContext } from '../../../../../api';
 import { fakeFetch, type Handler } from '../../../../../test/fake-trpc-fetch';
 import {
   ApiError,

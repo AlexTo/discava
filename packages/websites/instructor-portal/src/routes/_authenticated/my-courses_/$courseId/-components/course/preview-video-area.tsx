@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import {
   AlertDialog,
@@ -15,15 +16,14 @@ import {
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { ICoursePreviewSummary } from '@discava/instructor-api';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Alert } from '../../../../../../components/alert';
-import { Spinner } from '../../../../../../components/spinner';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import {
   ACCEPTED_VIDEO_TYPES,
   putFileWithProgress,
@@ -172,14 +172,14 @@ export function PreviewVideoArea({
       </div>
 
       {error && (
-        <Alert type="error" header="Couldn't update the preview">
+        <ErrorAlert type="error" header="Couldn't update the preview">
           {error}
-        </Alert>
+        </ErrorAlert>
       )}
       {isVideoError && (
-        <Alert type="error" header="Couldn't load the preview">
+        <ErrorAlert type="error" header="Couldn't load the preview">
           The preview couldn't be loaded for playback.
-        </Alert>
+        </ErrorAlert>
       )}
 
       {preview?.status === 'processing' && (
@@ -196,7 +196,7 @@ export function PreviewVideoArea({
         </div>
       )}
       {preview?.status === 'failed' && (
-        <Alert type="error" header="Video processing failed">
+        <ErrorAlert type="error" header="Video processing failed">
           {preview.failureReason === 'too-long'
             ? TOO_LONG
             : 'Something went wrong processing this video.'}{' '}
@@ -204,7 +204,7 @@ export function PreviewVideoArea({
             ? 'Visitors still see the previous version. '
             : ''}
           Upload a new file to try again.
-        </Alert>
+        </ErrorAlert>
       )}
       {preview?.hasPlayableVersion && video && (
         <HlsVideo
@@ -290,9 +290,9 @@ export function PreviewVideoArea({
             </AlertDialogDescription>
           </AlertDialogHeader>
           {removeError && (
-            <Alert type="error" header="Couldn't remove the preview">
+            <ErrorAlert type="error" header="Couldn't remove the preview">
               {apiErrorMessage(removeError)}
-            </Alert>
+            </ErrorAlert>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

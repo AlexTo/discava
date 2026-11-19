@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -13,6 +15,7 @@ import {
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Label } from '@discava/common-shadcn/components/ui/label';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import {
@@ -21,9 +24,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../components/alert';
-import { Spinner } from '../components/spinner';
-import { useAdminApi } from '../hooks/useAdminApi';
+import { useAdminApi } from '../api';
 
 export const REASON_MAX = 200;
 
@@ -94,9 +95,9 @@ function RemoveDialog({
           </DialogHeader>
 
           {remove.isError && (
-            <Alert type="error" header="Couldn't remove the review">
+            <ErrorAlert type="error" header="Couldn't remove the review">
               {apiErrorMessage(remove.error)}
-            </Alert>
+            </ErrorAlert>
           )}
 
           <div className="space-y-2">

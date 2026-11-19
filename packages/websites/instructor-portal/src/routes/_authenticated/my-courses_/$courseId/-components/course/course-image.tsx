@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -14,14 +15,13 @@ import {
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ImageIcon, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Cropper, { type Area } from 'react-easy-crop';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
-import { usePublicMediaUrl } from '../../../../../../hooks/usePublicMediaUrl';
+import { useInstructorApi } from '../../../../../../api';
 import { cropToJpeg } from './crop-to-jpeg';
 
 // What the browser can draw onto a canvas to crop; whatever it is, it's
@@ -283,9 +283,9 @@ function CourseImageDialog({
         )}
 
         {error && (
-          <Alert type="error" header="Couldn't save the image">
+          <ErrorAlert type="error" header="Couldn't save the image">
             {error}
-          </Alert>
+          </ErrorAlert>
         )}
 
         <DialogFooter className="gap-2 sm:justify-between">

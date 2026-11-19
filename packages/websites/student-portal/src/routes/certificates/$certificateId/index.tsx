@@ -2,12 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Alert } from '../../../components/alert';
-import { useCoreApi } from '../../../hooks/useCoreApi';
+import { useCoreApi } from '../../../api';
 
 // A certificate's public page, for anyone with its ID (signed in or not):
 // who completed which course, and when. Nothing else about the learner.
@@ -58,9 +59,9 @@ function RouteComponent() {
           </div>
         ) : (
           <div className="space-y-4">
-            <Alert type="error" header="Couldn't check this certificate">
+            <ErrorAlert type="error" header="Couldn't check this certificate">
               Something went wrong. Try again.
-            </Alert>
+            </ErrorAlert>
             <Button variant="outline" onClick={() => void query.refetch()}>
               Try again
             </Button>

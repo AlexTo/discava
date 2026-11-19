@@ -2,13 +2,14 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { PostText } from '@discava/common-shadcn/discussion/post-text';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../../../components/alert';
-import { useInstructorApi } from '../../../../../../hooks/useInstructorApi';
+import { useInstructorApi } from '../../../../../../api';
 import { lessonStateLabel, useCourseLessons } from './lessons';
 import { DeletePostButton, useModeration } from './moderation';
 import { PagedList } from './paged-list';
@@ -31,9 +32,9 @@ export function ReportedView({ courseId }: { courseId: string }) {
   return (
     <div className="space-y-4">
       {actionError ? (
-        <Alert type="error" header="That didn't work">
+        <ErrorAlert type="error" header="That didn't work">
           {apiErrorMessage(actionError)}
-        </Alert>
+        </ErrorAlert>
       ) : null}
       <PagedList
         query={query}

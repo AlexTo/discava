@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Accessibility, defaultPreset } from '@dnd-kit/dom';
@@ -22,7 +24,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Alert } from '../../../../../components/alert';
 
 // What a sortable row hands its renderer: `ref` goes on the element that moves,
 // `handleRef` on the grip that picks it up (see DragHandle).
@@ -234,9 +235,9 @@ export function SortableList<T>({
       )}
       {error && (
         <div className={errorClassName}>
-          <Alert type="error" header={errorHeader}>
+          <ErrorAlert type="error" header={errorHeader}>
             {error}
-          </Alert>
+          </ErrorAlert>
         </div>
       )}
     </>

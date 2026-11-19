@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Alert } from '../../../../components/alert';
+import { useCoreApi } from '../../../../api';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
-import { Spinner } from '../../../../components/spinner';
-import { useCoreApi } from '../../../../hooks/useCoreApi';
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}`;
@@ -70,9 +70,9 @@ export function CoursePreview({
         Preview this course · {clock(durationSeconds)}
       </p>
       {video.isError && (
-        <Alert type="error" header="Couldn't load the preview">
+        <ErrorAlert type="error" header="Couldn't load the preview">
           {apiErrorMessage(video.error)}
-        </Alert>
+        </ErrorAlert>
       )}
     </div>
   );

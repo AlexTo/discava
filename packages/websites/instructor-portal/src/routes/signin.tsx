@@ -2,11 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { safeReturnTo } from '@discava/common-web-utils/return-to';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { Spinner } from '../components/spinner';
 
 export const Route = createFileRoute('/signin')({
   // `redirect`: the page to come back to, e.g. a deep link opened while
