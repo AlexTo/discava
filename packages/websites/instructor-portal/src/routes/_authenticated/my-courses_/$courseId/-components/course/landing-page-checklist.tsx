@@ -21,12 +21,15 @@ export function LandingPageChecklist({
   publicPageUrl,
   hasOutcomes,
   hasRequirements,
+  hasPreview,
   hasImage,
 }: {
   /** The public page's address; given only while the course is published. */
   publicPageUrl?: string;
   hasOutcomes: boolean;
   hasRequirements: boolean;
+  /** The preview video is ready to play. */
+  hasPreview: boolean;
   hasImage: boolean;
 }) {
   const lines: Line[] = [
@@ -40,8 +43,8 @@ export function LandingPageChecklist({
       done: hasRequirements,
       href: '#landing-page-heading',
     },
-    // The preview video and the instructor profile come in later phases.
-    { label: 'Preview video' },
+    { label: 'Preview video', done: hasPreview, href: '#landing-page-heading' },
+    // The instructor profile comes in a later phase.
     { label: 'Course image', done: hasImage, href: '#course-image' },
     { label: 'Your profile (headline and photo)' },
   ];

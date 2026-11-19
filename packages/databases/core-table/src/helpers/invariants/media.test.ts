@@ -343,6 +343,15 @@ describe('course previews', () => {
       );
     });
 
+    it('reports a processing preview that is not waiting for its transcode', () => {
+      table.coursePreviews = [
+        preview({ status: 'processing', s3Key: undefined }),
+      ];
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /processing preview is not waiting/,
+      );
+    });
+
     it('reports transcodePending on a ready preview', () => {
       table.coursePreviews = [
         preview({ transcodePending: 'pending', transcodePendingSince: T }),

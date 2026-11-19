@@ -4,182 +4,39 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  Cancelled,
+  createFakeTable,
+  type Operation,
+} from '../test-support/fake-transaction.js';
+import {
   checkTableInvariants,
-  type TableSnapshot,
+  emptyTableSnapshot,
 } from './invariants/index.js';
 import { type ReviewWrite, reviewerName, reviewWrites } from './review.js';
 
-// An in-memory stand-in for the entities reviewWrites builds its transaction
-// from. It keeps DynamoDB's transaction rules that matter here: every
-// condition is checked against the table as it was before the transaction,
-// all of the items apply or none, and two operations on one item are refused.
-// Transactions run one at a time, which is the order DynamoDB would give two
-// that raced; each is built from a read taken beforehand, so a later one
-// meets what the earlier one wrote.
+// The fake transaction (test-support/fake-transaction.ts) over the entities
+// reviewWrites builds its transaction from; a table is a Map of its rows.
 
 type Row = Record<string, any>;
-interface Operation {
-  entity: string;
-  key: Row;
-  /** Whether the transaction may go ahead, given the item as stored. */
-  allowed: (row: Row | undefined) => boolean;
-  apply: (row: Row | undefined, table: Table) => Row | undefined;
-}
 type Table = Map<string, Row>;
 
-class Cancelled extends Error {
-  constructor(readonly reasons: { code: string }[]) {
-    super('TransactionCanceledException');
-  }
-}
-
-const rowKey = (entity: string, key: Row) =>
-  `${entity} ${key.courseId} ${key.userId ?? key.instructorId ?? ''}`;
-
-// `where` callbacks build their condition from `op.eq(attr.version, 2)`
-// joined with AND; each call returns a token standing for its predicate.
-const conditionOf = (where?: (attr: any, op: any) => string) => {
-  const predicates = new Map<string, (row?: Row) => boolean>();
-  const token = (test: (row?: Row) => boolean) => {
-    const id = `<${predicates.size}>`;
-    predicates.set(id, test);
-    return id;
-  };
-  const attr = new Proxy({}, { get: (_, name) => name });
-  const op = {
-    eq: (name: string, value: unknown) => token((row) => row?.[name] === value),
-    ne: (name: string, value: unknown) => token((row) => row?.[name] !== value),
-    gte: (name: string, value: number) =>
-      token((row) => (row?.[name] ?? Number.NEGATIVE_INFINITY) >= value),
-    exists: (name: string) => token((row) => row?.[name] !== undefined),
-    notExists: (name: string) => token((row) => row?.[name] === undefined),
-  };
-  const expression = where?.(attr, op) ?? '';
-  return (row?: Row) =>
-    [...expression.matchAll(/<\d+>/g)].every(([id]) =>
-      predicates.get(id!)!(row),
-    );
+const KEY_FIELDS = {
+  review: ['courseId', 'userId'],
+  enrolment: ['courseId', 'userId'],
+  course: ['courseId'],
+  courseInstructor: ['courseId', 'instructorId'],
+  courseRating: ['courseId'],
 };
-
-const builder = (entity: string, key: Row, base: Partial<Operation>) => {
-  let where: ((attr: any, op: any) => string) | undefined;
-  let removed: string[] = [];
-  let changes: Row = {};
-  const self: any = {
-    set: (values: Row) => ((changes = { ...changes, ...values }), self),
-    add: (values: Row) => ((changes = { ...changes, ...values }), self),
-    remove: (names: string[]) => ((removed = names), self),
-    where: (fn: typeof where) => ((where = fn), self),
-    commit: (): Operation & { changes: Row; removed: string[] } => {
-      const holds = conditionOf(where);
-      return {
-        entity,
-        key,
-        allowed: (row) => (base.allowed?.(row) ?? true) && holds(row),
-        apply: base.apply ?? ((row) => ({ ...row, ...changes })),
-        changes,
-        removed,
-      };
-    },
-  };
-  return self;
-};
-
-const fakeEntities = () => {
-  const patching = (entity: string) => (key: Row) => builder(entity, key, {});
-  const checking = (entity: string) => (key: Row) =>
-    builder(entity, key, { apply: (row) => row });
-  return {
-    review: {
-      create: (item: Row) =>
-        builder('review', item, {
-          allowed: (row) => row === undefined,
-          apply: () => item,
-        }),
-      patch: (key: Row) => {
-        const b = builder('review', key, {});
-        const commit = b.commit;
-        b.commit = () => {
-          const op = commit() as Operation & {
-            changes: Row;
-            removed: string[];
-          };
-          return {
-            ...op,
-            allowed: (row) => row !== undefined && op.allowed(row),
-            apply: (row) => {
-              const next = { ...row, ...op.changes };
-              for (const name of op.removed) delete next[name];
-              return next;
-            },
-          };
-        };
-        return b;
-      },
-      delete: (key: Row) => {
-        const b = builder('review', key, {});
-        const commit = b.commit;
-        b.commit = () => {
-          const op = commit();
-          return {
-            ...op,
-            allowed: (row) => row !== undefined && op.allowed(row),
-            apply: () => undefined,
-          };
-        };
-        return b;
-      },
-    },
-    enrolment: { check: checking('enrolment'), patch: patching('enrolment') },
-    course: { check: checking('course') },
-    courseInstructor: { check: checking('courseInstructor') },
-    courseRating: {
-      update: (key: Row) => {
-        const b = builder('courseRating', key, {});
-        const commit = b.commit;
-        b.commit = () => {
-          const op = commit() as Operation & { changes: Row };
-          return {
-            ...op,
-            apply: (row) => {
-              const next: Row = { ...key, ...row };
-              for (const [field, delta] of Object.entries(op.changes)) {
-                next[field] = (next[field] ?? 0) + delta;
-              }
-              return next;
-            },
-          };
-        };
-        return b;
-      },
-    },
-  };
-};
-
-const transact = (table: Table, operations: Operation[]) => {
-  const keys = operations.map((o) => rowKey(o.entity, o.key));
-  if (new Set(keys).size !== keys.length) {
-    throw new Error(
-      'Transaction request cannot include multiple operations on one item',
-    );
-  }
-  const reasons = operations.map((o, i) => ({
-    code: o.allowed(table.get(keys[i]!)) ? 'None' : 'ConditionalCheckFailed',
-  }));
-  if (reasons.some((r) => r.code !== 'None')) {
-    throw new Cancelled(reasons);
-  }
-  operations.forEach((o, i) => {
-    const next = o.apply(table.get(keys[i]!), table);
-    if (next === undefined) table.delete(keys[i]!);
-    else table.set(keys[i]!, next);
-  });
-};
+const keys = createFakeTable({ keyFields: KEY_FIELDS });
+const rowKey = keys.keyOf;
+const fakeEntities = () => keys.entities();
+const transact = (table: Table, operations: Operation[]) =>
+  createFakeTable({ keyFields: KEY_FIELDS, rows: table }).transact(operations);
 
 const run = (table: Table, write: ReviewWrite) =>
   transact(
     table,
-    reviewWrites(fakeEntities() as never, write) as unknown as Operation[],
+    reviewWrites(fakeEntities(), write) as unknown as Operation[],
   );
 
 // Whether a transaction went through.
@@ -228,7 +85,7 @@ const newTable = (students: string[]): Table => {
 
 const rows = (table: Table, entity: string) =>
   [...table.entries()]
-    .filter(([key]) => key.startsWith(`${entity} `))
+    .filter(([key]) => key.startsWith(`${entity}|`))
     .map(([, row]) => row);
 const tally = (table: Table) =>
   rows(table, 'courseRating')[0] as Row | undefined;
@@ -238,42 +95,13 @@ const review = (table: Table, userId: string) =>
 // The three review invariants, run on the fake's table.
 const violations = (table: Table) =>
   checkTableInvariants({
+    ...emptyTableSnapshot(),
     courses: rows(table, 'course'),
     enrolments: rows(table, 'enrolment'),
     reviews: rows(table, 'review'),
     courseRatings: rows(table, 'courseRating'),
-    modules: [],
-    lessons: [],
-    contentItems: [],
-    coursePreviews: [],
     courseInstructors: rows(table, 'courseInstructor'),
-    itemCompletions: [],
-    progress: [],
-    quizAttempts: [],
-    quizSummaries: [],
-    assignmentSubmissions: [],
-    certificates: [],
-    videoPositions: [],
-    users: [],
-    courseStats: [],
-    periodStats: [],
-    lessonStats: [],
-    quizQuestionStats: [],
-    quizScoreStats: [],
-    notifications: [],
-    notificationStates: [],
-    notificationPreferences: [],
-    notificationBroadcasts: [],
-    announcements: [],
-    categories: [],
-    categoryClaims: [],
-    instructorProfiles: [],
-    profileHandleClaims: [],
-    coupons: [],
-    couponRedemptions: [],
-    discussionPosts: [],
-    discussionVotes: [],
-  } as unknown as TableSnapshot).filter((v) =>
+  } as never).filter((v) =>
     [
       'review-shape',
       'review-has-enrolment',
@@ -289,7 +117,7 @@ describe('the fake', () => {
         ...post('a', 3),
       }) as unknown as Operation[]),
     ];
-    const counter = twice.find((o) => o.entity === 'courseRating')!;
+    const counter = twice.find((o) => o.key.startsWith('courseRating|'))!;
 
     expect(() => transact(table, [...twice, counter])).toThrow(/multiple/);
   });

@@ -236,11 +236,16 @@ export const submitTranscodeJob = async (
 export type ICancelableTranscodeJob = {
   jobId: string;
   courseId: string;
-  moduleId: string;
-  lessonId: string;
-  contentItemId: string;
   submissionNonce?: string;
-};
+} & (
+  | {
+      target?: 'contentItem';
+      moduleId: string;
+      lessonId: string;
+      contentItemId: string;
+    }
+  | { target: 'coursePreview' }
+);
 
 /**
  * Cancels a MediaConvert job that no longer has anywhere to report to --
@@ -285,13 +290,22 @@ export const bestEffortCancelTranscodeJob = async (
   // scope a cleanup to -- best-effort, so this is silently skipped for
   // them rather than treated as an error.
   if (job.submissionNonce !== undefined) {
-    await scheduleTranscodeCleanup(logger, {
-      courseId: job.courseId,
-      moduleId: job.moduleId,
-      lessonId: job.lessonId,
-      contentItemId: job.contentItemId,
-      submissionNonce: job.submissionNonce,
-    });
+    await scheduleTranscodeCleanup(
+      logger,
+      job.target === 'coursePreview'
+        ? {
+            target: 'coursePreview',
+            courseId: job.courseId,
+            submissionNonce: job.submissionNonce,
+          }
+        : {
+            courseId: job.courseId,
+            moduleId: job.moduleId,
+            lessonId: job.lessonId,
+            contentItemId: job.contentItemId,
+            submissionNonce: job.submissionNonce,
+          },
+    );
   }
 };
 

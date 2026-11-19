@@ -8,7 +8,6 @@ import { createNotificationBroadcastEntity } from './notification-broadcast.js';
 
 let broadcast: Awaited<ReturnType<typeof createNotificationBroadcastEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   broadcast = await createNotificationBroadcastEntity();
 });
 

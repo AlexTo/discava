@@ -8,7 +8,6 @@ import { createNotificationStateEntity } from './notification-state.js';
 
 let state: Awaited<ReturnType<typeof createNotificationStateEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   state = await createNotificationStateEntity();
 });
 

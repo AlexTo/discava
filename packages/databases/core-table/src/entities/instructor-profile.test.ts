@@ -12,7 +12,6 @@ import { createProfileHandleClaimEntity } from './profile-handle-claim.js';
 let profile: Awaited<ReturnType<typeof createInstructorProfileEntity>>;
 let claim: Awaited<ReturnType<typeof createProfileHandleClaimEntity>>;
 beforeAll(async () => {
-  process.env.LOCAL_DEV = 'true';
   profile = await createInstructorProfileEntity();
   claim = await createProfileHandleClaimEntity();
 });

@@ -9,6 +9,7 @@ import {
   normaliseCategoryName,
 } from './catalogue.js';
 import {
+  failedConditions,
   isConditionalCheckFailed,
   NameConflictError,
   NotFoundError,
@@ -30,7 +31,6 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 // - nothing deletes a category: archiving hides it from new choices.
 
 const MAX_SLUG_ATTEMPTS = 5;
-const CLAIMED = 'ConditionalCheckFailed';
 
 const slugClaim = (slug: string) => `slug#${slug}`;
 const nameClaim = (name: string) => `name#${categoryNameKey(name)}`;
@@ -92,9 +92,7 @@ export const categoryWrites = {
           status: 'active' as const,
         };
       }
-      const failed = (results ?? []).map(
-        (result: { code?: string } | undefined) => result?.code === CLAIMED,
-      );
+      const failed = failedConditions(results);
       // The name decides first: a taken name is a conflict whatever the slug.
       if (failed[2]) {
         throw new NameConflictError(
@@ -160,9 +158,7 @@ export const categoryWrites = {
       ])
       .go();
     if (canceled) {
-      const failed = (results ?? []).map(
-        (result: { code?: string } | undefined) => result?.code === CLAIMED,
-      );
+      const failed = failedConditions(results);
       if (failed[1]) {
         throw new NameConflictError(
           `A category named "${displayName}" already exists`,

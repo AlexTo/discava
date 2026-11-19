@@ -9,6 +9,7 @@ import {
   HANDLE_MIN,
 } from '../entities/instructor-profile.js';
 import type { createCoreTableService } from '../service.js';
+import { failedConditions } from './errors.js';
 import {
   type NotificationTransactionItems,
   transactionEntities,
@@ -23,7 +24,6 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 //   each conditioned on not existing, so two instructors never share a handle
 //   and an instructor never has two profiles.
 
-const CLAIMED = 'ConditionalCheckFailed';
 const FALLBACK_HANDLE = 'instructor';
 const FALLBACK_DISPLAY_NAME = 'Discava instructor';
 const RANDOM_CANDIDATES = 4;
@@ -190,9 +190,7 @@ export const ensureInstructorProfile = async (
     if (!canceled) {
       return { status: 'created', handle: candidate };
     }
-    const failed = (results ?? []).map(
-      (result: { code?: string } | undefined) => result?.code === CLAIMED,
-    );
+    const failed = failedConditions(results);
     if (failed[0]) {
       return { status: 'exists' };
     }

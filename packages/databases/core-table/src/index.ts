@@ -82,7 +82,6 @@ export {
   announcementIdTime,
   announcementPage,
   announcementWrites,
-  uuidV7Time,
 } from './helpers/announcement.js';
 export {
   type AssignmentSubmissionFile,
@@ -209,6 +208,12 @@ export {
   discussionNotificationWrites,
 } from './helpers/discussion-notifications.js';
 export {
+  type CancellationReasons,
+  cancellationReasons,
+  failedAt,
+  failedConditions,
+  hasFailedCondition,
+  hasTransactionConflict,
   InvalidRequestError,
   isConditionalCheckFailed,
   NameConflictError,
@@ -341,6 +346,7 @@ export {
   syncUserProfile,
   userProfileFrom,
 } from './helpers/user.js';
+export { idTimeWithin, uuidV7Time } from './helpers/uuid-v7.js';
 export {
   isValidPosition,
   resumeAt,

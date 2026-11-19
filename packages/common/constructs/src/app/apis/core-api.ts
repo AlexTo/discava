@@ -64,6 +64,7 @@ export const CORE_API_DEDICATED_FUNCTIONS = {
   // file download links
   MediaUrl: [
     'contentItem.videoUrl',
+    'course.previewVideoUrl',
     'contentItem.fileUrl',
     'assignment.submissionFileUrl',
   ],

@@ -4,7 +4,12 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
-import { type CoreTable, isConditionalCheckFailed } from '@discava/core-table';
+import {
+  type CoreTable,
+  cancellationReasons,
+  failedAt,
+  isConditionalCheckFailed,
+} from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -202,7 +207,7 @@ export const deleteContentItem = courseProcedure
         ])
         .go();
       if (canceled) {
-        if (results?.[1]?.code === 'ConditionalCheckFailed') {
+        if (failedAt(cancellationReasons(results), 1)) {
           throw courseNoLongerDraft();
         }
         throw new TRPCError({

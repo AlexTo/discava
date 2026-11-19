@@ -1,0 +1,134 @@
+---
+title: Deployment on AWS
+description: The CloudFormation stacks a Discava stage is made of, the AWS resources in each, and how they depend on one another.
+sidebar:
+  order: 1
+---
+
+import Link from '@components/link.astro';
+
+A deployed installation is called a **stage**. A stage is a group of CloudFormation stacks, all named `<stage>-<Stack>`, such as `discava-production-Data`. Several stages can live in one AWS account without touching each other.
+
+## The stacks
+
+The application is split into eight stacks. One stack would exceed CloudFormation's limit of 500 resources, and separating stateful resources from code keeps routine deploys away from the data.
+
+```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
+direction: up
+
+websites: "Websites"
+data: "Data"
+media: "MediaPipeline"
+core: "CoreApi"
+router: "StreamRouter"
+instr: "InstructorApi"
+admin: "AdminApi"
+rc: "RuntimeConfig"
+
+data -> websites
+media -> data
+core -> data
+core -> media
+core -> websites
+router -> data
+router -> core
+router -> websites
+instr -> data
+instr -> media
+instr -> core
+instr -> websites
+admin -> data
+admin -> websites
+rc -> core
+rc -> instr
+rc -> admin
+rc -> router
+```
+
+They deploy in this order:
+
+```
+Websites → Data → MediaPipeline → CoreApi → StreamRouter → InstructorApi → AdminApi → RuntimeConfig
+```
+
+| Stack | Contains | Why it is separate |
+| --- | --- | --- |
+| **Websites** | The three portals: an S3 bucket and CloudFront distribution each | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
+| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the AppConfig application | Everything stateful. Changes rarely, and every other backend stack depends on it |
+| **MediaPipeline** | MediaConvert pipeline, the functions reacting to finished transcodes and transcriptions, cleanup schedules, failure queues | Video processing, used by both core-api and instructor-api |
+| **CoreApi** | core-api's API Gateway and functions, the search re-index function, the email unsubscribe route | The API every user calls |
+| **StreamRouter** | The table stream's router function, one queue and failure queue per feature, the feature handlers | Background reactions to data changes, kept out of CoreApi's resource budget |
+| **InstructorApi** | instructor-api's API Gateway and function, with its media and transcoding permissions | The instructors' API |
+| **AdminApi** | admin-api's API Gateway and function | The admins' API |
+| **RuntimeConfig** | AppConfig content and each portal's `runtime-config.json` | Reads values from every other stack, so it deploys last |
+
+When a portal or media distribution has WAF on, its web ACL is an extra small stack in `us-east-1`, where CloudFront requires it.
+
+## What is in each layer
+
+### Edge: CloudFront and API Gateway
+
+| Entry point | Service | Origin |
+| --- | --- | --- |
+| Each portal | CloudFront | A private S3 bucket of static files |
+| Lesson media | CloudFront, signed requests only | A private S3 bucket |
+| Public media | CloudFront | A private S3 bucket |
+| Each API | API Gateway (REST, regional) | Lambda |
+
+No S3 bucket is public. CloudFront reaches each through Origin Access Control.
+
+### Compute: Lambda
+
+All code runs in Lambda on Node.js 24.
+
+- **API functions.** core-api serves most procedures from one shared function, and gives a dedicated function to any procedure needing more access than the table, such as the one holding the key that signs video requests. That keeps powerful permissions off the function handling every other request.
+- **Event functions.** One per job: the two Cognito triggers, the stream router and its feature handlers, and the media pipeline's completion and cleanup handlers.
+
+### Data
+
+| Resource | Service | Notes |
+| --- | --- | --- |
+| Core table | DynamoDB, on-demand with a throughput ceiling | A change stream feeds the stream router |
+| Search | OpenSearch Serverless | Can scale to zero on a development stage |
+| Media | S3 | Three buckets: lesson media, uploads, public media |
+| Users | Cognito user pool | Groups: `student`, `instructor`, `admin` |
+| Configuration | AppConfig | Resource names and addresses that functions read at runtime |
+| Secrets | Secrets Manager | The video signing key and the key that signs unsubscribe links |
+
+### Messaging and scheduling
+
+| Service | Used for |
+| --- | --- |
+| DynamoDB Streams | Every change to the core table |
+| SQS | One queue and one failure queue per stream feature, plus the media pipeline's failure queues |
+| EventBridge | Rules that fire when a MediaConvert or Transcribe job finishes, and a schedule that finds stuck videos |
+| EventBridge Scheduler | Delayed cleanups of temporary media |
+| SES | Notification emails |
+
+## Runtime configuration
+
+Deployed code never has resource names hardcoded.
+
+- **Backend functions** read table names, bucket names and endpoints from **AppConfig** at runtime. A function is given only the AppConfig application id.
+- **Portals** fetch `runtime-config.json` from their own origin when they load. It carries the API addresses and Cognito ids.
+
+Both are written by the `RuntimeConfig` stack from values the other stacks export, which is why it deploys last.
+
+## Stages sharing an account
+
+Three mechanisms keep stages apart:
+
+- **Names.** Every stack and generated resource name starts with the stage name, and IAM permissions are scoped to that prefix.
+- **Assets.** Each stage uploads its build output under its own prefix in the shared CDK bucket, so one stage can't overwrite what another is about to deploy.
+- **Permissions boundary.** Every IAM role a stage creates carries that stage's boundary policy, capping what the stage's own code can be granted.
+
+## How it is defined in code
+
+| What | Where |
+| --- | --- |
+| Which stages exist and their settings | `packages/common/infra-config/src/stages.config.ts` |
+| The CDK app: one `ApplicationStage` per configured stage | `packages/infra/src/main.ts` |
+| How stacks are composed and wired | `packages/infra/src/stages/application-stage.ts` and `packages/infra/src/stacks/` |
+| The building blocks (an API, a bucket, a website) | `packages/common/constructs` |
+
+A **construct** owns one component's resources and exposes helpers such as `grantRead`. A **stack** wires constructs together and turns stage settings into construct options. See <Link path="deploy/configuration">Stage configuration</Link> for the settings.
