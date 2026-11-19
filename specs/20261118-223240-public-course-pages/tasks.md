@@ -179,13 +179,13 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: An instructor edits outcomes and requirements on a course, sees the checklist, and the public page reflects the edits.
 
-- [ ] T015 [US3] Tests first, then add a "Landing page" card to the course settings area under `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/`, next to the catalogue fields card (find where `updateCourseCatalogue` is edited and follow that structure), in `-components/landing-page-card.tsx`:
+- [x] T015 [US3] Tests first, then add a "Landing page" card to the course settings area under `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/`, next to the catalogue fields card (find where `updateCourseCatalogue` is edited and follow that structure), in `-components/landing-page-card.tsx`:
   - **Lists**: one editable list each for outcomes and requirements, with an "Add" button, "Move up", "Move down" and "Remove" text buttons (no arrow icons), a character counter at "160", and "Add" disabled at "10" items.
   - **Save and Cancel**: Save calls `course.updateLanding`, and server errors show inline.
 
   Component tests cover editing, reordering, the limits, error display and the preview note.
-- [ ] T016 [US3] Tests first, then add `-components/landing-page-checklist.tsx` with five lines (outcomes, requirements, preview ready, course image, profile has a headline and photo). Each line shows a tick or an empty mark and links to its fix. It is computed in the client from `course.view` and `profile.get`; until the phases that add them, the preview line (Phase 5) and the profile line (Phase 6) read "Coming soon", and those phases wire them. Show it on the course overview, and add a "View public page" link when the course is published. Component tests: each line in both states; Publish is never disabled by the checklist.
-- [ ] T017 [US3] Change `packages/e2e/src/scenarios/public-landing-page.e2e.ts` so the instructor sets outcomes and requirements through the new card, not the API helper. Add a `screenshot()` of the card and the checklist.
+- [x] T016 [US3] Tests first, then add `-components/landing-page-checklist.tsx` with five lines (outcomes, requirements, preview ready, course image, profile has a headline and photo). Each line shows a tick or an empty mark and links to its fix. It is computed in the client from `course.view` and `profile.get`; until the phases that add them, the preview line (Phase 5) and the profile line (Phase 6) read "Coming soon", and those phases wire them. Show it on the course overview, and add a "View public page" link when the course is published. Component tests: each line in both states; Publish is never disabled by the checklist.
+- [x] T017 [US3] Change `packages/e2e/src/scenarios/public-landing-page.e2e.ts` so the instructor sets outcomes and requirements through the new card, not the API helper. Add a `screenshot()` of the card and the checklist.
 ---
 
 ## Phase 4: User Story 2 - The media pipeline processes preview videos (P1)

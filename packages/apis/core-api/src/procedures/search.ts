@@ -92,7 +92,7 @@ const facetsOf = (
  * Full-text search and browsing over published courses (#53), narrowed by
  * category, tags, level, language and duration, with counts for every facet.
  * Visibility is enforced twice -- once when a document is indexed
- * (index-content.ts never indexes a draft or archived course) and again
+ * (search-indexing.ts never indexes a draft or archived course) and again
  * here, in the query itself, by filtering to `status: 'published'`.
  */
 export const publicSearchCourses = publicSearchProcedure

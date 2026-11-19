@@ -2,11 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  type EmailMessage,
-  EmailPermanentError,
-  sendEmail,
-} from '@discava/common-server-utils/email';
+import { type EmailMessage, EmailPermanentError, sendEmail } from './email.js';
 import { signUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import {
   claimEmail,

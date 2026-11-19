@@ -27,7 +27,11 @@
         "compile",
         "test",
         "bundle",
-        "generate-indices-manifest"
+        "generate-indices-manifest",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
       ]
     },
     "bundle": {
