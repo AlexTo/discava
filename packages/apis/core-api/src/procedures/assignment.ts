@@ -29,20 +29,19 @@ import {
   RETIRED_VERSION_DELAY_MINUTES,
   SUBMISSION_ATTEMPT_CLEANUP_DELAY_MINUTES,
 } from '@discava/common-server-utils/media-keys';
+import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   assignmentSubmissionWrites,
   type CoreTable,
+  cancellationReasons,
+  hasFailedCondition,
+  hasTransactionConflict,
   isLateSubmission,
   isShown,
   studentActivityAt,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
-import {
-  type CancellationReasons,
-  hasTransactionConflict,
-  transactionConflict,
-} from '../lib/transaction.js';
 import {
   AssignmentRefSchema,
   type IAssignmentRef,
@@ -363,13 +362,8 @@ export const submit = courseProcedure
           };
         }
 
-        const reasons: CancellationReasons = data ?? [];
-        if (
-          !reasons.some(
-            (reason) => reason?.code === 'ConditionalCheckFailed',
-          ) &&
-          !hasTransactionConflict(reasons)
-        ) {
+        const reasons = cancellationReasons(data);
+        if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to record the submission',

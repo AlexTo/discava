@@ -4,7 +4,6 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
-  hasTransactionConflict,
   writeAtEnd,
   writeInActiveCourse,
   writeUnderActiveAncestors,
@@ -316,13 +315,5 @@ describe('writeAtEnd', () => {
 
     await expect(append(coreTable)).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(tries).toHaveLength(1);
-  });
-});
-
-describe('hasTransactionConflict', () => {
-  it('is true only when some result is a TransactionConflict', () => {
-    expect(hasTransactionConflict([{}, TC])).toBe(true);
-    expect(hasTransactionConflict([CCF])).toBe(false);
-    expect(hasTransactionConflict(undefined)).toBe(false);
   });
 });

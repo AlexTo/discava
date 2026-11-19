@@ -52,5 +52,6 @@ describe('ADMIN_API_DEDICATED_FUNCTIONS', () => {
         Template.fromStack(stack).findResources('AWS::Lambda::Function'),
       ),
     ).toHaveLength(2);
-  });
+    // Synthesising the Lambda assets is slow on a busy CI runner.
+  }, 60_000);
 });

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   writeStripeSecrets: vi.fn(),
   clearStripeSecrets: vi.fn(),
   readStripeApiKey: vi.fn(),
+  readStripeWebhookSecret: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importActual) => ({
@@ -56,6 +57,7 @@ vi.mock('@discava/common-server-utils/stripe/secrets-admin', () => ({
   writeStripeSecrets: mocks.writeStripeSecrets,
   clearStripeSecrets: mocks.clearStripeSecrets,
   readStripeApiKey: mocks.readStripeApiKey,
+  readStripeWebhookSecret: mocks.readStripeWebhookSecret,
 }));
 
 import { ConnectError } from '@discava/common-server-utils/stripe/connect';
@@ -134,6 +136,7 @@ beforeEach(() => {
   mocks.removeLeftoverEndpoints.mockResolvedValue(0);
   mocks.removeEndpoint.mockResolvedValue(true);
   mocks.readStripeApiKey.mockResolvedValue(OLD_KEY);
+  mocks.readStripeWebhookSecret.mockResolvedValue('whsec_OLDSIGNING');
   mocks.completeConnection.mockResolvedValue({});
   mocks.completeDisconnect.mockResolvedValue({});
   mocks.rotateKey.mockResolvedValue({});
@@ -517,6 +520,72 @@ describe('payment.connect: a switch', () => {
     noSecretWrites();
     expect(mocks.removeEndpoint).not.toHaveBeenCalled();
     expect(mocks.abandonChange).toHaveBeenCalled();
+  });
+});
+
+describe('failures after the secrets are written', () => {
+  it('a switch puts the old key and signing secret back when the record write fails', async () => {
+    mocks.getConnection.mockResolvedValue(active({ accountId: 'acct_old' }));
+    mocks.completeConnection.mockRejectedValue(new Error('dynamo'));
+    await expect(callAs().connect({ secretKey: KEY })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+    expect(mocks.writeStripeSecrets).toHaveBeenLastCalledWith({
+      apiKey: OLD_KEY,
+      webhookSecret: 'whsec_OLDSIGNING',
+    });
+    expect(mocks.abandonChange).toHaveBeenCalled();
+  });
+
+  it('a first connection that fails clears what it wrote', async () => {
+    mocks.completeConnection.mockRejectedValue(new Error('dynamo'));
+    await expect(callAs().connect({ secretKey: KEY })).rejects.toBeDefined();
+    expect(mocks.clearStripeSecrets).toHaveBeenCalledTimes(1);
+  });
+
+  it('a rotation whose secret write fails puts the record back', async () => {
+    mocks.getConnection.mockResolvedValue(active());
+    mocks.rotateKey.mockResolvedValue({
+      ...active(),
+      revision: 4,
+      keyLast4: '1234',
+    });
+    mocks.writeStripeSecrets.mockRejectedValue(new Error('throttled'));
+    await expect(callAs().connect({ secretKey: KEY })).rejects.toMatchObject({
+      code: 'INTERNAL_SERVER_ERROR',
+    });
+    expect(mocks.rotateKey).toHaveBeenCalledTimes(2);
+    expect(mocks.rotateKey).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        keyLast4: '9999',
+        connection: expect.objectContaining({ revision: 4 }),
+      }),
+    );
+  });
+
+  it('a disconnect whose record write fails clears nothing and removes no endpoint', async () => {
+    mocks.getConnection.mockResolvedValue(active());
+    mocks.completeDisconnect.mockRejectedValue(new Error('dynamo'));
+    await expect(callAs().disconnect()).rejects.toBeDefined();
+    noSecretWrites();
+    expect(mocks.removeEndpoint).not.toHaveBeenCalled();
+    expect(mocks.abandonChange).toHaveBeenCalled();
+  });
+
+  it('a disconnect commits the record first, then cleans up, warning if clearing fails', async () => {
+    mocks.getConnection.mockResolvedValue(active());
+    mocks.clearStripeSecrets.mockRejectedValue(new Error('denied'));
+    const order: string[] = [];
+    mocks.completeDisconnect.mockImplementation(
+      async () => void order.push('record'),
+    );
+    mocks.removeEndpoint.mockImplementation(
+      async () => (order.push('endpoint'), true),
+    );
+    const result = await callAs().disconnect();
+    expect(order).toEqual(['record', 'endpoint']);
+    expect(result.warning).toMatch(/couldn't be cleared/);
+    expect(mocks.abandonChange).not.toHaveBeenCalled();
   });
 });
 

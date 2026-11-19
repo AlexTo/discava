@@ -12,6 +12,7 @@ import {
 import {
   clearStripeSecrets,
   readStripeApiKey,
+  readStripeWebhookSecret,
   writeStripeSecrets,
 } from '@discava/common-server-utils/stripe/secrets-admin';
 import {
@@ -53,6 +54,8 @@ const MESSAGES = {
   busy: 'Another change is in progress; try again in a minute',
   nothingConnected: 'Nothing is connected',
   storage: "Couldn't save the key; nothing was changed",
+  secretsNotCleared:
+    "Disconnected, but the saved key couldn't be cleared; disconnect again or save a new key to replace it",
   oldRegistration:
     "Couldn't remove the old confirmation address from Stripe; remove it in the Stripe dashboard",
 } as const;
@@ -222,16 +225,32 @@ export const connectPayment = adminProcedure
       // The same account with the address unchanged is a rotation: the
       // registration and signing secret stay valid, so only the key changes.
       // The record moves first, conditioned on its revision, so a rotation
-      // that lost to a switch writes no secret.
+      // that lost to a switch writes no secret; if the secret write then
+      // fails, the record is put back so it never shows a key that isn't
+      // stored.
       if (current && sameAccount && current.webhookUrl === url) {
-        await rotateKey({
+        const rotated = await rotateKey({
           coreTable,
           connection: current,
           keyLast4: verified.keyLast4,
           by,
           now,
         });
-        await writeStripeSecrets({ apiKey: secretKey });
+        try {
+          await writeStripeSecrets({ apiKey: secretKey });
+        } catch (error) {
+          await rotateKey({
+            coreTable,
+            connection: rotated,
+            keyLast4: current.keyLast4 ?? verified.keyLast4,
+            by: {
+              userId: current.changedBy ?? by.userId,
+              name: current.changedByName ?? by.name,
+            },
+            now: current.changedAt ?? now,
+          }).catch(() => undefined);
+          throw error;
+        }
         await recordChange(coreTable, {
           kind: 'replaced',
           byUserId: by.userId,
@@ -253,10 +272,14 @@ export const connectPayment = adminProcedure
       });
       let registeredId: string | undefined;
       let oldKey: string | undefined;
+      let oldSigning: string | undefined;
+      let secretsWritten = false;
       try {
-        // Read before the new key is saved, to remove the old registration.
+        // Read before the new ones are saved: the old key removes the old
+        // registration, and both are put back if the change fails.
         if (current?.status === 'active') {
           oldKey = await readStripeApiKey();
+          oldSigning = await readStripeWebhookSecret();
         }
         await removeLeftoverEndpoints({ secretKey, url, stage: stage() });
         const registration = await registerEndpoint({
@@ -265,6 +288,7 @@ export const connectPayment = adminProcedure
           stage: stage(),
         });
         registeredId = registration.id;
+        secretsWritten = true;
         await writeStripeSecrets({
           webhookSecret: registration.secret,
           apiKey: secretKey,
@@ -286,6 +310,13 @@ export const connectPayment = adminProcedure
       } catch (error) {
         if (registeredId) {
           await removeEndpoint({ secretKey, endpointId: registeredId });
+        }
+        // The record goes back to what it was, so the secrets must too.
+        if (secretsWritten) {
+          await (oldKey !== undefined && oldSigning !== undefined
+            ? writeStripeSecrets({ apiKey: oldKey, webhookSecret: oldSigning })
+            : clearStripeSecrets()
+          ).catch(() => undefined);
         }
         await abandonChange({ coreTable, connection: leased });
         throw error;
@@ -358,22 +389,30 @@ export const disconnectPayment = adminProcedure
         by,
       });
       let warning: string | undefined;
+      let oldKey: string | undefined;
       try {
-        const oldKey = await readStripeApiKey();
-        if (current.webhookEndpointId) {
-          const removed =
-            oldKey !== undefined &&
-            (await removeEndpoint({
-              secretKey: oldKey,
-              endpointId: current.webhookEndpointId,
-            }));
-          if (!removed) warning = MESSAGES.oldRegistration;
-        }
-        await clearStripeSecrets();
+        oldKey = await readStripeApiKey();
+        // The record is the commit point under the lease: once it says
+        // disconnected, the rest is cleanup that a repeated disconnect or the
+        // next connect redoes.
         await completeDisconnect({ coreTable, connection: leased, by, now });
       } catch (error) {
         await abandonChange({ coreTable, connection: leased });
         throw error;
+      }
+      if (current.webhookEndpointId) {
+        const removed =
+          oldKey !== undefined &&
+          (await removeEndpoint({
+            secretKey: oldKey,
+            endpointId: current.webhookEndpointId,
+          }));
+        if (!removed) warning = MESSAGES.oldRegistration;
+      }
+      try {
+        await clearStripeSecrets();
+      } catch {
+        warning = MESSAGES.secretsNotCleared;
       }
       await recordChange(coreTable, {
         kind: 'disconnected',

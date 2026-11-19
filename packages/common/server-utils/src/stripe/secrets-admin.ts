@@ -61,3 +61,21 @@ export const readStripeApiKey = async (): Promise<string | undefined> => {
     throw error;
   }
 };
+
+/**
+ * The stored signing secret, uncached, so a failed switch can put it back;
+ * `undefined` when none is saved.
+ */
+export const readStripeWebhookSecret = async (): Promise<
+  string | undefined
+> => {
+  try {
+    const value = await readSecret('webhook-secret');
+    return looksLikeStripeSecret('webhook-secret', value) ? value : undefined;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'PaymentsNotConnectedError') {
+      return undefined;
+    }
+    throw error;
+  }
+};
