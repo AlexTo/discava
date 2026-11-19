@@ -427,7 +427,7 @@ describe('notification delivery', () => {
     expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
   });
 
-  it('is told where the portals and the API are, and where its secret is', () => {
+  it('is told where the portals and the API are, where its secret is, and the runtime config app id', () => {
     const { Environment } = deliveryFunction(configured);
     expect(Object.keys(Environment.Variables).sort()).toEqual(
       [
@@ -435,6 +435,7 @@ describe('notification delivery', () => {
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
         'NOTIFICATIONS_FROM_ADDRESS',
+        'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
         'UNSUBSCRIBE_SECRET_ARN',
       ].sort(),
