@@ -124,7 +124,7 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 - **FR-012**: The search box and dropdown MUST follow the accessible combobox pattern: assistive technology is told that suggestions exist, how many there are, and which one is highlighted, without focus leaving the box.
 - **FR-013**: The dropdown MUST end with a "See all results for '<text>'" entry that opens the results page, and MUST say "No courses match" when nothing matches.
 - **FR-014**: A failed or timed-out suggestion request MUST NOT show an error, block typing, or affect Enter and the results page.
-- **FR-015**: Suggestions MUST be available to signed-out visitors, under the same request limits and protections as today's public search.
+- **FR-015**: Suggestions MUST be available to signed-out visitors, with the same protections as today's public search (WAF where the stage enables it), and under a request limit of their own, sized for typing traffic and set per stage, so that suggestions keep working while several visitors type at once.
 - **FR-016**: A suggestion request MUST return only what the dropdown shows (identifier, title, image), not full result data such as facets or counts.
 - **FR-017**: Suggestions MUST work in local development with no AWS account, against the same local search the results page uses.
 
@@ -136,7 +136,7 @@ The last row of the dropdown is "See all results for '<text>'", which opens the 
 
 ### Measurable Outcomes
 
-- **SC-001**: With search warm, suggestions appear within 1 second of the visitor pausing, for 95% of pauses.
+- **SC-001**: With search warm, and site-wide suggestion traffic under the stage's suggestion limit (about 5 people typing at once on the development stage, about 100 on production), suggestions appear within 1 second of the visitor pausing, for 95% of pauses.
 - **SC-002**: Typing a 10-character word continuously, then pausing, results in exactly 1 suggestion request.
 - **SC-003**: Suggestions never show text older than what's in the box: in a test where an older answer arrives after a newer one, the dropdown shows the newer one 100% of the time.
 - **SC-004**: No draft or archived course appears in suggestions, checked against every course state in tests.

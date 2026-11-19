@@ -1,6 +1,6 @@
 # Contract: `course.publicSuggest` (core-api)
 
-A public tRPC **query** on the core API, built on `publicSearchProcedure`. It's listed in `PUBLIC_OPERATIONS`, so signed-out callers reach it without the Cognito authorizer.
+A public tRPC **query** on the core API, built on `publicSearchProcedure`. It's listed in `PUBLIC_OPERATIONS`, so signed-out callers reach it without the Cognito authorizer. Its API Gateway throttle is `publicSuggestThrottle` (stage keys `publicSuggestThrottleRateLimit` and `publicSuggestThrottleBurstLimit`), not the shared `publicThrottle` the other public operations get.
 
 ## Input
 
@@ -38,6 +38,7 @@ SuggestCoursesOutputSchema = z.object({
 | Search doesn't answer within 3 s (cold start) | `TIMEOUT`, with the message "Search is starting up. Try again in a few seconds." |
 | Any other search error | `INTERNAL_SERVER_ERROR` |
 | Signed in or signed out | Identical results |
+| Over the stage's suggest throttle (R-6) | API Gateway answers 429 before the Lambda runs. The portal shows no suggestions and no error |
 
 ## Search request (built by `buildSuggestRequest`)
 

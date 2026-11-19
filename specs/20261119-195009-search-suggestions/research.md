@@ -63,11 +63,29 @@
 
 ## R-6: Failure, cold start and limits
 
-**Decision**: `course.publicSuggest` uses a 3 s request timeout and maps `TimeoutError` to tRPC `TIMEOUT`, the same mapping as `publicSearch`. The portal treats any error as "no suggestions": the dropdown stays as it was or closes, with nothing logged to the user. No new throttle setting: suggestions share core-api's stage throttle and WAF.
+**Decision**: `course.publicSuggest` uses a 3 s request timeout and maps `TimeoutError` to tRPC `TIMEOUT`, the same mapping as `publicSearch`. The portal treats any error, a 429 included, as "no suggestions": the dropdown stays as it was or closes, with nothing logged to the user.
 
-**Rationale**:
+It gets an API Gateway throttle of its own, sized for typing traffic, through two new per-stage keys on `coreApi`: `publicSuggestThrottleRateLimit` and `publicSuggestThrottleBurstLimit`.
+
+| Stage | Suggest throttle (rate / burst) | Other public operations |
+|-------|---------------------------------|-------------------------|
+| `discava-development` | 5 / 10 | 1 / 3 |
+| `discava-production` | 100 / 200 | 20 / 40 |
+| Default (stage sets neither key) | 100 / 200 | 20 / 40 |
+
+**Why a throttle of its own**: Listing `course.publicSuggest` in `PUBLIC_OPERATIONS` makes `CoreApi` (`packages/common/constructs/src/app/apis/core-api.ts`) give it a method setting with `publicThrottle`, not the stage default. That limit is shared by every caller of the method, signed in or not, not counted per visitor: 1 request/s with a burst of 3 on `discava-development`, and 20 with a burst of 40 on `discava-production`. Suggestions are core-api's most frequent request, and FR-014 hides every 429. Under that limit, two people typing at once on development, or a few dozen on production, would make the dropdown quietly stop working, which breaks SC-001.
+
+**Sizing**: The 300 ms debounce sends at most one request per pause. Someone typing steadily pauses about once a second, so one active typist costs about 1 request/s, and usually less.
+- `discava-development` serves a handful of testers. 5/s with a burst of 10 covers about five people typing at once. With WAF off there, the throttle bounds what an anonymous flood costs, so it stays small: it adds 5 requests/s to what anonymous callers can reach, and core-api's reserved concurrency of 10 still caps how many requests run at once.
+- `discava-production` gets 100/s with a burst of 200, about 100 people typing at the same moment. A request is a 10-hit query with no aggregations or core-table read, so it holds a Lambda for tens of milliseconds: about 5 of the router's 50 reserved concurrency at full rate. Raise it with real traffic, like the stage's other limits.
+
+The limit is still shared by everyone, not per visitor. Neither stage's WAF has a per-IP rate rule, so one heavy caller can use the whole limit, as it can for the other public operations today. A per-IP rule is a stage-wide change outside this feature.
+
+**Rationale (timeout)**:
 - On a scale-to-zero stage (`discava-development`), the first request after a quiet spell wakes the collection, and the following pauses then succeed.
 - A shorter timeout than `publicSearch`'s 8 s stops a cold start from holding Lambda concurrency for every pause.
-- The 300 ms debounce caps one visitor at about 3 requests a second of continuous typing with pauses. In practice it's far fewer, because a request fires only after a pause.
 
-**Alternatives considered**: a separate, lower throttle for this route. API Gateway throttles per stage or method, and the existing limit already bounds the cost. Revisit after launch with real traffic.
+**Alternatives considered**:
+- Keep the shared `publicThrottle` and accept its cap. Rejected: at 1/s on development the manual checks with more than one tester are unreliable, and at 20/s on production the dropdown would fail silently well below the traffic the stage is sized for.
+- Raise `publicThrottle` for every public operation instead. Rejected: it loosens the limit on `course.publicSearch`, `course.publicList` and the rest, which cost more per request and don't need it.
+- A per-IP WAF rate rule. Not in scope (above), and development has WAF off.

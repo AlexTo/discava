@@ -28,7 +28,7 @@ As a visitor types 3 or more characters in the student portal's top-bar search b
 - One request per typing pause (300 ms debounce) and none for text under 3 characters.
 - Only published courses, enforced in the query as well as at index time.
 - Fails quietly: a timeout or error never shows an error in the top bar.
-- Public: works signed out, under core-api's existing throttling and WAF.
+- Public: works signed out, under core-api's WAF and an API Gateway throttle of its own (`publicSuggestThrottle*`, 5/s on development and 100/s on production), since the shared public throttle is too tight for typing traffic (R-6).
 - Works under `pnpm dev`.
 
 **Scale/Scope**: One procedure, one query-builder function, one component and one hook in the student portal, one e2e test, and one design-page section. The catalogue size is whatever the `courses` index holds. The query is bounded at 10 hits.
@@ -44,7 +44,7 @@ As a visitor types 3 or more characters in the student portal's top-bar search b
 | III. Everything runs locally | Pass | The same local OpenSearch container serves the query. `match_bool_prefix` is supported in OpenSearch 3.x, which local and Serverless both run (R-1) |
 | IV. Layered tests | Pass, planned | Unit tests for `buildSuggestRequest` and `course.publicSuggest` (published-only filter, 10-hit cap, timeout mapping, input bounds). Portal component tests for threshold, debounce, stale answers, keyboard and ARIA. One new e2e test. No invariant applies: no shared record is written (impact check below) |
 | V. Single-table via ElectroDB | Pass | No core-table access at all: the procedure reads only the search index. No scan, no new index. `STREAM_FEATURES` unchanged |
-| VI. Secure by default | Pass | Same throttling and WAF as `course.publicSearch`. Input is bounded (3 to 200 characters) and sent as query text, never as query syntax. Output is three fields of published courses. Highlighting is done in the portal on plain text, so no server HTML is injected (R-5) |
+| VI. Secure by default | Pass | Same WAF as `course.publicSearch`, and a throttle of its own, set per stage and still bounded (R-6). Input is bounded (3 to 200 characters) and sent as query text, never as query syntax. Output is three fields of published courses. Highlighting is done in the portal on plain text, so no server HTML is injected (R-5) |
 | VII. Change freely before launch | Pass | The search box's role changes from `searchbox` to `combobox`. The e2e helper that finds it is updated outright, with no alias |
 | VIII. Repo conventions | Pass | `core-api/src/helpers/suggest-query.ts` beside `search-query.ts`. Portal code stays in the student portal (the only consumer): `components/site-search-suggestions.tsx`, `hooks/use-debounced-value.ts`, `lib/title-highlight.ts`. Text-only rows, no arrow icons. Screenshots in e2e. English docs section, with translations pending noted in the PR |
 
@@ -59,7 +59,8 @@ As a visitor types 3 or more characters in the student portal's top-bar search b
 3. **The answer is cached under its text** (R-3): a TanStack Query keyed by the debounced text gives last-text-wins (FR-008) and reuse (FR-009, `staleTime` 60 s) for free. `placeholderData` keeps the previous list visible while the next one loads.
 4. **A hand-built ARIA combobox** (R-4) around the existing `Input`, following the WAI-ARIA APG "combobox with listbox popup" pattern, instead of adding cmdk. A polite live region announces the count.
 5. **Highlighting in the portal** (R-5): the matched word prefixes are emphasized with `<mark>` from plain text, not from OpenSearch's HTML highlighter.
-6. **Silent failure** (R-6): errors and `TIMEOUT` close the dropdown, or keep the last list. They're never shown as an `ErrorAlert` in the top bar.
+6. **Silent failure** (R-6): errors, 429s and `TIMEOUT` close the dropdown, or keep the last list. They're never shown as an `ErrorAlert` in the top bar.
+7. **A throttle of its own** (R-6): listing the method in `PUBLIC_OPERATIONS` would otherwise give it `publicThrottle` (1/s on development, 20/s on production, shared by every caller). Two new `coreApi` stage keys, `publicSuggestThrottleRateLimit` and `publicSuggestThrottleBurstLimit`, set it instead.
 
 ## Project Structure
 
@@ -91,7 +92,18 @@ packages/apis/core-api/src/
 ├── router.ts                        # course.publicSuggest, and PUBLIC_OPERATIONS += 'course.publicSuggest'
 └── router.test.ts                   # existing public-operations check covers the new entry
 
-packages/common/constructs/src/app/apis/core-api.ts   # unchanged code; reads PUBLIC_OPERATIONS, so its snapshot gains the route
+packages/common/infra-config/src/
+├── stages.types.ts                  # + publicSuggestThrottleRateLimit, publicSuggestThrottleBurstLimit on coreApi
+├── stages.config.ts                 # development 5 / 10, production 100 / 200
+└── env-overrides.ts                 # + the two keys as numbers
+
+packages/common/constructs/src/app/apis/
+├── core-api.ts                      # + publicSuggestThrottle prop, applied to course.publicSuggest instead of publicThrottle
+└── core-api.test.ts                 # + the suggest method gets its own throttle
+
+packages/infra/src/stacks/
+├── api-limits.ts                    # + publicSuggestThrottle(config), default 100 / 200
+└── core-api-stack.ts                # passes publicSuggestThrottle to CoreApi
 
 packages/websites/student-portal/src/
 ├── components/site-search.tsx                   # combobox wiring, keyboard handling, submit cancels pending
@@ -109,7 +121,7 @@ packages/e2e/src/
 docs/src/content/docs/en/design/search.mdx   # + "Suggestions" section and "Spec" link
 ```
 
-**Structure Decision**: The backend change is confined to core-api's existing search procedure file and a new helper beside `search-query.ts`. The frontend change stays in the student portal, because no other portal has this search box. Nothing goes in `common-shadcn` or `common-web-utils` until a second portal needs it (constitution VIII). `CoreApi` in `common-constructs` reads `PUBLIC_OPERATIONS` to skip the Cognito authorizer, so adding the name there is the only infra change, and the construct's snapshot updates to match.
+**Structure Decision**: The backend change is confined to core-api's existing search procedure file and a new helper beside `search-query.ts`. The frontend change stays in the student portal, because no other portal has this search box. Nothing goes in `common-shadcn` or `common-web-utils` until a second portal needs it (constitution VIII). `CoreApi` in `common-constructs` reads `PUBLIC_OPERATIONS` to skip the Cognito authorizer. The one other infra change is the suggest throttle: two stage config keys, a `CoreApi` prop that overrides `publicThrottle` for `course.publicSuggest`, and the stack passing it through, like `publicThrottle` today (R-6).
 
 ## Complexity Tracking
 

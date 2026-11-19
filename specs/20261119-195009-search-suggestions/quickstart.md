@@ -30,3 +30,5 @@ All pass. The e2e test posts its screenshots on the PR.
 10. On a phone-width window (375 px), the dropdown fits without horizontal scrolling.
 
 Save screenshots of the key steps to `tmp/screenshots/pr-<number>/`.
+
+`pnpm dev` has no API Gateway, so the throttle isn't exercised locally. On `discava-development` the suggest throttle is 5 requests/s with a burst of 10, enough for about five testers typing at once (research R-6). More than that, and some pauses get a 429 and show no suggestions.

@@ -34,9 +34,9 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 ## Phase 1: Foundational - `course.publicSuggest` in core-api
 
-**Goal**: A public suggestions query, which no portal calls yet. Nothing users see changes.
+**Goal**: A public suggestions query with an API Gateway throttle of its own, which no portal calls yet. Nothing users see changes.
 
-**Independent test**: `pnpm nx run @discava/core-api:test -- --run suggest-query.test.ts search.test.ts router.test.ts` passes.
+**Independent test**: `pnpm nx run @discava/core-api:test -- --run suggest-query.test.ts search.test.ts router.test.ts`, `pnpm nx run @discava/common-infra-config:test -- --run env-overrides.test.ts` and `pnpm nx run @discava/common-constructs:test -- --run core-api.test.ts` pass, and `pnpm nx run @discava/infra:synth` succeeds.
 
 - [ ] T001 [P] Tests first, then add `SuggestCoursesInputSchema` and `SuggestCoursesOutputSchema` (with `ISuggestCoursesInput` and `ISuggestCoursesOutput` types) to `packages/apis/core-api/src/schema/search.ts`, exported through `schema/index.ts`, exactly as in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
   - input `q: z.string().trim().min(3).max(200)`;
@@ -64,7 +64,15 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - a `TimeoutError` gives `TIMEOUT`;
   - `category.query` is never called.
 - [ ] T004 Register `publicSuggest: publicSuggestCourses` under `course` in `packages/apis/core-api/src/router.ts`, and add `'course.publicSuggest'` to `PUBLIC_OPERATIONS` (keep the list's order: after `'course.publicSearch'`). The existing check in `packages/apis/core-api/src/router.test.ts` must pass unchanged. If it lists the public operations by hand, add the new name there too, without weakening any other assertion.
-- [ ] T005 Run `pnpm nx run @discava/common-constructs:test -u` only if the `CoreApi` construct's snapshot changes because of the new public route (`packages/common/constructs/src/app/apis/core-api.ts` reads `PUBLIC_OPERATIONS`). Check that the only snapshot difference is the new `course.publicSuggest` method without the Cognito authorizer, and say so in the PR description.
+- [ ] T022 [P] Tests first, then add the suggest throttle's stage keys (research R-6):
+  - `publicSuggestThrottleRateLimit?: number` (`@default 100`) and `publicSuggestThrottleBurstLimit?: number` (`@default 200`) on `CoreApiComponentConfig` in `packages/common/infra-config/src/stages.types.ts`, next to `publicThrottleRateLimit`, with doc comments saying they apply to `course.publicSuggest` only and are shared by every caller. Also correct `publicThrottleRateLimit`'s comment, which names only `course.publicList` and `course.publicView`: it applies to every operation in `PUBLIC_OPERATIONS`;
+  - both keys as `'number'` under `coreApi` in `packages/common/infra-config/src/env-overrides.ts`, with a case in `env-overrides.test.ts` like the existing `THROTTLE_RATE_LIMIT` one;
+  - in `packages/common/infra-config/src/stages.config.ts`, `5` and `10` on `discava-development` and `100` and `200` on `discava-production`, beside the `publicThrottle*` keys. Add a line to each stage's limits comment: suggestions have their own throttle because they fire on every typing pause.
+- [ ] T023 Tests first, then wire the throttle (after T004 and T022):
+  - a `publicSuggestThrottle?: ThrottleSettings` prop on `CoreApi` in `packages/common/constructs/src/app/apis/core-api.ts` (`@default` `publicThrottle`). The method setting for `course.publicSuggest` uses it instead of `publicThrottle`; every other public operation and public extra route keeps `publicThrottle`. In `core-api.test.ts`, with `publicThrottle: { rateLimit: 2, burstLimit: 4 }` and `publicSuggestThrottle: { rateLimit: 7, burstLimit: 9 }`, assert the stage's `MethodSettings` give `/course.publicSuggest` GET 7 and 9 and `/course.publicSearch` GET still 2 and 4;
+  - `publicSuggestThrottle(config)` in `packages/infra/src/stacks/api-limits.ts` beside `publicThrottle`, with `DEFAULT_PUBLIC_SUGGEST_THROTTLE = { rateLimit: 100, burstLimit: 200 }`;
+  - `publicSuggestThrottle: publicSuggestThrottle(coreApiConfig)` passed to `CoreApi` in `packages/infra/src/stacks/core-api-stack.ts`.
+- [ ] T005 Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public route or its throttle. Check that the only snapshot differences are the new `course.publicSuggest` method without the Cognito authorizer, and its method setting with the suggest throttle (100 / 200 by default, or the stage's values), and say so in the PR description.
 
 ---
 
@@ -173,7 +181,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - `course.publicSuggest`, and why it's separate from `publicSearch` (research R-2);
   - the `match_bool_prefix` query and its known stemming limit, with `search_as_you_type` as the follow-up (R-1);
   - the 3-character threshold, the 300 ms debounce and last-text-wins caching (R-3);
-  - the 3 s timeout and silent failure (R-6).
+  - the 3 s timeout and silent failure, and the throttle of its own: why the shared public throttle is too tight, the stage keys and each stage's values (R-6).
 
   Add a "Spec" link to `specs/20261119-195009-search-suggestions/spec.md` in the page's existing link style. Note in the PR that translations of the other locales are pending.
 - [ ] T020 (human) Run [quickstart.md](./quickstart.md) steps 1 to 6 and 8 to 10 against `pnpm dev`, saving screenshots to `tmp/screenshots/pr-<number>/`. Confirm in the browser's network panel that one `course.publicSuggest` request is sent per pause (SC-002), and that suggestions appear within 1 s of pausing with search warm (SC-001).
@@ -184,13 +192,13 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 ## Dependencies
 
 - Phase 1 → Phase 2 (the portal calls `course.publicSuggest`) → Phase 3 (ARIA on the Phase 2 component) → Phase 4 (the last row joins Phase 3's keyboard navigation). Phase 5's T018 can start any time after Phase 1. T020 and T021 come after Phase 4.
-- Within Phase 1: T001 and T002 in parallel, then T003, then T004, then T005.
+- Within Phase 1: T001, T002 and T022 in parallel, then T003, then T004, then T023, then T005.
 - Within Phase 2: T006 and T007 in parallel, then T008, then T009, then T010. T011 and T012 can be written alongside T009.
 
 ## Parallel examples
 
 ```text
-Phase 1:  T001 (schema)  ║  T002 (query builder)
+Phase 1:  T001 (schema)  ║  T002 (query builder)  ║  T022 (throttle stage keys)
 Phase 2:  T006 (debounce hook)  ║  T007 (title highlight)
 ```
 
