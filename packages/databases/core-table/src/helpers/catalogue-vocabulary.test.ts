@@ -7,7 +7,7 @@ import {
   categorySlug,
   normaliseCategoryName,
   normaliseTags,
-} from './catalogue.js';
+} from './catalogue-vocabulary.js';
 import { InvalidRequestError } from './errors.js';
 
 describe('normaliseTags', () => {

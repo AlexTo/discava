@@ -10,12 +10,12 @@ import {
   SCORE_BANDS,
   scoreStatsSk,
   sumContributions,
-} from '../analytics.js';
+} from '../analytics-contributions.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
 // A course's analytics aggregates equal the sums of what its records
-// contribute: `contributions` (helpers/analytics.ts) summed over its
+// contribute: `contributions` (helpers/analytics-contributions.ts) summed over its
 // enrolments, completions and quiz attempts. The stream handler keeps them
 // current a few seconds behind the records, so a check right after a change
 // may see a difference that closes (the e2e suite waits, see

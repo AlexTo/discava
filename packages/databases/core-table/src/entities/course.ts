@@ -4,7 +4,7 @@
  */
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
-import { LANGUAGES, LEVELS } from '../helpers/catalogue.js';
+import { LANGUAGES, LEVELS } from '../helpers/catalogue-vocabulary.js';
 
 // Primary key attribute is named `courseId`, not `id`, so it matches the
 // composite attribute name Module/Lesson use for their own pk. ElectroDB
