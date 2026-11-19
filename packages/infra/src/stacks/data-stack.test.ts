@@ -212,6 +212,16 @@ describe('the notification unsubscribe secret', () => {
     expect(removed.DeletionPolicy).toBe('Delete');
   });
 
+  it('names every secret under the stage prefix the execution role is scoped to', () => {
+    // CI's CloudFormation execution role manages only secrets named
+    // `<stage without hyphens>*`.
+    const all = Object.values(secrets({}));
+    expect(all.length).toBeGreaterThan(1);
+    for (const secret of all) {
+      expect(secret.Properties.Name).toMatch(/^discavatest/);
+    }
+  });
+
   it('is the only notification secret in Data', () => {
     expect(unsubscribeSecrets({})).toHaveLength(1);
   });

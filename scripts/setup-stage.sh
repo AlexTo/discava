@@ -16,17 +16,6 @@ lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
-# map_set <map> <key> <value> / map_get <map> <key>: a map from identifier
-# keys (component names such as coreApi) to values, kept as one variable per
-# key (<map>__<key>). map_get prints nothing for a key never set.
-map_set() {
-  printf -v "$1__$2" '%s' "$3"
-}
-map_get() {
-  local name="$1__$2"
-  printf '%s' "${!name:-}"
-}
-
 # Guided deployment setup for a Discava stage.
 #
 # Run this once per deployment stage (as defined in
@@ -47,9 +36,9 @@ map_get() {
 # - optionally creates the matching GitHub environment and sets its variables,
 #   plus the repository's AWS_DOCKER_LOGIN_ROLE_ARN variable (requires an
 #   authenticated `gh` CLI)
-# - optionally configures custom domains and their ACM certificates for the
-#   APIs, portals and lesson media, plus (when lesson media has a domain) the
-#   shared parent domain HLS playback's signed cookies need, stored as
+# - optionally serves every component from a subdomain of one root domain,
+#   using the issued ACM certificate it finds for each (stopping if one is
+#   missing), with the root as HLS playback's signed-cookie domain; stored as
 #   <STAGE>_INFRA_<COMPONENT>_* variables on that GitHub environment (see
 #   packages/common/infra-config/src/env-overrides.ts), which the deploy
 #   workflow forwards to synth
@@ -78,19 +67,10 @@ map_get() {
 #   AWS_PROFILE          AWS CLI profile (otherwise the stage's configured
 #                        profile, then the default credential chain)
 #   AWS_REGION           used when the stage config sets no region
-#   <STAGE>_INFRA_<COMPONENT>_DOMAIN_NAME(S), <STAGE>_INFRA_<COMPONENT>_CERTIFICATE_ARN
-#                        custom domain defaults, e.g.
-#                        DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME (otherwise
-#                        the stage's config, then the GitHub environment's
-#                        current variables)
-#   <STAGE>_ROOT_DOMAIN  root domain each component's domain defaults to a
+#   <STAGE>_ROOT_DOMAIN  root domain every component is served from a
 #                        subdomain of, e.g. DISCAVA_DEVELOPMENT_ROOT_DOMAIN=
-#                        example.com suggests core-api.example.com (only used
-#                        where neither the stage's config nor the GitHub
-#                        environment sets that component's domain)
-#   <STAGE>_INFRA_LESSON_MEDIA_COOKIE_DOMAIN
-#                        shared cookie domain default for HLS playback (same
-#                        fallback order as above)
+#                        example.com (otherwise the root the GitHub
+#                        environment's student portal domain already uses)
 #   DEPLOY_ROLE_NAME, EXECUTION_ROLE_NAME, DOCKER_LOGIN_ROLE_NAME
 #
 # This script is designed to be idempotent and safe to run multiple times.
@@ -222,12 +202,6 @@ read_stages_config() {
         console.log('account=' + (config.account ?? ''));
         console.log('profile=' + (config.credentials?.type === 'profile' ? config.credentials.profile : ''));
         console.log('cloudFrontWaf=' + cloudFrontWaf);
-        for (const name of ['coreApi', 'instructorApi', 'studentPortal', 'instructorPortal', 'adminPortal', 'lessonMedia', 'publicMedia']) {
-          const component = c[name] ?? {};
-          console.log('domains.' + name + '=' + [component.domainName ?? component.domainNames ?? []].flat().join(','));
-          console.log('certificate.' + name + '=' + (component.certificateArn ?? ''));
-        }
-        console.log('cookieDomain=' + (c.lessonMedia?.cookieDomain ?? ''));
       });
     " "$@"
   )
@@ -279,27 +253,6 @@ certificate_covers() {
   domain="$(lower "$2")"
   [[ "$names" == *",$domain,"* ]] && return 0
   [[ "${domain#*.}" == *.* && "$names" == *",*.${domain#*.},"* ]]
-}
-
-# common_domain_suffix <domain> <domain>: prints the longest shared
-# dot-separated suffix, e.g. instructor-api.example.com and
-# lesson-media.example.com -> example.com. Empty if they share none.
-common_domain_suffix() {
-  local -a a_labels b_labels
-  IFS='.' read -r -a a_labels <<<"$1"
-  IFS='.' read -r -a b_labels <<<"$2"
-  local ai=$((${#a_labels[@]} - 1)) bi=$((${#b_labels[@]} - 1))
-  local -a common=()
-  while [[ $ai -ge 0 && $bi -ge 0 && "${a_labels[$ai]}" == "${b_labels[$bi]}" ]]; do
-    common=("${a_labels[$ai]}" ${common[@]+"${common[@]}"})
-    ai=$((ai - 1))
-    bi=$((bi - 1))
-  done
-  local result="" label
-  for label in ${common[@]+"${common[@]}"}; do
-    result="${result:+$result.}$label"
-  done
-  echo "$result"
 }
 
 # root_domain_names <comma-separated labels> <root>: prints each label as a
@@ -456,19 +409,12 @@ STAGE_REGION=""
 STAGE_ACCOUNT=""
 STAGE_PROFILE=""
 STAGE_CLOUDFRONT_WAF=""
-STAGE_COOKIE_DOMAIN=""
-# The STAGE_DOMAINS and STAGE_CERTIFICATES maps (see map_set) are keyed by
-# component name, e.g. coreApi. Already include any <STAGE>_INFRA_<COMPONENT>_*
-# overrides set in this shell (resolveStage applies them).
 while IFS='=' read -r key value; do
   case "$key" in
     region) STAGE_REGION="$value" ;;
     account) STAGE_ACCOUNT="$value" ;;
     profile) STAGE_PROFILE="$value" ;;
     cloudFrontWaf) STAGE_CLOUDFRONT_WAF="$value" ;;
-    domains.*) map_set STAGE_DOMAINS "${key#domains.}" "$value" ;;
-    certificate.*) map_set STAGE_CERTIFICATES "${key#certificate.}" "$value" ;;
-    cookieDomain) STAGE_COOKIE_DOMAIN="$value" ;;
   esac
 done < <(read_stages_config "$INFRA_PROJECT_PATH" "$TARGET_STAGE")
 
@@ -620,15 +566,28 @@ fi
 # NAME=value pairs to set, and names to remove, on the GitHub environment.
 DOMAIN_VARIABLES=()
 DOMAIN_VARIABLES_TO_DELETE=()
-# The RESOLVED_DOMAINS map (see map_set), keyed by component name: the
-# domain(s) actually entered below, so the cookie-domain prompt after the loop
-# can default off of them.
-paragraph "Each component can be served from a custom domain instead of its generated *.execute-api.amazonaws.com / *.cloudfront.net hostname (leave blank for none). API certificates must be in $AWS_REGION; portal and media certificates, served by CloudFront, in $GLOBAL_REGION. DNS records aren't created for you."
-echo ""
-paragraph "A root domain suggests a subdomain of it for each component not already configured, e.g. core-api.example.com for example.com."
+# component|env segment|label|kind|subdomain labels under the root domain
+# (@ is the root itself)
+readonly DOMAIN_SPECS=(
+  "coreApi|CORE_API|Core API|api|core-api"
+  "instructorApi|INSTRUCTOR_API|Instructor API|api|instructor-api"
+  "studentPortal|STUDENT_PORTAL|Student portal|cloudfront|@,www"
+  "instructorPortal|INSTRUCTOR_PORTAL|Instructor portal|cloudfront|instructor"
+  "adminPortal|ADMIN_PORTAL|Admin portal|cloudfront|admin"
+  "lessonMedia|LESSON_MEDIA|Lesson media|cloudfront|lesson-media"
+  "publicMedia|PUBLIC_MEDIA|Public media|cloudfront|media"
+)
+readonly COOKIE_DOMAIN_VARIABLE="${STAGE_INFRA_ENV_PREFIX}LESSON_MEDIA_COOKIE_DOMAIN"
+paragraph "Give a root domain and every component is served from a subdomain of it (core-api.<root>, instructor-api.<root>, <root> and www.<root> for the student portal, instructor.<root>, admin.<root>, lesson-media.<root>, media.<root>), each with the issued ACM certificate found for it: in $AWS_REGION for the APIs, in $GLOBAL_REGION for the CloudFront components. Leave it blank for the generated *.execute-api.amazonaws.com / *.cloudfront.net hostnames. DNS records aren't created for you."
+# The default is the root the student portal is already served from.
 root_domain_variable="${STAGE_ENV_PREFIX}ROOT_DOMAIN"
+root_domain_default="${!root_domain_variable:-}"
+if [[ -z "$root_domain_default" && "$READ_GITHUB_VARIABLES" == true ]]; then
+  root_domain_default="$(github_environment_variable "${STAGE_INFRA_ENV_PREFIX}STUDENT_PORTAL_DOMAIN_NAMES")"
+  root_domain_default="${root_domain_default%%,*}"
+fi
 while true; do
-  ask_optional ROOT_DOMAIN "Root domain" "${!root_domain_variable:-}"
+  ask_optional ROOT_DOMAIN "Root domain" "$root_domain_default"
   ROOT_DOMAIN="${ROOT_DOMAIN// /}"
   ROOT_DOMAIN="$(lower "$ROOT_DOMAIN")"
   [[ -n "$ROOT_DOMAIN" && ! "$ROOT_DOMAIN" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || break
@@ -636,193 +595,65 @@ while true; do
   [[ "$ASSUME_YES" == false ]] || exit 1
 done
 readonly ROOT_DOMAIN
-# The API whose domain was resolved before this one, so the second API's
-# certificate can be checked against the first's (see api_certificate_error).
-previous_api_label=""
-previous_api_domain=""
-previous_api_certificate_names=""
-# component|env segment|label|kind|subdomain labels under the root domain
-for spec in \
-  "coreApi|CORE_API|Core API|api|core-api" \
-  "instructorApi|INSTRUCTOR_API|Instructor API|api|instructor-api" \
-  "studentPortal|STUDENT_PORTAL|Student portal|cloudfront|@,www" \
-  "instructorPortal|INSTRUCTOR_PORTAL|Instructor portal|cloudfront|instructor" \
-  "adminPortal|ADMIN_PORTAL|Admin portal|cloudfront|admin" \
-  "lessonMedia|LESSON_MEDIA|Lesson media|cloudfront|lesson-media" \
-  "publicMedia|PUBLIC_MEDIA|Public media|cloudfront|media"; do
-  IFS='|' read -r component segment label kind root_labels <<<"$spec"
-  if [[ "$kind" == api ]]; then
-    # API Gateway custom domains take a single name.
-    domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAME"
-    domain_question="$label domain"
-    certificate_region="$AWS_REGION"
-    # Regional custom domains accept RSA public keys of at most 2048 bits.
-    certificate_key_types="RSA_1024,RSA_2048,EC_prime256v1,EC_secp384r1"
-  else
-    domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAMES"
-    domain_question="$label domains (comma-separated)"
-    certificate_region="$GLOBAL_REGION"
-    certificate_key_types="RSA_1024,RSA_2048,RSA_3072,RSA_4096,EC_prime256v1,EC_secp384r1"
-  fi
-  certificate_variable="$STAGE_INFRA_ENV_PREFIX${segment}_CERTIFICATE_ARN"
 
-  current_domains=""
-  current_certificate=""
+if [[ -z "$ROOT_DOMAIN" ]]; then
+  # No custom domains: remove any a previous run stored.
   if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
-    current_domains="$(github_environment_variable "$domain_variable")"
-    current_certificate="$(github_environment_variable "$certificate_variable")"
-  fi
-
-  root_domains=""
-  [[ -z "$ROOT_DOMAIN" ]] || root_domains="$(root_domain_names "$root_labels" "$ROOT_DOMAIN")"
-
-  while true; do
-    stage_domains="$(map_get STAGE_DOMAINS "$component")"
-    ask_optional domains "$domain_question" "${stage_domains:-${current_domains:-$root_domains}}"
-    domains="${domains// /}"
-    domains="$(lower "$domains")"
-    domain_error=""
-    if [[ "$kind" == api && "$domains" == *,* ]]; then
-      domain_error="$label takes a single domain, got: $domains"
-    else
-      IFS=',' read -r -a domain_list <<<"$domains"
-      for domain in ${domain_list[@]+"${domain_list[@]}"}; do
-        if [[ ! "$domain" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]]; then
-          domain_error="Not a valid domain name: $domain"
-          break
-        fi
-      done
-    fi
-    [[ -n "$domain_error" ]] || break
-    echo "$domain_error" >&2
-    [[ "$ASSUME_YES" == false ]] || exit 1
-  done
-  map_set RESOLVED_DOMAINS "$component" "$domains"
-
-  if [[ -z "$domains" ]]; then
-    [[ -z "$current_domains" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$domain_variable")
-    [[ -z "$current_certificate" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$certificate_variable")
-    continue
-  fi
-
-  certificate_default="$(map_get STAGE_CERTIFICATES "$component")"
-  certificate_default="${certificate_default:-$current_certificate}"
-  # An API's configured certificate that's shared with the other API (e.g. a
-  # wildcard set up before #224) isn't offered again.
-  if [[ "$kind" == api && -n "$certificate_default" ]]; then
-    default_names="$(aws acm describe-certificate \
-      --certificate-arn "$certificate_default" \
-      --region "$certificate_region" \
-      --query 'Certificate.[Status, KeyAlgorithm, join(`,`, SubjectAlternativeNames)]' \
-      --output text 2>/dev/null | cut -f3 || true)"
-    default_error="$(api_certificate_error "$default_names" "$domains" "$previous_api_domain")"
-    if [[ -n "$default_names" && -n "$default_error" ]]; then
-      paragraph "$label's current certificate $certificate_default can't stay: $default_error. $API_CERTIFICATE_REASON"
-      certificate_default=""
-    fi
-  fi
-  if [[ -z "$certificate_default" ]]; then
-    if [[ "$kind" == api ]]; then
-      certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types" api "$previous_api_domain")"
-    else
-      certificate_default="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types")"
-    fi
-    if [[ -n "$certificate_default" ]]; then
-      echo "Found an issued certificate in $certificate_region covering $domains."
-    elif [[ "$kind" == api ]]; then
-      echo "No issued certificate in $certificate_region is for exactly $domains; request one for exactly $domains in ACM first (a wildcard won't do, see #224)." >&2
-    else
-      echo "No issued certificate in $certificate_region covers $domains; request one in ACM first." >&2
-    fi
-  fi
-
-  while true; do
-    ask certificate "ACM certificate ARN for $domains" "$certificate_default"
-    certificate_error=""
-    if [[ ! "$certificate" =~ ^arn:[a-z-]+:acm:([a-z0-9-]+):([0-9]{12}):certificate/[A-Za-z0-9-]+$ ]]; then
-      certificate_error="Not an ACM certificate ARN: $certificate"
-    elif [[ "${BASH_REMATCH[1]}" != "$certificate_region" ]]; then
-      certificate_error="$label's certificate must be in $certificate_region, not ${BASH_REMATCH[1]}."
-    elif [[ "${BASH_REMATCH[2]}" != "$ACCOUNT_ID" ]]; then
-      certificate_error="$label's certificate must be in account $ACCOUNT_ID, not ${BASH_REMATCH[2]}."
-    elif ! certificate_details="$(aws acm describe-certificate \
-      --certificate-arn "$certificate" \
-      --region "$certificate_region" \
-      --query 'Certificate.[Status, KeyAlgorithm, join(`,`, SubjectAlternativeNames)]' \
-      --output text 2>&1)"; then
-      certificate_error="Couldn't read $certificate: $certificate_details"
-    else
-      IFS=$'\t' read -r certificate_status certificate_key_algorithm certificate_names <<<"$certificate_details"
-      # describe-certificate spells key algorithms with hyphens (RSA-2048),
-      # list-certificates' key types with underscores (RSA_2048).
-      if [[ "$certificate_status" != ISSUED ]]; then
-        certificate_error="$certificate is $certificate_status, not ISSUED."
-      elif [[ ",$certificate_key_types," != *",${certificate_key_algorithm//-/_},"* ]]; then
-        certificate_error="$label doesn't support $certificate's $certificate_key_algorithm key; use one of $certificate_key_types."
-      elif ! certificate_covers_all "$certificate_names" "$domains"; then
-        certificate_error="$certificate ($certificate_names) doesn't cover all of $domains."
-      elif [[ "$kind" == api ]]; then
-        api_error="$(api_certificate_error "$certificate_names" "$domains" "$previous_api_domain")"
-        if [[ -n "$api_error" ]]; then
-          certificate_error="$label can't use $certificate ($certificate_names): $api_error. $API_CERTIFICATE_REASON"
-        elif [[ -n "$previous_api_domain" ]] && certificate_covers "$previous_api_certificate_names" "$domains"; then
-          # Choosing another certificate here can't fix this one.
-          paragraph "$previous_api_label's certificate ($previous_api_certificate_names) also covers $domains. $API_CERTIFICATE_REASON Re-run and give $previous_api_label a certificate for exactly its own domain." >&2
-          exit 1
-        fi
+    for spec in "${DOMAIN_SPECS[@]}"; do
+      IFS='|' read -r _ segment _ kind _ <<<"$spec"
+      if [[ "$kind" == api ]]; then
+        domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAME"
+      else
+        domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAMES"
       fi
+      for variable in "$domain_variable" "$STAGE_INFRA_ENV_PREFIX${segment}_CERTIFICATE_ARN"; do
+        [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
+      done
+    done
+    [[ -z "$(github_environment_variable "$COOKIE_DOMAIN_VARIABLE")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$COOKIE_DOMAIN_VARIABLE")
+  fi
+else
+  readonly CORE_API_DOMAIN="core-api.$ROOT_DOMAIN"
+  readonly INSTRUCTOR_API_DOMAIN="instructor-api.$ROOT_DOMAIN"
+  missing_certificates=false
+  for spec in "${DOMAIN_SPECS[@]}"; do
+    IFS='|' read -r component segment label kind root_labels <<<"$spec"
+    domains="$(root_domain_names "$root_labels" "$ROOT_DOMAIN")"
+    if [[ "$kind" == api ]]; then
+      # API Gateway custom domains take a single name.
+      domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAME"
+      # Regional custom domains accept RSA public keys of at most 2048 bits.
+      certificate_region="$AWS_REGION"
+      certificate_key_types="RSA_1024,RSA_2048,EC_prime256v1,EC_secp384r1"
+      other_api_domain="$CORE_API_DOMAIN"
+      [[ "$component" != coreApi ]] || other_api_domain="$INSTRUCTOR_API_DOMAIN"
+      certificate="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types" api "$other_api_domain")"
+    else
+      domain_variable="$STAGE_INFRA_ENV_PREFIX${segment}_DOMAIN_NAMES"
+      certificate_region="$GLOBAL_REGION"
+      certificate_key_types="RSA_1024,RSA_2048,RSA_3072,RSA_4096,EC_prime256v1,EC_secp384r1"
+      certificate="$(find_certificate "$certificate_region" "$domains" "$certificate_key_types")"
     fi
-    [[ -n "$certificate_error" ]] || break
-    paragraph "$certificate_error" >&2
-    [[ "$ASSUME_YES" == false ]] || exit 1
-  done
 
-  DOMAIN_VARIABLES+=("$domain_variable=$domains" "$certificate_variable=$certificate")
-  if [[ "$kind" == api ]]; then
-    previous_api_label="$label"
-    previous_api_domain="$domains"
-    previous_api_certificate_names="$certificate_names"
-  fi
-done
-
-# HLS video playback authorizes via CloudFront signed cookies, which need a
-# domain shared between Instructor API (which issues them) and Lesson media
-# (which serves the video) -- only meaningful once Lesson media itself has a
-# custom domain configured above.
-lesson_media_domains="$(map_get RESOLVED_DOMAINS lessonMedia)"
-instructor_api_domain="$(map_get RESOLVED_DOMAINS instructorApi)"
-if [[ -n "$lesson_media_domains" ]]; then
-  cookie_domain_variable="${STAGE_INFRA_ENV_PREFIX}LESSON_MEDIA_COOKIE_DOMAIN"
-  current_cookie_domain=""
-  if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
-    current_cookie_domain="$(github_environment_variable "$cookie_domain_variable")"
-  fi
-  cookie_domain_default="${STAGE_COOKIE_DOMAIN:-$current_cookie_domain}"
-  if [[ -z "$cookie_domain_default" && -n "$instructor_api_domain" ]]; then
-    cookie_domain_default="$(common_domain_suffix \
-      "$instructor_api_domain" \
-      "${lesson_media_domains%%,*}")"
-  fi
-
-  echo ""
-  paragraph "HLS playback needs a domain shared by Instructor API and Lesson media (e.g. example.com for instructor-api.example.com and lesson-media.example.com) -- a cookie can only be set for the issuing domain or one of its parents."
-  while true; do
-    ask_optional cookie_domain "Shared cookie domain for HLS playback" "$cookie_domain_default"
-    cookie_domain="$(lower "$cookie_domain")"
-    cookie_domain_error=""
-    if [[ -n "$cookie_domain" && ! "$cookie_domain" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]]; then
-      cookie_domain_error="Not a valid domain name: $cookie_domain"
+    if [[ -z "$certificate" ]]; then
+      missing_certificates=true
+      if [[ "$kind" == api ]]; then
+        paragraph "$label: no issued certificate in $certificate_region is for exactly $domains (and not also $other_api_domain). $API_CERTIFICATE_REASON" >&2
+      else
+        paragraph "$label: no issued certificate in $certificate_region covers $domains." >&2
+      fi
+      continue
     fi
-    [[ -n "$cookie_domain_error" ]] || break
-    echo "$cookie_domain_error" >&2
-    [[ "$ASSUME_YES" == false ]] || exit 1
+    echo "$label: $domains ($certificate)"
+    DOMAIN_VARIABLES+=("$domain_variable=$domains" "$STAGE_INFRA_ENV_PREFIX${segment}_CERTIFICATE_ARN=$certificate")
   done
-
-  if [[ -n "$cookie_domain" ]]; then
-    DOMAIN_VARIABLES+=("$cookie_domain_variable=$cookie_domain")
-  elif [[ -n "$current_cookie_domain" ]]; then
-    DOMAIN_VARIABLES_TO_DELETE+=("$cookie_domain_variable")
+  if [[ "$missing_certificates" == true ]]; then
+    paragraph "Request the missing certificates in ACM (or leave the root domain blank), then re-run." >&2
+    exit 1
   fi
+  # HLS playback's signed cookies are issued by Instructor API and sent to
+  # Lesson media, so they're set for the root both are subdomains of.
+  DOMAIN_VARIABLES+=("$COOKIE_DOMAIN_VARIABLE=$ROOT_DOMAIN")
 fi
 
 # Policy documents are written to fixed names in one private directory:
@@ -1390,6 +1221,26 @@ EOF
       }
     },
     {
+      "Sid": "SecretsForDiscava",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:CreateSecret",
+        "secretsmanager:DeleteSecret",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:TagResource",
+        "secretsmanager:UntagResource"
+      ],
+      "Resource": "arn:$AWS_PARTITION:secretsmanager:$AWS_REGION:$ACCOUNT_ID:secret:$COMPACT_PREFIX*"
+    },
+    {
+      "Sid": "GenerateSecretValues",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetRandomPassword",
+      "Resource": "*"
+    },
+    {
       "Sid": "CloudWatchLogsForDiscava",
       "Effect": "Allow",
       "Action": [
@@ -1883,15 +1734,12 @@ upsert_boundary_policy() {
         "secretsmanager:CreateSecret",
         "secretsmanager:DeleteSecret",
         "secretsmanager:DescribeSecret",
-        "secretsmanager:GetSecretValue"
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:UpdateSecretVersionStage"
       ],
       "Resource": "arn:$AWS_PARTITION:secretsmanager:$AWS_REGION:$ACCOUNT_ID:secret:$COMPACT_PREFIX*"
-    },
-    {
-      "Sid": "GenerateSecretValues",
-      "Effect": "Allow",
-      "Action": "secretsmanager:GetRandomPassword",
-      "Resource": "*"
     },
     {
       "Sid": "StageCrossRegionExports",

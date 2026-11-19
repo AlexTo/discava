@@ -25,7 +25,7 @@ import type {
   SearchComponentConfig,
 } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Names, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
@@ -222,12 +222,14 @@ export class DataStack extends Stack {
   // Signs the unsubscribe links in notification emails (HMAC-SHA256); the
   // delivery function signs with it and the unsubscribe function verifies.
   // Replacing it would invalidate every link already sent, so it is kept like
-  // the table, and follows the table's encryption setting.
+  // the table, and follows the table's encryption setting. Named under the
+  // stage's prefix, which CI's execution role is scoped to.
   private createNotificationUnsubscribeSecret(
     coreTableConfig?: CoreTableComponentConfig,
   ) {
     const kmsEnabled = coreTableConfig?.enableKmsEncryption ?? true;
     const secret = new Secret(this, 'NotificationUnsubscribeSecret', {
+      secretName: `${Names.uniqueResourceName(this, { maxLength: 100, separator: '/' })}/NotificationUnsubscribe`,
       description: 'HMAC key that signs notification unsubscribe links',
       generateSecretString: {
         passwordLength: 64,

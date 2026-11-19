@@ -17,7 +17,7 @@ sidebar:
 
 **"uses a custom OIDC subject claim template."** Your repository or organisation customises the OIDC token's subject. Set `GITHUB_OIDC_SUBJECT_PREFIX` to the part of the subject before `:environment:` and run the script again.
 
-**"No issued certificate … covers …"** Request the certificate in ACM, in the region the message names, and wait until its status is **Issued**.
+**"no issued certificate in … covers …" or "… is for exactly …"** With a root domain, the script needs an issued certificate for every component. It lists each one it couldn't find and stops before changing anything. Request them in ACM, in the region the message names: the stage's region for the two APIs, `us-east-1` for the portals and media. Wait until each is **Issued**, then run the script again. Each API needs a certificate naming exactly its own domain (`core-api.<root>`, `instructor-api.<root>`), not a wildcard. The portals and media can share one certificate for `<root>` and `*.<root>`. To deploy without custom domains, leave the root domain blank.
 
 ## The Deploy workflow
 
@@ -37,7 +37,12 @@ Run the setup script again from a clone of the repository that runs the workflow
 
 **"SSM parameter /cdk-bootstrap/hnb659fds/version not found".** CDK isn't bootstrapped in a region the stage deploys to. Run the setup script again and accept the bootstrap, remembering `us-east-1` for stages with WAF.
 
-**Access denied while CloudFormation creates a resource.** The execution role is scoped to what Discava creates today. If you added a new kind of AWS resource, add the permission to the execution role's policies and to the permissions boundary in `scripts/setup-stage.sh`, then run the script again.
+**Access denied while CloudFormation creates a resource.** CloudFormation runs as the execution role, `cfn-execution-<stage>`. That role may only do what Discava creates today, and only on resources whose names start with the stage name (`discava-development-…`, or `discavadevelopment…` for some kinds). Look at who the error names:
+
+- **`cfn-execution-<stage>` is refused.** Add the action to the execution role's policies in `scripts/setup-stage.sh`. If the resource's name doesn't start with the stage name, give it an explicit name that does instead: CDK's `Names.uniqueResourceName` builds one from the construct's path. Then run the script again.
+- **A function's role is refused when it runs.** Add the action to the permissions boundary in the same script, then run it again. Every role the stage creates carries that boundary. The execution role doesn't, so adding an action to the boundary never fixes a deploy.
+
+A deploy from your own machine uses CDK's default roles, which can do anything. So a stack that deploys locally can still fail in the Deploy workflow.
 
 **The Trivy step fails.** A dependency has a known critical vulnerability with a fix available, or a secret was committed. Update the dependency. A finding you have reviewed and accepted goes in `.trivyignore`.
 

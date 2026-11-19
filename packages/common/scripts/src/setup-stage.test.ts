@@ -287,6 +287,39 @@ describe('setup-stage.sh repository', { timeout: 60_000 }, () => {
 });
 
 describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
+  it("lets CloudFormation manage the stage's secrets and generate their values", () => {
+    // The Data stack's secrets are native AWS::SecretsManager::Secret
+    // resources, so CloudFormation itself creates them, and generating a
+    // value has no resource-level scoping.
+    const { status, executionStatements } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining([
+          'secretsmanager:CreateSecret',
+          'secretsmanager:DeleteSecret',
+          'secretsmanager:DescribeSecret',
+          'secretsmanager:UpdateSecret',
+          'secretsmanager:TagResource',
+        ]),
+        Resource:
+          'arn:aws:secretsmanager:ap-southeast-2:111122223333:secret:discavadevelopment*',
+      }),
+    );
+    expect(executionStatements).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'secretsmanager:GetRandomPassword',
+        Resource: '*',
+      }),
+    );
+  });
+
   it('allows tagging MediaConvert job templates as they are created', () => {
     // Tag-on-create is authorized against jobTemplates/*, not the template's
     // own ARN, so the stage-prefixed job template statement doesn't cover it.
@@ -490,6 +523,31 @@ describe('setup-stage.sh execution policy', { timeout: 60_000 }, () => {
 });
 
 describe('setup-stage.sh permissions boundary', { timeout: 60_000 }, () => {
+  it("lets the stage's functions write its secrets", () => {
+    // The admin function saves the Stripe keys an administrator connects.
+    const { status, policyDocument } = runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining([
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:PutSecretValue',
+          'secretsmanager:UpdateSecretVersionStage',
+        ]),
+        Resource:
+          'arn:aws:secretsmanager:ap-southeast-2:111122223333:secret:discavadevelopment*',
+      }),
+    );
+  });
+
   it("lets the stage's functions use the search collection's data plane", () => {
     // Every function's role is capped by the boundary, so without this the
     // indexing Lambda, the search API and the index-sync handler are denied
@@ -639,16 +697,25 @@ const CERTIFICATE_ARN =
 const REGIONAL_CERTIFICATE_ARN =
   'arn:aws:acm:ap-southeast-2:111122223333:certificate/66666666-7777-8888-9999-000000000000';
 // Certificates naming exactly one API's domain, as each API needs (#224).
-const CORE_API_CERTIFICATE_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
-const CORE_API_CERTIFICATE_ARN = `arn:aws:acm:ap-southeast-2:111122223333:certificate/${CORE_API_CERTIFICATE_ID}`;
-const INSTRUCTOR_API_CERTIFICATE_ID = 'bbbbbbbb-1111-2222-3333-444444444444';
-const INSTRUCTOR_API_CERTIFICATE_ARN = `arn:aws:acm:ap-southeast-2:111122223333:certificate/${INSTRUCTOR_API_CERTIFICATE_ID}`;
-/** The env var answering describe-certificate for one certificate. */
-const describeOf = (id: string) => `ACM_DESCRIBE_${id.replaceAll('-', '_')}`;
+const CORE_API_CERTIFICATE_ARN =
+  'arn:aws:acm:ap-southeast-2:111122223333:certificate/aaaaaaaa-1111-2222-3333-444444444444';
+const INSTRUCTOR_API_CERTIFICATE_ARN =
+  'arn:aws:acm:ap-southeast-2:111122223333:certificate/bbbbbbbb-1111-2222-3333-444444444444';
 const GH_READY: OidcSettings = { kind: 'response', useDefault: true };
+/** ACM with every certificate example.com's components need. */
+const EXAMPLE_COM_CERTIFICATES = {
+  ACM_CERTIFICATES_ap_southeast_2: [
+    `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
+    `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com`,
+    `${INSTRUCTOR_API_CERTIFICATE_ARN}\\tinstructor-api.example.com`,
+  ].join('\\n'),
+  ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\texample.com,*.example.com`,
+};
+const set = (name: string, body: string) =>
+  `gh variable set DISCAVA_DEVELOPMENT_INFRA_${name} --repo ${REPOSITORY} --env discava-development --body ${body}`;
 
 describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
-  it('sets no domain variables when no domains are configured', () => {
+  it('sets no domain variables without a root domain', () => {
     const { status, ghVariableCalls } = runSetup(GH_READY);
 
     expect(status).toBe(0);
@@ -657,121 +724,13 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     );
   });
 
-  it('stores a domain with the issued certificate found for it', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'api.example.com',
-      ACM_CERTIFICATES: `${REGIONAL_CERTIFICATE_ARN}\\tapi.example.com`,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\tapi.example.com',
-    });
-
-    expect(status).toBe(0);
-    expect(ghVariableCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME --repo ${REPOSITORY} --env discava-development --body api.example.com`,
-    );
-    expect(ghVariableCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN --repo ${REPOSITORY} --env discava-development --body ${REGIONAL_CERTIFICATE_ARN}`,
-    );
-  });
-
-  it('finds ECDSA certificates, which ACM only lists when asked for', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'api.example.com',
-      ACM_CERTIFICATES: `${REGIONAL_CERTIFICATE_ARN}\\tapi.example.com`,
-      ACM_KEY_TYPE: 'EC_prime256v1',
-      ACM_DESCRIBE: 'ISSUED\\tEC-prime256v1\\tapi.example.com',
-    });
-
-    expect(status).toBe(0);
-    expect(ghVariableCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN --repo ${REPOSITORY} --env discava-development --body ${REGIONAL_CERTIFICATE_ARN}`,
-    );
-  });
-
-  it('rejects an RSA key over 2048 bits for an API', () => {
-    const { status, output, iamCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'api.example.com',
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN:
-        REGIONAL_CERTIFICATE_ARN,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-4096\\tapi.example.com',
-    });
-
-    expect(status).not.toBe(0);
-    expect(output).toContain("doesn't support");
-    expect(iamCalls).toEqual([]);
-  });
-
-  it('stops before touching IAM when no issued certificate covers a domain', () => {
-    const { status, output, iamCalls, ghVariableCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'api.example.com',
-      ACM_CERTIFICATES: `${REGIONAL_CERTIFICATE_ARN}\\tother.example.org`,
-    });
-
-    expect(status).not.toBe(0);
-    expect(output).toContain('No issued certificate');
-    expect(iamCalls).toEqual([]);
-    expect(ghVariableCalls).toEqual([]);
-  });
-
-  it('stores comma-separated CloudFront domains', () => {
-    const { status, ghVariableCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
-        'example.com, www.example.com',
-      DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_CERTIFICATE_ARN: CERTIFICATE_ARN,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\texample.com,*.example.com',
-    });
-
-    expect(status).toBe(0);
-    expect(ghVariableCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES --repo ${REPOSITORY} --env discava-development --body example.com,www.example.com`,
-    );
-  });
-
-  it('rejects a CloudFront certificate outside us-east-1 before touching IAM', () => {
-    const { status, output, iamCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_DOMAIN_NAMES: 'media.example.com',
-      DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_CERTIFICATE_ARN:
-        REGIONAL_CERTIFICATE_ARN,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\t*.example.com',
-    });
-
-    expect(status).not.toBe(0);
-    expect(output).toContain('must be in us-east-1');
-    expect(iamCalls).toEqual([]);
-  });
-
-  it("rejects a certificate that doesn't cover every domain", () => {
-    const { status, output, iamCalls } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_DOMAIN_NAMES:
-        'admin.lms.example.com',
-      DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_CERTIFICATE_ARN: CERTIFICATE_ARN,
-      // A wildcard covers exactly one label.
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\t*.example.com',
-    });
-
-    expect(status).not.toBe(0);
-    expect(output).toContain("doesn't cover");
-    expect(iamCalls).toEqual([]);
-  });
-
-  it('suggests a subdomain of the root domain for each component', () => {
+  it('serves every component from a subdomain of the root, with the certificate found for it', () => {
     const { status, ghVariableCalls } = runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'Example.com',
-      ACM_CERTIFICATES_ap_southeast_2: [
-        `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
-        `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com`,
-        `${INSTRUCTOR_API_CERTIFICATE_ARN}\\tinstructor-api.example.com`,
-      ].join('\\n'),
-      ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\texample.com,*.example.com`,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\texample.com,*.example.com',
-      [describeOf(CORE_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tcore-api.example.com',
-      [describeOf(INSTRUCTOR_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tinstructor-api.example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
     });
 
     expect(status).toBe(0);
-    const set = (name: string, body: string) =>
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_${name} --repo ${REPOSITORY} --env discava-development --body ${body}`;
     expect(ghVariableCalls).toEqual(
       expect.arrayContaining([
         set('CORE_API_DOMAIN_NAME', 'core-api.example.com'),
@@ -784,42 +743,65 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
         set('ADMIN_PORTAL_DOMAIN_NAMES', 'admin.example.com'),
         set('LESSON_MEDIA_DOMAIN_NAMES', 'lesson-media.example.com'),
         set('LESSON_MEDIA_CERTIFICATE_ARN', CERTIFICATE_ARN),
-        set('LESSON_MEDIA_COOKIE_DOMAIN', 'example.com'),
+        set('PUBLIC_MEDIA_DOMAIN_NAMES', 'media.example.com'),
       ]),
     );
   });
 
-  it('keeps domains the stage config or GitHub already sets over the root domain', () => {
+  it('uses the root domain as the HLS cookie domain', () => {
     const { status, ghVariableCalls } = runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'api.example.com',
-      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_DOMAIN_NAMES:
-        'backoffice.example.com',
-      ACM_CERTIFICATES_ap_southeast_2: [
-        `${CORE_API_CERTIFICATE_ARN}\\tapi.example.com`,
-        `${INSTRUCTOR_API_CERTIFICATE_ARN}\\tinstructor-api.example.com`,
-      ].join('\\n'),
-      ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\t*.example.com,example.com`,
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\t*.example.com,example.com',
-      [describeOf(CORE_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tapi.example.com',
-      [describeOf(INSTRUCTOR_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tinstructor-api.example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
     });
 
     expect(status).toBe(0);
-    const domainCalls = ghVariableCalls.filter((call) =>
-      call.includes('_DOMAIN_NAME'),
+    expect(ghVariableCalls).toContain(
+      set('LESSON_MEDIA_COOKIE_DOMAIN', 'example.com'),
     );
-    expect(domainCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME --repo ${REPOSITORY} --env discava-development --body api.example.com`,
+  });
+
+  it('defaults the root domain to the one the student portal already uses', () => {
+    const { status, ghVariableCalls } = runSetup(GH_READY, {
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'example.com,www.example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toContain(
+      set('ADMIN_PORTAL_DOMAIN_NAMES', 'admin.example.com'),
     );
-    expect(domainCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_DOMAIN_NAMES --repo ${REPOSITORY} --env discava-development --body backoffice.example.com`,
+  });
+
+  it('finds ECDSA certificates, which ACM only lists when asked for', () => {
+    const { status, ghVariableCalls } = runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      ACM_KEY_TYPE: 'EC_prime256v1',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toContain(
+      set('CORE_API_CERTIFICATE_ARN', CORE_API_CERTIFICATE_ARN),
     );
-    expect(domainCalls).toContain(
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES --repo ${REPOSITORY} --env discava-development --body instructor.example.com`,
+  });
+
+  it('stops before touching IAM when a component has no certificate, naming each one missing', () => {
+    const { status, output, iamCalls, ghVariableCalls } = runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      ACM_CERTIFICATES_us_east_1: `${CERTIFICATE_ARN}\\tother.example.org`,
+    });
+
+    expect(status).not.toBe(0);
+    expect(output).toContain(
+      'Student portal: no issued certificate in us-east-1 covers example.com,www.example.com',
     );
+    expect(output).toContain(
+      'Public media: no issued certificate in us-east-1 covers media.example.com',
+    );
+    expect(iamCalls).toEqual([]);
+    expect(ghVariableCalls).toEqual([]);
   });
 
   it('rejects an invalid root domain before touching IAM', () => {
@@ -832,136 +814,77 @@ describe('setup-stage.sh custom domains', { timeout: 60_000 }, () => {
     expect(iamCalls).toEqual([]);
   });
 
+  it('removes the domain variables a previous run stored when the root is left blank', () => {
+    const { status, ghVariableCalls } = runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_COOKIE_DOMAIN:
+        'example.com',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'gh variable delete DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES',
+        ),
+        expect.stringContaining(
+          'gh variable delete DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_COOKIE_DOMAIN',
+        ),
+      ]),
+    );
+  });
+
   // #224: browsers reuse one HTTP/2 connection for two hostnames when a
   // single certificate covers both and they resolve to the same address, and
   // API Gateway then rejects the requests that reach the wrong API.
   describe('API certificates', () => {
-    const BOTH_APIS = {
-      DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'core-api.example.com',
-      DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME:
-        'instructor-api.example.com',
-    };
-    const OWN_CERTIFICATES = {
-      [describeOf(CORE_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tcore-api.example.com',
-      [describeOf(INSTRUCTOR_API_CERTIFICATE_ID)]:
-        'ISSUED\\tRSA-2048\\tinstructor-api.example.com',
-      ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\texample.com,*.example.com',
-    };
-    const certificateSet = (api: string, arn: string) =>
-      `gh variable set DISCAVA_DEVELOPMENT_INFRA_${api}_CERTIFICATE_ARN --repo ${REPOSITORY} --env discava-development --body ${arn}`;
-
-    it('finds each API its own certificate, passing over a wildcard', () => {
+    it('passes over a wildcard for each API', () => {
       const { status, ghVariableCalls } = runSetup(GH_READY, {
-        ...BOTH_APIS,
-        ...OWN_CERTIFICATES,
-        ACM_CERTIFICATES: [
-          `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
-          `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com`,
-          `${INSTRUCTOR_API_CERTIFICATE_ARN}\\tinstructor-api.example.com`,
-        ].join('\\n'),
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
       });
 
       expect(status).toBe(0);
-      expect(ghVariableCalls).toContain(
-        certificateSet('CORE_API', CORE_API_CERTIFICATE_ARN),
-      );
-      expect(ghVariableCalls).toContain(
-        certificateSet('INSTRUCTOR_API', INSTRUCTOR_API_CERTIFICATE_ARN),
-      );
-    });
-
-    it('replaces a configured wildcard with the API’s own certificate', () => {
-      const { status, output, ghVariableCalls } = runSetup(GH_READY, {
-        ...BOTH_APIS,
-        ...OWN_CERTIFICATES,
-        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN:
-          REGIONAL_CERTIFICATE_ARN,
-        ACM_CERTIFICATES: [
-          `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com`,
-          `${INSTRUCTOR_API_CERTIFICATE_ARN}\\tinstructor-api.example.com`,
-        ].join('\\n'),
-      });
-
-      expect(status).toBe(0);
-      expect(output).toContain('current certificate');
-      expect(output).toContain("can't stay");
-      expect(ghVariableCalls).toContain(
-        certificateSet('CORE_API', CORE_API_CERTIFICATE_ARN),
+      expect(ghVariableCalls).not.toContain(
+        set('CORE_API_CERTIFICATE_ARN', REGIONAL_CERTIFICATE_ARN),
       );
     });
 
     it('stops before touching IAM when an API has only a wildcard', () => {
       const { status, output, iamCalls } = runSetup(GH_READY, {
-        DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'core-api.example.com',
-        ACM_CERTIFICATES: `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        ACM_CERTIFICATES_ap_southeast_2: `${REGIONAL_CERTIFICATE_ARN}\\texample.com,*.example.com`,
       });
 
       expect(status).not.toBe(0);
       expect(output).toContain('for exactly core-api.example.com');
-      expect(iamCalls).toEqual([]);
-    });
-
-    it.each([
-      ['a wildcard', 'example.com,*.example.com', 'only through a wildcard'],
-      [
-        'its domain and a wildcard',
-        'core-api.example.com,*.example.com',
-        'also covers *.example.com',
-      ],
-    ])('rejects %s for an API', (_, names, reason) => {
-      const { status, output, iamCalls } = runSetup(GH_READY, {
-        DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME: 'core-api.example.com',
-        DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN:
-          CORE_API_CERTIFICATE_ARN,
-        ACM_DESCRIBE: `ISSUED\\tRSA-2048\\t${names}`,
-      });
-
-      expect(status).not.toBe(0);
-      expect(output).toContain(reason);
       expect(output).toContain('see #224');
       expect(iamCalls).toEqual([]);
     });
 
-    it('rejects one certificate naming both APIs', () => {
-      const { status, output, iamCalls } = runSetup(GH_READY, {
-        ...BOTH_APIS,
-        DISCAVA_DEVELOPMENT_INFRA_CORE_API_CERTIFICATE_ARN:
-          CORE_API_CERTIFICATE_ARN,
-        DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_CERTIFICATE_ARN:
-          INSTRUCTOR_API_CERTIFICATE_ARN,
-        [describeOf(CORE_API_CERTIFICATE_ID)]:
-          'ISSUED\\tRSA-2048\\tcore-api.example.com',
-        [describeOf(INSTRUCTOR_API_CERTIFICATE_ID)]:
-          'ISSUED\\tRSA-2048\\tinstructor-api.example.com,core-api.example.com',
+    it('passes over one certificate naming both APIs', () => {
+      const { status, output } = runSetup(GH_READY, {
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        ACM_CERTIFICATES_ap_southeast_2: `${CORE_API_CERTIFICATE_ARN}\\tcore-api.example.com,instructor-api.example.com`,
       });
 
       expect(status).not.toBe(0);
-      expect(output).toContain('also covers core-api.example.com');
-      expect(iamCalls).toEqual([]);
+      expect(output).toContain('and not also instructor-api.example.com');
     });
 
-    it('still lets CloudFront components share a wildcard', () => {
-      const { status } = runSetup(GH_READY, {
-        DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_PORTAL_DOMAIN_NAMES:
-          'instructor.example.com',
-        DISCAVA_DEVELOPMENT_INFRA_ADMIN_PORTAL_DOMAIN_NAMES:
-          'admin.example.com',
-        ACM_CERTIFICATES: `${CERTIFICATE_ARN}\\texample.com,*.example.com`,
-        ACM_DESCRIBE: 'ISSUED\\tRSA-2048\\texample.com,*.example.com',
+    it('skips an RSA key over 2048 bits, which API Gateway rejects', () => {
+      const { status, output } = runSetup(GH_READY, {
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        ACM_KEY_TYPE: 'RSA_4096',
       });
 
-      expect(status).toBe(0);
+      expect(status).not.toBe(0);
+      expect(output).toContain('Core API: no issued certificate');
     });
-  });
-
-  it('rejects more than one domain for an API', () => {
-    const { status, output } = runSetup(GH_READY, {
-      DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME:
-        'a.example.com,b.example.com',
-    });
-
-    expect(status).not.toBe(0);
-    expect(output).toContain('takes a single domain');
   });
 });
