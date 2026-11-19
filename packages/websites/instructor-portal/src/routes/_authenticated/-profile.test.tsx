@@ -124,6 +124,27 @@ describe('profile editor', () => {
     expect(await screen.findByText('Profile saved.')).toBeVisible();
   });
 
+  it('keeps "Profile saved." once the refetch brings the new version', async () => {
+    let saved = false;
+    const { user } = open({
+      'profile.get': () => ({ ...profile, version: saved ? 3 : 2 }),
+      'profile.update': () => {
+        saved = true;
+        return { ...profile, version: 3 };
+      },
+    });
+    await field('Display name');
+    await user.type(screen.getByLabelText('Bio'), '!');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Profile saved.')).toBeVisible();
+    // The form has started again from the saved profile by now.
+    await waitFor(() =>
+      expect(screen.getByLabelText('Bio')).toHaveValue('Hello'),
+    );
+    expect(screen.getByText('Profile saved.')).toBeVisible();
+  });
+
   it('shows validation errors inline and does not save', async () => {
     const { calls, user } = open();
     const handle = await field('Handle');

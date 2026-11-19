@@ -71,6 +71,8 @@ const initialsOf = (name: string) =>
 function ProfilePage() {
   const trpc = useInstructorApi();
   const profileQuery = useQuery(trpc.profile.get.queryOptions());
+  // Kept here, since the form below starts again when a save bumps the version.
+  const [saved, setSaved] = useState(false);
 
   if (profileQuery.isPending) {
     return (
@@ -100,6 +102,8 @@ function ProfilePage() {
     <ProfileForm
       key={profileQuery.data.version}
       profile={profileQuery.data}
+      saved={saved}
+      onSaved={setSaved}
       reload={() => profileQuery.refetch()}
     />
   );
@@ -107,9 +111,13 @@ function ProfilePage() {
 
 function ProfileForm({
   profile,
+  saved,
+  onSaved,
   reload,
 }: {
   profile: ProfileData;
+  saved: boolean;
+  onSaved: (saved: boolean) => void;
   reload: () => void;
 }) {
   const trpc = useInstructorApi();
@@ -122,7 +130,6 @@ function ProfileForm({
   );
   const updatePhoto = useMutation(trpc.profile.updatePhoto.mutationOptions());
   const [handleError, setHandleError] = useState<string>();
-  const [saved, setSaved] = useState(false);
   const isNew = profile.version === 0;
 
   const refresh = () =>
@@ -138,7 +145,7 @@ function ProfileForm({
     validators: { onChange: profileFormSchema },
     onSubmit: async ({ value }) => {
       setHandleError(undefined);
-      setSaved(false);
+      onSaved(false);
       try {
         await update.mutateAsync({
           version: profile.version,
@@ -147,7 +154,7 @@ function ProfileForm({
           headline: value.headline.trim() || undefined,
           bio: value.bio.trim() || undefined,
         });
-        setSaved(true);
+        onSaved(true);
         await refresh();
       } catch (error) {
         // A message about the handle shows on the field it concerns; the
