@@ -71,8 +71,9 @@ Nested `CLAUDE.md` files hold the detail for the packages below that name one; C
 - `packages/common/tiptap`: rich-text document helpers (`@discava/common-tiptap`) shared by the portals and the APIs: `createContentExtensions` (the Tiptap schema, StarterKit plus LaTeX maths), `isValidTiptapDocument` / `parseTiptapDocument` for stored JSON, `renderLatex` and `plainTextExcerpt`. Extensions are added there, never in one consumer
 - `packages/common/scripts`: deploy/destroy tooling and the Docker services local dev runs instead of AWS; see `packages/common/scripts/CLAUDE.md`
 - `packages/events`: standalone Lambda handlers for AWS-triggered events and the local event runner; see `packages/events/CLAUDE.md`
-- `packages/infra` and `packages/common/constructs`: CDK stacks, stages and constructs; see `packages/infra/CLAUDE.md`
-- `packages/common/infra-config`: per-stage deployment config and the local portals' ports and origins; see `packages/infra/CLAUDE.md`
+- `packages/infra`: CDK stacks and stages; see `packages/infra/CLAUDE.md`
+- `packages/common/constructs`: all CDK constructs; see `packages/common/constructs/CLAUDE.md`
+- `packages/common/infra-config`: per-stage deployment config and the local portals' ports and origins; see `packages/common/infra-config/CLAUDE.md`
 - `packages/websites/student-portal`, `packages/websites/instructor-portal`, `packages/websites/admin-portal`: React + Vite + TanStack Router frontends
 - `packages/common/shadcn`: shared shadcn/ui components used by all three portals, plus `ErrorAlert`
 - `packages/common/web-utils`: non-UI code shared by two or more portals (types, pure logic, browser helpers, e.g. `quiz`, `return-to`, `video-player`: speeds, keyboard shortcut mapping and saved player preferences for the shared `HlsVideo` controls), imported per module (`@discava/common-web-utils/return-to`); the portals' shared bootstrap: `runtime-config` (context, provider and hook; each portal passes its local-dev config in), `trpc-provider` (`createTrpcProvider<AppRouter>({ apiKey, credentials })`, which each portal calls once in its `src/api.ts`; the router type is a generic, so web-utils never imports an API package), `query-client`, `public-media-url` and `app-config`; the frontend counterpart of `common-server-utils`. UI goes in `common-shadcn`, and code only one portal uses stays in it

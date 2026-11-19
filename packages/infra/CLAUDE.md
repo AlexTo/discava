@@ -1,6 +1,6 @@
 # CLAUDE.md: packages/infra
 
-Loaded when working in `packages/infra` or `packages/common/constructs`. The repo-wide rules are in the root [CLAUDE.md](../../CLAUDE.md).
+Loaded when working in `packages/infra`. The repo-wide rules are in the root [CLAUDE.md](../../CLAUDE.md).
 
 ## Stacks
 
@@ -10,10 +10,4 @@ Stages themselves are defined in `packages/common/infra-config/src/stages.config
 
 `packages/infra` composes constructs into stacks, translating per-stage config into construct props and wiring components together (cross-component grants, CORS, event triggers such as EventBridge rules). The core table's stream has one reader, the `StreamRouter` construct, and a feature adds a `STREAM_FEATURES` registration rather than its own stream source.
 
-## Constructs (`packages/common/constructs`)
-
-All CDK constructs live here. A construct owns one component's own resources (e.g. an API with its handlers and WAF) and exposes `grant*`/`restrictCorsTo`-style helpers; `lambda-functions/` holds the generator-owned bare `Function` wrappers.
-
-## infra-config (`packages/common/infra-config`)
-
-Per-stage deployment config (credentials, region, which security features are on), and the one definition of the local portals' ports and origins (`local-portals`, imported per module as `@discava/common-infra-config/local-portals` by the stacks, constructs, local dev, e2e and the portals' vite configs).
+The constructs it composes are described in `packages/common/constructs/CLAUDE.md`, and the per-stage config in `packages/common/infra-config/CLAUDE.md`.
