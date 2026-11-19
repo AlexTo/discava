@@ -21,7 +21,7 @@ export default defineConfig({
   },
   integrations: [
     starlight({
-      title: 'docs',
+      title: 'Discava',
       social: [],
       tableOfContents: {
         minHeadingLevel: 2,
@@ -59,7 +59,19 @@ export default defineConfig({
       },
       sidebar: [
         {
-          label: 'Guides',
+          label: 'Start here',
+          items: ['guides/getting-started'],
+        },
+        {
+          label: 'Deploy',
+          items: [{ autogenerate: { directory: 'deploy' } }],
+        },
+        {
+          label: 'Architecture',
+          items: [{ autogenerate: { directory: 'architecture' } }],
+        },
+        {
+          label: 'Feature guides',
           items: [
             'guides/announcements',
             'guides/notifications',
