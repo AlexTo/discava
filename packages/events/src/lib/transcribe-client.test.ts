@@ -171,3 +171,48 @@ describe('keyFromS3Uri', () => {
     expect(keyFromS3Uri(uri)).toBe(key);
   });
 });
+
+describe('for a course preview', () => {
+  const PREVIEW = {
+    target: 'coursePreview' as const,
+    courseId: 'c1',
+    nonce: 'n1',
+  };
+
+  it('starts a job named and tagged for the preview, outputting outside the version folder', async () => {
+    await startCaptionJob(PREVIEW);
+
+    expect(send).toHaveBeenCalledWith({
+      type: 'start',
+      input: expect.objectContaining({
+        TranscriptionJobName: 'captions-preview-c1-n1',
+        Media: { MediaFileUri: 's3://upload-bucket/transcribe-input/n1.mp4' },
+        OutputKey: 'courses/c1/preview/transcribe-output/n1/',
+        Tags: [
+          { Key: 'target', Value: 'coursePreview' },
+          { Key: 'courseId', Value: 'c1' },
+          { Key: 'nonce', Value: 'n1' },
+        ],
+      }),
+    });
+  });
+
+  it('reads the target back from the job tags', async () => {
+    send.mockResolvedValue({
+      TranscriptionJob: {
+        TranscriptionJobStatus: 'COMPLETED',
+        Tags: [
+          { Key: 'target', Value: 'coursePreview' },
+          { Key: 'courseId', Value: 'c1' },
+          { Key: 'nonce', Value: 'n1' },
+        ],
+      },
+    });
+
+    await expect(getCaptionJob('captions-preview-c1-n1')).resolves.toEqual({
+      ...PREVIEW,
+      status: 'COMPLETED',
+      vttKey: undefined,
+    });
+  });
+});

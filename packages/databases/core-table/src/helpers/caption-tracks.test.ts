@@ -2,16 +2,21 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   applyCaptionChange,
   type CaptionTrack,
   CaptionTrackError,
   captionWriteCondition,
   dropOtherVersions,
+  getCaptionRecord,
+  isPreviewKey,
   MAX_CAPTION_TRACKS,
   reportedCaptionsStatus,
   tracksForPlayback,
+  writeCaptionsFailed,
+  writeCaptionsReady,
+  writeCaptionTracks,
 } from './caption-tracks';
 
 const NONCE = 'n1';
@@ -344,5 +349,76 @@ describe('reportedCaptionsStatus', () => {
         now,
       ),
     ).toBe('failed');
+  });
+});
+
+describe('target-aware writers', () => {
+  const build = () => {
+    const calls: { entity: string; ops: [string, unknown][] }[] = [];
+    const entity = (name: string) => ({
+      get: vi.fn((key) => ({
+        go: async () => ({ data: { status: 'ready', key } }),
+      })),
+      patch: vi.fn((key: unknown) => {
+        const call = {
+          entity: name,
+          ops: [['patch', key]] as [string, unknown][],
+        };
+        calls.push(call);
+        const builder: Record<string, unknown> = {};
+        for (const op of ['set', 'remove', 'where']) {
+          builder[op] = (arg: unknown) => {
+            call.ops.push([op, arg]);
+            return builder;
+          };
+        }
+        builder.go = async () => ({});
+        return builder;
+      }),
+    });
+    return {
+      entities: {
+        contentItem: entity('contentItem'),
+        coursePreview: entity('coursePreview'),
+      },
+      calls,
+    };
+  };
+  const item = {
+    courseId: 'c',
+    moduleId: 'm',
+    lessonId: 'l',
+    contentItemId: 'i',
+  };
+
+  it('tells a preview key from a content item key', () => {
+    expect(isPreviewKey({ courseId: 'c' })).toBe(true);
+    expect(isPreviewKey(item)).toBe(false);
+  });
+
+  it.each([
+    ['content item', item, 'contentItem'],
+    ['course preview', { courseId: 'c' }, 'coursePreview'],
+  ])('patches the matching entity for a %s', async (_n, key, entity) => {
+    const { entities, calls } = build();
+    await writeCaptionsFailed(entities as never, key, 'n1');
+    await writeCaptionsReady(entities as never, key, 'n1');
+    await writeCaptionTracks(entities as never, key, {
+      tracks: [],
+      rev: 2,
+      nonce: 'n1',
+    });
+    expect(calls.map((c) => c.entity)).toEqual([entity, entity, entity]);
+    expect(calls.every((c) => c.ops[0][1] === key)).toBe(true);
+    const sets = calls.map((c) => c.ops.find(([o]) => o === 'set')?.[1]);
+    expect(sets).toEqual([
+      { captionsStatus: 'failed' },
+      { captionsStatus: 'ready' },
+      { captionTracks: [], captionTracksRev: 3, captionsStatus: 'ready' },
+    ]);
+    expect(calls.every((c) => c.ops.some(([o]) => o === 'where'))).toBe(true);
+    expect((await getCaptionRecord(entities as never, key))?.status).toBe(
+      'ready',
+    );
   });
 });

@@ -98,3 +98,29 @@ describe('transcribeComplete', () => {
     ).rejects.toThrow('DynamoDB is down');
   });
 });
+
+describe('transcribeComplete for a course preview', () => {
+  it('applies the outcome to the preview its job was tagged for', async () => {
+    getCaptionJob.mockResolvedValue({
+      target: 'coursePreview',
+      status: 'COMPLETED',
+      courseId: 'course-1',
+      nonce: 'nonce-1',
+      vttKey: job.vttKey,
+    });
+
+    await transcribeComplete(buildEvent('COMPLETED') as any);
+
+    expect(applyTranscribeOutcome).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      {
+        target: 'coursePreview',
+        jobName: 'captions-item-1-nonce-1',
+        status: 'COMPLETED',
+        courseId: 'course-1',
+        nonce: 'nonce-1',
+        vttKey: job.vttKey,
+      },
+    );
+  });
+});

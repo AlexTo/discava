@@ -24,12 +24,12 @@
   },
   "contentItem": {
     "core-table": [
+      "packages/databases/core-table/src/helpers/caption-tracks.ts",
       "packages/databases/core-table/src/helpers/student-activity.ts"
     ],
     "events": [
       "packages/events/src/media/transcode-outcome.ts",
-      "packages/events/src/media/transcode-reconciler.ts",
-      "packages/events/src/media/transcribe-outcome.ts"
+      "packages/events/src/media/transcode-reconciler.ts"
     ],
     "instructor-api": [
       "packages/apis/instructor-api/src/procedures/assignment.ts",
@@ -64,7 +64,15 @@
       "packages/apis/instructor-api/src/procedures/course.ts"
     ]
   },
-  "coursePreview": {},
+  "coursePreview": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/caption-tracks.ts"
+    ],
+    "events": [
+      "packages/events/src/media/transcode-outcome.ts",
+      "packages/events/src/media/transcode-reconciler.ts"
+    ]
+  },
   "courseRating": {
     "core-table": ["packages/databases/core-table/src/helpers/review.ts"]
   },

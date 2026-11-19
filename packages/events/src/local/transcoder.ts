@@ -123,10 +123,13 @@ export interface TranscoderOptions {
   /** LOCAL_TRANSCODE_RENDITIONS, e.g. ['360p'], for speed. */
   only?: readonly string[];
   /** Called once a job finishes, as MediaConvert's completion event would. */
+  // The transcoded duration is passed only for a COMPLETE job whose probe
+  // reported one, as MediaConvert's output details do.
   onFinished: (
     jobId: string,
     status: 'COMPLETE' | 'ERROR',
     request: LocalTranscodeJobRequest,
+    durationSeconds?: number,
   ) => Promise<void>;
   log: (message: string) => void;
 }
@@ -141,6 +144,8 @@ interface Job {
   jobId: string;
   request: LocalTranscodeJobRequest;
   canceled: boolean;
+  // Set by `run` once the source is probed.
+  durationSeconds?: number;
 }
 
 /**
@@ -210,13 +215,23 @@ export const createTranscoder = (options: TranscoderOptions) => {
       ...['run', '--rm', '--name', probeContainer(jobId)],
       ...['-v', `${dir}:/work`, '--entrypoint', '/ffprobe'],
       image,
-      ...['-v', 'error', '-show_entries', 'stream=codec_type,height'],
+      ...[
+        '-v',
+        'error',
+        '-show_entries',
+        'stream=codec_type,height:format=duration',
+      ],
       ...['-of', 'json', `/work/${input}`],
     ]);
     if (job.canceled) return 'CANCELED';
     if (probe.code !== 0) return failed('ffprobe', probe.stderr);
-    const streams: { codec_type?: string; height?: number }[] =
-      JSON.parse(probe.stdout).streams ?? [];
+    const probed: {
+      streams?: { codec_type?: string; height?: number }[];
+      format?: { duration?: string };
+    } = JSON.parse(probe.stdout);
+    const streams = probed.streams ?? [];
+    const duration = Number.parseFloat(probed.format?.duration ?? '');
+    if (Number.isFinite(duration)) job.durationSeconds = duration;
     const video = streams.find(({ codec_type }) => codec_type === 'video');
     if (!video?.height) return failed('ffprobe', 'no video stream');
     const renditions = renditionsFor(video.height, options.only);
@@ -276,7 +291,14 @@ export const createTranscoder = (options: TranscoderOptions) => {
       options.log(`${job.jobId} canceled`);
     } else {
       options.log(`${job.jobId} ${result}`);
-      await options.onFinished(job.jobId, result, job.request);
+      await (result === 'COMPLETE' && job.durationSeconds !== undefined
+        ? options.onFinished(
+            job.jobId,
+            result,
+            job.request,
+            job.durationSeconds,
+          )
+        : options.onFinished(job.jobId, result, job.request));
     }
     await next();
   };

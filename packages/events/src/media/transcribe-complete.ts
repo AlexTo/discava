@@ -40,16 +40,26 @@ export const transcribeComplete = async (
 
   const detail = TranscribeJobStateChangeDetailSchema.parse(event.detail);
   const job = await getCaptionJob(detail.TranscriptionJobName);
-  await applyTranscribeOutcome(logger, {
+  // The job's tags say which record it is for: a course's preview, or a
+  // content item (no `target`, as before preview videos).
+  const common = {
     jobName: detail.TranscriptionJobName,
     status: detail.TranscriptionJobStatus,
-    courseId: job.courseId,
-    moduleId: job.moduleId,
-    lessonId: job.lessonId,
-    contentItemId: job.contentItemId,
     nonce: job.nonce,
     vttKey: job.vttKey,
-  });
+  };
+  await applyTranscribeOutcome(
+    logger,
+    job.target === 'coursePreview'
+      ? { ...common, target: 'coursePreview', courseId: job.courseId }
+      : {
+          ...common,
+          courseId: job.courseId,
+          moduleId: job.moduleId,
+          lessonId: job.lessonId,
+          contentItemId: job.contentItemId,
+        },
+  );
 };
 
 export const handler = middy()

@@ -7,6 +7,8 @@ import { transcodeReconciler } from './transcode-reconciler.js';
 
 const {
   pending,
+  pendingPreviews,
+  previewPatch,
   queryLt,
   patch,
   patchSet,
@@ -17,6 +19,8 @@ const {
   applyTranscodeOutcome,
 } = vi.hoisted(() => ({
   pending: [] as Record<string, unknown>[],
+  pendingPreviews: [] as Record<string, unknown>[],
+  previewPatch: vi.fn(),
   queryLt: vi.fn(),
   patch: vi.fn(),
   patchSet: vi.fn(),
@@ -41,6 +45,17 @@ vi.mock('./transcode-outcome.js', () => ({
           }),
         },
         patch,
+      },
+      coursePreview: {
+        query: {
+          byTranscodePending: () => ({
+            lt: (range: unknown) => {
+              queryLt(range);
+              return { go: async () => ({ data: pendingPreviews }) };
+            },
+          }),
+        },
+        patch: previewPatch,
       },
     },
   }),
@@ -87,11 +102,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   pending.length = 0;
+  pendingPreviews.length = 0;
   patch.mockReturnValue({ set: patchSet });
   patchSet.mockReturnValue({ remove: patchRemove });
   patchRemove.mockReturnValue({ where: patchWhere });
   patchWhere.mockReturnValue({ go: patchGo });
   patchGo.mockResolvedValue({});
+  previewPatch.mockReturnValue({ set: patchSet });
 });
 
 const jobIs = (Status: string) =>
@@ -231,5 +248,94 @@ describe('transcodeReconciler', () => {
       // Falls back to the item's own when the job carries none.
       submissionNonce: 'nonce-1',
     });
+  });
+});
+
+describe('transcodeReconciler for course previews', () => {
+  const preview = (overrides: Record<string, unknown> = {}) => ({
+    courseId: 'course-1',
+    status: 'processing',
+    s3Key: undefined,
+    submissionNonce: 'nonce-1',
+    mediaConvertJobId: 'job-1',
+    transcodePendingSince: minutesAgo(180),
+    ...overrides,
+  });
+
+  it('queries previews beside lesson videos, with the same grace period', async () => {
+    await run();
+
+    expect(queryLt).toHaveBeenCalledTimes(2);
+    expect(queryLt).toHaveBeenNthCalledWith(2, {
+      transcodePendingSince: minutesAgo(30),
+    });
+  });
+
+  it('applies a finished preview job as a preview outcome, with its duration', async () => {
+    pendingPreviews.push(preview());
+    send.mockResolvedValue({
+      Job: {
+        Status: 'COMPLETE',
+        UserMetadata: {
+          rawObjectKey: 'courses/course-1/preview/raw.mp4',
+          submissionNonce: 'nonce-1',
+        },
+        OutputGroupDetails: [
+          { OutputDetails: [{ DurationInMs: 301_000 }] },
+          { OutputDetails: [{ DurationInMs: 300_900 }] },
+        ],
+      },
+    });
+
+    await run();
+
+    expect(applyTranscodeOutcome).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      {
+        target: 'coursePreview',
+        jobId: 'job-1',
+        status: 'COMPLETE',
+        courseId: 'course-1',
+        rawObjectKey: 'courses/course-1/preview/raw.mp4',
+        submissionNonce: 'nonce-1',
+        durationSeconds: 301,
+      },
+    );
+  });
+
+  it('marks a stuck preview with no job failed, as a transcode error', async () => {
+    pendingPreviews.push(
+      preview({
+        mediaConvertJobId: undefined,
+        transcodePendingSince: minutesAgo(45),
+      }),
+    );
+
+    await run();
+
+    expect(previewPatch).toHaveBeenCalledWith({ courseId: 'course-1' });
+    expect(patch).not.toHaveBeenCalled();
+    expect(patchSet).toHaveBeenCalledWith({
+      status: 'failed',
+      failureReason: 'transcode-error',
+    });
+    const condition = patchWhere.mock.calls[0][0](
+      new Proxy({}, { get: (_, name) => name }),
+      {
+        eq: (a: string, v: string) => `${a}=${v}`,
+        notExists: (a: string) => `notExists(${a})`,
+      },
+    );
+    expect(condition).toBe('status=processing AND submissionNonce=nonce-1');
+  });
+
+  it('leaves a preview whose job is still running', async () => {
+    pendingPreviews.push(preview());
+    jobIs('PROGRESSING');
+
+    await run();
+
+    expect(applyTranscodeOutcome).not.toHaveBeenCalled();
+    expect(previewPatch).not.toHaveBeenCalled();
   });
 });
