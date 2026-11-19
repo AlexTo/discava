@@ -11,7 +11,7 @@ import {
   funnelContributions,
   funnelStatus,
   sumContributions,
-} from './analytics.js';
+} from './analytics-contributions.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 

@@ -251,36 +251,36 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
 
 **Independent test**: An instructor edits their profile and photo. The public profile lists only published courses. A profile with no published course gives not found.
 
-- [ ] T022 [US5] Tests first, then add to `packages/databases/core-table/src/helpers/instructor-profile.ts`:
+- [x] T022 [US5] Tests first, then add to `packages/databases/core-table/src/helpers/instructor-profile.ts`:
   - `instructorProfileWrites.update({ instructorId, version, patch, now })`, conditioned on `version` and incrementing it;
   - `changeHandle({ instructorId, version, from, to, now })`: one transaction of claim create (not exists), old claim delete (condition `instructorId` = caller), and profile update (condition `handle = from` and `version`);
   - `setPhoto`;
   - `classifyProfileCancellation`, giving `handle-taken` or `stale`.
 
   Tests cover every item and condition. Extend the T009 invariants with a snapshot written by `changeHandle` that satisfies `profile-handle-claims-consistent`.
-- [ ] T023 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/profile.ts` with `get`, `update`, `createPhotoUploadUrl` and `updatePhoto` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
+- [x] T023 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/profile.ts` with `get`, `update`, `createPhotoUploadUrl` and `updatePhoto` per [contracts/instructor-api-landing.md](./contracts/instructor-api-landing.md):
   - `get` returns a default with `version: 0` and writes nothing when there is no profile; `isPublic` is true if any taught course is `published` (`courseInstructor.byInstructor` and a batch get of courses);
   - `update` validates "1 to 60", "Up to 100" and "Up to 2,000" characters, the handle pattern and reserved words; `version: 0` calls `ensureInstructorProfile(caller, { fields, handle })` with the explicit handle (`handle-taken` → `CONFLICT` "That handle is taken"; `exists` → `CONFLICT` "Your profile changed; reload and try again");
   - errors are `CONFLICT` "That handle is taken" and "Your profile changed; reload and try again";
   - photo procedures mirror `course-image.ts`, with key `instructors/<sub>/<uuid>.jpg` and a 2 MB JPEG limit.
 
   Register them under `profile` in `src/router.ts`. If course image procedures run in a dedicated function with public media rights, put the photo procedures in the same function in `packages/common/constructs/src/app/apis/instructor-api.ts`; otherwise leave them on the router. Tests in `procedures/profile.test.ts` cover every path, and confirm the caller's `sub` is the only profile key ever used.
-- [ ] T024 [US5] Tests first, then add `packages/apis/core-api/src/procedures/instructor-profile.ts` with `publicView` (a `publicCourseProcedure`) per the contract:
+- [x] T024 [US5] Tests first, then add `packages/apis/core-api/src/procedures/instructor-profile.ts` with `publicView` (a `publicCourseProcedure`) per the contract:
   - the handle is lower-cased, and a pattern miss gives `NOT_FOUND`;
   - reads go claim → profile → `courseInstructor.byInstructor` → batch get of courses (keep `published`, sorted by `publishedAt` descending, at most 100) → batch get of `courseRating`;
   - no published course gives `NOT_FOUND`.
 
   Register it as `instructorProfile.publicView` and add it to `PUBLIC_OPERATIONS`, with a `router.test.ts` case. Tests: draft and archived courses never listed; no IDs of people in the output; the three `NOT_FOUND` causes give identical errors.
-- [ ] T025 [P] [US5] Tests first, then add `packages/websites/student-portal/src/routes/instructors/$handle.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): photo, name, headline, bio paragraphs (split on blank lines, rendered as text), and "Courses by <name>" using the catalogue card component. Not found shows "Instructor not found" with a "Browse courses" button. Make the instructor card's "View profile" a `Link` to it. Component tests cover each state and that bio markup renders as text.
-- [ ] T026 [P] [US5] Tests first, then add `packages/websites/instructor-portal/src/routes/_authenticated/profile.tsx`, and a "Public profile" item in the account menu:
+- [x] T025 [P] [US5] Tests first, then add `packages/websites/student-portal/src/routes/instructors/$handle.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md): photo, name, headline, bio paragraphs (split on blank lines, rendered as text), and "Courses by <name>" using the catalogue card component. Not found shows "Instructor not found" with a "Browse courses" button. Make the instructor card's "View profile" a `Link` to it. Component tests cover each state and that bio markup renders as text.
+- [x] T026 [P] [US5] Tests first, then add `packages/websites/instructor-portal/src/routes/_authenticated/profile.tsx`, and a "Public profile" item in the account menu:
   - fields for display name, handle (showing the address `/instructors/<handle>` live), headline, bio, and a photo using the existing course image crop dialog at a 1:1 aspect, output 512×512;
   - Save;
   - inline conflict messages;
   - the public-status line from `isPublic`.
 
   Wire the checklist's profile line (T016). Component tests.
-- [ ] T027 [US5] Concurrency test in `packages/e2e/src/concurrency/profile-handle.e2e.ts`: two new instructors send `profile.update` at the same moment claiming the same new handle. Exactly one succeeds, the other gets `CONFLICT` "That handle is taken", and the invariants pass.
-- [ ] T028 [US5] Extend `public-landing-page.e2e.ts`:
+- [x] T027 [US5] Concurrency test in `packages/e2e/src/concurrency/profile-handle.e2e.ts`: two new instructors send `profile.update` at the same moment claiming the same new handle. Exactly one succeeds, the other gets `CONFLICT` "That handle is taken", and the invariants pass.
+- [x] T028 [US5] Extend `public-landing-page.e2e.ts`:
   1. The instructor fills in the profile and uploads a photo. Take a `screenshot()` of the editor.
   2. Signed out, open the profile from the course's card. Take a `screenshot()`.
   3. Archive the instructor's only published course. The profile gives "Instructor not found".

@@ -63,6 +63,15 @@ describe('PUBLIC_OPERATIONS', () => {
   });
 });
 
+describe('instructorProfile', () => {
+  it('serves publicView to anonymous callers', () => {
+    expect(Object.keys(appRouter._def.procedures)).toContain(
+      'instructorProfile.publicView',
+    );
+    expect(PUBLIC_OPERATIONS).toContain('instructorProfile.publicView');
+  });
+});
+
 describe('discussion', () => {
   const procedures = [
     'listQuestions',

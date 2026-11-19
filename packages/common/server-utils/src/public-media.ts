@@ -26,3 +26,20 @@ export const courseImageKey = (courseId: string, nonce: string): string =>
 /** Whether `key` is one of `courseId`'s image keys, as courseImageKey makes. */
 export const isCourseImageKey = (courseId: string, key: string): boolean =>
   new RegExp(`^courses/${courseId}/image/[0-9a-f-]{36}\\.jpg$`).test(key);
+
+/**
+ * Where an instructor's profile photo is stored, keyed on their Cognito `sub`.
+ * A new nonce per upload, for the same reason as courseImageKey.
+ */
+export const instructorPhotoKey = (
+  instructorId: string,
+  nonce: string,
+): string => `instructors/${instructorId}/${nonce}.jpg`;
+
+/** Whether `key` is one of `instructorId`'s photo keys, as instructorPhotoKey makes. */
+export const isInstructorPhotoKey = (
+  instructorId: string,
+  key: string,
+): boolean =>
+  key.startsWith(`instructors/${instructorId}/`) &&
+  /^[0-9a-f-]{36}\.jpg$/.test(key.slice(`instructors/${instructorId}/`.length));

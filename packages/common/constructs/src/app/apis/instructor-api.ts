@@ -87,7 +87,13 @@ export const INSTRUCTOR_API_DEDICATED_FUNCTIONS = {
     'module.deletePermanently',
   ],
   // Uploads, keeps and retires course images in the public media bucket
-  CourseImage: ['course.createImageUploadUrl', 'course.updateImage'],
+  // (and the same for instructors' profile photos)
+  CourseImage: [
+    'course.createImageUploadUrl',
+    'course.updateImage',
+    'profile.createPhotoUploadUrl',
+    'profile.updatePhoto',
+  ],
 } as const satisfies Record<string, readonly Operations[]>;
 
 const functionNameFor = (op: Operations | '$router'): string =>

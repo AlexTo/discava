@@ -9,6 +9,7 @@ import {
   apiUser,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { COURSE_IMAGE_BARS } from '../helpers/images.js';
 import {
   addLesson,
   addModule,
@@ -277,5 +278,107 @@ test('an instructor uploads a preview and a signed-out visitor watches it', asyn
       signedOut.course.previewVideoUrl.query({ courseId }),
     ).rejects.toMatchObject({ data: { code: 'NOT_FOUND' } });
     await screenshot(visitor, 'public page after the preview is removed');
+  });
+});
+
+// The instructor fills in their public profile and photo; a signed-out visitor
+// reaches it from the course's instructor card and sees only published courses.
+test('an instructor edits their profile and a signed-out visitor opens it from the course', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E profile course');
+  const displayName = uniqueName('Ivy Profile');
+  const handle = `ivy-${Date.now().toString(36)}`;
+  const instructor = await browser.newPage();
+  const visitor = await browser.newPage();
+  let courseUrl = '';
+
+  await test.step('the instructor publishes a course', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A course for the profile tests.',
+    });
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addTextItem(instructor, { title: 'Reading one', body: 'Hello.' });
+    await publishCourse(instructor);
+    courseUrl = instructor.url();
+    await expect(
+      instructor
+        .getByRole('region', { name: 'Landing page checklist' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Your profile' }),
+    ).toContainText('Not yet');
+  });
+
+  await test.step('the instructor fills in the profile and uploads a photo', async () => {
+    await instructor.getByRole('button', { name: 'Open user menu' }).click();
+    await instructor.getByRole('menuitem', { name: 'Public profile' }).click();
+    await expect(
+      instructor.getByRole('heading', { name: 'Public profile' }),
+    ).toBeVisible();
+
+    await instructor.getByLabel('Display name').fill(displayName);
+    await instructor.getByLabel('Handle').fill(handle);
+    await expect(
+      instructor.getByText(`Your address: /instructors/${handle}`),
+    ).toBeVisible();
+    await instructor.getByLabel('Headline').fill('Teaches by example');
+    await instructor
+      .getByLabel('Bio')
+      .fill('First paragraph of the bio.\n\nSecond paragraph of the bio.');
+    await instructor.getByRole('button', { name: 'Save' }).click();
+    await expect(instructor.getByText('Profile saved.')).toBeVisible();
+
+    await instructor.getByRole('button', { name: 'Add photo' }).click();
+    const dialog = instructor.getByRole('dialog', { name: 'Profile photo' });
+    await dialog
+      .getByLabel('Profile photo file')
+      .setInputFiles(COURSE_IMAGE_BARS);
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      instructor.getByRole('button', { name: 'Change photo' }),
+    ).toBeVisible();
+    await expect(instructor.getByTestId('profile-status')).toContainText(
+      'Your profile is public',
+    );
+    await screenshot(instructor, 'profile editor', { fullPage: true });
+  });
+
+  await test.step('the checklist counts the profile as done', async () => {
+    await instructor.goto(courseUrl);
+    await expect(
+      instructor
+        .getByRole('region', { name: 'Landing page checklist' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Your profile' }),
+    ).toContainText('Done');
+  });
+
+  await test.step('signed out, the visitor opens the profile from the course', async () => {
+    const courseId = courseUrl.split('/').pop() as string;
+    await visitor.goto(coursePageUrl(courseId));
+    await visitor
+      .getByRole('region', { name: 'Instructors' })
+      .getByRole('link', { name: 'View profile' })
+      .click();
+
+    await expect(
+      visitor.getByRole('heading', { level: 1, name: displayName }),
+    ).toBeVisible();
+    await expect(visitor).toHaveURL(new RegExp(`/instructors/${handle}$`));
+    await expect(visitor.getByText('Teaches by example')).toBeVisible();
+    await expect(
+      visitor.getByText('Second paragraph of the bio.'),
+    ).toBeVisible();
+    await expect(
+      visitor
+        .getByRole('region', { name: `Courses by ${displayName}` })
+        .getByText(title),
+    ).toBeVisible();
+    await screenshot(visitor, 'public instructor profile', { fullPage: true });
   });
 });

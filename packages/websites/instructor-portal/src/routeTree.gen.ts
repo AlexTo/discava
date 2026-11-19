@@ -14,6 +14,7 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedDashboardRouteRouteImport } from './routes/_authenticated/dashboard/route'
 import { Route as AuthenticatedMyCoursesRouteRouteImport } from './routes/_authenticated/my-courses/route'
+import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedDashboardCourseIdRouteRouteImport } from './routes/_authenticated/dashboard_/$courseId/route'
 import { Route as AuthenticatedMyCoursesCourseIdRouteRouteImport } from './routes/_authenticated/my-courses_/$courseId/route'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
@@ -46,6 +47,11 @@ const AuthenticatedMyCoursesRouteRoute =
     path: '/my-courses',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDashboardCourseIdRouteRoute =
   AuthenticatedDashboardCourseIdRouteRouteImport.update({
     id: '/dashboard_/$courseId',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRouteRoute
   '/my-courses': typeof AuthenticatedMyCoursesRouteRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/dashboard/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRouteRoute
   '/my-courses': typeof AuthenticatedMyCoursesRouteRoute
+  '/profile': typeof AuthenticatedProfileRoute
   '/': typeof AuthenticatedIndexRoute
   '/dashboard/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteRoute
   '/_authenticated/my-courses': typeof AuthenticatedMyCoursesRouteRoute
+  '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/dashboard_/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
   '/_authenticated/my-courses_/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/dashboard'
     | '/my-courses'
+    | '/profile'
     | '/dashboard/$courseId'
     | '/my-courses/$courseId'
     | '/settings/notifications'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/dashboard'
     | '/my-courses'
+    | '/profile'
     | '/'
     | '/dashboard/$courseId'
     | '/my-courses/$courseId'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/_authenticated/dashboard'
     | '/_authenticated/my-courses'
+    | '/_authenticated/profile'
     | '/_authenticated/'
     | '/_authenticated/dashboard_/$courseId'
     | '/_authenticated/my-courses_/$courseId'
@@ -191,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMyCoursesRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile': {
+      id: '/_authenticated/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AuthenticatedProfileRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard_/$courseId': {
       id: '/_authenticated/dashboard_/$courseId'
       path: '/dashboard/$courseId'
@@ -232,6 +251,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRouteRoute: typeof AuthenticatedDashboardRouteRoute
   AuthenticatedMyCoursesRouteRoute: typeof AuthenticatedMyCoursesRouteRoute
+  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedDashboardCourseIdRouteRoute: typeof AuthenticatedDashboardCourseIdRouteRoute
   AuthenticatedMyCoursesCourseIdRouteRoute: typeof AuthenticatedMyCoursesCourseIdRouteRoute
@@ -243,6 +263,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRouteRoute: AuthenticatedDashboardRouteRoute,
   AuthenticatedMyCoursesRouteRoute: AuthenticatedMyCoursesRouteRoute,
+  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedDashboardCourseIdRouteRoute:
     AuthenticatedDashboardCourseIdRouteRoute,
