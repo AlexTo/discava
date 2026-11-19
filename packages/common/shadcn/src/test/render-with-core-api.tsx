@@ -3,73 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
-import type { AppRouter } from '@discava/core-api';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { type RenderResult, render } from '@testing-library/react';
-import userEvent, { type UserEvent } from '@testing-library/user-event';
-import { createTRPCClient, httpLink } from '@trpc/client';
 import {
-  createTRPCOptionsProxy,
-  type TRPCOptionsProxy,
-} from '@trpc/tanstack-react-query';
-import type { ReactElement } from 'react';
+  type ApiCall,
+  ApiError,
+  createRenderWithApi,
+  type Handler,
+  type RenderWithApi,
+} from '@discava/common-web-utils/testing';
+import type { AppRouter } from '@discava/core-api';
 import { CoreApiTRPCContext } from '../lib/core-api';
-import { type ApiCall, fakeFetch, type Handler } from './fake-trpc-fetch';
 
-const API_URL = 'http://core-api.test/';
-
-// Re-exported so tests don't need a second import from fake-trpc-fetch.
-export { ApiError } from './fake-trpc-fetch';
 export type { ApiCall, Handler };
+// Re-exported so tests don't need a second import from the shared helpers.
+export { ApiError };
 
 // Renders `ui` inside a fresh React Query client and a core API whose
 // procedures are answered by `handlers` (keyed by path, e.g.
-// 'course.publicList').
-// Spelled out so the declaration emit doesn't have to name the API router's
-// inferred types.
-export interface RenderedWithApi extends RenderResult {
-  calls: ApiCall[];
-  queryClient: QueryClient;
-  optionsProxy: TRPCOptionsProxy<AppRouter>;
-  user: UserEvent;
-}
-
-export const renderWithCoreApi = (
-  ui: ReactElement,
-  {
-    handlers = {},
-    runtimeConfig = {},
-  }: {
-    handlers?: Record<string, Handler>;
-    // Merged into the runtime config the portal sees.
-    runtimeConfig?: Record<string, unknown>;
-  } = {},
-): RenderedWithApi => {
-  const calls: ApiCall[] = [];
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  const client = createTRPCClient<AppRouter>({
-    links: [httpLink({ url: API_URL, fetch: fakeFetch(handlers, calls) })],
-  });
-  const optionsProxy = createTRPCOptionsProxy<AppRouter>({
-    client,
-    queryClient,
-  });
-  const user = userEvent.setup();
-  const result = render(
-    <RuntimeConfigContext.Provider
-      value={{
-        ...runtimeConfig,
-      }}
-    >
-      <QueryClientProvider client={queryClient}>
-        <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>
-          {ui}
-        </CoreApiTRPCContext.Provider>
-      </QueryClientProvider>
-    </RuntimeConfigContext.Provider>,
-  );
-  return { ...result, calls, queryClient, optionsProxy, user };
-};
+// 'notification.list').
+export const renderWithCoreApi: RenderWithApi<AppRouter> =
+  createRenderWithApi(CoreApiTRPCContext);
