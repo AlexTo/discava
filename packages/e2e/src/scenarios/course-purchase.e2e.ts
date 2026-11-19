@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { connectLocalPayments } from '../helpers/api.js';
+import { connectLocalStripe } from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -24,7 +24,7 @@ test('a student buys a paid course and starts learning', async ({
   browser,
 }) => {
   const title = uniqueName('E2E paid course');
-  await connectLocalPayments();
+  await connectLocalStripe();
 
   await test.step('an instructor publishes a course priced at 19.99', async () => {
     const instructor = await browser.newPage();
