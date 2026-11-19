@@ -38,12 +38,12 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run suggest-query.test.ts search.test.ts router.test.ts`, `pnpm nx run @discava/common-infra-config:test -- --run env-overrides.test.ts` and `pnpm nx run @discava/common-constructs:test -- --run core-api.test.ts` pass, and `pnpm nx run @discava/infra:synth` succeeds.
 
-- [ ] T001 [P] Tests first, then add `SuggestCoursesInputSchema` and `SuggestCoursesOutputSchema` (with `ISuggestCoursesInput` and `ISuggestCoursesOutput` types) to `packages/apis/core-api/src/schema/search.ts`, exported through `schema/index.ts`, exactly as in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
+- [x] T001 [P] Tests first, then add `SuggestCoursesInputSchema` and `SuggestCoursesOutputSchema` (with `ISuggestCoursesInput` and `ISuggestCoursesOutput` types) to `packages/apis/core-api/src/schema/search.ts`, exported through `schema/index.ts`, exactly as in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
   - input `q: z.string().trim().min(3).max(200)`;
   - output `items` (at most 10) of `{ courseId: string, title: string, imageKey?: string }`.
 
   Schema tests (in `procedures/search.test.ts` or a new `schema/search.test.ts`): `"  ab  "` is refused, `"abc"` is accepted, and 201 characters are refused.
-- [ ] T002 [P] Tests first, then add `buildSuggestRequest(input: ISuggestCoursesInput)` in `packages/apis/core-api/src/helpers/suggest-query.ts`, returning the body in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
+- [x] T002 [P] Tests first, then add `buildSuggestRequest(input: ISuggestCoursesInput)` in `packages/apis/core-api/src/helpers/suggest-query.ts`, returning the body in [contracts/core-api-suggest.md](./contracts/core-api-suggest.md):
   - `size: 10`, `track_total_hits: false`, `_source: ['courseId', 'title', 'imageKey']`;
   - a `function_score` around a `bool` with `must: match_bool_prefix` on `title`, and `filter: term status published`;
   - the `ratingBoost` multiplier with `missing: 1`;
@@ -51,7 +51,7 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - no `aggs`.
 
   `helpers/suggest-query.test.ts` pins the whole body for one input, and asserts the published filter is present for every input and that the text is passed as a plain string.
-- [ ] T003 Tests first, then add `publicSuggestCourses` to `packages/apis/core-api/src/procedures/search.ts`:
+- [x] T003 Tests first, then add `publicSuggestCourses` to `packages/apis/core-api/src/procedures/search.ts`:
   - built on `publicSearchProcedure`, with input and output from T001 and the request from T002;
   - a `SUGGEST_REQUEST_TIMEOUT_MS = 3_000` request timeout, with a comment pointing to research R-6;
   - a `TimeoutError` mapped to `TRPCError` `TIMEOUT` with the message "Search is starting up. Try again in a few seconds.", sharing the mapping with `publicSearchCourses` (extract a small function in the same file, not a new module);
@@ -63,16 +63,16 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - the request sent equals `buildSuggestRequest`'s;
   - a `TimeoutError` gives `TIMEOUT`;
   - `category.query` is never called.
-- [ ] T004 Register `publicSuggest: publicSuggestCourses` under `course` in `packages/apis/core-api/src/router.ts`, and add `'course.publicSuggest'` to `PUBLIC_OPERATIONS` (keep the list's order: after `'course.publicSearch'`). The existing check in `packages/apis/core-api/src/router.test.ts` must pass unchanged. If it lists the public operations by hand, add the new name there too, without weakening any other assertion.
-- [ ] T022 [P] Tests first, then add the suggest throttle's stage keys (research R-6):
+- [x] T004 Register `publicSuggest: publicSuggestCourses` under `course` in `packages/apis/core-api/src/router.ts`, and add `'course.publicSuggest'` to `PUBLIC_OPERATIONS` (keep the list's order: after `'course.publicSearch'`). The existing check in `packages/apis/core-api/src/router.test.ts` must pass unchanged. If it lists the public operations by hand, add the new name there too, without weakening any other assertion.
+- [x] T022 [P] Tests first, then add the suggest throttle's stage keys (research R-6):
   - `publicSuggestThrottleRateLimit?: number` (`@default 100`) and `publicSuggestThrottleBurstLimit?: number` (`@default 200`) on `CoreApiComponentConfig` in `packages/common/infra-config/src/stages.types.ts`, next to `publicThrottleRateLimit`, with doc comments saying they apply to `course.publicSuggest` only and are shared by every caller. Also correct `publicThrottleRateLimit`'s comment, which names only `course.publicList` and `course.publicView`: it applies to every operation in `PUBLIC_OPERATIONS`;
   - both keys as `'number'` under `coreApi` in `packages/common/infra-config/src/env-overrides.ts`, with a case in `env-overrides.test.ts` like the existing `THROTTLE_RATE_LIMIT` one;
   - in `packages/common/infra-config/src/stages.config.ts`, `5` and `10` on `discava-development` and `100` and `200` on `discava-production`, beside the `publicThrottle*` keys. Add a line to each stage's limits comment: suggestions have their own throttle because they fire on every typing pause.
-- [ ] T023 Tests first, then wire the throttle (after T004 and T022):
+- [x] T023 Tests first, then wire the throttle (after T004 and T022):
   - a `publicSuggestThrottle?: ThrottleSettings` prop on `CoreApi` in `packages/common/constructs/src/app/apis/core-api.ts` (`@default` `publicThrottle`). The method setting for `course.publicSuggest` uses it instead of `publicThrottle`; every other public operation and public extra route keeps `publicThrottle`. In `core-api.test.ts`, with `publicThrottle: { rateLimit: 2, burstLimit: 4 }` and `publicSuggestThrottle: { rateLimit: 7, burstLimit: 9 }`, assert the stage's `MethodSettings` give `/course.publicSuggest` GET 7 and 9 and `/course.publicSearch` GET still 2 and 4;
   - `publicSuggestThrottle(config)` in `packages/infra/src/stacks/api-limits.ts` beside `publicThrottle`, with `DEFAULT_PUBLIC_SUGGEST_THROTTLE = { rateLimit: 100, burstLimit: 200 }`;
   - `publicSuggestThrottle: publicSuggestThrottle(coreApiConfig)` passed to `CoreApi` in `packages/infra/src/stacks/core-api-stack.ts`.
-- [ ] T005 Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public route or its throttle. Check that the only snapshot differences are the new `course.publicSuggest` method without the Cognito authorizer, and its method setting with the suggest throttle (100 / 200 by default, or the stage's values), and say so in the PR description.
+- [x] T005 Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public route or its throttle. Check that the only snapshot differences are the new `course.publicSuggest` method without the Cognito authorizer, and its method setting with the suggest throttle (100 / 200 by default, or the stage's values), and say so in the PR description.
 
 ---
 
@@ -82,25 +82,25 @@ Paths are relative to the repository root. There's no parent issue: each PR says
 
 **Independent test**: Component tests in `site-search.test.tsx` pass with fake timers. The e2e test "suggestions offer a published course by the start of its title" passes on PR CI, with screenshots.
 
-- [ ] T006 [P] [US2] Tests first, then add `useDebouncedValue<T>(value: T, delayMs: number): [T, () => void]` in `packages/websites/student-portal/src/hooks/use-debounced-value.ts`. It returns the value once it has stayed unchanged for `delayMs`, and a `cancel()` that drops the pending update. `hooks/use-debounced-value.test.ts` (vitest fake timers):
+- [x] T006 [P] [US2] Tests first, then add `useDebouncedValue<T>(value: T, delayMs: number): [T, () => void]` in `packages/websites/student-portal/src/hooks/use-debounced-value.ts`. It returns the value once it has stayed unchanged for `delayMs`, and a `cancel()` that drops the pending update. `hooks/use-debounced-value.test.ts` (vitest fake timers):
   - one update after a burst of changes;
   - no update before the delay;
   - `cancel()` stops a pending update;
   - unmounting clears the timer.
-- [ ] T007 [P] [US1] Tests first, then add `highlightTitle(title: string, typed: string): { text: string; match: boolean }[]` in `packages/websites/student-portal/src/lib/title-highlight.ts` (research R-5). Each word of `title` that starts with one of the typed words (case- and accent-insensitive, using `Intl.Collator` base sensitivity on the word's leading characters) has that leading part marked `match: true`. Joining the parts' text always gives back `title` exactly. `lib/title-highlight.test.ts` covers:
+- [x] T007 [P] [US1] Tests first, then add `highlightTitle(title: string, typed: string): { text: string; match: boolean }[]` in `packages/websites/student-portal/src/lib/title-highlight.ts` (research R-5). Each word of `title` that starts with one of the typed words (case- and accent-insensitive, using `Intl.Collator` base sensitivity on the word's leading characters) has that leading part marked `match: true`. Joining the parts' text always gives back `title` exactly. `lib/title-highlight.test.ts` covers:
   - "pyth" in "Python for Data Analysis";
   - "data py" (two words, either order);
   - "café" against "Cafe";
   - punctuation in the title;
   - no match;
   - empty typed text.
-- [ ] T008 [US1] Tests first, then add `SiteSearchSuggestions` in `packages/websites/student-portal/src/components/site-search-suggestions.tsx`, a presentational list under the box. It takes `items`, `typed`, `loading`, `id` and `onChoose(courseId)`.
+- [x] T008 [US1] Tests first, then add `SiteSearchSuggestions` in `packages/websites/student-portal/src/components/site-search-suggestions.tsx`, a presentational list under the box. It takes `items`, `typed`, `loading`, `id` and `onChoose(courseId)`.
   - Each row is a button-like element with the course thumbnail (`usePublicMediaUrl()(imageKey)`, or a neutral placeholder `div` when absent) and the title rendered from `highlightTitle` with matched parts in `<mark>` (bold, no background).
   - Rows use `onMouseDown={e => e.preventDefault()}`, so choosing one doesn't blur the input first.
   - Text only, no arrow icons.
   - The list is absolutely positioned under the form, full width of the box, `max-w-[calc(100vw-2rem)]`, so it never scrolls horizontally at 375 px.
   - When `loading` is set and there are no items, it shows "Searching…".
-- [ ] T009 [US1] [US2] Tests first, then wire `packages/websites/student-portal/src/components/site-search.tsx`:
+- [x] T009 [US1] [US2] Tests first, then wire `packages/websites/student-portal/src/components/site-search.tsx`:
   - `const SUGGEST_DEBOUNCE_MS = 300`, `const SUGGEST_MIN_LENGTH = 3` and `const SUGGEST_MAX_LENGTH = 200` (the input schema's bounds);
   - the trimmed text is debounced with T006;
   - `useQuery(trpc.course.publicSuggest.queryOptions({ q }, { enabled: open && q.length >= SUGGEST_MIN_LENGTH && q.length <= SUGGEST_MAX_LENGTH, staleTime: 60_000, retry: false, placeholderData: keepPreviousData }))`;
@@ -123,9 +123,9 @@ Paths are relative to the repository root. There's no parent issue: each PR says
   - on `/search?query=linear` the dropdown is closed at load;
   - 10 items render 10 rows;
   - 201 characters send no request.
-- [ ] T010 [US1] Make sure the existing student-portal tests that render the top bar still pass. `src/routes/-routes.test.tsx` and `src/routes/search/-search.test.tsx` add a `course.publicSuggest` handler returning `{ items: [] }` only where a test now fails because it's missing, without changing any existing assertion.
-- [ ] T011 [US1] Add `suggestInSiteSearch(page, text)` to `packages/e2e/src/helpers/student-portal.ts`. It fills the search box (found the same way `searchWithSiteSearch` finds it) and waits for the suggestions list (`getByRole('listbox', { name: 'Course suggestions' })`, or for this phase the list's `data-testid="site-search-suggestions"` if T013's ARIA isn't in yet, which T013 then replaces).
-- [ ] T012 [US1] Add the test "suggestions offer a published course by the start of its title" to `packages/e2e/src/scenarios/search.e2e.ts`:
+- [x] T010 [US1] Make sure the existing student-portal tests that render the top bar still pass. `src/routes/-routes.test.tsx` and `src/routes/search/-search.test.tsx` add a `course.publicSuggest` handler returning `{ items: [] }` only where a test now fails because it's missing, without changing any existing assertion.
+- [x] T011 [US1] Add `suggestInSiteSearch(page, text)` to `packages/e2e/src/helpers/student-portal.ts`. It fills the search box (found the same way `searchWithSiteSearch` finds it) and waits for the suggestions list (`getByRole('listbox', { name: 'Course suggestions' })`, or for this phase the list's `data-testid="site-search-suggestions"` if T013's ARIA isn't in yet, which T013 then replaces).
+- [x] T012 [US1] Add the test "suggestions offer a published course by the start of its title" to `packages/e2e/src/scenarios/search.e2e.ts`:
   - publish a uniquely named course (`uniqueName('Suggestible course')`) with `createPublishedCourseViaApi`, and create a draft with a title that shares the prefix;
   - signed out, type the first word of the title plus the first 3 letters of the next, using `expectAfterReloads`, since indexing lags by a few seconds;
   - expect the published course in the list and the draft absent, and take `screenshot(page, 'search-suggestions-open')`;

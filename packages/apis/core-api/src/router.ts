@@ -68,7 +68,10 @@ import {
   postReview,
   reviewSummary,
 } from './procedures/review.js';
-import { publicSearchCourses } from './procedures/search.js';
+import {
+  publicSearchCourses,
+  publicSuggestCourses,
+} from './procedures/search.js';
 
 export const router = t.router;
 
@@ -83,6 +86,7 @@ export const appRouter = router({
     listInstructors: listInstructorsForCourse,
     publicList: publicListCourses,
     publicSearch: publicSearchCourses,
+    publicSuggest: publicSuggestCourses,
     publicView: publicViewCourse,
     previewVideoUrl,
     view: viewCourse,
@@ -159,6 +163,7 @@ export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
+  'course.publicSuggest',
   'course.previewVideoUrl',
   'review.summary',
   'review.list',

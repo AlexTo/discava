@@ -23,7 +23,7 @@ type ExtraRoutes = NonNullable<
   ConstructorParameters<typeof CoreApi>[2]['extraRoutes']
 >;
 
-const synth = (extraRoutes?: ExtraRoutes) => {
+const synth = (extraRoutes?: ExtraRoutes, suggestThrottle?: boolean) => {
   const stack = new Stack(new App(), 'Stack', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
   });
@@ -33,6 +33,9 @@ const synth = (extraRoutes?: ExtraRoutes) => {
     identity: { userPool: new UserPool(stack, 'Pool') },
     enableWaf: false,
     publicThrottle: { rateLimit: 2, burstLimit: 4 },
+    ...(suggestThrottle && {
+      publicSuggestThrottle: { rateLimit: 7, burstLimit: 9 },
+    }),
     ...(extraRoutes && { extraRoutes }),
   });
   api.restrictCorsTo('https://portal.example.com');
@@ -149,5 +152,39 @@ describe('CoreApi extra routes', () => {
       JSON.stringify(m.Properties.ResourceId).includes(resource[0]),
     );
     expect(method.Properties.AuthorizationType).toBe('COGNITO_USER_POOLS');
+  });
+});
+
+describe('CoreApi suggest throttle', () => {
+  it('gives course.publicSuggest its own throttle and leaves the other public operations on the public one', () => {
+    synth(undefined, true).hasResourceProperties('AWS::ApiGateway::Stage', {
+      MethodSettings: Match.arrayWith([
+        Match.objectLike({
+          HttpMethod: 'GET',
+          ResourcePath: '/~1course.publicSearch',
+          ThrottlingRateLimit: 2,
+          ThrottlingBurstLimit: 4,
+        }),
+        Match.objectLike({
+          HttpMethod: 'GET',
+          ResourcePath: '/~1course.publicSuggest',
+          ThrottlingRateLimit: 7,
+          ThrottlingBurstLimit: 9,
+        }),
+      ]),
+    });
+  });
+
+  it('uses the public throttle for it when no suggest throttle is given', () => {
+    synth().hasResourceProperties('AWS::ApiGateway::Stage', {
+      MethodSettings: Match.arrayWith([
+        Match.objectLike({
+          HttpMethod: 'GET',
+          ResourcePath: '/~1course.publicSuggest',
+          ThrottlingRateLimit: 2,
+          ThrottlingBurstLimit: 4,
+        }),
+      ]),
+    });
   });
 });

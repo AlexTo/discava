@@ -128,8 +128,10 @@ export type CoreApiComponentConfig = {
   enableTracing?: boolean;
   /**
    * Requests per second API Gateway lets through to each operation anyone
-   * may call without signing in (core-api's PUBLIC_OPERATIONS and the
-   * unsubscribe route): the only ones a bot can reach without an account.
+   * may call without signing in (every operation in core-api's
+   * PUBLIC_OPERATIONS, and the unsubscribe route): the only ones a bot can
+   * reach without an account. `course.publicSuggest` has its own limit,
+   * `publicSuggestThrottleRateLimit`.
    *
    * @default 20
    */
@@ -141,6 +143,21 @@ export type CoreApiComponentConfig = {
    * @default 40
    */
   publicThrottleBurstLimit?: number;
+  /**
+   * Requests per second API Gateway lets through to `course.publicSuggest`,
+   * the search box's suggestions. They fire on every typing pause, so they
+   * have a limit of their own, shared by every caller.
+   *
+   * @default 100
+   */
+  publicSuggestThrottleRateLimit?: number;
+  /**
+   * Requests API Gateway lets through at once in a burst above
+   * `publicSuggestThrottleRateLimit`, shared by every caller.
+   *
+   * @default 200
+   */
+  publicSuggestThrottleBurstLimit?: number;
 };
 
 /**

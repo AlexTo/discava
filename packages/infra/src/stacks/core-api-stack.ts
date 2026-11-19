@@ -22,7 +22,7 @@ import { Stack, StackProps } from 'aws-cdk-lib';
 import { LambdaIntegration } from 'aws-cdk-lib/aws-apigateway';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
-import { publicThrottle } from './api-limits.js';
+import { publicSuggestThrottle, publicThrottle } from './api-limits.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 import { privilegedHandler, trpcApiProps } from './trpc-api-props.js';
@@ -112,6 +112,7 @@ export class CoreApiStack extends Stack {
       })),
       identity,
       publicThrottle: publicThrottle(coreApiConfig),
+      publicSuggestThrottle: publicSuggestThrottle(coreApiConfig),
       ...apiProps,
     });
     // With a custom domain the base path mapping serves the API without the

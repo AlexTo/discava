@@ -13,6 +13,7 @@ import { Duration } from 'aws-cdk-lib';
 // which no stage of this app comes near.
 const DEFAULT_THROTTLE = { rateLimit: 100, burstLimit: 200 };
 const DEFAULT_PUBLIC_THROTTLE = { rateLimit: 20, burstLimit: 40 };
+const DEFAULT_PUBLIC_SUGGEST_THROTTLE = { rateLimit: 100, burstLimit: 200 };
 
 // An API's stage settings as its construct and defaultIntegrations take them:
 // API Gateway throttling and tracing for the API, and timeout, reserved
@@ -44,4 +45,17 @@ export const publicThrottle = (config: CoreApiComponentConfig | undefined) => ({
     config?.publicThrottleRateLimit ?? DEFAULT_PUBLIC_THROTTLE.rateLimit,
   burstLimit:
     config?.publicThrottleBurstLimit ?? DEFAULT_PUBLIC_THROTTLE.burstLimit,
+});
+
+// The throttle for course.publicSuggest, the search box's suggestions. They
+// fire on every typing pause, so they get a limit of their own.
+export const publicSuggestThrottle = (
+  config: CoreApiComponentConfig | undefined,
+) => ({
+  rateLimit:
+    config?.publicSuggestThrottleRateLimit ??
+    DEFAULT_PUBLIC_SUGGEST_THROTTLE.rateLimit,
+  burstLimit:
+    config?.publicSuggestThrottleBurstLimit ??
+    DEFAULT_PUBLIC_SUGGEST_THROTTLE.burstLimit,
 });
