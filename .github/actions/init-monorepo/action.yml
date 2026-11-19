@@ -21,6 +21,10 @@ inputs:
     description: "Keep Nx's task cache (.nx/cache and the database that indexes it, .nx/workspace-data) between runs, under this name, so a task whose inputs haven't changed since an earlier run is replayed, not run again. One name per job that runs different targets. Leave empty for jobs that run no cached Nx targets."
     required: false
     default: ''
+  nx-cache-save:
+    description: "Save this job's Nx cache when it ends, for its next run on the same branch. Each saved cache counts toward the repository's 10 GB of Actions cache, so disable it for a job whose tasks are quick to run again; it still restores main's."
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -29,12 +33,21 @@ runs:
     # under ~/.nx unless told otherwise. Both are pinned to the checkout, where
     # the cache step below saves them. Set first, so no nx command or daemon
     # starts without them.
+    #
+    # The size cap is far below Nx's default (a share of the disk). Each save
+    # carries on from the cache it restored, so without a cap the outputs of a
+    # week of earlier commits ride along: about 760 MB compressed per saved
+    # cache, where one full build's outputs are about 265 MB before
+    # compression. Three of those per push to a pull request overran the
+    # repository's 10 GB of Actions cache, which evicts the caches of pull
+    # requests still open.
     - name: Keep the Nx cache in the checkout
       if: ${{ inputs.nx-cache-scope != '' }}
       shell: bash
       run: |
         echo "NX_CACHE_DIRECTORY=.nx/cache" >> "$GITHUB_ENV"
         echo "NX_WORKSPACE_DATA_DIRECTORY=.nx/workspace-data" >> "$GITHUB_ENV"
+        echo "NX_MAX_CACHE_SIZE=1GB" >> "$GITHUB_ENV"
     # Credentials go to step outputs rather than the job environment, so the
     # login role is only ever used by the login step below.
     - name: Docker login credentials
@@ -116,11 +129,23 @@ runs:
     # Saved per commit, since a cache can't be overwritten, and restored from
     # the newest one: this job's on an earlier push to the same branch, or
     # else main's (ci.yml), the only other ref a pull request can read caches
-    # from. Nx removes old entries and caps the cache's size itself, so it
-    # doesn't grow without bound.
+    # from. Nx removes old entries and keeps the cache under
+    # NX_MAX_CACHE_SIZE (above), so it doesn't grow without bound.
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       name: Setup Nx cache
-      if: ${{ inputs.nx-cache-scope != '' }}
+      if: ${{ inputs.nx-cache-scope != '' && inputs.nx-cache-save == 'true' }}
+      with:
+        path: |
+          .nx/cache
+          .nx/workspace-data
+        key: ${{ runner.os }}-nx-${{ inputs.nx-cache-scope }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-nx-${{ inputs.nx-cache-scope }}-
+          ${{ runner.os }}-nx-main-
+    # The same restore, with nothing saved when the job ends.
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      name: Restore Nx cache
+      if: ${{ inputs.nx-cache-scope != '' && inputs.nx-cache-save != 'true' }}
       with:
         path: |
           .nx/cache
