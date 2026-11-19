@@ -49,6 +49,24 @@ import { RuntimeConfig } from '../../core/runtime-config.js';
 type Operations = Procedures<AppRouter>;
 
 /**
+ * Operations served by a dedicated function instead of the shared router,
+ * keyed by function name. Operations in a group share that function and
+ * whatever it's granted. The infra stack grants these functions the
+ * permissions their procedures need, which keeps them off the router that
+ * serves every other admin procedure.
+ */
+export const ADMIN_API_DEDICATED_FUNCTIONS = {
+  // The only holder of write access to the two Stripe secrets: connects,
+  // replaces and disconnects the administrator's Stripe account.
+  PaymentsConnect: ['payment.connect', 'payment.disconnect'],
+} as const satisfies Record<string, readonly Operations[]>;
+
+const functionNameFor = (op: Operations | '$router'): string =>
+  Object.entries(ADMIN_API_DEDICATED_FUNCTIONS).find(([, ops]) =>
+    (ops as readonly string[]).includes(op),
+  )?.[0] ?? 'Router';
+
+/**
  * Properties for creating a AdminApi construct
  *
  * @template TIntegrations - Map of operation names to their integrations
@@ -129,9 +147,20 @@ export class AdminApi<
   private allowedOrigins: readonly string[] = ['*'];
 
   /**
-   * Creates default integrations for all operations. Every operation is
-   * served by a single router function, and still gets its own integration
-   * entry, so infra can grant permissions to `integrations[op].handler`.
+   * Whether an operation is served by a dedicated function rather than the
+   * shared router. Infra checks this before granting an operation's handler
+   * anything beyond the baseline, so the grant can't land on the router.
+   */
+  public static hasDedicatedFunction(op: string): boolean {
+    return functionNameFor(op as Operations) !== 'Router';
+  }
+
+  /**
+   * Creates default integrations for all operations. Operations listed in
+   * ADMIN_API_DEDICATED_FUNCTIONS are served by their group's function; every
+   * other operation shares a single router function. Each operation still
+   * gets its own integration entry, so infra can grant permissions to
+   * `integrations[op].handler`.
    *
    * @param scope - The CDK construct scope
    * @param functionOptions - The stage's timeout, reserved concurrency, log
@@ -143,7 +172,7 @@ export class AdminApi<
     functionOptions?: ApiFunctionOptions,
   ) => {
     const rc = RuntimeConfig.ensure(scope);
-    let handler: Function | undefined;
+    const handlers = new Map<string, Function>();
     return IntegrationBuilder.rest({
       pattern: 'isolated',
       operations: routerToOperations(appRouter),
@@ -164,14 +193,23 @@ export class AdminApi<
         tracing: Tracing.ACTIVE,
         ...apiFunctionProps(functionOptions),
       } as FunctionProps,
-      buildDefaultIntegration: (_op, props: FunctionProps) => {
+      buildDefaultIntegration: (op, props: FunctionProps) => {
+        const functionName = functionNameFor(op);
+        let handler = handlers.get(functionName);
         if (!handler) {
-          handler = new Function(scope, 'AdminApiRouterHandler', props);
+          handler = new Function(
+            scope,
+            functionName === 'Router'
+              ? 'AdminApiRouterHandler'
+              : `AdminApi${functionName}Handler`,
+            props,
+          );
           handler.addEnvironment(
             'RUNTIME_CONFIG_APP_ID',
             rc.appConfigApplicationId,
           );
           rc.grantReadAppConfig(handler);
+          handlers.set(functionName, handler);
         }
         return {
           handler,

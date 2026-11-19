@@ -15,6 +15,7 @@ import {
   renderInboxPage,
   renderMessagePage,
 } from './email-inbox.js';
+import type { StripeStandIn } from './stripe-stand-in.js';
 
 export interface LocalRouterFeatureState {
   name: string;
@@ -59,6 +60,8 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  * - `POST /router/redrive/<feature>` -> `{ feature, redriven }`, moving the
  *   feature's failure queue back to its queue (404 for an unregistered
  *   feature)
+ * - `/v1/*` and `/stripe/test/*` -> the Stripe stand-in (stripe-stand-in.ts),
+ *   as Stripe's API
  * - `POST /router/fail/<feature>` (`{ batches }`) -> `{ feature, failing }`,
  *   making the feature's runner fail its next batches (404 for an
  *   unregistered feature; 403 unless `LOCAL_DEV=true`)
@@ -74,6 +77,7 @@ export const startEventRunnerServer = ({
   routerQueues,
   redriveFeature,
   failFeature,
+  stripe,
   log,
 }: {
   port: number;
@@ -88,6 +92,8 @@ export const startEventRunnerServer = ({
   redriveFeature: (feature: string) => Promise<number | undefined>;
   /** The batches now set to fail, or undefined for an unregistered feature. */
   failFeature: (feature: string, batches: number) => number | undefined;
+  /** The Stripe stand-in, answering Stripe's API paths when given. */
+  stripe?: StripeStandIn;
   log: (message: string) => void;
 }) => {
   const server = createServer(async (request, response) => {
@@ -103,6 +109,9 @@ export const startEventRunnerServer = ({
     };
     try {
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+      if (stripe && (await stripe.handle(request, response, path))) {
+        return;
+      }
       if (request.method === 'POST' && path === '/transcode-jobs') {
         const job = (await readJson(request)) as LocalTranscodeJobRequest;
         if (!job.inputKey || !job.outputPrefix?.endsWith('/')) {

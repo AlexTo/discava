@@ -4,11 +4,17 @@
  */
 import { defineConfig, devices } from '@playwright/test';
 import { PORTALS } from './src/helpers/portals.js';
+import { shardFiles } from './src/helpers/shards.js';
 
 const CI = !!process.env.CI;
 
+const TEST_MATCH = ['scenarios/**/*.e2e.ts', 'concurrency/**/*.e2e.ts'];
+
 // CI splits the suite over several runners, each with its own stack (the
 // `e2e` job's matrix): E2E_SHARD is this runner's "current/total", e.g. "2/3".
+// Each runner gets whole files adding up to about the same run time
+// (helpers/shards.ts), not Playwright's own `shard`, which evens out the
+// number of tests and so left one runner with twice another's work.
 const [shardCurrent, shardTotal] = (process.env.E2E_SHARD ?? '')
   .split('/')
   .map(Number);
@@ -21,17 +27,16 @@ export default defineConfig({
   // User flows in src/scenarios; requests racing each other, made straight to
   // the APIs, in src/concurrency.
   testDir: './src',
-  testMatch: ['scenarios/**/*.e2e.ts', 'concurrency/**/*.e2e.ts'],
+  testMatch:
+    shardCurrent && shardTotal
+      ? shardFiles(shardCurrent, shardTotal)
+      : TEST_MATCH,
   outputDir: '../../dist/packages/e2e/test-results',
   // Scenarios share one stack; each makes its own users and courses, so they
   // could run side by side, but one at a time keeps a slow transcode or stream
   // from crowding the others out on a small CI runner.
   workers: 1,
   fullyParallel: false,
-  shard:
-    shardCurrent && shardTotal
-      ? { current: shardCurrent, total: shardTotal }
-      : null,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
   // A scenario walks several pages and waits on background work (progress

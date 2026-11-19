@@ -12,6 +12,7 @@ import {
   PublicMediaBucket,
   RuntimeConfig,
   SearchCollection,
+  StripeSecrets,
   StudentPortal,
   suppressRules,
   UserIdentity,
@@ -64,6 +65,8 @@ export class DataStack extends Stack {
   public readonly searchCollection: SearchCollection;
   /** The HMAC key that signs notification unsubscribe links. */
   public readonly notificationUnsubscribeSecret: Secret;
+  /** The Stripe key and webhook signing secret an administrator's save fills. */
+  public readonly stripeSecrets: StripeSecrets;
 
   constructor(
     scope: Construct,
@@ -91,6 +94,14 @@ export class DataStack extends Stack {
     this.searchCollection = this.createSearchCollection(searchConfig);
     this.notificationUnsubscribeSecret =
       this.createNotificationUnsubscribeSecret(coreTableConfig);
+    this.stripeSecrets = new StripeSecrets(this, 'StripeSecrets', {
+      enableKmsEncryption: coreTableConfig?.enableKmsEncryption ?? true,
+      enableKeyRotation: coreTableConfig?.enableKeyRotation ?? true,
+      removalPolicy:
+        (coreTableConfig?.retainOnDelete ?? true)
+          ? RemovalPolicy.RETAIN
+          : RemovalPolicy.DESTROY,
+    });
 
     // hls.js fetches a video's manifest, renditions and segments with
     // cross-origin requests, so both portals that play lesson videos must be

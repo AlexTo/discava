@@ -46,6 +46,12 @@ export const createEnrolmentEntity = async () =>
         lastActivityAt: {
           type: 'string',
         },
+        // The order that currently entitles the enrolment: absent for a free
+        // enrolment, kept when a refund ends it so the refund stays traceable.
+        // Written only by the helpers in ../helpers/order.ts; no API exposes it.
+        orderId: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,

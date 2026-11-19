@@ -3,21 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { NotificationBell } from '@discava/common-shadcn/components/notification-bell-container';
 import {
   MAIN_CONTENT_ID,
   SkipLink,
 } from '@discava/common-shadcn/components/skip-link';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { TooltipProvider } from '@discava/common-shadcn/components/ui/tooltip';
+import { UserMenu } from '@discava/common-shadcn/components/user-menu';
 import Config from '@discava/common-web-utils/app-config';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { NotificationBell } from './NotificationBell';
 import { SiteSearch } from './SiteSearch';
-import { UserMenu } from './UserMenu';
 
 const DISCAVA_URL = 'https://alexto.github.io/discava';
 
@@ -73,7 +73,7 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
                   My Learning
                 </Link>
               </Button>
-              <NotificationBell />
+              <NotificationBell portal="student" />
               <UserMenu />
             </div>
           ) : (

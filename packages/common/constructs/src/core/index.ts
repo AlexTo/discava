@@ -13,6 +13,7 @@ export * from './runtime-config.js';
 export * from './stage-isolation.js';
 export * from './static-website.js';
 export * from './stream-router.js';
+export * from './stripe-secrets.js';
 export * from './upload-bucket.js';
 export * from './user-identity.js';
 export * from './workspace.js';
