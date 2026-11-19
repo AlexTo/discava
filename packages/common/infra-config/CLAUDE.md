@@ -4,4 +4,4 @@ Loaded when working in `packages/common/infra-config`. The repo-wide rules are i
 
 Per-stage deployment config (credentials, region, which security features are on), and the one definition of the local portals' ports and origins (`local-portals`, imported per module as `@discava/common-infra-config/local-portals` by the stacks, constructs, local dev, e2e and the portals' vite configs).
 
-Stages are defined in `src/stages.config.ts`; adding a stage means editing that file only.
+The stages themselves are defined in `src/stages.config.ts`; `packages/infra/CLAUDE.md` says how to add one.
