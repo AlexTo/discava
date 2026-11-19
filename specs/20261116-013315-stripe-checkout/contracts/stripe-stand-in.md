@@ -44,4 +44,3 @@ The student's refund request uses `POST /v1/refunds`, which the stand-in already
 
 - `POST /v1/refunds` refuses, in Stripe's error shape, a refund that would take the total refunded above the payment's amount (as Stripe does for a charge already fully refunded). A repeated request with the same idempotency key still returns the first refund and delivers nothing new.
 - A test control, `POST /stripe/test/refunds`: lists the refunds made for a payment intent or session, with their amounts, so a test can prove that many requests made one refund.
-
