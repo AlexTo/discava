@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { plainTextExcerpt } from '@discava/common-tiptap';
 import {
   AnnouncementInputError,
@@ -11,6 +10,7 @@ import {
   announcementEditWrites,
   announcementPage,
   announcementWrites,
+  type CoreTable,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -31,8 +31,6 @@ import {
   UpdateAnnouncementInputSchema,
   UpdateAnnouncementOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 const EXCERPT_CHARS = 200;
 const DEFAULT_AUTHOR_NAME = 'Instructor';
@@ -92,7 +90,7 @@ export const createAnnouncement = courseProcedure
   .input(CreateAnnouncementInputSchema)
   .output(CreateAnnouncementOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, announcementId, title, body } = input;
     const authorId = ctx.user.sub;
 
@@ -190,7 +188,7 @@ export const listAnnouncements = courseProcedure
   .input(ListAnnouncementsInputSchema)
   .output(ListAnnouncementsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, cursor, limit } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -224,7 +222,7 @@ export const updateAnnouncement = courseProcedure
   .input(UpdateAnnouncementInputSchema)
   .output(UpdateAnnouncementOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, announcementId, version, title, body } = input;
     const instructorId = ctx.user.sub;
 
@@ -306,7 +304,7 @@ export const deleteAnnouncement = courseProcedure
   .input(DeleteAnnouncementInputSchema)
   .output(DeleteAnnouncementOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, announcementId } = input;
     const instructorId = ctx.user.sub;
 

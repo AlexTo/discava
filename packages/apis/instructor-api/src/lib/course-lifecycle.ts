@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
+import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import type { ICurriculumVisibility } from '../schema/index.js';
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 // Only instructors teaching this specific course may change its curriculum,
 // not just any member of the instructor group.

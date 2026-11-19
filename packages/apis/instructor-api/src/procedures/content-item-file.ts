@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { randomUUID } from 'node:crypto';
 import { scheduleTranscodeCleanup } from '@discava/common-server-utils/cleanup-scheduler';
 import {
@@ -16,7 +17,7 @@ import {
   presignLessonFileUpload,
 } from '@discava/common-server-utils/lesson-files';
 import { getSignedCloudFrontFileUrl } from '@discava/common-server-utils/lesson-media';
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
+import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { courseProcedure } from '../init.js';
@@ -47,8 +48,6 @@ import { asContentItemOutput } from './content-item-shared.js';
 // File items (#102): a document students download. The file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then copied into
 // the lesson media bucket when the item is saved (see lib/lesson-files.ts).
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 interface ItemKey {
   courseId: string;
@@ -134,7 +133,7 @@ export const createContentItemFileUploadUrl = courseProcedure
   .input(CreateContentItemFileUploadUrlInputSchema)
   .output(CreateContentItemFileUploadUrlOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, fileName, fileSize } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
@@ -174,7 +173,7 @@ export const createContentItemFile = courseProcedure
   .input(CreateContentItemFileInputSchema)
   .output(CreateContentItemFileOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { title, description, objectKey, fileName, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 
@@ -214,7 +213,7 @@ export const updateContentItemFile = courseProcedure
   .input(UpdateContentItemFileInputSchema)
   .output(UpdateContentItemFileOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { title, description, objectKey, fileName, ...key } = input;
     const { courseId, moduleId, lessonId } = key;
 
@@ -290,7 +289,7 @@ export const createContentItemFileUrl = courseProcedure
   .input(CreateContentItemFileUrlInputSchema)
   .output(CreateContentItemFileUrlOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
     const { data: item } = await coreTable.entities.contentItem.get(input).go();
     if (!item || item.type !== 'file' || !item.s3Key) {

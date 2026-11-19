@@ -4,8 +4,7 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
-import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
-import { isConditionalCheckFailed } from '@discava/core-table';
+import { type CoreTable, isConditionalCheckFailed } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
@@ -53,8 +52,6 @@ import {
   RestoreContentItemInputSchema,
   RestoreContentItemOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = NonNullable<ICoreTableContext['coreTable']>;
 
 interface ContentItemKey {
   courseId: string;
@@ -181,7 +178,7 @@ export const deleteContentItem = courseProcedure
   .input(DeleteContentItemInputSchema)
   .output(DeleteContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
@@ -248,7 +245,7 @@ export const publishContentItem = courseProcedure
   .input(PublishContentItemInputSchema)
   .output(PublishContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
@@ -277,7 +274,7 @@ export const hideContentItem = courseProcedure
   .input(HideContentItemInputSchema)
   .output(HideContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
@@ -306,7 +303,7 @@ export const restoreContentItem = courseProcedure
   .input(RestoreContentItemInputSchema)
   .output(RestoreContentItemOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
@@ -352,7 +349,7 @@ export const deleteContentItemPermanently = courseProcedure
   .input(DeleteContentItemPermanentlyInputSchema)
   .output(DeleteContentItemPermanentlyOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemId } = input;
     const key = { courseId, moduleId, lessonId, contentItemId };
 
@@ -427,7 +424,7 @@ export const reorderContentItems = courseProcedure
   .input(ReorderContentItemsInputSchema)
   .output(ReorderContentItemsOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, moduleId, lessonId, contentItemIds } = input;
 
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);

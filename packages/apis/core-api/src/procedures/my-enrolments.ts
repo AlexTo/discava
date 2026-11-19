@@ -29,7 +29,7 @@ export const myEnrolments = courseProcedure
   .input(MyEnrolmentsInputSchema)
   .output(MyEnrolmentsOutputSchema)
   .query(async ({ ctx }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
 
     const [{ data: enrolments }, { data: progress }] = await Promise.all([

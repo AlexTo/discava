@@ -18,7 +18,7 @@ export const myLessonProgress = courseProcedure
   .input(MyLessonProgressInputSchema)
   .output(MyLessonProgressOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const { courseId } = input;
 

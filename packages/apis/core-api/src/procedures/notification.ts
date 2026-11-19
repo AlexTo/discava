@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  type createCoreTableService,
+  type CoreTable,
   InvalidRequestError,
   markNotificationRead,
   markNotificationsRead,
@@ -27,8 +27,6 @@ import {
   NotificationSetPreferenceInputSchema,
   NotificationUnreadCountOutputSchema,
 } from '../schema/index.js';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 // The helpers throw their own errors for the cases a caller can cause; this
 // maps them to the API's codes. The not-found message is the same for a
@@ -88,7 +86,7 @@ export const listNotifications = courseProcedure
   .input(NotificationListInputSchema)
   .output(NotificationListOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const userId = ctx.user.sub;
     const [{ data, cursor }, { unreadCount, readThrough }] = await Promise.all([
       coreTable.entities.notification.query.primary({ userId }).go({
@@ -123,7 +121,7 @@ export const listNotifications = courseProcedure
 export const notificationUnreadCount = courseProcedure
   .output(NotificationUnreadCountOutputSchema)
   .query(async ({ ctx }) => {
-    const { unreadCount } = await unreadCountOf(ctx.coreTable!, ctx.user.sub);
+    const { unreadCount } = await unreadCountOf(ctx.coreTable, ctx.user.sub);
     return { unreadCount };
   });
 
@@ -132,7 +130,7 @@ export const markNotificationReadProcedure = courseProcedure
   .output(NotificationUnreadCountOutputSchema)
   .mutation(({ ctx, input }) =>
     asTrpcError(() =>
-      markNotificationRead(ctx.coreTable!, ctx.user.sub, input.position),
+      markNotificationRead(ctx.coreTable, ctx.user.sub, input.position),
     ),
   );
 
@@ -141,7 +139,7 @@ export const markAllNotificationsRead = courseProcedure
   .output(NotificationMarkAllReadOutputSchema)
   .mutation(({ ctx, input }) =>
     asTrpcError(() =>
-      markNotificationsRead(ctx.coreTable!, ctx.user.sub, input.through),
+      markNotificationsRead(ctx.coreTable, ctx.user.sub, input.through),
     ),
   );
 
@@ -149,8 +147,8 @@ export const markAllNotificationsRead = courseProcedure
 export const notificationPreferences = courseProcedure
   .output(NotificationPreferencesOutputSchema)
   .query(async ({ ctx }) => {
-    const { data } = await ctx
-      .coreTable!.entities.notificationPreference.query.primary({
+    const { data } = await ctx.coreTable.entities.notificationPreference.query
+      .primary({
         userId: ctx.user.sub,
       })
       .go({ pages: 'all' });
@@ -164,7 +162,7 @@ export const setNotificationPreferenceProcedure = courseProcedure
   .mutation(async ({ ctx, input }) => {
     const type = await asTrpcError(() =>
       setNotificationPreference(
-        ctx.coreTable!,
+        ctx.coreTable,
         ctx.user.sub,
         input.type,
         input.emailEnabled,

@@ -2,12 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type createCoreTableService, isShown } from '@discava/core-table';
+import { type CoreTable, isShown } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { getEnrolment, requireEnrolment } from '../procedures/enrolment.js';
 import type { ILessonRef } from '../schema/index.js';
-
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
 const INSTRUCTOR_GROUP = 'instructor';
 const NOT_AVAILABLE = 'This lesson is not available';

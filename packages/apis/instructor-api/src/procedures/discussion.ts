@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
-  type createCoreTableService,
+  type CoreTable,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DiscussionInputError,
   type DiscussionOperation,
@@ -24,7 +24,6 @@ import {
   UnhidePostInputSchema,
 } from '../schema/index.js';
 
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type StoredPost = NonNullable<
   Awaited<
     ReturnType<ReturnType<CoreTable['entities']['discussionPost']['get']>['go']>
@@ -147,7 +146,7 @@ export const unanswered = courseProcedure
   .input(QueueInputSchema)
   .output(QueueOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, cursor } = input;
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     checkCursor(courseId, cursor);
@@ -166,7 +165,7 @@ export const reported = courseProcedure
   .input(QueueInputSchema)
   .output(QueueOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { courseId, cursor } = input;
     await requireCourseInstructor(coreTable, courseId, ctx.user.sub);
     checkCursor(courseId, cursor);
@@ -317,7 +316,7 @@ export const hide = courseProcedure
   .input(HidePostInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
     return moderate(
       coreTable,
@@ -331,7 +330,7 @@ export const unhide = courseProcedure
   .input(UnhidePostInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
     return moderate(
       coreTable,
@@ -345,7 +344,7 @@ export const remove = courseProcedure
   .input(RemovePostInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
     return moderate(coreTable, ctx.user.sub, input, (post, question) =>
       // Deleting a deleted post is a no-op.
@@ -367,7 +366,7 @@ export const dismissReports = courseProcedure
   .input(DismissReportsInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     await requireCourseInstructor(coreTable, input.courseId, ctx.user.sub);
     return moderate(coreTable, ctx.user.sub, input, (post) =>
       // The write is conditioned on the flag, so a post without one is left.

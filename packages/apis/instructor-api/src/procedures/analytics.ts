@@ -26,8 +26,8 @@ import {
 export const analyticsCourseProcedure = courseProcedure
   .input(AnalyticsCourseInputSchema)
   .use(async ({ ctx, input, next }) => {
-    const { data: membership } = await ctx
-      .coreTable!.entities.courseInstructor.get({
+    const { data: membership } = await ctx.coreTable.entities.courseInstructor
+      .get({
         courseId: input.courseId,
         instructorId: ctx.user.sub,
       })
@@ -56,7 +56,7 @@ const completionRate = (
 export const courseSummaries = courseProcedure
   .output(CourseSummariesOutputSchema)
   .query(async ({ ctx }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { data: memberships } =
       await coreTable.entities.courseInstructor.query
         .byInstructor({ instructorId: ctx.user.sub })
@@ -106,7 +106,7 @@ export const course = analyticsCourseProcedure
   .output(CourseAnalyticsOutputSchema)
   .query(async ({ ctx, input }) => {
     const analytics = await readCourseAnalytics(
-      ctx.coreTable!,
+      ctx.coreTable,
       input.courseId,
       input.days,
     );
@@ -160,7 +160,7 @@ export const quiz = analyticsCourseProcedure
   .output(QuizAnalyticsOutputSchema)
   .query(async ({ ctx, input }) => {
     const figures = await readQuizAnalytics(
-      ctx.coreTable!,
+      ctx.coreTable,
       input.courseId,
       input.contentItemId,
     );
