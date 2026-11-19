@@ -2,10 +2,13 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  Avatar,
-  AvatarFallback,
-} from '@discava/common-shadcn/components/ui/avatar';
+
+import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
+import { signOut } from '@discava/common-web-utils/sign-out';
+import { getUserIdentity } from '@discava/common-web-utils/user-profile';
+import { Link } from '@tanstack/react-router';
+import { useAuth } from 'react-oidc-context';
+import { Avatar, AvatarFallback } from './ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@discava/common-shadcn/components/ui/dropdown-menu';
-import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
-import { signOut } from '@discava/common-web-utils/sign-out';
-import { Link } from '@tanstack/react-router';
-import { useAuth } from 'react-oidc-context';
-import { getUserIdentity } from './user-profile';
+} from './ui/dropdown-menu';
 
 export const UserMenu = () => {
   const auth = useAuth();
