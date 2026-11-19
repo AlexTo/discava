@@ -10,6 +10,8 @@
 
 **Parent issue**: #276
 
+**Design page**: [`design/certificates`](../../../docs/src/content/docs/en/design/certificates.mdx)
+
 ## Clarifications
 
 ### Session 2026-11-15
