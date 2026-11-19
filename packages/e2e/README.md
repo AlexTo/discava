@@ -52,6 +52,7 @@ One file per user-facing flow, in `src/scenarios/`, named `*.e2e.ts`. Build it f
 - `video.ts`: `expectToPlay`, which checks a `<video>` really plays, and `THREE_SECOND_VIDEO`, the test video.
 - `files.ts`: `WORKSHEET_PDF`, the test file for file items.
 - `portals.ts`: where everything runs.
+- `discussion.ts`: steps for lesson discussions, a course with a visible lesson, enrolled students, `ask`, `reply` and `readThread`. For `scenarios/discussion.e2e.ts` and `concurrency/discussion-counters.e2e.ts`.
 - `api.ts`: `apiUser`, a new user signed in on the local OIDC server without a browser, with a typed client for each API; and `createPublishedCourseViaApi`. For `src/concurrency/`.
 
 Fixtures go in `src/files/`: `three-seconds.mp4`, a 39 KB, 3-second H.264/AAC clip of colour bars with a moving counter, two small 1600×900 JPEGs for course images, and `worksheet.pdf`, a 596-byte one-page PDF. The video and images are made with ffmpeg, the commands in `src/helpers/video.ts` and `src/helpers/images.ts`; the PDF is written by hand (see `src/helpers/files.ts`). Keep fixtures synthetic and small, never real course material.
