@@ -51,19 +51,23 @@ test('an instructor edits the landing page and a signed-out visitor sees it', as
       .getByRole('button', { name: `Add ${outcomes} item` })
       .click();
     await instructor
-      .getByLabel(`${outcomes} item 1`)
+      .getByLabel(`${outcomes} item 1`, { exact: true })
       .fill('Build a landing page');
     await instructor
       .getByRole('button', { name: `Add ${outcomes} item` })
       .click();
-    await instructor.getByLabel(`${outcomes} item 2`).fill('Read a curriculum');
+    await instructor
+      .getByLabel(`${outcomes} item 2`, { exact: true })
+      .fill('Read a curriculum');
     await instructor
       .getByRole('button', { name: 'Move up What students will learn item 2' })
       .click();
     await instructor
       .getByRole('button', { name: 'Add Requirements item' })
       .click();
-    await instructor.getByLabel('Requirements item 1').fill('A laptop');
+    await instructor
+      .getByLabel('Requirements item 1', { exact: true })
+      .fill('A laptop');
     await instructor.getByRole('button', { name: 'Save landing page' }).click();
     await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
 
