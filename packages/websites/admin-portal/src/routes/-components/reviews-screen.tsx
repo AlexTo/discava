@@ -24,7 +24,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useAdminApi } from '../api';
+import { useAdminApi } from '../../api';
 
 export const REASON_MAX = 200;
 

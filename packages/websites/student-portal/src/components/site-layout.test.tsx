@@ -6,7 +6,7 @@ import { screen } from '@testing-library/react';
 import type { AuthContextProps } from 'react-oidc-context';
 import { describe, expect, it } from 'vitest';
 import { renderWithCoreApi } from '../test/render-with-core-api';
-import SiteLayout from './SiteLayout';
+import SiteLayout from './site-layout';
 
 const portals = {
   StudentPortal: 'https://learn.example',

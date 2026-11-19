@@ -21,11 +21,8 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../api';
-import {
-  type CourseStatus,
-  courseStatusStyles,
-} from '../../components/course-status';
 import { CreateCourseDialog } from '../../components/create-course-dialog';
+import { type CourseStatus, courseStatusStyles } from '../../lib/course-status';
 
 export const Route = createFileRoute('/_authenticated/')({
   component: RouteComponent,

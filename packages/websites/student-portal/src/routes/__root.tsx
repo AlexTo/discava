@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
-import SiteLayout from '../components/SiteLayout';
+import SiteLayout from '../components/site-layout';
 import type { RouterProviderContext } from '../router-context';
 
 export const Route = createRootRouteWithContext<RouterProviderContext>()({

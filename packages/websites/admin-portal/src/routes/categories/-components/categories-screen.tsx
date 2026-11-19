@@ -21,7 +21,7 @@ import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
-import { useAdminApi } from '../../api';
+import { useAdminApi } from '../../../api';
 
 interface Category {
   id: string;

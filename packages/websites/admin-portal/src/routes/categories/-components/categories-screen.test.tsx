@@ -8,8 +8,8 @@ import {
   ApiError,
   type Handler,
   renderWithAdminApi,
-} from '../../test/render-with-admin-api';
-import { CategoriesScreen } from './-categories-screen';
+} from '../../../test/render-with-admin-api';
+import { CategoriesScreen } from './categories-screen';
 
 const science = {
   id: 'c1',

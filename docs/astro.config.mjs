@@ -22,7 +22,9 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'Discava',
-      social: [],
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/AlexTo/discava' },
+      ],
       tableOfContents: {
         minHeadingLevel: 2,
         maxHeadingLevel: 4,
