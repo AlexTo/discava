@@ -45,7 +45,7 @@
       },
       {
         "generator": "ts#lambda-function",
-        "path": "src/search/index-content.ts",
+        "path": "src/search/search-indexing.ts",
         "name": "search-indexing",
         "iac": "cdk"
       },
@@ -75,13 +75,13 @@
       },
       {
         "generator": "ts#lambda-function",
-        "path": "src/notifications/delivery.ts",
+        "path": "src/notifications/notification-delivery.ts",
         "name": "notification-delivery",
         "iac": "cdk"
       },
       {
         "generator": "ts#lambda-function",
-        "path": "src/notifications/unsubscribe.ts",
+        "path": "src/notifications/notification-unsubscribe.ts",
         "name": "notification-unsubscribe",
         "iac": "cdk"
       }
