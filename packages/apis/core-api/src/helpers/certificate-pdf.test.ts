@@ -5,7 +5,7 @@
 // @vitest-environment node
 import { PDF } from '@libpdf/core';
 import { describe, expect, it } from 'vitest';
-import { drawCertificatePdf } from './certificate-pdf.js';
+import { drawCertificatePdf, formatDate } from './certificate-pdf.js';
 
 const base = {
   learnerName: 'Erin Nguyen',
@@ -37,5 +37,23 @@ describe('drawCertificatePdf', () => {
   ])('draws one page for %s', async (_, overrides) => {
     const bytes = await drawCertificatePdf({ ...base, ...overrides });
     expect((await PDF.load(bytes)).getPageCount()).toBe(1);
+  });
+});
+
+describe('the certificate date', () => {
+  it('is the UTC day, whatever the time zone', () => {
+    expect(formatDate('2026-11-19T19:48:06Z')).toBe('19 November 2026');
+  });
+
+  it('is the one the PDF prints', async () => {
+    const bytes = await drawCertificatePdf({
+      ...base,
+      completedAt: '2026-11-19T19:48:06Z',
+    });
+    const text = (await PDF.load(bytes))
+      .extractText()
+      .map((page) => page.text)
+      .join(' ');
+    expect(text).toContain('Completed on 19 November 2026');
   });
 });

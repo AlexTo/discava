@@ -15,6 +15,7 @@ const certificate = {
   learnerName: 'Ada Lovelace',
   courseTitle: 'Linear Algebra',
   completedAt: '2026-10-05T12:00:00.000Z',
+  completedOn: '5 October 2026',
 };
 
 const open = (
@@ -35,19 +36,25 @@ describe('/certificates/<ID>', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.getByText('Certificate of completion')).toBeInTheDocument();
     expect(screen.getByText('Linear Algebra')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        new Date(certificate.completedAt).toLocaleDateString(undefined, {
-          dateStyle: 'long',
-        }),
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('5 October 2026')).toBeInTheDocument();
     expect(screen.getByText(/ABCD-EFGH-JKLM/)).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/certificates/ABCD-EFGH-JKLM');
     expect(calls).toContainEqual({
       path: 'certificate.verify',
       input: { certificateId: 'ABCD-EFGH-JKLM' },
     });
+  });
+
+  it('shows the API’s date, not one formatted for the viewer', async () => {
+    // 20 November in Sydney, still 19 November in UTC.
+    open(() => ({
+      ...certificate,
+      completedAt: '2026-11-19T19:48:06.000Z',
+      completedOn: '19 November 2026',
+    }));
+
+    expect(await screen.findByText('19 November 2026')).toBeInTheDocument();
+    expect(screen.queryByText('20 November 2026')).toBeNull();
   });
 
   it('passes a lowercase, dash-less ID as typed', async () => {
