@@ -108,7 +108,12 @@ export default {
               maxWriteRequestUnits: 50,
             },
             streamRouter: { enableKmsEncryption: false },
-            studentPortal: { enableWaf: false, enableKmsEncryption: false },
+            studentPortal: {
+              enableWaf: false,
+              enableKmsEncryption: false,
+              allowSearchEngineIndexing: false,
+              pageRendererReservedConcurrency: 5,
+            },
             instructorPortal: { enableWaf: false, enableKmsEncryption: false },
             adminPortal: { enableWaf: false, enableKmsEncryption: false },
             lessonMedia: {
@@ -195,6 +200,7 @@ export default {
               enableWaf: true,
               enableKmsEncryption: true,
               enableKeyRotation: true,
+              allowSearchEngineIndexing: true,
             },
             instructorPortal: {
               enableWaf: true,

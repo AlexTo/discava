@@ -44,6 +44,7 @@ import {
   vote,
 } from './procedures/discussion.js';
 import { enrol, myEnrolment } from './procedures/enrolment.js';
+import { instructorProfilePublicView } from './procedures/instructor-profile.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
 import {
@@ -94,6 +95,9 @@ export const appRouter = router({
     submit,
     mySubmission,
     submissionFileUrl,
+  }),
+  instructorProfile: router({
+    publicView: instructorProfilePublicView,
   }),
   category: router({
     list: listCategories,
@@ -160,5 +164,6 @@ export const PUBLIC_OPERATIONS = [
   'review.list',
   'category.list',
   'category.bySlug',
+  'instructorProfile.publicView',
   'certificate.verify',
 ] as const;
