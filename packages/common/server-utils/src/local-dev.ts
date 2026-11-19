@@ -219,6 +219,9 @@ export interface LocalEmailRequest {
 export const LOCAL_PORTAL_URLS = LOCAL_PORTAL_ORIGINS;
 export const LOCAL_CORE_API_URL = 'http://localhost:2022';
 
+/** Local dev's page renderer (core-api's `src/local-page-renderer.ts`): the landing pages as crawlers get them. */
+export const LOCAL_PAGE_RENDERER_URL = 'http://localhost:2026';
+
 /** The sender local dev's notification emails come from, so email counts as configured. */
 export const LOCAL_NOTIFICATIONS_FROM = 'notifications@discava.local';
 
