@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
-import { RouterProviderContext } from '../router';
+import type { RouterProviderContext } from '../router-context';
 
 export const Route = createRootRouteWithContext<RouterProviderContext>()({
   component: () => <Outlet />,
