@@ -11,6 +11,7 @@ import { CoreApiStack } from '../stacks/core-api-stack.js';
 import { DataStack } from '../stacks/data-stack.js';
 import { InstructorApiStack } from '../stacks/instructor-api-stack.js';
 import { MediaPipelineStack } from '../stacks/media-pipeline-stack.js';
+import { PaymentsStack } from '../stacks/payments-stack.js';
 import { StreamRouterStack } from '../stacks/stream-router-stack.js';
 import { WebsitesStack } from '../stacks/websites-stack.js';
 
@@ -21,12 +22,14 @@ export type ApplicationStageProps = StageProps & StageComponents;
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> AdminApi -> RuntimeConfig
+ *   Websites -> Data -> Payments -> MediaPipeline -> CoreApi -> StreamRouter -> InstructorApi -> AdminApi -> RuntimeConfig
  *
  * Data depends on Websites (Cognito callback URLs, lesson media CORS), the
  * APIs depend on both (and on MediaPipeline, which schedules their cleanups),
  * and RuntimeConfig (AppConfig content plus each
  * portal's runtime-config.json) collects values from all of them.
+ * Payments holds the Stripe webhook API, which only needs the table and the
+ * Stripe secrets from Data; AdminApi depends on it for the webhook's address.
  * InstructorApi also depends on CoreApi only because the stage's single
  * ApiGatewayAccount (API Gateway's account-wide logging role) lands in
  * whichever API stack is created first. AdminApi reads from Data and Websites
@@ -47,6 +50,7 @@ export class ApplicationStage extends Stage {
       coreApi,
       instructorApi,
       adminApi,
+      payments,
       coreTable,
       streamRouter,
       studentPortal,
@@ -89,6 +93,13 @@ export class ApplicationStage extends Stage {
       studentPortal: websites.studentPortal,
     });
 
+    const paymentsStack = new PaymentsStack(this, 'Payments', {
+      ...stackProps,
+      payments,
+      coreTable: data.coreTable,
+      stripeSecrets: data.stripeSecrets,
+    });
+
     const mediaPipeline = new MediaPipelineStack(this, 'MediaPipeline', {
       ...stackProps,
       coreTable: data.coreTable,
@@ -102,6 +113,7 @@ export class ApplicationStage extends Stage {
       identity: data.identity,
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
+      stripeSecrets: data.stripeSecrets,
       notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       lessonMediaBucket: data.lessonMediaBucket,
       lessonMediaUploadBucket: data.lessonMediaUploadBucket,
@@ -143,6 +155,7 @@ export class ApplicationStage extends Stage {
       identity: data.identity,
       coreTable: data.coreTable,
       stripeSecrets: data.stripeSecrets,
+      webhookUrl: paymentsStack.webhookUrl,
       adminPortal: websites.adminPortal,
     });
 

@@ -17,6 +17,7 @@ import type { StagesConfig } from './stages.types.js';
 //   connection for both APIs and get 403s from the wrong one (#224):
 //     DISCAVA_DEVELOPMENT_INFRA_CORE_API_DOMAIN_NAME            api.example.com
 //     DISCAVA_DEVELOPMENT_INFRA_INSTRUCTOR_API_DOMAIN_NAME      instructor-api.example.com
+//     DISCAVA_DEVELOPMENT_INFRA_PAYMENTS_DOMAIN_NAME            payments.example.com   (the Stripe webhook API)
 //
 //   CloudFront (certificate in us-east-1), comma-separated domains:
 //     DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES     example.com,www.example.com
@@ -91,6 +92,16 @@ export default {
               enableTracing: false,
             },
             adminApi: {
+              enableWaf: false,
+              enableKmsEncryption: false,
+              retainOnDelete: false,
+              throttleRateLimit: 2,
+              throttleBurstLimit: 5,
+              reservedConcurrency: 10,
+              logLevel: 'WARN',
+              enableTracing: false,
+            },
+            payments: {
               enableWaf: false,
               enableKmsEncryption: false,
               retainOnDelete: false,

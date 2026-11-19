@@ -63,6 +63,18 @@ describe('PUBLIC_OPERATIONS', () => {
   });
 });
 
+describe('payment', () => {
+  it('mounts checkout and available, neither public', async () => {
+    expect(Object.keys(appRouter._def.procedures)).toEqual(
+      expect.arrayContaining(['payment.checkout', 'payment.available']),
+    );
+    expect(
+      PUBLIC_OPERATIONS.filter((path) => path.startsWith('payment.')),
+    ).toEqual([]);
+    expect(await refusesAnonymousCallers('payment.checkout')).toBe(true);
+  });
+});
+
 describe('discussion', () => {
   const procedures = [
     'listQuestions',

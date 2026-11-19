@@ -10,3 +10,4 @@
 export * from './admin-api.js';
 export * from './core-api.js';
 export * from './instructor-api.js';
+export * from './stripe-webhook-api.js';

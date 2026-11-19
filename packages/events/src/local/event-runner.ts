@@ -35,6 +35,7 @@ import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-gener
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
 import { applyTranscribeOutcome } from '../media/transcribe-outcome.js';
+import { handleStripeWebhook } from '../payments/stripe-webhook.js';
 import { HANDLERS } from '../router/handlers.js';
 import { createSqsQueueClient } from '../router/queue-client.js';
 import { createStreamRouter } from '../router/stream-router.js';
@@ -271,6 +272,7 @@ const emailInbox = createEmailInbox({
 const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   stripe: createStripeStandIn({ log }),
+  stripeWebhook: handleStripeWebhook,
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
   submitTranscriptionJob: (request) => transcriber.submit(request),
@@ -333,7 +335,7 @@ const server = startEventRunnerServer({
   log,
 });
 log(
-  `transcode and transcription jobs, schedules, sign-ins and the email inbox on http://localhost:${LOCAL_EVENT_RUNNER.port} (inbox at /inbox)`,
+  `transcode and transcription jobs, schedules, sign-ins and the email inbox on http://localhost:${LOCAL_EVENT_RUNNER.port} (inbox at /inbox), and the Stripe stand-in (API at http://localhost:${LOCAL_EVENT_RUNNER.port}/v1, webhook at /stripe/webhook)`,
 );
 
 const tableName = await resolveTableName();
