@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  type CoreTable,
   checkPostId,
-  type createCoreTableService,
   DISCUSSION_MAX_REPORTERS,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   DiscussionInputError,
@@ -40,7 +40,6 @@ import {
   VoteOutputSchema,
 } from '../schema/index.js';
 
-type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type StoredPost = NonNullable<
   Awaited<
     ReturnType<ReturnType<CoreTable['entities']['discussionPost']['get']>['go']>
@@ -297,7 +296,7 @@ export const listQuestions = courseProcedure
   .input(ListQuestionsInputSchema)
   .output(ListQuestionsOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { cursor, ...ref } = input;
     const access = await requireDiscussionAccess(coreTable, ctx.user, ref);
     checkCursor(ref.courseId, cursor);
@@ -342,7 +341,7 @@ export const thread = courseProcedure
   .input(ThreadInputSchema)
   .output(ThreadOutputSchema)
   .query(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { cursor, threadId, ...ref } = input;
     const access = await requireDiscussionAccess(coreTable, ctx.user, ref);
     checkCursor(ref.courseId, cursor);
@@ -398,7 +397,7 @@ export const ask = courseProcedure
   .input(AskInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { postId, title, body, ...ref } = input;
     const user = ctx.user;
 
@@ -449,7 +448,7 @@ export const reply = courseProcedure
   .input(ReplyInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { threadId, postId, body, ...ref } = input;
     const user = ctx.user;
     // The question's own id would make later calls take the reply for the
@@ -531,7 +530,7 @@ export const vote = courseProcedure
   .input(VoteInputSchema)
   .output(VoteOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { threadId, postId, voted, ...ref } = input;
     const user = ctx.user;
     const kind = kindOf(threadId, postId);
@@ -591,7 +590,7 @@ export const accept = courseProcedure
   .input(AcceptInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { threadId, postId, ...ref } = input;
     const user = ctx.user;
 
@@ -649,7 +648,7 @@ export const report = courseProcedure
   .input(ReportInputSchema)
   .output(ReportOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { threadId, postId, ...ref } = input;
     const user = ctx.user;
 
@@ -700,7 +699,7 @@ export const removeOwn = courseProcedure
   .input(RemoveOwnInputSchema)
   .output(DiscussionPostSchema)
   .mutation(async ({ ctx, input }) => {
-    const coreTable = ctx.coreTable!;
+    const coreTable = ctx.coreTable;
     const { threadId, postId, ...ref } = input;
     const user = ctx.user;
     const kind = kindOf(threadId, postId);
