@@ -10,4 +10,12 @@ Stages themselves are defined in `packages/common/infra-config/src/stages.config
 
 `packages/infra` composes constructs into stacks, translating per-stage config into construct props and wiring components together (cross-component grants, CORS, event triggers such as EventBridge rules). The core table's stream has one reader, the `StreamRouter` construct, and a feature adds a `STREAM_FEATURES` registration rather than its own stream source.
 
+## Deploy permissions
+
+CI deploys through the `cfn-execution-<stage>` role and caps every role the stacks create with `permissions-boundary-<stage>`, both written by `scripts/setup-stage.sh`. A local `cdk deploy` uses CDK's admin bootstrap role instead, so a stack that deploys locally can still fail in CI. When adding a new kind of resource:
+
+- Add what CloudFormation needs to the execution role's policies, and what the functions need at runtime to the boundary. The execution role carries no boundary, so a permission added to the boundary never fixes a deploy.
+- Both are scoped by name prefix (`<stage>-*`, or `<stage without hyphens>*` for secrets and some other kinds). Give a resource whose CloudFormation-generated name wouldn't match an explicit name, e.g. `Names.uniqueResourceName(this, { separator: '/' })` as the Stripe and unsubscribe secrets do.
+- Cover the new statements in `packages/common/scripts/src/setup-stage.test.ts`, and re-run the script for each stage before the deploy.
+
 The constructs it composes are described in `packages/common/constructs/CLAUDE.md`, and the per-stage config in `packages/common/infra-config/CLAUDE.md`.
