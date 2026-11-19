@@ -12,6 +12,7 @@ import type { Violation } from './common.js';
 import { COUPONS_CHECKS } from './coupons.js';
 import { CURRICULUM_CHECKS } from './curriculum.js';
 import { DISCUSSION_CHECKS } from './discussion.js';
+import { EARNINGS_CHECKS } from './earnings.js';
 import { INSTRUCTOR_PROFILES_CHECKS } from './instructor-profiles.js';
 import { MEDIA_CHECKS } from './media.js';
 import { NOTIFICATIONS_CHECKS } from './notifications.js';
@@ -35,6 +36,7 @@ const CHECKS = [
   ...INSTRUCTOR_PROFILES_CHECKS,
   ...COUPONS_CHECKS,
   ...PAYMENTS_CHECKS,
+  ...EARNINGS_CHECKS,
 ] as const;
 
 export type InvariantName = (typeof CHECKS)[number]['name'];

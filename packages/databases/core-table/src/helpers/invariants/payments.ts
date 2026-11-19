@@ -65,6 +65,7 @@ export const checkOrderShape = (snapshot: TableSnapshot): Violation[] => {
       'userId',
       'courseId',
       'accountId',
+      'mode',
       'currency',
       'status',
       'expiresAt',
@@ -349,13 +350,14 @@ export const checkOrderAccountKnown = (
       connection?.status === 'active' &&
       connection.changedAt !== undefined &&
       order.createdAt > connection.changedAt &&
-      order.accountId !== connection.accountId
+      (order.accountId !== connection.accountId ||
+        order.mode !== connection.mode)
     ) {
       return [
         violation(
           'order-account-known',
           { orderId: order.orderId },
-          `names ${order.accountId}, not the connected account ${connection.accountId}`,
+          `names ${order.accountId} (${order.mode}), not the connected account ${connection.accountId} (${connection.mode})`,
         ),
       ];
     }

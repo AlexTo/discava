@@ -22,6 +22,7 @@ describe('payments: price, orders and the connection', () => {
     userId: 'student',
     courseId: 'c1',
     accountId: 'acct_1',
+    mode: 'test' as const,
     listAmount: 1999,
     amount: 1999,
     currency: 'USD',
@@ -99,6 +100,7 @@ describe('payments: price, orders and the connection', () => {
       [{ amount: -1 }, /amount -1/],
       [{ currency: 'JPY' }, /currency JPY/],
       [{ accountId: '' }, /accountId is not set/],
+      [{ mode: undefined }, /mode is not set/],
       [{ paidAt: undefined }, /paidAt is not set/],
       [{ paymentIntentId: undefined }, /no payment intent/],
       [
@@ -421,6 +423,14 @@ describe('payments: price, orders and the connection', () => {
       paidTable();
       table.orders[0].accountId = 'acct_other';
       expect(violationsOf('order-account-known')).toHaveLength(1);
+    });
+
+    it('reports a new order of the same account but another mode', () => {
+      paidTable();
+      table.orders[0].mode = 'live';
+      expect(violationsOf('order-account-known')[0]?.message).toMatch(
+        /\(live\), not the connected account acct_1 \(test\)/,
+      );
     });
 
     it('accepts an order from an earlier connection', () => {

@@ -18,6 +18,9 @@ import type { createCourseRatingEntity } from '../../entities/course-rating.js';
 import type { createCourseStatsEntity } from '../../entities/course-stats.js';
 import type { createDiscussionPostEntity } from '../../entities/discussion-post.js';
 import type { createDiscussionVoteEntity } from '../../entities/discussion-vote.js';
+import type { createEarningDayEntity } from '../../entities/earning-day.js';
+import type { createEarningEntryEntity } from '../../entities/earning-entry.js';
+import type { createEarningOrderEntity } from '../../entities/earning-order.js';
 import type { createEnrolmentEntity } from '../../entities/enrolment.js';
 import type { createInstructorProfileEntity } from '../../entities/instructor-profile.js';
 import type { createItemCompletionEntity } from '../../entities/item-completion.js';
@@ -31,6 +34,8 @@ import type { createNotificationStateEntity } from '../../entities/notification-
 import type { createOrderEntity } from '../../entities/order.js';
 import type { createPaymentChangeEntity } from '../../entities/payment-change.js';
 import type { createPaymentConnectionEntity } from '../../entities/payment-connection.js';
+import type { createPayoutEntity } from '../../entities/payout.js';
+import type { createPayoutAccountEntity } from '../../entities/payout-account.js';
 import type { createPeriodStatsEntity } from '../../entities/period-stats.js';
 import type { createProfileHandleClaimEntity } from '../../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../../entities/progress.js';
@@ -373,6 +378,7 @@ export interface TableSnapshot {
     | 'userId'
     | 'courseId'
     | 'accountId'
+    | 'mode'
     | 'listAmount'
     | 'amount'
     | 'currency'
@@ -413,6 +419,72 @@ export interface TableSnapshot {
     | 'accountId'
     | 'keyLast4'
     | 'step'
+  >[];
+  payoutAccounts: Pick<
+    Item<typeof createPayoutAccountEntity>,
+    'instructorId' | 'accountId' | 'mode' | 'connectedAccountId' | 'status'
+  >[];
+  earningEntries: Pick<
+    Item<typeof createEarningEntryEntity>,
+    | 'instructorId'
+    | 'courseId'
+    | 'orderId'
+    | 'accountId'
+    | 'mode'
+    | 'entryId'
+    | 'kind'
+    | 'currency'
+    | 'grossMinor'
+    | 'discountMinor'
+    | 'refundMinor'
+    | 'feeMinor'
+    | 'netMinor'
+    | 'feeBasisPoints'
+    | 'occurredAt'
+    | 'releaseAt'
+    | 'payoutId'
+    | 'settlement'
+  >[];
+  earningDays: Pick<
+    Item<typeof createEarningDayEntity>,
+    | 'instructorId'
+    | 'courseId'
+    | 'currency'
+    | 'day'
+    | 'salesCount'
+    | 'grossMinor'
+    | 'discountMinor'
+    | 'refundMinor'
+    | 'feeMinor'
+    | 'netMinor'
+  >[];
+  earningOrders: Pick<
+    Item<typeof createEarningOrderEntity>,
+    | 'orderId'
+    | 'courseId'
+    | 'currency'
+    | 'accountId'
+    | 'mode'
+    | 'grossMinor'
+    | 'discountMinor'
+    | 'paidMinor'
+    | 'feeMinor'
+    | 'feeBasisPoints'
+    | 'instructorIds'
+    | 'refundedMinor'
+  >[];
+  payouts: Pick<
+    Item<typeof createPayoutEntity>,
+    | 'instructorId'
+    | 'payoutId'
+    | 'accountId'
+    | 'mode'
+    | 'currency'
+    | 'status'
+    | 'amountMinor'
+    | 'entryCount'
+    | 'transferId'
+    | 'failureReason'
   >[];
 }
 
@@ -457,6 +529,11 @@ export const SNAPSHOT_ENTITIES = {
   orders: 'order',
   paymentConnections: 'paymentConnection',
   paymentChanges: 'paymentChange',
+  payoutAccounts: 'payoutAccount',
+  earningEntries: 'earningEntry',
+  earningDays: 'earningDay',
+  earningOrders: 'earningOrder',
+  payouts: 'payout',
 } as const satisfies Record<
   keyof TableSnapshot,
   keyof Awaited<ReturnType<typeof createCoreTableService>>['entities']

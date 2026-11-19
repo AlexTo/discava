@@ -23,6 +23,7 @@ const full = {
   userId: 'user-1',
   courseId: 'course-1',
   accountId: 'acct_1',
+  mode: 'test' as const,
   courseTitle: 'Intro',
   listAmount: 1999,
   amount: 1999,
@@ -53,6 +54,15 @@ describe('order', () => {
     const record: Record<string, unknown> = { ...full };
     delete record[field];
     expect(() => order.create(record as never).params()).toThrow();
+  });
+
+  it('refuses a mode other than test or live', () => {
+    expect(() =>
+      order.create({ ...full, mode: 'sandbox' as never }).params(),
+    ).toThrow();
+    for (const mode of ['test', 'live'] as const) {
+      expect(() => order.create({ ...full, mode }).params()).not.toThrow();
+    }
   });
 
   it.each(['pending', 'paid', 'expired', 'refunded'] as const)(
