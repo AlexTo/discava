@@ -344,6 +344,21 @@ export {
   rotateKey,
 } from './helpers/payment-connection.js';
 export {
+  claimPayout,
+  createPayout,
+  listActiveAccounts,
+  listUnsettledPayouts,
+  markPayoutFailed,
+  markPayoutSent,
+  openEntries,
+  PAYOUT_BATCH_SIZE,
+  PAYOUT_CLAIM_GRACE_MS,
+  type PayoutAccountRecord,
+  type PayoutRecord,
+  releasePayout,
+  saveAccountStatus,
+} from './helpers/payout.js';
+export {
   type Curriculum,
   computeProgress,
   type LessonStatus,

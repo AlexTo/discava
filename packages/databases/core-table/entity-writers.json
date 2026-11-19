@@ -106,7 +106,10 @@
     "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
   },
   "earningEntry": {
-    "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
+    "core-table": [
+      "packages/databases/core-table/src/helpers/earning.ts",
+      "packages/databases/core-table/src/helpers/payout.ts"
+    ]
   },
   "earningOrder": {
     "core-table": ["packages/databases/core-table/src/helpers/earning.ts"]
@@ -189,8 +192,12 @@
       "packages/databases/core-table/src/helpers/payment-connection.ts"
     ]
   },
-  "payout": {},
-  "payoutAccount": {},
+  "payout": {
+    "core-table": ["packages/databases/core-table/src/helpers/payout.ts"]
+  },
+  "payoutAccount": {
+    "core-table": ["packages/databases/core-table/src/helpers/payout.ts"]
+  },
   "periodStats": {
     "core-table": [
       "packages/databases/core-table/src/helpers/analytics-rebuild.ts",
