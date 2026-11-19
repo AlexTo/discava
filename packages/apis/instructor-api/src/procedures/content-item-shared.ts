@@ -4,6 +4,7 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { isConditionalCheckFailed } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -32,7 +33,6 @@ import {
   bestEffortRetirePreviousVersions,
   type IDeletableVideoContentItem,
 } from '../lib/s3-client.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   DeleteContentItemInputSchema,
   DeleteContentItemOutputSchema,

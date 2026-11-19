@@ -4,11 +4,11 @@
  */
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { notificationDelivery } from './notification-delivery.js';
 import {
   createFakeTable,
   fakeNotification,
 } from './fake-notification-table.js';
+import { notificationDelivery } from './notification-delivery.js';
 import type { EmailConfig } from './send-email.js';
 
 const mocks = vi.hoisted(() => ({

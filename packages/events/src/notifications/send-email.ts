@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type EmailMessage, EmailPermanentError, sendEmail } from './email.js';
+
 import { signUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import {
   claimEmail,
@@ -18,6 +18,7 @@ import {
   releaseEmailClaim,
   skipEmail,
 } from '@discava/core-table';
+import { type EmailMessage, EmailPermanentError, sendEmail } from './email.js';
 import { renderNotificationEmail } from './email-template.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;

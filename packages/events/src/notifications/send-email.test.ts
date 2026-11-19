@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { EmailPermanentError, EmailTransientError } from './email.js';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { EmailPermanentError, EmailTransientError } from './email.js';
 import {
   createFakeTable,
   type FakeNotification,

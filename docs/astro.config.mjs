@@ -63,6 +63,7 @@ export default defineConfig({
           items: [
             'guides/announcements',
             'guides/notifications',
+            'guides/lesson-discussions',
             'guides/reviews',
           ],
         },
