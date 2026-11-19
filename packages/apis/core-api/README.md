@@ -13,7 +13,7 @@ Run `nx test core-api` to execute the unit tests via [Vitest](https://vitest.dev
 ## Auth
 
 Procedures built on `protectedProcedure` (see [src/init.ts](src/init.ts)) require `ctx.user`,
-which is populated by the auth middleware ([src/middleware/auth.ts](src/middleware/auth.ts))
+which is populated by the auth middleware ([`createAuthPlugin`](../../common/server-utils/src/trpc-middleware.ts))
 from `event.requestContext.authorizer.claims`. In the deployed API this is set by CoreApi's
 `CognitoUserPoolsAuthorizer`, so `ctx.user` is only missing if the authorizer config changes.
 

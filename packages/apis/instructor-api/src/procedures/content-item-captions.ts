@@ -14,6 +14,7 @@ import {
   presignLessonFileUpload,
 } from '@discava/common-server-utils/lesson-files';
 import { manifestNonce } from '@discava/common-server-utils/media-keys';
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { captionLabel } from '@discava/common-web-utils/caption-languages';
 import {
   applyCaptionChange,
@@ -36,7 +37,6 @@ import {
   requireCourseInstructor,
   requireNotArchived,
 } from '../lib/course-lifecycle.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   AttachCaptionInputSchema,
   CaptionTracksOutputSchema,

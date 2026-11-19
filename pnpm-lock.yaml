@@ -834,10 +834,19 @@ importers:
       '@aws-lambda-powertools/logger':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
+      '@aws-lambda-powertools/metrics':
+        specifier: 'catalog:'
+        version: 2.36.0(@middy/core@7.9.2)
       '@aws-lambda-powertools/parameters':
         specifier: 'catalog:'
         version: 2.36.0(@aws-sdk/client-appconfigdata@3.1164.0)(@aws-sdk/client-dynamodb@3.1164.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1164.0))(@middy/core@7.9.2)
+      '@aws-lambda-powertools/tracer':
+        specifier: 'catalog:'
+        version: 2.36.0(@middy/core@7.9.2)
       '@aws-sdk/client-appconfigdata':
+        specifier: 'catalog:'
+        version: 3.1164.0
+      '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1164.0
       '@aws-sdk/client-s3':
@@ -861,13 +870,34 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@discava/core-table':
+        specifier: workspace:*
+        version: link:../../databases/core-table
+      '@trpc/server':
+        specifier: 'catalog:'
+        version: 11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3)
+      aws-xray-sdk-core:
+        specifier: 'catalog:'
+        version: 3.12.0
+      cors:
+        specifier: 'catalog:'
+        version: 2.8.6
+      electrodb:
+        specifier: 'catalog:'
+        version: 3.9.3(@aws-sdk/client-dynamodb@3.1164.0)
       tslib:
         specifier: ^2.3.0
         version: 2.8.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@types/aws-lambda':
         specifier: 'catalog:'
         version: 8.10.164
+      '@types/cors':
+        specifier: 'catalog:'
+        version: 2.8.19
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6

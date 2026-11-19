@@ -6,7 +6,7 @@ import { initTRPC } from '@trpc/server';
 import { CreateAWSLambdaContextOptions } from '@trpc/server/adapters/aws-lambda';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { describe, expect, it } from 'vitest';
-import { createAuthPlugin, IAuthContext } from './auth.js';
+import { createAuthPlugin, IAuthContext } from './trpc-middleware.js';
 
 const buildEvent = (claims?: Record<string, unknown>): APIGatewayProxyEvent =>
   ({

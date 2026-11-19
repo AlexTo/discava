@@ -5,8 +5,11 @@
   "type": "module",
   "dependencies": {
     "@aws-lambda-powertools/logger": "catalog:",
+    "@aws-lambda-powertools/metrics": "catalog:",
     "@aws-lambda-powertools/parameters": "catalog:",
+    "@aws-lambda-powertools/tracer": "catalog:",
     "@aws-sdk/client-appconfigdata": "catalog:",
+    "@aws-sdk/client-dynamodb": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
     "@aws-sdk/client-sqs": "catalog:",
@@ -14,10 +17,17 @@
     "@aws-sdk/client-sesv2": "catalog:",
     "@aws-sdk/cloudfront-signer": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
-    "tslib": "^2.3.0"
+    "@discava/core-table": "workspace:*",
+    "@trpc/server": "catalog:",
+    "aws-xray-sdk-core": "catalog:",
+    "cors": "catalog:",
+    "electrodb": "catalog:",
+    "tslib": "^2.3.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/aws-lambda": "catalog:",
+    "@types/cors": "catalog:",
     "@types/node": "catalog:"
   },
   "license": "Apache-2.0"

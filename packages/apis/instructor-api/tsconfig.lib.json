@@ -6,7 +6,8 @@
     "tsBuildInfoFile": "../../../dist/packages/apis/instructor-api/tsc/tsconfig.lib.tsbuildinfo",
     "emitDeclarationOnly": false,
     "types": [
-      "node"
+      "node",
+      "aws-lambda"
     ]
   },
   "include": [

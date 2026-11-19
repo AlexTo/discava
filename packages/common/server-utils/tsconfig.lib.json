@@ -12,7 +12,11 @@
   "include": [
     "src/**/*.ts"
   ],
-  "references": [],
+  "references": [
+    {
+      "path": "../../databases/core-table/tsconfig.lib.json"
+    }
+  ],
   "exclude": [
     "vite.config.ts",
     "vite.config.mts",

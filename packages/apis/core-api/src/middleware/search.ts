@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { IMiddlewareContext } from '@discava/common-server-utils/trpc-middleware';
 import { getOpenSearchClient } from '@discava/search';
 import { initTRPC } from '@trpc/server';
 
@@ -15,7 +16,7 @@ export type ISearchContext = {
 let searchClientPromise: ReturnType<typeof getOpenSearchClient> | undefined;
 
 export const createSearchPlugin = () => {
-  const t = initTRPC.context<ISearchContext>().create();
+  const t = initTRPC.context<ISearchContext & IMiddlewareContext>().create();
 
   return t.procedure.use(async (opts) => {
     if (!searchClientPromise) {

@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import type { ICoreTableContext } from '@discava/common-server-utils/trpc-middleware';
 import { plainTextExcerpt } from '@discava/common-tiptap';
 import {
   AnnouncementInputError,
@@ -18,7 +20,6 @@ import {
   requireCourseInstructor,
   transactionConflict,
 } from '../lib/course-lifecycle.js';
-import type { ICoreTableContext } from '../middleware/core-table.js';
 import {
   CreateAnnouncementInputSchema,
   CreateAnnouncementOutputSchema,
