@@ -100,7 +100,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
           priceAmount: 1999,
           priceCurrency: 'USD',
         }),
-      ).rejects.toMatchObject({ data: { code: 'BAD_REQUEST' } });
+      ).rejects.toMatchObject({ data: { code: 'PRECONDITION_FAILED' } });
     }
     // else: checkouts from other scenarios were open; nothing to check here.
   });
