@@ -240,6 +240,12 @@ export class CoreApiStack extends Stack {
       'NotificationUnsubscribe',
     );
     coreTable.grantReadWriteData(unsubscribe);
+    const runtimeConfig = RuntimeConfig.ensure(this);
+    unsubscribe.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(unsubscribe);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(unsubscribe);
     unsubscribe.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
