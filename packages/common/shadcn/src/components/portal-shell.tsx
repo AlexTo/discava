@@ -1,0 +1,227 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import Config from '@discava/common-web-utils/app-config';
+import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
+import type { LucideIcon } from 'lucide-react';
+import * as React from 'react';
+import { BreadcrumbOverrideContext } from './breadcrumb-label';
+import { NotificationBell, type Portal } from './notification-bell-container';
+import { MAIN_CONTENT_ID, SkipLink } from './skip-link';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from './ui/breadcrumb';
+import { Separator } from './ui/separator';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from './ui/sidebar';
+import { UserMenu } from './user-menu';
+
+// A crumb links to its own path only: the current page's search params (a new
+// quiz's lesson, say) mean nothing to the pages above it.
+export const getBreadcrumbs = (
+  matchRoute: ReturnType<typeof useMatchRoute>,
+  pathName: string,
+  defaultBreadcrumb: string,
+  overrides: Record<string, string>,
+  segmentLabels: Record<string, string> = {},
+  availableRoutes?: string[],
+) => {
+  const segments = [
+    defaultBreadcrumb,
+    ...pathName.split('/').filter((segment) => segment !== ''),
+  ];
+
+  return segments.map((segment, i) => {
+    const href =
+      i === 0
+        ? '/'
+        : `/${segments
+            .slice(1, i + 1)
+            .join('/')
+            .replace('//', '/')}`;
+
+    const matched =
+      !availableRoutes || availableRoutes.find((r) => matchRoute({ to: href }));
+
+    return {
+      href: matched ? href : '#',
+      text: overrides[href] ?? segmentLabels[segment] ?? segment,
+    };
+  });
+};
+
+export interface PortalNavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+}
+
+export interface PortalShellProps {
+  /** The portal this shell is in, for the notification bell's links. */
+  portal: Portal;
+  /** The sidebar group's label. */
+  label: string;
+  navItems: PortalNavItem[];
+  /**
+   * Labels for path segments that aren't titles of anything a route loads
+   * (e.g. 'my-courses' -> 'My Courses'). Titles a route loads go through
+   * `useBreadcrumbLabel` instead, keyed by full pathname. Keep the object the
+   * same between renders (a module constant).
+   */
+  segmentLabels?: Record<string, string>;
+  /** Shown in the header before the notification bell. */
+  headerActions?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+// A portal's signed-in layout: the sidebar, a header with the notification
+// bell and user menu, and breadcrumbs above the page.
+export const PortalShell = ({
+  portal,
+  label,
+  navItems,
+  segmentLabels,
+  headerActions,
+  children,
+}: PortalShellProps) => {
+  const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
+    { href: string; text: string }[]
+  >([{ text: '/', href: '/' }]);
+  const matchRoute = useMatchRoute();
+  const { pathname } = useLocation();
+  const [overrides, setOverrides] = React.useState<Record<string, string>>({});
+
+  const setOverride = React.useCallback(
+    (path: string, label: string | undefined) => {
+      setOverrides((prev) => {
+        if (label === undefined) {
+          if (!(path in prev)) return prev;
+          const next = { ...prev };
+          delete next[path];
+          return next;
+        }
+        if (prev[path] === label) return prev;
+        return { ...prev, [path]: label };
+      });
+    },
+    [],
+  );
+
+  // Memoized: consumers (useBreadcrumbLabel) depend on this identity.
+  const breadcrumbOverrideContextValue = React.useMemo(
+    () => ({ setOverride }),
+    [setOverride],
+  );
+
+  React.useEffect(() => {
+    const breadcrumbs = getBreadcrumbs(
+      matchRoute,
+      pathname,
+      '/',
+      overrides,
+      segmentLabels,
+    );
+    setActiveBreadcrumbs(breadcrumbs);
+  }, [matchRoute, pathname, overrides, segmentLabels]);
+
+  return (
+    <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
+      <SidebarProvider>
+        <SkipLink />
+        <Sidebar>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>{label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {navItems.map((item) => (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton asChild>
+                        <Link to={item.to} preload="intent">
+                          <item.icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+        </Sidebar>
+        <SidebarInset>
+          <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="-ml-1" />
+              <Separator orientation="vertical" className="h-6" />
+              <div className="flex items-center gap-2">
+                <img
+                  width={40}
+                  height={40}
+                  alt={`${Config.applicationName} logo`}
+                  className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
+                  src={Config.logo}
+                />
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-semibold">
+                    {Config.applicationName}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              {headerActions}
+              <NotificationBell portal={portal} />
+              <UserMenu />
+            </div>
+          </header>
+          <div
+            id={MAIN_CONTENT_ID}
+            tabIndex={-1}
+            className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
+          >
+            <Breadcrumb>
+              <BreadcrumbList>
+                {activeBreadcrumbs.map((crumb, index) => (
+                  <React.Fragment key={crumb.href || index}>
+                    <BreadcrumbItem>
+                      {index === activeBreadcrumbs.length - 1 ? (
+                        <BreadcrumbPage>{crumb.text}</BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink asChild>
+                          <Link to={crumb.href}>{crumb.text}</Link>
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                    {index < activeBreadcrumbs.length - 1 && (
+                      <BreadcrumbSeparator />
+                    )}
+                  </React.Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
+            {children}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </BreadcrumbOverrideContext.Provider>
+  );
+};

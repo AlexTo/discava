@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { getBreadcrumbs } from '.';
+import { getBreadcrumbs } from './portal-shell';
 
 const matchAll = (() => true) as unknown as Parameters<
   typeof getBreadcrumbs
@@ -12,11 +12,17 @@ const matchAll = (() => true) as unknown as Parameters<
 describe('getBreadcrumbs', () => {
   it('links each crumb to its own path, labelled from overrides', () => {
     expect(
-      getBreadcrumbs(matchAll, '/my-courses/course-1/quiz/new', '/', {
-        '/my-courses/course-1': 'Course One',
-        '/my-courses/course-1/quiz': 'Quizzes',
-        '/my-courses/course-1/quiz/new': 'New quiz',
-      }),
+      getBreadcrumbs(
+        matchAll,
+        '/my-courses/course-1/quiz/new',
+        '/',
+        {
+          '/my-courses/course-1': 'Course One',
+          '/my-courses/course-1/quiz': 'Quizzes',
+          '/my-courses/course-1/quiz/new': 'New quiz',
+        },
+        { 'my-courses': 'My Courses' },
+      ),
     ).toEqual([
       { href: '/', text: '/' },
       { href: '/my-courses', text: 'My Courses' },

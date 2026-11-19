@@ -3,20 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
-import { safeReturnTo } from '@discava/common-web-utils/return-to';
+import { currentPath, safeReturnTo } from '@discava/common-web-utils/return-to';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
-import React, { PropsWithChildren } from 'react';
+import React, { PropsWithChildren, useEffect } from 'react';
 import { AuthProvider, AuthProviderProps, useAuth } from 'react-oidc-context';
-import { router } from '../../router';
+import { ErrorAlert } from './error-alert';
+import { Spinner } from './ui/spinner';
+
+export interface CognitoAuthProps extends PropsWithChildren {
+  /**
+   * Redirects to sign-in by itself when nobody is signed in, and renders the
+   * children only once someone is. Without it the children render whether or
+   * not they are (the portal's routes send people to sign in).
+   */
+  autoSignIn?: boolean;
+  /**
+   * Called with the path to show after sign-in: the page sign-in started from
+   * (the OIDC state the portal sends), or `/`. It runs above the portal's
+   * router, so it navigates however the portal can at that point.
+   */
+  onReturn: (path: string) => void;
+}
 
 /**
  * Sets up sign-in: with Cognito, from runtime-config.json's cognitoProps, or
  * in local-dev mode with the local OIDC server the runtime config override
  * sets as `localOidc` (#226).
  */
-const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
+const CognitoAuth: React.FC<CognitoAuthProps> = ({
+  children,
+  autoSignIn = false,
+  onReturn,
+}) => {
   const { cognitoProps, localOidc } = useRuntimeConfig();
 
   if (!cognitoProps && !localOidc) {
@@ -38,32 +56,39 @@ const CognitoAuth: React.FC<PropsWithChildren> = ({ children }) => {
     redirect_uri: window.location.origin,
     response_type: 'code',
     scope: 'email openid profile',
-    // Back to the page sign-in started from (the OIDC state signin.tsx
-    // sends), or home. Also clears the code from the URL.
+    // Also clears the code from the URL.
     onSigninCallback: (user) => {
       const returnTo = safeReturnTo(
         (user as { state?: { returnTo?: unknown } } | void)?.state?.returnTo,
       );
-      // Runs above <RouterProvider> (see main.tsx), so useNavigate isn't
-      // available here — navigate via the router instance directly instead
-      // of window.location.replace, to avoid a full page reload.
-      if (returnTo) {
-        router.navigate({ href: returnTo, replace: true });
-      } else {
-        router.navigate({ to: '/', replace: true });
-      }
+      onReturn(returnTo ?? '/');
     },
   };
 
   return (
     <AuthProvider {...cognitoAuthConfig}>
-      <CognitoAuthInternal>{children}</CognitoAuthInternal>
+      <CognitoAuthInternal autoSignIn={autoSignIn}>
+        {children}
+      </CognitoAuthInternal>
     </AuthProvider>
   );
 };
 
-const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
+const CognitoAuthInternal: React.FC<
+  PropsWithChildren<{ autoSignIn: boolean }>
+> = ({ children, autoSignIn }) => {
   const auth = useAuth();
+
+  useEffect(() => {
+    if (autoSignIn && !auth.isAuthenticated && !auth.isLoading) {
+      // The provider hands the state back to onSigninCallback above.
+      auth.signinRedirect({ state: { returnTo: currentPath() } });
+    }
+  }, [autoSignIn, auth]);
+
+  if (autoSignIn && auth.isAuthenticated) {
+    return children;
+  }
 
   if (auth.error) {
     return (
@@ -76,7 +101,7 @@ const CognitoAuthInternal: React.FC<PropsWithChildren> = ({ children }) => {
     );
   }
 
-  if (auth.isLoading) {
+  if (autoSignIn || auth.isLoading) {
     return <Spinner />;
   }
 

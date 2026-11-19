@@ -922,9 +922,18 @@ importers:
       '@discava/common-web-utils':
         specifier: workspace:*
         version: link:../web-utils
+      '@discava/core-api':
+        specifier: workspace:*
+        version: link:../../apis/core-api
       '@tailwindcss/typography':
         specifier: 'catalog:'
         version: 0.5.20
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.107.1(@types/react@19.3.0)(react@19.3.1)
+      '@tanstack/react-router':
+        specifier: 'catalog:'
+        version: 1.170.46(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@tiptap/core':
         specifier: 'catalog:'
         version: 3.31.3(@tiptap/pm@3.31.3)
@@ -934,6 +943,12 @@ importers:
       '@tiptap/static-renderer':
         specifier: 'catalog:'
         version: 3.31.3(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@trpc/client':
+        specifier: 'catalog:'
+        version: 11.25.0(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(typescript@6.0.3)
+      '@trpc/tanstack-react-query':
+        specifier: 'catalog:'
+        version: 11.25.0(@tanstack/react-query@5.107.1(@types/react@19.3.0)(react@19.3.1))(@trpc/client@11.25.0(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.25.0(@types/aws-lambda@8.10.164)(typescript@6.0.3))(react@19.3.1)(typescript@6.0.3)
       '@vitest/coverage-v8':
         specifier: 'catalog:'
         version: 5.1.0(vitest@5.1.0)
@@ -955,6 +970,9 @@ importers:
       lucide-react:
         specifier: 'catalog:'
         version: 1.70.0(@types/react@19.3.0)(react@19.3.1)
+      oidc-client-ts:
+        specifier: 'catalog:'
+        version: 3.5.0
       radix-ui:
         specifier: 'catalog:'
         version: 1.8.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -964,6 +982,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.3.1(react@19.3.1)
+      react-oidc-context:
+        specifier: 'catalog:'
+        version: 3.3.1(oidc-client-ts@3.5.0)(react@19.3.1)
       recharts:
         specifier: 'catalog:'
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react-is@17.0.2)(react@19.3.1)(redux@5.0.1)
@@ -1038,6 +1059,9 @@ importers:
       event-source-polyfill:
         specifier: 'catalog:'
         version: 1.0.31
+      oidc-client-ts:
+        specifier: 'catalog:'
+        version: 3.5.0
       react:
         specifier: 'catalog:'
         version: 19.3.1

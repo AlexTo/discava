@@ -2,10 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import {
-  NotificationBell as Bell,
-  type NotificationBellItem,
-} from '@discava/common-shadcn/components/notification-bell';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import {
   useInfiniteQuery,
@@ -15,9 +11,12 @@ import {
 } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useCoreApi } from '../api';
+import { useCoreApi } from '../lib/core-api';
+import {
+  NotificationBell as Bell,
+  type NotificationBellItem,
+} from './notification-bell';
 
-const THIS_PORTAL = 'student';
 const PORTAL_ADDRESS_KEYS = {
   student: 'StudentPortal',
   instructor: 'InstructorPortal',
@@ -25,9 +24,12 @@ const PORTAL_ADDRESS_KEYS = {
 } as const;
 const POLL_MS = 60_000;
 
-// The shared bell fed by core-api: the unread count polls every minute and on
-// window focus, the list loads when the popover opens.
-export const NotificationBell = () => {
+export type Portal = NotificationBellItem['link']['portal'];
+
+// The bell fed by core-api, for the portal it runs in: the unread count polls
+// every minute and on window focus, the list loads when the popover opens.
+// Links to this portal go through its router, others to the portal's address.
+export const NotificationBell = ({ portal }: { portal: Portal }) => {
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -75,7 +77,7 @@ export const NotificationBell = () => {
       markRead.mutate({ position: item.position });
     }
     setOpen(false);
-    if (item.link.portal === THIS_PORTAL) {
+    if (item.link.portal === portal) {
       router.navigate({ to: item.link.path });
       return;
     }
