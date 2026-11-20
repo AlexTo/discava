@@ -32,7 +32,7 @@ export const createSubmissionFeedbackEntity = async () =>
           type: 'string',
           required: true,
         },
-        // A ULID, unique per round.
+        // A UUID v7, unique per round and sortable by time.
         feedbackId: {
           type: 'string',
           required: true,

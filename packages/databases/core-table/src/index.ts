@@ -95,6 +95,21 @@ export {
   announcementWrites,
 } from './helpers/announcement.js';
 export {
+  type AmendGradeWrite,
+  amendGradeWrites,
+  FEEDBACK_MAX_LENGTH,
+  isValidPoints,
+  MAX_SUBMISSION_NOTICE_INSTRUCTORS,
+  type RequestResubmissionWrite,
+  type ReturnSubmissionWrite,
+  requestResubmissionWrites,
+  returnSubmissionWrites,
+  type SubmissionsReceivedNotice,
+  submissionsReceivedNotificationWrites,
+  type WaitingKeys,
+  waitingKeys,
+} from './helpers/assignment-grading.js';
+export {
   type AssignmentSubmissionFile,
   type AssignmentSubmissionWrite,
   assignmentSubmissionWrites,

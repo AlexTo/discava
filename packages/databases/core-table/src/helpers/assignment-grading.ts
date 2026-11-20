@@ -69,7 +69,7 @@ export interface SubmissionKey {
 }
 
 interface RoundInput {
-  /** A new ULID for the round, also the notification's dedupe key. */
+  /** A new UUID v7 for the round, also the notification's dedupe key. */
   feedbackId: string;
   /** The instructor, and when. */
   givenBy: string;
