@@ -27,6 +27,9 @@ export const checkTableInvariants = (snapshot: TableSnapshot) => {
         contributions('itemCompletion', r),
       ),
       ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
+      ...snapshot.videoAnswerSheets.map((r) =>
+        contributions('videoAnswerSheet', r),
+      ),
     ]),
   );
   return checkAllInvariants({
@@ -64,8 +67,9 @@ export const shown = { visibility: 'visible' as const, publishedAt: T };
 export const prefix = 'courses/c1/modules/m1/lessons/l1/content-items';
 
 // A published course whose student has done the text item and passed the quiz
-// (on their second attempt), but not the video or the file: two of four items,
-// so 50% and the lesson in progress. Items are in order: text, quiz, video, file.
+// (on their second attempt), and answered a question on the video without
+// marking it done, but not the file: two of four items, so 50% and the lesson
+// in progress. Items are in order: text, quiz, video, file.
 export const consistentTable = (): TableSnapshot => ({
   courses: [
     {
@@ -109,7 +113,8 @@ export const consistentTable = (): TableSnapshot => ({
       status: 'ready',
       order: 3,
       s3Key: `${prefix}/video/n1/master.m3u8`,
-      studentActivityCount: 0,
+      quizVersion: 2,
+      studentActivityCount: 1,
     },
     {
       ...ids,
@@ -190,6 +195,23 @@ export const consistentTable = (): TableSnapshot => ({
   submissionFeedback: [],
   submissionNotices: [],
   certificates: [],
+  // The student answered the video's question q1 wrongly, with no completion.
+  videoAnswerSheets: [
+    {
+      ...ids,
+      userId: 'student',
+      contentItemId: 'video',
+      answers: {
+        q1: {
+          optionIds: ['x'],
+          correct: false,
+          answeredAt: AT.a1,
+          quizVersion: 2,
+        },
+      },
+      answerCount: 1,
+    },
+  ],
   videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],
   // What the stream handler leaves for the records above: one enrolment on
@@ -233,6 +255,14 @@ export const consistentTable = (): TableSnapshot => ({
       contentItemId: 'quiz',
       questionId: 'q2',
       attempts: 2,
+      misses: 1,
+    },
+    // The video question the student missed.
+    {
+      courseId: 'c1',
+      contentItemId: 'video',
+      questionId: 'q1',
+      attempts: 1,
       misses: 1,
     },
   ],
@@ -320,6 +350,9 @@ export const testHelpers = (getTable: () => TableSnapshot) => {
       sumContributions([
         ...getTable().quizAttempts.map((r) => contributions('quizAttempt', r)),
         ...getTable().quizSummaries.map((r) => contributions('quizSummary', r)),
+        ...getTable().videoAnswerSheets.map((r) =>
+          contributions('videoAnswerSheet', r),
+        ),
       ]),
     );
     getTable().quizQuestionStats = items

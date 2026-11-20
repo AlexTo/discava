@@ -27,12 +27,13 @@ export const ANALYTICS_STREAM_FILTERS: readonly {
       'quizSummary',
       'itemCompletion',
       'quizAttempt',
+      'videoAnswerSheet',
     ],
   },
   {
     eventName: 'MODIFY',
     image: 'NewImage',
-    entities: ['enrolment', 'progress', 'quizSummary'],
+    entities: ['enrolment', 'progress', 'quizSummary', 'videoAnswerSheet'],
   },
   {
     eventName: 'REMOVE',

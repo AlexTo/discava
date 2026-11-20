@@ -135,6 +135,41 @@ const questionCounts = (image: Record<string, unknown>): Delta[] => {
   });
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+// A video answer sheet's entries, each with the question it answers. An
+// entry is added once and never changed, so a sheet with one more entry
+// contributes exactly that entry's counts.
+const sheetEntries = (image: Record<string, unknown>) =>
+  isRecord(image.answers)
+    ? Object.entries(image.answers).flatMap(([questionId, entry]) =>
+        isRecord(entry) ? [{ questionId, entry }] : [],
+      )
+    : [];
+
+// Each answered question is an attempt at it, and a miss when the recorded
+// answer was incorrect.
+const sheetCounts = (image: Record<string, unknown>): Delta[] => {
+  const courseId = text(image.courseId);
+  const contentItemId = text(image.contentItemId);
+  if (!courseId || !contentItemId) {
+    return [];
+  }
+  return sheetEntries(image).flatMap(({ questionId, entry }) => {
+    const delta = (attribute: string): Delta => ({
+      kind: 'quizQuestionStats',
+      courseId,
+      sk: questionStatsSk(contentItemId, questionId),
+      attribute,
+      amount: 1,
+    });
+    return entry.correct === false
+      ? [delta('attempts'), delta('misses')]
+      : [delta('attempts')];
+  });
+};
+
 const scoreCounts = (image: Record<string, unknown>): Delta[] => {
   const courseId = text(image.courseId);
   const contentItemId = text(image.contentItemId);
@@ -227,6 +262,15 @@ export const contributions = (entity: string, image: Image): Contributions => {
       };
     case 'quizSummary':
       return { counts: scoreCounts(image), members: [] };
+    case 'videoAnswerSheet':
+      return {
+        counts: sheetCounts(image),
+        members: sumContributions(
+          sheetEntries(image).map(({ entry }) =>
+            memberContributions(image.courseId, image.userId, entry.answeredAt),
+          ),
+        ).members,
+      };
     default:
       return NONE;
   }
