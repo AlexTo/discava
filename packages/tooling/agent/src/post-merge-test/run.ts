@@ -192,7 +192,6 @@ export const run = (deps: Deps): void => {
   if (!repository) {
     throw new Error('GITHUB_REPOSITORY must be set');
   }
-  const root = env.GITHUB_WORKSPACE ?? process.cwd();
   const dryRun = env.DRY_RUN === 'true';
   const testStage = env.TEST_STAGE || DEFAULT_TEST_STAGE;
 
@@ -252,10 +251,6 @@ export const run = (deps: Deps): void => {
     }
   }
 
-  const templateMd = readFileSync(
-    join(root, '.github/ISSUE_TEMPLATE/test-deployed-pr.md'),
-    'utf8',
-  );
   const tested = force
     ? new Set<number>()
     : testedPullRequests(markedIssueBodies(repository, gh));
@@ -277,7 +272,6 @@ export const run = (deps: Deps): void => {
       stage,
       deployedSha: deployedSha || pr.mergeCommit,
       deployRunUrl,
-      templateMd,
     });
     if (dryRun) {
       log(`${issue.title}\n\n${issue.body}`);

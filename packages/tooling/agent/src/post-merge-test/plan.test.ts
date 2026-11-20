@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   changeKind,
@@ -15,18 +13,9 @@ import {
   type MergedPullRequest,
   renderIssue,
   SKIP_LABEL,
-  standingSections,
   testedPullRequests,
   testMarker,
 } from './plan.js';
-
-const TEMPLATE = readFileSync(
-  join(
-    import.meta.dirname,
-    '../../../../../.github/ISSUE_TEMPLATE/test-deployed-pr.md',
-  ),
-  'utf8',
-);
 
 const pr = (over: Partial<MergedPullRequest> = {}): MergedPullRequest => ({
   number: 634,
@@ -168,13 +157,12 @@ describe('issueTitle', () => {
 });
 
 describe('renderIssue', () => {
-  it('carries the marker, the pull request and the standing instructions', () => {
+  it('carries the marker and what to test, and nothing on how', () => {
     const { body } = renderIssue({
       pr: pr({ files: [...pr().files, 'docs/x.md'] }),
       stage: 'discava-development',
       deployedSha: 'def456',
       deployRunUrl: 'https://github.com/o/r/actions/runs/1',
-      templateMd: TEMPLATE,
     });
     expect(body.startsWith(testMarker(634))).toBe(true);
     expect(body).toContain('- Pull request: #634');
@@ -182,17 +170,9 @@ describe('renderIssue', () => {
     expect(body).toContain('**UI change**');
     expect(body).toContain('Deployed files it changes (1)');
     expect(body).not.toContain('docs/x.md');
-    expect(body).toContain('DISCAVA_STUDENT_USERNAME');
-    expect(body).toContain('DISCAVA_ADMIN_PASSWORD');
-    expect(body).toContain('gh pr view 634');
-    expect(body).toContain('discava-development-*');
-    expect(body).not.toContain('<pr>');
-    expect(body).not.toContain('<stage>');
-    // The template's own "What to test" placeholder is not copied in.
-    expect(body.match(/## What to test/g)).toHaveLength(1);
-  });
-
-  it('fails on a template without the instructions', () => {
-    expect(() => standingSections('# nothing')).toThrow();
+    expect(body).toContain('deployed to `discava-development` at `def456`');
+    // The instructions are the agent's own prompt, not the issue's.
+    expect(body).not.toContain('## Instructions for the agent');
+    expect(body).not.toContain('DISCAVA_');
   });
 });

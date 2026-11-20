@@ -11,7 +11,6 @@ import { testMarker } from './plan.js';
 import { run } from './run.js';
 
 const REPOSITORY = 'o/r';
-const ROOT = join(import.meta.dirname, '../../../../..');
 const HEAD = 'head000';
 const PREV = 'prev000';
 
@@ -75,7 +74,6 @@ const runScenario = (scenario: Scenario) => {
       GITHUB_REPOSITORY: REPOSITORY,
       GITHUB_EVENT_PATH: eventPath,
       GITHUB_EVENT_NAME: 'workflow_run',
-      GITHUB_WORKSPACE: ROOT,
       ...scenario.env,
     },
     log: (message) => logs.push(message),
@@ -203,7 +201,6 @@ describe('run', () => {
     expect(created[0].label).toBe('openhands-test');
     expect(created[0].body).toContain(testMarker(11));
     expect(created[0].body).toContain(`at \`${HEAD}\``);
-    expect(created[0].body).toContain('DISCAVA_STUDENT_PASSWORD');
     expect(created[0].body).toContain('Issue it closes: #5');
   });
 

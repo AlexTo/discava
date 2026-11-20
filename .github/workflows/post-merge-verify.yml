@@ -4,8 +4,9 @@ name: Post-merge Verify
 # discava-development, labelled `openhands-test`: the test agent (OpenHands
 # polls for the label) then tests the change end to end on the deployed stack,
 # clicking through the portals with Playwright, calling the APIs as the Cognito
-# test users and checking the stored data, and reports on the issue. Its
-# standing instructions are in .github/ISSUE_TEMPLATE/test-deployed-pr.md.
+# test users and checking the stored data, and reports on the issue. The
+# issue says only what to test; how to test it is the agent's own prompt in
+# OpenHands (.github/ISSUE_TEMPLATE/test-deployed-pr.md is the by-hand form).
 # Each issue, and the pull request it tests, is locked as soon as the issue is
 # opened: the agent holds AWS credentials and reads both, so only
 # collaborators with write access may comment on them.

@@ -4,7 +4,9 @@
  */
 
 // Which merged pull requests get a test issue once the Deploy workflow has put
-// them on a stage, and what that issue says. The test agent (OpenHands polls
+// them on a stage, and what that issue says: only what to test. How to test
+// it is the test agent's own standing prompt, which nobody who can edit an
+// issue can change. The test agent (OpenHands polls
 // for the `openhands-test` label) then exercises the change on the deployed
 // stack: the portals with Playwright, the APIs with the test users' tokens,
 // and the data the change wrote.
@@ -146,26 +148,6 @@ export const issueTitle = (pr: { number: number; title: string }): string => {
   return `${prefix}${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}`.trimEnd();
 };
 
-const SECTION_HEADINGS = [
-  '## What the agent has',
-  '## Instructions for the agent',
-] as const;
-
-/** The standing sections of the issue template, from the first heading on. */
-export const standingSections = (templateMd: string): string => {
-  const start = templateMd.indexOf(SECTION_HEADINGS[0]);
-  if (start < 0) {
-    throw new Error(`The issue template has no "${SECTION_HEADINGS[0]}"`);
-  }
-  const sections = templateMd.slice(start).trim();
-  for (const heading of SECTION_HEADINGS) {
-    if (!sections.includes(heading)) {
-      throw new Error(`The issue template has no "${heading}"`);
-    }
-  }
-  return sections;
-};
-
 const MAX_LISTED_FILES = 60;
 
 export interface IssueContext {
@@ -173,7 +155,6 @@ export interface IssueContext {
   stage: string;
   deployedSha: string;
   deployRunUrl: string | undefined;
-  templateMd: string;
 }
 
 export const renderIssue = ({
@@ -181,7 +162,6 @@ export const renderIssue = ({
   stage,
   deployedSha,
   deployRunUrl,
-  templateMd,
 }: IssueContext): { title: string; body: string } => {
   const kind = changeKind(pr.files);
   const deployed = pr.files.filter(isDeployedPath);
@@ -212,10 +192,6 @@ export const renderIssue = ({
       : []),
     '',
     '</details>',
-    '',
-    standingSections(templateMd)
-      .replaceAll('<pr>', String(pr.number))
-      .replaceAll('<stage>', stage),
     '',
   ].join('\n');
   return { title: issueTitle(pr), body };
