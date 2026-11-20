@@ -293,6 +293,8 @@ export type StudentPortalComponentConfig = {
   allowSearchEngineIndexing?: boolean;
   /** Site name shown in page titles and social cards. Default `"Discava"` */
   siteName?: string;
+  /** The stage's LinkedIn organisation page ID (digits). When set, certificates added to LinkedIn name that page; otherwise the site name is sent as text */
+  linkedInOrganizationId?: string;
   /** Reserved concurrency for the page renderer Lambda. Default `20` */
   pageRendererReservedConcurrency?: number;
 };

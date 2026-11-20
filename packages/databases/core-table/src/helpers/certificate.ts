@@ -9,13 +9,30 @@ import type { createCourseEntity } from '../entities/course.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createUserEntity } from '../entities/user.js';
 import type { createCoreTableService } from '../service.js';
-import { isConditionalCheckFailed } from './errors.js';
+import {
+  cancellationReasons,
+  failedAt,
+  hasFailedCondition,
+  hasTransactionConflict,
+  isConditionalCheckFailed,
+  VersionConflictError,
+} from './errors.js';
+import { notificationWrites, transactionEntities } from './notification.js';
 
 // Crockford's base32: no I, L, O or U, so an ID read aloud or copied by hand
 // can't be mistaken.
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const ID_LENGTH = 16;
 const MAX_ID_TRIES = 5;
+const MAX_WRITE_RETRIES = 3;
+export const LINKEDIN_CLICK_SOURCES = [
+  'my-learning',
+  'certificate-page',
+  'issued-email',
+  'reminder-email',
+] as const;
+export type LinkedInClickSource = (typeof LINKEDIN_CLICK_SOURCES)[number];
+
 const FALLBACK_NAME = 'Discava learner';
 
 // 10 random bytes are 80 bits: exactly 16 base32 characters.
@@ -67,7 +84,7 @@ type Item<F extends () => Promise<any>> = EntityItem<Awaited<ReturnType<F>>>;
 export type Certificate = Item<typeof createCertificateEntity>;
 
 export interface IssueCertificateInput {
-  coreTable: Pick<CoreTable, 'entities'>;
+  coreTable: CoreTable;
   enrolment: Pick<
     Item<typeof createEnrolmentEntity>,
     'userId' | 'courseId' | 'status' | 'completedAt'
@@ -80,11 +97,13 @@ export interface IssueCertificateInput {
   now: Date;
 }
 
-// The only writer of `certificate`. Issues the student's certificate for a
-// course once they've completed it, and returns it; returns the one already
-// issued if there is one, so it's safe to call again (a retried stream batch)
-// or at the same time as another caller: the create is conditioned on the key
-// not existing, and the loser reads the winner's record.
+// Issues the student's certificate for a course once they've completed it,
+// and returns it; returns the one already issued if there is one, so it's safe
+// to call again (a retried stream batch) or at the same time as another
+// caller. The certificate and its `certificate.issued` notification are one
+// transaction: the certificate's create is conditioned on the key not
+// existing, and the loser reads the winner's record. A notification state
+// that moved meanwhile cancels the transaction, which is built and tried again.
 export const issueCertificate = async ({
   coreTable,
   enrolment,
@@ -122,26 +141,99 @@ export const issueCertificate = async ({
     throw new Error(`No unused certificate ID found in ${MAX_ID_TRIES} tries`);
   }
 
-  try {
-    const { data } = await certificate
-      .create({
-        ...key,
-        certificateId,
-        learnerName: learnerName(user),
-        courseTitle: course.title,
-        completedAt,
-        issuedAt: now.toISOString(),
-      })
+  const issuedAt = now.toISOString();
+  for (let attempt = 0; attempt <= MAX_WRITE_RETRIES; attempt++) {
+    const items = [
+      transactionEntities(coreTable)
+        .certificate.create({
+          ...key,
+          certificateId,
+          learnerName: learnerName(user),
+          courseTitle: course.title,
+          completedAt,
+          issuedAt,
+        })
+        .commit(),
+      ...(await notificationWrites(coreTable, {
+        type: 'certificate.issued',
+        userId: key.userId,
+        params: {
+          certificateId: formatCertificateId(certificateId),
+          courseTitle: course.title,
+        },
+        dedupeKey: certificateId,
+        occurredAt: issuedAt,
+      })),
+    ];
+    const { canceled, data } = await coreTable.transaction
+      .write(() => items)
       .go();
-    return data;
+    if (!canceled) {
+      const { data: created } = await certificate.get(key).go();
+      if (!created) {
+        throw new Error('The issued certificate could not be read back');
+      }
+      return created;
+    }
+    const reasons = cancellationReasons(data);
+    // Item 0 is the certificate's create: its condition failing means
+    // another caller issued it first.
+    if (failedAt(reasons, 0)) {
+      const { data: winner } = await certificate.get(key).go();
+      if (winner) {
+        return winner;
+      }
+    }
+    if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
+      throw new Error('The certificate transaction was cancelled');
+    }
+  }
+  throw new VersionConflictError();
+};
+
+export interface RecordLinkedInClickInput {
+  coreTable: Pick<CoreTable, 'entities'>;
+  certificateId: string;
+  source: LinkedInClickSource;
+  now: Date;
+}
+
+// Records the first use of "Add to LinkedIn profile" on a certificate. Later
+// calls, or one at the same moment as another, change nothing. Undefined for a
+// malformed or unknown ID.
+export const recordLinkedInClick = async ({
+  coreTable,
+  certificateId,
+  source,
+  now,
+}: RecordLinkedInClickInput): Promise<
+  'recorded' | 'already-recorded' | undefined
+> => {
+  const id = normaliseCertificateId(certificateId);
+  if (!id) {
+    return undefined;
+  }
+  const { certificate } = coreTable.entities;
+  const {
+    data: [found],
+  } = await certificate.query.byCertificateId({ certificateId: id }).go();
+  if (!found) {
+    return undefined;
+  }
+  try {
+    await certificate
+      .patch({ userId: found.userId, courseId: found.courseId })
+      .set({
+        linkedInClickedAt: now.toISOString(),
+        linkedInClickSource: source,
+      })
+      .where((attr, op) => op.notExists(attr.linkedInClickedAt))
+      .go();
+    return 'recorded';
   } catch (error) {
     if (!isConditionalCheckFailed(error)) {
       throw error;
     }
-    const { data: winner } = await certificate.get(key).go();
-    if (!winner) {
-      throw error;
-    }
-    return winner;
+    return 'already-recorded';
   }
 };

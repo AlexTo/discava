@@ -5,8 +5,8 @@
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
 
-// A student's proof that they completed a course. Written only by
-// issueCertificate (../helpers/certificate.ts). Everything printed on it is
+// A student's proof that they completed a course. Written only by the
+// functions in ../helpers/certificate.ts. Everything printed on it is
 // copied at issue time, so later renames of the course or the student don't
 // change it.
 export const createCertificateEntity = async () =>
@@ -51,6 +51,19 @@ export const createCertificateEntity = async () =>
           type: 'string',
           required: true,
           readOnly: true,
+        },
+        // The first use of "Add to LinkedIn profile", set once by
+        // recordLinkedInClick.
+        linkedInClickedAt: {
+          type: 'string',
+        },
+        linkedInClickSource: {
+          type: [
+            'my-learning',
+            'certificate-page',
+            'issued-email',
+            'reminder-email',
+          ] as const,
         },
         createdAt: {
           type: 'string',

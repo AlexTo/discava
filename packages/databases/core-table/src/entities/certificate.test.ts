@@ -35,6 +35,43 @@ describe('certificate', () => {
     expect(() => certificate.create(record as never).params()).toThrow();
   });
 
+  it('takes the LinkedIn use attributes, both optional', () => {
+    expect(() => certificate.create(full).params()).not.toThrow();
+    expect(() =>
+      certificate
+        .create({
+          ...full,
+          linkedInClickedAt: '2026-11-02T00:00:00.000Z',
+          linkedInClickSource: 'my-learning',
+        })
+        .params(),
+    ).not.toThrow();
+  });
+
+  it('refuses a LinkedIn source outside the four', () => {
+    expect(() =>
+      certificate
+        .create({ ...full, linkedInClickSource: 'twitter' as never })
+        .params(),
+    ).toThrow();
+  });
+
+  it('keeps the printed attributes read-only', () => {
+    for (const field of [
+      'learnerName',
+      'courseTitle',
+      'completedAt',
+      'issuedAt',
+    ]) {
+      expect(() =>
+        certificate
+          .patch({ userId: 'user-1', courseId: 'course-1' })
+          .set({ [field]: 'x' } as never)
+          .params(),
+      ).toThrow();
+    }
+  });
+
   it('keys by student and course', () => {
     const { Item } = certificate.create(full).params() as {
       Item: Record<string, string>;

@@ -68,6 +68,12 @@ export const checkNotificationShape = (snapshot: TableSnapshot): Violation[] =>
     if (!n.link?.path?.startsWith('/')) {
       problems.push('link.path does not start with /');
     }
+    if (
+      n.action !== undefined &&
+      !(n.action.label && n.action.path?.startsWith('/'))
+    ) {
+      problems.push('action needs a label and a path starting with /');
+    }
     const { email } = n;
     if (email.state === 'sent' && !(email.sentAt && email.messageId)) {
       problems.push('email is sent without sentAt and messageId');

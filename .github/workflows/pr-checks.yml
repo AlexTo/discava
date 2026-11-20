@@ -233,7 +233,10 @@ jobs:
   # One comment on the pull request, kept up to date, naming the screenshots
   # the e2e scenarios took (and where to download them). Images can't be
   # embedded: an artifact has no public URL. Only for a pull request from this
-  # repository, whose token can write; a fork's can't.
+  # repository, whose token can write; a fork's can't. The list also goes in
+  # the job summary, the only place it appears for an agent's pull request:
+  # that one is locked (agent-lock.yml), and the Actions token can't comment
+  # on a locked conversation whatever its permissions.
   e2e-screenshots:
     name: E2E screenshots
     needs: e2e

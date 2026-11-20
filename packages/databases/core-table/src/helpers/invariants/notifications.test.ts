@@ -107,6 +107,15 @@ describe('notifications', () => {
       expectOnly('notification-shape', /does not start with/);
     });
 
+    it('reports an action without a label or a leading slash', () => {
+      table.notifications[0].action = { label: 'Go', path: '/x' };
+      expect(checkTableInvariants(table)).toEqual([]);
+      table.notifications[0].action = { label: '', path: '/x' };
+      expectOnly('notification-shape', /action needs a label/);
+      table.notifications[0].action = { label: 'Go', path: 'x' };
+      expectOnly('notification-shape', /action needs a label/);
+    });
+
     it('reports a sent email without a message id', () => {
       table.notifications[0].email = { state: 'sent', sentAt: NOW };
       expectOnly('notification-shape', /sent without sentAt and messageId/);

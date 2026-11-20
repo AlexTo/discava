@@ -22,13 +22,12 @@ const EDITS = 4;
 let instructor: ApiUser;
 let course: Awaited<ReturnType<typeof createPublishedCourseViaApi>>;
 let student: ApiUser;
+let courseTitle: string;
 
 test.beforeEach(async () => {
   instructor = await apiUser('Ines', ['instructor']);
-  course = await createPublishedCourseViaApi(
-    instructor,
-    uniqueName('Certificate race'),
-  );
+  courseTitle = uniqueName('Certificate race');
+  course = await createPublishedCourseViaApi(instructor, courseTitle);
   student = await apiUser('Sam', ['student']);
   await student.core.course.enrol.mutate({ courseId: course.courseId });
 });
@@ -90,4 +89,12 @@ test('completing the last item while the curriculum changes issues one certifica
     certificateId: issued!.certificateId,
   });
   expect(verified.courseTitle).toBe(issued?.courseTitle);
+
+  // The race left one notification for it as well.
+  const { items } = await student.core.notification.list.query({ limit: 50 });
+  expect(
+    items.filter(
+      (item) => item.title === `Your certificate for ${courseTitle} is ready`,
+    ),
+  ).toHaveLength(1);
 });

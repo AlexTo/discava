@@ -8,7 +8,9 @@ import {
   PaymentsNotConnectedError,
 } from '@discava/common-server-utils/stripe/secrets';
 import Stripe from 'stripe';
+import { handleChargeRefunded } from './events/charge-refunded.js';
 import { handleSessionCompleted } from './events/session-completed.js';
+import { handleSessionExpired } from './events/session-expired.js';
 import { defaultWebhookDeps, type WebhookDeps } from './webhook-deps.js';
 
 // The messages older than this are refused, as Stripe's libraries advise.
@@ -83,6 +85,10 @@ export const handleStripeWebhook = async (
   try {
     if (event.type === 'checkout.session.completed') {
       await handleSessionCompleted(event, deps);
+    } else if (event.type === 'checkout.session.expired') {
+      await handleSessionExpired(event, deps);
+    } else if (event.type === 'charge.refunded') {
+      await handleChargeRefunded(event, deps);
     } else {
       deps.logger.info('Ignored a Stripe event', {
         eventId: event.id,

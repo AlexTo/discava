@@ -16,6 +16,9 @@ const db = {
   user: null as Record<string, unknown> | null,
   // Certificates by `userId#courseId`.
   certificates: new Map<string, Record<string, unknown>>(),
+  // Notifications by `userId#id`, and states by user.
+  notifications: new Map<string, Record<string, unknown>>(),
+  notificationStates: new Map<string, Record<string, any>>(),
 };
 
 // Reads other than the enrolment, completions and progress, for the tests of
@@ -101,17 +104,31 @@ const coreTable = {
       query: {
         byCertificateId: vi.fn(() => ({ go: async () => ({ data: [] }) })),
       },
+      // Issued in a transaction with its notification (see `transaction`).
       create: vi.fn((item: Record<string, any>) => ({
-        go: async () => {
-          await createCertificate(item);
-          const key = `${item.userId}#${item.courseId}`;
-          if (db.certificates.has(key)) {
-            throw lostCondition();
-          }
-          db.certificates.set(key, item);
-          return { data: item };
-        },
+        commit: () => ({ entity: 'certificate', kind: 'create', item }),
       })),
+    },
+    notification: {
+      create: (item: Record<string, any>) => ({
+        commit: () => ({ entity: 'notification', kind: 'create', item }),
+      }),
+    },
+    notificationState: {
+      get: (key: { userId: string }) => ({
+        go: async () => ({ data: db.notificationStates.get(key.userId) }),
+      }),
+      create: (item: Record<string, any>) => ({
+        commit: () => ({ entity: 'notificationState', kind: 'create', item }),
+      }),
+      patch: (key: { userId: string }) => {
+        const chain = {
+          add: () => chain,
+          where: () => chain,
+          commit: () => ({ entity: 'notificationState', kind: 'patch', key }),
+        };
+        return chain;
+      },
     },
     course: {
       get: vi.fn(() => ({
@@ -138,6 +155,37 @@ const coreTable = {
     },
   },
 } as any;
+
+// The certificate's transaction: all or nothing, with the certificate's
+// create conditioned on the key not existing.
+coreTable.transaction = {
+  write: (build: () => Record<string, any>[]) => ({
+    go: async () => {
+      const items = build();
+      const [certificate] = items;
+      await createCertificate(certificate.item);
+      const key = `${certificate.item.userId}#${certificate.item.courseId}`;
+      if (db.certificates.has(key)) {
+        return {
+          canceled: true,
+          data: items.map((_, i) => ({
+            code: i === 0 ? 'ConditionalCheckFailed' : 'None',
+          })),
+        };
+      }
+      for (const { entity, kind, item } of items) {
+        if (entity === 'certificate') {
+          db.certificates.set(key, item);
+        } else if (entity === 'notification') {
+          db.notifications.set(`${item.userId}#${item.id}`, item);
+        } else if (kind === 'create') {
+          db.notificationStates.set(item.userId, { ...item });
+        }
+      }
+      return { canceled: false, data: items.map(() => ({ code: 'None' })) };
+    },
+  }),
+};
 
 const visible = { visibility: 'visible' as const };
 // m1: l1 (a, b), l2 (c).
@@ -190,6 +238,8 @@ beforeEach(() => {
   };
   db.user = { userId: 'student-1', givenName: 'Ada', familyName: 'Lovelace' };
   db.certificates = new Map();
+  db.notifications = new Map();
+  db.notificationStates = new Map();
   createCertificate = async () => {};
 });
 
@@ -393,12 +443,30 @@ describe('recalculateStudent', () => {
       ]);
     });
 
+    it('issues one certificate.issued notification with the certificate', async () => {
+      completed('a', 'b', 'c');
+
+      await recalculate();
+
+      const [certificate] = [...db.certificates.values()];
+      expect([...db.notifications.values()]).toEqual([
+        expect.objectContaining({
+          userId: 'student-1',
+          type: 'certificate.issued',
+          occurredAt: NOW,
+          title: 'Your certificate for Intro to Discava is ready',
+        }),
+      ]);
+      expect(certificate).toBeDefined();
+    });
+
     it('issues none, and reads neither the course nor the user, for a student who isn’t complete', async () => {
       completed('a');
 
       await recalculate();
 
       expect(db.certificates.size).toBe(0);
+      expect(db.notifications.size).toBe(0);
       expect(coreTable.entities.certificate.get).not.toHaveBeenCalled();
       expect(reads.course).not.toHaveBeenCalled();
       expect(reads.user).not.toHaveBeenCalled();
@@ -487,6 +555,7 @@ describe('recalculateStudent', () => {
       await both();
 
       expect(db.certificates.size).toBe(1);
+      expect(db.notifications.size).toBe(1);
       expect(coreTable.entities.certificate.create).toHaveBeenCalled();
     });
 

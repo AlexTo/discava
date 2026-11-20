@@ -5,6 +5,8 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { lockAgentIssue } from '../helpers/conversation-lock.js';
+import { type IssueSummary, isTrustedIssue } from '../helpers/issue-author.js';
 import { closedIssue, specFolders } from './discover.js';
 import { decide } from './gate.js';
 import {
@@ -90,18 +92,22 @@ const foldersForPullRequest = (
 
 // The body of every issue that carries a marker: open or closed, and whether
 // or not it still has the agent's label (removing it is how a run is stopped
-// or repeated). One JSON string per line.
+// or repeated). Only issues this workflow or someone with write access
+// opened: a marker in a stranger's issue must not stall a spec's chain. One
+// JSON object per line.
 const markedIssueBodies = (repository: string, gh: Deps['gh']): string[] =>
   gh([
     'api',
     `repos/${repository}/issues?state=all&per_page=100`,
     '--paginate',
     '--jq',
-    `.[] | select(.pull_request == null) | (.body // "") | select(contains("${MARKER_PREFIX}")) | @json`,
+    `.[] | select(.pull_request == null) | select((.body // "") | contains("${MARKER_PREFIX}")) | {body, author: .user.login, association: .author_association} | @json`,
   ])
     .split('\n')
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as string);
+    .map((line) => JSON.parse(line) as IssueSummary)
+    .filter(isTrustedIssue)
+    .map((issue) => issue.body);
 
 export const run = (deps: Deps): void => {
   const { env, gh, log } = deps;
@@ -160,6 +166,9 @@ export const run = (deps: Deps): void => {
   // stopped them; opening an issue from one would hand the agent the wrong
   // tasks, so the run fails instead.
   const unreadable: string[] = [];
+  // Issues opened but not handed to the agent, because they could not be
+  // locked. The run fails for them: nobody reads its warnings.
+  const notHandedOver: string[] = [];
   for (const folder of withTasks) {
     const read = (file: string) =>
       readFileSync(join(root, 'specs', folder, file), 'utf8');
@@ -215,10 +224,24 @@ export const run = (deps: Deps): void => {
       plan.issue.title,
       '--body-file',
       bodyFile(plan.issue.body),
-      '--label',
-      AGENT_LABEL,
     ]).trim();
     notice(`Created ${url}`);
+    if (
+      !lockAgentIssue({
+        repository,
+        issueUrl: url,
+        label: AGENT_LABEL,
+        gh,
+        log,
+      })
+    ) {
+      notHandedOver.push(url);
+    }
+  }
+  if (notHandedOver.length > 0) {
+    throw new Error(
+      `Not handed to the agent: ${notHandedOver.join(', ')}. Lock what the warnings above name, then add the ${AGENT_LABEL} label by hand`,
+    );
   }
   if (unreadable.length > 0) {
     throw new Error(

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { execFileSync } from 'node:child_process';
-import { readdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { ChangedFile } from './check.js';
 import { addedPictures, commentBody, MARKER } from './pictures.js';
@@ -13,7 +13,20 @@ import { addedPictures, commentBody, MARKER } from './pictures.js';
 // comment on the pull request, kept up to date, naming the pictures the e2e
 // scenarios took. SCREENSHOTS_DIR holds the downloaded `e2e-screenshots-*`
 // artifacts, one folder each.
-const { GITHUB_REPOSITORY, PR, SHA, RUN_URL, SCREENSHOTS_DIR } = process.env;
+//
+// The list also goes in the job summary. An agent's pull request is locked
+// (agent-lock.yml), and GitHub refuses the Actions token a comment on a
+// locked conversation whatever its permissions, so for one of those the
+// summary is the only place the list appears. Unlocking it to comment would
+// let anyone comment in between, which the lock is there to stop.
+const {
+  GITHUB_REPOSITORY,
+  GITHUB_STEP_SUMMARY,
+  PR,
+  SHA,
+  RUN_URL,
+  SCREENSHOTS_DIR,
+} = process.env;
 if (!GITHUB_REPOSITORY || !PR || !SHA || !RUN_URL || !SCREENSHOTS_DIR) {
   throw new Error(
     'GITHUB_REPOSITORY, PR, SHA, RUN_URL and SCREENSHOTS_DIR must be set',
@@ -55,6 +68,23 @@ const body = commentBody({
   added: addedPictures(pages.flat()),
 });
 writeFileSync('body.md', body);
+if (GITHUB_STEP_SUMMARY) {
+  appendFileSync(GITHUB_STEP_SUMMARY, `${body}\n`);
+}
+
+const locked =
+  gh([
+    'api',
+    `repos/${GITHUB_REPOSITORY}/issues/${PR}`,
+    '--jq',
+    '.locked',
+  ]).trim() === 'true';
+if (locked) {
+  console.log(
+    `::notice::#${PR} is locked, so the Actions token can't comment on it: the screenshots are listed in this job's summary (${RUN_URL}).`,
+  );
+  process.exit(0);
+}
 
 const id = gh([
   'api',

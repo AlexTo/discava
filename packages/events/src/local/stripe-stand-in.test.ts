@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Stripe from 'stripe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStripeStandIn, type StripeStandIn } from './stripe-stand-in.js';
 
 let server: Server;
@@ -388,20 +388,59 @@ describe('the hosted page', () => {
     expect(hook.deliveries).toEqual([]);
   });
 
+  it('expires a session through the control, delivering the event and closing the page', async () => {
+    const hook = await receiver();
+    const { session, secret } = await start(hook.url);
+    const response = await request('/stripe/test/expire', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(response.status).toBe(200);
+    const [delivery] = hook.deliveries as [{ body: string; signature: string }];
+    const event = Stripe.webhooks.constructEvent(
+      delivery.body,
+      delivery.signature,
+      secret,
+    );
+    expect(event.type).toBe('checkout.session.expired');
+    const html = await (await page(`/stripe/pay/${session.id}`)).text();
+    expect(html).toContain('expired');
+    // A second expiry delivers nothing more.
+    await request('/stripe/test/expire', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(hook.deliveries).toHaveLength(1);
+  });
+
+  it('expires an unpaid session by itself at its expires_at', async () => {
+    const hook = await receiver();
+    const { stripe } = await connect(hook.url);
+    await stripe.checkout.sessions.create(
+      sessionParams({ expires_at: Math.floor(Date.now() / 1000) + 1 }),
+    );
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1), {
+      timeout: 4000,
+    });
+    expect(JSON.parse(hook.deliveries[0]?.body ?? '{}').type).toBe(
+      'checkout.session.expired',
+    );
+  });
+
   it('shows an expired page for an unknown session', async () => {
     const html = await (await page('/stripe/pay/cs_test_nope')).text();
     expect(html).toContain('expired');
   });
 });
 
-describe('delivery', () => {
-  const paid = async (url: string) => {
-    const { stripe, secret } = await connect(url);
-    const session = await stripe.checkout.sessions.create(sessionParams());
-    await page(`/stripe/pay/${session.id}/pay`, { method: 'POST' });
-    return { stripe, secret, session };
-  };
+const paid = async (url: string) => {
+  const { stripe, secret } = await connect(url);
+  const session = await stripe.checkout.sessions.create(sessionParams());
+  await page(`/stripe/pay/${session.id}/pay`, { method: 'POST' });
+  return { stripe, secret, session };
+};
 
+describe('delivery', () => {
   it('delivers nothing for an account with no endpoint', async () => {
     const hook = await receiver();
     const other = stripeFor('sk_test_local_2');
@@ -509,6 +548,121 @@ describe('delivery', () => {
     );
     expect(event.type).toBe('charge.refunded');
     expect(event.data.object).toMatchObject({ amount_refunded: 4900 });
+  });
+});
+
+describe('learner refunds', () => {
+  it("refuses a refund above the remaining amount in Stripe's error shape and delivers nothing", async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+      amount: 4000,
+    });
+    await expect(
+      stripe.refunds.create({
+        payment_intent: session.payment_intent as string,
+        amount: 1000,
+      }),
+    ).rejects.toMatchObject({
+      type: 'StripeInvalidRequestError',
+      statusCode: 400,
+    });
+    const refundNotices = hook.deliveries.filter(
+      (d) => JSON.parse(d.body).type === 'charge.refunded',
+    );
+    expect(refundNotices).toHaveLength(1);
+  });
+
+  it('returns the first refund for the same idempotency key, delivering once', async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    hook.deliveries.length = 0;
+    const params = { payment_intent: session.payment_intent as string };
+    const options = { idempotencyKey: 'refund-order-1' };
+    const [first, second] = await Promise.all([
+      stripe.refunds.create(params, options),
+      stripe.refunds.create(params, options),
+    ]);
+    const third = await stripe.refunds.create(params, options);
+    expect(second.id).toBe(first.id);
+    expect(third.id).toBe(first.id);
+    expect(hook.deliveries).toHaveLength(1);
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.body.refunds).toEqual([{ id: first.id, amount: 4900 }]);
+  });
+
+  it("lists a payment's refunds with their amounts, including an operator's", async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    const refund = await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+      amount: 1000,
+    });
+    await request('/stripe/test/refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id, amount: 500 }),
+    });
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.status).toBe(200);
+    expect(
+      listed.body.refunds.map((r: { amount: number }) => r.amount),
+    ).toEqual([1000, 500]);
+    expect(listed.body.refunds[0].id).toBe(refund.id);
+  });
+
+  it('answers 404 for a session with no payment', async () => {
+    const response = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'cs_nope' }),
+    });
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('refund control', () => {
+  it.each([
+    ['full', undefined, 4900],
+    ['partial', 1000, 1000],
+  ])(
+    'delivers charge.refunded for a %s refund',
+    async (_, amount, expected) => {
+      const hook = await receiver();
+      const { secret, session } = await paid(hook.url);
+      hook.deliveries.length = 0;
+      const response = await request('/stripe/test/refund', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id, amount }),
+      });
+      expect(response.status).toBe(200);
+      const [delivery] = hook.deliveries as [
+        { body: string; signature: string },
+      ];
+      const event = Stripe.webhooks.constructEvent(
+        delivery.body,
+        delivery.signature,
+        secret,
+      );
+      expect(event.type).toBe('charge.refunded');
+      expect(event.data.object).toMatchObject({
+        payment_intent: session.payment_intent,
+        amount_refunded: expected,
+      });
+    },
+  );
+
+  it('answers 404 for a session with no payment', async () => {
+    const response = await request('/stripe/test/refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'cs_nope' }),
+    });
+    expect(response.status).toBe(404);
   });
 });
 

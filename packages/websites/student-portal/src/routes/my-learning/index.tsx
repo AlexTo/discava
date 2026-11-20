@@ -46,8 +46,8 @@ function MyLearning() {
   const certificatesQuery = useQuery(
     trpc.certificate.myCertificates.queryOptions(),
   );
-  const certificateIds = new Map(
-    (certificatesQuery.data ?? []).map((c) => [c.courseId, c.certificateId]),
+  const certificatesByCourse = new Map(
+    (certificatesQuery.data ?? []).map((c) => [c.courseId, c]),
   );
 
   return (
@@ -97,14 +97,16 @@ function MyLearning() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {completed.map((course) => {
-                  const certificateId = certificateIds.get(course.courseId);
+                  const certificate = certificatesByCourse.get(course.courseId);
                   return (
                     <div key={course.courseId} className="flex flex-col gap-3">
                       <CourseProgressCard course={course} className="flex-1" />
-                      {certificateId ? (
+                      {certificate ? (
                         <CertificateActions
                           courseId={course.courseId}
-                          certificateId={certificateId}
+                          certificateId={certificate.certificateId}
+                          courseTitle={certificate.courseTitle}
+                          completedAt={certificate.completedAt}
                         />
                       ) : null}
                     </div>

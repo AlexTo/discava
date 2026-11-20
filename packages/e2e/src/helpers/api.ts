@@ -159,9 +159,12 @@ export const connectLocalStripe = async () => {
       authorization,
       'content-type': 'application/x-www-form-urlencoded',
     },
+    // The events the real registration asks for (`WEBHOOK_EVENTS`).
     body: new URLSearchParams({
       url: `${runner}/stripe/webhook`,
       'enabled_events[0]': 'checkout.session.completed',
+      'enabled_events[1]': 'checkout.session.expired',
+      'enabled_events[2]': 'charge.refunded',
     }),
   });
   if (!response.ok) {

@@ -116,6 +116,16 @@ export const checkOrderShape = (snapshot: TableSnapshot): Violation[] => {
     ) {
       problems.push('refundedAmount is more than the amount');
     }
+    if (order.refundRequestedAt !== undefined) {
+      if (!order.paidAt) {
+        problems.push('refund requested, but paidAt is not set');
+      } else if (order.refundRequestedAt < order.paidAt) {
+        problems.push('refundRequestedAt is before paidAt');
+      }
+      if (order.status !== 'paid' && order.status !== 'refunded') {
+        problems.push(`refund requested, but the order is ${order.status}`);
+      }
+    }
     if (
       (order.status === 'pending' || order.status === 'expired') &&
       order.paidAt !== undefined

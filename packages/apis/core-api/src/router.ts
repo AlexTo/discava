@@ -14,6 +14,7 @@ import { categoryBySlug, listCategories } from './procedures/category.js';
 import {
   certificatePdf,
   myCertificates,
+  recordLinkedInClick,
   verifyCertificate,
 } from './procedures/certificate.js';
 import {
@@ -55,7 +56,12 @@ import {
   notificationUnreadCount,
   setNotificationPreferenceProcedure,
 } from './procedures/notification.js';
-import { checkout, paymentAvailable } from './procedures/payment.js';
+import {
+  checkout,
+  myOrder,
+  paymentAvailable,
+  requestRefund,
+} from './procedures/payment.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -112,6 +118,7 @@ export const appRouter = router({
     verify: verifyCertificate,
     myCertificates,
     pdf: certificatePdf,
+    recordLinkedInClick,
   }),
   contentItem: router({
     complete: completeContentItem,
@@ -140,6 +147,8 @@ export const appRouter = router({
   payment: router({
     checkout,
     available: paymentAvailable,
+    requestRefund,
+    myOrder,
   }),
   review: router({
     mine: myReview,
@@ -176,4 +185,5 @@ export const PUBLIC_OPERATIONS = [
   'category.bySlug',
   'instructorProfile.publicView',
   'certificate.verify',
+  'certificate.recordLinkedInClick',
 ] as const;

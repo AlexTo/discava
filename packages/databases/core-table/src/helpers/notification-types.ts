@@ -26,6 +26,8 @@ export interface NotificationType<P extends string = string> {
     title: string;
     body: string;
     link: { portal: NotificationPortal; path: string };
+    /** A second link for the email, in the same portal as `link`. */
+    action?: { label: string; path: string };
   };
 }
 
@@ -65,6 +67,23 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       title: `${p.courseTitle}: ${p.announcementTitle}`,
       body: p.excerpt,
       link: { portal: 'student', path: `/learn/${p.courseId}/home` },
+    }),
+  }),
+  'certificate.issued': defineType({
+    id: 'certificate.issued',
+    name: 'Certificates',
+    description:
+      'You earn a certificate, and one reminder to add it to your LinkedIn profile.',
+    params: ['certificateId', 'courseTitle'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `Your certificate for ${p.courseTitle} is ready`,
+      body: `You completed ${p.courseTitle}. View your certificate, or add it to your LinkedIn profile so employers can see it.`,
+      link: { portal: 'student', path: `/certificates/${p.certificateId}` },
+      action: {
+        label: 'Add to LinkedIn profile',
+        path: `/certificates/${p.certificateId}/linkedin?source=issued-email`,
+      },
     }),
   }),
   'discussion.reply': defineType({
@@ -112,6 +131,18 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       },
     }),
   }),
+  'order.refunded': defineType({
+    id: 'order.refunded',
+    name: 'Refunds',
+    description: 'A refund of a course you bought has gone through.',
+    params: ['courseTitle', 'courseId', 'amount'],
+    emailPolicy: 'required',
+    build: (p) => ({
+      title: `Your refund for ${p.courseTitle} is complete`,
+      body: `${p.amount} has been refunded for ${p.courseTitle}, and your access to the course has ended.`,
+      link: { portal: 'student', path: `/learn/${p.courseId}` },
+    }),
+  }),
   'review.received': defineType({
     id: 'review.received',
     name: 'Course reviews',
@@ -128,6 +159,7 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
 
 export const MAX_TITLE_LENGTH = 120;
 export const MAX_BODY_LENGTH = 500;
+export const MAX_ACTION_LABEL_LENGTH = 60;
 
 const truncate = (text: string, max: number): string =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`;
@@ -145,6 +177,7 @@ export const buildNotification = (
   title: string;
   body: string;
   link: { portal: NotificationPortal; path: string };
+  action?: { label: string; path: string };
 } => {
   const entry = Object.hasOwn(NOTIFICATION_TYPES, type)
     ? NOTIFICATION_TYPES[type]
@@ -162,10 +195,16 @@ export const buildNotification = (
     }
     declared[name] = value;
   }
-  const { title, body, link } = entry.build(declared);
+  const { title, body, link, action } = entry.build(declared);
   return {
     title: truncate(title, MAX_TITLE_LENGTH),
     body: truncate(body, MAX_BODY_LENGTH),
     link,
+    ...(action && {
+      action: {
+        label: truncate(action.label, MAX_ACTION_LABEL_LENGTH),
+        path: action.path,
+      },
+    }),
   };
 };

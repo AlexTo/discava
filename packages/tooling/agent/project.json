@@ -64,6 +64,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "post-merge-test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/post-merge-test/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "validate-tasks": {
       "executor": "nx:run-commands",
       "options": {

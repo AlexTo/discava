@@ -12,6 +12,60 @@ beforeEach(() => {
   table = consistentTable();
 });
 
+describe('certificate-linkedin-click-shape', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const setup = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: ISSUED,
+      issuedAt: ISSUED,
+    });
+    return table.certificates[0];
+  };
+  const violationsOf = () =>
+    checkTableInvariants(table).filter(
+      (v) => v.invariant === 'certificate-linkedin-click-shape',
+    );
+
+  it('accepts no use, and a use after issue', () => {
+    const certificate = setup();
+    expect(violationsOf()).toEqual([]);
+    certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('reports a time without a source', () => {
+    setup().linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    expect(violationsOf()[0]?.message).toMatch(/exactly when/);
+  });
+
+  it('reports a source without a time', () => {
+    setup().linkedInClickSource = 'my-learning';
+    expect(violationsOf()[0]?.message).toMatch(/exactly when/);
+  });
+
+  it('reports an unknown source', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    certificate.linkedInClickSource = 'twitter' as never;
+    expect(violationsOf()[0]?.message).toMatch(/unknown/);
+  });
+
+  it('reports a use before the certificate was issued', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-02T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    expect(violationsOf()[0]?.message).toMatch(/before issuedAt/);
+  });
+});
+
 describe('certificate-shape and certificate-has-completed-enrolment', () => {
   const COMPLETED = '2026-01-03T00:00:00.000Z';
   const issued = () => {
@@ -160,5 +214,80 @@ describe('certificate-shape and certificate-has-completed-enrolment', () => {
     const names = checkTableInvariants(table).map((v) => v.invariant);
     expect(names).not.toContain('activity-count-matches-students');
     expect(names.filter((n) => n.startsWith('student-records-'))).toEqual([]);
+  });
+});
+
+describe('certificate-notifications-match', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const NOW = '2026-01-03T00:00:00.000Z';
+  const certificate = (userId: string, certificateId: string) => ({
+    userId,
+    courseId: 'c1',
+    certificateId,
+    learnerName: 'Erin Nguyen',
+    courseTitle: 'Intro',
+    completedAt: ISSUED,
+    issuedAt: ISSUED,
+  });
+  const notification = (id: string, path: string, userId = 'student') => ({
+    userId,
+    occurredAt: NOW,
+    id,
+    type: 'certificate.issued',
+    link: { portal: 'student' as const, path },
+    email: { state: 'skipped' as const, reason: 'never' },
+    createdAt: NOW,
+  });
+  const setup = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push(certificate('student', '0123456789ABCDEF'));
+    table.notifications = [
+      notification('a1b2c3d4e5f60718', '/certificates/0123-4567-89AB-CDEF'),
+    ];
+    table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+  };
+  const violationsOf = () =>
+    checkTableInvariants(table).filter(
+      (v) => v.invariant === 'certificate-notifications-match',
+    );
+
+  it('accepts a notification naming its own certificate', () => {
+    setup();
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('accepts a certificate with no notification', () => {
+    setup();
+    table.notifications = [];
+    table.notificationStates = [];
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('reports an unknown ID', () => {
+    setup();
+    table.notifications[0].link.path = '/certificates/ZZZZ-ZZZZ-ZZZZ-ZZZZ';
+    expect(violationsOf()[0]?.message).toMatch(/does not name a certificate/);
+  });
+
+  it('reports a path that is not /certificates/<ID>', () => {
+    setup();
+    table.notifications[0].link.path = '/learn/c1';
+    expect(violationsOf()).toHaveLength(1);
+  });
+
+  it('reports another user’s certificate', () => {
+    setup();
+    table.certificates[0].userId = 'someone-else';
+    expect(violationsOf()[0]?.message).toMatch(/another user/);
+  });
+
+  it('reports two notifications on one certificate', () => {
+    setup();
+    table.notifications.push(
+      notification('b1b2c3d4e5f60718', '/certificates/0123-4567-89AB-CDEF'),
+    );
+    expect(violationsOf()).toHaveLength(1);
+    expect(violationsOf()[0]?.message).toMatch(/more than one/);
   });
 });

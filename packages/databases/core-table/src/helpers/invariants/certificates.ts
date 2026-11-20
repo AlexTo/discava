@@ -2,6 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import {
+  LINKEDIN_CLICK_SOURCES,
+  normaliseCertificateId,
+} from '../certificate.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
@@ -83,10 +87,98 @@ export const checkCertificateHasCompletedEnrolment = (
   });
 };
 
+// A certificate's LinkedIn use has a source exactly when it has a time, the
+// source is one of the known ones, and the time isn't before issuedAt.
+export const checkCertificateLinkedInClickShape = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.certificates.flatMap((certificate) => {
+    const { userId, courseId, linkedInClickedAt, linkedInClickSource } =
+      certificate;
+    const problems: string[] = [];
+    if (Boolean(linkedInClickedAt) !== Boolean(linkedInClickSource)) {
+      problems.push(
+        'linkedInClickSource is present exactly when linkedInClickedAt is',
+      );
+    }
+    if (
+      linkedInClickSource &&
+      !(LINKEDIN_CLICK_SOURCES as readonly string[]).includes(
+        linkedInClickSource,
+      )
+    ) {
+      problems.push(`linkedInClickSource ${linkedInClickSource} is unknown`);
+    }
+    if (
+      linkedInClickedAt &&
+      certificate.issuedAt &&
+      linkedInClickedAt < certificate.issuedAt
+    ) {
+      problems.push('linkedInClickedAt is before issuedAt');
+    }
+    return problems.map((message) =>
+      violation(
+        'certificate-linkedin-click-shape',
+        { userId, courseId },
+        message,
+      ),
+    );
+  });
+
+// Every `certificate.issued` notification has a link of /certificates/<ID>
+// naming a certificate of the same user, and a certificate has at most one.
+// A certificate with no such notification (issued before the notification
+// existed) isn't a violation.
+export const checkCertificateNotificationsMatch = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const issued = snapshot.notifications.filter(
+    (n) => n.type === 'certificate.issued',
+  );
+  const perCertificate = new Map<string, number>();
+  return issued.flatMap((n) => {
+    const record = { userId: n.userId, occurredAt: n.occurredAt, id: n.id };
+    const named = /^\/certificates\/([^/?#]+)$/.exec(n.link?.path ?? '')?.[1];
+    const certificateId = named ? normaliseCertificateId(named) : undefined;
+    const certificate = certificateId
+      ? snapshot.certificates.find((c) => c.certificateId === certificateId)
+      : undefined;
+    const problem = !certificate
+      ? `link ${n.link?.path} does not name a certificate`
+      : certificate.userId !== n.userId
+        ? `link ${n.link?.path} names another user's certificate`
+        : undefined;
+    if (problem || !certificateId) {
+      return [
+        violation('certificate-notifications-match', record, problem ?? ''),
+      ];
+    }
+    const count = (perCertificate.get(certificateId) ?? 0) + 1;
+    perCertificate.set(certificateId, count);
+    return count > 1
+      ? [
+          violation(
+            'certificate-notifications-match',
+            record,
+            `certificate ${certificateId} has more than one certificate.issued notification`,
+          ),
+        ]
+      : [];
+  });
+};
+
 export const CERTIFICATES_CHECKS = [
   { name: 'certificate-shape', check: checkCertificateShape },
   {
     name: 'certificate-has-completed-enrolment',
     check: checkCertificateHasCompletedEnrolment,
+  },
+  {
+    name: 'certificate-linkedin-click-shape',
+    check: checkCertificateLinkedInClickShape,
+  },
+  {
+    name: 'certificate-notifications-match',
+    check: checkCertificateNotificationsMatch,
   },
 ] as const satisfies readonly Check[];

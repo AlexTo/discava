@@ -141,16 +141,28 @@ describe('EnrolmentActions', () => {
     expect(screen.getByText(/Completed on/)).toBeInTheDocument();
   });
 
-  it("doesn't offer to enrol a student whose enrolment has ended", async () => {
-    renderPreview({
-      'course.myEnrolment': () => enrolment({ status: 'dropped' }),
+  it('tells a student whose enrolment has ended, and lets them enrol again in a free course', async () => {
+    let enrolled = false;
+    const { user } = renderPreview({
+      'course.myEnrolment': () =>
+        enrolled ? enrolment() : enrolment({ status: 'dropped' }),
+      'course.enrol': () => {
+        enrolled = true;
+        return enrolment();
+      },
     });
 
     expect(
       await screen.findByText("You're no longer enrolled"),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Enrol now' })).toBeNull();
+    expect(screen.getByText('Your enrolment has ended.')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /learning/ })).toBeNull();
+
+    await user.click(await enrolButton());
+
+    expect(
+      await screen.findByRole('dialog', { name: "You're enrolled!" }),
+    ).toBeInTheDocument();
   });
 
   it('explains when the course closed before enrolling', async () => {
@@ -345,12 +357,37 @@ describe('EnrolmentActions: paid courses', () => {
     expect(await buyButton()).toBeEnabled();
   });
 
+  it('starts a new checkout after an earlier one was cancelled or expired', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const { user, calls } = renderPriced(
+      {
+        'payment.checkout': () => ({
+          checkoutUrl: 'https://pay.test/session-2',
+        }),
+      },
+      { path: '/?checkout=cancelled' },
+    );
+
+    await user.click(await buyButton());
+
+    await vi.waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://pay.test/session-2'),
+    );
+    expect(calls).toContainEqual({
+      path: 'payment.checkout',
+      input: { courseId: 'course-1' },
+    });
+  });
+
   it('offers a dropped student a new purchase', async () => {
     renderPriced({
       'course.myEnrolment': () => enrolment({ status: 'dropped' }),
     });
 
+    expect(await screen.findByText('Your enrolment has ended.')).toBeVisible();
     expect(await buyButton()).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Enrol now' })).toBeNull();
   });
 
   it('confirms the payment, then shows the enrolled state when the enrolment appears', async () => {
