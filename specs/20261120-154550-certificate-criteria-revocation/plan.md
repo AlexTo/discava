@@ -122,7 +122,7 @@ packages/
 ├── apis/
 │   ├── core-api/src/
 │   │   ├── procedures/certificate.ts          # verify (two shapes), myCertificates, pdf, requirements
-│   │   ├── helpers/certificate-statement.ts   # new: assessmentStatement
+│   │   ├── helpers/certificate-statement.ts   # new: assessmentStatement (moves to common-server-utils in Phase 5)
 │   │   ├── helpers/certificate-pdf.ts         # draws the statement
 │   │   └── schema/certificate.ts
 │   ├── instructor-api/src/
@@ -141,6 +141,7 @@ packages/
 │   │   ├── course-certificate-criteria.tsx    # new
 │   │   └── course-certificates-list.tsx       # new
 │   └── admin-portal/src/routes/{certificates.tsx,-components/certificates-screen.tsx}
+├── common/server-utils/src/certificate-statement.ts   # from Phase 5
 ├── e2e/src/
 │   ├── scenarios/{certificate-criteria.e2e.ts,certificate-revocation.e2e.ts}
 │   ├── concurrency/certificate-revoke.e2e.ts
@@ -148,7 +149,7 @@ packages/
 docs/src/content/docs/en/design/{certificates.mdx,progress-and-completion.mdx}
 ```
 
-**Structure Decision**: extend existing packages; no new project. The rule and the writers live in core-table because two packages decide with them and three write through them. The statement's wording lives in core-api because only its two procedures produce it.
+**Structure Decision**: extend existing packages; no new project. The rule and the writers live in core-table because two packages decide with them and three write through them. The statement's wording starts in core-api, whose two procedures produce it, and moves to `common-server-utils` when admin-api's lookup becomes a second Lambda using it (code one Lambda uses stays beside it).
 
 ## Phases (one agent PR each; detail in tasks.md)
 

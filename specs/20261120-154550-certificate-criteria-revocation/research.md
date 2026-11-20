@@ -172,7 +172,7 @@ Not violations, each pinned by a test: a completed enrolment with no certificate
 
 ## R-12: Wording shared by the page and the PDF
 
-**Decision**: `assessmentStatement(assessment)` in `core-api/src/helpers/certificate-statement.ts` returns the statement as English lines. `certificate.verify` returns them as `statement: string[]`, and `certificate.pdf` draws the same lines. The page prints what it is given.
+**Decision**: `assessmentStatement(assessment)` returns the statement as English lines. It starts in `core-api/src/helpers/certificate-statement.ts` (Phase 4) and moves to `common-server-utils/src/certificate-statement.ts` in Phase 5, when admin-api becomes its second user. `certificate.verify` returns them as `statement: string[]`, and `certificate.pdf` draws the same lines. The page prints what it is given.
 
 **Rationale**: FR-013 asks for the same words in both; `verify` already returns a date formatted for print (`completedOn`) for the same reason. The portals have no translations today.
 
