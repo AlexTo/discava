@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlayerItem } from '../../../../hooks/use-course-player';
 import {
@@ -42,6 +43,7 @@ const submission = (overrides: Record<string, unknown> = {}) => ({
   submittedAt: '2026-11-14T10:30:00.000Z',
   late: false,
   file: { fileName: 'essay.pdf', fileSize: 2048, mimeType: 'application/pdf' },
+  feedback: [],
   ...overrides,
 });
 
@@ -689,6 +691,195 @@ describe('AssignmentItem', () => {
       expect(
         await screen.findByRole('button', { name: 'Download' }),
       ).toBeEnabled();
+    });
+  });
+
+  describe('instructor feedback', () => {
+    const returnedRound = {
+      kind: 'returned',
+      feedback: doc('Well argued'),
+      points: 17,
+      pointsOutOf: 20,
+      version: 1,
+      givenAt: '2026-11-15T09:00:00.000Z',
+    };
+    const grade = {
+      points: 17,
+      pointsOutOf: 20,
+      returnedAt: '2026-11-15T09:00:00.000Z',
+      gradedAt: '2026-11-15T09:00:00.000Z',
+    };
+    const returned = (overrides: Record<string, unknown> = {}) =>
+      submission({
+        status: 'returned',
+        grade,
+        feedback: [returnedRound],
+        ...overrides,
+      });
+
+    it('shows no feedback while the work is only submitted', async () => {
+      render({
+        done: true,
+        handlers: { 'assignment.mySubmission': () => submission() },
+      });
+
+      expect(await screen.findByText(/^Submitted/)).toBeVisible();
+      expect(screen.queryByText('Returned')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Earlier feedback/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Resubmit' })).toBeEnabled();
+    });
+
+    it('shows a returned submission with its points, feedback and date, and no form', async () => {
+      render({
+        done: true,
+        handlers: { 'assignment.mySubmission': () => returned() },
+      });
+
+      expect(await screen.findByText('Returned')).toBeVisible();
+      expect(screen.getByText('17 / 20')).toBeVisible();
+      expect(screen.getByText('Well argued')).toBeVisible();
+      expect(
+        screen.getByText(
+          `Returned ${new Date(grade.returnedAt).toLocaleString()}`,
+        ),
+      ).toBeVisible();
+      expect(screen.getByText('essay.pdf')).toBeVisible();
+      expect(screen.queryByText(/updated/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Resubmit' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Choose file')).not.toBeInTheDocument();
+    });
+
+    it('shows the amended points and when the grade was updated', async () => {
+      const amendedAt = '2026-11-20T12:00:00.000Z';
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () =>
+            returned({
+              grade: { ...grade, points: 19, gradedAt: amendedAt },
+              feedback: [
+                {
+                  kind: 'amended',
+                  feedback: doc('Regraded'),
+                  points: 19,
+                  pointsOutOf: 20,
+                  version: 1,
+                  givenAt: amendedAt,
+                },
+                returnedRound,
+              ],
+            }),
+        },
+      });
+
+      expect(await screen.findByText('19 / 20')).toBeVisible();
+      expect(screen.getByText('Regraded')).toBeVisible();
+      expect(
+        screen.getByText(`updated ${new Date(amendedAt).toLocaleString()}`),
+      ).toBeVisible();
+      // The first return is an earlier round, collapsed.
+      expect(screen.queryByText('Well argued')).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole('button', { name: /Earlier feedback/ }),
+      );
+      expect(screen.getByText('Well argued')).toBeVisible();
+    });
+
+    it('asks for a resubmission with the request and an open form', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () =>
+            submission({
+              status: 'resubmission_requested',
+              feedback: [
+                {
+                  kind: 'resubmission_requested',
+                  feedback: doc('Cite your sources'),
+                  version: 1,
+                  givenAt: '2026-11-15T09:00:00.000Z',
+                },
+              ],
+            }),
+        },
+      });
+
+      expect(
+        await screen.findByText('Your instructor asked you to resubmit'),
+      ).toBeVisible();
+      expect(screen.getByText('Cite your sources')).toBeVisible();
+      expect(screen.getByText('essay.pdf')).toBeVisible();
+      expect(await screen.findByLabelText('Choose file')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Resubmit' }),
+      ).not.toBeInTheDocument();
+      expect(submitButton()).toBeDisabled();
+    });
+
+    it('keeps the request under Earlier feedback once the student resubmits', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () =>
+            submission({
+              version: 2,
+              feedback: [
+                {
+                  kind: 'resubmission_requested',
+                  feedback: doc('Cite your sources'),
+                  version: 1,
+                  givenAt: '2026-11-15T09:00:00.000Z',
+                },
+              ],
+            }),
+        },
+      });
+
+      expect(await screen.findByText(/^Submitted/)).toBeVisible();
+      expect(
+        screen.queryByText('Your instructor asked you to resubmit'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Cite your sources')).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole('button', { name: /Earlier feedback/ }),
+      );
+      expect(screen.getByText('Cite your sources')).toBeVisible();
+    });
+
+    it('lists earlier rounds collapsed, newest first', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () =>
+            submission({
+              version: 2,
+              feedback: [
+                {
+                  kind: 'resubmission_requested',
+                  feedback: doc('Second request'),
+                  version: 2,
+                  givenAt: '2026-11-17T09:00:00.000Z',
+                },
+                {
+                  kind: 'resubmission_requested',
+                  feedback: doc('First request'),
+                  version: 1,
+                  givenAt: '2026-11-15T09:00:00.000Z',
+                },
+              ],
+              status: 'resubmission_requested',
+            }),
+        },
+      });
+
+      expect(await screen.findByText('Second request')).toBeVisible();
+      expect(screen.queryByText('First request')).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole('button', { name: /Earlier feedback/ }),
+      );
+      expect(screen.getByText('First request')).toBeVisible();
     });
   });
 });

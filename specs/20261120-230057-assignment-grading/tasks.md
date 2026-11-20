@@ -190,11 +190,11 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/student-portal:test -- --run assignment-item assignment-feedback` passes.
 
-- [ ] T016 [P] [US2] Tests first, then add `packages/websites/student-portal/src/routes/learn/$courseId/-components/assignment-feedback.tsx`.
+- [x] T016 [P] [US2] Tests first, then add `packages/websites/student-portal/src/routes/learn/$courseId/-components/assignment-feedback.tsx`.
   - It renders one round with `RichTextView`: kind label ("Resubmission requested", "Returned", "Grade updated"), date, version, and `points / pointsOutOf` when present.
   - It also renders an "Earlier feedback" list, collapsed by default and newest first.
   - `assignment-feedback.test.tsx` covers each kind and the collapsed list.
-- [ ] T017 [US2] Tests first, then change `assignment-item.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md) (Student portal):
+- [x] T017 [US2] Tests first, then change `assignment-item.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md) (Student portal):
   - `locked` stays `status === 'returned'`;
   - `returned` shows "Returned" with points / pointsOutOf, the latest feedback, the returned date, and "updated" with `gradedAt` when an amendment exists;
   - `resubmission_requested` shows the notice "Your instructor asked you to resubmit", the request's feedback, the current file and the resubmit form open by default;
