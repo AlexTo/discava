@@ -106,6 +106,14 @@ beforeEach(() => {
 });
 
 describe('notification.list', () => {
+  it('does not return an email action', async () => {
+    db.notifications = [
+      notification(1, { action: { label: 'Go', path: '/x' } }),
+    ];
+    const result = await call().list({});
+    expect(result.items[0]).not.toHaveProperty('action');
+  });
+
   it('lists newest first with read derived and the unread count', async () => {
     db.state = { unreadCount: 1, readThrough: position(2), version: 3 };
     db.notifications = [
@@ -238,6 +246,7 @@ describe('notification.preferences', () => {
     expect(result.map((p) => p.type)).toEqual([
       'assignment.returned',
       'announcement.posted',
+      'certificate.issued',
       'discussion.reply',
       'discussion.answered',
       'discussion.accepted',
@@ -249,10 +258,15 @@ describe('notification.preferences', () => {
       true,
       true,
       true,
+      true,
       false,
       true,
       false,
     ]);
+    expect(result.find((p) => p.type === 'certificate.issued')).toMatchObject({
+      name: 'Certificates',
+      emailEnabled: true,
+    });
     // Only the refund notice is required: it is always emailed.
     expect(result.filter((p) => p.required).map((p) => p.type)).toEqual([
       'order.refunded',
@@ -274,6 +288,7 @@ describe('notification.preferences', () => {
     const result = await call().preferences();
     expect(result.map((p) => p.emailEnabled)).toEqual([
       false,
+      true,
       true,
       true,
       true,

@@ -21,6 +21,7 @@ describe('NOTIFICATION_TYPES', () => {
     expect(ids.sort()).toEqual([
       'announcement.posted',
       'assignment.returned',
+      'certificate.issued',
       'discussion.accepted',
       'discussion.answered',
       'discussion.reply',
@@ -41,6 +42,7 @@ describe('NOTIFICATION_TYPES', () => {
       ),
     ).toEqual({
       'assignment.returned': 'default-on',
+      'certificate.issued': 'default-on',
       'announcement.posted': 'default-on',
       'discussion.reply': 'default-on',
       'discussion.answered': 'default-on',
@@ -59,6 +61,47 @@ describe('buildNotification', () => {
     expect(built.body.length).toBeGreaterThan(0);
     expect(built.link.path.startsWith('/')).toBe(true);
     expect(['student', 'instructor', 'admin']).toContain(built.link.portal);
+  });
+
+  it('builds a type without an action as before', () => {
+    expect(
+      buildNotification('review.received', sample('review.received')),
+    ).not.toHaveProperty('action');
+  });
+
+  it('builds the certificate notification with its two links', () => {
+    expect(
+      buildNotification('certificate.issued', {
+        certificateId: 'ABCD-EFGH-JKLM-NPQR',
+        courseTitle: 'History',
+      }),
+    ).toEqual({
+      title: 'Your certificate for History is ready',
+      body: 'You completed History. View your certificate, or add it to your LinkedIn profile so employers can see it.',
+      link: { portal: 'student', path: '/certificates/ABCD-EFGH-JKLM-NPQR' },
+      action: {
+        label: 'Add to LinkedIn profile',
+        path: '/certificates/ABCD-EFGH-JKLM-NPQR/linkedin?source=issued-email',
+      },
+    });
+  });
+
+  it('cuts an action label to 60 characters', () => {
+    const original = NOTIFICATION_TYPES['review.received'].build;
+    NOTIFICATION_TYPES['review.received'].build = (p) => ({
+      ...original(p),
+      action: { label: 'x'.repeat(100), path: '/a' },
+    });
+    try {
+      const { action } = buildNotification(
+        'review.received',
+        sample('review.received'),
+      );
+      expect(action?.label).toHaveLength(60);
+      expect(action?.path).toBe('/a');
+    } finally {
+      NOTIFICATION_TYPES['review.received'].build = original;
+    }
   });
 
   it('links an assignment return to the lesson', () => {

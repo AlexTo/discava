@@ -12,7 +12,9 @@ import {
   publishCertificateCourse,
   setCertificates,
 } from '../helpers/certificate.js';
+import { emailsFor } from '../helpers/notification.js';
 import { PORTALS } from '../helpers/portals.js';
+import { waitForQueuesToDrain } from '../helpers/router.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -202,6 +204,68 @@ test('a student adds their certificate to LinkedIn', async ({ browser }) => {
     await visitor.goto(`${PORTALS.student}/certificates/${certificateId}`);
     await expect(visitor.getByText(title)).toBeVisible();
     await expect(visitor.getByText('What LinkedIn asks for')).toHaveCount(0);
+  });
+});
+
+test('a student is told about their certificate and adds it from the email', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E certificate email course');
+  const learner = newUser('Nia', ['student']);
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+  const signedOut = await browser.newContext();
+  let certificateUrl = '';
+  let linkedInUrl = '';
+
+  await test.step('an instructor publishes a course and a student completes it', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await publishCertificateCourse(instructor, title);
+    await completeCourse(student, title, learner);
+  });
+
+  await test.step('the bell tells them the certificate is ready', async () => {
+    await student.goto(`${PORTALS.student}/my-learning`);
+    await student
+      .getByRole('button', { name: /^Notifications, \d+ unread$/ })
+      .click({ timeout: 30_000 });
+    await expect(
+      student.getByText(`Your certificate for ${title} is ready`),
+    ).toBeVisible();
+    await screenshot(student, 'certificate-issued-notification');
+  });
+
+  await test.step('one email carries the certificate and the LinkedIn address', async () => {
+    await waitForQueuesToDrain();
+    await expect
+      .poll(async () => (await emailsFor(learner.email, title)).length, {
+        timeout: 30_000,
+      })
+      .toBe(1);
+    const [email] = await emailsFor(learner.email, title);
+    certificateUrl = email!.text.match(
+      new RegExp(`Open: (${PORTALS.student}/certificates/\\S+)`),
+    )![1]!;
+    linkedInUrl = email!.text.match(
+      /Add to LinkedIn profile: (\S+\/linkedin\?source=issued-email)/,
+    )![1]!;
+    expect(certificateUrl).toMatch(CERTIFICATE_ID);
+    expect(linkedInUrl).toBe(`${certificateUrl}/linkedin?source=issued-email`);
+  });
+
+  await test.step('signed out, the email’s address lands on LinkedIn’s form', async () => {
+    const visitor = await signedOut.newPage();
+    // The test never reaches LinkedIn.
+    await signedOut.route('https://www.linkedin.com/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<h1>LinkedIn</h1>' }),
+    );
+    await visitor.goto(linkedInUrl);
+    await visitor.waitForURL(/^https:\/\/www\.linkedin\.com\/profile\/add/);
+    const params = new URL(visitor.url()).searchParams;
+    expect(params.get('certId')).toBe(certificateUrl.split('/').pop());
+    expect(params.get('name')).toBe(title);
+    await screenshot(visitor, 'certificate-email-to-linkedin');
   });
 });
 

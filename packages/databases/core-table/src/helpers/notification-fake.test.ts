@@ -19,11 +19,13 @@ const KEYS: Record<string, (r: Row) => string> = {
   notification: (r) => `${r.userId}|${r.occurredAt}#${r.id}`,
   notificationState: (r) => r.userId,
   notificationBroadcast: (r) => r.id,
+  certificate: (r) => `${r.userId}|${r.courseId}`,
 };
 const DEFAULTS: Record<string, () => Row> = {
   notification: () => ({ email: { state: 'pending' } }),
   notificationState: () => ({}),
   notificationBroadcast: () => ({ status: 'pending' }),
+  certificate: () => ({}),
 };
 
 const path = (row: Row, name: string) =>
@@ -72,6 +74,7 @@ export const createFakeNotificationTable = () => {
     notification: new Map(),
     notificationState: new Map(),
     notificationBroadcast: new Map(),
+    certificate: new Map(),
   };
   const log = { transactions: 0, cancelled: 0 };
   // Run before each transaction applies: lets a test change the table at the
@@ -135,6 +138,14 @@ export const createFakeNotificationTable = () => {
         return chain;
       },
       query: {
+        // The certificate's index by its public ID.
+        byCertificateId: ({ certificateId }: Row) => ({
+          go: async () => ({
+            data: [...rows.certificate!.values()]
+              .filter((r) => r.certificateId === certificateId)
+              .map((r) => structuredClone(r)),
+          }),
+        }),
         primary: ({ userId }: Row) => {
           const pos = (k: Row) => `${k.occurredAt}#${k.id}`;
           const run = (keep: (p: string) => boolean) => ({
@@ -177,6 +188,7 @@ export const createFakeNotificationTable = () => {
       notification: entity('notification'),
       notificationState: entity('notificationState'),
       notificationBroadcast: entity('notificationBroadcast'),
+      certificate: entity('certificate'),
     },
     transaction: {
       write: (cb: (entities: unknown) => FakeItem[]) => ({

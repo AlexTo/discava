@@ -18,6 +18,7 @@ export interface FakeNotification {
   title: string;
   body: string;
   link: { portal: 'student' | 'instructor' | 'admin'; path: string };
+  action?: { label: string; path: string };
   email: {
     state: string;
     reason?: string;

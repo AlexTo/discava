@@ -114,6 +114,14 @@ describe('sendNotificationEmail', () => {
     });
   });
 
+  it('passes a stored action to the message', async () => {
+    n.action = { label: 'Add to LinkedIn profile', path: '/c/linkedin' };
+    expect(await run()).toBe('sent');
+    expect(send.mock.calls[0][0].text).toContain(
+      'Add to LinkedIn profile: https://student.example.com/c/linkedin',
+    );
+  });
+
   it('sends nothing the second time', async () => {
     await run();
     expect(await run()).toBe('already-handled');

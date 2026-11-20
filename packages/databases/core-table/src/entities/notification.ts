@@ -60,6 +60,15 @@ export const createNotificationEntity = async () =>
             },
           },
         },
+        // A second link for the email, in the same portal as `link`. Not
+        // returned to the bell.
+        action: {
+          type: 'map',
+          properties: {
+            label: { type: 'string', required: true },
+            path: { type: 'string', required: true, validate: /^\// },
+          },
+        },
         // Set when marked read individually. A notification is also read
         // when its position is at or before the user's `readThrough`.
         readAt: {

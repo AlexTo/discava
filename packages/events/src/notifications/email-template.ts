@@ -8,6 +8,8 @@ export interface NotificationEmailInput {
   body: string;
   /** Where the notification leads; `path` starts with `/`. */
   link: { path: string };
+  /** A second link, in the same portal as `link`; `path` starts with `/`. */
+  action?: { label: string; path: string };
   /** The URL of the portal `link` belongs to. */
   portalUrl: string;
   /** The API route: for the one-click `List-Unsubscribe` header only. */
@@ -50,6 +52,7 @@ export const renderNotificationEmail = ({
   title,
   body,
   link,
+  action,
   portalUrl,
   unsubscribeUrl,
   unsubscribePageUrl,
@@ -58,6 +61,7 @@ export const renderNotificationEmail = ({
 }: NotificationEmailInput): NotificationEmail => {
   const subject = singleLine(title);
   const url = joinUrl(portalUrl, link.path);
+  const actionUrl = action && joinUrl(portalUrl, action.path);
   const reason = `You get this because you have ${typeName} emails on.`;
 
   const text = [
@@ -66,6 +70,7 @@ export const renderNotificationEmail = ({
     body,
     '',
     `Open: ${url}`,
+    ...(action ? [`${singleLine(action.label)}: ${actionUrl}`] : []),
     '',
     `${reason} Stop these emails: ${unsubscribePageUrl}`,
     `Email settings: ${settingsUrl}`,
@@ -77,7 +82,7 @@ export const renderNotificationEmail = ({
 <h1 style="font-size: 20px;">${escapeHtml(title)}</h1>
 <p>${escapeHtml(body)}</p>
 <p><a href="${escapeHtml(url)}" style="display: inline-block; padding: 10px 16px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 4px;">Open</a></p>
-<p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
+${action ? `<p><a href="${escapeHtml(actionUrl ?? '')}" style="display: inline-block; padding: 9px 15px; border: 1px solid #2563eb; color: #2563eb; text-decoration: none; border-radius: 4px;">${escapeHtml(action.label)}</a></p>\n` : ''}<p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
 <hr>
 <p style="font-size: 12px; color: #6b7280;">You get this because you have ${escapeHtml(typeName)} emails on. <a href="${escapeHtml(unsubscribePageUrl)}">Stop these emails</a>. <a href="${escapeHtml(settingsUrl)}">Email settings</a>.</p>
 </body>

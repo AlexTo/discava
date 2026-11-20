@@ -18,6 +18,7 @@ import { Route as SearchIndexRouteImport } from './routes/search/index'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
 import { Route as SigninIndexRouteImport } from './routes/signin/index'
 import { Route as CertificatesCertificateIdIndexRouteImport } from './routes/certificates/$certificateId/index'
+import { Route as CertificatesCertificateIdLinkedinRouteImport } from './routes/certificates/$certificateId/linkedin'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
 import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
@@ -68,6 +69,12 @@ const CertificatesCertificateIdIndexRoute =
     path: '/certificates/$certificateId/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const CertificatesCertificateIdLinkedinRoute =
+  CertificatesCertificateIdLinkedinRouteImport.update({
+    id: '/certificates/$certificateId/linkedin',
+    path: '/certificates/$certificateId/linkedin',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const LearnCourseIdIndexRoute = LearnCourseIdIndexRouteImport.update({
   id: '/learn/$courseId/',
   path: '/learn/$courseId/',
@@ -94,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
+  '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
@@ -108,6 +116,7 @@ export interface FileRoutesByTo {
   '/my-learning': typeof MyLearningIndexRoute
   '/search': typeof SearchIndexRoute
   '/signin': typeof SigninIndexRoute
+  '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/certificates/$certificateId': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
@@ -123,6 +132,7 @@ export interface FileRoutesById {
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
+  '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/my-learning/'
     | '/search/'
     | '/signin/'
+    | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/my-learning'
     | '/search'
     | '/signin'
+    | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
     | '/certificates/$certificateId'
     | '/learn/$courseId'
@@ -167,6 +179,7 @@ export interface FileRouteTypes {
     | '/my-learning/'
     | '/search/'
     | '/signin/'
+    | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
@@ -182,6 +195,7 @@ export interface RootRouteChildren {
   MyLearningIndexRoute: typeof MyLearningIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   SigninIndexRoute: typeof SigninIndexRoute
+  CertificatesCertificateIdLinkedinRoute: typeof CertificatesCertificateIdLinkedinRoute
   LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
   CertificatesCertificateIdIndexRoute: typeof CertificatesCertificateIdIndexRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
@@ -253,6 +267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CertificatesCertificateIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/certificates/$certificateId/linkedin': {
+      id: '/certificates/$certificateId/linkedin'
+      path: '/certificates/$certificateId/linkedin'
+      fullPath: '/certificates/$certificateId/linkedin'
+      preLoaderRoute: typeof CertificatesCertificateIdLinkedinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/learn/$courseId/': {
       id: '/learn/$courseId/'
       path: '/learn/$courseId'
@@ -286,6 +307,8 @@ const rootRouteChildren: RootRouteChildren = {
   MyLearningIndexRoute: MyLearningIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   SigninIndexRoute: SigninIndexRoute,
+  CertificatesCertificateIdLinkedinRoute:
+    CertificatesCertificateIdLinkedinRoute,
   LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
   CertificatesCertificateIdIndexRoute: CertificatesCertificateIdIndexRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
