@@ -59,7 +59,9 @@ const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
   const verify = vi.fn(async ({ certificateId }: { certificateId: string }) =>
     certificateId.replace(/-/g, '').toUpperCase() === 'ABCDEFGHJKMNPQRS'
       ? certificate
-      : notFound(),
+      : certificateId.length > 100
+        ? Promise.reject(new TRPCError({ code: 'BAD_REQUEST' }))
+        : notFound(),
   );
   const deps = {
     loadTemplate: async () => TEMPLATE,
@@ -337,6 +339,14 @@ describe('page renderer', () => {
       );
       expect(malformed).toEqual(unknown);
       expect(unknown.body).toContain('Not found');
+    });
+
+    it('answers an ID the procedure rejects as too long with the same 404', async () => {
+      const { render } = build();
+      const unknown = await render(get('/certificates/ZZZZ-ZZZZ-ZZZZ-ZZZZ'));
+      const tooLong = await render(get(`/certificates/${'A'.repeat(101)}`));
+      expect(tooLong.statusCode).toBe(404);
+      expect(tooLong).toEqual(unknown);
     });
 
     it('gives the plain noindex template to deeper paths without a lookup', async () => {

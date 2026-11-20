@@ -93,6 +93,9 @@ export const createAnonymousCaller = (): Caller =>
 const isNotFound = (error: unknown): boolean =>
   error instanceof TRPCError && error.code === 'NOT_FOUND';
 
+const isBadRequest = (error: unknown): boolean =>
+  error instanceof TRPCError && error.code === 'BAD_REQUEST';
+
 const decode = (segment: string): string => {
   try {
     return decodeURIComponent(segment);
@@ -263,7 +266,9 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
             { 'X-Robots-Tag': 'noindex' },
           );
         } catch (error) {
-          if (isNotFound(error)) return notFound();
+          // An over-long ID fails the procedure's input check: it is as
+          // malformed as any other and gets the same 404.
+          if (isNotFound(error) || isBadRequest(error)) return notFound();
           throw error;
         }
       }
