@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -26,52 +26,31 @@ const {
   contentItemPatch,
   patchSet,
   patchRemove,
-} = vi.hoisted(() => ({
-  transactionWrite: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   transactionGo: vi.fn(),
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  moduleGet: vi.fn(),
   modulePatch: vi.fn(),
-  lessonGet: vi.fn(),
-  lessonCreate: vi.fn(),
-  lessonQueryPrimary: vi.fn(),
-  contentItemGet: vi.fn(),
-  contentItemCreate: vi.fn(),
-  contentItemPatch: vi.fn(),
   patchSet: vi.fn(),
   patchRemove: vi.fn(),
-}));
-
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      module: { get: moduleGet },
-      lesson: {
-        get: lessonGet,
-        create: lessonCreate,
-        query: { primary: lessonQueryPrimary },
-      },
-      contentItem: {
-        get: contentItemGet,
-        create: contentItemCreate,
-        patch: contentItemPatch,
-      },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
-
-const caller = t.createCallerFactory(
-  t.router({
-    createQuizAssignment,
-    createUploadAssignment,
-    updateContentItemAssignment,
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    module: ['get'],
+    lesson: ['get', 'create', 'query.primary'],
+    contentItem: ['get', 'create', 'patch'],
+    transaction: ['write'],
   }),
+}));
+
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
 );
+
+const router = t.router({
+  createQuizAssignment,
+  createUploadAssignment,
+  updateContentItemAssignment,
+});
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
@@ -80,17 +59,7 @@ const LESSON_ID = 'lesson-1';
 const CONTENT_ITEM_ID = 'content-item-1';
 
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const doc = (text: string) =>
   JSON.stringify({

@@ -7,26 +7,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { categoryBySlug, listCategories } from './category.js';
 
-const { searchMock, categoryQuery, categoryGet, claimGet } = vi.hoisted(() => ({
+const {
+  searchMock,
+  categoryQueryPrimary,
+  categoryGet,
+  categoryClaimGet,
+  mockModule,
+} = await vi.hoisted(async () => ({
   searchMock: vi.fn(),
-  categoryQuery: vi.fn(),
-  categoryGet: vi.fn(),
-  claimGet: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    category: ['query.primary', 'get'],
+    categoryClaim: ['get'],
+  }),
 }));
 
 vi.mock('@discava/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/search')>()),
   getOpenSearchClient: vi.fn(async () => ({ search: searchMock })),
 }));
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      category: { query: { primary: categoryQuery }, get: categoryGet },
-      categoryClaim: { get: claimGet },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 const caller = t.createCallerFactory(
   t.router({ list: listCategories, bySlug: categoryBySlug }),
@@ -53,7 +54,9 @@ describe('category.list', () => {
   it('lists every active category with its course count, zero included, by name', async () => {
     const categories = Array.from({ length: 25 }, (_, i) => category(25 - i));
     categories.push(category(99, 'archived'));
-    categoryQuery.mockReturnValue({ go: async () => ({ data: categories }) });
+    categoryQueryPrimary.mockReturnValue({
+      go: async () => ({ data: categories }),
+    });
     searchMock.mockResolvedValue({
       body: {
         aggregations: {
@@ -84,7 +87,7 @@ describe('category.list', () => {
   });
 
   it('asks for a bucket per category, not the default ten, over published courses only', async () => {
-    categoryQuery.mockReturnValue({ go: async () => ({ data: [] }) });
+    categoryQueryPrimary.mockReturnValue({ go: async () => ({ data: [] }) });
     searchMock.mockResolvedValue({ body: {} });
 
     await callAnonymously().list();
@@ -103,7 +106,7 @@ describe('category.list', () => {
 
 describe('category.bySlug', () => {
   it('returns a category by its slug', async () => {
-    claimGet.mockReturnValue({
+    categoryClaimGet.mockReturnValue({
       go: async () => ({
         data: { claim: 'slug#category-1', categoryId: 'cat-1' },
       }),
@@ -118,11 +121,11 @@ describe('category.bySlug', () => {
       slug: 'category-1',
       status: 'active',
     });
-    expect(claimGet).toHaveBeenCalledWith({ claim: 'slug#category-1' });
+    expect(categoryClaimGet).toHaveBeenCalledWith({ claim: 'slug#category-1' });
   });
 
   it('returns an archived category with its status', async () => {
-    claimGet.mockReturnValue({
+    categoryClaimGet.mockReturnValue({
       go: async () => ({
         data: { claim: 'slug#category-1', categoryId: 'cat-1' },
       }),
@@ -137,7 +140,7 @@ describe('category.bySlug', () => {
   });
 
   it('is NOT_FOUND for an unknown slug', async () => {
-    claimGet.mockReturnValue({ go: async () => ({ data: null }) });
+    categoryClaimGet.mockReturnValue({ go: async () => ({ data: null }) });
 
     await expect(
       callAnonymously().bySlug({ slug: 'nope' }),

@@ -13,6 +13,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedDashboardRouteRouteImport } from './routes/_authenticated/dashboard/route'
+import { Route as AuthenticatedEarningsRouteRouteImport } from './routes/_authenticated/earnings/route'
 import { Route as AuthenticatedMyCoursesRouteRouteImport } from './routes/_authenticated/my-courses/route'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedDashboardCourseIdRouteRouteImport } from './routes/_authenticated/dashboard_/$courseId/route'
@@ -39,6 +40,12 @@ const AuthenticatedDashboardRouteRoute =
   AuthenticatedDashboardRouteRouteImport.update({
     id: '/dashboard',
     path: '/dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedEarningsRouteRoute =
+  AuthenticatedEarningsRouteRouteImport.update({
+    id: '/earnings',
+    path: '/earnings',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedMyCoursesRouteRoute =
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRouteRoute
+  '/earnings': typeof AuthenticatedEarningsRouteRoute
   '/my-courses': typeof AuthenticatedMyCoursesRouteRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/dashboard/$courseId': typeof AuthenticatedDashboardCourseIdRouteRoute
@@ -98,6 +106,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRouteRoute
+  '/earnings': typeof AuthenticatedEarningsRouteRoute
   '/my-courses': typeof AuthenticatedMyCoursesRouteRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/': typeof AuthenticatedIndexRoute
@@ -112,6 +121,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/signin': typeof SigninRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteRoute
+  '/_authenticated/earnings': typeof AuthenticatedEarningsRouteRoute
   '/_authenticated/my-courses': typeof AuthenticatedMyCoursesRouteRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/'
     | '/signin'
     | '/dashboard'
+    | '/earnings'
     | '/my-courses'
     | '/profile'
     | '/dashboard/$courseId'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
   to:
     | '/signin'
     | '/dashboard'
+    | '/earnings'
     | '/my-courses'
     | '/profile'
     | '/'
@@ -151,6 +163,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/signin'
     | '/_authenticated/dashboard'
+    | '/_authenticated/earnings'
     | '/_authenticated/my-courses'
     | '/_authenticated/profile'
     | '/_authenticated/'
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/earnings': {
+      id: '/_authenticated/earnings'
+      path: '/earnings'
+      fullPath: '/earnings'
+      preLoaderRoute: typeof AuthenticatedEarningsRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/my-courses': {
@@ -250,6 +270,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRouteRoute: typeof AuthenticatedDashboardRouteRoute
+  AuthenticatedEarningsRouteRoute: typeof AuthenticatedEarningsRouteRoute
   AuthenticatedMyCoursesRouteRoute: typeof AuthenticatedMyCoursesRouteRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -262,6 +283,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRouteRoute: AuthenticatedDashboardRouteRoute,
+  AuthenticatedEarningsRouteRoute: AuthenticatedEarningsRouteRoute,
   AuthenticatedMyCoursesRouteRoute: AuthenticatedMyCoursesRouteRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,

@@ -17,8 +17,23 @@ const navItems: PortalNavItem[] = [
   { label: 'Payments', to: '/payments', icon: CreditCard },
 ];
 
+// Static labels for path segments, which the breadcrumb would otherwise show
+// as the raw URL segment.
+export const segmentLabels = {
+  categories: 'Categories',
+  reviews: 'Reviews',
+  payments: 'Payments',
+  settings: 'Settings',
+  notifications: 'Notifications',
+};
+
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <PortalShell portal="admin" label="Admin" navItems={navItems}>
+  <PortalShell
+    portal="admin"
+    label="Admin"
+    navItems={navItems}
+    segmentLabels={segmentLabels}
+  >
     {children}
   </PortalShell>
 );

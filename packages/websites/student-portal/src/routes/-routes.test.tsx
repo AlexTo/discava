@@ -23,6 +23,7 @@ const handlers = {
     learnerName: 'Ada Lovelace',
     courseTitle: 'Linear Algebra',
     completedAt: '2026-10-05T12:00:00.000Z',
+    completedOn: '5 October 2026',
   }),
   'course.publicList': () => ({ items: [course] }),
   'course.publicSearch': () => ({

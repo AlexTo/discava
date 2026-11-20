@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { reorderModules } from './module.js';
@@ -16,48 +16,31 @@ const {
   modulePatch,
   modulePatchSet,
   courseCheck,
-} = vi.hoisted(() => ({
-  transactionWrite: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   transactionGo: vi.fn(),
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  moduleQueryPrimary: vi.fn(),
-  modulePatch: vi.fn(),
   modulePatchSet: vi.fn(),
   courseCheck: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get'],
+    module: ['query.primary', 'patch'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      module: {
-        query: { primary: moduleQueryPrimary },
-        patch: modulePatch,
-      },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 const router = t.router({ reorderModules });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
 const ARCHIVED_AT = '2024-02-01T00:00:00.000Z';
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const mod = (
   id: string,
