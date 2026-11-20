@@ -5,6 +5,7 @@
 
 import {
   type ApiUser,
+  addCourseInstructor,
   apiUser,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
@@ -213,6 +214,101 @@ test.describe('a student submitting to an upload assignment', () => {
     // The replaced file's folder is retired later, so it is still there
     // beside the winner's; the losers' are gone.
     await expectOnlyWinnersFolders(2);
+  });
+});
+
+test.describe('an instructor grading an upload assignment', () => {
+  let assignment: Awaited<ReturnType<typeof createUploadAssignmentCourse>>;
+  let second: ApiUser;
+  const key = () => ({
+    courseId: assignment.courseId,
+    contentItemId: assignment.contentItemId,
+    userId: student.sub,
+  });
+
+  test.beforeEach(async () => {
+    assignment = await createUploadAssignmentCourse(instructor, {
+      courseTitle: uniqueName('Concurrent grading'),
+      assignmentTitle: 'Essay',
+    });
+    await student.core.course.enrol.mutate({ courseId: assignment.courseId });
+    await student.core.assignment.submit.mutate(
+      await uploadSubmissionFile(
+        student,
+        assignment,
+        'essay.txt',
+        Buffer.from('essay'),
+      ),
+    );
+    second = await apiUser('Ines', ['instructor']);
+    await addCourseInstructor(assignment.courseId, second);
+  });
+
+  test.afterEach(async () => {
+    await instructor.instructor.course.archive.mutate({
+      courseId: assignment.courseId,
+    });
+  });
+
+  test('two instructors returning one submission at once: one succeeds, one gets CONFLICT', async () => {
+    const { submission } =
+      await instructor.instructor.assignmentSubmission.get.query(key());
+    const input = {
+      ...key(),
+      version: submission!.version,
+      reviewRevision: submission!.reviewRevision,
+      points: 5,
+    };
+
+    const results = await Promise.allSettled([
+      instructor.instructor.assignmentSubmission.return.mutate(input),
+      second.instructor.assignmentSubmission.return.mutate(input),
+    ]);
+
+    expect(fulfilled(results)).toHaveLength(1);
+    expect(errorCodes(results)).toEqual(['CONFLICT']);
+  });
+
+  test('a return racing the student’s resubmit: exactly one commits', async () => {
+    const { submission } =
+      await instructor.instructor.assignmentSubmission.get.query(key());
+    const resubmission = await uploadSubmissionFile(
+      student,
+      assignment,
+      'essay-2.txt',
+      Buffer.from('essay again'),
+    );
+
+    const [returned, resubmitted] = await Promise.allSettled([
+      instructor.instructor.assignmentSubmission.return.mutate({
+        ...key(),
+        version: submission!.version,
+        reviewRevision: submission!.reviewRevision,
+        points: 5,
+      }),
+      student.core.assignment.submit.mutate(resubmission),
+    ]);
+
+    const stored = await instructor.instructor.assignmentSubmission.get.query(
+      key(),
+    );
+    if (resubmitted.status === 'fulfilled') {
+      // The resubmit won: waiting at the new version with no grade.
+      expect(returned.status).toBe('rejected');
+      expect(stored.submission).toMatchObject({
+        state: 'submitted',
+        version: submission!.version + 1,
+      });
+      expect(stored.submission?.points).toBeUndefined();
+    } else {
+      // The return won, and the student's resubmit was refused.
+      expect(returned.status).toBe('fulfilled');
+      expect(stored.submission).toMatchObject({
+        state: 'returned',
+        version: submission!.version,
+        points: 5,
+      });
+    }
   });
 });
 

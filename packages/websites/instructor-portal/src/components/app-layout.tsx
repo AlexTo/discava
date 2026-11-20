@@ -26,6 +26,8 @@ const navItems: PortalNavItem[] = [
 const segmentLabels = {
   dashboard: 'Dashboard',
   'my-courses': 'My Courses',
+  assignments: 'Assignments',
+  submissions: 'Submissions',
   questions: 'Questions',
   reviews: 'Reviews',
   profile: 'Profile',
