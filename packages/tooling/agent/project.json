@@ -29,6 +29,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "agent-lock": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/agent-lock/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "agent-review-status": {
       "executor": "nx:run-commands",
       "options": {
@@ -61,6 +68,13 @@
       "executor": "nx:run-commands",
       "options": {
         "command": "tsx src/invariant-coverage/main.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "post-merge-test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/post-merge-test/main.ts",
         "cwd": "{projectRoot}"
       }
     },

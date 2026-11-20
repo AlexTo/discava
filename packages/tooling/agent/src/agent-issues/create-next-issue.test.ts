@@ -70,13 +70,17 @@ interface Scenario {
   dispatch?: string;
   /** Files the pull request changed. */
   files?: string[];
-  /** Bodies of the repository's issues (the stub applies no filter). */
+  /** Bodies of the repository's issues that the workflow opened. */
   issueBodies?: string[];
+  /** Bodies of issues opened by someone with no write access. */
+  strangerIssueBodies?: string[];
   /** Body of the issue `gh issue view` returns. */
   linkedIssueBody?: string;
   /** `gh issue view` fails, as it does for a number that is no issue. */
   linkedIssueMissing?: boolean;
   dryRun?: boolean;
+  /** GitHub refuses to lock the new issue. */
+  lockFails?: boolean;
 }
 
 // Runs the script against a stub `gh` that answers from the scenario and
@@ -100,9 +104,10 @@ const runScenario = (scenario: Scenario) => {
     }),
   );
   const calls: string[][] = [];
-  const created: { title: string; body: string; label: string }[] = [];
+  const created: { title: string; body: string; label?: string }[] = [];
   const comments: { pr: string; body: string }[] = [];
   const logs: string[] = [];
+  const locked: string[] = [];
   const arg = (args: string[], flag: string) => args[args.indexOf(flag) + 1];
   run({
     env: {
@@ -123,9 +128,30 @@ const runScenario = (scenario: Scenario) => {
         return (scenario.files ?? []).join('\n');
       }
       if (command === 'api' && args[1].includes('/issues?')) {
-        return (scenario.issueBodies ?? [])
-          .map((body) => JSON.stringify(body))
+        return [
+          ...(scenario.issueBodies ?? []).map((body) => ({
+            body,
+            author: 'github-actions[bot]',
+            association: 'NONE',
+          })),
+          ...(scenario.strangerIssueBodies ?? []).map((body) => ({
+            body,
+            author: 'mallory',
+            association: 'NONE',
+          })),
+        ]
+          .map((issue) => JSON.stringify(issue))
           .join('\n');
+      }
+      if (command === 'api' && args[1] === `repos/${REPOSITORY}/issues/400`) {
+        return 'false\n';
+      }
+      if (command === 'api' && args[1] === '-X') {
+        if (scenario.lockFails) {
+          throw new Error('HTTP 403');
+        }
+        locked.push(args[3]);
+        return '';
       }
       if (command === 'issue' && subcommand === 'view') {
         if (scenario.linkedIssueMissing) {
@@ -137,9 +163,20 @@ const runScenario = (scenario: Scenario) => {
         created.push({
           title: arg(args, '--title'),
           body: readFileSync(arg(args, '--body-file'), 'utf8'),
-          label: arg(args, '--label'),
+          label: args.includes('--label') ? arg(args, '--label') : undefined,
         });
         return 'https://github.com/AlexTo/discava/issues/400\n';
+      }
+      if (command === 'issue' && subcommand === 'edit') {
+        const issue = created.find((c) => c.label === undefined);
+        if (issue) {
+          // Labelled after locking, never at creation.
+          expect(locked).toContain(
+            `repos/${REPOSITORY}/issues/${args[2]}/lock`,
+          );
+          issue.label = arg(args, '--add-label');
+        }
+        return '';
       }
       if (command === 'pr' && subcommand === 'comment') {
         comments.push({
@@ -151,18 +188,20 @@ const runScenario = (scenario: Scenario) => {
       throw new Error(`Unexpected gh call: ${args.join(' ')}`);
     },
   });
-  return { calls, created, comments, logs };
+  return { calls, created, comments, logs, locked };
 };
 
 const specFiles = [`specs/${FOLDER}/tasks.md`, `specs/${FOLDER}/spec.md`];
 
 describe('a merged pull request', () => {
   it('labelled spec-ready opens the first issue, labelled for the agent', () => {
-    const { created, logs } = runScenario({
+    const { created, logs, locked } = runScenario({
       pr: { labels: ['spec-ready'] },
       files: specFiles,
     });
     expect(created).toHaveLength(1);
+    // Locked, so only collaborators can comment on what the agent reads.
+    expect(locked).toEqual([`repos/${REPOSITORY}/issues/400/lock`]);
     expect(created[0].title).toBe(
       'feat(assignment-submissions): submit work (with setup and foundations)',
     );
@@ -171,6 +210,18 @@ describe('a merged pull request', () => {
     expect(created[0].body).toContain('`T001` to `T002`');
     expect(created[0].body).toContain('`Refs #102`');
     expect(logs.join('\n')).toContain('Created https://github.com/');
+  });
+
+  it('fails the run when the new issue could not be locked, and never labels it', () => {
+    expect(() =>
+      runScenario({
+        pr: { labels: ['spec-ready'] },
+        files: specFiles,
+        lockFails: true,
+      }),
+    ).toThrow(
+      'Not handed to the agent: https://github.com/AlexTo/discava/issues/400',
+    );
   });
 
   it('without the label does nothing, even when it changes a spec', () => {
@@ -254,6 +305,16 @@ describe("an agent's merged pull request", () => {
     expect(comments[0].pr).toBe('302');
     expect(comments[0].body).toContain('T001, T002');
     expect(comments[0].body).toContain(`specs/${FOLDER}/`);
+  });
+
+  it('is not stalled by a marker in an issue a stranger opened', () => {
+    const { created, comments } = runScenario({
+      pr: agentPr,
+      linkedIssueBody: issueMarker(FOLDER, 0),
+      strangerIssueBodies: [`${issueMarker(FOLDER, 0)}\nbody`],
+    });
+    expect(created).toHaveLength(1);
+    expect(comments).toEqual([]);
   });
 
   it('opens nothing once every task is ticked', () => {
