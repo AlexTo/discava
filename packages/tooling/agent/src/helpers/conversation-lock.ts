@@ -28,9 +28,11 @@ export const numberFromUrl = (url: string): string | undefined =>
   /\/(?:issues|pull)\/(\d+)\/?$/.exec(url.trim())?.[1];
 
 /**
- * Locks an issue just opened for an agent, and the conversations it points
- * the agent at. If any can't be locked, the agent's label comes off the issue,
- * so the agent never picks it up open. True when everything was locked.
+ * Hands an issue just opened (unlabelled) to an agent: locks it and the
+ * conversations it points the agent at, and only then adds the agent's label,
+ * so the agent never picks it up while anyone can still comment. If anything
+ * can't be locked the label is never added. A label the workflow token adds
+ * starts no workflow. True when the issue was handed over.
  */
 export const lockAgentIssue = ({
   repository,
@@ -48,22 +50,21 @@ export const lockAgentIssue = ({
   log: (message: string) => void;
 }): boolean => {
   const issue = numberFromUrl(issueUrl);
+  const others = [...new Set(alsoLock)];
   try {
     if (!issue) {
       throw new Error(`no issue number in ${issueUrl}`);
     }
-    for (const number of [issue, ...alsoLock]) {
+    for (const number of [issue, ...others]) {
       lockConversation(repository, number, gh);
     }
-    return true;
   } catch (error) {
-    const what = [issueUrl, ...alsoLock.map((n) => `#${n}`)].join(' and ');
+    const what = [issueUrl, ...others.map((n) => `#${n}`)].join(', ');
     log(
-      `::warning::Could not lock ${what} (${(error as Error).message}); removed the ${label} label instead. Lock it, then add the label back.`,
+      `::warning::Could not lock ${what} (${(error as Error).message}), so the ${label} label was not added. Lock them, then add the label.`,
     );
-    if (issue) {
-      gh(['issue', 'edit', issue, '--remove-label', label]);
-    }
     return false;
   }
+  gh(['issue', 'edit', issue, '--add-label', label]);
+  return true;
 };

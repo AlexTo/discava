@@ -100,7 +100,7 @@ const runScenario = (scenario: Scenario) => {
     }),
   );
   const calls: string[][] = [];
-  const created: { title: string; body: string; label: string }[] = [];
+  const created: { title: string; body: string; label?: string }[] = [];
   const comments: { pr: string; body: string }[] = [];
   const logs: string[] = [];
   const locked: string[] = [];
@@ -145,9 +145,20 @@ const runScenario = (scenario: Scenario) => {
         created.push({
           title: arg(args, '--title'),
           body: readFileSync(arg(args, '--body-file'), 'utf8'),
-          label: arg(args, '--label'),
+          label: args.includes('--label') ? arg(args, '--label') : undefined,
         });
         return 'https://github.com/AlexTo/discava/issues/400\n';
+      }
+      if (command === 'issue' && subcommand === 'edit') {
+        const issue = created.find((c) => c.label === undefined);
+        if (issue) {
+          // Labelled after locking, never at creation.
+          expect(locked).toContain(
+            `repos/${REPOSITORY}/issues/${args[2]}/lock`,
+          );
+          issue.label = arg(args, '--add-label');
+        }
+        return '';
       }
       if (command === 'pr' && subcommand === 'comment') {
         comments.push({

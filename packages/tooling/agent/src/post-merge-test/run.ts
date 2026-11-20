@@ -284,16 +284,15 @@ export const run = (deps: Deps): void => {
       issue.title,
       '--body-file',
       bodyFile(issue.body),
-      '--label',
-      TEST_LABEL,
     ]).trim();
     notice(`Created ${url} to test #${number}`);
-    // The agent reads both the issue and the pull request it tests.
+    // The agent reads the issue, the pull request it tests and the issues
+    // that pull request closes.
     lockAgentIssue({
       repository,
       issueUrl: url,
       label: TEST_LABEL,
-      alsoLock: [number],
+      alsoLock: [number, ...pr.closingIssues],
       gh,
       log,
     });

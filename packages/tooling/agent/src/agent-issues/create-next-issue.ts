@@ -216,8 +216,6 @@ export const run = (deps: Deps): void => {
       plan.issue.title,
       '--body-file',
       bodyFile(plan.issue.body),
-      '--label',
-      AGENT_LABEL,
     ]).trim();
     notice(`Created ${url}`);
     lockAgentIssue({ repository, issueUrl: url, label: AGENT_LABEL, gh, log });

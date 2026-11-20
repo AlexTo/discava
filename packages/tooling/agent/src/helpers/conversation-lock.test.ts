@@ -39,13 +39,16 @@ describe('lockAgentIssue', () => {
         log: () => {},
       }),
     ).toBe(true);
-    expect(calls.filter((args) => args.includes('PUT'))).toEqual([
+    expect(
+      calls.filter((args) => args.includes('PUT') || args[1] === 'edit'),
+    ).toEqual([
       ['api', '-X', 'PUT', 'repos/o/r/issues/12/lock'],
       ['api', '-X', 'PUT', 'repos/o/r/issues/5/lock'],
+      ['issue', 'edit', '12', '--add-label', 'openhands'],
     ]);
   });
 
-  it('takes the label off when something could not be locked', () => {
+  it('never adds the label when something could not be locked', () => {
     const { calls, gh } = fakeGh(['/issues/5/']);
     const logs: string[] = [];
     expect(
@@ -58,13 +61,7 @@ describe('lockAgentIssue', () => {
         log: (m) => logs.push(m),
       }),
     ).toBe(false);
-    expect(calls).toContainEqual([
-      'issue',
-      'edit',
-      '12',
-      '--remove-label',
-      'openhands',
-    ]);
+    expect(calls.some((args) => args[1] === 'edit')).toBe(false);
     expect(logs[0]).toContain('::warning::');
   });
 });

@@ -64,9 +64,11 @@ const runScenario = (scenario: Scenario) => {
       },
     }),
   );
-  const created: { title: string; body: string; label: string }[] = [];
+  const created: { title: string; body: string; label?: string }[] = [];
   const locked: string[] = [];
-  const unlabelled: string[] = [];
+  const labelled: { issue: string; label: string }[] = [];
+  // Locks and labels in the order they happened.
+  const order: string[] = [];
   const logs: string[] = [];
   const flag = (args: string[], name: string) => args[args.indexOf(name) + 1];
   run({
@@ -87,23 +89,27 @@ const runScenario = (scenario: Scenario) => {
           throw new Error('HTTP 403');
         }
         locked.push(args[3]);
+        order.push(`lock ${args[3]}`);
         return '';
       }
       const lockedState = /^repos\/o\/r\/issues\/(\d+)$/.exec(path);
       if (lockedState) {
-        return (scenario.alreadyLocked ?? []).includes(Number(lockedState[1]))
+        const n = Number(lockedState[1]);
+        return (scenario.alreadyLocked ?? []).includes(n) ||
+          locked.includes(`repos/o/r/issues/${n}/lock`)
           ? 'true\n'
           : 'false\n';
       }
       if (args[0] === 'issue' && args[1] === 'edit') {
-        unlabelled.push(args[2]);
+        labelled.push({ issue: args[2], label: flag(args, '--add-label') });
+        order.push(`label ${args[2]}`);
         return '';
       }
       if (args[0] === 'issue' && args[1] === 'create') {
         created.push({
           title: flag(args, '--title'),
           body: readFileSync(flag(args, '--body-file'), 'utf8'),
-          label: flag(args, '--label'),
+          label: args.includes('--label') ? flag(args, '--label') : undefined,
         });
         return `https://github.com/o/r/issues/${900 + created.length}\n`;
       }
@@ -181,7 +187,7 @@ const runScenario = (scenario: Scenario) => {
       throw new Error(`Unexpected gh ${args.join(' ')}`);
     },
   });
-  return { created, logs, locked, unlabelled };
+  return { created, logs, locked, labelled, order };
 };
 
 describe('run', () => {
@@ -198,51 +204,54 @@ describe('run', () => {
       'test(post-merge): verify #11 change 11',
       'test(post-merge): verify #12 change 12',
     ]);
-    expect(created[0].label).toBe('openhands-test');
+    // Opened unlabelled: the label goes on once everything is locked.
+    expect(created[0].label).toBeUndefined();
     expect(created[0].body).toContain(testMarker(11));
     expect(created[0].body).toContain(`at \`${HEAD}\``);
     expect(created[0].body).toContain('Issue it closes: #5');
   });
 
-  it('locks each issue it opens, so only collaborators can comment', () => {
-    const { locked, unlabelled } = runScenario({
+  it('locks the issue, the pull request and what it closes, then labels it', () => {
+    const { labelled, order } = runScenario({
       previous: [{ id: 98, sha: PREV, jobs: deployJobs('success') }],
       commits: ['c1', HEAD],
       mergedAs: { c1: 11, [HEAD]: 12 },
     });
-    expect(locked).toEqual([
-      'repos/o/r/issues/901/lock',
-      'repos/o/r/issues/11/lock',
-      'repos/o/r/issues/902/lock',
-      'repos/o/r/issues/12/lock',
+    expect(order).toEqual([
+      'lock repos/o/r/issues/901/lock',
+      'lock repos/o/r/issues/11/lock',
+      'lock repos/o/r/issues/5/lock',
+      'label 901',
+      'lock repos/o/r/issues/902/lock',
+      'lock repos/o/r/issues/12/lock',
+      // #5 is locked already.
+      'label 902',
     ]);
-    expect(unlabelled).toEqual([]);
+    expect(labelled).toEqual([
+      { issue: '901', label: 'openhands-test' },
+      { issue: '902', label: 'openhands-test' },
+    ]);
   });
 
   it('leaves an already locked pull request as it is', () => {
     const { locked } = runScenario({
       existing: [testMarker(12)],
-      alreadyLocked: [12],
+      alreadyLocked: [12, 5],
       env: { GITHUB_EVENT_NAME: 'workflow_dispatch', PR_NUMBER: '12' },
     });
     expect(locked).toEqual(['repos/o/r/issues/901/lock']);
   });
 
-  it('takes the label off when the pull request could not be locked', () => {
-    const { unlabelled } = runScenario({
+  it.each([
+    ['the issue it closes', 5],
+    ['the pull request', 12],
+    ['the issue', 901],
+  ])('never labels the issue when %s could not be locked', (_, refused) => {
+    const { labelled, logs } = runScenario({
       mergedAs: { [HEAD]: 12 },
-      lockFails: 12,
+      lockFails: refused,
     });
-    expect(unlabelled).toEqual(['901']);
-  });
-
-  it('takes the label off an issue it could not lock', () => {
-    const { locked, unlabelled, logs } = runScenario({
-      mergedAs: { [HEAD]: 12 },
-      lockFails: 901,
-    });
-    expect(locked).toEqual([]);
-    expect(unlabelled).toEqual(['901']);
+    expect(labelled).toEqual([]);
     expect(logs.join('\n')).toContain('::warning::Could not lock');
   });
 

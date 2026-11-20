@@ -7,8 +7,9 @@ name: Post-merge Verify
 # test users and checking the stored data, and reports on the issue. The
 # issue says only what to test; how to test it is the agent's own prompt in
 # OpenHands (.github/ISSUE_TEMPLATE/test-deployed-pr.md is the by-hand form).
-# Each issue, and the pull request it tests, is locked as soon as the issue is
-# opened: the agent holds AWS credentials and reads both, so only
+# Each issue is opened unlabelled; it, the pull request it tests and the
+# issues that pull request closes are locked, and only then does the label go
+# on: the agent holds AWS credentials and reads all of them, so only
 # collaborators with write access may comment on them.
 #
 # A Deploy run that deployed nothing (its commit was no longer main's latest)
