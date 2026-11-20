@@ -239,14 +239,25 @@ export function EnrolmentActions({
       </>
     );
   } else if (enrolment?.status === 'dropped') {
-    // A refunded or dropped student can buy a priced course again. Enrolling
-    // again in a free one is not offered here yet.
+    // A refunded or dropped student can buy a priced course again, or enrol
+    // again in a free one (the API restores the enrolment, progress intact).
     action = (
       <>
         <ErrorAlert header="You're no longer enrolled">
-          Your enrolment in this course has ended.
+          Your enrolment has ended.
         </ErrorAlert>
-        {priced ? buy() : null}
+        {priced ? (
+          buy()
+        ) : (
+          <Button
+            className="w-full"
+            size="lg"
+            disabled={enrol.isPending}
+            onClick={() => enrol.mutate({ courseId })}
+          >
+            {enrol.isPending ? 'Enrolling…' : 'Enrol now'}
+          </Button>
+        )}
       </>
     );
   } else if (priced) {
