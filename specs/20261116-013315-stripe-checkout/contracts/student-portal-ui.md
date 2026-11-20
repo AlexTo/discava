@@ -31,3 +31,27 @@ On a refusal with `PRECONDITION_FAILED` "Payments are unavailable right now" (th
 ## Tests
 
 Student portal, with the `renderWithCoreApi`-style helper: every row of the table above; **Buy now** calls `payment.checkout` with the course ID and sends the browser to the returned URL; polling stops on the enrolment appearing and at 60 s (fake timers); the `?checkout=success` marker alone never shows the enrolled state; catalogue cards show the price; no arrow icons in any button. Instructor portal, with `renderWithInstructorApi`: shows the current price; typed "19.99" sends 1999; "abc", "0.5" and "10001" show the rule and send nothing; a failing call restores the field.
+
+## Amendment 2026-11-19: learner refunds and leaving a course
+
+**Course page** (`enrolment-actions.tsx`), added states. All buttons are text only (no arrow icons). Dates use the viewer's locale.
+
+| State | Shown |
+|-------|-------|
+| Course priced, any visitor not enrolled | under the price line: "14-day refund if you haven't completed the course." (the number from `course.publicView`) |
+| Enrolled, paid for, `canRequestRefund` | "You can request a refund until <date>." and **Request a refund**. The dialog says the amount, that access to the course ends and progress is kept, with **Request refund** and **Cancel** |
+| Enrolled, paid for, refund requested | "Refund requested on <date>. Your access ends when it is confirmed." No button. The page polls `course.myEnrolment` as the `?checkout=success` state does and moves to the ended state by itself |
+| Enrolled, paid for, `refundBlockedBy: window-ended` | "The refund period for this course ended on <date>." No button |
+| Completed, paid for, within the 14 days | "A course can't be refunded after you have completed it." No button |
+| Enrolled, paid for, `refundBlockedBy: other-account` | "This purchase can't be refunded here right now." No button |
+| Enrolled or completed, not paid for | **Leave course**. The dialog says the enrolment ends and progress is kept; if the course now has a price it adds "This course now has a price. To come back you would need to buy it." **Leave course** and **Cancel** |
+| `dropped`, with a refunded order (`payment.myOrder` is `refunded`) | "Your enrolment has ended. Refunded on <date>." and **Buy now** or, if the course is free, **Enrol now** |
+| `dropped`, otherwise (the student left) | "Your enrolment has ended." and **Enrol now** or, if the course is priced, **Buy now** |
+
+**Request a refund** and **Leave course** are never shown together: the first needs `paidFor`, the second its absence. Neither is shown on an ended enrolment. A refusal from the API is shown as an error alert with the API's message.
+
+**My Learning** is unchanged: an ended enrolment already leaves it.
+
+### Tests
+
+As listed in tasks T098 and T104.
