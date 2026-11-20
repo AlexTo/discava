@@ -152,4 +152,5 @@ export const openTranscript = async (page: Page, video: string) => {
 };
 
 // The lines of an open transcript panel.
-export const transcriptLines = (panel: Locator) => panel.getByRole('button');
+export const transcriptLines = (panel: Locator) =>
+  panel.getByRole('listitem').getByRole('button');

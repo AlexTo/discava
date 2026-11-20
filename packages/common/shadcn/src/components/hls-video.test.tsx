@@ -677,6 +677,21 @@ Third line
       expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     });
 
+    it('keeps the arrow keys on the transcript away from the player', async () => {
+      respondWith(VTT);
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      const line = await utils.findByRole('button', { name: /Third line/ });
+      line.focus();
+      media.volume = 0.5;
+      media.currentTime = 20;
+      await userEvent.keyboard('{ArrowUp}{ArrowRight}');
+      expect(media.volume).toBe(0.5);
+      expect(media.currentTime).toBe(20);
+    });
+
     it('ignores a rejected play', async () => {
       respondWith(VTT);
       HTMLMediaElement.prototype.play = vi.fn(() =>

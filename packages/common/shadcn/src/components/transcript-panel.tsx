@@ -38,25 +38,101 @@ export function TranscriptPanel({
   className?: string;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
-  const activeRef = React.useRef<HTMLButtonElement>(null);
+  const lineRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+  // Set while the panel moves focus itself, which isn't the learner reading.
+  const movingFocus = React.useRef(false);
+  const [following, setFollowing] = React.useState(true);
+  // The line last focused: it keeps the tab stop until the learner leaves.
+  const [focusedIndex, setFocusedIndex] = React.useState<number>();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of the current line moves the scroll
+  const tabStop =
+    focusedIndex !== undefined && focusedIndex < cues.length
+      ? focusedIndex
+      : Math.max(activeIndex, 0);
+
+  const scrollToActive = React.useCallback(
+    (centre: boolean) => {
+      const container = scrollRef.current;
+      const line = lineRefs.current[activeIndex];
+      if (!container || !line) {
+        return;
+      }
+      const top = line.offsetTop;
+      const bottom = top + line.offsetHeight;
+      if (
+        !centre &&
+        top >= container.scrollTop &&
+        bottom <= container.scrollTop + container.clientHeight
+      ) {
+        return;
+      }
+      const target = top - (container.clientHeight - line.offsetHeight) / 2;
+      const reduceMotion = window.matchMedia?.(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({
+          top: target,
+          behavior: reduceMotion ? 'auto' : 'smooth',
+        });
+      } else {
+        container.scrollTop = target;
+      }
+    },
+    [activeIndex],
+  );
+
+  // Resuming centres the current line; afterwards it only moves when the line leaves the view.
+  const wasFollowing = React.useRef(true);
   React.useEffect(() => {
-    const container = scrollRef.current;
-    const line = activeRef.current;
-    if (!container || !line) {
+    if (following) {
+      scrollToActive(!wasFollowing.current);
+    }
+    wasFollowing.current = following;
+  }, [activeIndex, following]);
+
+  const pause = () => setFollowing(false);
+  const resume = () => setFollowing(true);
+
+  const focusLine = (index: number, quietly = false) => {
+    movingFocus.current = quietly;
+    lineRefs.current[index]?.focus();
+    movingFocus.current = false;
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const current = lineRefs.current.findIndex(
+      (line) => line === document.activeElement,
+    );
+    if (current < 0) {
       return;
     }
-    const top = line.offsetTop;
-    const bottom = top + line.offsetHeight;
-    if (
-      top < container.scrollTop ||
-      bottom > container.scrollTop + container.clientHeight
-    ) {
-      container.scrollTop =
-        top - (container.clientHeight - line.offsetHeight) / 2;
+    const last = cues.length - 1;
+    const next =
+      event.key === 'ArrowDown'
+        ? Math.min(current + 1, last)
+        : event.key === 'ArrowUp'
+          ? Math.max(current - 1, 0)
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? last
+              : undefined;
+    if (next === undefined) {
+      return;
     }
-  }, [activeIndex]);
+    event.preventDefault();
+    focusLine(next);
+  };
+
+  const jumpToCurrent = () => {
+    resume();
+    // The button is about to go away; keep focus in the panel.
+    if (activeIndex >= 0) {
+      setFocusedIndex(activeIndex);
+      focusLine(activeIndex, true);
+    }
+  };
 
   return (
     <section
@@ -72,7 +148,27 @@ export function TranscriptPanel({
         <h3 className="text-sm font-semibold">Transcript</h3>
         <span className="text-xs text-muted-foreground">{languageLabel}</span>
       </div>
-      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
+      {!following && (
+        <button
+          type="button"
+          onClick={jumpToCurrent}
+          className="border-b px-3 py-1.5 text-left text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+        >
+          Jump to current line
+        </button>
+      )}
+      <div
+        ref={scrollRef}
+        onWheel={pause}
+        onTouchMove={pause}
+        onPointerDown={(event) => {
+          // Lines cover the content, so a press on the area itself is its scrollbar.
+          if (event.target === event.currentTarget) {
+            pause();
+          }
+        }}
+        className="relative min-h-0 flex-1 overflow-y-auto"
+      >
         {status === 'failed' ? (
           <p className="p-3 text-sm text-muted-foreground">
             This transcript couldn't be loaded.
@@ -82,16 +178,28 @@ export function TranscriptPanel({
             This transcript is empty.
           </p>
         ) : (
-          <ol>
+          <ol onKeyDown={onKeyDown}>
             {cues.map((cue, index) => {
               const active = index === activeIndex;
               return (
                 <li key={`${cue.start}-${index}`}>
                   <button
-                    ref={active ? activeRef : undefined}
+                    ref={(node) => {
+                      lineRefs.current[index] = node;
+                    }}
                     type="button"
+                    tabIndex={index === tabStop ? 0 : -1}
+                    onFocus={() => {
+                      setFocusedIndex(index);
+                      if (!movingFocus.current) {
+                        pause();
+                      }
+                    }}
                     aria-current={active ? 'true' : undefined}
-                    onClick={() => onChoose(cue)}
+                    onClick={() => {
+                      onChoose(cue);
+                      resume();
+                    }}
                     className={cn(
                       'flex w-full gap-3 border-l-2 border-transparent px-3 py-1.5 text-left text-sm break-words hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
                       active && 'border-primary bg-accent/50 font-semibold',

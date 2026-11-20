@@ -71,6 +71,46 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
     )
     .toBeGreaterThanOrEqual(2);
 
+  await test.step('the transcript works by keyboard alone', async () => {
+    // Back to the start with the panel closed, so the list opens on line one.
+    const toggle = page.getByRole('button', { name: 'Transcript' });
+    await toggle.click();
+    await expect(
+      page.getByRole('region', { name: /^Transcript/ }),
+    ).toBeHidden();
+    await lessonVideo(page, 'Video').evaluate((v: HTMLVideoElement) => {
+      v.pause();
+      v.currentTime = 0;
+    });
+    await toggle.focus();
+    await page.keyboard.press('Enter');
+    const keyboardPanel = page.getByRole('region', { name: /^Transcript/ });
+    await expect(keyboardPanel).toBeVisible();
+    await page.keyboard.press('Tab');
+    const keyboardLines = transcriptLines(keyboardPanel);
+    await expect(keyboardLines.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(keyboardLines.nth(2)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect
+      .poll(() =>
+        lessonVideo(page, 'Video').evaluate(
+          (v: HTMLVideoElement) => v.currentTime,
+        ),
+      )
+      .toBeGreaterThanOrEqual(2);
+    await expect(keyboardLines.nth(2)).toBeFocused();
+    await screenshot(page, 'transcript-panel-keyboard');
+    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(
+        () =>
+          !document.activeElement?.closest('[data-slot="transcript-panel"]'),
+      ),
+    ).toBe(true);
+  });
+
   await page.setViewportSize({ width: 375, height: 800 });
   const player = page.getByRole('group', { name: 'Video player' });
   await expect(panel).toBeVisible();
