@@ -70,6 +70,7 @@ describe('parseNotifyArgs', () => {
     [['--user', 'u1', '--type', 'review.received', '--param', 'novalue']],
     [['--user', 'u1', '--type', 'nope.nope']],
     [['--user', 'u1', '--type', 'certificate.issued']],
+    [['--user', 'u1', '--type', 'certificate.reminder']],
     [['--user', 'u1', '--type', 'review.received', '--bogus']],
   ])('refuses %j', (args) => {
     expect(() => parseNotifyArgs(args, now)).toThrow();
@@ -80,6 +81,12 @@ describe('cannedParams', () => {
   it('refuses a certificate type, which belongs to a certificate', () => {
     expect(() => cannedParams('certificate.issued')).toThrow(
       'Certificate notifications belong to a certificate: complete a course instead',
+    );
+  });
+
+  it('refuses the certificate reminder too', () => {
+    expect(() => cannedParams('certificate.reminder')).toThrow(
+      'Certificate notifications belong to a certificate',
     );
   });
 

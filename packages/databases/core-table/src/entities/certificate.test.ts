@@ -48,6 +48,18 @@ describe('certificate', () => {
     ).not.toThrow();
   });
 
+  it('accepts the reminder’s schedule and send times', () => {
+    expect(() =>
+      certificate
+        .create({
+          ...full,
+          reminderScheduledAt: '2026-11-02T00:00:00.000Z',
+          reminderSentAt: '2026-11-05T00:00:00.000Z',
+        })
+        .params(),
+    ).not.toThrow();
+  });
+
   it('refuses a LinkedIn source outside the four', () => {
     expect(() =>
       certificate

@@ -291,3 +291,131 @@ describe('certificate-notifications-match', () => {
     expect(violationsOf()[0]?.message).toMatch(/more than one/);
   });
 });
+
+describe('certificate-reminder-not-after-click', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const setup = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: ISSUED,
+      issuedAt: ISSUED,
+    });
+    return table.certificates[0];
+  };
+  const violationsOf = () =>
+    checkTableInvariants(table).filter(
+      (v) => v.invariant === 'certificate-reminder-not-after-click',
+    );
+
+  it('accepts a scheduled reminder that was not sent', () => {
+    const certificate = setup();
+    certificate.reminderScheduledAt = '2026-01-03T00:00:01.000Z';
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('accepts a reminder before the click, and at the same time', () => {
+    const certificate = setup();
+    certificate.reminderSentAt = '2026-01-06T00:00:00.000Z';
+    certificate.linkedInClickedAt = '2026-01-07T00:00:00.000Z';
+    certificate.linkedInClickSource = 'reminder-email';
+    expect(violationsOf()).toEqual([]);
+    certificate.linkedInClickedAt = '2026-01-06T00:00:00.000Z';
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('reports a reminder after the click', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    certificate.reminderSentAt = '2026-01-06T00:00:00.000Z';
+    expect(violationsOf()[0]?.message).toMatch(/after linkedInClickedAt/);
+  });
+
+  it('reports a reminder before the certificate was issued', () => {
+    const certificate = setup();
+    certificate.reminderSentAt = '2026-01-02T00:00:00.000Z';
+    expect(violationsOf()[0]?.message).toMatch(/before issuedAt/);
+  });
+});
+
+describe('certificate-notifications-match for reminders', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const SENT = '2026-01-06T00:00:00.000Z';
+  const reminder = (id: string, userId = 'student', occurredAt = SENT) => ({
+    userId,
+    occurredAt,
+    id,
+    type: 'certificate.reminder',
+    link: {
+      portal: 'student' as const,
+      path: '/certificates/0123-4567-89AB-CDEF',
+    },
+    email: { state: 'skipped' as const, reason: 'never' },
+    createdAt: occurredAt,
+  });
+  const setup = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: ISSUED,
+      issuedAt: ISSUED,
+      reminderSentAt: SENT,
+    });
+    table.notifications = [reminder('a1b2c3d4e5f60718')];
+    table.notificationStates = [{ userId: 'student', unreadCount: 1 }];
+  };
+  const violationsOf = () =>
+    checkTableInvariants(table).filter(
+      (v) => v.invariant === 'certificate-notifications-match',
+    );
+
+  it('accepts a reminder matching its certificate’s reminderSentAt', () => {
+    setup();
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('accepts one issued and one reminder notification on a certificate', () => {
+    setup();
+    table.notifications.push({
+      ...reminder('b1b2c3d4e5f60718', 'student', ISSUED),
+      type: 'certificate.issued',
+    });
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('reports a reminder whose time differs from reminderSentAt', () => {
+    setup();
+    table.certificates[0].reminderSentAt = '2026-01-07T00:00:00.000Z';
+    expect(violationsOf()[0]?.message).toMatch(/reminderSentAt/);
+  });
+
+  it('reports a reminder for a certificate with no reminderSentAt', () => {
+    setup();
+    table.certificates[0].reminderSentAt = undefined;
+    expect(violationsOf()).toHaveLength(1);
+  });
+
+  it('reports another user’s certificate', () => {
+    setup();
+    table.certificates[0].userId = 'someone-else';
+    expect(violationsOf()[0]?.message).toMatch(/another user/);
+  });
+
+  it('reports two reminders on one certificate', () => {
+    setup();
+    table.notifications.push(reminder('b1b2c3d4e5f60718'));
+    expect(violationsOf()).toHaveLength(1);
+    expect(violationsOf()[0]?.message).toMatch(/more than one/);
+  });
+});

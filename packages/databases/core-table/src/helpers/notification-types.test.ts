@@ -22,6 +22,7 @@ describe('NOTIFICATION_TYPES', () => {
       'announcement.posted',
       'assignment.returned',
       'certificate.issued',
+      'certificate.reminder',
       'discussion.accepted',
       'discussion.answered',
       'discussion.reply',
@@ -43,6 +44,7 @@ describe('NOTIFICATION_TYPES', () => {
     ).toEqual({
       'assignment.returned': 'default-on',
       'certificate.issued': 'default-on',
+      'certificate.reminder': 'default-on',
       'announcement.posted': 'default-on',
       'discussion.reply': 'default-on',
       'discussion.answered': 'default-on',
@@ -51,6 +53,35 @@ describe('NOTIFICATION_TYPES', () => {
       'review.received': 'default-off',
     });
   });
+});
+
+describe('emailPreferenceType', () => {
+  const followers = Object.values(NOTIFICATION_TYPES).filter(
+    (type) => type.emailPreferenceType,
+  );
+
+  it('is set on the certificate reminder, following certificate.issued', () => {
+    expect(NOTIFICATION_TYPES['certificate.reminder'].emailPreferenceType).toBe(
+      'certificate.issued',
+    );
+    expect(followers.map((type) => type.id)).toEqual(['certificate.reminder']);
+  });
+
+  it.each(followers.map((type) => type.id))(
+    '%s names an existing type that has none itself and the same email policy',
+    (id) => {
+      const type = NOTIFICATION_TYPES[id];
+      const named = Object.hasOwn(
+        NOTIFICATION_TYPES,
+        type.emailPreferenceType as string,
+      )
+        ? NOTIFICATION_TYPES[type.emailPreferenceType as string]
+        : undefined;
+      expect(named).toBeDefined();
+      expect(named?.emailPreferenceType).toBeUndefined();
+      expect(named?.emailPolicy).toBe(type.emailPolicy);
+    },
+  );
 });
 
 describe('buildNotification', () => {
@@ -82,6 +113,23 @@ describe('buildNotification', () => {
       action: {
         label: 'Add to LinkedIn profile',
         path: '/certificates/ABCD-EFGH-JKLM-NPQR/linkedin?source=issued-email',
+      },
+    });
+  });
+
+  it('builds the certificate reminder, with the reminder-email source', () => {
+    expect(
+      buildNotification('certificate.reminder', {
+        certificateId: 'ABCD-EFGH-JKLM-NPQR',
+        courseTitle: 'History',
+      }),
+    ).toEqual({
+      title: 'Add your History certificate to LinkedIn',
+      body: "Your certificate for History isn't on your LinkedIn profile yet, as far as we can tell. Adding it takes one click.",
+      link: { portal: 'student', path: '/certificates/ABCD-EFGH-JKLM-NPQR' },
+      action: {
+        label: 'Add to LinkedIn profile',
+        path: '/certificates/ABCD-EFGH-JKLM-NPQR/linkedin?source=reminder-email',
       },
     });
   });

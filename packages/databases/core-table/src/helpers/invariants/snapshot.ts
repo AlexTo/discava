@@ -211,6 +211,8 @@ export interface TableSnapshot {
     | 'issuedAt'
     | 'linkedInClickedAt'
     | 'linkedInClickSource'
+    | 'reminderScheduledAt'
+    | 'reminderSentAt'
   >[];
   videoPositions: Pick<
     Item<typeof createVideoPositionEntity>,

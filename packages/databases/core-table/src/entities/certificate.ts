@@ -65,6 +65,14 @@ export const createCertificateEntity = async () =>
             'reminder-email',
           ] as const,
         },
+        // The reminder's schedule exists (markCertificateReminderScheduled),
+        // and the reminder was claimed for sending (claimCertificateReminder).
+        reminderScheduledAt: {
+          type: 'string',
+        },
+        reminderSentAt: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,
