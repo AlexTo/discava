@@ -30,6 +30,7 @@ import {
   type PageContext,
   type RenderedPage,
 } from './page.js';
+import { renderCertificatePage } from './render-certificate.js';
 import { renderCoursePage } from './render-course.js';
 import { renderProfilePage } from './render-profile.js';
 import { robotsTxt } from './robots.js';
@@ -91,6 +92,9 @@ export const createAnonymousCaller = (): Caller =>
 
 const isNotFound = (error: unknown): boolean =>
   error instanceof TRPCError && error.code === 'NOT_FOUND';
+
+const isBadRequest = (error: unknown): boolean =>
+  error instanceof TRPCError && error.code === 'BAD_REQUEST';
 
 const decode = (segment: string): string => {
   try {
@@ -232,6 +236,39 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           );
         } catch (error) {
           if (isNotFound(error)) return notFound();
+          throw error;
+        }
+      }
+      if (first === 'certificates' && id) {
+        if (rest.length > 0) {
+          // The signed-in routes under a certificate: never indexed.
+          return html(
+            200,
+            injectIntoTemplate(template, {
+              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
+              root: '',
+            }),
+            PAGE_CACHE,
+            { 'X-Robots-Tag': 'noindex' },
+          );
+        }
+        try {
+          const certificate = await deps.caller.certificate.verify({
+            certificateId: id,
+          });
+          return html(
+            200,
+            injectIntoTemplate(
+              template,
+              renderCertificatePage(context, certificate),
+            ),
+            PAGE_CACHE,
+            { 'X-Robots-Tag': 'noindex' },
+          );
+        } catch (error) {
+          // An over-long ID fails the procedure's input check: it is as
+          // malformed as any other and gets the same 404.
+          if (isNotFound(error) || isBadRequest(error)) return notFound();
           throw error;
         }
       }

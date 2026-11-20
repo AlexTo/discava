@@ -67,6 +67,7 @@ describe('the student portal page renderer', () => {
     }[];
     const behaviors = distribution.DistributionConfig.CacheBehaviors;
     expect(behaviors.map((b) => b.PathPattern).sort()).toEqual([
+      '/certificates/*',
       '/instructors/*',
       '/learn/*',
       '/robots.txt',
