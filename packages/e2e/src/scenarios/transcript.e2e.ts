@@ -34,9 +34,9 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
       method: 'PUT',
       headers: target.headers,
       body: webVttOf([
-        { start: 1, end: 4, text: `Welcome to the ${phrase} lesson` },
-        { start: 5, end: 8, text: 'Here is the second line' },
-        { start: 9, end: 12, text: 'And this is the third line' },
+        { start: 0, end: 1, text: `Welcome to the ${phrase} lesson` },
+        { start: 1, end: 2, text: 'Here is the second line' },
+        { start: 2, end: 3, text: 'And this is the third line' },
       ]),
     });
     expect(response.ok).toBe(true);
@@ -60,6 +60,8 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
   await expect(lines.nth(0)).toContainText(phrase);
   await screenshot(page, 'transcript-panel-open');
 
+  // The test video is three seconds long, so the third line starts at 2 s.
+  // Nothing was playing, so reaching it means the click seeked.
   await lines.nth(2).click();
   await expect
     .poll(() =>
@@ -67,7 +69,7 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
         (v: HTMLVideoElement) => v.currentTime,
       ),
     )
-    .toBeGreaterThanOrEqual(9);
+    .toBeGreaterThanOrEqual(2);
 
   await page.setViewportSize({ width: 375, height: 800 });
   const player = page.getByRole('group', { name: 'Video player' });
