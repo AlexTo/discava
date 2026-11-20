@@ -212,7 +212,8 @@ export const setQuizAttempts = async (
   const dialog = page.getByRole('dialog', { name: `Edit ${title}` });
   await dialog.getByLabel('Number of attempts').fill(String(attempts));
   await dialog.getByRole('button', { name: 'Save quiz' }).click();
-  await expect(dialog.getByRole('status')).toHaveText('Saved');
+  // An editing notice is also a status, so look for the "Saved" text itself.
+  await expect(dialog.getByText('Saved', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Close' }).first().click();
   await expect(dialog).toBeHidden();
 };
