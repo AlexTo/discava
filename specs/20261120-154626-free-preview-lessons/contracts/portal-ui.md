@@ -28,7 +28,7 @@ Route `routes/learn/$courseId/preview/$lessonId.tsx`, public (no `requireSignIn`
 | Condition | Page |
 |-----------|------|
 | Loading | The portal's usual skeleton |
-| Signed in with a current enrolment (`active` or `completed`) | Navigate to `/learn/$courseId/lesson/$lessonId`, replacing the history entry |
+| Signed in with a current enrolment (`active` or `completed`) | Navigate to `/learn/$courseId/lesson/$lessonId`, replacing the history entry. Checked before the rows below, so a student of an archived course still reaches their lesson |
 | `course.publicView` is `NOT_FOUND` | "This preview is no longer available." No link |
 | The outline lacks the lesson, or has it with `freePreview: false`, or `freePreview.lesson` is `NOT_FOUND` | "This preview is no longer available." and a link "View the course" to `/learn/$courseId` |
 | Any other error | The portal's `ErrorAlert` with a retry |

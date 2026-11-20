@@ -93,7 +93,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ### Tests for User Stories 2 and 1 (write first, see them fail)
 
-- [ ] T015 [P] [US2] Extend `packages/apis/core-api/src/procedures/paid-access.test.ts` without loosening any case (research R-9): run its table of enrolled procedures a second time with the lesson in the mocked table being an open preview (`freePreview: true`, `kind` `lesson`, visible, in a priced published course) and expect the same `FORBIDDEN` from every one for a signed-in student with no enrolment, and for one whose enrolment is `dropped`. Add `contentItem.saveVideoPosition`, `quiz.myAttempts`, `course.myLessonProgress` and `announcement.list` to the table if they are not in it. This is the test that fails if `requireEnrolment` is ever taught about previews.
+- [ ] T015 [P] [US2] Extend `packages/apis/core-api/src/procedures/paid-access.test.ts` without loosening any case (research R-9): run its table of enrolled procedures a second time with the lesson in the mocked table being an open preview (`freePreview: true`, `kind` `lesson`, visible, in a priced published course) and expect the same `FORBIDDEN` from every one for a signed-in student with no enrolment, and for one whose enrolment is `dropped`. Add `contentItem.saveVideoPosition`, `quiz.myAttempts`, `course.myLessonProgress` and `announcement.list` to the table if they are not in it. Add one case to `packages/apis/core-api/src/helpers/discussion-access.test.ts`: a student with no enrolment is refused by `requireDiscussionAccess` for a lesson that is an open preview, as for any lesson (FR-006). These are the tests that fail if `requireEnrolment` is ever taught about previews.
 - [ ] T016 [P] [US2] The refusal matrix, in a new `packages/apis/core-api/src/procedures/free-preview.test.ts` (mock the table as `paid-access.test.ts` does, and mock `@discava/common-server-utils/lesson-media`), per [contracts/core-api-free-preview.md](./contracts/core-api-free-preview.md) "Tests" 2 to 5. For each of `freePreview.lesson`, `freePreview.videoUrl` and `freePreview.fileUrl`, called with no user:
   - course `draft`, `archived` and missing; module hidden, archived and missing; lesson hidden, archived, missing, not marked, and an assignment lesson that carries the mark: each is `NOT_FOUND` "This preview is not available", identical in code and message;
   - for the two signing queries: the item missing, hidden, archived, of the other type, a video with nothing playable, and **a real, shown video and file that belong to a different lesson of the same course (a non-preview one) addressed under the preview lesson's IDs**: each the same `NOT_FOUND`;
@@ -187,7 +187,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 - [ ] T032 [P] [US4] Extend `-components/free-preview-page.test.tsx` and `-components/enrolment-actions.test.tsx` in `packages/websites/student-portal/src/routes/learn/$courseId/`, per [contracts/portal-ui.md](./contracts/portal-ui.md):
   - the page shows `EnrolmentActions` for the course with its price, and the line "Your progress is saved once you enrol.";
   - "More free previews" lists the outline's other lessons with `freePreview: true`, in order, and is absent when there are none;
-  - signed in with an `active` or a `completed` enrolment: the page navigates to `/learn/$courseId/lesson/$lessonId` (use `mockRouter`); with a `dropped` enrolment it stays on the preview;
+  - signed in with an `active` or a `completed` enrolment: the page navigates to `/learn/$courseId/lesson/$lessonId` (use `mockRouter`); with a `dropped` enrolment it stays on the preview; an enrolled student is navigated to the lesson even when `course.publicView` is `NOT_FOUND` (an archived course they still study), because the enrolment is checked before the "no longer available" states;
   - `EnrolmentActions` with `continueTo={{ lessonId }}`: after a successful `course.enrol` the dialog's button reads "Start this lesson" and links to the lesson route; without the prop every existing assertion still passes unchanged;
   - no arrow icon in any button.
 
@@ -208,7 +208,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run render handler robots sitemap` passes.
 
-- [ ] T037 [P] [US5] Tests first, per [contracts/page-renderer.md](./contracts/page-renderer.md) "Tests", in `packages/apis/core-api/src/page-renderer/render.test.ts`, `handler.test.ts`, `robots.test.ts` and `packages/apis/core-api/src/helpers/sitemap.test.ts`: the outline renders the link and "Free preview" for a marked lesson only; a hostile title and hostile IDs are escaped inside the link; `/learn/<courseId>/preview/<lessonId>` returns the plain template with `noindex`, no lesson title and no page data script; the robots file disallows that address and the site map does not list it.
+- [ ] T037 [P] [US5] Tests first, per [contracts/page-renderer.md](./contracts/page-renderer.md) "Tests", in `packages/apis/core-api/src/page-renderer/render.test.ts`, `handler.test.ts`, `robots.test.ts` and `packages/apis/core-api/src/helpers/sitemap.test.ts`: the outline renders the link and "Free preview" for a marked lesson only; a hostile title and hostile IDs are escaped inside the link; `/learn/<courseId>/preview/<lessonId>` returns the plain template with `noindex`, no lesson title and no page data script, and reads nothing from the table; the robots file disallows that address and the site map does not list it.
 - [ ] T038 [US5] In `packages/apis/core-api/src/page-renderer/render-course.ts`, render an outline lesson with `freePreview: true` as `<li class="text-sm"><a href="/learn/<courseId>/preview/<lessonId>">title</a> <span>Free preview</span></li>`, escaping the title and both IDs with the file's existing helpers; leave other lessons and every other part of the renderer unchanged. Run the tests of T037 and fix failures in the code.
 
 **Checkpoint**: all five stories work locally.
@@ -240,6 +240,36 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 - Within Phase 5: T032; then T033 → T034 → T035 → T036.
 - Within a phase, tests come first, and tasks run in ID order except those marked [P].
 - This spec needs the Stripe checkout spec's Phases 1 to 7 (prices, the unpaid-enrolment refusal, the purchase and the landing page's Buy now) and the public course pages spec's landing page and renderer; all are on `main`. It does not wait for checkout's Phases 9 to 14.
+
+## Requirement coverage
+
+| Requirement | Tasks |
+|-------------|-------|
+| FR-001 mark and unmark; refusals | T001, T008, T010, T011 |
+| FR-002 one definition of "open" | T002, T020 |
+| FR-003 what a visitor gets | T017, T019, T021, T024, T027 |
+| FR-004 same response for every caller | T017, T021, T030 |
+| FR-005 scope and life of playback and download | T003, T017, T021, T024, T027, T042 |
+| FR-006 enrolled routes still refuse | T015, T030 |
+| FR-007 one refusal for everything not open | T016, T020, T030 |
+| FR-008 nothing sensitive in a response | T016, T019, T020 |
+| FR-009 nothing recorded; no discussion | T016, T024, T025, T035 |
+| FR-010 closed at once; old addresses | T016, T025, T028, T030, T042 |
+| FR-011 outline label and link | T017, T022, T026, T029 |
+| FR-012 preview page: enrol action, other previews | T032, T034 |
+| FR-013 enrolled students and what follows enrolling | T032, T033, T034, T035 |
+| FR-014 editor control and badge | T009, T012, T013 |
+| FR-015 crawler content | T037, T038 |
+| FR-016 WAF, throttle, no embedding | T018, T022, T042 |
+| FR-017 the paid-content rule restated | T004, T005, T015, T016, T022, T039 |
+| FR-018 runs locally | T013, T030, T035, T041 |
+| FR-019 not added | T043 (scope confirmed), none built |
+| SC-001, SC-006 | T041 |
+| SC-002, SC-003 | T016, T030 |
+| SC-004 | T030, T042 |
+| SC-005 | T016, T035 |
+| SC-007 | T032, T035 |
+| SC-008 | T037 |
 
 ## Parallel examples
 

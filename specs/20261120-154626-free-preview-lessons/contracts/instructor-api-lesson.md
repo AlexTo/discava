@@ -47,6 +47,7 @@ Allowed in a draft or a published course, and on a hidden lesson: the mark is in
 - marking twice, and unmarking an unmarked lesson, write nothing and return the lesson;
 - an assignment lesson is refused with nothing written, and the write's condition includes `kind = 'lesson'`;
 - an archived lesson, an archived module and an archived course are each refused;
+- a lesson archived between the read and the write (the transaction's condition fails) is reported as archived, with nothing written, in the style of `curriculum-lifecycle-races.test.ts`;
 - a non-instructor is refused;
 - a draft course and a hidden lesson can be marked;
 - `course.updatedAt` and `courseInstructor` are not written;
