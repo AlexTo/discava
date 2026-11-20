@@ -6,11 +6,13 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Checkbox } from '@discava/common-shadcn/components/ui/checkbox';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import {
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '@discava/common-web-utils/catalogue-labels';
+import {
   type CatalogueFilters,
   DURATION_LABELS,
   hasCatalogueFilters,
-  LANGUAGE_LABELS,
-  LEVEL_LABELS,
   MIN_RATING_OPTIONS,
   NO_FILTERS,
   SORT_OPTIONS,

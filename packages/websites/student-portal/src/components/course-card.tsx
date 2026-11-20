@@ -10,14 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import {
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '@discava/common-web-utils/catalogue-labels';
 import { formatPrice } from '@discava/common-web-utils/price';
 import { Link } from '@tanstack/react-router';
 import { BarChart3, Clock3 } from 'lucide-react';
-import {
-  formatDuration,
-  LANGUAGE_LABELS,
-  LEVEL_LABELS,
-} from '../lib/catalogue-filters';
+import { formatDuration } from '../lib/catalogue-filters';
 import type { DisplayCourse } from '../lib/course-display';
 import { CourseThumbnail } from './course-thumbnail';
 import { RatingSummary } from './rating-summary';

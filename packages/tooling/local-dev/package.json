@@ -1,0 +1,18 @@
+{
+  "name": "@discava/tooling-local-dev",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "catalog:",
+    "@discava/common-server-utils": "workspace:*",
+    "@discava/core-table": "workspace:*",
+    "@discava/search": "workspace:*",
+    "@opensearch-project/opensearch": "catalog:",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  },
+  "license": "Apache-2.0"
+}

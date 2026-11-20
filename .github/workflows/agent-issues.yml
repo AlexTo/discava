@@ -10,7 +10,7 @@ name: Agent Issues
 # the agent's own pull requests tick tasks.md, so a path filter would loop.
 # It can also be run by hand for one spec folder: a spec merged without its
 # label, or a chain that stalled and has been sorted out.
-# The rules are in packages/common/scripts/src/agent-issues/.
+# The rules are in packages/tooling/agent/src/agent-issues/.
 
 on:
   pull_request:
@@ -66,7 +66,7 @@ jobs:
           set-nx-shas: false
 
       - name: Create the issue
-        run: pnpm nx run @discava/common-scripts:agent-issue
+        run: pnpm nx run @discava/tooling-agent:agent-issue
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

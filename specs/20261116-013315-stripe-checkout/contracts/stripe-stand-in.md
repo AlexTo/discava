@@ -37,3 +37,10 @@ Every event is delivered to each endpoint registered for that account whose `ena
 ## Tests
 
 `stripe-stand-in.test.ts`: both accounts and the 401 for an unknown key; a created endpoint returns its secret once and a signature made with it verifies, one made with another endpoint's does not; delete stops delivery; the restricted key's permission error;  each endpoint's shape against what the `stripe` SDK parses; the signature it produces verifies with `constructEvent`; Pay then redirect; Decline stays; idempotency key reuse; a session created without `adaptive_pricing[enabled]=false` is refused; replay N times; an unknown route is a 404 in Stripe's error shape. The Connect slice: each endpoint's shape against what the SDK parses, idempotency of account and transfer creation, isolation between the two platform accounts, each status and failure control, and state surviving a restart.
+
+## Amendment 2026-11-19: learner refunds
+
+The student's refund request uses `POST /v1/refunds`, which the stand-in already implements. Two additions make it testable:
+
+- `POST /v1/refunds` refuses, in Stripe's error shape, a refund that would take the total refunded above the payment's amount (as Stripe does for a charge already fully refunded). A repeated request with the same idempotency key still returns the first refund and delivers nothing new.
+- A test control, `POST /stripe/test/refunds`: lists the refunds made for a payment intent or session, with their amounts, so a test can prove that many requests made one refund.

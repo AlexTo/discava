@@ -37,3 +37,53 @@ Unchanged for a student with no enrolment in a free course. The transaction's co
 ## Tests
 
 `procedures/payment.test.ts`: the cases above, plus: the Stripe client is mocked, and the amount it is asked for is the course's even when the input carries another; a second call returns the first call's URL with one order and one Stripe call; a draft course never reaches Stripe; the success URL's origin is the allowed one. `procedures/enrolment.test.ts` (extend, do not weaken): a priced course is refused with `PRECONDITION_FAILED` and writes nothing; the free paths pass unchanged; a `dropped` enrolment in a free published course is restored to `completed` when it has `completedAt` and to `active` otherwise, with `orderId` removed and `progressPercent` kept; a `dropped` one in a priced published course is `PRECONDITION_FAILED` and stays `dropped`; in a draft or archived course it is `NOT_FOUND` and stays `dropped`; two `enrol` calls at once restore it once and both return the restored enrolment. `router.test.ts`: `payment.checkout` is not in `PUBLIC_OPERATIONS` and is `UNAUTHORIZED` without a user. `payment.checkout` with no connection, a `changing` one and a `disconnected` one is `PRECONDITION_FAILED` with no order written and no Stripe call; the order carries the connection's `accountId`; `payment.available` is false for those three states and true for `active`.
+
+## Amendment 2026-11-19: learner refunds and leaving a course
+
+### `payment.requestRefund` (mutation, signed in)
+
+Runs on the dedicated `PaymentsCheckout` function, still the only core-api function that may read the Stripe API key.
+
+Input: `{ courseId: string }`
+
+Output: `{ refundRequestedAt: string }`
+
+- The order is the one the caller's enrolment in the course rests on (`enrolment.orderId`); the student is always `ctx.user.sub`. No enrolment, or an enrolment without an order, is `NOT_FOUND` "No purchase to refund", the same answer whether or not anyone else bought the course.
+- `refundEligibility` decides, with the server's clock. Refusals are `PRECONDITION_FAILED` and write nothing:
+  - `window-ended`: "The 14-day refund period for this course has ended"
+  - `completed`: "A course can't be refunded after you have completed it"
+  - `other-account`, or payments not connected: "This purchase can't be refunded here right now"
+  - `not-current-order`, `not-paid`: "No purchase to refund"
+- `already-requested` is not an error: the stored `refundRequestedAt` is returned and Stripe is not called.
+- Otherwise: one Stripe `refunds.create` for the order's `paymentIntentId`, amount `amount - (refundedAmount ?? 0)`, idempotency key `refund-<orderId>`; then `markRefundRequested`. If Stripe fails, nothing is written and the call fails with `INTERNAL_SERVER_ERROR` "Couldn't request the refund".
+- It never moves the order to `refunded` and never writes the enrolment: `charge.refunded` does (stripe-webhook.md).
+- Never returns the order ID, the payment intent or any other Stripe field.
+
+### `payment.myOrder` (query, signed in)
+
+Input: `{ courseId: string }`
+
+Output: `null` when the caller has no paid or refunded order for the course, otherwise their most recent one as:
+
+`{ status: 'paid' | 'refunded', amount: number, currency: string, paidAt: string, refundWindowDays: number, refundableUntil: string, canRequestRefund: boolean, refundBlockedBy?: 'window-ended' | 'completed' | 'other-account', refundRequestedAt?: string, refundedAt?: string }`
+
+Reads only; needs no Stripe key, so it runs on the shared function. This is the one output that exposes order fields, and only to the order's own student.
+
+### `course.unenrol` (mutation, signed in)
+
+Input: `{ courseId: string }`. Output: the enrolment, as `course.myEnrolment` returns it.
+
+- No enrolment for the caller: `NOT_FOUND`.
+- The enrolment has an `orderId`: `PRECONDITION_FAILED` "You bought this course; request a refund instead". Nothing is written.
+- Already `dropped`: returned as it is.
+- Otherwise `unenrolFromCourse`. The course's status and price are not checked: a student can leave a course that has been archived or given a price.
+
+### Changed
+
+- `course.myEnrolment` gains `paidFor: boolean` (the enrolment has an `orderId`). `orderId` itself is still never exposed.
+- `course.publicView` gains `refundWindowDays: number` for a priced course, so the terms line and the API cannot disagree.
+- `course.enrol`: its text above says only a full refund writes `dropped`. That no longer holds: leaving writes it too. The behaviour is unchanged and is what brings back a student who left: a `dropped` enrolment in a free course is restored, and in a priced course it is "This course must be purchased".
+
+### Tests
+
+As listed in tasks T090 and T103.
