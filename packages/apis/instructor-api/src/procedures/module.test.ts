@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bestEffortRetirePreviousVersions } from '../helpers/s3-client.js';
 import { t } from '../init.js';
@@ -28,65 +28,26 @@ const {
   transactionGo,
   bestEffortDeleteContentItemVideos,
   bestEffortCancelTranscodeJobs,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  courseInstructorQueryPrimary: vi.fn(),
-  courseInstructorPatch: vi.fn(),
-  moduleQueryPrimary: vi.fn(),
-  moduleCreate: vi.fn(),
-  moduleGet: vi.fn(),
-  moduleDelete: vi.fn(),
-  modulePatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   modulePatchSet: vi.fn(),
-  lessonQueryPrimary: vi.fn(),
-  lessonDelete: vi.fn(),
-  contentItemQueryPrimary: vi.fn(),
-  contentItemDelete: vi.fn(),
   contentItemDeleteWhere: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
   bestEffortDeleteContentItemVideos: vi.fn(),
   bestEffortCancelTranscodeJobs: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get', 'query.primary', 'patch'],
+    module: ['query.primary', 'create', 'get', 'delete', 'patch'],
+    lesson: ['query.primary', 'delete'],
+    contentItem: ['query.primary', 'delete'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-        query: { primary: courseInstructorQueryPrimary },
-        patch: courseInstructorPatch,
-      },
-      module: {
-        query: {
-          primary: moduleQueryPrimary,
-        },
-        create: moduleCreate,
-        get: moduleGet,
-        delete: moduleDelete,
-        patch: modulePatch,
-      },
-      lesson: {
-        query: {
-          primary: lessonQueryPrimary,
-        },
-        delete: lessonDelete,
-      },
-      contentItem: {
-        query: {
-          primary: contentItemQueryPrimary,
-        },
-        delete: contentItemDelete,
-      },
-    },
-    transaction: {
-      write: transactionWrite,
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock('../helpers/s3-client.js', () => ({
   bestEffortDeleteContentItemVideos,
@@ -101,21 +62,13 @@ vi.mock('../helpers/mediaconvert-client.js', () => ({
 }));
 
 const router = t.router({ createModule, updateModule, deleteModule });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
 const MODULE_ID = 'module-1';
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const module = {
   moduleId: MODULE_ID,

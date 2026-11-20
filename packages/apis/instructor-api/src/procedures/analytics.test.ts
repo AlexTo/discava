@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { TRPCError } from '@trpc/server';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -15,35 +16,29 @@ import {
 
 const {
   courseInstructorGet,
-  courseInstructorByInstructor,
+  courseInstructorQueryByInstructor,
   courseGet,
   readCourseSummaries,
   readCourseAnalytics,
   readQuizAnalytics,
-} = vi.hoisted(() => ({
-  courseInstructorGet: vi.fn(),
-  courseInstructorByInstructor: vi.fn(),
-  courseGet: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   readCourseSummaries: vi.fn(),
   readCourseAnalytics: vi.fn(),
   readQuizAnalytics: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get'],
+    courseInstructor: ['get', 'query.byInstructor'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  readCourseSummaries,
-  readCourseAnalytics,
-  readQuizAnalytics,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet },
-      courseInstructor: {
-        get: courseInstructorGet,
-        query: { byInstructor: courseInstructorByInstructor },
-      },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), {
+    readCourseSummaries,
+    readCourseAnalytics,
+    readQuizAnalytics,
+  }),
+);
 
 // A course-scoped procedure the authorization matrix is written against once;
 // each later one is added to PROCEDURES.
@@ -54,21 +49,9 @@ const router = t.router({
   quiz: analyticsQuiz,
   probe,
 });
-const caller = t.createCallerFactory(router);
-
-const buildEvent = (sub: string, groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
 
 const callAs = (sub = 'instructor-1', groups = ['instructor']) =>
-  caller({
-    event: buildEvent(sub, groups),
-    context: {} as never,
-    info: {} as never,
-  });
+  callerFor(router, { sub, groups });
 
 const course = (courseId: string, status = 'published') => ({
   courseId,
@@ -192,7 +175,7 @@ describe('analyticsCourseProcedure: who may read a course’s analytics', () => 
 
 describe('analytics.courseSummaries', () => {
   const memberships = (...courseIds: string[]) => {
-    courseInstructorByInstructor.mockReturnValue({
+    courseInstructorQueryByInstructor.mockReturnValue({
       go: async () => ({ data: courseIds.map((courseId) => ({ courseId })) }),
     });
   };
@@ -233,7 +216,7 @@ describe('analytics.courseSummaries', () => {
       ['c2', 'archived'],
       ['c1', 'published'],
     ]);
-    expect(courseInstructorByInstructor).toHaveBeenCalledWith({
+    expect(courseInstructorQueryByInstructor).toHaveBeenCalledWith({
       instructorId: 'instructor-1',
     });
   });
@@ -245,7 +228,7 @@ describe('analytics.courseSummaries', () => {
 
     await callAs('instructor-2').courseSummaries();
 
-    expect(courseInstructorByInstructor).toHaveBeenCalledWith({
+    expect(courseInstructorQueryByInstructor).toHaveBeenCalledWith({
       instructorId: 'instructor-2',
     });
   });
@@ -409,7 +392,7 @@ describe('analytics.courseSummaries', () => {
     await expect(
       callAs('student-1', ['student']).courseSummaries(),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect(courseInstructorByInstructor).not.toHaveBeenCalled();
+    expect(courseInstructorQueryByInstructor).not.toHaveBeenCalled();
   });
 });
 

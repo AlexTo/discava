@@ -116,7 +116,7 @@ export const payoutStripe = async (
       stripe.transfers.create(
         {
           amount: amountMinor,
-          currency,
+          currency: currency.toLowerCase(),
           destination,
           transfer_group: payoutId,
           metadata: { payoutId },
@@ -193,3 +193,7 @@ export const classifyTransferError = (error: unknown): TransferOutcome => {
 export const isConnectNotAllowed = (error: unknown): boolean =>
   error instanceof Stripe.errors.StripePermissionError ||
   error instanceof Stripe.errors.StripeInvalidRequestError;
+
+/** Whether Stripe refused the saved key itself: no later call can succeed. */
+export const isAuthenticationError = (error: unknown): boolean =>
+  error instanceof Stripe.errors.StripeAuthenticationError;

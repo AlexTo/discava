@@ -220,6 +220,7 @@ export function LessonVisibilityButton({
   visibility,
   draft,
   className,
+  noun = 'lesson',
 }: {
   courseId: string;
   moduleId: string;
@@ -228,6 +229,8 @@ export function LessonVisibilityButton({
   visibility: Visibility;
   draft: boolean;
   className?: string;
+  // What the lesson is called: 'lesson', or 'assignment'.
+  noun?: string;
 }) {
   const { lesson } = useInstructorApi();
   const refresh = useRefreshCourse(courseId);
@@ -236,7 +239,7 @@ export function LessonVisibilityButton({
   );
   return (
     <VisibilityDialog
-      noun="lesson"
+      noun={noun}
       level="lesson"
       title={title}
       visibility={visibility}

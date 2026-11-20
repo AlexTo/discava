@@ -13,6 +13,7 @@ import {
   setCertificates,
 } from '../helpers/certificate.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
@@ -95,10 +96,11 @@ test('a student completes a course, downloads their certificate and shares it', 
     ).toBeVisible();
     await expect(visitor.getByText(title)).toBeVisible();
     await expect(visitor.getByText(certificateId)).toBeVisible();
-    // The completion date, as a long date (the browser's locale is en-US).
+    // The completion date, in UTC as the PDF prints it.
     await expect(
-      visitor.getByText(/^[A-Z][a-z]+ \d{1,2}, \d{4}$/),
+      visitor.getByText(/^\d{1,2} [A-Z][a-z]+ \d{4}$/),
     ).toBeVisible();
+    await screenshot(visitor, 'certificate-page');
     await expect(visitor.getByText(learner.email)).toHaveCount(0);
     await expect(visitor.getByText(learner.username)).toHaveCount(0);
   });

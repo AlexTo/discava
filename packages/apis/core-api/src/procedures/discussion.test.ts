@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { postIdTime } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -100,29 +100,19 @@ const table = () => ({
   },
 });
 
-const caller = t.createCallerFactory(
-  t.router({
-    listQuestions,
-    thread,
-    ask,
-    reply,
-    vote,
-    accept,
-    report,
-    removeOwn,
-  }),
-);
+const router = t.router({
+  listQuestions,
+  thread,
+  ask,
+  reply,
+  vote,
+  accept,
+  report,
+  removeOwn,
+});
 
 const as = (sub: string, groups: string[] = ['student']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: { claims: { sub, 'cognito:groups': groups } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub, groups });
 
 const ref = { courseId: 'c1', moduleId: 'm1', lessonId: 'l1' };
 const ASKER = 'asker';

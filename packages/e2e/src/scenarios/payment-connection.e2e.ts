@@ -67,8 +67,9 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await expect(
       admin.getByRole('heading', { name: 'Payments' }),
     ).toBeVisible();
+    // The sidebar's link; the breadcrumb for this page is also a link role.
     await expect(
-      admin.getByRole('link', { name: 'Payments', exact: true }),
+      admin.locator('[data-sidebar="menu-button"]', { hasText: 'Payments' }),
     ).toBeVisible();
   });
 

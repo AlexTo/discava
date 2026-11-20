@@ -31,7 +31,8 @@
   "devDependencies": {
     "@types/aws-lambda": "catalog:",
     "@types/cors": "catalog:",
-    "cors": "catalog:"
+    "cors": "catalog:",
+    "vitest": "catalog:"
   },
   "license": "Apache-2.0"
 }

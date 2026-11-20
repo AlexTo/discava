@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -24,36 +24,25 @@ const {
   reviewWrites,
   reviewNotifications,
   courseGet,
-  instructorQuery,
-} = vi.hoisted(() => ({
-  reviewGet: vi.fn(),
-  reviewQueryByCourse: vi.fn(),
-  userGet: vi.fn(),
-  courseRatingGet: vi.fn(),
-  transactionWrite: vi.fn(),
+  courseInstructorQueryPrimary,
+  mockModule,
+} = await vi.hoisted(async () => ({
   transactionGo: vi.fn(),
   reviewWrites: vi.fn(),
   reviewNotifications: vi.fn(),
-  courseGet: vi.fn(),
-  instructorQuery: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    review: ['get', 'query.byCourse'],
+    user: ['get'],
+    course: ['get'],
+    courseInstructor: ['query.primary'],
+    courseRating: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  // The writer has its own tests; here only what the procedures ask of it.
-  reviewWrites,
-  reviewNotifications,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      review: { get: reviewGet, query: { byCourse: reviewQueryByCourse } },
-      user: { get: userGet },
-      course: { get: courseGet },
-      courseInstructor: { query: { primary: instructorQuery } },
-      courseRating: { get: courseRatingGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal(), { reviewWrites, reviewNotifications }),
+);
 
 const router = t.router({
   myReview,
@@ -63,25 +52,12 @@ const router = t.router({
   reviewSummary,
   listReviews,
 });
-const caller = t.createCallerFactory(router);
 
 const USER_SUB = 'student-1';
 
-const callAsUser = () =>
-  caller({
-    event: {
-      requestContext: { authorizer: { claims: { sub: USER_SUB } } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const callAsUser = () => callerFor(router, { sub: USER_SUB });
 
-const callAnonymously = () =>
-  caller({
-    event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const callAnonymously = () => callerFor(router);
 
 const stored = (overrides: Record<string, unknown> = {}) => ({
   courseId: 'course-1',
@@ -124,7 +100,7 @@ beforeEach(() => {
   courseGet.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: { title: 'Intro to Rust' } }),
   });
-  instructorQuery.mockReturnValue({
+  courseInstructorQueryPrimary.mockReturnValue({
     go: vi.fn().mockResolvedValue({ data: [] }),
   });
   reviewNotifications.mockResolvedValue([]);
@@ -343,7 +319,7 @@ describe('postReview', () => {
 
 describe('postReview notifications', () => {
   const instructors = (...ids: string[]) =>
-    instructorQuery.mockReturnValue({
+    courseInstructorQueryPrimary.mockReturnValue({
       go: vi.fn().mockResolvedValue({
         data: ids.map((instructorId) => ({ instructorId })),
       }),
@@ -356,7 +332,9 @@ describe('postReview notifications', () => {
 
     await callAsUser().postReview({ courseId: 'course-1', rating: 4 });
 
-    expect(instructorQuery).toHaveBeenCalledWith({ courseId: 'course-1' });
+    expect(courseInstructorQueryPrimary).toHaveBeenCalledWith({
+      courseId: 'course-1',
+    });
     expect(reviewNotifications).toHaveBeenCalledWith(expect.anything(), {
       courseId: 'course-1',
       courseTitle: 'Intro to Rust',
@@ -456,7 +434,7 @@ describe('postReview notifications', () => {
 
     await (callAsUser() as any)[name](input);
 
-    expect(instructorQuery).not.toHaveBeenCalled();
+    expect(courseInstructorQueryPrimary).not.toHaveBeenCalled();
     expect(reviewNotifications).not.toHaveBeenCalled();
     expect(writeArg().notifications).toBeUndefined();
   });

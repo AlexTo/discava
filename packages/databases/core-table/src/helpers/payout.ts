@@ -426,20 +426,23 @@ export const listUnsettledPayouts = async ({
  * Takes an unsettled payout for this run: moves its `attemptedAt` to `now`
  * on the condition that it still holds the value read, so of two overlapping
  * runs one wins. False if another run claimed it, or if it was attempted
- * within `PAYOUT_CLAIM_GRACE_MS` and so is still that run's.
+ * within `graceMs` (default `PAYOUT_CLAIM_GRACE_MS`) and so is still that run's.
  */
 export const claimPayout = async ({
   coreTable,
   payout,
   now,
+  graceMs = PAYOUT_CLAIM_GRACE_MS,
 }: {
   coreTable: CoreTable;
   payout: PayoutRecord;
   now: string;
+  /** How recently a run must have worked on the payout for it to stay that run's. */
+  graceMs?: number;
 }): Promise<boolean> => {
   if (
     new Date(now).getTime() - new Date(payout.attemptedAt).getTime() <
-    PAYOUT_CLAIM_GRACE_MS
+    graceMs
   ) {
     return false;
   }
