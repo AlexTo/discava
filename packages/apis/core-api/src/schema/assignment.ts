@@ -44,7 +44,7 @@ export type ISubmitInput = z.output<typeof SubmitInputSchema>;
 // the file is fetched through a signed link.
 export const SubmissionSchema = z.object({
   version: z.number().int().min(1),
-  status: z.enum(['submitted', 'returned']),
+  status: z.enum(['submitted', 'resubmission_requested', 'returned']),
   submittedAt: z.string(),
   late: z.boolean(),
   file: z.object({
@@ -52,12 +52,41 @@ export const SubmissionSchema = z.object({
     fileSize: z.number().int().positive().max(LESSON_FILE_MAX_BYTES),
     mimeType: z.string(),
   }),
+  // Set once returned.
+  grade: z
+    .object({
+      points: z.number(),
+      pointsOutOf: z.number(),
+      returnedAt: z.string(),
+      gradedAt: z.string(),
+    })
+    .optional(),
 });
+
+// One instructor action on the submission, as its student sees it: the
+// instructor's identity is not exposed.
+export const FeedbackRoundSchema = z.object({
+  kind: z.enum(['resubmission_requested', 'returned', 'amended']),
+  feedback: z.string().optional(),
+  points: z.number().optional(),
+  pointsOutOf: z.number().optional(),
+  version: z.number().int().min(1),
+  givenAt: z.string(),
+});
+
+export type IFeedbackRound = z.output<typeof FeedbackRoundSchema>;
 
 export type ISubmission = z.output<typeof SubmissionSchema>;
 
 export const SubmitOutputSchema = SubmissionSchema;
 
-export const MySubmissionOutputSchema = SubmissionSchema.nullable();
+// The caller's submission with the rounds of feedback on it, newest first.
+export const MySubmissionSchema = SubmissionSchema.extend({
+  feedback: z.array(FeedbackRoundSchema),
+});
+
+export type IMySubmission = z.output<typeof MySubmissionSchema>;
+
+export const MySubmissionOutputSchema = MySubmissionSchema.nullable();
 
 export const SubmissionFileUrlOutputSchema = z.object({ url: z.string() });

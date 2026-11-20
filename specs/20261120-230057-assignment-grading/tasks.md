@@ -103,11 +103,11 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run assignment` passes.
 
-- [ ] T008 [P] Tests first, then widen `MySubmissionOutputSchema` (or its equivalent) in `packages/apis/core-api/src/schema/assignment.ts` to [contracts/core-api-assignment.md](./contracts/core-api-assignment.md):
+- [x] T008 [P] Tests first, then widen `MySubmissionOutputSchema` (or its equivalent) in `packages/apis/core-api/src/schema/assignment.ts` to [contracts/core-api-assignment.md](./contracts/core-api-assignment.md):
   - `status` gains `'resubmission_requested'`;
   - optional `grade: { points, pointsOutOf, returnedAt, gradedAt }`;
   - `feedback` is an array of `{ kind, feedback?, points?, pointsOutOf?, version, givenAt }`, without `givenBy`.
-- [ ] T009 Tests first, then change `packages/apis/core-api/src/procedures/assignment.ts`:
+- [x] T009 Tests first, then change `packages/apis/core-api/src/procedures/assignment.ts`:
   - `requireOpenForSubmitting` (`:138-151`) refuses only `returned`;
   - `toSubmission` maps the grade;
   - `mySubmission` queries `submissionFeedback` for the caller's pk in reverse (newest first) and returns the rounds, with the same visibility rules as today.
