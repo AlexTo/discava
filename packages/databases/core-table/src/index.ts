@@ -106,21 +106,27 @@ export {
   type CaptionChange,
   type CaptionChangeResult,
   type CaptionEntities,
+  type CaptionLanguageState,
   type CaptionTargetKey,
   type CaptionTrack,
   CaptionTrackError,
   type CaptionTrackErrorCode,
+  type CaptionTranslationPlan,
+  type CaptionTranslationSettings,
   captionsStillPending,
   captionWriteCondition,
   dropOtherVersions,
   getCaptionRecord,
   isPreviewKey,
   MAX_CAPTION_TRACKS,
+  planCaptionTranslations,
   reportedCaptionsStatus,
+  requestCaptionTranslation,
   tracksForPlayback,
   writeCaptionsFailed,
   writeCaptionsReady,
   writeCaptionTracks,
+  writeCaptionTranslationOutcome,
 } from './helpers/caption-tracks.js';
 export {
   CATEGORY_NAME_MAX_LENGTH,
@@ -184,6 +190,8 @@ export {
 export {
   type CourseCatalogue,
   courseCatalogueWrites,
+  MAX_CAPTION_LANGUAGES,
+  setCourseCaptionLanguages,
 } from './helpers/course-catalogue.js';
 export {
   type CourseLandingSet,

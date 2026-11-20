@@ -49,7 +49,7 @@ type Track = {
   language: string;
   label: string;
   isDefault: boolean;
-  source: 'auto' | 'uploaded';
+  source: 'auto' | 'uploaded' | 'translated';
 };
 
 const putCaptionFile = async (
