@@ -551,6 +551,81 @@ describe('delivery', () => {
   });
 });
 
+describe('learner refunds', () => {
+  it("refuses a refund above the remaining amount in Stripe's error shape and delivers nothing", async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+      amount: 4000,
+    });
+    await expect(
+      stripe.refunds.create({
+        payment_intent: session.payment_intent as string,
+        amount: 1000,
+      }),
+    ).rejects.toMatchObject({
+      type: 'StripeInvalidRequestError',
+      statusCode: 400,
+    });
+    const refundNotices = hook.deliveries.filter(
+      (d) => JSON.parse(d.body).type === 'charge.refunded',
+    );
+    expect(refundNotices).toHaveLength(1);
+  });
+
+  it('returns the first refund for the same idempotency key, delivering once', async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    hook.deliveries.length = 0;
+    const params = { payment_intent: session.payment_intent as string };
+    const options = { idempotencyKey: 'refund-order-1' };
+    const [first, second] = await Promise.all([
+      stripe.refunds.create(params, options),
+      stripe.refunds.create(params, options),
+    ]);
+    const third = await stripe.refunds.create(params, options);
+    expect(second.id).toBe(first.id);
+    expect(third.id).toBe(first.id);
+    expect(hook.deliveries).toHaveLength(1);
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.body.refunds).toEqual([{ id: first.id, amount: 4900 }]);
+  });
+
+  it("lists a payment's refunds with their amounts, including an operator's", async () => {
+    const hook = await receiver();
+    const { stripe, session } = await paid(hook.url);
+    const refund = await stripe.refunds.create({
+      payment_intent: session.payment_intent as string,
+      amount: 1000,
+    });
+    await request('/stripe/test/refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id, amount: 500 }),
+    });
+    const listed = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(listed.status).toBe(200);
+    expect(
+      listed.body.refunds.map((r: { amount: number }) => r.amount),
+    ).toEqual([1000, 500]);
+    expect(listed.body.refunds[0].id).toBe(refund.id);
+  });
+
+  it('answers 404 for a session with no payment', async () => {
+    const response = await request('/stripe/test/refunds', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'cs_nope' }),
+    });
+    expect(response.status).toBe(404);
+  });
+});
+
 describe('refund control', () => {
   it.each([
     ['full', undefined, 4900],

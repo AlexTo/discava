@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { checkout, paymentAvailable } from './payment.js';
+import {
+  checkout,
+  myOrder,
+  paymentAvailable,
+  requestRefund,
+} from './payment.js';
 
 const mocks = vi.hoisted(() => ({
   db: {} as Record<string, any>,
@@ -16,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   startOrder: vi.fn(),
   attach: vi.fn(),
   expire: vi.fn(),
+  refund: vi.fn(),
+  mark: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
@@ -26,6 +33,11 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       {
         get: (_, name: string) => ({
           get: () => ({ go: async () => ({ data: mocks.db[name] ?? null }) }),
+          query: {
+            byStudentCourse: () => ({
+              go: async () => ({ data: mocks.orders }),
+            }),
+          },
         }),
       },
     ),
@@ -36,15 +48,24 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   startOrder: mocks.startOrder,
   attachCheckoutSession: mocks.attach,
   expireOrder: mocks.expire,
+  markRefundRequested: mocks.mark,
 }));
 
 vi.mock('@discava/common-server-utils/stripe/client', () => ({
   withStripe: vi.fn(async (call: (stripe: unknown) => unknown) =>
-    call({ checkout: { sessions: { create: mocks.create } } }),
+    call({
+      checkout: { sessions: { create: mocks.create } },
+      refunds: { create: mocks.refund },
+    }),
   ),
 }));
 
-const router = t.router({ checkout, available: paymentAvailable });
+const router = t.router({
+  checkout,
+  available: paymentAvailable,
+  requestRefund,
+  myOrder,
+});
 const callerAt = (origin?: string) =>
   callerFor(router, { sub: 'student-1', headers: origin ? { origin } : {} });
 const caller = callerAt('http://localhost:2020');
@@ -77,6 +98,9 @@ beforeEach(() => {
   mocks.create.mockResolvedValue({ id: 'cs_1', url: 'https://pay/cs_1' });
   mocks.attach.mockResolvedValue(true);
   mocks.expire.mockResolvedValue(undefined);
+  mocks.orders = [];
+  mocks.refund.mockResolvedValue({ id: 're_1' });
+  mocks.mark.mockResolvedValue(undefined);
 });
 
 describe('payment.checkout', () => {
@@ -235,5 +259,212 @@ describe('payment.available', () => {
   ])('is %s: %s', async (_, connection, available) => {
     mocks.connection = connection;
     expect(await caller.available()).toEqual({ available });
+  });
+});
+
+describe('refunds', () => {
+  const NOW = new Date('2026-11-10T00:00:00.000Z');
+  const PAID = '2026-11-05T00:00:00.000Z';
+  const paid = {
+    ...order,
+    status: 'paid',
+    paidAt: PAID,
+    paymentIntentId: 'pi_1',
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    mocks.db = {
+      course,
+      enrolment: { status: 'active', orderId: 'o1' },
+      order: paid,
+    };
+    mocks.orders = [paid];
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('payment.requestRefund', () => {
+    it('asks Stripe once for the whole amount, then marks the order', async () => {
+      mocks.mark.mockImplementation(async () => {
+        mocks.db.order = { ...paid, refundRequestedAt: NOW.toISOString() };
+      });
+      const result = await caller.requestRefund({ courseId: 'c1' });
+      expect(result).toEqual({ refundRequestedAt: NOW.toISOString() });
+      expect(mocks.refund).toHaveBeenCalledTimes(1);
+      expect(mocks.refund).toHaveBeenCalledWith(
+        { payment_intent: 'pi_1', amount: 4900 },
+        { idempotencyKey: 'refund-o1' },
+      );
+      expect(mocks.mark).toHaveBeenCalledWith(
+        expect.objectContaining({
+          order: expect.objectContaining({ orderId: 'o1' }),
+          now: NOW.toISOString(),
+        }),
+      );
+    });
+
+    it('refunds only what has not been refunded yet', async () => {
+      mocks.db.order = { ...paid, refundedAmount: 1000 };
+      await caller.requestRefund({ courseId: 'c1' });
+      expect(mocks.refund).toHaveBeenCalledWith(
+        { payment_intent: 'pi_1', amount: 3900 },
+        { idempotencyKey: 'refund-o1' },
+      );
+    });
+
+    it('returns the stored time and makes no second Stripe call when already requested', async () => {
+      mocks.db.order = { ...paid, refundRequestedAt: PAID };
+      await expect(caller.requestRefund({ courseId: 'c1' })).resolves.toEqual({
+        refundRequestedAt: PAID,
+      });
+      expect(mocks.refund).not.toHaveBeenCalled();
+      expect(mocks.mark).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no enrolment', { enrolment: undefined }],
+      ['a free enrolment', { enrolment: { status: 'active' } }],
+      ['no order', { order: undefined }],
+      [
+        "another student's order",
+        { order: { ...paid, userId: 'someone-else' } },
+      ],
+      ['another course', { order: { ...paid, courseId: 'c2' } }],
+    ])('is NOT_FOUND for %s and never reaches Stripe', async (_, change) => {
+      mocks.db = { ...mocks.db, ...change };
+      await expect(
+        caller.requestRefund({ courseId: 'c1' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'No purchase to refund',
+      });
+      expect(mocks.refund).not.toHaveBeenCalled();
+      expect(mocks.mark).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'past the window',
+        { order: { ...paid, paidAt: '2026-10-01T00:00:00.000Z' } },
+        'The 14-day refund period for this course has ended',
+      ],
+      [
+        'a completed enrolment',
+        { enrolment: { status: 'completed', orderId: 'o1' } },
+        "A course can't be refunded after you have completed it",
+      ],
+      [
+        'an order from another account',
+        { order: { ...paid, accountId: 'acct_2' } },
+        "This purchase can't be refunded here right now",
+      ],
+      [
+        'an enrolment on another order',
+        { enrolment: { status: 'active', orderId: 'o2' } },
+        'No purchase to refund',
+      ],
+      [
+        'an order that is no longer paid',
+        { order: { ...paid, status: 'refunded' } },
+        'No purchase to refund',
+      ],
+    ])('refuses %s and never reaches Stripe', async (_, change, message) => {
+      mocks.db = { ...mocks.db, ...change };
+      await expect(
+        caller.requestRefund({ courseId: 'c1' }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED', message });
+      expect(mocks.refund).not.toHaveBeenCalled();
+      expect(mocks.mark).not.toHaveBeenCalled();
+    });
+
+    it('refuses when payments are not connected', async () => {
+      mocks.connection = undefined;
+      await expect(
+        caller.requestRefund({ courseId: 'c1' }),
+      ).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: "This purchase can't be refunded here right now",
+      });
+      expect(mocks.refund).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing when Stripe fails', async () => {
+      mocks.refund.mockRejectedValue(new Error('card_declined sk_live_secret'));
+      const error = await caller
+        .requestRefund({ courseId: 'c1' })
+        .catch((e) => e);
+      expect(error).toMatchObject({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: "Couldn't request the refund",
+      });
+      expect(JSON.stringify(error.message)).not.toContain('sk_live');
+      expect(mocks.mark).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('payment.myOrder', () => {
+    it('is null with no paid or refunded order', async () => {
+      mocks.orders = [{ ...order, status: 'pending' }];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toBeNull();
+      mocks.orders = [];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toBeNull();
+    });
+
+    it("returns only the contract's fields", async () => {
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toEqual({
+        status: 'paid',
+        amount: 4900,
+        currency: 'usd',
+        paidAt: PAID,
+        refundWindowDays: 14,
+        refundableUntil: '2026-11-19T00:00:00.000Z',
+        canRequestRefund: true,
+      });
+    });
+
+    it('says why a refund is blocked, and shows a request and a refund', async () => {
+      mocks.db.enrolment = { status: 'completed', orderId: 'o1' };
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        canRequestRefund: false,
+        refundBlockedBy: 'completed',
+      });
+
+      mocks.db.enrolment = { status: 'active', orderId: 'o1' };
+      mocks.orders = [{ ...paid, paidAt: '2026-10-01T00:00:00.000Z' }];
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        refundBlockedBy: 'window-ended',
+      });
+
+      mocks.orders = [{ ...paid, refundRequestedAt: PAID }];
+      const requested = await caller.myOrder({ courseId: 'c1' });
+      expect(requested).toMatchObject({
+        canRequestRefund: false,
+        refundRequestedAt: PAID,
+      });
+      expect(requested).not.toHaveProperty('refundBlockedBy');
+
+      mocks.orders = [
+        { ...paid, status: 'refunded', refundedAt: NOW.toISOString() },
+      ];
+      mocks.db.enrolment = { status: 'dropped', orderId: 'o1' };
+      await expect(caller.myOrder({ courseId: 'c1' })).resolves.toMatchObject({
+        status: 'refunded',
+        canRequestRefund: false,
+        refundedAt: NOW.toISOString(),
+      });
+    });
+
+    it('returns the most recent order and never exposes the order, intent or account', async () => {
+      mocks.orders = [
+        { ...paid, orderId: 'o0', status: 'refunded', amount: 1000 },
+        { ...paid, orderId: 'o9' },
+      ];
+      const result = await caller.myOrder({ courseId: 'c1' });
+      expect(result).toMatchObject({ status: 'paid', amount: 4900 });
+      expect(JSON.stringify(result)).not.toMatch(/pi_1|acct_1|o9|orderId/);
+    });
   });
 });

@@ -24,6 +24,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.accepted',
       'discussion.answered',
       'discussion.reply',
+      'order.refunded',
       'review.received',
     ]);
   });
@@ -44,6 +45,7 @@ describe('NOTIFICATION_TYPES', () => {
       'discussion.reply': 'default-on',
       'discussion.answered': 'default-on',
       'discussion.accepted': 'default-off',
+      'order.refunded': 'required',
       'review.received': 'default-off',
     });
   });
@@ -102,6 +104,22 @@ describe('buildNotification', () => {
       expect(built.body.length).toBeLessThanOrEqual(500);
     },
   );
+
+  it('tells a student their refund went through and links to the course', () => {
+    expect(NOTIFICATION_TYPES['order.refunded'].params).toEqual([
+      'courseTitle',
+      'courseId',
+      'amount',
+    ]);
+    const built = buildNotification('order.refunded', {
+      courseTitle: 'Algebra',
+      courseId: 'c1',
+      amount: '$49.00',
+    });
+    expect(built.title).toContain('Algebra');
+    expect(built.body).toContain('$49.00');
+    expect(built.link).toEqual({ portal: 'student', path: '/learn/c1' });
+  });
 
   it('links a review to the instructor portal', () => {
     expect(

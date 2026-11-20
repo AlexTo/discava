@@ -55,7 +55,12 @@ import {
   notificationUnreadCount,
   setNotificationPreferenceProcedure,
 } from './procedures/notification.js';
-import { checkout, paymentAvailable } from './procedures/payment.js';
+import {
+  checkout,
+  myOrder,
+  paymentAvailable,
+  requestRefund,
+} from './procedures/payment.js';
 import {
   myQuizAttempts,
   submitQuizAttempt,
@@ -140,6 +145,8 @@ export const appRouter = router({
   payment: router({
     checkout,
     available: paymentAvailable,
+    requestRefund,
+    myOrder,
   }),
   review: router({
     mine: myReview,

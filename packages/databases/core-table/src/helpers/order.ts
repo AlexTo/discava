@@ -19,6 +19,9 @@ type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 export const CHECKOUT_TTL_SECONDS = 60 * 60;
 export const CHECKOUT_REUSE_MARGIN_SECONDS = 5 * 60;
 
+/** How long after paying a student may ask for a refund. */
+export const REFUND_WINDOW_DAYS = 14;
+
 // Starting a checkout, or settling a paid one, kept losing to other writers.
 const ATTEMPTS = 3;
 
@@ -41,6 +44,7 @@ export interface OrderRecord {
   refundedAt?: string;
   refundedAmount?: number;
   refundReason?: OrderRefundReason;
+  refundRequestedAt?: string;
 }
 
 export interface OrderCourse {
@@ -69,6 +73,10 @@ export class PaymentsUnavailableError extends Error {
 
 const plusSeconds = (iso: string, seconds: number) =>
   new Date(new Date(iso).getTime() + seconds * 1000).toISOString();
+
+/** The last moment a student may ask to refund an order paid at `paidAt`. */
+export const refundDeadline = (paidAt: string) =>
+  plusSeconds(paidAt, REFUND_WINDOW_DAYS * 24 * 60 * 60);
 
 const later = (a: string | undefined, b: string) =>
   a !== undefined && a > b ? a : b;
@@ -442,4 +450,89 @@ export const restoreFreeEnrolment = async ({
     if (!canceled) return 'restored';
   }
   throw new Error('Could not restore the enrolment; try again');
+};
+
+export type RefundEligibility =
+  | { eligible: true; refundableUntil: string }
+  | {
+      eligible: false;
+      reason:
+        | 'not-paid'
+        | 'not-current-order'
+        | 'window-ended'
+        | 'completed'
+        | 'already-requested'
+        | 'other-account';
+    };
+
+/**
+ * Whether the student may ask for this order to be refunded now. Pure: the
+ * first reason that applies wins. `connection` is the active connection's
+ * account, absent when payments aren't connected (which is `other-account`:
+ * the order can't be refunded through the account in use).
+ */
+export const refundEligibility = ({
+  order,
+  enrolment,
+  connection,
+  now,
+}: {
+  order: Pick<
+    OrderRecord,
+    'orderId' | 'status' | 'accountId' | 'paidAt' | 'refundRequestedAt'
+  >;
+  enrolment: { orderId?: string; status: string };
+  connection: Pick<OrderConnection, 'status' | 'accountId'> | undefined;
+  now: string;
+}): RefundEligibility => {
+  if (order.status !== 'paid' || !order.paidAt) {
+    return { eligible: false, reason: 'not-paid' };
+  }
+  if (enrolment.orderId !== order.orderId || enrolment.status === 'dropped') {
+    return { eligible: false, reason: 'not-current-order' };
+  }
+  if (
+    connection?.status !== 'active' ||
+    connection.accountId !== order.accountId
+  ) {
+    return { eligible: false, reason: 'other-account' };
+  }
+  if (order.refundRequestedAt !== undefined) {
+    return { eligible: false, reason: 'already-requested' };
+  }
+  if (enrolment.status === 'completed') {
+    return { eligible: false, reason: 'completed' };
+  }
+  const refundableUntil = refundDeadline(order.paidAt);
+  if (now > refundableUntil) return { eligible: false, reason: 'window-ended' };
+  return { eligible: true, refundableUntil };
+};
+
+/**
+ * Records that the student's refund request was accepted and Stripe was
+ * asked. Conditioned on `status = paid` and the attribute being absent; a
+ * failed condition is not an error (the refund notice got there first, or
+ * another request did). Never changes `status`.
+ */
+export const markRefundRequested = async ({
+  coreTable,
+  order,
+  now,
+}: {
+  coreTable: CoreTable;
+  order: Pick<OrderRecord, 'orderId'>;
+  now: string;
+}): Promise<void> => {
+  try {
+    await coreTable.entities.order
+      .patch({ orderId: order.orderId })
+      .set({ refundRequestedAt: now })
+      .where(
+        (attr, op) =>
+          `${op.eq(attr.status, 'paid')} AND ${op.notExists(attr.refundRequestedAt)}`,
+      )
+      .go();
+  } catch (error) {
+    if (!isConditionalFailure(error)) throw error;
+  }
 };

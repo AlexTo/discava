@@ -241,6 +241,7 @@ describe('notification.preferences', () => {
       'discussion.reply',
       'discussion.answered',
       'discussion.accepted',
+      'order.refunded',
       'review.received',
     ]);
     expect(result.map((p) => p.emailEnabled)).toEqual([
@@ -249,9 +250,13 @@ describe('notification.preferences', () => {
       true,
       true,
       false,
+      true,
       false,
     ]);
-    expect(result.every((p) => !p.required)).toBe(true);
+    // Only the refund notice is required: it is always emailed.
+    expect(result.filter((p) => p.required).map((p) => p.type)).toEqual([
+      'order.refunded',
+    ]);
     expect(Object.keys(result[0]!).sort()).toEqual([
       'description',
       'emailEnabled',
@@ -273,6 +278,7 @@ describe('notification.preferences', () => {
       true,
       true,
       false,
+      true,
       true,
     ]);
   });
