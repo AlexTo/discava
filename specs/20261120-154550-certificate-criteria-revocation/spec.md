@@ -32,6 +32,16 @@ Resolved without asking, using the recommended defaults (non-interactive run). T
 - Q: Is the learner told when their certificate is revoked or restored? → A: Yes, by an in-app notification and an email through the existing notifications pipeline. The message names the reason category, never the private note.
 - Q: What about the criterion on graded uploads? → A: It is specified here but built last, in its own phase, after #102 part 3 (grading) is merged. Everything else ships without it.
 
+### Session 2026-11-20 (clarify pass)
+
+Five further points found by the ambiguity scan. Resolved without asking, using the recommended defaults (non-interactive run).
+
+- Q: May an instructor use the reason "Order refunded"? → A: No. Refunds are handled by the platform, so that reason is for administrators only. An instructor chooses from academic integrity, issued in error and other.
+- Q: Is the private note ever required? → A: Yes, when the reason is "other", so every revocation can be explained later. It is optional for the other reasons and limited to 500 characters.
+- Q: How does an instructor tell two learners apart in the course's certificate list? → A: By the name printed on the certificate, the certificate ID and the dates. The list shows no email address; an instructor acting on a report already has the link or the ID.
+- Q: How many certificates does the instructor's list show at once, and in what order? → A: Newest first, 50 at a time, with a way to load more. A course's certificates are listed with one keyed read per page.
+- Q: How long does a revoked certificate's page keep saying "revoked"? → A: For as long as the certificate exists: indefinitely. It never falls back to "not found", so an old link keeps giving a true answer.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A certificate only when the course's criteria are met (Priority: P1)
@@ -184,12 +194,12 @@ An instructor adds a second criterion: every graded upload must have been return
 
 **Revocation**
 
-- **FR-016**: An instructor of a course MUST be able to list the certificates issued for it, each with the learner's name as printed, the completion date, whether it is valid or revoked, and its history of revocations and restorations.
-- **FR-017**: An instructor of a course MUST be able to revoke a valid certificate of that course, and an administrator any valid certificate, giving a reason from a fixed list (order refunded, academic integrity, issued in error, other) and an optional private note.
+- **FR-016**: An instructor of a course MUST be able to list the certificates issued for it, each with the learner's name as printed, the completion date, whether it is valid or revoked, and its history of revocations and restorations. The list MUST be newest first, 50 at a time with more on request, and MUST NOT show any email address.
+- **FR-017**: An instructor of a course MUST be able to revoke a valid certificate of that course, and an administrator any valid certificate, giving a reason from a fixed list (academic integrity, issued in error, other, and for administrators only: order refunded) and a private note of at most 500 characters, which is required when the reason is "other" and optional otherwise.
 - **FR-018**: An administrator MUST be able to look up any certificate by its ID and see what the page prints, its status and its history.
 - **FR-019**: Every revocation and restoration MUST be recorded with who did it, in which role, when, the reason and the note. The record MUST be kept for the life of the certificate and MUST never be shown publicly. The private note MUST be visible only to the course's instructors and to administrators.
 - **FR-020**: A revoked certificate MUST be restorable: by an administrator always, and by an instructor of the course only when an instructor revoked it. A restored certificate MUST keep its ID, link and statement.
-- **FR-021**: The public verification page for a revoked certificate MUST say that the certificate with this ID has been revoked and is no longer valid, with the date, and MUST show no learner name, course title, statement, reason or actor. It MUST remain distinguishable from "Certificate not found".
+- **FR-021**: The public verification page for a revoked certificate MUST say that the certificate with this ID has been revoked and is no longer valid, with the date, and MUST show no learner name, course title, statement, reason or actor. It MUST remain distinguishable from "Certificate not found", and MUST keep saying so for as long as the certificate exists.
 - **FR-022**: A revoked certificate's PDF MUST NOT be downloadable; the refusal MUST say the certificate has been revoked.
 - **FR-023**: The learner MUST see, in My Learning and on the course home, that their certificate was revoked, when, and the reason category, and MUST NOT be offered any action that views, downloads or shares it. Every list of a learner's certificates MUST carry the status, so that other features (#592, sharing to LinkedIn) do not offer a revoked certificate.
 - **FR-024**: A revoked certificate MUST NOT be replaced: processing the learner's progress again issues nothing while a certificate, valid or revoked, exists for that student and course.
