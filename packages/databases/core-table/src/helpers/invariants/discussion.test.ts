@@ -152,6 +152,13 @@ describe('discussion', () => {
       courseTitle: 'Intro',
       completedAt: AT1,
       issuedAt: AT1,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
     });
     const discussion = (vs: ReturnType<typeof checkTableInvariants>) =>
       vs.filter((v) => v.invariant.startsWith('discussion-'));

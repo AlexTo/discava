@@ -72,6 +72,7 @@ export interface TableSnapshot {
     | 'priceAmount'
     | 'priceCurrency'
     | 'pricedAt'
+    | 'certificateCriteria'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -240,6 +241,7 @@ export interface TableSnapshot {
     | 'issuedAt'
     | 'linkedInClickedAt'
     | 'linkedInClickSource'
+    | 'assessment'
     | 'reminderScheduledAt'
     | 'reminderSentAt'
   >[];

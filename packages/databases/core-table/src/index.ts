@@ -172,6 +172,18 @@ export {
   recordLinkedInClick,
 } from './helpers/certificate.js';
 export {
+  type CertificateAssessment,
+  type CertificateCriteria,
+  type CertificateEvaluation,
+  type CertificateRequirement,
+  type CriteriaCurriculum,
+  DEFAULT_CERTIFICATE_CRITERIA,
+  type EvaluateCertificateCriteriaInput,
+  evaluateCertificateCriteria,
+  type QuizRequirementState,
+  scoreBand,
+} from './helpers/certificate-criteria.js';
+export {
   TRANSCODE_PENDING_ATTRIBUTES,
   transcodePendingFrom,
 } from './helpers/content-item.js';

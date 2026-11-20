@@ -112,6 +112,7 @@ describe('order', () => {
         courseId: 'course-1',
         title: 'x',
         certificatesEnabled: true,
+        certificateCriteria: { version: 1, requireQuizPass: false },
         priceAmount: 0,
         priceCurrency: 'USD',
       })

@@ -6,8 +6,62 @@ import {
   LINKEDIN_CLICK_SOURCES,
   normaliseCertificateId,
 } from '../certificate.js';
+import { scoreBand } from '../certificate-criteria.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
+
+type Assessment = TableSnapshot['certificates'][number]['assessment'];
+
+const assessmentProblems = (assessment: Assessment | undefined): string[] => {
+  if (!assessment) {
+    return ['assessment is missing'];
+  }
+  const problems: string[] = [];
+  const items = assessment.assessedItems ?? [];
+  if (!(assessment.criteriaVersion >= 1)) {
+    problems.push('assessment.criteriaVersion is below 1');
+  }
+  if (!(assessment.itemCount >= 1)) {
+    problems.push('assessment.itemCount is below 1');
+  }
+  if (assessment.assessedItemCount !== items.length) {
+    problems.push('assessment.assessedItemCount is not the list length');
+  }
+  const { passMarkLowest, passMarkHighest, scoreBand: band } = assessment;
+  if (items.length === 0) {
+    if (
+      passMarkLowest !== undefined ||
+      passMarkHighest !== undefined ||
+      band !== undefined
+    ) {
+      problems.push(
+        'assessment has pass marks or a band with nothing assessed',
+      );
+    }
+    return problems;
+  }
+  if (
+    passMarkLowest === undefined ||
+    passMarkHighest === undefined ||
+    band === undefined
+  ) {
+    problems.push('assessment lacks pass marks or a band');
+    return problems;
+  }
+  if (passMarkLowest > passMarkHighest) {
+    problems.push('assessment.passMarkLowest is above passMarkHighest');
+  }
+  if (!Number.isInteger(band) || band < 0 || band > 90 || band % 10 !== 0) {
+    problems.push(`assessment.scoreBand ${band} is not 0, 10 ... 90`);
+  } else {
+    const mean =
+      items.reduce((sum, i) => sum + i.scorePercent, 0) / items.length;
+    if (band !== scoreBand(mean)) {
+      problems.push('assessment.scoreBand is not the band of the mean score');
+    }
+  }
+  return problems;
+};
 
 // A certificate's ID is 16 characters of the Crockford
 // alphabet and unique across certificates, it carries the name, title and
@@ -46,6 +100,7 @@ export const checkCertificateShape = (snapshot: TableSnapshot): Violation[] => {
     ) {
       problems.push('issuedAt is before completedAt');
     }
+    problems.push(...assessmentProblems(certificate.assessment));
     return problems.map((message) =>
       violation('certificate-shape', record, message),
     );
@@ -206,8 +261,92 @@ export const checkCertificateNotificationsMatch = (
   });
 };
 
+// What a certificate says was assessed was met: with quiz pass required, every
+// listed quiz has a score at or above its pass mark (above 0) that the
+// student's quizSummary backs, passed by the time of issue; with nothing
+// required, the list is empty. Compared with what the certificate recorded,
+// not the course's current criteria or quizzes, which may have changed since.
+export const checkCertificateMetCriteria = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const summaries = new Map(
+    snapshot.quizSummaries.map((q) => [
+      `${q.userId} ${q.courseId} ${q.contentItemId}`,
+      q,
+    ]),
+  );
+  return snapshot.certificates.flatMap((certificate) => {
+    const { assessment, userId, courseId, issuedAt } = certificate;
+    if (!assessment) {
+      return [];
+    }
+    const items = assessment.assessedItems ?? [];
+    const problems: string[] = [];
+    if (assessment.requireQuizPass) {
+      for (const item of items) {
+        const summary = summaries.get(
+          `${userId} ${courseId} ${item.contentItemId}`,
+        );
+        const mark = item.passMarkPercent ?? 0;
+        if (!(mark > 0 && item.scorePercent >= mark)) {
+          problems.push(
+            `quiz ${item.contentItemId} was listed below its pass mark`,
+          );
+        }
+        if (
+          !summary?.passedAt ||
+          summary.passedAt > issuedAt ||
+          summary.bestScore < item.scorePercent
+        ) {
+          problems.push(
+            `quiz ${item.contentItemId} has no passing quizSummary before issue`,
+          );
+        }
+      }
+    } else if (
+      assessment.minUploadScorePercent === undefined &&
+      items.length > 0
+    ) {
+      problems.push('assessedItems is not empty though nothing was required');
+    }
+    return problems.map((message) =>
+      violation('certificate-met-criteria', { userId, courseId }, message),
+    );
+  });
+};
+
+// Every course has certificate criteria: an integer version from 1 and, when
+// present, an upload score threshold of 1 to 100.
+export const checkCourseCertificateCriteriaShape = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.courses.flatMap(({ courseId, certificateCriteria: criteria }) => {
+    const problems: string[] = [];
+    if (!criteria) {
+      problems.push('certificateCriteria is missing');
+    } else {
+      if (!Number.isInteger(criteria.version) || criteria.version < 1) {
+        problems.push('certificateCriteria.version is not an integer from 1');
+      }
+      const min = criteria.minUploadScorePercent;
+      if (min !== undefined && !(min >= 1 && min <= 100)) {
+        problems.push(
+          'certificateCriteria.minUploadScorePercent is not 1 to 100',
+        );
+      }
+    }
+    return problems.map((message) =>
+      violation('course-certificate-criteria-shape', { courseId }, message),
+    );
+  });
+
 export const CERTIFICATES_CHECKS = [
   { name: 'certificate-shape', check: checkCertificateShape },
+  { name: 'certificate-met-criteria', check: checkCertificateMetCriteria },
+  {
+    name: 'course-certificate-criteria-shape',
+    check: checkCourseCertificateCriteriaShape,
+  },
   {
     name: 'certificate-has-completed-enrolment',
     check: checkCertificateHasCompletedEnrolment,

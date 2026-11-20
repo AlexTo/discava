@@ -7,6 +7,7 @@ import { transactionConflict } from '@discava/common-server-utils/trpc-api-base'
 import { validatePrice } from '@discava/common-web-utils/price';
 import {
   cancellationReasons,
+  DEFAULT_CERTIFICATE_CRITERIA,
   ensureInstructorProfile,
   failedAt,
   filterEffectivelyVisible,
@@ -70,6 +71,7 @@ export const createCourse = courseProcedure
             title,
             description,
             certificatesEnabled: true,
+            certificateCriteria: DEFAULT_CERTIFICATE_CRITERIA,
             priceAmount: 0,
             priceCurrency: 'USD',
           })
