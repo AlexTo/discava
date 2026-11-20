@@ -21,6 +21,11 @@ export interface NotificationType<P extends string = string> {
   /** Required flat string params. */
   params: readonly P[];
   emailPolicy: EmailPolicy;
+  /**
+   * This type's email follows the named type's setting, unsubscribe and
+   * label. The named type exists, has none itself and has the same policy.
+   */
+  emailPreferenceType?: string;
   /** Pure and total over valid params. */
   build(params: Record<P, string>): {
     title: string;
@@ -83,6 +88,24 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       action: {
         label: 'Add to LinkedIn profile',
         path: `/certificates/${p.certificateId}/linkedin?source=issued-email`,
+      },
+    }),
+  }),
+  'certificate.reminder': defineType({
+    id: 'certificate.reminder',
+    name: 'Certificate reminder',
+    description:
+      'One reminder to add your certificate to your LinkedIn profile.',
+    params: ['certificateId', 'courseTitle'],
+    emailPolicy: 'default-on',
+    emailPreferenceType: 'certificate.issued',
+    build: (p) => ({
+      title: `Add your ${p.courseTitle} certificate to LinkedIn`,
+      body: `Your certificate for ${p.courseTitle} isn't on your LinkedIn profile yet, as far as we can tell. Adding it takes one click.`,
+      link: { portal: 'student', path: `/certificates/${p.certificateId}` },
+      action: {
+        label: 'Add to LinkedIn profile',
+        path: `/certificates/${p.certificateId}/linkedin?source=reminder-email`,
       },
     }),
   }),

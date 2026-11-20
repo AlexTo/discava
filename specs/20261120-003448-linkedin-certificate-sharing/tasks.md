@@ -139,14 +139,14 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
 
 **Independent test**: `pnpm nx run @discava/core-table:test -- --run certificate notification invariants`, `pnpm nx run @discava/core-api:test -- --run notification.test.ts` and `pnpm nx run @discava/events:test -- --run send-email` pass.
 
-- [ ] T020 [P] [US3] Tests first, then add the reminder's attributes and helpers ([data-model.md](./data-model.md)) to `packages/databases/core-table/src/entities/certificate.ts` and `helpers/certificate.ts`, exported from `src/index.ts`:
+- [x] T020 [P] [US3] Tests first, then add the reminder's attributes and helpers ([data-model.md](./data-model.md)) to `packages/databases/core-table/src/entities/certificate.ts` and `helpers/certificate.ts`, exported from `src/index.ts`:
   - optional `reminderScheduledAt` and `reminderSentAt` (ISO strings);
   - `CERTIFICATE_REMINDER_DELAY_DAYS = 3` and `certificateReminderDueAt(certificate)`: `issuedAt` plus that many days, as an ISO string;
   - `markCertificateReminderScheduled({ coreTable, userId, courseId, now })`: patch `reminderScheduledAt` where it doesn't exist; a failed condition is fine;
   - `claimCertificateReminder({ coreTable, userId, courseId, now })`: get the certificate; none returns `undefined`; a stored `reminderSentAt` returns `{ certificate, reminderSentAt }`; otherwise patch `reminderSentAt = now` where `reminderSentAt` and `linkedInClickedAt` don't exist and return it; on a failed condition read again and return the stored `reminderSentAt` if there is one, else `undefined` (a click won).
 
   `helpers/certificate.test.ts`: the due time; mark is set once; claim sets once and a second claim returns the first time; a claim after a click returns `undefined` and stores nothing; a click after a claim is still recorded; a claim and a click at once end in one of the two allowed states.
-- [ ] T021 [P] [US3] Tests first, then add `emailPreferenceType` and `isEmailEnabled` (research R-6, [contracts/notifications-and-reminder.md](./contracts/notifications-and-reminder.md)):
+- [x] T021 [P] [US3] Tests first, then add `emailPreferenceType` and `isEmailEnabled` (research R-6, [contracts/notifications-and-reminder.md](./contracts/notifications-and-reminder.md)):
   - `emailPreferenceType?: string` on `NotificationType`, and the `certificate.reminder` entry from [data-model.md](./data-model.md) with `emailPreferenceType: 'certificate.issued'`, in `packages/databases/core-table/src/helpers/notification-types.ts`. A registry test: every `emailPreferenceType` names an existing type that has none itself and the same email policy;
   - `isEmailEnabled(service, userId, type)` in `helpers/notification-preference.ts`, with the table in the contract, and `setNotificationPreference` refusing a type that has `emailPreferenceType` with `InvalidRequestError`;
   - `notification-preference-shape` in `helpers/invariants/notifications.ts` also refuses a stored preference for such a type, with a breaking test;
@@ -154,7 +154,7 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
   - the preference list in `packages/apis/core-api/src/procedures/notification.ts` leaves out types that have `emailPreferenceType`.
 
   Tests: `notification-preference.test.ts` (each row of the table; the reminder follows `certificate.issued` on, off and unset); `send-email.test.ts` (a reminder notification is skipped as `opted-out` when "Certificates" is off, its token verifies for `certificate.issued`, its footer says "Certificates"; every existing case passes unchanged); `procedures/notification.test.ts` (one "Certificates" row, no reminder row, and `setPreference` for `certificate.reminder` is `BAD_REQUEST`). `notify-local` already refuses `certificate.` types (T014): add `certificate.reminder` to that test.
-- [ ] T022 [US3] Tests first, then the reminder's invariants in `packages/databases/core-table/src/helpers/invariants/certificates.ts` (after T020 and T021):
+- [x] T022 [US3] Tests first, then the reminder's invariants in `packages/databases/core-table/src/helpers/invariants/certificates.ts` (after T020 and T021):
   - new `certificate-reminder-not-after-click`: "when both are present, `reminderSentAt` isn't after `linkedInClickedAt`; `reminderSentAt` isn't before `issuedAt`";
   - extend `certificate-notifications-match` to `certificate.reminder`: its link names a certificate of the same user, a certificate has at most one, and that certificate's `reminderSentAt` equals the notification's `occurredAt`.
 

@@ -221,6 +221,13 @@ describe('notifications', () => {
         delete NOTIFICATION_TYPES[type];
       }
     });
+
+    it('reports a preference for a type that follows another type', () => {
+      table.notificationPreferences = [
+        { userId: 'student', type: 'certificate.reminder' },
+      ];
+      expectOnly('notification-preference-shape', /certificate\.issued/);
+    });
   });
 
   describe('notification-broadcast-done-complete', () => {

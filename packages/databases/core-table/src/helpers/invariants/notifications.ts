@@ -133,7 +133,8 @@ export const checkNotificationStateExists = (
 };
 
 // A stored preference is for a registered type whose email can be
-// changed: a `required` type is always sent.
+// changed: a `required` type is always sent, and a type with
+// `emailPreferenceType` follows another type's setting.
 export const checkNotificationPreferenceShape = (
   snapshot: TableSnapshot,
 ): Violation[] =>
@@ -146,7 +147,9 @@ export const checkNotificationPreferenceShape = (
       ? `type ${type} is not registered`
       : entry.emailPolicy === 'required'
         ? `type ${type} is required, so its email can't be changed`
-        : undefined;
+        : entry.emailPreferenceType
+          ? `type ${type} follows ${entry.emailPreferenceType}, so it has no setting of its own`
+          : undefined;
     return problem
       ? [violation('notification-preference-shape', { userId, type }, problem)]
       : [];

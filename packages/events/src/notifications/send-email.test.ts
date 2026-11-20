@@ -4,6 +4,7 @@
  */
 // @vitest-environment node
 
+import { verifyUnsubscribeToken } from '@discava/common-server-utils/unsubscribe-token';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmailPermanentError, EmailTransientError } from './email.js';
 import {
@@ -120,6 +121,44 @@ describe('sendNotificationEmail', () => {
     expect(send.mock.calls[0][0].text).toContain(
       'Add to LinkedIn profile: https://student.example.com/c/linkedin',
     );
+  });
+
+  describe('the certificate reminder, which follows certificate.issued', () => {
+    const reminder = () =>
+      t.add(
+        fakeNotification({
+          id: '1123456789abcdef',
+          type: 'certificate.reminder',
+          title: 'Add your History certificate to LinkedIn',
+          link: { portal: 'student', path: '/certificates/ABCD' },
+          action: {
+            label: 'Add to LinkedIn profile',
+            path: '/certificates/ABCD/linkedin?source=reminder-email',
+          },
+        }),
+      );
+
+    it('is skipped as opted-out when Certificates is off', async () => {
+      n = reminder();
+      t.preferences.set('u1|certificate.issued', { emailEnabled: false });
+      await run();
+      expect(n.email).toEqual({ state: 'skipped', reason: 'opted-out' });
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it('is sent when Certificates is on or unset, with the Certificates footer and a token for certificate.issued', async () => {
+      n = reminder();
+      expect(await run()).toBe('sent');
+      const message = send.mock.calls[0][0];
+      expect(message.text).toContain('Certificates');
+      expect(message.text).toContain(
+        'https://student.example.com/certificates/ABCD/linkedin?source=reminder-email',
+      );
+      const token = /unsubscribe\?token=([^\s&]+)/.exec(message.text)?.[1];
+      expect(
+        verifyUnsubscribeToken('secret', decodeURIComponent(token as string)),
+      ).toEqual({ userId: 'u1', type: 'certificate.issued' });
+    });
   });
 
   it('sends nothing the second time', async () => {

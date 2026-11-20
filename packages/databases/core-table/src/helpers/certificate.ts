@@ -34,6 +34,8 @@ export const LINKEDIN_CLICK_SOURCES = [
 ] as const;
 export type LinkedInClickSource = (typeof LINKEDIN_CLICK_SOURCES)[number];
 
+export const CERTIFICATE_REMINDER_DELAY_DAYS = 3;
+
 const FALLBACK_NAME = 'Discava learner';
 
 // 10 random bytes are 80 bits: exactly 16 base32 characters.
@@ -249,4 +251,85 @@ export const recordLinkedInClick = async ({
     }
     return 'already-recorded';
   }
+};
+
+// When the one reminder to add the certificate to LinkedIn is due.
+export const certificateReminderDueAt = (
+  certificate: Pick<Certificate, 'issuedAt'>,
+): string =>
+  new Date(
+    Date.parse(certificate.issuedAt) +
+      CERTIFICATE_REMINDER_DELAY_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+export interface CertificateReminderInput {
+  coreTable: Pick<CoreTable, 'entities'>;
+  userId: string;
+  courseId: string;
+  now: Date;
+}
+
+// Records that the reminder's schedule exists, once. A failed condition means
+// it was already recorded, which is fine.
+export const markCertificateReminderScheduled = async ({
+  coreTable,
+  userId,
+  courseId,
+  now,
+}: CertificateReminderInput): Promise<void> => {
+  try {
+    await coreTable.entities.certificate
+      .patch({ userId, courseId })
+      .set({ reminderScheduledAt: now.toISOString() })
+      .where((attr, op) => op.notExists(attr.reminderScheduledAt))
+      .go();
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) {
+      throw error;
+    }
+  }
+};
+
+// Claims the reminder for sending: `reminderSentAt` is set once, and only
+// while no LinkedIn use is recorded. Returns the certificate and the stored
+// `reminderSentAt` when the reminder is to be published (a claim made by an
+// earlier run is read back, so a retry publishes with the same time), and
+// undefined when there is no certificate or a click won.
+export const claimCertificateReminder = async ({
+  coreTable,
+  userId,
+  courseId,
+  now,
+}: CertificateReminderInput): Promise<
+  { certificate: Certificate; reminderSentAt: string } | undefined
+> => {
+  const { certificate } = coreTable.entities;
+  const key = { userId, courseId };
+  const { data: existing } = await certificate.get(key).go();
+  if (!existing) {
+    return undefined;
+  }
+  if (existing.reminderSentAt) {
+    return { certificate: existing, reminderSentAt: existing.reminderSentAt };
+  }
+  const reminderSentAt = now.toISOString();
+  try {
+    await certificate
+      .patch(key)
+      .set({ reminderSentAt })
+      .where(
+        (attr, op) =>
+          `${op.notExists(attr.reminderSentAt)} AND ${op.notExists(attr.linkedInClickedAt)}`,
+      )
+      .go();
+    return { certificate: { ...existing, reminderSentAt }, reminderSentAt };
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) {
+      throw error;
+    }
+  }
+  const { data: current } = await certificate.get(key).go();
+  return current?.reminderSentAt
+    ? { certificate: current, reminderSentAt: current.reminderSentAt }
+    : undefined;
 };

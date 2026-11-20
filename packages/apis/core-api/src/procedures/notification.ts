@@ -58,11 +58,11 @@ const unreadCountOf = async (coreTable: CoreTable, userId: string) => {
   };
 };
 
-// The types a user can set: every registered type that is emailed at all, in
-// registry order.
+// The types a user can set: every registered type that is emailed at all and
+// has a setting of its own, in registry order.
 const settableTypes = () =>
   Object.values(NOTIFICATION_TYPES).filter(
-    (type) => type.emailPolicy !== 'never',
+    (type) => type.emailPolicy !== 'never' && !type.emailPreferenceType,
   );
 
 const preferenceFor = (

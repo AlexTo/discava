@@ -280,6 +280,14 @@ describe('notification.preferences', () => {
     ]);
   });
 
+  it('has one Certificates row and none for the reminder', async () => {
+    const result = await call().preferences();
+    expect(result.filter((p) => p.name === 'Certificates')).toHaveLength(1);
+    expect(
+      result.find((p) => p.type === 'certificate.reminder'),
+    ).toBeUndefined();
+  });
+
   it('applies stored overrides', async () => {
     db.preferences = [
       { type: 'assignment.returned', emailEnabled: false },
@@ -329,6 +337,16 @@ describe('notification.setPreference', () => {
         call().setPreference({ type, emailEnabled: true }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     }
+    expect(puts).toHaveLength(0);
+  });
+
+  it('is BAD_REQUEST for a type that follows another type’s setting', async () => {
+    await expect(
+      call().setPreference({
+        type: 'certificate.reminder',
+        emailEnabled: false,
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(puts).toHaveLength(0);
   });
 
