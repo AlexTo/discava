@@ -126,14 +126,14 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/instructor-api:test -- --run assignment-submission` passes and `pnpm nx run @discava/infra:synth` succeeds.
 
-- [x] T10 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/schema/assignment-submission.ts` from [contracts/instructor-api-assignment-submission.md](./contracts/instructor-api-assignment-submission.md):
+- [x] T010 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/schema/assignment-submission.ts` from [contracts/instructor-api-assignment-submission.md](./contracts/instructor-api-assignment-submission.md):
   - `FeedbackSchema = z.string().max(20_000).refine(isValidTiptapDocument)`;
   - `PointsSchema = z.number().min(0).multipleOf(0.01)`;
   - inputs for `list` (`cursor` optional), `get`, `fileUrl`, `return` (`version`, `reviewRevision`, `points`, `feedback?`), `requestResubmission` (`feedback` required, refined to non-empty text as `schema/announcement.ts:17-24` does) and `amendGrade`;
   - the output schemas.
 
   Export them through `schema/index.ts`. Test the bounds: 20 001 characters refused, invalid Tiptap refused, an empty-text request refused, `points: -1` and `points: 1.005` refused.
-- [x] T11 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/helpers/submission-list.ts`. It is a pure function that merges enrolments and submissions into rows and sorts them in the order of research R-4 and the contract:
+- [x] T011 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/helpers/submission-list.ts`. It is a pure function that merges enrolments and submissions into rows and sorts them in the order of research R-4 and the contract:
   1. enrolled `submitted` by `submittedAt` ascending;
   2. `resubmission_requested`;
   3. `returned`;
@@ -148,7 +148,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a dropped student with one (last, `enrolled: false`);
   - the ties;
   - a page boundary staying stable when a row before the cursor changes state.
-- [x] T12 [US1] Tests first, then add `listAssignmentSubmissions` and `getAssignmentSubmission` in `packages/apis/instructor-api/src/procedures/assignment-submission.ts`. Register them as `assignmentSubmission.list` and `.get` in `src/router.ts`.
+- [x] T012 [US1] Tests first, then add `listAssignmentSubmissions` and `getAssignmentSubmission` in `packages/apis/instructor-api/src/procedures/assignment-submission.ts`. Register them as `assignmentSubmission.list` and `.get` in `src/router.ts`.
   - Both are `courseInstructorProcedure`.
   - The item must be `type: 'assignment'` in the course (`NOT_FOUND` otherwise); hidden or archived content is allowed.
   - `list` reads access patterns A1, A2 and A9 from data-model and calls `submission-list.ts`.
@@ -159,8 +159,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a quiz item is `NOT_FOUND`;
   - the order and counts;
   - history newest first.
-- [x] T13 [US1] Tests first, then add `assignmentSubmission.fileUrl` (`getSignedCloudFrontFileUrl(submission.file.key)`, or `localObjectUrl` when `isLocalDev()`; `NOT_FOUND` without a submission) in the same procedures file. Add it to the `MediaUrl` list in `INSTRUCTOR_API_DEDICATED_FUNCTIONS` (`packages/common/constructs/src/app/apis/instructor-api.ts:61-65`). Then check `pnpm nx run @discava/infra:synth` succeeds.
-- [x] T14 [US1] Tests first, then add `returnAssignmentSubmission` and `amendAssignmentGrade` (`assignmentSubmission.return`, `.amendGrade`) to the procedures file. Each one:
+- [x] T013 [US1] Tests first, then add `assignmentSubmission.fileUrl` (`getSignedCloudFrontFileUrl(submission.file.key)`, or `localObjectUrl` when `isLocalDev()`; `NOT_FOUND` without a submission) in the same procedures file. Add it to the `MediaUrl` list in `INSTRUCTOR_API_DEDICATED_FUNCTIONS` (`packages/common/constructs/src/app/apis/instructor-api.ts:61-65`). Then check `pnpm nx run @discava/infra:synth` succeeds.
+- [x] T014 [US1] Tests first, then add `returnAssignmentSubmission` and `amendAssignmentGrade` (`assignmentSubmission.return`, `.amendGrade`) to the procedures file. Each one:
   1. reads the item (`maxPoints`, lesson title), course title, submission and enrolment;
   2. refuses `dropped` enrolment with `PRECONDITION_FAILED` "This student has left the course. Their work can be read but not graded.";
   3. refuses points over `maxPoints` with `BAD_REQUEST` "Points must be between 0 and N";
@@ -176,7 +176,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - two returns from one revision (one `CONFLICT`);
   - replaying a return that already committed (same `version` and `reviewRevision`) gets `CONFLICT` and writes no second notification (spec US2 scenario 4);
   - an amend keeps `returnedAt`.
-- [x] T15 [US3] Tests first, then add `requestAssignmentResubmission` (`assignmentSubmission.requestResubmission`) to the procedures file with the same reads, enrolment and conflict handling as T014. It is allowed only from `submitted` and uses `requestResubmissionWrites`. Cases:
+- [x] T015 [US3] Tests first, then add `requestAssignmentResubmission` (`assignmentSubmission.requestResubmission`) to the procedures file with the same reads, enrolment and conflict handling as T014. It is allowed only from `submitted` and uses `requestResubmissionWrites`. Cases:
   - success;
   - from `resubmission_requested` and from `returned` refused;
   - empty feedback refused by the schema;

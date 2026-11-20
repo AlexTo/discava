@@ -45,6 +45,7 @@ import type { createQuizScoreStatsEntity } from '../../entities/quiz-score-stats
 import type { createQuizSummaryEntity } from '../../entities/quiz-summary.js';
 import type { createReviewEntity } from '../../entities/review.js';
 import type { createSubmissionFeedbackEntity } from '../../entities/submission-feedback.js';
+import type { createSubmissionNoticeEntity } from '../../entities/submission-notice.js';
 import type { createUserEntity } from '../../entities/user.js';
 import type { createVideoPositionEntity } from '../../entities/video-position.js';
 import type { createCoreTableService } from '../../service.js';
@@ -223,6 +224,10 @@ export interface TableSnapshot {
     | 'version'
     | 'givenAt'
     | 'givenBy'
+  >[];
+  submissionNotices: Pick<
+    Item<typeof createSubmissionNoticeEntity>,
+    'courseId' | 'contentItemId' | 'day' | 'ttl'
   >[];
   certificates: Pick<
     Item<typeof createCertificateEntity>,
@@ -534,6 +539,7 @@ export const SNAPSHOT_ENTITIES = {
   quizSummaries: 'quizSummary',
   assignmentSubmissions: 'assignmentSubmission',
   submissionFeedback: 'submissionFeedback',
+  submissionNotices: 'submissionNotice',
   certificates: 'certificate',
   videoPositions: 'videoPosition',
   users: 'user',

@@ -14,8 +14,6 @@ import { describe, expect, it } from 'vitest';
 const NO_INVARIANTS: Record<string, string> = {
   'analytics-marker':
     'only guards the analytics stream against counting an event twice; the aggregates it guards are checked',
-  'submission-notice':
-    'only deduplicates the daily instructor notice; the notifications it guards are checked',
 };
 
 const src = path.join(import.meta.dirname, '..');

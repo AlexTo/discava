@@ -231,6 +231,36 @@ export const checkSubmissionLatestRoundMatches = (
   });
 };
 
+const DAY_SECONDS = 24 * 60 * 60;
+
+// A daily instructor notice marker is for a real UTC day (YYYY-MM-DD) and
+// expires, by its ttl in epoch seconds, two days after that day starts.
+export const checkSubmissionNoticeShape = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.submissionNotices.flatMap((notice) => {
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(notice.day)
+      ? Date.parse(`${notice.day}T00:00:00.000Z`) / 1000
+      : Number.NaN;
+    const problems: string[] = [];
+    if (Number.isNaN(start)) {
+      problems.push(`day ${notice.day} is not a YYYY-MM-DD date`);
+    } else if (notice.ttl !== start + 2 * DAY_SECONDS) {
+      problems.push(`ttl ${notice.ttl} is not two days after ${notice.day}`);
+    }
+    return problems.map((message) =>
+      violation(
+        'submission-notice-shape',
+        {
+          courseId: notice.courseId,
+          contentItemId: notice.contentItemId,
+          day: notice.day,
+        },
+        message,
+      ),
+    );
+  });
+
 export const ASSIGNMENT_GRADING_CHECKS = [
   { name: 'submission-grade-shape', check: checkSubmissionGradeShape },
   { name: 'submission-waiting-keys', check: checkSubmissionWaitingKeys },
@@ -243,4 +273,5 @@ export const ASSIGNMENT_GRADING_CHECKS = [
     name: 'submission-latest-round-matches',
     check: checkSubmissionLatestRoundMatches,
   },
+  { name: 'submission-notice-shape', check: checkSubmissionNoticeShape },
 ] as const satisfies readonly Check[];

@@ -18,6 +18,7 @@ const INVARIANTS_UNDER_TEST: InvariantName[] = [
   'submission-feedback-has-submission',
   'submission-feedback-shape',
   'submission-latest-round-matches',
+  'submission-notice-shape',
   'assignment-submission-shape',
 ];
 
@@ -99,6 +100,37 @@ beforeEach(() => {
 const submission = () => table.assignmentSubmissions[0]!;
 const violationsOf = (invariant: InvariantName) =>
   checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+describe('submission-notice-shape', () => {
+  const notice = {
+    courseId: 'c1',
+    contentItemId: 'video',
+    day: '2026-01-02',
+    ttl: Date.parse('2026-01-04T00:00:00.000Z') / 1000,
+  };
+
+  it('keeps a marker that expires two days after its day', () => {
+    table.submissionNotices.push(notice);
+    expect(violationsOf('submission-notice-shape')).toEqual([]);
+  });
+
+  it('reports a ttl that is not two days after the day', () => {
+    table.submissionNotices.push({ ...notice, ttl: notice.ttl + 1 });
+    expect(violationsOf('submission-notice-shape')[0]?.message).toMatch(
+      /not two days after 2026-01-02/,
+    );
+  });
+
+  it.each(['2026-1-2', 'yesterday', '2026-13-45'])(
+    'reports the day %s',
+    (day) => {
+      table.submissionNotices.push({ ...notice, day });
+      expect(violationsOf('submission-notice-shape')[0]?.message).toMatch(
+        /not a YYYY-MM-DD date/,
+      );
+    },
+  );
+});
 
 describe('grading (#102)', () => {
   it.each(INVARIANTS_UNDER_TEST)(
