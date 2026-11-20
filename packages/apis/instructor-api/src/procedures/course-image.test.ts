@@ -66,6 +66,7 @@ const course = {
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-02T00:00:00.000Z',
   certificatesEnabled: true,
+  certificateCriteria: { version: 1, requireQuizPass: false },
   priceAmount: 0,
   priceCurrency: 'USD',
 };

@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { type InvariantName } from './index.js';
 import type { TableSnapshot } from './snapshot.js';
-import { checkTableInvariants, consistentTable } from './test-fixture.js';
+import { checkTableInvariants, consistentTable, T } from './test-fixture.js';
 
 let table: TableSnapshot;
 beforeEach(() => {
@@ -25,6 +25,13 @@ describe('certificate-linkedin-click-shape', () => {
       courseTitle: 'Intro',
       completedAt: ISSUED,
       issuedAt: ISSUED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
     });
     return table.certificates[0];
   };
@@ -79,6 +86,13 @@ describe('certificate-shape and certificate-has-completed-enrolment', () => {
       courseTitle: 'Intro',
       completedAt: COMPLETED,
       issuedAt: COMPLETED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
     });
     return table.certificates[0];
   };
@@ -228,6 +242,13 @@ describe('certificate-notifications-match', () => {
     courseTitle: 'Intro',
     completedAt: ISSUED,
     issuedAt: ISSUED,
+    assessment: {
+      criteriaVersion: 1,
+      requireQuizPass: false,
+      itemCount: 4,
+      assessedItemCount: 0,
+      assessedItems: [],
+    },
   });
   const notification = (id: string, path: string, userId = 'student') => ({
     userId,
@@ -289,6 +310,190 @@ describe('certificate-notifications-match', () => {
     );
     expect(violationsOf()).toHaveLength(1);
     expect(violationsOf()[0]?.message).toMatch(/more than one/);
+  });
+});
+
+describe('certificate assessment and criteria invariants', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const issue = (
+    assessment: Partial<
+      NonNullable<TableSnapshot['certificates'][number]['assessment']>
+    > = {},
+  ) => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: ISSUED,
+      issuedAt: ISSUED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+        ...assessment,
+      },
+    });
+    return table.certificates[0];
+  };
+  const quizAssessment = {
+    requireQuizPass: true,
+    assessedItemCount: 1,
+    assessedItems: [
+      {
+        contentItemId: 'quiz',
+        kind: 'quiz' as const,
+        scorePercent: 80,
+        passMarkPercent: 70,
+      },
+    ],
+    passMarkLowest: 70,
+    passMarkHighest: 70,
+    scoreBand: 80,
+  };
+  const of = (invariant: InvariantName) =>
+    checkTableInvariants(table)
+      .filter((v) => v.invariant === invariant)
+      .map((v) => v.message);
+
+  it('accepts both an empty and a quiz assessment', () => {
+    issue();
+    expect(of('certificate-shape')).toEqual([]);
+    expect(of('certificate-met-criteria')).toEqual([]);
+    table.certificates = [];
+    issue(quizAssessment);
+    expect(of('certificate-shape')).toEqual([]);
+    expect(of('certificate-met-criteria')).toEqual([]);
+  });
+
+  it('reports a missing assessment', () => {
+    delete (issue() as { assessment?: unknown }).assessment;
+    expect(of('certificate-shape')).toContain('assessment is missing');
+  });
+
+  it.each([
+    ['criteriaVersion below 1', { criteriaVersion: 0 }, /criteriaVersion/],
+    ['itemCount below 1', { itemCount: 0 }, /itemCount/],
+    ['a count that is not the length', { assessedItemCount: 2 }, /list length/],
+    ['a band with nothing assessed', { scoreBand: 0 }, /nothing assessed/],
+    [
+      'no band with a quiz',
+      { ...quizAssessment, scoreBand: undefined },
+      /lacks/,
+    ],
+    [
+      'a band not a multiple of 10',
+      { ...quizAssessment, scoreBand: 85 },
+      /not 0, 10/,
+    ],
+    [
+      'a band that is not the mean’s',
+      { ...quizAssessment, scoreBand: 70 },
+      /mean/,
+    ],
+    [
+      'lowest above highest',
+      { ...quizAssessment, passMarkLowest: 90 },
+      /passMarkLowest/,
+    ],
+  ])('reports %s', (_, assessment, message) => {
+    issue(assessment);
+    expect(of('certificate-shape').join('\n')).toMatch(message);
+  });
+
+  it('reports a listed quiz below its pass mark', () => {
+    issue({
+      ...quizAssessment,
+      assessedItems: [{ ...quizAssessment.assessedItems[0], scorePercent: 60 }],
+    });
+    expect(of('certificate-met-criteria').join('\n')).toMatch(
+      /below its pass mark/,
+    );
+  });
+
+  it('reports a listed quiz with a pass mark of 0', () => {
+    issue({
+      ...quizAssessment,
+      assessedItems: [
+        { ...quizAssessment.assessedItems[0], passMarkPercent: 0 },
+      ],
+    });
+    expect(of('certificate-met-criteria').join('\n')).toMatch(
+      /below its pass mark/,
+    );
+  });
+
+  it('reports a listed quiz with no summary, a late pass or a lower best score', () => {
+    issue(quizAssessment);
+    table.quizSummaries = [];
+    expect(of('certificate-met-criteria')).toHaveLength(1);
+    table.quizSummaries = consistentTable().quizSummaries;
+    table.quizSummaries[0].passedAt = '2026-01-04T00:00:00.000Z';
+    expect(of('certificate-met-criteria')).toHaveLength(1);
+    table.quizSummaries[0].passedAt = T;
+    table.quizSummaries[0].bestScore = 70;
+    expect(of('certificate-met-criteria')).toHaveLength(1);
+  });
+
+  it('reports a listed quiz when quiz pass was not required', () => {
+    issue({ ...quizAssessment, requireQuizPass: false });
+    expect(of('certificate-met-criteria').join('\n')).toMatch(
+      /nothing was required/,
+    );
+  });
+
+  it('does not report a completed enrolment with no certificate', () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    expect(of('certificate-met-criteria')).toEqual([]);
+    expect(of('certificate-shape')).toEqual([]);
+  });
+
+  it('does not report an assessment that differs from the course’s current criteria', () => {
+    issue(quizAssessment);
+    table.courses[0].certificateCriteria = {
+      version: 5,
+      requireQuizPass: false,
+    };
+    expect(of('certificate-met-criteria')).toEqual([]);
+    expect(of('certificate-shape')).toEqual([]);
+  });
+
+  it('does not report a listed quiz since hidden or given a higher pass mark', () => {
+    issue(quizAssessment);
+    const quiz = table.contentItems.find((i) => i.contentItemId === 'quiz');
+    if (quiz) {
+      quiz.visibility = 'hidden';
+      (quiz as { settings?: unknown }).settings = { passMarkPercent: 95 };
+    }
+    expect(of('certificate-met-criteria')).toEqual([]);
+  });
+
+  it('checks every course’s criteria', () => {
+    expect(of('course-certificate-criteria-shape')).toEqual([]);
+    for (const bad of [
+      { version: 0, requireQuizPass: false },
+      { version: 1.5, requireQuizPass: false },
+      { version: 1, requireQuizPass: false, minUploadScorePercent: 0 },
+      { version: 1, requireQuizPass: false, minUploadScorePercent: 101 },
+    ]) {
+      table.courses[0].certificateCriteria = bad;
+      expect(of('course-certificate-criteria-shape')).toHaveLength(1);
+    }
+    table.courses[0].certificateCriteria = {
+      version: 2,
+      requireQuizPass: true,
+      minUploadScorePercent: 100,
+    };
+    expect(of('course-certificate-criteria-shape')).toEqual([]);
+    delete (table.courses[0] as { certificateCriteria?: unknown })
+      .certificateCriteria;
+    expect(of('course-certificate-criteria-shape')).toHaveLength(1);
   });
 });
 

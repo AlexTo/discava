@@ -192,6 +192,77 @@ describe('publicViewCourse', () => {
     });
   });
 
+  it('returns none of a video’s questions, answer key or quiz version', async () => {
+    const withQuestions = {
+      contentItemId: 'content-item-1',
+      lessonId: 'lesson-1',
+      moduleId: 'module-1',
+      courseId: publishedCourse.courseId,
+      type: 'video' as const,
+      status: 'ready' as const,
+      title: 'Lecture',
+      s3Key:
+        'courses/course-1/modules/module-1/lessons/lesson-1/content-items/content-item-1/n1/master.m3u8',
+      mimeType: 'video/mp4',
+      order: 1,
+      questions: [
+        {
+          questionId: 'q1',
+          kind: 'single',
+          prompt: 'SECRET-PROMPT',
+          options: [
+            { optionId: 'a', text: 'Yes' },
+            { optionId: 'b', text: 'No' },
+          ],
+          atSeconds: 5,
+          contentHash: 'hash',
+        },
+      ],
+      answerKey: { q1: { correctOptionIds: ['a'] } },
+      quizVersion: 2,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [publishedCourse],
+          module: [
+            visible({
+              moduleId: 'module-1',
+              courseId: publishedCourse.courseId,
+              title: 'Module',
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            }),
+          ],
+          lesson: [
+            visible({
+              lessonId: 'lesson-1',
+              moduleId: 'module-1',
+              courseId: publishedCourse.courseId,
+              title: 'Lesson',
+              kind: 'lesson' as const,
+              order: 1,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            }),
+          ],
+          contentItem: [visible(withQuestions)],
+        },
+      }),
+    });
+
+    const result = await callAnonymously().publicViewCourse({
+      courseId: publishedCourse.courseId,
+    });
+
+    expect(JSON.stringify(result)).not.toMatch(
+      /SECRET-PROMPT|answerKey|quizVersion|contentHash/,
+    );
+  });
+
   it('omits hidden and archived modules and lessons, and lessons under them', async () => {
     const base = {
       courseId: publishedCourse.courseId,

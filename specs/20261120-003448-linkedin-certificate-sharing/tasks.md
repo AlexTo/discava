@@ -218,7 +218,7 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
 
 **Goal**: The design pages describe the feature. Reviewers confirm what needs a stack, a LinkedIn account or a deployed stage.
 
-- [ ] T034 [P] Update the English docs, and note in the PR that translations of the other locales are pending:
+- [x] T034 [P] Update the English docs, and note in the PR that translations of the other locales are pending:
   - `docs/src/content/docs/en/design/certificates.mdx`: sections "Adding it to LinkedIn" (the link, what is sent and what never is, the set-once record and that it means "opened the form", research R-1 to R-3), "Telling the learner" (the notification in the certificate's transaction, the email's two links, the "Certificates" setting, the three-day reminder and its claim, R-4 to R-7) and "The link preview" (R-8). Replace "Sharing and verifying"'s list of actions with the four actions. Add a second "Spec" link to this spec. Say how uptake is read: the share of certificates with `linkedInClickedAt`, split by `linkedInClickSource` (FR-013). Under Limitations: LinkedIn sends nothing back; a use can be recorded by anyone holding the ID; no revocation yet (#594);
   - `docs/src/content/docs/en/guides/notifications.mdx`: the two types, `action` and `emailPreferenceType`;
   - `docs/src/content/docs/en/design/public-pages.mdx`: `/certificates/*` among the renderer's paths, always `noindex`.

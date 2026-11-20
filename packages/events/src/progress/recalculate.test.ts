@@ -26,6 +26,7 @@ const db = {
   completions: [] as { contentItemId: string }[],
   progress: [] as { lessonId: string; status: string }[],
   course: null as Record<string, unknown> | null,
+  quizSummaries: [] as Record<string, unknown>[],
   user: null as Record<string, unknown> | null,
   // Certificates by `userId#courseId`.
   certificates: new Map<string, Record<string, unknown>>(),
@@ -36,7 +37,7 @@ const db = {
 
 // Reads other than the enrolment, completions and progress, for the tests of
 // when the course and user are (not) read.
-const reads = { course: vi.fn(), user: vi.fn() };
+const reads = { course: vi.fn(), user: vi.fn(), quizSummaries: vi.fn() };
 // What the next certificate create does, if it isn't the default: throws
 // ConditionalCheckFailedException as a lost race does, or any other error.
 let createCertificate: (item: Record<string, unknown>) => Promise<void> =
@@ -141,6 +142,16 @@ const coreTable = {
           commit: () => ({ entity: 'notificationState', kind: 'patch', key }),
         };
         return chain;
+      },
+    },
+    quizSummary: {
+      query: {
+        primary: vi.fn(() => ({
+          go: async () => {
+            reads.quizSummaries();
+            return { data: db.quizSummaries };
+          },
+        })),
       },
     },
     course: {
@@ -248,7 +259,9 @@ beforeEach(() => {
     courseId: 'course-1',
     title: 'Intro to Discava',
     certificatesEnabled: true,
+    certificateCriteria: { version: 1, requireQuizPass: false },
   };
+  db.quizSummaries = [];
   db.user = { userId: 'student-1', givenName: 'Ada', familyName: 'Lovelace' };
   db.certificates = new Map();
   db.notifications = new Map();
@@ -461,6 +474,130 @@ describe('recalculateStudent', () => {
           issuedAt: NOW,
         }),
       ]);
+    });
+
+    it('stores what was assessed: the item count and no assessed items under the default criteria, with no quiz summary read', async () => {
+      completed('a', 'b', 'c');
+
+      await recalculate();
+
+      expect([...db.certificates.values()][0]).toMatchObject({
+        assessment: {
+          criteriaVersion: 1,
+          requireQuizPass: false,
+          itemCount: 3,
+          assessedItemCount: 0,
+          assessedItems: [],
+        },
+      });
+      expect(reads.quizSummaries).not.toHaveBeenCalled();
+    });
+
+    describe('when quiz pass is required', () => {
+      beforeEach(() => {
+        db.course = {
+          ...db.course,
+          certificateCriteria: { version: 2, requireQuizPass: true },
+        };
+      });
+      const withQuiz = {
+        ...curriculum,
+        contentItems: [
+          ...curriculum.contentItems,
+          {
+            moduleId: 'm1',
+            lessonId: 'l2',
+            contentItemId: 'q',
+            type: 'quiz',
+            settings: { passMarkPercent: 70, attemptsAllowed: null },
+            ...visible,
+          },
+        ],
+      } as Curriculum;
+      const run = () =>
+        recalculateStudent(coreTable, 'course-1', withQuiz, 'student-1', NOW);
+
+      it('completes the student but issues nothing while an assessed quiz is failed', async () => {
+        completed('a', 'b', 'c', 'q');
+        db.quizSummaries = [
+          { contentItemId: 'q', attemptsUsed: 1, bestScore: 40 },
+        ];
+
+        await run();
+
+        expect(writes).toContainEqual(
+          expect.objectContaining({
+            entity: 'enrolment',
+            set: expect.objectContaining({
+              status: 'completed',
+              completedAt: NOW,
+            }),
+          }),
+        );
+        expect(db.certificates.size).toBe(0);
+        expect(db.notifications.size).toBe(0);
+      });
+
+      it('issues one listing the quiz once it is passed', async () => {
+        completed('a', 'b', 'c', 'q');
+        db.quizSummaries = [
+          {
+            contentItemId: 'q',
+            attemptsUsed: 2,
+            bestScore: 85,
+            passedAt: '2024-01-31T00:00:00.000Z',
+          },
+        ];
+
+        await run();
+
+        expect([...db.certificates.values()][0]).toMatchObject({
+          assessment: {
+            criteriaVersion: 2,
+            requireQuizPass: true,
+            itemCount: 4,
+            assessedItemCount: 1,
+            assessedItems: [
+              {
+                contentItemId: 'q',
+                kind: 'quiz',
+                scorePercent: 85,
+                passMarkPercent: 70,
+              },
+            ],
+            scoreBand: 80,
+          },
+        });
+        expect(
+          coreTable.entities.quizSummary.query.primary,
+        ).toHaveBeenCalledWith({ userId: 'student-1', courseId: 'course-1' });
+      });
+
+      it('reads no quiz summary for a student who already has a certificate', async () => {
+        completed('a', 'b', 'c', 'q');
+        completedEnrolment();
+        db.certificates.set('student-1#course-1', {
+          certificateId: 'X',
+          issuedAt: NOW,
+          reminderScheduledAt: NOW,
+        });
+
+        await run();
+
+        expect(reads.course).not.toHaveBeenCalled();
+        expect(reads.user).not.toHaveBeenCalled();
+        expect(reads.quizSummaries).not.toHaveBeenCalled();
+      });
+
+      it('reads no quiz summary when certificates are off', async () => {
+        completed('a', 'b', 'c', 'q');
+        db.course = { ...db.course, certificatesEnabled: false };
+
+        await run();
+
+        expect(reads.quizSummaries).not.toHaveBeenCalled();
+        expect(db.certificates.size).toBe(0);
+      });
     });
 
     it('issues one certificate.issued notification with the certificate', async () => {

@@ -427,6 +427,93 @@ describe('LessonContentItemsRow', () => {
       ).toBeNull();
     });
 
+    it('labels the Questions button with the count, when there are any', () => {
+      renderRow({
+        contentItems: [
+          readyVideo({ questions: [{}, {}, {}] }),
+          readyVideo({ contentItemId: 'v2', title: 'Other' }),
+        ],
+      });
+
+      expect(
+        screen.getByRole('button', { name: 'Questions for Lecture' }),
+      ).toHaveTextContent('Questions (3)');
+      expect(
+        screen.getByRole('button', { name: 'Questions for Other' }),
+      ).toHaveTextContent(/^Questions$/);
+    });
+
+    it('opens the questions editor from the row', async () => {
+      const { user } = renderRow(
+        { contentItems: [readyVideo()] },
+        {
+          'contentItem.createVideoUrl': () => ({
+            url: 'https://media.test/master.m3u8',
+            withCredentials: false,
+            versionId: 'v',
+            captions: [],
+          }),
+          'course.view': () => ({
+            status: 'published',
+            modules: [
+              {
+                moduleId: 'module-1',
+                title: 'Module',
+                lessons: [
+                  {
+                    lessonId: 'lesson-1',
+                    title: 'Lesson',
+                    contentItems: [readyVideo({ studentActivityCount: 0 })],
+                  },
+                ],
+              },
+            ],
+          }),
+        },
+      );
+
+      await user.click(
+        screen.getByRole('button', { name: 'Questions for Lecture' }),
+      );
+
+      expect(
+        await screen.findByRole('dialog', { name: 'Questions' }),
+      ).toBeInTheDocument();
+    });
+
+    it('disables the Questions button, with the reason, while the video has no playable version', () => {
+      renderRow({ contentItems: [readyVideo({ status: 'pending' })] });
+
+      const button = screen.getByRole('button', {
+        name: 'Questions for Lecture',
+      });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute(
+        'title',
+        expect.stringMatching(/no playable version/),
+      );
+    });
+
+    it('enables it for a video being replaced over a version that plays', () => {
+      renderRow({
+        contentItems: [
+          readyVideo({ status: 'processing', previousS3Key: 'old.m3u8' }),
+        ],
+      });
+
+      expect(
+        screen.getByRole('button', { name: 'Questions for Lecture' }),
+      ).toBeEnabled();
+    });
+
+    it('in an archived course, still offers Questions, to be read there', () => {
+      renderRow({ contentItems: [readyVideo()], readOnly: true });
+
+      expect(
+        screen.getByRole('button', { name: 'Questions for Lecture' }),
+      ).toBeEnabled();
+    });
+
     it('in an archived course, shows the status but offers no Captions button', () => {
       renderRow({ contentItems: [readyVideo()], readOnly: true });
 

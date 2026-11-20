@@ -4,14 +4,20 @@
  */
 // @vitest-environment node
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createAssignmentSubmissionEntity } from './assignment-submission.js';
 import { createCertificateEntity } from './certificate.js';
 import { createEnrolmentEntity } from './enrolment.js';
+import { createReviewEntity } from './review.js';
 
 let certificate: Awaited<ReturnType<typeof createCertificateEntity>>;
 let enrolment: Awaited<ReturnType<typeof createEnrolmentEntity>>;
+let review: Awaited<ReturnType<typeof createReviewEntity>>;
+let submission: Awaited<ReturnType<typeof createAssignmentSubmissionEntity>>;
 beforeAll(async () => {
   certificate = await createCertificateEntity();
   enrolment = await createEnrolmentEntity();
+  review = await createReviewEntity();
+  submission = await createAssignmentSubmissionEntity();
 });
 
 const full = {
@@ -22,6 +28,18 @@ const full = {
   courseTitle: 'Intro',
   completedAt: '2026-11-01T00:00:00.000Z',
   issuedAt: '2026-11-01T00:00:01.000Z',
+  assessment: {
+    criteriaVersion: 1,
+    requireQuizPass: false,
+    itemCount: 3,
+    assessedItemCount: 0,
+    assessedItems: [],
+  },
+};
+
+type Query = {
+  IndexName: string;
+  ExpressionAttributeValues: Record<string, string>;
 };
 
 describe('certificate', () => {
@@ -108,5 +126,34 @@ describe('certificate', () => {
     expect(queryKey).toContain('certificate');
     expect(Item.gsi1pk).not.toBe(queryKey);
     expect(Item.gsi1pk).not.toContain(full.certificateId);
+  });
+
+  it('stores the assessment', () => {
+    const { Item } = certificate.create(full).params() as {
+      Item: Record<string, unknown>;
+    };
+    expect(Item.assessment).toEqual(full.assessment);
+  });
+
+  // Plan risk R3: byCourse shares gsi2pk-gsi2sk-index with other entities.
+  it('lists a course’s certificates on gsi2pk-gsi2sk-index, apart from other entities', () => {
+    const query = certificate.query
+      .byCourse({ courseId: 'course-1' })
+      .params() as Query;
+    const values = (q: Query) => Object.values(q.ExpressionAttributeValues);
+    expect(query.IndexName).toBe('gsi2pk-gsi2sk-index');
+    expect(values(query).some((v) => v.includes('certificate'))).toBe(true);
+    expect(values(query).some((v) => v.includes('review'))).toBe(false);
+    expect(values(query).some((v) => v.includes('assignmentsubmission'))).toBe(
+      false,
+    );
+
+    const others = [
+      review.query.byCourse({ courseId: 'course-1' }).params() as Query,
+      submission.query.byUser({ userId: 'course-1' }).params() as Query,
+    ];
+    for (const other of others) {
+      expect(values(other).some((v) => v.includes('certificate'))).toBe(false);
+    }
   });
 });

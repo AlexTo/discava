@@ -8,6 +8,7 @@ import {
   certificateReminderDueAt,
   computeProgress,
   type createCoreTableService,
+  evaluateCertificateCriteria,
   isConditionalCheckFailed,
   issueCertificate,
   markCertificateReminderScheduled,
@@ -68,10 +69,11 @@ export const listEnrolledStudents = async (
 // and the writes that complete them are conditioned on that, so a run racing
 // another can't undo it. A student who isn't enrolled, or has dropped out,
 // is left alone. Once the enrolment is completed, the student's certificate
-// is issued if they don't have one yet, and its one reminder is scheduled
-// unless it was already, sent, made unnecessary by a click, or is too late (an
-// error from either propagates, so the batch is retried and a failed issue or
-// schedule is picked up on the next pass).
+// is issued if they don't have one yet and meet the course's certificate
+// criteria (completion is recorded either way), and its one reminder is
+// scheduled unless it was already, sent, made unnecessary by a click, or is too
+// late (an error from either propagates, so the batch is retried and a failed
+// issue or schedule is picked up on the next pass).
 export const recalculateStudent = async (
   coreTable: CoreTable,
   courseId: string,
@@ -170,13 +172,25 @@ export const recalculateStudent = async (
       coreTable.entities.course.get({ courseId }).go(),
       coreTable.entities.user.get({ userId }).go(),
     ]);
-    if (!course) {
+    if (!course || !course.certificatesEnabled) {
       return;
     }
+    // A quiz summary is only read when the criteria need one.
+    const { data: quizSummaries } = course.certificateCriteria.requireQuizPass
+      ? await coreTable.entities.quizSummary.query
+          .primary({ userId, courseId })
+          .go({ pages: 'all' })
+      : { data: [] };
+    const evaluation = evaluateCertificateCriteria({
+      criteria: course.certificateCriteria,
+      curriculum,
+      quizSummaries,
+    });
     certificate = await issueCertificate({
       coreTable,
       enrolment: { userId, courseId, status: 'completed', completedAt },
       course,
+      evaluation,
       user,
       now: new Date(now),
     });

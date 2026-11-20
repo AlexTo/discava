@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { PORTALS } from './portals.js';
 import { signIn, type User } from './users.js';
 
@@ -49,8 +49,10 @@ export const suggestInSiteSearch = async (page: Page, text: string) => {
 };
 
 // Enrols from the course page, signing in first when signed out (the way a
-// visitor does, through the "Sign in to enrol" dialog), and starts learning.
-export const enrol = async (page: Page, user?: User) => {
+// visitor does, through the "Sign in to enrol" dialog), and waits for the page
+// enrolling lands on: the learner's next lesson, or the course home when the
+// course shows no lesson.
+export const enrolAndLand = async (page: Page, user?: User) => {
   await page.getByRole('button', { name: 'Enrol now' }).click();
   if (user) {
     await page
@@ -60,8 +62,14 @@ export const enrol = async (page: Page, user?: User) => {
     await signIn(page, user);
     await page.getByRole('button', { name: 'Enrol now' }).click();
   }
-  const enrolled = page.getByRole('dialog', { name: "You're enrolled!" });
-  await enrolled.getByRole('link', { name: 'Start learning' }).click();
+  await page.waitForURL(/\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/);
+};
+
+// Enrols, then opens the course home, so callers start from there.
+export const enrol = async (page: Page, user?: User) => {
+  await enrolAndLand(page, user);
+  const courseId = /\/learn\/([0-9a-f-]+)\//.exec(page.url())?.[1];
+  await page.goto(`${PORTALS.student}/learn/${courseId}/home`);
   await page.waitForURL(/\/learn\/[0-9a-f-]+\/home$/);
 };
 
@@ -141,3 +149,15 @@ export const expectAfterReloads = async (
 // lists them).
 export const lessonSteps = (page: Page) =>
   page.getByRole('navigation', { name: 'Lesson steps' }).getByRole('link');
+
+// Opens the transcript panel of the video item `video` and returns it.
+export const openTranscript = async (page: Page, video: string) => {
+  const item = lessonItem(page, video);
+  await item.getByRole('button', { name: 'Transcript' }).click();
+  const panel = item.getByRole('region', { name: /^Transcript/ });
+  await expect(panel).toBeVisible();
+  return panel;
+};
+
+// The lines of an open transcript panel.
+export const transcriptLines = (panel: Locator) => panel.getByRole('button');

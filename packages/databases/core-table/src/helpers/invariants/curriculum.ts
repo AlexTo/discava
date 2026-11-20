@@ -411,6 +411,63 @@ export const checkFreePreviewOnOrdinaryLesson = (
       ];
     });
 
+// A video holds at most 20 questions with unique ids, and a key with exactly
+// their ids; `quizVersion` is set once either exists. Only a quiz or a video
+// holds any of the three. Saving a video's questions writes the three
+// together, so a mismatch was written outside that.
+const MAX_VIDEO_QUESTIONS = 20;
+
+export const checkVideoQuestionsShape = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.contentItems.flatMap(
+    ({
+      courseId,
+      lessonId,
+      contentItemId,
+      type,
+      questions,
+      answerKey,
+      quizVersion,
+    }) => {
+      const record = { courseId, lessonId, contentItemId };
+      const problem = (message: string) => [
+        violation('video-questions-shape', record, message),
+      ];
+      const hasAny =
+        questions !== undefined ||
+        answerKey !== undefined ||
+        quizVersion !== undefined;
+      if (type === 'quiz') {
+        return [];
+      }
+      if (type !== 'video') {
+        return hasAny ? problem(`${type} item holds video questions`) : [];
+      }
+      if (!hasAny) {
+        return [];
+      }
+      if (quizVersion === undefined) {
+        return problem('video has questions or a key but no quizVersion');
+      }
+      const list = (questions ?? []) as { questionId: string }[];
+      if (list.length > MAX_VIDEO_QUESTIONS) {
+        return problem(
+          `video has ${list.length} questions, over ${MAX_VIDEO_QUESTIONS}`,
+        );
+      }
+      const ids = list.map((question) => question.questionId);
+      if (new Set(ids).size !== ids.length) {
+        return problem('video questions share an id');
+      }
+      const keyIds = Object.keys(answerKey ?? {});
+      return keyIds.length === ids.length &&
+        keyIds.every((id) => ids.includes(id))
+        ? []
+        : problem("video's answer key doesn't match its questions");
+    },
+  );
+
 export const CURRICULUM_CHECKS = [
   { name: 'course-has-instructor', check: checkCourseHasInstructor },
   {
@@ -431,4 +488,5 @@ export const CURRICULUM_CHECKS = [
     name: 'free-preview-on-ordinary-lesson',
     check: checkFreePreviewOnOrdinaryLesson,
   },
+  { name: 'video-questions-shape', check: checkVideoQuestionsShape },
 ] as const satisfies readonly Check[];

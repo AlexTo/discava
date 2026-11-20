@@ -58,6 +58,9 @@ export interface CoursePlayer {
   newItemIds: Set<string>;
   newItemCount: (lesson: PlayerLesson) => number;
   nextLesson: CourseLesson | undefined;
+  // Whether the learner's place is known: the course, their completions and
+  // their lesson progress have all loaded, so nextLesson is where they are.
+  isPlaceReady: boolean;
 }
 
 // Marks an item done; see useCompleteItem.
@@ -245,6 +248,10 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
     enrolment: enrolmentQuery.data,
     // An archived course is read-only: its items can't be completed.
     readOnly: course?.status === 'archived',
+    isPlaceReady:
+      courseQuery.isSuccess &&
+      completionsQuery.isSuccess &&
+      progressQuery.isSuccess,
     ...derived,
   };
 }

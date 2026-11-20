@@ -4,6 +4,7 @@
  */
 // @vitest-environment node
 import { beforeAll, describe, expect, it } from 'vitest';
+import { DEFAULT_CERTIFICATE_CRITERIA } from '../helpers/certificate-criteria.js';
 import { createCourseEntity } from './course.js';
 
 // The requests ElectroDB would send, checked without a table.
@@ -19,6 +20,7 @@ const record = {
   certificatesEnabled: true,
   priceAmount: 0,
   priceCurrency: 'USD',
+  certificateCriteria: DEFAULT_CERTIFICATE_CRITERIA,
 };
 
 describe('course', () => {
@@ -84,5 +86,24 @@ describe('course', () => {
 
     expect(passed.ExpressionAttributeValues[':updatedAt_u0']).toBe(at);
     expect(stamped.ExpressionAttributeValues[':updatedAt_u0']).not.toBe(at);
+  });
+});
+
+describe('course certificateCriteria', () => {
+  it('stores the criteria it is given', () => {
+    const { Item } = course.create(record).params() as {
+      Item: Record<string, unknown>;
+    };
+    expect(Item.certificateCriteria).toEqual({
+      version: 1,
+      requireQuizPass: false,
+    });
+  });
+
+  it('refuses a course without certificateCriteria', () => {
+    const { certificateCriteria: _omitted, ...rest } = record;
+    expect(() => course.create(rest as never).params()).toThrow(
+      'certificateCriteria',
+    );
   });
 });
