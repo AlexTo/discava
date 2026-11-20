@@ -100,6 +100,18 @@ describe('StripeWebhookApi', () => {
     });
   });
 
+  it('gives the function enough memory to start within its timeout (#654)', () => {
+    const { template } = build();
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: Match.objectLike({
+          STRIPE_WEBHOOK_SECRET_ARN: Match.anyValue(),
+        }),
+      },
+      MemorySize: 512,
+    });
+  });
+
   it("reports the custom domain's address when it has one", () => {
     expect(build().api.webhookUrl).toMatch(/stripe\/webhook$/);
   });
