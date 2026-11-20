@@ -149,4 +149,4 @@ Existing checks extended: `assignment-submission-shape` (`helpers/invariants/stu
 | `contentItem.studentActivityCount` | Unchanged | `activity-count-matches-students` | A test asserts a resubmission after a request doesn't count again |
 | `enrolment` | Read in a new way (batch get for the queue) | — | None (read only) |
 | `notification`, `notificationState` | Three new types; a new instructor fan-out | `notification-shape`, `notification-unread-count-matches`, `notification-state-exists` | Covered by the existing checks; the registry test lists the new types |
-| `submissionFeedback`, `submissionNotice` | New entities | — | New checks above (`submissionNotice` holds no rule beyond its key; its TTL is checked in a unit test) |
+| `submissionFeedback`, `submissionNotice` | New entities | — | New checks above for `submissionFeedback`; `submissionNotice` holds no rule beyond its key, so it is listed in `NO_INVARIANTS` in `helpers/invariants-coverage.test.ts` (its TTL is checked in a unit test) |

@@ -89,7 +89,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a resubmit from `resubmission_requested` doesn't add to `studentActivityCount` and leaves the existing completion as it is (spec FR-013, data-model impact check).
 - [ ] T006 Tests first, then add `packages/databases/core-table/src/helpers/invariants/assignment-grading.ts` with the five checks in [data-model.md](./data-model.md) (Invariants): `submission-grade-shape`, `submission-waiting-keys`, `submission-feedback-has-submission`, `submission-feedback-shape` and `submission-latest-round-matches`.
   - Register them in `helpers/invariants/index.ts`.
-  - Add the new attributes and `submissionFeedback` to `helpers/invariants/snapshot.ts`.
+  - In `helpers/invariants/snapshot.ts`, add the new `assignmentSubmission` attributes, and add `submissionFeedback` to both `TableSnapshot` (as `Item<typeof createSubmissionFeedbackEntity>`) and `SNAPSHOT_ENTITIES`.
+  - Add `'submission-notice'` to `NO_INVARIANTS` in `packages/databases/core-table/src/helpers/invariants-coverage.test.ts`, with the reason "only deduplicates the daily instructor notice; the notifications it guards are checked" (data-model: it holds no rule beyond its key). Without this, `invariants-coverage.test.ts` fails for the new entity file from T003.
   - Widen `checkAssignmentSubmissionShape` (`helpers/invariants/student-activity.ts:399-450`) to the new status and fields.
   - In `assignment-grading.test.ts`, starting from `consistentTable()`, break each clause and expect its violation. Also give `consistentTable()` a returned submission with two rounds (request, then return) so every check runs on real data.
 - [ ] T007 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json`.
