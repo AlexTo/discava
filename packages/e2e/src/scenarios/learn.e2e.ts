@@ -93,8 +93,8 @@ test('enrolling lands in the first shown lesson', async ({ browser }) => {
     await addModule(instructor, 'Module two');
     await addLesson(instructor, 'Later lesson');
     await addTextItem(instructor, { title: 'Later reading', body: 'Later.' });
-    await hideItem(instructor, 'lesson', 'Hidden lesson');
     await publishCourse(instructor);
+    await hideItem(instructor, 'lesson', 'Hidden lesson');
   });
 
   await test.step('a new student enrols and lands in the first shown lesson', async () => {
@@ -138,7 +138,11 @@ test('enrolling in a course with no lessons lands on the course home', async ({
     summary: 'A course made by the end-to-end tests.',
   });
   await addModule(instructor, 'Module one');
+  await addLesson(instructor, 'Hidden lesson');
+  await addTextItem(instructor, { title: 'Hidden reading', body: 'Hidden.' });
   await publishCourse(instructor);
+  // A published course whose only lesson is hidden shows no lesson.
+  await hideItem(instructor, 'lesson', 'Hidden lesson');
 
   await openCourse(student, course);
   await enrolAndLand(student, newUser('Sam', ['student']));
