@@ -14,6 +14,14 @@ const record = (
 ) => ({ eventName, dynamodb: { [image]: { __edb_e__: { S: entity } } } });
 
 describe('matchesAnalyticsStreamFilters', () => {
+  it('ignores a certificate MODIFY (a LinkedIn use)', () => {
+    expect(
+      matchesAnalyticsStreamFilters(
+        record('MODIFY', 'NewImage', 'certificate'),
+      ),
+    ).toBe(false);
+  });
+
   it.each([
     ['a new enrolment', record('INSERT', 'NewImage', 'enrolment')],
     ['a changed enrolment', record('MODIFY', 'NewImage', 'enrolment')],

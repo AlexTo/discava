@@ -38,26 +38,26 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
 
 **Independent test**: `pnpm nx run @discava/core-table:test -- --run certificate invariants stream` and `pnpm nx run @discava/core-api:test -- --run certificate.test.ts router.test.ts` pass, and `pnpm nx run @discava/infra:synth` succeeds.
 
-- [ ] T001 Tests first, then add two optional attributes to `packages/databases/core-table/src/entities/certificate.ts` ([data-model.md](./data-model.md)):
+- [x] T001 Tests first, then add two optional attributes to `packages/databases/core-table/src/entities/certificate.ts` ([data-model.md](./data-model.md)):
   - `linkedInClickedAt`: string (ISO);
   - `linkedInClickSource`: one of `'my-learning' | 'certificate-page' | 'issued-email' | 'reminder-email'`, exported as `LINKEDIN_CLICK_SOURCES` from `helpers/certificate.ts`.
 
   Change the entity's comment from "Written only by issueCertificate" to "written only by the functions in `helpers/certificate.ts`". `entities/certificate.test.ts`: both are optional, a source outside the four is refused, and the printed attributes stay read-only.
-- [ ] T002 Tests first, then add `recordLinkedInClick({ coreTable, certificateId, source, now })` to `packages/databases/core-table/src/helpers/certificate.ts`, exported from `src/index.ts`:
+- [x] T002 Tests first, then add `recordLinkedInClick({ coreTable, certificateId, source, now })` to `packages/databases/core-table/src/helpers/certificate.ts`, exported from `src/index.ts`:
   - `normaliseCertificateId`; a malformed ID returns `undefined` without a table read;
   - query `byCertificateId`; none returns `undefined`;
   - patch by `{ userId, courseId }`, setting `linkedInClickedAt` (`now.toISOString()`) and `linkedInClickSource`, where `linkedInClickedAt` doesn't exist; return `'recorded'`;
   - a failed condition (`isConditionalCheckFailed`) returns `'already-recorded'`; any other error is thrown.
 
   `helpers/certificate.test.ts`: first call records; a second call with another source returns `'already-recorded'` and the stored source and time are the first; two calls at once store one; unknown and malformed IDs return `undefined`; the printed attributes are unchanged.
-- [ ] T003 Tests first, then add the invariant `certificate-linkedin-click-shape` to `packages/databases/core-table/src/helpers/invariants/certificates.ts` and to `CERTIFICATES_CHECKS`: "`linkedInClickSource` is present exactly when `linkedInClickedAt` is, is one of the four sources, and `linkedInClickedAt` isn't before `issuedAt`". `invariants/certificates.test.ts` gets a `describe('certificate-linkedin-click-shape')` starting from `consistentTable()` with one breaking case per clause. Add to `helpers/progress-stream.test.ts`, `search-stream.test.ts`, `analytics-stream.test.ts`, `notification-stream.test.ts` and `stream-features.test.ts` an assertion that a `certificate` MODIFY record matches no filter and is routed to no feature.
-- [ ] T004 [P] Tests first, then add `certificate.recordLinkedInClick` exactly as in [contracts/core-api-certificate.md](./contracts/core-api-certificate.md):
+- [x] T003 Tests first, then add the invariant `certificate-linkedin-click-shape` to `packages/databases/core-table/src/helpers/invariants/certificates.ts` and to `CERTIFICATES_CHECKS`: "`linkedInClickSource` is present exactly when `linkedInClickedAt` is, is one of the four sources, and `linkedInClickedAt` isn't before `issuedAt`". `invariants/certificates.test.ts` gets a `describe('certificate-linkedin-click-shape')` starting from `consistentTable()` with one breaking case per clause. Add to `helpers/progress-stream.test.ts`, `search-stream.test.ts`, `analytics-stream.test.ts`, `notification-stream.test.ts` and `stream-features.test.ts` an assertion that a `certificate` MODIFY record matches no filter and is routed to no feature.
+- [x] T004 [P] Tests first, then add `certificate.recordLinkedInClick` exactly as in [contracts/core-api-certificate.md](./contracts/core-api-certificate.md):
   - `RecordLinkedInClickInputSchema` (`certificateId: z.string().max(64)`, `source: z.enum([...])`) and `RecordLinkedInClickOutputSchema` (`z.object({})`) in `packages/apis/core-api/src/schema/certificate.ts`, exported through `schema/index.ts`;
   - `recordLinkedInClick` in `packages/apis/core-api/src/procedures/certificate.ts`, a mutation on `publicCourseProcedure` that calls core-table's `recordLinkedInClick` with `new Date()` and maps `undefined` to the file's existing `notFound()`;
   - `recordLinkedInClick` under `certificate` in `packages/apis/core-api/src/router.ts`, and `'certificate.recordLinkedInClick'` in `PUBLIC_OPERATIONS` after `'certificate.verify'`.
 
   `procedures/certificate.test.ts`: an anonymous caller records a use; a second call with another source answers `{}` and the first is kept; unknown and malformed IDs get the same `NOT_FOUND` message as `certificate.verify`; a bad `source` is `BAD_REQUEST`; the output has no keys; `certificate.verify`'s output still has exactly its four keys. `router.test.ts`'s public-operations check must pass unchanged.
-- [ ] T005 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json` if it changed. Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public method, check that the only difference is `POST /certificate.recordLinkedInClick` without the Cognito authorizer and with the public throttle, and say so in the PR description.
+- [x] T005 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json` if it changed. Run `pnpm nx run @discava/common-constructs:test -u` and `pnpm nx run @discava/infra:test -u` only if a snapshot changes because of the new public method, check that the only difference is `POST /certificate.recordLinkedInClick` without the Cognito authorizer and with the public throttle, and say so in the PR description.
 
 ---
 
@@ -67,29 +67,29 @@ Paths are relative to the repository root. Each PR says "Part of #592" and links
 
 **Independent test**: The component tests in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) pass. The e2e test "a student adds their certificate to LinkedIn" passes on PR CI, with screenshots.
 
-- [ ] T006 [P] [US1] Tests first, then add the stage key for the LinkedIn organisation ID:
+- [x] T006 [P] [US1] Tests first, then add the stage key for the LinkedIn organisation ID:
   - `linkedInOrganizationId?: string` on `StudentPortalComponentConfig` in `packages/common/infra-config/src/stages.types.ts`, with a doc comment: "The stage's LinkedIn organisation page ID (digits). When set, certificates added to LinkedIn name that page; otherwise the site name is sent as text";
   - the key as `'string'` under the student portal in `packages/common/infra-config/src/env-overrides.ts`, with a case in `env-overrides.test.ts` like `siteName`'s.
-- [ ] T007 [US1] Tests first, then publish the issuer to the portals (after T006): in `packages/infra/src/stacks/websites-stack.ts`, set `runtimeConfig.set('connection', 'site', { name: config?.siteName ?? 'Discava', ...(linkedInOrganizationId && { linkedInOrganizationId }) })` from the student portal's config, and assert it in `websites-stack.test.ts` with and without the ID. Add `site: { name: 'Discava' }` to `packages/websites/student-portal/src/local-dev-config.ts`.
-- [ ] T008 [P] [US1] Tests first, then add `buildLinkedInAddToProfileUrl` in `packages/websites/student-portal/src/lib/linkedin-add-to-profile.ts`, exactly the parameter table in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) (research R-1). `lib/linkedin-add-to-profile.test.ts`:
+- [x] T007 [US1] Tests first, then publish the issuer to the portals (after T006): in `packages/infra/src/stacks/websites-stack.ts`, set `runtimeConfig.set('connection', 'site', { name: config?.siteName ?? 'Discava', ...(linkedInOrganizationId && { linkedInOrganizationId }) })` from the student portal's config, and assert it in `websites-stack.test.ts` with and without the ID. Add `site: { name: 'Discava' }` to `packages/websites/student-portal/src/local-dev-config.ts`.
+- [x] T008 [P] [US1] Tests first, then add `buildLinkedInAddToProfileUrl` in `packages/websites/student-portal/src/lib/linkedin-add-to-profile.ts`, exactly the parameter table in [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) (research R-1). `lib/linkedin-add-to-profile.test.ts`:
   - the whole address for one certificate;
   - a title with `&`, `#`, accents and emoji reads back unchanged from `new URL(...).searchParams`;
   - `issueMonth` has no leading zero and uses UTC (a `completedAt` of `2026-11-30T23:30:00.000Z` gives 11);
   - with `linkedInOrganizationId`, `organizationId` is sent and `organizationName` isn't;
   - the set of parameter names equals the table's, so any extra parameter fails (SC-004);
   - no parameter value contains the learner's name.
-- [ ] T009 [US1] Tests first, then add the link to `packages/websites/student-portal/src/routes/my-learning/-components/certificate-actions.tsx` (after T008):
+- [x] T009 [US1] Tests first, then add the link to `packages/websites/student-portal/src/routes/my-learning/-components/certificate-actions.tsx` (after T008):
   - new props `courseTitle` and `completedAt`, passed from `certificate.myCertificates` in `routes/my-learning/index.tsx`;
   - `Button variant="outline" size="sm" asChild` around `<a href={url} target="_blank" rel="noopener noreferrer">Add to LinkedIn profile</a>`, after Copy link, text only;
   - `onClick` calls `certificate.recordLinkedInClick({ certificateId, source: 'my-learning' })` without waiting and swallows a failure.
 
   Extend `routes/my-learning/-my-learning.test.tsx`: the link's `href`, `target` and `rel`; a click calls the mutation with `my-learning`; a handler that throws shows no alert; a completed course without a certificate has no link. Add a `certificate.recordLinkedInClick` handler only to tests that now need it, without changing any existing assertion.
-- [ ] T010 [US1] Tests first, then add the owner's section to the verification page (after T008):
+- [x] T010 [US1] Tests first, then add the owner's section to the verification page (after T008):
   - `packages/websites/student-portal/src/routes/certificates/$certificateId/-components/owner-share.tsx`: the heading, the same link (recording `certificate-page`), the "What LinkedIn asks for" list (Name, Issuing organisation, Issue date as month and year, Credential ID, Credential URL) and the line "We can't see your LinkedIn profile, so this button stays here after you've used it.";
   - `routes/certificates/$certificateId/index.tsx` renders it only when the viewer is signed in and `certificate.myCertificates` holds a certificate with this ID. Signed out, that query isn't enabled.
 
   Extend `routes/certificates/$certificateId/-certificate.test.tsx`: the owner sees the section and all five values; another signed-in user doesn't; signed out doesn't, and `certificate.myCertificates` isn't in `calls`; a click records `certificate-page`; everything the page showed before is still asserted unchanged.
-- [ ] T011 [US1] Extend `packages/e2e/src/scenarios/certificate.e2e.ts` with the test "a student adds their certificate to LinkedIn", reusing the file's way of completing a course:
+- [x] T011 [US1] Extend `packages/e2e/src/scenarios/certificate.e2e.ts` with the test "a student adds their certificate to LinkedIn", reusing the file's way of completing a course:
   - route `https://www.linkedin.com/**` to a stub page (`page.context().route`), so the test never reaches LinkedIn;
   - in My Learning, expect the link's `href` to start with `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME` and to carry the course's unique title, the certificate's ID and its verification address; take `screenshot(page, 'certificate-add-to-linkedin')`;
   - click it, expect the new tab's address to be the same, and expect a `certificate.recordLinkedInClick` response with status 200;

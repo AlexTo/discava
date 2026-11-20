@@ -8,6 +8,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useState } from 'react';
 import { useCoreApiClient } from '../../../api';
+import { AddToLinkedInButton } from '../../../components/add-to-linkedin-button';
 
 const certificatePath = (certificateId: string) =>
   `/certificates/${certificateId}`;
@@ -29,14 +30,18 @@ const saveBase64 = (fileName: string, contentBase64: string, type: string) => {
 
 /**
  * What a student can do with the certificate for a course they completed:
- * view its public page, download it as a PDF, or copy its link.
+ * view its public page, download it as a PDF, or copy its link, or add it to their LinkedIn profile.
  */
 export function CertificateActions({
   courseId,
   certificateId,
+  courseTitle,
+  completedAt,
 }: {
   courseId: string;
   certificateId: string;
+  courseTitle: string;
+  completedAt: string;
 }) {
   const client = useCoreApiClient();
   const [preparing, setPreparing] = useState(false);
@@ -89,6 +94,10 @@ export function CertificateActions({
         <Button variant="outline" size="sm" onClick={() => void copyLink()}>
           Copy link
         </Button>
+        <AddToLinkedInButton
+          certificate={{ certificateId, courseTitle, completedAt }}
+          source="my-learning"
+        />
         {copied ? (
           <span role="status" className="text-sm text-muted-foreground">
             Link copied

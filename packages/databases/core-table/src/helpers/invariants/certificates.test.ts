@@ -12,6 +12,60 @@ beforeEach(() => {
   table = consistentTable();
 });
 
+describe('certificate-linkedin-click-shape', () => {
+  const ISSUED = '2026-01-03T00:00:00.000Z';
+  const setup = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = ISSUED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: ISSUED,
+      issuedAt: ISSUED,
+    });
+    return table.certificates[0];
+  };
+  const violationsOf = () =>
+    checkTableInvariants(table).filter(
+      (v) => v.invariant === 'certificate-linkedin-click-shape',
+    );
+
+  it('accepts no use, and a use after issue', () => {
+    const certificate = setup();
+    expect(violationsOf()).toEqual([]);
+    certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    expect(violationsOf()).toEqual([]);
+  });
+
+  it('reports a time without a source', () => {
+    setup().linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    expect(violationsOf()[0]?.message).toMatch(/exactly when/);
+  });
+
+  it('reports a source without a time', () => {
+    setup().linkedInClickSource = 'my-learning';
+    expect(violationsOf()[0]?.message).toMatch(/exactly when/);
+  });
+
+  it('reports an unknown source', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-04T00:00:00.000Z';
+    certificate.linkedInClickSource = 'twitter' as never;
+    expect(violationsOf()[0]?.message).toMatch(/unknown/);
+  });
+
+  it('reports a use before the certificate was issued', () => {
+    const certificate = setup();
+    certificate.linkedInClickedAt = '2026-01-02T00:00:00.000Z';
+    certificate.linkedInClickSource = 'my-learning';
+    expect(violationsOf()[0]?.message).toMatch(/before issuedAt/);
+  });
+});
+
 describe('certificate-shape and certificate-has-completed-enrolment', () => {
   const COMPLETED = '2026-01-03T00:00:00.000Z';
   const issued = () => {

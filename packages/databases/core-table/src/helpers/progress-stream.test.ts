@@ -61,6 +61,7 @@ describe('matchesProgressStreamFilters', () => {
     ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
     ['a saved video position', record('MODIFY', 'NewImage', 'videoPosition')],
     ['a new certificate', record('INSERT', 'NewImage', 'certificate')],
+    ['a certificate LinkedIn use', record('MODIFY', 'NewImage', 'certificate')],
     // Discussion records: nothing in progress depends on them.
     ['a new post', record('INSERT', 'NewImage', 'discussionPost')],
     ['an edited post', record('MODIFY', 'NewImage', 'discussionPost')],

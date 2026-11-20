@@ -6,6 +6,7 @@ import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   formatCertificateId,
   normaliseCertificateId,
+  recordLinkedInClick as recordCertificateLinkedInClick,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { drawCertificatePdf, formatDate } from '../helpers/certificate-pdf.js';
@@ -15,6 +16,8 @@ import {
   CertificatePdfOutputSchema,
   MyCertificatesInputSchema,
   MyCertificatesOutputSchema,
+  RecordLinkedInClickInputSchema,
+  RecordLinkedInClickOutputSchema,
   VerifyCertificateInputSchema,
   VerifyCertificateOutputSchema,
 } from '../schema/index.js';
@@ -53,6 +56,27 @@ export const verifyCertificate = publicCourseProcedure
       completedAt: certificate.completedAt,
       completedOn: formatDate(certificate.completedAt),
     };
+  });
+
+/**
+ * Public: records the first use of "Add to LinkedIn profile" on a certificate.
+ * Later uses change nothing and answer the same. The caller's identity isn't
+ * read, and nothing is sent to LinkedIn.
+ */
+export const recordLinkedInClick = publicCourseProcedure
+  .input(RecordLinkedInClickInputSchema)
+  .output(RecordLinkedInClickOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const result = await recordCertificateLinkedInClick({
+      coreTable: ctx.coreTable,
+      certificateId: input.certificateId,
+      source: input.source,
+      now: new Date(),
+    });
+    if (!result) {
+      throw notFound();
+    }
+    return {};
   });
 
 /** The caller's certificates, most recently completed first. */

@@ -209,6 +209,8 @@ export interface TableSnapshot {
     | 'courseTitle'
     | 'completedAt'
     | 'issuedAt'
+    | 'linkedInClickedAt'
+    | 'linkedInClickSource'
   >[];
   videoPositions: Pick<
     Item<typeof createVideoPositionEntity>,

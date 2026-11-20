@@ -110,6 +110,7 @@ export const renderWithCoreApi = (
     <RuntimeConfigContext.Provider
       value={{
         media: { PublicMediaBucket: PUBLIC_MEDIA_URL },
+        site: { name: 'Discava' },
         ...runtimeConfig,
       }}
     >

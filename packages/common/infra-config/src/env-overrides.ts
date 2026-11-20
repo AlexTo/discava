@@ -107,6 +107,7 @@ const COMPONENT_FIELDS: Record<
     certificateArn: 'string',
     allowSearchEngineIndexing: 'boolean',
     siteName: 'string',
+    linkedInOrganizationId: 'string',
     pageRendererReservedConcurrency: 'number',
   },
   instructorPortal: {

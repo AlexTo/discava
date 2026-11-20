@@ -28,6 +28,24 @@ export type IVerifyCertificateOutput = z.output<
   typeof VerifyCertificateOutputSchema
 >;
 
+export const RecordLinkedInClickInputSchema = z.object({
+  // Any case, with or without dashes or spaces, as certificate.verify takes it.
+  certificateId: z.string().max(64),
+  source: z.enum([
+    'my-learning',
+    'certificate-page',
+    'issued-email',
+    'reminder-email',
+  ]),
+});
+
+export type IRecordLinkedInClickInput = z.output<
+  typeof RecordLinkedInClickInputSchema
+>;
+
+// Nothing from the certificate comes back.
+export const RecordLinkedInClickOutputSchema = z.object({});
+
 export const MyCertificatesInputSchema = z.void();
 
 export const MyCertificateSchema = z.object({

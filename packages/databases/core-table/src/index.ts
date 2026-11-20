@@ -144,8 +144,12 @@ export {
   generateCertificateId,
   type IssueCertificateInput,
   issueCertificate,
+  LINKEDIN_CLICK_SOURCES,
+  type LinkedInClickSource,
   learnerName,
   normaliseCertificateId,
+  type RecordLinkedInClickInput,
+  recordLinkedInClick,
 } from './helpers/certificate.js';
 export {
   TRANSCODE_PENDING_ATTRIBUTES,

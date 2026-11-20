@@ -11,6 +11,7 @@ import { t } from '../init.js';
 import {
   certificatePdf,
   myCertificates,
+  recordLinkedInClick,
   verifyCertificate,
 } from './certificate.js';
 
@@ -20,6 +21,7 @@ const { db, calls } = vi.hoisted(() => ({
     byCertificateId: [] as any[],
     primary: [] as any[],
     get: [] as any[],
+    patch: [] as any[],
     course: 0,
   },
 }));
@@ -55,6 +57,27 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
             },
           }),
         },
+        patch: (key: any) => ({
+          set: (values: any) => ({
+            where: () => ({
+              go: async () => {
+                calls.patch.push({ key, values });
+                const item = db.certificates.find(
+                  (c) => c.userId === key.userId && c.courseId === key.courseId,
+                );
+                if (item?.linkedInClickedAt) {
+                  throw new Error('conflict', {
+                    cause: Object.assign(new Error('x'), {
+                      name: 'ConditionalCheckFailedException',
+                    }),
+                  });
+                }
+                Object.assign(item, values);
+                return { data: item };
+              },
+            }),
+          }),
+        }),
         get: (key: any) => ({
           go: async () => {
             calls.get.push(key);
@@ -104,6 +127,7 @@ beforeEach(() => {
   calls.byCertificateId = [];
   calls.primary = [];
   calls.get = [];
+  calls.patch = [];
   calls.course = 0;
   delete process.env.ALLOWED_ORIGINS;
 });
@@ -257,5 +281,75 @@ describe('certificate.pdf', () => {
     await expect(
       caller(certificatePdf)({ courseId: 'c1' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+});
+
+describe('certificate.recordLinkedInClick', () => {
+  const click = (input: Record<string, unknown>, sub?: string) =>
+    caller(recordLinkedInClick, { sub })(input);
+
+  it('records a use for an anonymous caller and answers with no keys', async () => {
+    db.certificates = [record()];
+    const result = await click({
+      certificateId: '0123-4567-89ab-cdef',
+      source: 'certificate-page',
+    });
+    expect(result).toEqual({});
+    expect(db.certificates[0]).toMatchObject({
+      linkedInClickSource: 'certificate-page',
+    });
+    expect(typeof db.certificates[0].linkedInClickedAt).toBe('string');
+  });
+
+  it('keeps the first use when called again with another source', async () => {
+    db.certificates = [record()];
+    await click({ certificateId: '0123456789ABCDEF', source: 'my-learning' });
+    const first = db.certificates[0].linkedInClickedAt;
+    expect(
+      await click(
+        { certificateId: '0123456789ABCDEF', source: 'reminder-email' },
+        'someone-else',
+      ),
+    ).toEqual({});
+    expect(db.certificates[0].linkedInClickSource).toBe('my-learning');
+    expect(db.certificates[0].linkedInClickedAt).toBe(first);
+  });
+
+  it('gives unknown and malformed IDs the same NOT_FOUND as verify', async () => {
+    const errors = await Promise.all(
+      ['FFFFFFFFFFFFFFFF', 'nope'].map((certificateId) =>
+        click({ certificateId, source: 'my-learning' }).catch((e: any) => e),
+      ),
+    );
+    for (const error of errors) {
+      expect(error).toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Certificate not found',
+      });
+    }
+    expect(calls.patch).toEqual([]);
+  });
+
+  it('refuses a source outside the four', async () => {
+    db.certificates = [record()];
+    await expect(
+      click({ certificateId: '0123456789ABCDEF', source: 'twitter' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('leaves verify with exactly its five keys', async () => {
+    db.certificates = [record()];
+    await click({ certificateId: '0123456789ABCDEF', source: 'my-learning' });
+    expect(
+      Object.keys(
+        await caller(verifyCertificate)({ certificateId: '0123456789ABCDEF' }),
+      ).sort(),
+    ).toEqual([
+      'certificateId',
+      'completedAt',
+      'completedOn',
+      'courseTitle',
+      'learnerName',
+    ]);
   });
 });
