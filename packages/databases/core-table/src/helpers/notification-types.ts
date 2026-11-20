@@ -62,6 +62,52 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       },
     }),
   }),
+  'assignment.resubmission_requested': defineType({
+    id: 'assignment.resubmission_requested',
+    name: 'Resubmission requested',
+    description: 'An instructor asks you to resubmit an assignment.',
+    params: ['courseId', 'lessonId', 'assignmentTitle', 'courseTitle'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `Resubmission requested: "${p.assignmentTitle}"`,
+      body: `Your instructor asked you to resubmit "${p.assignmentTitle}" in ${p.courseTitle}.`,
+      link: {
+        portal: 'student',
+        path: `/learn/${p.courseId}/lesson/${p.lessonId}`,
+      },
+    }),
+  }),
+  'assignment.grade_updated': defineType({
+    id: 'assignment.grade_updated',
+    name: 'Assignment grade updated',
+    description: 'An instructor changes the grade of a returned assignment.',
+    params: ['courseId', 'lessonId', 'assignmentTitle', 'courseTitle'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `Your grade for "${p.assignmentTitle}" was updated`,
+      body: `The grade for your submission to "${p.assignmentTitle}" in ${p.courseTitle} has changed.`,
+      link: {
+        portal: 'student',
+        path: `/learn/${p.courseId}/lesson/${p.lessonId}`,
+      },
+    }),
+  }),
+  'assignment.submissions_received': defineType({
+    id: 'assignment.submissions_received',
+    name: 'New assignment submissions',
+    description:
+      'Students submit work to an assignment in a course you teach (once a day per assignment).',
+    params: ['courseId', 'contentItemId', 'assignmentTitle', 'courseTitle'],
+    emailPolicy: 'default-off',
+    build: (p) => ({
+      title: `New submissions to "${p.assignmentTitle}"`,
+      body: `Students have submitted work to "${p.assignmentTitle}" in ${p.courseTitle}.`,
+      link: {
+        portal: 'instructor',
+        path: `/my-courses/${p.courseId}/assignments/${p.contentItemId}/submissions`,
+      },
+    }),
+  }),
   'announcement.posted': defineType({
     id: 'announcement.posted',
     name: 'Course announcements',

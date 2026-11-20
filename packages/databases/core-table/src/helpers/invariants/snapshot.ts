@@ -44,6 +44,7 @@ import type { createQuizQuestionStatsEntity } from '../../entities/quiz-question
 import type { createQuizScoreStatsEntity } from '../../entities/quiz-score-stats.js';
 import type { createQuizSummaryEntity } from '../../entities/quiz-summary.js';
 import type { createReviewEntity } from '../../entities/review.js';
+import type { createSubmissionFeedbackEntity } from '../../entities/submission-feedback.js';
 import type { createUserEntity } from '../../entities/user.js';
 import type { createVideoPositionEntity } from '../../entities/video-position.js';
 import type { createCoreTableService } from '../../service.js';
@@ -197,8 +198,31 @@ export interface TableSnapshot {
     | 'lessonId'
     | 'contentItemId'
     | 'file'
+    | 'status'
     | 'version'
+    | 'reviewRevision'
     | 'submittedAt'
+    | 'points'
+    | 'pointsOutOf'
+    | 'returnedAt'
+    | 'returnedBy'
+    | 'gradedAt'
+    | 'waitingCourseId'
+    | 'waitingSince'
+  >[];
+  submissionFeedback: Pick<
+    Item<typeof createSubmissionFeedbackEntity>,
+    | 'courseId'
+    | 'contentItemId'
+    | 'userId'
+    | 'feedbackId'
+    | 'kind'
+    | 'feedback'
+    | 'points'
+    | 'pointsOutOf'
+    | 'version'
+    | 'givenAt'
+    | 'givenBy'
   >[];
   certificates: Pick<
     Item<typeof createCertificateEntity>,
@@ -509,6 +533,7 @@ export const SNAPSHOT_ENTITIES = {
   quizAttempts: 'quizAttempt',
   quizSummaries: 'quizSummary',
   assignmentSubmissions: 'assignmentSubmission',
+  submissionFeedback: 'submissionFeedback',
   certificates: 'certificate',
   videoPositions: 'videoPosition',
   users: 'user',

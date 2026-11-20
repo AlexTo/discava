@@ -7,7 +7,7 @@ import { getDynamoDBClient, resolveTableName } from '../client.js';
 
 // A student's work for an upload assignment (#102): one record per student
 // and assignment, replaced by each resubmission until an instructor returns
-// it. The assignment is a content item (`type: 'assignment'`) in an assignment
+// it with a grade. The assignment is a content item (`type: 'assignment'`) in an assignment
 // lesson, so `contentItemId` names it.
 export const createAssignmentSubmissionEntity = async () =>
   new Entity(
@@ -51,14 +51,35 @@ export const createAssignmentSubmissionEntity = async () =>
             mimeType: { type: 'string', required: true },
           },
         },
-        // 'returned' is set when an instructor returns it with a grade and
-        // feedback (grading is still to come); a returned submission can't
-        // be resubmitted.
+        // 'resubmission_requested' is set when an instructor asks for new
+        // work (the student may resubmit); 'returned' when an instructor
+        // returns it with a grade, after which it can't be resubmitted.
         status: {
-          type: ['submitted', 'returned'] as const,
+          type: ['submitted', 'resubmission_requested', 'returned'] as const,
           required: true,
           default: 'submitted',
         },
+        // +1 on every instructor action (return, request, amend): the
+        // concurrency token for instructor writes.
+        reviewRevision: {
+          type: 'number',
+          required: true,
+          default: 0,
+        },
+        // The grade, set on the final return and on an amendment. `pointsOutOf`
+        // is the assignment's maxPoints when graded, kept if it changes later.
+        points: { type: 'number' },
+        pointsOutOf: { type: 'number' },
+        // The first final return; an amendment leaves both.
+        returnedAt: { type: 'string' },
+        returnedBy: { type: 'string' },
+        // The latest return or amendment.
+        gradedAt: { type: 'string' },
+        // Both set, to the courseId and submittedAt, while the status is
+        // 'submitted' (waiting for an instructor), and removed together
+        // otherwise; they build the byWaiting index.
+        waitingCourseId: { type: 'string' },
+        waitingSince: { type: 'string' },
         // When the work was last submitted, and whether that was after the
         // assignment's due date.
         submittedAt: {
@@ -114,6 +135,29 @@ export const createAssignmentSubmissionEntity = async () =>
           sk: {
             field: 'gsi2sk',
             composite: ['courseId', 'contentItemId'],
+          },
+        },
+        // A course's work waiting for an instructor, oldest first. Sparse:
+        // only submissions with both waiting attributes are indexed. Built
+        // as discussionPost.byUnanswered is, from attributes outside the
+        // primary key (waitingCourseId holds the courseId; waitingSince
+        // orders it). ElectroDB re-evaluates an index's `condition` only
+        // when an update provides one of its composites, so a patch of
+        // anything else leaves the keys alone. A write that changes `status`
+        // sets or removes both attributes with it (waitingKeys).
+        byWaiting: {
+          index: 'gsi1pk-gsi1sk-index',
+          condition: (attr) =>
+            attr.waitingCourseId !== undefined &&
+            attr.waitingSince !== undefined,
+          pk: {
+            field: 'gsi1pk',
+            composite: ['waitingCourseId'],
+            template: '$assignmentsubmission_waiting#${waitingCourseId}',
+          },
+          sk: {
+            field: 'gsi1sk',
+            composite: ['waitingSince', 'contentItemId', 'userId'],
           },
         },
       },

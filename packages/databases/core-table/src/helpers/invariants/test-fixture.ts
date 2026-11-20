@@ -186,6 +186,7 @@ export const consistentTable = (): TableSnapshot => ({
     },
   ],
   assignmentSubmissions: [],
+  submissionFeedback: [],
   certificates: [],
   videoPositions: [],
   users: [{ userId: 'teacher' }, { userId: 'student' }],

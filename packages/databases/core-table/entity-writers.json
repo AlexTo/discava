@@ -10,6 +10,7 @@
   },
   "assignmentSubmission": {
     "core-table": [
+      "packages/databases/core-table/src/helpers/assignment-grading.ts",
       "packages/databases/core-table/src/helpers/assignment-submission.ts"
     ]
   },
@@ -235,6 +236,16 @@
   },
   "review": {
     "core-table": ["packages/databases/core-table/src/helpers/review.ts"]
+  },
+  "submissionFeedback": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/assignment-grading.ts"
+    ]
+  },
+  "submissionNotice": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/assignment-grading.ts"
+    ]
   },
   "user": {
     "core-table": ["packages/databases/core-table/src/helpers/user.ts"]

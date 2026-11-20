@@ -83,6 +83,9 @@ describe('a first submission', () => {
     expect(submission!.Put?.Item).toMatchObject({
       status: 'submitted',
       version: 1,
+      reviewRevision: 0,
+      waitingCourseId: 'course-1',
+      waitingSince: AT,
       submittedAt: AT,
       late: false,
       file: write.file,
@@ -140,7 +143,9 @@ describe('late', () => {
 describe('a resubmission', () => {
   const resubmit = { ...write, existing: { version: 2 }, hasCompletion: true };
 
-  it('replaces the version it read, while it is still submitted', () => {
+  // An intended change (#102): a resubmission is also allowed while an
+  // instructor has asked for one.
+  it('replaces the version it read, while it is submitted or a resubmission was requested', () => {
     const items = requestFor(resubmit);
 
     expect(items).toHaveLength(ACTIVITY + 1);
@@ -150,6 +155,22 @@ describe('a resubmission', () => {
     const condition = conditionOf(patch);
     expect(condition).toContain('version = 2');
     expect(condition).toContain('status = submitted');
+    expect(condition).toContain('status = resubmission_requested');
+    // `returned` is in neither branch, so a returned submission is refused.
+    expect(condition).not.toContain('returned');
+  });
+
+  it('goes back to submitted and to waiting, with the new time', () => {
+    const later = '2026-11-15T08:00:00.000Z';
+    const patch = requestFor({ ...resubmit, at: later })[5]!;
+    const values = Object.values(patch.Update!.ExpressionAttributeValues);
+
+    expect(values).toContain('submitted');
+    expect(values).toContain('course-1');
+    expect(values).toContain(later);
+    expect(patch.Update?.UpdateExpression).toMatch(/#waitingCourseId/);
+    expect(patch.Update?.UpdateExpression).toMatch(/#waitingSince/);
+    expect(patch.Update?.UpdateExpression).toMatch(/#gsi1pk/);
   });
 
   it('counts nobody again and writes no completion', () => {
@@ -158,6 +179,18 @@ describe('a resubmission', () => {
     expect(items[3]!.Update).toBeUndefined();
     expect(items[3]!.ConditionCheck).toBeDefined();
     expect(items.some((item) => item.Put)).toBe(false);
+  });
+
+  // FR-013: a resubmission after a request is not new student activity.
+  it('does not count the student again or change the completion', () => {
+    const items = requestFor({ ...resubmit, existing: { version: 2 } });
+    const writes = JSON.stringify(items);
+
+    expect(writes).not.toMatch(/studentActivityCount/);
+    expect(items.every((item) => !item.Put)).toBe(true);
+    expect(items.some((item) => /completion/i.test(JSON.stringify(item)))).toBe(
+      false,
+    );
   });
 });
 
