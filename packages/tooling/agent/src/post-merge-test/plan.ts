@@ -21,24 +21,6 @@ export const MARKER_PREFIX = '<!-- post-merge-test pr:';
 
 export const testMarker = (pr: number): string => `${MARKER_PREFIX}${pr} -->`;
 
-export interface IssueSummary {
-  body: string;
-  /** The login of whoever opened it. */
-  author: string;
-  /** GitHub's `author_association`: what the author is to the repository. */
-  association: string;
-}
-
-// The workflow's token opens the test issues; a person with write access may
-// open or rewrite one by hand.
-const WORKFLOW_AUTHOR = 'github-actions[bot]';
-const WRITE_ASSOCIATIONS = ['OWNER', 'MEMBER', 'COLLABORATOR'];
-
-/** Whether an issue's marker counts: anyone can open an issue with one. */
-export const isTrustedIssue = (issue: IssueSummary): boolean =>
-  issue.author === WORKFLOW_AUTHOR ||
-  WRITE_ASSOCIATIONS.includes(issue.association);
-
 /** The pull request numbers named by these issue bodies' markers. */
 export const testedPullRequests = (issueBodies: string[]): Set<number> => {
   const tested = new Set<number>();

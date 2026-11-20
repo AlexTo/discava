@@ -70,8 +70,10 @@ interface Scenario {
   dispatch?: string;
   /** Files the pull request changed. */
   files?: string[];
-  /** Bodies of the repository's issues (the stub applies no filter). */
+  /** Bodies of the repository's issues that the workflow opened. */
   issueBodies?: string[];
+  /** Bodies of issues opened by someone with no write access. */
+  strangerIssueBodies?: string[];
   /** Body of the issue `gh issue view` returns. */
   linkedIssueBody?: string;
   /** `gh issue view` fails, as it does for a number that is no issue. */
@@ -126,8 +128,19 @@ const runScenario = (scenario: Scenario) => {
         return (scenario.files ?? []).join('\n');
       }
       if (command === 'api' && args[1].includes('/issues?')) {
-        return (scenario.issueBodies ?? [])
-          .map((body) => JSON.stringify(body))
+        return [
+          ...(scenario.issueBodies ?? []).map((body) => ({
+            body,
+            author: 'github-actions[bot]',
+            association: 'NONE',
+          })),
+          ...(scenario.strangerIssueBodies ?? []).map((body) => ({
+            body,
+            author: 'mallory',
+            association: 'NONE',
+          })),
+        ]
+          .map((issue) => JSON.stringify(issue))
           .join('\n');
       }
       if (command === 'api' && args[1] === `repos/${REPOSITORY}/issues/400`) {
@@ -292,6 +305,16 @@ describe("an agent's merged pull request", () => {
     expect(comments[0].pr).toBe('302');
     expect(comments[0].body).toContain('T001, T002');
     expect(comments[0].body).toContain(`specs/${FOLDER}/`);
+  });
+
+  it('is not stalled by a marker in an issue a stranger opened', () => {
+    const { created, comments } = runScenario({
+      pr: agentPr,
+      linkedIssueBody: issueMarker(FOLDER, 0),
+      strangerIssueBodies: [`${issueMarker(FOLDER, 0)}\nbody`],
+    });
+    expect(created).toHaveLength(1);
+    expect(comments).toEqual([]);
   });
 
   it('opens nothing once every task is ticked', () => {

@@ -6,6 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { lockAgentIssue } from '../helpers/conversation-lock.js';
+import { type IssueSummary, isTrustedIssue } from '../helpers/issue-author.js';
 import { closedIssue, specFolders } from './discover.js';
 import { decide } from './gate.js';
 import {
@@ -91,18 +92,22 @@ const foldersForPullRequest = (
 
 // The body of every issue that carries a marker: open or closed, and whether
 // or not it still has the agent's label (removing it is how a run is stopped
-// or repeated). One JSON string per line.
+// or repeated). Only issues this workflow or someone with write access
+// opened: a marker in a stranger's issue must not stall a spec's chain. One
+// JSON object per line.
 const markedIssueBodies = (repository: string, gh: Deps['gh']): string[] =>
   gh([
     'api',
     `repos/${repository}/issues?state=all&per_page=100`,
     '--paginate',
     '--jq',
-    `.[] | select(.pull_request == null) | (.body // "") | select(contains("${MARKER_PREFIX}")) | @json`,
+    `.[] | select(.pull_request == null) | select((.body // "") | contains("${MARKER_PREFIX}")) | {body, author: .user.login, association: .author_association} | @json`,
   ])
     .split('\n')
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as string);
+    .map((line) => JSON.parse(line) as IssueSummary)
+    .filter(isTrustedIssue)
+    .map((issue) => issue.body);
 
 export const run = (deps: Deps): void => {
   const { env, gh, log } = deps;

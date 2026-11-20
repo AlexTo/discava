@@ -7,13 +7,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closedIssue } from '../agent-issues/discover.js';
 import { lockAgentIssue } from '../helpers/conversation-lock.js';
+import { type IssueSummary, isTrustedIssue } from '../helpers/issue-author.js';
 import {
   DEFAULT_TEST_STAGE,
   type DeployJob,
   decide,
   deployedStage,
-  type IssueSummary,
-  isTrustedIssue,
   MARKER_PREFIX,
   type MergedPullRequest,
   renderIssue,
