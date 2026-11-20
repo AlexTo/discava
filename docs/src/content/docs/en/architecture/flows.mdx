@@ -1,13 +1,13 @@
 ---
 title: Request and data flows
-description: How sign-in, an API call, a video upload and a data change travel through Discava's components.
+description: How sign-in, an API call, a video upload, a data change and a purchase travel through Discava's components.
 sidebar:
   order: 2
 ---
 
 import Link from '@components/link.astro';
 
-Four flows explain most of the system.
+Five flows explain most of the system.
 
 ## Signing in
 
@@ -97,7 +97,7 @@ cf -> lesson
 
 ## Reacting to a change
 
-Some results depend on many records: a student's course progress, a course's search entry, an instructor's analytics. They aren't computed inside the request that changes the data. They are recomputed afterwards from the table's change stream.
+Some results depend on many records: a student's course progress, a course's search entry, an instructor's analytics and earnings. They aren't computed inside the request that changes the data. They are recomputed afterwards from the table's change stream.
 
 ```d2 title="One stream reader, one queue per feature"
 direction: right
@@ -141,6 +141,35 @@ h4 -> ses
 The consequence for users: figures such as progress and analytics update a few seconds after the action that caused them.
 
 <Link path="design/stream-event-router">Stream event router</Link> has the full design, and <Link path="design/search">Search</Link> and <Link path="design/progress-and-completion">Progress and completion</Link> cover two of its features.
+
+## Buying a course
+
+A paid course is bought on Stripe's page, and the student is enrolled by Stripe's confirmation, never by the browser coming back.
+
+```d2 title="A purchase"
+direction: right
+student: "Student portal"
+core: "core-api"
+table: "Core table"
+stripe: "Stripe"
+hook: "Stripe webhook API"
+
+student -> core: "1. Buy now"
+core -> table: "2. pending order"
+core -> stripe: "3. create checkout"
+student -> stripe: "4. pay"
+stripe -> hook: "5. signed confirmation"
+hook -> table: "6. order paid + enrolment"
+```
+
+1. core-api writes a `pending` order with the course's own price, then asks Stripe for a checkout page and sends the student to it.
+2. The student pays on Stripe. Discava never sees a card number.
+3. Stripe posts a signed confirmation to the webhook API. The handler verifies the signature, then marks the order paid and creates the enrolment in one transaction.
+4. Back on the course page, the portal waits for the enrolment to appear, usually within seconds.
+
+Stripe may deliver a confirmation more than once, so the handler changes nothing the second time. A payment that can't be delivered, such as for a course unpublished in the meantime, is refunded automatically.
+
+The paid order then travels the change stream like any other write: the earnings feature records each instructor's share, and a daily run pays what is due. <Link path="design/payments">Payments</Link> and <Link path="design/instructor-payouts">Instructor payouts</Link> have the full design.
 
 ## Searching
 

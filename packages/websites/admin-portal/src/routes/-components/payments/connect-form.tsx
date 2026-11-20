@@ -77,7 +77,8 @@ export function KeyHelp() {
       In the Stripe dashboard, open Developers, then API keys, and copy a secret
       key (starting <code>sk_</code>) or create a restricted key (starting{' '}
       <code>rk_</code>). A restricted key needs write access to Checkout
-      Sessions and Webhook Endpoints, and read access to Accounts and Events.
+      Sessions, Refunds and Webhook Endpoints, and read access to Accounts,
+      Events and PaymentIntents.
     </p>
   );
 }

@@ -8,6 +8,8 @@
 
 **Input**: User description: "Issue #286: instructors need to see and receive earnings once courses are paid. Stripe Connect onboarding for instructors; platform fee configurable per stage. Earnings report per course and period; payout status. Refund adjustments. Depends on the payments issue. Acceptance: report totals reconcile with orders and refunds."
 
+**Design page**: [`design/instructor-payouts`](../../docs/src/content/docs/en/design/instructor-payouts.mdx)
+
 **Parent issue**: #286
 
 **Depends on**: #284 (Stripe checkout and orders) and #285 (coupons). Both specs are on `main`, and so is #284's order record; what this spec takes from them is listed in Assumptions.
