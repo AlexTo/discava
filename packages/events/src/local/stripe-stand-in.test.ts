@@ -433,14 +433,14 @@ describe('the hosted page', () => {
   });
 });
 
-describe('delivery', () => {
-  const paid = async (url: string) => {
-    const { stripe, secret } = await connect(url);
-    const session = await stripe.checkout.sessions.create(sessionParams());
-    await page(`/stripe/pay/${session.id}/pay`, { method: 'POST' });
-    return { stripe, secret, session };
-  };
+const paid = async (url: string) => {
+  const { stripe, secret } = await connect(url);
+  const session = await stripe.checkout.sessions.create(sessionParams());
+  await page(`/stripe/pay/${session.id}/pay`, { method: 'POST' });
+  return { stripe, secret, session };
+};
 
+describe('delivery', () => {
   it('delivers nothing for an account with no endpoint', async () => {
     const hook = await receiver();
     const other = stripeFor('sk_test_local_2');
@@ -548,6 +548,46 @@ describe('delivery', () => {
     );
     expect(event.type).toBe('charge.refunded');
     expect(event.data.object).toMatchObject({ amount_refunded: 4900 });
+  });
+});
+
+describe('refund control', () => {
+  it.each([
+    ['full', undefined, 4900],
+    ['partial', 1000, 1000],
+  ])(
+    'delivers charge.refunded for a %s refund',
+    async (_, amount, expected) => {
+      const hook = await receiver();
+      const { secret, session } = await paid(hook.url);
+      hook.deliveries.length = 0;
+      const response = await request('/stripe/test/refund', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: session.id, amount }),
+      });
+      expect(response.status).toBe(200);
+      const [delivery] = hook.deliveries as [
+        { body: string; signature: string },
+      ];
+      const event = Stripe.webhooks.constructEvent(
+        delivery.body,
+        delivery.signature,
+        secret,
+      );
+      expect(event.type).toBe('charge.refunded');
+      expect(event.data.object).toMatchObject({
+        payment_intent: session.payment_intent,
+        amount_refunded: expected,
+      });
+    },
+  );
+
+  it('answers 404 for a session with no payment', async () => {
+    const response = await request('/stripe/test/refund', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: 'cs_nope' }),
+    });
+    expect(response.status).toBe(404);
   });
 });
 

@@ -12,6 +12,8 @@ const SECRET = 'whsec_testsecret0123';
 const state = vi.hoisted(() => ({
   orders: new Map<string, any>(),
   enrolments: [] as string[],
+  // The enrolment's state, as the real refund keeps it.
+  enrolment: undefined as any,
   undeliverable: undefined as undefined | 'duplicate' | 'unavailable',
   settleCalls: 0,
   tableError: false,
@@ -37,6 +39,24 @@ vi.mock('@discava/core-table', () => ({
     state.enrolments.push(current.userId);
     return { result: 'fulfilled' };
   }),
+  refundOrder: vi.fn(async ({ order, refundedTotal, now }: any) => {
+    const current = state.orders.get(order.orderId);
+    if (!current) throw new Error('Not found');
+    if (current.status !== 'paid') return;
+    if (refundedTotal >= current.amount) {
+      Object.assign(current, {
+        status: 'refunded',
+        refundReason: 'requested',
+        refundedAt: now,
+        refundedAmount: current.amount,
+      });
+      if (state.enrolment?.orderId === current.orderId) {
+        state.enrolment.status = 'dropped';
+      }
+    } else if (refundedTotal > (current.refundedAmount ?? 0)) {
+      current.refundedAmount = refundedTotal;
+    }
+  }),
   refundUndeliverable: vi.fn(async (_: unknown, order: any, reason: string) => {
     const current = state.orders.get(order.orderId);
     if (current.status === 'pending') {
@@ -60,6 +80,7 @@ import { handleStripeWebhook } from './stripe-webhook.js';
 import type { WebhookDeps } from './webhook-deps.js';
 
 const refunds = { create: vi.fn() };
+const paymentIntents = { retrieve: vi.fn() };
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 const deps: WebhookDeps = {
   getCoreTable: async () =>
@@ -72,7 +93,7 @@ const deps: WebhookDeps = {
         },
       },
     }) as any,
-  withStripe: async (call) => call({ refunds } as any),
+  withStripe: async (call) => call({ refunds, paymentIntents } as any),
   now: () => '2026-11-19T09:00:00.000Z',
   logger,
 };
@@ -117,7 +138,12 @@ beforeEach(() => {
   state.undeliverable = undefined;
   state.settleCalls = 0;
   state.tableError = false;
+  state.enrolment = undefined;
   refunds.create.mockResolvedValue({ id: 're_1' });
+  paymentIntents.retrieve.mockResolvedValue({
+    id: 'pi_1',
+    metadata: { orderId: 'o1' },
+  });
 });
 
 describe('checkout.session.completed', () => {
@@ -315,5 +341,99 @@ describe('checkout.session.expired', () => {
     expect(await send(expiredEvent('nope'))).toEqual({ status: 200 });
     expect(logger.error).toHaveBeenCalled();
     expect(state.orders.get('o1')?.status).toBe('pending');
+  });
+});
+
+describe('charge.refunded', () => {
+  const refundedEvent = (amountRefunded: number, id = 'evt_r') =>
+    JSON.stringify({
+      id,
+      object: 'event',
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: 'ch_1',
+          object: 'charge',
+          payment_intent: 'pi_1',
+          amount: 4900,
+          amount_refunded: amountRefunded,
+        },
+      },
+    });
+
+  beforeEach(() => {
+    state.orders.set('o1', {
+      ...order(),
+      status: 'paid',
+      paymentIntentId: 'pi_1',
+    });
+    state.enrolment = {
+      orderId: 'o1',
+      status: 'completed',
+      completedAt: '2026-11-18T00:00:00.000Z',
+      progressPercent: 100,
+    };
+  });
+
+  it('ends the order and the enrolment on a full refund, keeping progress', async () => {
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(paymentIntents.retrieve).toHaveBeenCalledWith('pi_1');
+    expect(state.orders.get('o1')).toMatchObject({
+      status: 'refunded',
+      refundReason: 'requested',
+      refundedAmount: 4900,
+    });
+    expect(state.enrolment).toMatchObject({
+      status: 'dropped',
+      completedAt: '2026-11-18T00:00:00.000Z',
+      progressPercent: 100,
+    });
+  });
+
+  it('only records the amount on a partial refund', async () => {
+    expect(await send(refundedEvent(1000))).toEqual({ status: 200 });
+    expect(state.orders.get('o1')).toMatchObject({
+      status: 'paid',
+      refundedAmount: 1000,
+    });
+    expect(state.enrolment.status).toBe('completed');
+  });
+
+  it('changes nothing for the same notice twice', async () => {
+    await send(refundedEvent(4900));
+    const after = structuredClone(state.orders.get('o1'));
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(state.orders.get('o1')).toEqual(after);
+  });
+
+  it('changes nothing for the notice our own automatic refund causes', async () => {
+    state.orders.set('o1', {
+      ...order(),
+      status: 'refunded',
+      refundReason: 'duplicate',
+      refundedAt: '2026-11-19T08:00:00.000Z',
+    });
+    const before = structuredClone(state.orders.get('o1'));
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(state.orders.get('o1')).toEqual(before);
+  });
+
+  it("does not end a newer enrolment for an old order's notice", async () => {
+    state.enrolment = { orderId: 'o2', status: 'active' };
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(state.orders.get('o1')?.status).toBe('refunded');
+    expect(state.enrolment).toEqual({ orderId: 'o2', status: 'active' });
+  });
+
+  it('logs an unknown order and answers 200', async () => {
+    paymentIntents.retrieve.mockResolvedValue({ id: 'pi_1', metadata: {} });
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(logger.error).toHaveBeenCalled();
+    expect(state.orders.get('o1')?.status).toBe('paid');
+  });
+
+  it('answers 500 when Stripe cannot be asked, so it retries', async () => {
+    paymentIntents.retrieve.mockRejectedValue(new Error('timeout'));
+    expect(await send(refundedEvent(4900))).toEqual({ status: 500 });
   });
 });

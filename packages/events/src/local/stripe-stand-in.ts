@@ -472,14 +472,31 @@ export const createStripeStandIn = ({
     path: string,
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
-    const control = /^\/stripe\/test\/(replay|forge|expire)$/.exec(path);
+    const control = /^\/stripe\/test\/(replay|forge|expire|refund)$/.exec(path);
     if (!control) return false;
     const input = JSON.parse((await readBody(request)) || '{}') as {
       sessionId?: string;
       times?: number;
       kind?: 'signature' | 'body';
+      amount?: number;
     };
     const session = input.sessionId ? sessions.get(input.sessionId) : undefined;
+    if (control[1] === 'refund') {
+      // As an operator in the dashboard: the whole payment, or `amount` of it.
+      const intent = session ? intents.get(session.paymentIntentId) : undefined;
+      if (!intent) {
+        error(
+          response,
+          404,
+          'invalid_request_error',
+          'No payment for that session',
+        );
+        return true;
+      }
+      await refundIntent(intent, input.amount);
+      send(response, 200, { amount_refunded: intent.refunded });
+      return true;
+    }
     if (control[1] === 'expire' && session) {
       await expireSession(session);
       send(response, 200, { status: session.status });
