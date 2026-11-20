@@ -23,6 +23,41 @@ const input = (
 });
 
 describe('renderNotificationEmail', () => {
+  it('adds a second, outline button and a text line for an action', () => {
+    const email = renderNotificationEmail(
+      input({
+        action: {
+          label: 'Add to LinkedIn profile',
+          path: '/c/x/linkedin?source=issued-email',
+        },
+      }),
+    );
+    const url = 'https://student.example.com/c/x/linkedin?source=issued-email';
+    expect(email.text).toContain(
+      `Open: https://student.example.com/courses/c1\nAdd to LinkedIn profile: ${url}`,
+    );
+    expect(email.html).toContain(`href="${url}"`);
+    expect(email.html).toContain('Add to LinkedIn profile</a>');
+    expect(email.html).toContain('border: 1px solid');
+  });
+
+  it('escapes an action label in the HTML', () => {
+    const email = renderNotificationEmail(
+      input({ action: { label: '<b>Go</b>', path: '/x' } }),
+    );
+    expect(email.html).not.toContain('<b>Go</b>');
+    expect(email.html).toContain('&lt;b&gt;Go&lt;/b&gt;');
+    expect(email.text).toContain('<b>Go</b>: https://student.example.com/x');
+  });
+
+  it('is unchanged without an action', () => {
+    const email = renderNotificationEmail(input());
+    expect(email.text).toBe(
+      renderNotificationEmail(input({ action: undefined })).text,
+    );
+    expect(email.html).not.toContain('border: 1px solid');
+  });
+
   it('uses the title as the subject and states why the email was sent', () => {
     const email = renderNotificationEmail(input());
     expect(email.subject).toBe('Assignment graded');

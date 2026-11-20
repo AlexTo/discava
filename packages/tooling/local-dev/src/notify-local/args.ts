@@ -18,6 +18,12 @@ const USAGE =
 
 /** Canned values for a type's params, so a bare `--type` publishes something. */
 export const cannedParams = (type: string): Record<string, string> => {
+  // Sample params would name a certificate that doesn't exist.
+  if (type.startsWith('certificate.')) {
+    throw new Error(
+      'Certificate notifications belong to a certificate: complete a course instead',
+    );
+  }
   const entry = Object.hasOwn(NOTIFICATION_TYPES, type)
     ? NOTIFICATION_TYPES[type]
     : undefined;

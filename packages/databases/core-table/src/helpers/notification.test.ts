@@ -97,6 +97,28 @@ describe('publishNotification', () => {
     });
   });
 
+  it('stores the action when the type builds one, and none otherwise', async () => {
+    const { service, rows } = createFakeNotificationTable();
+    await publishNotification(service, input());
+    await publishNotification(service, {
+      type: 'certificate.issued',
+      userId: 'student-1',
+      params: { certificateId: 'ABCD-EFGH-JKLM-NPQR', courseTitle: 'History' },
+      dedupeKey: 'cert-1',
+      occurredAt: AT,
+    });
+    const stored = [...rows.notification!.values()];
+    expect(
+      stored.find((n) => n.type === 'assignment.returned'),
+    ).not.toHaveProperty('action');
+    expect(stored.find((n) => n.type === 'certificate.issued')?.action).toEqual(
+      {
+        label: 'Add to LinkedIn profile',
+        path: '/certificates/ABCD-EFGH-JKLM-NPQR/linkedin?source=issued-email',
+      },
+    );
+  });
+
   it('counts a second distinct publish and moves the state version', async () => {
     const { service, rows } = createFakeNotificationTable();
     await publishNotification(service, input());

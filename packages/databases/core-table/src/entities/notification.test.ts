@@ -69,6 +69,17 @@ describe('notification', () => {
     ).toThrow();
   });
 
+  it('accepts an action, and refuses one without a label or a leading /', () => {
+    const create = (action: unknown) =>
+      notification.create({ ...record, action } as never).params();
+    expect(() => create({ label: 'Go', path: '/x' })).not.toThrow();
+    expect(() => create({ path: '/x' })).toThrow();
+    expect(() => create({ label: 'Go', path: 'x' })).toThrow();
+    expect(
+      (notification.create(record).params() as { Item: object }).Item,
+    ).not.toHaveProperty('action');
+  });
+
   it('refuses a link path that does not start with /', () => {
     expect(() =>
       notification

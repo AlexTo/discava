@@ -262,6 +262,7 @@ export interface TableSnapshot {
     | 'id'
     | 'type'
     | 'link'
+    | 'action'
     | 'readAt'
     | 'email'
     | 'createdAt'

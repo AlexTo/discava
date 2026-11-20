@@ -12,6 +12,9 @@ import {
   normaliseCertificateId,
   recordLinkedInClick,
 } from './certificate.js';
+import { VersionConflictError } from './errors.js';
+import { notificationId, publishNotification } from './notification.js';
+import { createFakeNotificationTable } from './notification-fake.test.js';
 
 describe('generateCertificateId', () => {
   it('makes 16 characters of the Crockford alphabet, never I L O U', () => {
@@ -96,46 +99,12 @@ const enrolment = {
 const course = { courseId: 'c1', title: 'Intro', certificatesEnabled: true };
 const user = { givenName: 'Erin', familyName: 'Nguyen' };
 
-// An in-memory certificate entity that enforces the conditional create.
-const fake = (options: { takenIds?: number; raceWinner?: boolean } = {}) => {
-  const store = new Map<string, Record<string, unknown>>();
-  let taken = options.takenIds ?? 0;
-  const create = vi.fn((item: Record<string, unknown>) => ({
-    go: async () => {
-      const key = `${item.userId}/${item.courseId}`;
-      if (options.raceWinner && !store.has(key)) {
-        store.set(key, { ...item, certificateId: 'WINNER0000000000' });
-      }
-      if (store.has(key)) {
-        throw new Error('conflict', {
-          cause: Object.assign(new Error('x'), {
-            name: 'ConditionalCheckFailedException',
-          }),
-        });
-      }
-      store.set(key, item);
-      return { data: item };
-    },
-  }));
-  const query = vi.fn(() => ({
-    go: async () => ({ data: taken-- > 0 ? [{}] : [] }),
-  }));
-  const entity = {
-    get: vi.fn(({ userId, courseId }) => ({
-      go: async () => ({ data: store.get(`${userId}/${courseId}`) ?? null }),
-    })),
-    create,
-    query: { byCertificateId: query },
-  };
-  return {
-    coreTable: { entities: { certificate: entity } } as never,
-    entity,
-    store,
-  };
-};
+// The fake table enforces the transaction's all-or-nothing writes and the
+// certificate's conditional create.
+const table = () => createFakeNotificationTable();
 
 const issue = (
-  coreTable: never,
+  coreTable: ReturnType<typeof table>['service'],
   overrides: Partial<Parameters<typeof issueCertificate>[0]> = {},
 ) =>
   issueCertificate({
@@ -149,9 +118,9 @@ const issue = (
 
 describe('issueCertificate', () => {
   it('creates a certificate from the enrolment, course and user', async () => {
-    const { coreTable, entity } = fake();
-    const certificate = await issue(coreTable);
-    expect(entity.create).toHaveBeenCalledTimes(1);
+    const { service, rows } = table();
+    const certificate = await issue(service);
+    expect(rows.certificate!.size).toBe(1);
     expect(certificate).toMatchObject({
       userId: 'u1',
       courseId: 'c1',
@@ -163,70 +132,179 @@ describe('issueCertificate', () => {
     expect(certificate?.certificateId).toMatch(/^[0-9A-Z]{16}$/);
   });
 
+  it('creates one certificate.issued notification with it, keyed by the stored ID and timed at issuedAt', async () => {
+    const { service, rows } = table();
+    const certificate = await issue(service);
+    expect(rows.notification!.size).toBe(1);
+    const [n] = [...rows.notification!.values()];
+    expect(n).toMatchObject({
+      userId: 'u1',
+      type: 'certificate.issued',
+      occurredAt: NOW.toISOString(),
+      id: notificationId('certificate.issued', certificate!.certificateId),
+      title: 'Your certificate for Intro is ready',
+      link: {
+        portal: 'student',
+        path: `/certificates/${formatCertificateId(certificate!.certificateId)}`,
+      },
+      action: {
+        label: 'Add to LinkedIn profile',
+        path: `/certificates/${formatCertificateId(certificate!.certificateId)}/linkedin?source=issued-email`,
+      },
+    });
+    expect(rows.notificationState!.get('u1')).toMatchObject({
+      unreadCount: 1,
+    });
+  });
+
+  it('adds one to the unread count of a learner who has other notifications', async () => {
+    const { service, rows } = table();
+    await publishNotification(service, {
+      type: 'review.received',
+      userId: 'u1',
+      params: { courseId: 'c9', courseTitle: 'Other', rating: '5' },
+      dedupeKey: 'r1',
+      occurredAt: '2026-11-01T00:00:00.000Z',
+    });
+    await issue(service);
+    expect(rows.notificationState!.get('u1')).toMatchObject({
+      unreadCount: 2,
+      version: 2,
+    });
+  });
+
   it.each([
     ['active', { status: 'active' as const }],
     ['dropped', { status: 'dropped' as const }],
     ['completed without completedAt', { completedAt: undefined }],
   ])('writes nothing for a %s enrolment', async (_, patch) => {
-    const { coreTable, entity } = fake();
+    const { service, rows, log } = table();
     expect(
-      await issue(coreTable, { enrolment: { ...enrolment, ...patch } }),
+      await issue(service, { enrolment: { ...enrolment, ...patch } }),
     ).toBeUndefined();
-    expect(entity.create).not.toHaveBeenCalled();
-    expect(entity.get).not.toHaveBeenCalled();
+    expect(rows.certificate!.size).toBe(0);
+    expect(rows.notification!.size).toBe(0);
+    expect(log.transactions).toBe(0);
   });
 
   it('writes nothing when the course has certificates off', async () => {
-    const { coreTable, entity } = fake();
+    const { service, rows } = table();
     expect(
-      await issue(coreTable, {
+      await issue(service, {
         course: { ...course, certificatesEnabled: false },
       }),
     ).toBeUndefined();
-    expect(entity.create).not.toHaveBeenCalled();
+    expect(rows.certificate!.size).toBe(0);
+    expect(rows.notification!.size).toBe(0);
   });
 
-  it('returns the first call’s certificate on a second call without a second create', async () => {
-    const { coreTable, entity } = fake();
-    const first = await issue(coreTable);
-    const second = await issue(coreTable);
+  it('returns the first call’s certificate on a second call, leaving one certificate and one notification', async () => {
+    const { service, rows, log } = table();
+    const first = await issue(service);
+    const second = await issue(service);
     expect(second?.certificateId).toBe(first?.certificateId);
-    expect(entity.create).toHaveBeenCalledTimes(1);
+    expect(rows.certificate!.size).toBe(1);
+    expect(rows.notification!.size).toBe(1);
+    expect(log.transactions).toBe(1);
   });
 
-  it('returns the winner’s record when the create loses its condition', async () => {
-    const { coreTable } = fake({ raceWinner: true });
-    const certificate = await issue(coreTable);
-    expect(certificate?.certificateId).toBe('WINNER0000000000');
-  });
-
-  it('rethrows other create errors', async () => {
-    const { coreTable, entity } = fake();
-    entity.create.mockReturnValueOnce({
-      go: async () => {
-        throw new Error('boom');
-      },
+  it('leaves one certificate and one notification when two issue at once', async () => {
+    const { service, rows } = table();
+    const [a, b] = await Promise.all([issue(service), issue(service)]);
+    expect(a?.certificateId).toBe(b?.certificateId);
+    expect(rows.certificate!.size).toBe(1);
+    expect(rows.notification!.size).toBe(1);
+    expect(rows.notificationState!.get('u1')).toMatchObject({
+      unreadCount: 1,
     });
-    await expect(issue(coreTable)).rejects.toThrow('boom');
+  });
+
+  it('returns the winner’s record, and writes no second notification, when the create loses its condition', async () => {
+    const { service, rows, hooks } = table();
+    const winner = {
+      userId: 'u1',
+      courseId: 'c1',
+      certificateId: 'WINNER0000000000',
+    };
+    hooks.beforeTransaction = () => {
+      rows.certificate!.set('u1|c1', winner);
+    };
+    const certificate = await issue(service);
+    expect(certificate?.certificateId).toBe('WINNER0000000000');
+    expect(rows.notification!.size).toBe(0);
+  });
+
+  it('retries a notification state that moved, and succeeds', async () => {
+    const { service, rows, hooks, log } = table();
+    await publishNotification(service, {
+      type: 'review.received',
+      userId: 'u1',
+      params: { courseId: 'c9', courseTitle: 'Other', rating: '5' },
+      dedupeKey: 'r1',
+      occurredAt: '2026-11-01T00:00:00.000Z',
+    });
+    let moved = false;
+    hooks.beforeTransaction = () => {
+      if (!moved) {
+        moved = true;
+        rows.notificationState!.get('u1')!.version += 1;
+      }
+    };
+    const certificate = await issue(service);
+    expect(certificate).toBeDefined();
+    expect(log.cancelled).toBe(1);
+    expect(rows.certificate!.size).toBe(1);
+    expect(rows.notification!.size).toBe(2);
+  });
+
+  it('throws VersionConflictError when the state keeps moving', async () => {
+    const { service, rows, hooks } = table();
+    await publishNotification(service, {
+      type: 'review.received',
+      userId: 'u1',
+      params: { courseId: 'c9', courseTitle: 'Other', rating: '5' },
+      dedupeKey: 'r1',
+      occurredAt: '2026-11-01T00:00:00.000Z',
+    });
+    hooks.beforeTransaction = () => {
+      rows.notificationState!.get('u1')!.version += 1;
+    };
+    await expect(issue(service)).rejects.toBeInstanceOf(VersionConflictError);
+    expect(rows.certificate!.size).toBe(0);
   });
 
   it('regenerates an ID found on the index', async () => {
-    const { coreTable, entity } = fake({ takenIds: 2 });
-    await issue(coreTable);
-    expect(entity.query.byCertificateId).toHaveBeenCalledTimes(3);
-    expect(entity.create).toHaveBeenCalledTimes(1);
+    const { service, rows } = table();
+    const query = vi.spyOn(
+      service.entities.certificate.query,
+      'byCertificateId',
+    );
+    let taken = 2;
+    query.mockImplementation((() => ({
+      go: async () => ({ data: taken-- > 0 ? [{}] : [] }),
+    })) as never);
+    await issue(service);
+    expect(query).toHaveBeenCalledTimes(3);
+    expect(rows.certificate!.size).toBe(1);
   });
 
   it('throws after five collisions', async () => {
-    const { coreTable, entity } = fake({ takenIds: 5 });
-    await expect(issue(coreTable)).rejects.toThrow(/5 tries/);
-    expect(entity.query.byCertificateId).toHaveBeenCalledTimes(5);
-    expect(entity.create).not.toHaveBeenCalled();
+    const { service, rows } = table();
+    const query = vi.spyOn(
+      service.entities.certificate.query,
+      'byCertificateId',
+    );
+    query.mockImplementation((() => ({
+      go: async () => ({ data: [{}] }),
+    })) as never);
+    await expect(issue(service)).rejects.toThrow(/5 tries/);
+    expect(query).toHaveBeenCalledTimes(5);
+    expect(rows.certificate!.size).toBe(0);
   });
 
   it('uses the fallback name for a missing user', async () => {
-    const { coreTable } = fake();
-    const certificate = await issue(coreTable, { user: null });
+    const { service } = table();
+    const certificate = await issue(service, { user: null });
     expect(certificate?.learnerName).toBe('Discava learner');
   });
 });
