@@ -12,6 +12,18 @@
 
 **Design page**: [`design/public-pages`](../../docs/src/content/docs/en/design/public-pages.mdx) (gains a "Free preview lessons" section)
 
+## Clarifications
+
+### Session 2026-11-20
+
+Resolved without asking, using the recommended defaults (non-interactive run). Each is a default for the maintainer to confirm in review.
+
+- Q: The issue says quizzes in a preview lesson "are shown but need enrolment to attempt". Does a visitor see the quiz's questions? → A: No. The quiz is shown as a locked card with its title and number of questions and "Enrol to take this quiz". Publishing the questions would give away assessment content for nothing a visitor can do with it, and keeps quiz content behind the one existing route that already separates questions from answers. In-video questions (#591) follow the same rule: not asked in a preview (FR-003, US1 scenario 4).
+- Q: "Unmarking a lesson as preview removes public access at once": does that include a video a visitor is already playing? → A: No new access from the moment of the change; access already granted runs out by itself. A preview's playback permission lasts at most one hour (an enrolled student's lasts four) and a file link five minutes, and neither is revoked, because that would mean moving the files. The page renews the permission while it is open, so a long video is not cut off (FR-005, FR-010, SC-004).
+- Q: Is there a limit on how many lessons of a course can be marked, and can a free course have previews? → A: No limit, and yes. The instructor decides how much to give away, and the editor's confirmation says what marking does; a preview on a free course lets a visitor watch without an account. Tying the mark to the price or to a quota would add a rule to every price and curriculum change (FR-001).
+- Q: Is anything a visitor does in a preview remembered, so that it counts once they enrol? → A: No. A preview records nothing for anyone, signed in or not: no completion, progress, video position, quiz attempt or discussion post. After enrolling the student starts the lesson in the normal player with no progress. Every student record today belongs to an enrolment, and that rule stays whole (FR-009, US4).
+- Q: Does the content served to search engines include a preview lesson's text or video? → A: No. The landing page's outline labels and links the open preview lessons; the lesson's own address serves no content to crawlers, is marked do-not-index and is left out of the site map. A search engine's stored copy would outlive an unmarking, against "removes public access at once" (FR-015, US5).
+
 ## User Scenarios & Testing *(mandatory)*
 
 Today a visitor decides whether to enrol in, or pay for, a course from its landing page: a description, an outline of titles, reviews and an optional promo video. Nothing of the course itself can be opened without an enrolment, and for a priced course an enrolment needs a paid order (Stripe checkout spec, User Story 2). This feature lets an instructor open chosen lessons to everyone. It is a deliberate exception to "unpaid users cannot get paid content", so most of this spec is about how narrow that exception is.
