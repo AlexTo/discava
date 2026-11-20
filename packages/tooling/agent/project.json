@@ -29,13 +29,6 @@
         "cwd": "{projectRoot}"
       }
     },
-    "agent-lock": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx src/agent-lock/main.ts",
-        "cwd": "{projectRoot}"
-      }
-    },
     "agent-review-status": {
       "executor": "nx:run-commands",
       "options": {
