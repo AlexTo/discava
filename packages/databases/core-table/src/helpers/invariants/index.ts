@@ -6,6 +6,7 @@ import {
   ANALYTICS_CHECKS,
   checkAnalyticsMatchesRecords as analyticsMatchesRecords,
 } from './analytics.js';
+import { ASSIGNMENT_GRADING_CHECKS } from './assignment-grading.js';
 import { CATALOGUE_CHECKS } from './catalogue.js';
 import { CERTIFICATES_CHECKS } from './certificates.js';
 import type { Violation } from './common.js';
@@ -26,6 +27,7 @@ import { STUDENT_ACTIVITY_CHECKS } from './student-activity.js';
 const CHECKS = [
   ...CURRICULUM_CHECKS,
   ...STUDENT_ACTIVITY_CHECKS,
+  ...ASSIGNMENT_GRADING_CHECKS,
   ...CERTIFICATES_CHECKS,
   ...MEDIA_CHECKS,
   ...ANALYTICS_CHECKS,

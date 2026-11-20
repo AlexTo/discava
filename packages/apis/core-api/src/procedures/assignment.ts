@@ -45,6 +45,7 @@ import { courseProcedure } from '../init.js';
 import {
   AssignmentRefSchema,
   type IAssignmentRef,
+  type IMySubmission,
   type ISubmission,
   MySubmissionOutputSchema,
   SubmissionFileUrlOutputSchema,
@@ -129,6 +130,20 @@ const toSubmission = (
     fileSize: submission.file.fileSize,
     mimeType: submission.file.mimeType,
   },
+  ...(submission.status === 'returned' &&
+  submission.points !== undefined &&
+  submission.pointsOutOf !== undefined &&
+  submission.returnedAt !== undefined &&
+  submission.gradedAt !== undefined
+    ? {
+        grade: {
+          points: submission.points,
+          pointsOutOf: submission.pointsOutOf,
+          returnedAt: submission.returnedAt,
+          gradedAt: submission.gradedAt,
+        },
+      }
+    : {}),
 });
 
 type Read = Awaited<ReturnType<typeof readAssignment>>;
@@ -184,13 +199,35 @@ export const uploadUrl = courseProcedure
 export const mySubmission = courseProcedure
   .input(AssignmentRefSchema)
   .output(MySubmissionOutputSchema)
-  .query(async ({ ctx, input }): Promise<ISubmission | null> => {
-    const { submission } = await readAssignment(
-      ctx.coreTable,
-      ctx.user.sub,
-      input,
-    );
-    return submission ? toSubmission(submission) : null;
+  .query(async ({ ctx, input }): Promise<IMySubmission | null> => {
+    const userId = ctx.user.sub;
+    const { submission } = await readAssignment(ctx.coreTable, userId, input);
+    if (!submission) {
+      return null;
+    }
+    // The rounds of feedback, newest first. The instructor who gave one
+    // (`givenBy`) is left out.
+    const { data: rounds } =
+      await ctx.coreTable.entities.submissionFeedback.query
+        .primary({
+          courseId: input.courseId,
+          contentItemId: input.contentItemId,
+          userId,
+        })
+        .go({ order: 'desc', pages: 'all' });
+    return {
+      ...toSubmission(submission),
+      feedback: rounds.map((round) => ({
+        kind: round.kind,
+        ...(round.feedback === undefined ? {} : { feedback: round.feedback }),
+        ...(round.points === undefined ? {} : { points: round.points }),
+        ...(round.pointsOutOf === undefined
+          ? {}
+          : { pointsOutOf: round.pointsOutOf }),
+        version: round.version,
+        givenAt: round.givenAt,
+      })),
+    };
   });
 
 // A link to download the caller's own submitted file, valid for

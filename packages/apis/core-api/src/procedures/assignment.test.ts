@@ -96,6 +96,14 @@ const entities = {
   enrolment: stored('enrolment'),
   assignmentSubmission: stored('assignmentSubmission'),
   itemCompletion: stored('itemCompletion'),
+  // Rounds of feedback, newest first as the query is asked for.
+  submissionFeedback: {
+    query: {
+      primary: vi.fn(() => ({
+        go: vi.fn(async () => ({ data: db.submissionFeedback ?? [] })),
+      })),
+    },
+  },
 };
 
 const transactions: TransactionItem[][] = [];
@@ -738,7 +746,21 @@ describe('submit (resubmission)', () => {
         },
       },
     });
-    expect(patch.condition).toBe('version = 1 AND status = submitted');
+    expect(patch.condition).toBe(
+      'version = 1 AND (status = submitted OR status = resubmission_requested)',
+    );
+  });
+
+  it('accepts a resubmission after the instructor asked for one', async () => {
+    db.assignmentSubmission = previous({ status: 'resubmission_requested' });
+
+    const result = await submitNow();
+
+    expect(result).toMatchObject({ version: 2, status: 'submitted' });
+    expect(copyTo).toHaveBeenCalled();
+    expect(itemOf(transactions[0]!, 'assignmentSubmission').set).toMatchObject({
+      status: 'submitted',
+    });
   });
 
   it('neither counts the student again nor writes a completion', async () => {
@@ -906,7 +928,93 @@ describe('mySubmission', () => {
       submittedAt: '2026-01-01T00:00:00.000Z',
       late: true,
       file: { fileName: 'Old.pdf', fileSize: 100, mimeType: 'application/pdf' },
+      feedback: [],
     });
+  });
+
+  it('returns the grade and the rounds of feedback, never who gave them', async () => {
+    db.assignmentSubmission = {
+      status: 'returned',
+      version: 2,
+      late: false,
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      points: 8,
+      pointsOutOf: 10,
+      returnedAt: '2026-01-03T00:00:00.000Z',
+      returnedBy: 'instructor-1',
+      gradedAt: '2026-01-04T00:00:00.000Z',
+      file: {
+        key: `${ITEM_PREFIX}submissions/${USER_SUB}/a/Old.pdf`,
+        fileName: 'Old.pdf',
+        fileSize: 100,
+        mimeType: 'application/pdf',
+      },
+    };
+    db.submissionFeedback = [
+      {
+        kind: 'amended',
+        points: 8,
+        pointsOutOf: 10,
+        version: 2,
+        givenAt: '2026-01-04T00:00:00.000Z',
+        givenBy: 'instructor-2',
+      },
+      {
+        kind: 'returned',
+        feedback: '{"type":"doc"}',
+        points: 7,
+        pointsOutOf: 10,
+        version: 2,
+        givenAt: '2026-01-03T00:00:00.000Z',
+        givenBy: 'instructor-1',
+      },
+    ];
+
+    const result = await callAs(USER_SUB).mySubmission(ref);
+
+    expect(result?.grade).toEqual({
+      points: 8,
+      pointsOutOf: 10,
+      returnedAt: '2026-01-03T00:00:00.000Z',
+      gradedAt: '2026-01-04T00:00:00.000Z',
+    });
+    expect(result?.feedback.map((round) => round.kind)).toEqual([
+      'amended',
+      'returned',
+    ]);
+    expect(JSON.stringify(result)).not.toMatch(
+      /instructor-|givenBy|returnedBy/,
+    );
+  });
+
+  it('returns a requested resubmission with its feedback and no grade', async () => {
+    db.assignmentSubmission = {
+      status: 'resubmission_requested',
+      version: 1,
+      late: false,
+      submittedAt: '2026-01-01T00:00:00.000Z',
+      file: {
+        key: `${ITEM_PREFIX}submissions/${USER_SUB}/a/Old.pdf`,
+        fileName: 'Old.pdf',
+        fileSize: 100,
+        mimeType: 'application/pdf',
+      },
+    };
+    db.submissionFeedback = [
+      {
+        kind: 'resubmission_requested',
+        feedback: '{"type":"doc"}',
+        version: 1,
+        givenAt: '2026-01-02T00:00:00.000Z',
+        givenBy: 'instructor-1',
+      },
+    ];
+
+    const result = await callAs(USER_SUB).mySubmission(ref);
+
+    expect(result).toMatchObject({ status: 'resubmission_requested' });
+    expect(result).not.toHaveProperty('grade');
+    expect(result?.feedback).toHaveLength(1);
   });
 
   it('refuses a student who isn’t enrolled', async () => {

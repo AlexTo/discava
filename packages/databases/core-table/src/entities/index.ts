@@ -44,5 +44,7 @@ export { createQuizQuestionStatsEntity } from './quiz-question-stats.js';
 export { createQuizScoreStatsEntity } from './quiz-score-stats.js';
 export { createQuizSummaryEntity } from './quiz-summary.js';
 export { createReviewEntity } from './review.js';
+export { createSubmissionFeedbackEntity } from './submission-feedback.js';
+export { createSubmissionNoticeEntity } from './submission-notice.js';
 export { createUserEntity } from './user.js';
 export { createVideoPositionEntity } from './video-position.js';
