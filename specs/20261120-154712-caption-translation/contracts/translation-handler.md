@@ -18,7 +18,7 @@
 | Entity | Passes when, between `OldImage` and `NewImage` |
 |--------|-----------------------------------------------|
 | `contentItem`, `coursePreview` | the list of tracks whose `source` isn't `translated` differs (compare each track's `trackId`, `language` and `isDefault`), or `captionTranslationRequestedAt` differs |
-| `course` | `captionLanguages` differs |
+| `course` | `captionLanguages` or `language` differs (the planner reads both: `language` decides `language-mismatch`) |
 
 A record with either image missing doesn't pass. INSERT and REMOVE never pass: a new video has no tracks, and a removed one has nothing to translate.
 
@@ -101,7 +101,7 @@ The stack receives the lesson media bucket as a prop from `application-stage.ts`
 ## Tests the handler ships with
 
 - Matcher: passes each case in the table above; doesn't pass a title edit, a `studentActivityCount` change, a write that only adds a translated track, a write of `captionTranslation`, an INSERT or a REMOVE.
-- Handler, with the Translate client and S3 mocked: translates every planned language and writes the tracks; skips a language an upload holds; removes tracks of a language the course dropped; `too-long` records and doesn't throw; a service error for one language leaves the others written, records `failed`, then throws; a second run after the failure writes the missing track and clears the failure; a result for a replaced version is dropped and its file deleted; a lost condition is retried once; a course record touches each video with tracks and translates nothing.
+- Handler, with the Translate client and S3 mocked: translates every planned language and writes the tracks; skips a language an upload holds; removes tracks of a language the course dropped; `too-long` records and doesn't throw; a service error for one language leaves the others written, records `failed`, then throws; a second run after the failure writes the missing track and clears the failure; a result for a replaced version is dropped and its file deleted; a lost condition is retried once; a course record touches each video with tracks and translates nothing, both for a change of `captionLanguages` and for a change of `language` alone.
 - Duplicate delivery and reordered delivery.
 - Translate client: chunk sizes by bytes (including multi-byte text), the fallback on a line-count mismatch, empty texts, an unknown tag, the language-code map covering every `CAPTION_LANGUAGES` tag, and the local stand-in's output and failure markers.
 - Stack: the synthesised policy has `translate:TranslateText` and S3 access limited to the captions pattern, and no Comprehend, Transcribe or MediaConvert action.

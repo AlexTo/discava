@@ -95,14 +95,14 @@ The feature's matcher (`helpers/caption-translation-stream.ts` in core-table, re
 | Record | Passes when |
 |--------|-------------|
 | `contentItem` or `coursePreview` MODIFY | the tracks that aren't translated differ between the old and new image (ids, languages or which is the default), or `captionTranslationRequestedAt` differs |
-| `course` MODIFY | `captionLanguages` differs between the old and new image |
+| `course` MODIFY | `captionLanguages` or `language` differs between the old and new image (`language` decides `language-mismatch`, R-12) |
 
 So a title edit, a student-activity counter, the handler's own writes (translated tracks and the outcome) and every other change route nothing (FR-021, SC-008). The table's stream carries both images (`NEW_AND_OLD_IMAGES`, `common-constructs` `core-table.ts`).
 
 The handler derives everything from current data, as the router requires of a feature:
 
 - **A video record changed**: read the record and its course, call `planCaptionTranslations`, remove translated tracks that are no longer wanted, and translate what is missing (R-7).
-- **A course's languages changed**: read the course's curriculum (one query on the course's partition, no scan) and its preview, and for each video that has tracks set `captionTranslationRequestedAt` to now through a core-table helper (`requestCaptionTranslation`). Each of those writes is itself a stream record that passes the matcher, so each video becomes its own queue message. The handler never translates a whole course in one run.
+- **A course's caption languages or teaching language changed**: read the course's curriculum (one query on the course's partition, no scan) and its preview, and for each video that has tracks set `captionTranslationRequestedAt` to now through a core-table helper (`requestCaptionTranslation`). Each of those writes is itself a stream record that passes the matcher, so each video becomes its own queue message. The handler never translates a whole course in one run.
 
 This covers every trigger in the spec with one path:
 
@@ -111,7 +111,7 @@ This covers every trigger in the spec with one path:
 | New video, or replaced video (FR-004, FR-018) | transcribe-complete writes the new version's default track: the non-translated tracks changed |
 | Source captions replaced or removed (FR-017, FR-020) | instructor-api's attach or remove changes the non-translated tracks |
 | An uploaded track removed (FR-015) | the same |
-| Caption languages changed (FR-019) | the course record, then one touch per video |
+| Caption languages changed (FR-019), or the course's teaching language changed (R-12) | the course record, then one touch per video |
 | "Translate again" (FR-026) | instructor-api sets `captionTranslationRequestedAt` |
 
 **Rationale**:

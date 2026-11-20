@@ -19,7 +19,7 @@ A stage's limit that is lowered later doesn't shorten saved lists; the next save
 | `captionTracks[].source` | `'auto' \| 'uploaded' \| 'translated'` | `'translated'` is new |
 | `captionTracks[].sourceTrackId` | string, optional | Present on a translated track and only there: the `trackId` of the track it was made from |
 | `captionTranslation` | map, optional | `{ sourceTrackId: string, failures: { language: string, reason: 'failed' \| 'too-long' }[], updatedAt: string }`. Written only by the translation handler; cleared by "Translate again". Describes the source track named in it and is ignored once the default track is another |
-| `captionTranslationRequestedAt` | string (ISO time), optional | Set to ask for the record's translations to be worked out again: by the handler for each video when a course's languages change, and by "Translate again". Its value is never read; a change to it is what the stream matcher passes |
+| `captionTranslationRequestedAt` | string (ISO time), optional | Set to ask for the record's translations to be worked out again: by the handler for each video when a course's `captionLanguages` or `language` change, and by "Translate again". Its value is never read; a change to it is what the stream matcher passes |
 
 Unchanged: `captionTracksRev` still counts every write to `captionTracks` and is the condition that serialises writers; `captionsStatus` and `captionsPendingSince` describe automatic captioning only and are never written by translation.
 
