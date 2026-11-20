@@ -44,6 +44,7 @@ const course = {
   title: 'Course',
   status: 'draft',
   certificatesEnabled: true,
+  certificateCriteria: { version: 1, requireQuizPass: false },
   priceAmount: 0,
   priceCurrency: 'USD',
   createdAt: 'a',

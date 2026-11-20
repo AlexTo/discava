@@ -98,6 +98,17 @@ const enrolment = {
 };
 const course = { courseId: 'c1', title: 'Intro', certificatesEnabled: true };
 const user = { givenName: 'Erin', familyName: 'Nguyen' };
+const evaluation = {
+  met: true,
+  requirements: [],
+  assessment: {
+    criteriaVersion: 1,
+    requireQuizPass: false,
+    itemCount: 3,
+    assessedItemCount: 0,
+    assessedItems: [],
+  },
+};
 
 // The fake table enforces the transaction's all-or-nothing writes and the
 // certificate's conditional create.
@@ -111,6 +122,7 @@ const issue = (
     coreTable,
     enrolment,
     course,
+    evaluation,
     user,
     now: NOW,
     ...overrides,
@@ -130,6 +142,49 @@ describe('issueCertificate', () => {
       issuedAt: NOW.toISOString(),
     });
     expect(certificate?.certificateId).toMatch(/^[0-9A-Z]{16}$/);
+  });
+
+  it('stores the assessment as given, with no courseHours without durationHours', async () => {
+    const { service } = table();
+    const certificate = await issue(service);
+    expect(certificate?.assessment).toEqual(evaluation.assessment);
+    expect(certificate?.assessment).not.toHaveProperty('courseHours');
+  });
+
+  it('stores courseHours when the course states durationHours', async () => {
+    const { service } = table();
+    const certificate = await issue(service, {
+      course: { ...course, durationHours: 12 },
+    });
+    expect(certificate?.assessment).toEqual({
+      ...evaluation.assessment,
+      courseHours: 12,
+    });
+  });
+
+  it('writes nothing, and looks up no ID, when the criteria are not met', async () => {
+    const { service, rows, log } = table();
+    const query = vi.spyOn(
+      service.entities.certificate.query,
+      'byCertificateId',
+    );
+    expect(
+      await issue(service, { evaluation: { ...evaluation, met: false } }),
+    ).toBeUndefined();
+    expect(rows.certificate!.size).toBe(0);
+    expect(rows.notification!.size).toBe(0);
+    expect(log.transactions).toBe(0);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('returns an existing certificate even when the evaluation is unmet', async () => {
+    const { service, rows } = table();
+    const first = await issue(service);
+    const again = await issue(service, {
+      evaluation: { ...evaluation, met: false },
+    });
+    expect(again?.certificateId).toBe(first?.certificateId);
+    expect(rows.certificate!.size).toBe(1);
   });
 
   it('creates one certificate.issued notification with it, keyed by the stored ID and timed at issuedAt', async () => {

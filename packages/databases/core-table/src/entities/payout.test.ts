@@ -105,6 +105,7 @@ describe('payout', () => {
           courseId: 'c',
           title: 't',
           certificatesEnabled: true,
+          certificateCriteria: { version: 1, requireQuizPass: false },
           priceAmount: 0,
           priceCurrency: 'USD',
         })
@@ -118,6 +119,13 @@ describe('payout', () => {
           courseTitle: 't',
           completedAt: 'x',
           issuedAt: 'x',
+          assessment: {
+            criteriaVersion: 1,
+            requireQuizPass: false,
+            itemCount: 1,
+            assessedItemCount: 0,
+            assessedItems: [],
+          },
         })
         .params(),
     ] as Params[];

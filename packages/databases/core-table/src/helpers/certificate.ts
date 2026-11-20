@@ -9,6 +9,7 @@ import type { createCourseEntity } from '../entities/course.js';
 import type { createEnrolmentEntity } from '../entities/enrolment.js';
 import type { createUserEntity } from '../entities/user.js';
 import type { createCoreTableService } from '../service.js';
+import type { CertificateEvaluation } from './certificate-criteria.js';
 import {
   cancellationReasons,
   failedAt,
@@ -91,14 +92,16 @@ export interface IssueCertificateInput {
   >;
   course: Pick<
     Item<typeof createCourseEntity>,
-    'courseId' | 'title' | 'certificatesEnabled'
+    'courseId' | 'title' | 'certificatesEnabled' | 'durationHours'
   >;
+  // What the criteria say of this student (evaluateCertificateCriteria).
+  evaluation: CertificateEvaluation;
   user: Pick<Item<typeof createUserEntity>, 'givenName' | 'familyName'> | null;
   now: Date;
 }
 
-// Issues the student's certificate for a course once they've completed it,
-// and returns it; returns the one already issued if there is one, so it's safe
+// Issues the student's certificate for a course once they've completed it and
+// met its criteria (`evaluation.met`; none is issued otherwise), and returns it; returns the one already issued if there is one, so it's safe
 // to call again (a retried stream batch) or at the same time as another
 // caller. The certificate and its `certificate.issued` notification are one
 // transaction: the certificate's create is conditioned on the key not
@@ -108,6 +111,7 @@ export const issueCertificate = async ({
   coreTable,
   enrolment,
   course,
+  evaluation,
   user,
   now,
 }: IssueCertificateInput): Promise<Certificate | undefined> => {
@@ -125,6 +129,9 @@ export const issueCertificate = async ({
   const { data: existing } = await certificate.get(key).go();
   if (existing) {
     return existing;
+  }
+  if (!evaluation.met) {
+    return undefined;
   }
 
   let certificateId: string | undefined;
@@ -152,6 +159,12 @@ export const issueCertificate = async ({
           courseTitle: course.title,
           completedAt,
           issuedAt,
+          assessment: {
+            ...evaluation.assessment,
+            ...(course.durationHours !== undefined && {
+              courseHours: course.durationHours,
+            }),
+          },
         })
         .commit(),
       ...(await notificationWrites(coreTable, {

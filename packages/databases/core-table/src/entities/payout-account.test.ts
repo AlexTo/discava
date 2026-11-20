@@ -124,6 +124,13 @@ describe('payoutAccount', () => {
           courseTitle: 't',
           completedAt: 'x',
           issuedAt: 'x',
+          assessment: {
+            criteriaVersion: 1,
+            requireQuizPass: false,
+            itemCount: 1,
+            assessedItemCount: 0,
+            assessedItems: [],
+          },
         })
         .params(),
     ] as Params[];

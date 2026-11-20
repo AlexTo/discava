@@ -76,6 +76,7 @@ export const consistentTable = (): TableSnapshot => ({
       lastChildOrder: 1,
       priceAmount: 0,
       priceCurrency: 'USD',
+      certificateCriteria: { version: 1, requireQuizPass: false },
     },
   ],
   modules: [{ ...ids, ...shown, order: 1, lastChildOrder: 1 }],
