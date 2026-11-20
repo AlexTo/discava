@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Discava</h1>
+  <h1>🦉 Discava</h1>
   <h3>Teach, learn and grow, on a platform you own.</h3>
   <p>The serverless, AI-native Learning Management System.</p>
   <a href="https://opensource.org/licenses/Apache-2.0">
@@ -40,21 +40,24 @@
 ### 🎓 For learners
 
 - 🔍 Browse a course catalogue by category, or search with suggestions as you type
-- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout
-- 🎬 Adaptive HD video with captions, playback speeds and keyboard shortcuts
+- 💳 Enrol in free courses, or buy paid ones with Stripe Checkout, and ask for a refund if it isn't for you
+- 🎬 Adaptive HD video with auto-generated captions, playback speeds and keyboard shortcuts
 - 📝 Quizzes and assignment submissions, with late submissions flagged
 - 📊 Progress tracking that shows how far you are through each course
-- 🏆 Certificates when you complete a course
+- 🏆 Certificates when you complete a course, verifiable by anyone with the link
+- 💼 Add your certificate to LinkedIn in one click
 - ⭐ Rate and review the courses you take
-- 💬 Discuss lessons with your instructor and classmates
+- 💬 Discuss lessons with your instructor and classmates, and get notified of replies and accepted answers
 - 🔔 Notifications and 📣 announcements, so you never miss an update
 
 ### 📚 For instructors
 
 - 🎬 Build courses from video, text, files, quizzes and assignments
-- ✏️ Edit your course live and publish a public landing page for it, with a preview video and your instructor profile
-- 💰 Set a price, track your earnings and get paid through Stripe
-- 📊 An instructor dashboard with course analytics
+- ✏️ Edit your course live and publish a public landing page for it, with a preview video and your instructor profile, server-rendered so search engines can find it
+- 🏆 Choose whether your course awards certificates and what counts towards completion
+- 💰 Set a price, track your earnings and refunds, and get paid out through Stripe
+- 📊 An instructor dashboard with enrolment and activity trends, and the lessons where learners drop off
+- ✅ Grade assignment submissions and return feedback (coming soon to the instructor portal)
 - 💬 Answer lesson discussions and respond to reviews
 - 📣 Post announcements to your enrolled learners
 
@@ -62,7 +65,7 @@
 
 - 🗂️ Manage the category taxonomy that organises the catalogue
 - ⭐ Moderate course reviews from one admin portal
-- 💳 Connect your Stripe account from the admin portal, with no secrets to set by hand
+- 💳 Connect Stripe from the admin portal's Payments page, with no secrets to set by hand
 
 > [!TIP]
 > 🤖 **AI built in, not bolted on.** ✨ An AI assistant and personalised learning are part of the core experience, not a paid add-on. Coming soon.
