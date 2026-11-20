@@ -41,6 +41,8 @@ import {
   ReorderLessonsOutputSchema,
   RestoreLessonInputSchema,
   RestoreLessonOutputSchema,
+  SetLessonFreePreviewInputSchema,
+  SetLessonFreePreviewOutputSchema,
   UpdateLessonInputSchema,
   UpdateLessonOutputSchema,
 } from '../schema/index.js';
@@ -371,6 +373,73 @@ export const hideLesson = courseInstructorProcedure(HideLessonInputSchema)
           coreTable,
           key,
           'Restore the lesson before hiding it',
+        ),
+    );
+
+    // Transactions don't return the written attributes.
+    return getLessonOrThrow(coreTable, key);
+  });
+
+// Marks or unmarks an ordinary lesson as a free preview. Being marked is not
+// being open: whether anyone can open the lesson also depends on the course
+// being published and the lesson and its module being shown (see
+// `isOpenFreePreview` in `@discava/core-table`), so the mark is independent
+// of visibility and can be set in a draft course or on a hidden lesson. Doesn't
+// touch the course's `updatedAt` or any instructor record. Unmarking removes
+// the attribute; `false` is never stored.
+export const setLessonFreePreview = courseInstructorProcedure(
+  SetLessonFreePreviewInputSchema,
+)
+  .output(SetLessonFreePreviewOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { courseId, moduleId, lessonId, freePreview } = input;
+    const key = { courseId, moduleId, lessonId };
+
+    const existing = await getLessonOrThrow(coreTable, key);
+    requireNotArchived(
+      existing,
+      'Restore the lesson before changing its free preview',
+    );
+    await requireAncestorsNotArchived(coreTable, { courseId, moduleId });
+    if (freePreview && existing.kind === 'assignment') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: "Assignment lessons can't be free previews",
+      });
+    }
+    if ((existing.freePreview === true) === freePreview) {
+      return existing;
+    }
+
+    // Conditioned on the module still being active and the lesson still not
+    // archived, and, when marking, on it still being an ordinary lesson.
+    await writeUnderActiveAncestors(
+      coreTable,
+      { courseId, moduleId },
+      (entities) => [
+        freePreview
+          ? entities.lesson
+              .patch(key)
+              .set({ freePreview: true })
+              .where((attr, op) =>
+                [
+                  op.notExists(attr.archivedAt),
+                  op.eq(attr.kind, 'lesson'),
+                ].join(' AND '),
+              )
+              .commit()
+          : entities.lesson
+              .patch(key)
+              .remove(['freePreview'])
+              .where((attr, op) => op.notExists(attr.archivedAt))
+              .commit(),
+      ],
+      () =>
+        throwForLessonState(
+          coreTable,
+          key,
+          'Restore the lesson before changing its free preview',
         ),
     );
 

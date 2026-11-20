@@ -89,6 +89,7 @@ export interface TableSnapshot {
     | 'moduleId'
     | 'lessonId'
     | 'kind'
+    | 'freePreview'
     | 'order'
     | 'visibility'
     | 'archivedAt'

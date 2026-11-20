@@ -100,6 +100,7 @@ import {
   publishLesson,
   reorderLessons,
   restoreLesson,
+  setLessonFreePreview,
   updateLesson,
 } from './procedures/lesson.js';
 import {
@@ -220,6 +221,7 @@ export const appRouter = router({
     delete: deleteLesson,
     publish: publishLesson,
     hide: hideLesson,
+    setFreePreview: setLessonFreePreview,
     reorder: reorderLessons,
     createQuizAssignment,
     createUploadAssignment,

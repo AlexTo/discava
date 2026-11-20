@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { filterEffectivelyVisible, isShown } from './curriculum.js';
+import {
+  filterEffectivelyVisible,
+  isOpenFreePreview,
+  isShown,
+} from './curriculum.js';
 
 const visible = { visibility: 'visible' as const };
 const hidden = { visibility: 'hidden' as const };
@@ -14,6 +18,38 @@ describe('isShown', () => {
     expect(isShown(visible)).toBe(true);
     expect(isShown(hidden)).toBe(false);
     expect(isShown(archived)).toBe(false);
+  });
+});
+
+describe('isOpenFreePreview', () => {
+  const open = {
+    course: { status: 'published' },
+    module: visible,
+    lesson: { ...visible, kind: 'lesson' as const, freePreview: true },
+  };
+
+  it('is true for a marked, shown lesson of a published course', () => {
+    expect(isOpenFreePreview(open)).toBe(true);
+  });
+
+  it.each([
+    ['a draft course', { course: { status: 'draft' } }],
+    ['an archived course', { course: { status: 'archived' } }],
+    ['a hidden module', { module: hidden }],
+    ['an archived module', { module: archived }],
+    ['a hidden lesson', { lesson: { ...open.lesson, ...hidden } }],
+    ['an archived lesson', { lesson: { ...open.lesson, ...archived } }],
+    ['an unmarked lesson', { lesson: { ...visible, kind: 'lesson' as const } }],
+    [
+      'a lesson with freePreview false',
+      { lesson: { ...open.lesson, freePreview: false } },
+    ],
+    [
+      'an assignment lesson carrying the mark',
+      { lesson: { ...open.lesson, kind: 'assignment' as const } },
+    ],
+  ])('is false for %s', (_name, override) => {
+    expect(isOpenFreePreview({ ...open, ...override })).toBe(false);
   });
 });
 

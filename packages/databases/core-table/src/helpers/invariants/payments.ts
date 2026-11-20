@@ -220,7 +220,9 @@ export const checkEnrolmentOrderMatches = (
 // In a priced course, an enrolment with no order was made before the course
 // was priced (within ten seconds, for the write that priced it), or restored
 // for free after a refund when the course was free again. Anything else is
-// someone in a paid course without paying.
+// someone in a paid course without paying. Content of a priced course is read
+// without an enrolment only through open preview lessons (`isOpenFreePreview`),
+// which create no record, so this check has no exception.
 const PRICED_GRACE_MS = 10_000;
 export const checkPaidCourseEnrolmentPaid = (
   snapshot: TableSnapshot,

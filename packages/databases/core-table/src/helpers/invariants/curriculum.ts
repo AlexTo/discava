@@ -378,6 +378,39 @@ export const checkAssignmentLessonShape = (
   return [...fromLessons, ...fromItems];
 };
 
+// A lesson is marked as a free preview by `lesson.setFreePreview`, which sets
+// `freePreview` to true on a lesson of kind `lesson` and removes the attribute
+// to unmark it. So a stored `false`, or a mark on an assignment lesson, was
+// written some other way.
+export const checkFreePreviewOnOrdinaryLesson = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.lessons
+    .filter(({ freePreview }) => freePreview !== undefined)
+    .flatMap(({ courseId, moduleId, lessonId, kind, freePreview }) => {
+      const record = { courseId, moduleId, lessonId };
+      return [
+        ...(freePreview === true
+          ? []
+          : [
+              violation(
+                'free-preview-on-ordinary-lesson',
+                record,
+                `lesson stores freePreview ${String(freePreview)}, not true`,
+              ),
+            ]),
+        ...(kind === 'lesson'
+          ? []
+          : [
+              violation(
+                'free-preview-on-ordinary-lesson',
+                record,
+                `${kind} lesson is marked as a free preview`,
+              ),
+            ]),
+      ];
+    });
+
 export const CURRICULUM_CHECKS = [
   { name: 'course-has-instructor', check: checkCourseHasInstructor },
   {
@@ -394,4 +427,8 @@ export const CURRICULUM_CHECKS = [
   },
   { name: 'child-order-claimed', check: checkChildOrderClaimed },
   { name: 'assignment-lesson-shape', check: checkAssignmentLessonShape },
+  {
+    name: 'free-preview-on-ordinary-lesson',
+    check: checkFreePreviewOnOrdinaryLesson,
+  },
 ] as const satisfies readonly Check[];

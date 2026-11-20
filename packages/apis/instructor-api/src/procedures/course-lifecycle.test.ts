@@ -646,6 +646,7 @@ describe('viewCourse', () => {
           lessons: [
             {
               ...lesson,
+              freePreview: false,
               contentItems: [
                 contentItem('item-1', 1),
                 contentItem('item-2', 2),
