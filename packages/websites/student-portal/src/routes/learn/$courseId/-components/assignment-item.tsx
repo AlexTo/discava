@@ -146,8 +146,13 @@ export function AssignmentItem({
   );
   const locked = submission?.status === 'returned';
   const requested = submission?.status === 'resubmission_requested';
-  // Newest first: the latest round is shown in full, the rest are collapsed.
-  const [latestFeedback, ...earlierFeedback] = submission?.feedback ?? [];
+  // Newest first. A returned or requested state shows the latest round in
+  // full; otherwise (submitted again) every round stays under "Earlier
+  // feedback", so a request is not lost once the student resubmits.
+  const rounds = submission?.feedback ?? [];
+  const showsLatest = requested || locked;
+  const latestFeedback = showsLatest ? rounds[0] : undefined;
+  const earlierFeedback = showsLatest ? rounds.slice(1) : rounds;
   const amended = submission?.feedback.some(
     (round) => round.kind === 'amended',
   );

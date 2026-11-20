@@ -360,6 +360,9 @@ test.describe('submitting to an upload assignment', () => {
       await expect(item.getByText('Version 2')).toBeVisible({
         timeout: 30_000,
       });
+      // Waiting for grading again, with the request still reachable.
+      await item.getByRole('button', { name: /Earlier feedback/ }).click();
+      await expect(item.getByText('Cite your sources')).toBeVisible();
       const current =
         await instructor.instructor.assignmentSubmission.get.query(student);
       await instructor.instructor.assignmentSubmission.return.mutate({

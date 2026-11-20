@@ -818,6 +818,36 @@ describe('AssignmentItem', () => {
       expect(submitButton()).toBeDisabled();
     });
 
+    it('keeps the request under Earlier feedback once the student resubmits', async () => {
+      render({
+        done: true,
+        handlers: {
+          'assignment.mySubmission': () =>
+            submission({
+              version: 2,
+              feedback: [
+                {
+                  kind: 'resubmission_requested',
+                  feedback: doc('Cite your sources'),
+                  version: 1,
+                  givenAt: '2026-11-15T09:00:00.000Z',
+                },
+              ],
+            }),
+        },
+      });
+
+      expect(await screen.findByText(/^Submitted/)).toBeVisible();
+      expect(
+        screen.queryByText('Your instructor asked you to resubmit'),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText('Cite your sources')).not.toBeInTheDocument();
+      await userEvent.click(
+        screen.getByRole('button', { name: /Earlier feedback/ }),
+      );
+      expect(screen.getByText('Cite your sources')).toBeVisible();
+    });
+
     it('lists earlier rounds collapsed, newest first', async () => {
       render({
         done: true,
