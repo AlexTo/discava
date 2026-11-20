@@ -1,0 +1,84 @@
+---
+title: Earnings and payouts
+description: How an instructor's earnings are calculated, the Earnings page, setting up a payout account, when payouts are sent, and what a change of payment account does.
+sidebar:
+  order: 6
+---
+
+import Link from '@components/link.astro';
+
+When a student buys your course, your share is recorded within seconds and paid to you through Stripe.
+
+## How earnings are calculated
+
+For each sale:
+
+> net = amount paid − platform fee
+
+- The **platform fee** is a percentage of the amount paid, set by the platform (20% unless it was changed). A sale keeps the fee it was recorded with.
+- If a course has **several instructors**, they share each sale equally.
+- A **refund** takes back your share of the refunded amount, and returns the fee on it. A full refund brings the sale to zero.
+
+Each currency is kept apart. Nothing is converted.
+
+## The Earnings page
+
+**Earnings** in the instructor portal has four parts.
+
+**Balance**, per currency:
+
+| Figure | Meaning |
+| --- | --- |
+| **On hold** | Earned, but still inside the hold period. The page shows the next release date |
+| **Waiting for account setup** | Past the hold period, but you have no active payout account |
+| **Ready** | Will go out with the next payout |
+
+**Payout account**: its status and the one thing to do about it.
+
+**Report**: pick a month, or a From and To date up to 366 days apart. For each course it shows the number of orders, gross, discounts, refunds, fee and net, with a total per currency. Days are counted in UTC. **Show orders** on a course lists each sale and refund with an order reference. It never shows who bought.
+
+**Payouts**: each payout's date, amount and status.
+
+## Setting up payouts
+
+Choose **Set up payouts**. Stripe asks for your identity and bank details on its own pages, then sends you back.
+
+| Status | What to do |
+| --- | --- |
+| **Not set up** | Set up payouts |
+| **In progress** | Continue setup: Stripe's form isn't finished |
+| **Active** | Nothing. You can open your Stripe dashboard from here |
+| **Restricted** | Fix account: Stripe needs something more from you |
+
+Earnings are recorded whether or not you have set up payouts. They wait until you do.
+
+## When you are paid
+
+- Each sale is **held** for a number of days set by the platform (14 unless it was changed), so a refund in that time never has to be taken back from you.
+- A payout run happens **once a day**. It sends everything that is ready, one payout per currency.
+- A balance below the **minimum payout** (10.00 unless it was changed) waits for a later run.
+
+A payout shows as **Pending** while it is being sent, **Sent** once Stripe has accepted it, or **Failed** with a reason if Stripe refused it. A failed payout's earnings go back into your balance and are tried again.
+
+## Refunds after you were paid
+
+A refund made after its sale was paid out leaves a **negative balance**. It is deducted from your next payout. Nothing is taken from your bank account.
+
+## Held earnings
+
+If the platform changes the Stripe account it takes payments with, earnings from before the change that hadn't been paid show as **Held**: "Earned before the platform changed its payment account. Contact the platform to be paid." Your payout account shows as not set up, because it belonged to the old account. Set it up again for sales from now on.
+
+## For administrators
+
+- Payouts need **Connect** enabled on the platform's Stripe account. Without it, instructors are told payouts can't be set up.
+- A restricted key also needs to manage connected accounts, account links and transfers, in addition to what <Link path="guides/payments">taking payments</Link> needs.
+- The fee, the hold period and the minimum payout are set per stage. See <Link path="deploy/configuration">Stage configuration</Link>.
+- Switching Stripe account or mode holds every instructor's unpaid earnings. Let the daily run pay what is ready first, and pay held earnings by hand.
+
+## Limitations
+
+- No tax forms, invoices or tax calculation.
+- No currency conversion.
+- Disputes and chargebacks don't appear in the report.
+
+<Link path="design/instructor-payouts">Instructor payouts</Link> describes how it works.

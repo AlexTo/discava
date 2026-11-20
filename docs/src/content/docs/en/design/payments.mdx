@@ -1,0 +1,131 @@
+---
+title: Payments
+description: How a paid course is bought with Stripe Checkout, the order record, the webhook that delivers the course exactly once, refunds, and the administrator's Stripe connection.
+sidebar:
+  order: 10
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013315-stripe-checkout/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013315-stripe-checkout/)
+
+## The rule
+
+**A priced course is entered only by a paid order, and only Stripe's signed confirmation makes an order paid.** Nothing a browser sends, including the return from Stripe's page, enrols anyone. core-api's `course.enrol` refuses a priced course ("This course must be purchased"), and the webhook is the only caller of `settleOrderPaid`.
+
+## Prices
+
+A course has `priceAmount` and `priceCurrency`. The amount is an integer in the currency's smallest unit (1999 is 19.99), so no price is ever a floating point number. `0` is free, and every new course starts free.
+
+- The supported currencies are USD, EUR, GBP, AUD and CAD. All have two decimals. A currency with none or three isn't supported.
+- A price above zero is between 1.00 and 10,000.00.
+- An instructor sets the price with instructor-api's `setCoursePrice`, in any course status. Setting a price above zero needs an active Stripe connection. Going back to free never does.
+- A price change applies to new purchases. It never touches an order or an enrolment: students already enrolled keep their access.
+
+The rules and the formatting live in `@discava/common-web-utils/price`, shared by the portals and the APIs.
+
+## The order
+
+An `order` is one attempt by one student to buy one course. It copies the course title, the amount and the currency when it is created, along with the Stripe account and mode it was started under.
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | A checkout is open |
+| `paid` | Stripe confirmed the payment and the student is enrolled |
+| `expired` | The checkout was abandoned, or creating it failed |
+| `refunded` | The whole amount went back to the student |
+
+`helpers/order.ts` in core-table is the only writer of `order` and of an enrolment's `orderId`. Every move is a conditional write on the status it comes from, so a repeated or racing call changes nothing. None of it calls Stripe: the caller does that before or after.
+
+## Starting a checkout
+
+core-api's `payment.checkout` takes only a course ID. The amount and currency are the course's, never the input's.
+
+1. It refuses a course that isn't published, a free course, and a student who is already enrolled.
+2. If the student has a `pending` order for the course with more than five minutes left, it returns that order's page, so choosing **Buy now** twice makes one order.
+3. Otherwise `startOrder` creates a `pending` order in one transaction that also checks the Stripe connection is `active` and raises the connection's `latestCheckoutExpiresAt` to cover the new checkout.
+4. It creates a Stripe Checkout session with the order ID as the idempotency key, card payments only, and the order, student and course IDs in the metadata. The session's address is stored on the order and returned.
+
+A checkout lives for one hour. If Stripe can't be reached, the order is expired and the student sees "Couldn't start the payment".
+
+`payment.available` tells the student portal whether a purchase can start: only that the connection is active, nothing about the account or the key.
+
+## The webhook
+
+Stripe posts to `POST /stripe/webhook`, an API Gateway API of its own in the `Payments` stack, with its own WAF, throttling and domain. The handler is in `packages/events/src/payments/`.
+
+- **The signature is the only gate.** The message is verified against its exact bytes with the stored signing secret, and refused with 400 if it is older than five minutes or doesn't verify. With nothing connected there is no secret, so every message fails.
+- **400** means nothing changed. **500** means handling failed and Stripe should retry. **200** covers handled, duplicate, unmatched and ignored events.
+
+| Event | What happens |
+| --- | --- |
+| `checkout.session.completed` | The order is settled, or refunded if it can't be delivered |
+| `checkout.session.expired` | A `pending` order becomes `expired` |
+| `charge.refunded` | The refund is recorded against the order |
+
+These three are the only events registered with Stripe.
+
+### Delivering exactly once
+
+`settleOrderPaid` moves the order from `pending` to `paid` and gives the student their enrolment in **one transaction**, which also checks the course is still published. The enrolment is created, or restored if the student had a `dropped` one. Stripe delivers at least once and in any order, so the same confirmation arriving five times at once still leaves one paid order and one enrolment: every call after the first finds the order is no longer `pending`.
+
+### A payment that can't be delivered
+
+The money was taken, so it is never kept. The webhook asks Stripe for a full refund, with an idempotency key built from the order ID, and marks the order `refunded` with a reason:
+
+| Reason | When |
+| --- | --- |
+| `duplicate` | The student is already enrolled |
+| `unavailable` | The course is no longer published |
+| `mismatch` | The session's amount, currency or IDs differ from the order's |
+
+A paid session, expired session or refund whose order isn't in the table is logged as an error ("Paid session for an unknown order", "Refund for an unknown order") and answered 200. An operator should watch for these lines: they mean Stripe holds a payment Discava has no record of.
+
+## Refunds
+
+A refund starts in Stripe, today from the Stripe dashboard. `charge.refunded` carries the total refunded so far, and `refundOrder` applies it:
+
+- **Below the order's amount**, only `refundedAmount` rises. The student keeps access.
+- **At the order's amount**, one transaction moves the order to `refunded` and sets the enrolment to `dropped`, but only if the enrolment still names this order. A refund notice delayed past a second purchase can't end the new enrolment.
+
+A dropped enrolment keeps its progress and completions. The student can come back:
+
+- **By buying again.** Settling the new order restores the enrolment, as `completed` if they had finished the course, with their progress.
+- **By enrolling, if the course is now free.** `course.enrol` calls `restoreFreeEnrolment`, which restores the enrolment and removes its `orderId`. No order is written.
+
+## The Stripe connection
+
+Stripe isn't configured at deploy time. An administrator pastes a secret key on the admin portal's **Payments** page.
+
+- **`paymentConnection`** is one record holding the non-secret facts: status, test or live mode, the account's ID and name, the key's last four characters and the registered webhook address.
+- **The key and the webhook signing secret** live in Secrets Manager. admin-api's dedicated `PaymentsConnect` function is the only code that can write them. The checkout function reads the key, the webhook reads both, and neither can write.
+- **`paymentChange`** is an append-only audit row for every attempt: who, when, which account and the key's last four characters. It never holds a key or Stripe's error text.
+
+Saving a key checks its shape, asks Stripe whose it is, registers the stage's webhook address for the three events, and stores the key and the signing secret Stripe returns.
+
+| Save | What it does |
+| --- | --- |
+| **Rotation** (same account, same address) | Replaces only the key. The registration and signing secret stay, so open checkouts still complete |
+| **Switch** (another account or mode, or a new address) | Takes a lease, registers with the new key, stores both secrets, then removes the old registration |
+| **Disconnect** | Takes a lease, marks the record `disconnected` and clears the secrets |
+
+A switch or disconnect takes a two-minute **lease**: the record's status becomes `changing`, which checkout and pricing treat as not connected. The lease is refused while a checkout may still be open ("Checkouts are open until …"), so no payment is in flight while the secrets are replaced. A rotation takes no lease, but is conditioned on the record's `revision`, so it loses cleanly to a concurrent switch. A change that fails puts the record and the secrets back.
+
+## Invariants
+
+`helpers/invariants/payments.ts` checks the rules that span records, after every end-to-end scenario: an order's fields match its status, a paid order has its enrolment, and an enrolment's `orderId` names a paid order of the same student and course.
+
+## Local development
+
+The event runner includes a Stripe stand-in (`packages/events/src/local/stripe-stand-in.ts`): Stripe's API, a hosted checkout page with **Pay**, **Decline card** and **Cancel**, and signed webhook deliveries to `/stripe/webhook` on port 2024. Connect it as Carol with the key `sk_test_local`. The key is kept in the git-ignored `tmp/local-dev/secrets/` in place of Secrets Manager.
+
+Controls under `/stripe/test/` drive what a real Stripe account would: `refund`, `replay` (deliver a confirmation again), `expire`, `forge` (a wrongly signed message) and `endpoints`.
+
+## Limitations
+
+- A student can't ask for a refund in the portal, or leave a course. Both are specified and not built yet. Refunds are made in the Stripe dashboard.
+- No coupons at checkout. The coupon records and price function exist in core-table, and nothing uses them yet.
+- Card payments only, with no tax handling and no currency conversion.
+- A refund doesn't notify the student.
+
+<Link path="design/instructor-payouts">Instructor payouts</Link> covers what happens to the money after an order is paid.

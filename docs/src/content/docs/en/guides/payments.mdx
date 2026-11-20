@@ -1,0 +1,84 @@
+---
+title: Paid courses and payments
+description: Connecting Stripe as an administrator, pricing a course as an instructor, buying one as a student, and refunds.
+sidebar:
+  order: 5
+---
+
+import Link from '@components/link.astro';
+
+A course is free unless its instructor gives it a price. Payments are taken by Stripe, into a Stripe account the platform's administrator connects.
+
+## For administrators: connecting Stripe
+
+Nothing about Stripe is set when Discava is deployed. Until an administrator connects an account, every course is free and no price can be set.
+
+Open **Payments** in the admin portal and paste a Stripe secret key:
+
+- A **secret key** (it starts `sk_`), from Developers, then API keys, in the Stripe dashboard.
+- Or a **restricted key** (it starts `rk_`) with write access to Checkout Sessions and Webhook Endpoints, and read access to Accounts and Events.
+
+Choose **Connect Stripe**. Discava checks the key, registers its own confirmation address (a webhook endpoint) in your Stripe account, and stores the key. You never create a webhook or copy a signing secret by hand.
+
+The page then shows **Connected**, the account's name, the last four characters of the key, and **Test mode** or **Live mode**. The mode comes from the key. In test mode students pay with Stripe's test cards and are enrolled without real money moving, so use a live key before real students arrive.
+
+To pay instructors, the Stripe account also needs **Connect** enabled. See <Link path="guides/earnings-and-payouts">Earnings and payouts</Link>.
+
+### Replacing the key
+
+**Replace key** takes a new key.
+
+- **A new key for the same account** is a rotation. Payments carry on, and checkouts already open still complete.
+- **A key for another account, or the other mode,** is a switch: payments go to that account from now on. A switch waits until no checkout is open. A checkout lasts up to an hour, and the page tells you when the last one ends. Before switching, check the old account's webhook deliveries in the Stripe dashboard: a confirmation Stripe hasn't delivered yet can't be accepted afterwards.
+
+A switch also affects instructors' unpaid earnings. Read <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> first.
+
+### Disconnecting
+
+**Disconnect** stops new purchases: students see "Payments are unavailable right now" and instructors can't set a price. Prices already set remain, and students who paid keep their access. Like a switch, it waits for open checkouts.
+
+### The change history
+
+The page lists the latest changes: who made each one, when, and how it ended. It never shows a key.
+
+"Confirmation address changed" means the stage's webhook address is no longer the one registered with Stripe, for example after adding a custom domain. Save the key again to register the new one.
+
+### Refunding a student
+
+Refund the payment in the Stripe dashboard.
+
+- **A full refund** ends the student's enrolment within seconds. Their progress is kept.
+- **A partial refund** leaves their access as it is.
+
+A student whose payment can't be delivered is refunded automatically: the course was unpublished while they were paying, or they were already enrolled.
+
+## For instructors: pricing a course
+
+In the course's settings (My Courses, then the course), enter a price and pick a currency: USD, EUR, GBP, AUD or CAD. Enter `0` for free, or an amount from 1.00 to 10,000.00.
+
+- You can change the price whenever you like. The new price applies to new purchases.
+- Students who are already enrolled keep their access, whether they paid a different price or enrolled while the course was free.
+- If you see "Payments aren't set up yet; ask an administrator", Stripe isn't connected. You can still set a course back to free.
+
+The price shows on the course's public page and on its catalogue card, or "Free".
+
+## For students: buying a course
+
+A priced course shows its price and **Buy now** in place of the enrol button. If you aren't signed in, it asks you to sign in first.
+
+1. **Buy now** takes you to Stripe's payment page, which shows the course and the amount.
+2. After you pay, you return to the course. It says "Confirming your payment", then you are enrolled, usually within seconds.
+3. If you cancel, you return to the course with "Payment cancelled" and nothing is charged. Choosing Buy now again within the hour reopens the same payment.
+
+You are charged once however many times you click.
+
+If your payment is refunded in full, your enrolment ends and the course page offers Buy now again. Your progress is kept: buy the course again and you carry on where you stopped. If the course has become free in the meantime, enrolling brings your progress back too.
+
+## Limitations
+
+- Cards only.
+- You can't request a refund or leave a course from the student portal yet. Ask the platform's administrator.
+- No discount codes yet.
+- No tax is calculated or collected.
+
+<Link path="design/payments">Payments</Link> describes how it works.

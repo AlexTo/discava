@@ -80,6 +80,8 @@ export default defineConfig({
             'guides/notifications',
             'guides/lesson-discussions',
             'guides/reviews',
+            'guides/payments',
+            'guides/earnings-and-payouts',
           ],
         },
         {
