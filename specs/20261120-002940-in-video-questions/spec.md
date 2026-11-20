@@ -12,6 +12,18 @@
 
 **Design pages**: [`design/quizzes`](../../docs/src/content/docs/en/design/quizzes.mdx) (gains a "Questions in videos" section) and [`design/video-player`](../../docs/src/content/docs/en/design/video-player.mdx) (gains a "Questions" section)
 
+## Clarifications
+
+### Session 2026-11-20
+
+Resolved without asking, using the recommended defaults below (non-interactive run). Each is a product choice the maintainer should confirm; they are listed on the pull request.
+
+- Q: When a learner answers the same video question more than once, which answer is recorded and counted for the instructor? → A: Only the first. It measures what the learner recalled from the video, it can't be improved by trying each option in turn, and it makes a recorded answer something that never changes. **Try again** is practice, checked in the browser against the key the learner was already shown, and isn't recorded (FR-018, FR-026).
+- Q: Is a skip recorded, and is a skipped question asked again? → A: A skip isn't recorded. The question isn't asked again on the same visit to the page, is asked again on the next visit, and can be opened from its marker at any time. Instructors don't get skip counts in this version (FR-010, Assumptions).
+- Q: Does answering a video question count as the learner having used the video, and as activity in the course? → A: Yes to both. An answer is student data, so the video can no longer be permanently deleted, the same rule every other item follows, and the learner counts as active that day. It still changes nothing about completion, progress or certificates (FR-024, FR-029).
+- Q: How do instructor edits treat answers already recorded, and an answer being submitted as the edit lands? → A: As quizzes do. Recorded answers are kept and never regraded. A change to the key or explanation alone is invisible. A change to what the learner sees (prompt, kind, options) makes a submission of the old version record nothing and show the updated question. The check is per question, so editing one question never disturbs a learner answering another (FR-030 to FR-033).
+- Q: Does seeking past a question force it on a first viewing, and what happens in an archived course? → A: Seeking never forces a question, as the issue proposes; the markers show what was passed. In an archived course, which is read-only, videos play without their questions (FR-014, Edge Cases).
+
 ## User Scenarios & Testing *(mandatory)*
 
 Today a video item only plays. A quiz is a separate item in the lesson, which a learner can scroll past. This feature lets an instructor put questions on a video itself: at chosen moments, and straight after it ends. The player stops at each one, the learner answers or skips, sees the right answer and the explanation, and the video carries on. Nothing about these questions is graded towards anything: they exist to make the learner recall what they just watched.
