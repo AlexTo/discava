@@ -152,11 +152,11 @@
           "target": "dev"
         },
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "s3mock"
         },
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "elasticmq"
         }
       ],

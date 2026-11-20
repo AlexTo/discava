@@ -7,7 +7,13 @@
       "path": "./packages/databases/core-table"
     },
     {
-      "path": "./packages/common/scripts"
+      "path": "./packages/tooling/agent"
+    },
+    {
+      "path": "./packages/tooling/deploy"
+    },
+    {
+      "path": "./packages/tooling/local-dev"
     },
     {
       "path": "./packages/common/constructs"

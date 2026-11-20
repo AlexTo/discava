@@ -1,0 +1,116 @@
+{
+  "name": "@discava/tooling-deploy",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/tooling/deploy/src",
+  "projectType": "library",
+  "tags": [],
+  "metadata": {
+    "generator": "ts#project"
+  },
+  "targets": {
+    "reindex-search": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/infra/reindex-search.ts {args.stage}",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "rebuild-analytics": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/analytics/rebuild-analytics.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "seed-categories": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/seed-categories/seed.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "test-setup-stage": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/scripts/setup-stage.sh",
+        "{projectRoot}/src/setup-stage.test.ts",
+        "{projectRoot}/vitest.setup-stage.config.mts",
+        {
+          "input": "production",
+          "projects": ["@discava/common-infra-config"]
+        },
+        "{workspaceRoot}/pnpm-lock.yaml"
+      ],
+      "options": {
+        "command": "vitest run --config vitest.setup-stage.config.mts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "assemble": {
+      "dependsOn": ["compile"]
+    },
+    "build": {
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
+      ]
+    },
+    "compile": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/tsc"],
+      "options": {
+        "command": "tsc --build tsconfig.lib.json",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome format {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome format --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "format",
+        {
+          "projects": ["@discava/source"],
+          "target": "license-check"
+        }
+      ],
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome lint {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome check --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "test": {
+      "dependsOn": ["^build", "test-setup-stage"],
+      "inputs": ["default", "^default"]
+    }
+  }
+}

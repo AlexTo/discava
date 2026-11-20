@@ -11,6 +11,7 @@ packages:
   - packages/*
   - packages/databases/*
   - packages/common/*
+  - packages/tooling/*
   - packages/apis/*
   - packages/websites/*
   - docs

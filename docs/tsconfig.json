@@ -19,9 +19,6 @@
       "@discava/core-table": [
         "../packages/databases/core-table/src/index.ts"
       ],
-      "@discava/common-scripts": [
-        "../packages/common/scripts/src/index.ts"
-      ],
       "@discava/common-constructs": [
         "../packages/common/constructs/src/index.ts"
       ],

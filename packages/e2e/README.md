@@ -76,7 +76,7 @@ The tests run against whatever local data there is, and never reset it:
 - **Anything that writes** uses a new user and unique names, so scenarios don't see each other's data or yours, and can run again without cleaning up.
 - **The fixed test users** (Alice, Bob, Dan, Carol) are shared with whoever uses the local stack, so scenarios only read as them.
 
-Locally, each run leaves its users and courses behind. `pnpm nx run @discava/common-scripts:reset-local-data` clears everything (stop `pnpm dev` first).
+Locally, each run leaves its users and courses behind. `pnpm nx run @discava/tooling-local-dev:reset-local-data` clears everything (stop `pnpm dev` first).
 
 ## Table invariants
 

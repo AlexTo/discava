@@ -10,7 +10,7 @@ name: Archive Specs
 # pull request (closing it unmerged keeps the spec live).
 # Needs the repository setting "Allow GitHub Actions to create and approve
 # pull requests". The rules are in
-# packages/common/scripts/src/agent-issues/archive-specs.ts.
+# packages/tooling/agent/src/agent-issues/archive-specs.ts.
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
           git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
 
       - name: Open the pull requests
-        run: pnpm nx run @discava/common-scripts:archive-specs
+        run: pnpm nx run @discava/tooling-agent:archive-specs
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
