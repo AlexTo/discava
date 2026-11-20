@@ -12,3 +12,11 @@ export type RouterProviderContext = {
   runtimeConfig?: ReturnType<typeof useRuntimeConfig>;
   auth?: ReturnType<typeof useAuth>;
 };
+
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    // Set when a learner has just enrolled: the lesson page and the course
+    // home then say so.
+    enrolled?: boolean;
+  }
+}

@@ -73,14 +73,16 @@ test('a student buys a paid course and starts learning', async ({
     await student.getByRole('button', { name: 'Pay', exact: true }).click();
     await student.waitForURL(/checkout=success/);
     // The webhook usually lands before the redirect does, so the page loads
-    // already enrolled; when it lands later, the page waits and opens the
-    // enrolled dialog. Either way the student can start learning.
-    await expect(student.getByText('Enrolled', { exact: true })).toBeVisible({
-      timeout: 30_000,
-    });
-    await screenshot(student, 'enrolled-after-payment');
-    await student.getByRole('link', { name: 'Start learning' }).click();
-    await student.waitForURL(/\/learn\/[0-9a-f-]+\/home$/);
+    // already enrolled; when it lands later, the page waits and the
+    // lesson opens once it has. Either way the student lands in it.
+    await student.waitForURL(
+      /\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/,
+      {
+        timeout: 30_000,
+      },
+    );
+    await expect(student.getByText("You're enrolled in")).toBeVisible();
+    await screenshot(student, 'landed-after-purchase');
   });
 
   await test.step('a full refund ends the enrolment and Buy now returns', async () => {

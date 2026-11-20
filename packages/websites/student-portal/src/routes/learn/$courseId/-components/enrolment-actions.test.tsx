@@ -11,6 +11,20 @@ import {
 } from '../../../../test/render-with-core-api';
 import { CoursePage } from './course-page';
 
+// There's no route tree in these renders; navigation is a spy.
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, { useNavigate: () => navigate });
+});
+
+afterEach(() => navigate.mockReset());
+
+const START = {
+  to: '/learn/$courseId/start',
+  params: { courseId: 'course-1' },
+};
+
 const course = {
   courseId: 'course-1',
   title: 'Linear Algebra',
@@ -87,21 +101,15 @@ describe('EnrolmentActions', () => {
 
     await user.click(await enrolButton());
 
-    const dialog = await screen.findByRole('dialog', {
-      name: "You're enrolled!",
-    });
-    expect(
-      within(dialog).getByRole('link', { name: 'Start learning' }),
-    ).toHaveAttribute('href', '/learn/course-1/home');
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(START));
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(calls).toContainEqual({
       path: 'course.enrol',
       input: { courseId: 'course-1' },
     });
 
-    // Behind the dialog, the card now offers to start rather than enrol.
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Keep browsing' }),
-    );
+    // The card now offers to start rather than enrol.
     expect(screen.getByText('0% complete')).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Start learning' }),
@@ -160,9 +168,8 @@ describe('EnrolmentActions', () => {
 
     await user.click(await enrolButton());
 
-    expect(
-      await screen.findByRole('dialog', { name: "You're enrolled!" }),
-    ).toBeInTheDocument();
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(START));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('explains when the course closed before enrolling', async () => {
@@ -405,10 +412,57 @@ describe('EnrolmentActions: paid courses', () => {
     enrolled = true;
     await act(() => vi.advanceTimersByTimeAsync(2_000));
 
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({ ...START, replace: true }),
+    );
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('goes straight to the lesson when the payment was already confirmed', async () => {
+    renderPriced(
+      { 'course.myEnrolment': () => enrolment() },
+      { path: '/?checkout=success' },
+    );
+
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith({ ...START, replace: true }),
+    );
+    expect(navigate).toHaveBeenCalledTimes(1);
+  });
+
+  it('never navigates on ?checkout=success without an enrolment', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderPriced({}, { path: '/?checkout=success' });
+
+    await screen.findByText('Confirming your payment');
+    await act(() => vi.advanceTimersByTimeAsync(65_000));
     expect(
-      await screen.findByRole('dialog', { name: "You're enrolled!" }),
+      await screen.findByText(/Your payment is still being confirmed/),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Confirming your payment')).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows an enrolled learner the enrolled card without navigating when the address has no checkout', async () => {
+    renderPriced({ 'course.myEnrolment': () => enrolment() });
+
+    expect(
+      await screen.findByRole('link', { name: 'Start learning' }),
+    ).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('renders no arrow icon in any button', async () => {
+    const { container } = renderPriced({
+      'course.myEnrolment': () => enrolment(),
+    });
+
+    await screen.findByRole('link', { name: 'Start learning' });
+    expect(
+      container.querySelectorAll(
+        'a svg[class*="arrow"], button svg[class*="arrow"]',
+      ),
+    ).toHaveLength(0);
   });
 
   it('polls every 2 seconds and gives up after 60', async () => {

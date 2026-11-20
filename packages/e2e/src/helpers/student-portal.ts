@@ -49,8 +49,10 @@ export const suggestInSiteSearch = async (page: Page, text: string) => {
 };
 
 // Enrols from the course page, signing in first when signed out (the way a
-// visitor does, through the "Sign in to enrol" dialog), and starts learning.
-export const enrol = async (page: Page, user?: User) => {
+// visitor does, through the "Sign in to enrol" dialog), and waits for the page
+// enrolling lands on: the learner's next lesson, or the course home when the
+// course shows no lesson.
+export const enrolAndLand = async (page: Page, user?: User) => {
   await page.getByRole('button', { name: 'Enrol now' }).click();
   if (user) {
     await page
@@ -60,8 +62,14 @@ export const enrol = async (page: Page, user?: User) => {
     await signIn(page, user);
     await page.getByRole('button', { name: 'Enrol now' }).click();
   }
-  const enrolled = page.getByRole('dialog', { name: "You're enrolled!" });
-  await enrolled.getByRole('link', { name: 'Start learning' }).click();
+  await page.waitForURL(/\/learn\/[0-9a-f-]+\/(lesson\/[0-9a-f-]+|home)$/);
+};
+
+// Enrols, then opens the course home, so callers start from there.
+export const enrol = async (page: Page, user?: User) => {
+  await enrolAndLand(page, user);
+  const courseId = /\/learn\/([0-9a-f-]+)\//.exec(page.url())?.[1];
+  await page.goto(`${PORTALS.student}/learn/${courseId}/home`);
   await page.waitForURL(/\/learn\/[0-9a-f-]+\/home$/);
 };
 

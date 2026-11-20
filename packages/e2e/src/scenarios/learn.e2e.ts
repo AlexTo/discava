@@ -8,11 +8,14 @@ import {
   addModule,
   addTextItem,
   createCourse,
+  hideItem,
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
+  enrolAndLand,
   expectCourseCompleted,
   openCourse,
 } from '../helpers/student-portal.js';
@@ -66,4 +69,85 @@ test('an instructor publishes a course, and a student completes it', async ({
     await student.getByRole('link', { name: course }).click();
     await expectCourseCompleted(student);
   });
+});
+
+// Enrolling opens the learner's next lesson by itself: the first lesson the
+// course shows, or the course home when it shows none.
+test('enrolling lands in the first shown lesson', async ({ browser }) => {
+  const course = uniqueName('E2E landing course');
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+
+  await test.step('the instructor publishes a course whose first lesson is hidden', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await createCourse(instructor, {
+      title: course,
+      summary: 'A course made by the end-to-end tests.',
+    });
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Hidden lesson');
+    await addTextItem(instructor, { title: 'Hidden reading', body: 'Hidden.' });
+    await addLesson(instructor, 'Shown lesson');
+    await addTextItem(instructor, { title: 'Shown reading', body: 'Shown.' });
+    await addModule(instructor, 'Module two');
+    await addLesson(instructor, 'Later lesson');
+    await addTextItem(instructor, { title: 'Later reading', body: 'Later.' });
+    await publishCourse(instructor);
+    await hideItem(instructor, 'lesson', 'Hidden lesson');
+  });
+
+  await test.step('a new student enrols and lands in the first shown lesson', async () => {
+    await openCourse(student, course);
+    const coursePage = student.url();
+    await enrolAndLand(student, newUser('Sam', ['student']));
+    await expect(student).toHaveURL(/\/learn\/[0-9a-f-]+\/lesson\/[0-9a-f-]+$/);
+    await expect(
+      student.getByRole('heading', { name: 'Shown lesson' }),
+    ).toBeVisible();
+    await expect(student.getByText("You're enrolled in")).toBeVisible();
+    await expect(student.getByRole('dialog')).toHaveCount(0);
+    await screenshot(student, 'landed-in-first-lesson');
+
+    await student.goBack();
+    await expect(student).toHaveURL(coursePage);
+  });
+
+  await test.step('opening the lesson again from the course home shows no confirmation', async () => {
+    await student.getByRole('link', { name: 'Start learning' }).click();
+    await expect(student).toHaveURL(/\/home$/);
+    await student.getByRole('link', { name: 'Start', exact: true }).click();
+    await expect(
+      student.getByRole('heading', { name: 'Shown lesson' }),
+    ).toBeVisible();
+    await expect(student.getByText("You're enrolled in")).toHaveCount(0);
+  });
+});
+
+test('enrolling in a course with no lessons lands on the course home', async ({
+  browser,
+}) => {
+  const course = uniqueName('E2E empty course');
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+
+  await instructor.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(instructor, newUser('Ivy', ['instructor']));
+  await createCourse(instructor, {
+    title: course,
+    summary: 'A course made by the end-to-end tests.',
+  });
+  await addModule(instructor, 'Module one');
+  await addLesson(instructor, 'Hidden lesson');
+  await addTextItem(instructor, { title: 'Hidden reading', body: 'Hidden.' });
+  await publishCourse(instructor);
+  // A published course whose only lesson is hidden shows no lesson.
+  await hideItem(instructor, 'lesson', 'Hidden lesson');
+
+  await openCourse(student, course);
+  await enrolAndLand(student, newUser('Sam', ['student']));
+  await expect(student).toHaveURL(/\/learn\/[0-9a-f-]+\/home$/);
+  await expect(student.getByText("You're enrolled in")).toBeVisible();
+  await expect(student.getByText('No lessons yet')).toBeVisible();
+  await screenshot(student, 'landed-on-course-home');
 });

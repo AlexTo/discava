@@ -21,6 +21,7 @@ import { Route as CertificatesCertificateIdIndexRouteImport } from './routes/cer
 import { Route as CertificatesCertificateIdLinkedinRouteImport } from './routes/certificates/$certificateId/linkedin'
 import { Route as LearnCourseIdIndexRouteImport } from './routes/learn/$courseId/index'
 import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/home'
+import { Route as LearnCourseIdStartRouteImport } from './routes/learn/$courseId/start'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -85,6 +86,11 @@ const LearnCourseIdHomeRoute = LearnCourseIdHomeRouteImport.update({
   path: '/learn/$courseId/home',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LearnCourseIdStartRoute = LearnCourseIdStartRouteImport.update({
+  id: '/learn/$courseId/start',
+  path: '/learn/$courseId/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LearnCourseIdLessonLessonIdRoute =
   LearnCourseIdLessonLessonIdRouteImport.update({
     id: '/learn/$courseId/lesson/$lessonId',
@@ -103,6 +109,7 @@ export interface FileRoutesByFullPath {
   '/signin/': typeof SigninIndexRoute
   '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId/start': typeof LearnCourseIdStartRoute
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -118,6 +125,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninIndexRoute
   '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId/start': typeof LearnCourseIdStartRoute
   '/certificates/$certificateId': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -134,6 +142,7 @@ export interface FileRoutesById {
   '/signin/': typeof SigninIndexRoute
   '/certificates/$certificateId/linkedin': typeof CertificatesCertificateIdLinkedinRoute
   '/learn/$courseId/home': typeof LearnCourseIdHomeRoute
+  '/learn/$courseId/start': typeof LearnCourseIdStartRoute
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/signin/'
     | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
+    | '/learn/$courseId/start'
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
+    | '/learn/$courseId/start'
     | '/certificates/$certificateId'
     | '/learn/$courseId'
     | '/learn/$courseId/lesson/$lessonId'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/signin/'
     | '/certificates/$certificateId/linkedin'
     | '/learn/$courseId/home'
+    | '/learn/$courseId/start'
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
@@ -197,6 +209,7 @@ export interface RootRouteChildren {
   SigninIndexRoute: typeof SigninIndexRoute
   CertificatesCertificateIdLinkedinRoute: typeof CertificatesCertificateIdLinkedinRoute
   LearnCourseIdHomeRoute: typeof LearnCourseIdHomeRoute
+  LearnCourseIdStartRoute: typeof LearnCourseIdStartRoute
   CertificatesCertificateIdIndexRoute: typeof CertificatesCertificateIdIndexRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
   LearnCourseIdLessonLessonIdRoute: typeof LearnCourseIdLessonLessonIdRoute
@@ -288,6 +301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnCourseIdHomeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/learn/$courseId/start': {
+      id: '/learn/$courseId/start'
+      path: '/learn/$courseId/start'
+      fullPath: '/learn/$courseId/start'
+      preLoaderRoute: typeof LearnCourseIdStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/learn/$courseId/lesson/$lessonId': {
       id: '/learn/$courseId/lesson/$lessonId'
       path: '/learn/$courseId/lesson/$lessonId'
@@ -310,6 +330,7 @@ const rootRouteChildren: RootRouteChildren = {
   CertificatesCertificateIdLinkedinRoute:
     CertificatesCertificateIdLinkedinRoute,
   LearnCourseIdHomeRoute: LearnCourseIdHomeRoute,
+  LearnCourseIdStartRoute: LearnCourseIdStartRoute,
   CertificatesCertificateIdIndexRoute: CertificatesCertificateIdIndexRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
   LearnCourseIdLessonLessonIdRoute: LearnCourseIdLessonLessonIdRoute,
