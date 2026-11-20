@@ -218,10 +218,74 @@ describe('/my-learning certificates', () => {
     );
   });
 
+  it('links to LinkedIn’s form with the certificate’s values', async () => {
+    await openCompleted();
+
+    const link = await screen.findByRole('link', {
+      name: 'Add to LinkedIn profile',
+    });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    const url = new URL(link.getAttribute('href') ?? '');
+    expect(url.origin + url.pathname).toBe(
+      'https://www.linkedin.com/profile/add',
+    );
+    expect(url.searchParams.get('startTask')).toBe('CERTIFICATION_NAME');
+    expect(url.searchParams.get('name')).toBe('Course c3');
+    expect(url.searchParams.get('certId')).toBe('ABCD-EFGH-JKLM');
+    expect(url.searchParams.get('certUrl')).toBe(
+      `${window.location.origin}/certificates/ABCD-EFGH-JKLM`,
+    );
+  });
+
+  it('records the use when the link is clicked', async () => {
+    const { user, calls } = await openCompleted({
+      'certificate.recordLinkedInClick': () => ({}),
+    });
+    const link = await screen.findByRole('link', {
+      name: 'Add to LinkedIn profile',
+    });
+    // jsdom can't open LinkedIn; the click's navigation isn't what's tested.
+    link.addEventListener('click', (event) => event.preventDefault());
+
+    await user.click(link);
+
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        path: 'certificate.recordLinkedInClick',
+        input: { certificateId: 'ABCD-EFGH-JKLM', source: 'my-learning' },
+      }),
+    );
+  });
+
+  it('shows no alert when recording the use fails', async () => {
+    const { user, calls } = await openCompleted({
+      'certificate.recordLinkedInClick': () => {
+        throw new Error('boom');
+      },
+    });
+    const link = await screen.findByRole('link', {
+      name: 'Add to LinkedIn profile',
+    });
+    link.addEventListener('click', (event) => event.preventDefault());
+
+    await user.click(link);
+
+    await waitFor(() =>
+      expect(calls.map((c) => c.path)).toContain(
+        'certificate.recordLinkedInClick',
+      ),
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('is absent for a completed course without one', async () => {
     await openCompleted({ 'certificate.myCertificates': () => [] });
 
     expect(screen.queryByRole('group', { name: 'Certificate' })).toBeNull();
+    expect(
+      screen.queryByRole('link', { name: 'Add to LinkedIn profile' }),
+    ).toBeNull();
   });
 
   it('reads the student’s certificates once', async () => {

@@ -16,6 +16,14 @@ import { isConditionalCheckFailed } from './errors.js';
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const ID_LENGTH = 16;
 const MAX_ID_TRIES = 5;
+export const LINKEDIN_CLICK_SOURCES = [
+  'my-learning',
+  'certificate-page',
+  'issued-email',
+  'reminder-email',
+] as const;
+export type LinkedInClickSource = (typeof LINKEDIN_CLICK_SOURCES)[number];
+
 const FALLBACK_NAME = 'Discava learner';
 
 // 10 random bytes are 80 bits: exactly 16 base32 characters.
@@ -143,5 +151,52 @@ export const issueCertificate = async ({
       throw error;
     }
     return winner;
+  }
+};
+
+export interface RecordLinkedInClickInput {
+  coreTable: Pick<CoreTable, 'entities'>;
+  certificateId: string;
+  source: LinkedInClickSource;
+  now: Date;
+}
+
+// Records the first use of "Add to LinkedIn profile" on a certificate. Later
+// calls, or one at the same moment as another, change nothing. Undefined for a
+// malformed or unknown ID.
+export const recordLinkedInClick = async ({
+  coreTable,
+  certificateId,
+  source,
+  now,
+}: RecordLinkedInClickInput): Promise<
+  'recorded' | 'already-recorded' | undefined
+> => {
+  const id = normaliseCertificateId(certificateId);
+  if (!id) {
+    return undefined;
+  }
+  const { certificate } = coreTable.entities;
+  const {
+    data: [found],
+  } = await certificate.query.byCertificateId({ certificateId: id }).go();
+  if (!found) {
+    return undefined;
+  }
+  try {
+    await certificate
+      .patch({ userId: found.userId, courseId: found.courseId })
+      .set({
+        linkedInClickedAt: now.toISOString(),
+        linkedInClickSource: source,
+      })
+      .where((attr, op) => op.notExists(attr.linkedInClickedAt))
+      .go();
+    return 'recorded';
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) {
+      throw error;
+    }
+    return 'already-recorded';
   }
 };

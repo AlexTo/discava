@@ -9,6 +9,7 @@ import type { StageConfig } from './stages.types.js';
 const STAGE = 'discava-test-stage';
 
 const ENV_KEYS = [
+  'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_LINKED_IN_ORGANIZATION_ID',
   'DISCAVA_TEST_STAGE_REGION',
   'DISCAVA_TEST_STAGE_ACCOUNT',
   'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_ENABLE_WAF',
@@ -221,6 +222,15 @@ describe('applyEnvOverrides', () => {
           pageRendererReservedConcurrency: 7,
         },
       },
+    });
+  });
+
+  it('overrides the student portal LinkedIn organisation ID', () => {
+    process.env.DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_LINKED_IN_ORGANIZATION_ID =
+      '12345';
+
+    expect(applyEnvOverrides(STAGE, {})).toEqual({
+      infra: { studentPortal: { linkedInOrganizationId: '12345' } },
     });
   });
 

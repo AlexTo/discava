@@ -1,6 +1,6 @@
 # Research: Add a Certificate to a LinkedIn Profile
 
-## R-1: LinkedIn's "Add to profile" link (external fact, not verified with LinkedIn)
+## R-1: LinkedIn's "Add to profile" link (checked with LinkedIn on 2026-11-20)
 
 **Decision**: Build this address in the learner's browser and open it:
 
@@ -27,6 +27,8 @@ Every value is percent-encoded (`URLSearchParams`). `expirationYear` and `expira
 | Search results for the same format (a Ruby helper in `mumuki-laboratory`, an npm package `linkedin-certification`, several vendor help pages) | The same path and parameter names in code in use | Third party |
 
 The two kinds of source disagree. Third parties, including ones dated 2026, document the parameters above and say the form opens prefilled. LinkedIn's own help article says customised links still open the form but values aren't autofilled. This run couldn't sign in to LinkedIn to see which is true today.
+
+**Checked with a real LinkedIn account on 2026-11-20 (T012).** A maintainer opened a link built by `buildLinkedInAddToProfileUrl` for a test certificate, with `organizationName` (no `organizationId`), and reported that it works: LinkedIn's form opened with the certificate's values. The parameter names above stand, and the contract and T008's test are unchanged. `organizationId` wasn't tried, because no stage has a LinkedIn page yet.
 
 **What the design does about it**:
 

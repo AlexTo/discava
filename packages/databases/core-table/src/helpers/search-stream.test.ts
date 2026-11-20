@@ -189,6 +189,12 @@ describe('matchesSearchStreamFilters', () => {
     ).toBe(false);
   });
 
+  it('ignores a certificate change: the courses index does not depend on it', () => {
+    expect(
+      matchesSearchStreamFilters(record('MODIFY', 'NewImage', 'certificate')),
+    ).toBe(false);
+  });
+
   it('ignores a MODIFY matched against the old image', () => {
     expect(
       matchesSearchStreamFilters(record('MODIFY', 'OldImage', 'course')),

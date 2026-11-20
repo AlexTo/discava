@@ -14,6 +14,7 @@ import { categoryBySlug, listCategories } from './procedures/category.js';
 import {
   certificatePdf,
   myCertificates,
+  recordLinkedInClick,
   verifyCertificate,
 } from './procedures/certificate.js';
 import {
@@ -117,6 +118,7 @@ export const appRouter = router({
     verify: verifyCertificate,
     myCertificates,
     pdf: certificatePdf,
+    recordLinkedInClick,
   }),
   contentItem: router({
     complete: completeContentItem,
@@ -183,4 +185,5 @@ export const PUBLIC_OPERATIONS = [
   'category.bySlug',
   'instructorProfile.publicView',
   'certificate.verify',
+  'certificate.recordLinkedInClick',
 ] as const;

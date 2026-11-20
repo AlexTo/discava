@@ -10,6 +10,7 @@ import {
   issueCertificate,
   learnerName,
   normaliseCertificateId,
+  recordLinkedInClick,
 } from './certificate.js';
 
 describe('generateCertificateId', () => {
@@ -227,5 +228,115 @@ describe('issueCertificate', () => {
     const { coreTable } = fake();
     const certificate = await issue(coreTable, { user: null });
     expect(certificate?.learnerName).toBe('Discava learner');
+  });
+});
+
+// An in-memory certificate entity with the patch's `notExists` condition.
+const fakeForClick = () => {
+  const store = new Map<string, Record<string, unknown>>([
+    [
+      'u1/c1',
+      { userId: 'u1', courseId: 'c1', certificateId: '0123456789ABCDEF' },
+    ],
+  ]);
+  const query = vi.fn(({ certificateId }: { certificateId: string }) => ({
+    go: async () => ({
+      data: [...store.values()].filter(
+        (c) => c.certificateId === certificateId,
+      ),
+    }),
+  }));
+  const patch = vi.fn(({ userId, courseId }) => ({
+    set: (values: Record<string, unknown>) => ({
+      where: () => ({
+        go: async () => {
+          const item = store.get(`${userId}/${courseId}`);
+          if (!item || item.linkedInClickedAt) {
+            throw new Error('conflict', {
+              cause: Object.assign(new Error('x'), {
+                name: 'ConditionalCheckFailedException',
+              }),
+            });
+          }
+          Object.assign(item, values);
+          return { data: item };
+        },
+      }),
+    }),
+  }));
+  return {
+    coreTable: {
+      entities: { certificate: { query: { byCertificateId: query }, patch } },
+    } as never,
+    store,
+    query,
+    patch,
+  };
+};
+
+describe('recordLinkedInClick', () => {
+  const click = (
+    coreTable: never,
+    source: Parameters<typeof recordLinkedInClick>[0]['source'] = 'my-learning',
+    certificateId = '0123-4567-89ab-cdef',
+    now = NOW,
+  ) => recordLinkedInClick({ coreTable, certificateId, source, now });
+
+  it('records the first use', async () => {
+    const { coreTable, store } = fakeForClick();
+    expect(await click(coreTable)).toBe('recorded');
+    expect(store.get('u1/c1')).toMatchObject({
+      linkedInClickedAt: NOW.toISOString(),
+      linkedInClickSource: 'my-learning',
+    });
+  });
+
+  it('keeps the first source and time on a second call', async () => {
+    const { coreTable, store } = fakeForClick();
+    await click(coreTable);
+    expect(
+      await click(
+        coreTable,
+        'reminder-email',
+        undefined,
+        new Date(NOW.getTime() + 1000),
+      ),
+    ).toBe('already-recorded');
+    expect(store.get('u1/c1')).toMatchObject({
+      linkedInClickedAt: NOW.toISOString(),
+      linkedInClickSource: 'my-learning',
+    });
+  });
+
+  it('stores one of two calls at once', async () => {
+    const { coreTable, store } = fakeForClick();
+    const results = await Promise.all([
+      click(coreTable, 'my-learning'),
+      click(coreTable, 'certificate-page'),
+    ]);
+    expect(results.sort()).toEqual(['already-recorded', 'recorded']);
+    expect(store.get('u1/c1')?.linkedInClickSource).toBe('my-learning');
+  });
+
+  it('returns undefined for an unknown ID', async () => {
+    const { coreTable, patch } = fakeForClick();
+    expect(
+      await click(coreTable, 'my-learning', 'ZZZZZZZZZZZZZZZZ'),
+    ).toBeUndefined();
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it('returns undefined for a malformed ID without reading the table', async () => {
+    const { coreTable, query } = fakeForClick();
+    expect(await click(coreTable, 'my-learning', 'nope')).toBeUndefined();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('throws any other error', async () => {
+    const { coreTable, patch } = fakeForClick();
+    patch.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    await expect(click(coreTable)).rejects.toThrow('boom');
   });
 });

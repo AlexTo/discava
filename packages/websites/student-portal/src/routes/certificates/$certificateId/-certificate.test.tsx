@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { routeTree } from '../../../routeTree.gen';
 import {
   ApiError,
+  type Handler,
   renderWithCoreApi,
 } from '../../../test/render-with-core-api';
 
@@ -21,12 +22,16 @@ const certificate = {
 const open = (
   handler: (input: unknown) => unknown,
   path = '/certificates/ABCD-EFGH-JKLM',
+  {
+    signedIn = false,
+    handlers = {},
+  }: { signedIn?: boolean; handlers?: Record<string, Handler> } = {},
 ) =>
   renderWithCoreApi(null, {
     routeTree,
     path,
-    signedIn: false,
-    handlers: { 'certificate.verify': handler },
+    signedIn,
+    handlers: { 'certificate.verify': handler, ...handlers },
   });
 
 describe('/certificates/<ID>', () => {
@@ -118,5 +123,95 @@ describe('/certificates/<ID>', () => {
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
     await waitFor(() => expect(container.textContent).not.toContain('@'));
     expect(container.textContent).not.toContain('user-123');
+  });
+});
+
+describe('/certificates/<ID> for the owner', () => {
+  const mine = (certificateId = 'ABCD-EFGH-JKLM') => ({
+    'certificate.myCertificates': () => [
+      {
+        certificateId,
+        courseId: 'c1',
+        courseTitle: 'Linear Algebra',
+        learnerName: 'Ada Lovelace',
+        completedAt: certificate.completedAt,
+      },
+    ],
+    'certificate.recordLinkedInClick': () => ({}),
+  });
+
+  it('shows the owner the LinkedIn section and its five values', async () => {
+    open(() => certificate, undefined, { signedIn: true, handlers: mine() });
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Add this certificate to your LinkedIn profile',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Add to LinkedIn profile' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('What LinkedIn asks for')).toBeInTheDocument();
+    for (const label of [
+      'Name',
+      'Issuing organisation',
+      'Issue date',
+      'Credential ID',
+      'Credential URL',
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByText('October 2026')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /We can't see your LinkedIn profile, so this button stays here/,
+      ),
+    ).toBeInTheDocument();
+    // What the page showed before is still there.
+    expect(screen.getByText('Certificate of completion')).toBeInTheDocument();
+    expect(screen.getByText('5 October 2026')).toBeInTheDocument();
+  });
+
+  it('does not show it to another signed-in user', async () => {
+    open(() => certificate, undefined, {
+      signedIn: true,
+      handlers: mine('ZZZZ-ZZZZ-ZZZZ'),
+    });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText('Add to LinkedIn profile')).toBeNull(),
+    );
+    expect(screen.queryByText('What LinkedIn asks for')).toBeNull();
+  });
+
+  it('does not show it, or ask for certificates, when signed out', async () => {
+    const { calls } = open(() => certificate);
+
+    expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText('What LinkedIn asks for')).toBeNull();
+    expect(calls.map((c) => c.path)).not.toContain(
+      'certificate.myCertificates',
+    );
+  });
+
+  it('records a click with the certificate page as the source', async () => {
+    const { user, calls } = open(() => certificate, undefined, {
+      signedIn: true,
+      handlers: mine(),
+    });
+    const link = await screen.findByRole('link', {
+      name: 'Add to LinkedIn profile',
+    });
+    link.addEventListener('click', (event) => event.preventDefault());
+
+    await user.click(link);
+
+    await waitFor(() =>
+      expect(calls).toContainEqual({
+        path: 'certificate.recordLinkedInClick',
+        input: { certificateId: 'ABCD-EFGH-JKLM', source: 'certificate-page' },
+      }),
+    );
   });
 });

@@ -24,6 +24,12 @@ const NEW_ENTITIES = [
 ];
 
 describe('matchesNotificationStreamFilters', () => {
+  it('ignores a certificate MODIFY (a LinkedIn use)', () => {
+    expect(
+      matchesNotificationStreamFilters(record('MODIFY', 'certificate')),
+    ).toBe(false);
+  });
+
   it.each(['notification', 'notificationBroadcast'])(
     'matches an INSERT of %s',
     (entity) => {

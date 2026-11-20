@@ -8,7 +8,9 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../api';
+import { OwnerShare } from './-components/owner-share';
 
 // A certificate's public page, for anyone with its ID (signed in or not):
 // who completed which course, and when. Nothing else about the learner.
@@ -29,6 +31,18 @@ function RouteComponent() {
       { retry: false },
     ),
   );
+
+  // Only the owner sees the LinkedIn section. Signed out, there's nothing to
+  // ask: the query stays off.
+  const { isAuthenticated } = useAuth();
+  const mine = useQuery(
+    trpc.certificate.myCertificates.queryOptions(undefined, {
+      enabled: isAuthenticated,
+    }),
+  );
+  const isOwner =
+    query.data !== undefined &&
+    (mine.data ?? []).some((c) => c.certificateId === query.data.certificateId);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -85,6 +99,7 @@ function RouteComponent() {
           </p>
         </section>
       )}
+      {query.data && isOwner ? <OwnerShare certificate={query.data} /> : null}
     </main>
   );
 }

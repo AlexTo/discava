@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { LINKEDIN_CLICK_SOURCES } from '../certificate.js';
 import { type Check, type Violation, violation } from './common.js';
 import type { TableSnapshot } from './snapshot.js';
 
@@ -83,10 +84,52 @@ export const checkCertificateHasCompletedEnrolment = (
   });
 };
 
+// A certificate's LinkedIn use has a source exactly when it has a time, the
+// source is one of the known ones, and the time isn't before issuedAt.
+export const checkCertificateLinkedInClickShape = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.certificates.flatMap((certificate) => {
+    const { userId, courseId, linkedInClickedAt, linkedInClickSource } =
+      certificate;
+    const problems: string[] = [];
+    if (Boolean(linkedInClickedAt) !== Boolean(linkedInClickSource)) {
+      problems.push(
+        'linkedInClickSource is present exactly when linkedInClickedAt is',
+      );
+    }
+    if (
+      linkedInClickSource &&
+      !(LINKEDIN_CLICK_SOURCES as readonly string[]).includes(
+        linkedInClickSource,
+      )
+    ) {
+      problems.push(`linkedInClickSource ${linkedInClickSource} is unknown`);
+    }
+    if (
+      linkedInClickedAt &&
+      certificate.issuedAt &&
+      linkedInClickedAt < certificate.issuedAt
+    ) {
+      problems.push('linkedInClickedAt is before issuedAt');
+    }
+    return problems.map((message) =>
+      violation(
+        'certificate-linkedin-click-shape',
+        { userId, courseId },
+        message,
+      ),
+    );
+  });
+
 export const CERTIFICATES_CHECKS = [
   { name: 'certificate-shape', check: checkCertificateShape },
   {
     name: 'certificate-has-completed-enrolment',
     check: checkCertificateHasCompletedEnrolment,
+  },
+  {
+    name: 'certificate-linkedin-click-shape',
+    check: checkCertificateLinkedInClickShape,
   },
 ] as const satisfies readonly Check[];

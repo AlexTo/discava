@@ -224,6 +224,28 @@ describe('Lambda functions', () => {
   });
 });
 
+describe('the site runtime config', () => {
+  const siteOf = (studentPortal: object) =>
+    RuntimeConfig.of(
+      new ApplicationStage(new App(), 'discava-test', {
+        env: { account: '111122223333', region: 'ap-southeast-2' },
+        studentPortal,
+      }).node.findChild('Websites'),
+    )?.get('connection').site;
+
+  it('names the site, with no organisation ID by default', () => {
+    expect(siteOf({})).toEqual({ name: 'Discava' });
+    expect(siteOf({ siteName: 'Acme Learn' })).toEqual({ name: 'Acme Learn' });
+  });
+
+  it('carries the LinkedIn organisation ID when the stage has one', () => {
+    expect(siteOf({ linkedInOrganizationId: '12345' })).toEqual({
+      name: 'Discava',
+      linkedInOrganizationId: '12345',
+    });
+  });
+});
+
 describe("the portals' addresses (#235)", () => {
   it("gives every portal every portal's address, by its custom domain when it has one", () => {
     const stage = new ApplicationStage(new App(), 'discava-test', {

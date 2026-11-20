@@ -76,6 +76,12 @@ export class WebsitesStack extends Stack {
       runtimeConfigScope,
       this.studentPortalProps(studentPortal),
     );
+    // The issuer a certificate names when it's added to LinkedIn.
+    const linkedInOrganizationId = studentPortal?.linkedInOrganizationId;
+    RuntimeConfig.ensure(runtimeConfigScope).set('connection', 'site', {
+      name: studentPortal?.siteName ?? 'Discava',
+      ...(linkedInOrganizationId && { linkedInOrganizationId }),
+    });
     this.instructorPortal = this.createPortal(
       InstructorPortal,
       'InstructorPortal',

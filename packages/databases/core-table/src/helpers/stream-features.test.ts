@@ -91,6 +91,12 @@ describe('the earnings entities', () => {
 });
 
 describe('featuresFor', () => {
+  it('routes a certificate MODIFY (a LinkedIn use) to no feature', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'certificate'))).toEqual(
+      [],
+    );
+  });
+
   it('routes a record to exactly the matching feature', () => {
     expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
       'search-indexing',
