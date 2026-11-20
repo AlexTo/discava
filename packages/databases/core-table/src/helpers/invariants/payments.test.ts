@@ -131,6 +131,22 @@ describe('payments: price, orders and the connection', () => {
       [{ refundedAmount: 2000 }, /refundedAmount is more/],
       [{ status: 'pending' }, /paidAt is set/],
       [{ status: 'expired' }, /paidAt is set/],
+      [
+        { refundRequestedAt: '2025-12-31T00:00:00.000Z' },
+        /refundRequestedAt is before paidAt/,
+      ],
+      [
+        { paidAt: undefined, refundRequestedAt: LATER },
+        /refund requested, but paidAt is not set/,
+      ],
+      [
+        { status: 'pending', refundRequestedAt: LATER },
+        /refund requested, but the order is pending/,
+      ],
+      [
+        { status: 'expired', refundRequestedAt: LATER },
+        /refund requested, but the order is expired/,
+      ],
     ])('reports %j', (change, message) => {
       paidTable();
       Object.assign(table.orders[0], change);
@@ -162,6 +178,20 @@ describe('payments: price, orders and the connection', () => {
         expect(violationsOf('order-shape')).toEqual([]);
       },
     );
+
+    it('accepts a refund request on a paid order and on one refunded on request', () => {
+      paidTable();
+      table.orders[0].refundRequestedAt = LATER;
+      expect(violationsOf('order-shape')).toEqual([]);
+      Object.assign(table.orders[0], {
+        status: 'refunded',
+        refundedAt: LATER,
+        refundedAmount: 1999,
+        refundReason: 'requested',
+      });
+      table.enrolments[0].status = 'dropped';
+      expect(violationsOf('order-shape')).toEqual([]);
+    });
 
     it('does not report a pending order past its expiry', () => {
       paidTable();

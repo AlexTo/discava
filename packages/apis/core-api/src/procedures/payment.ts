@@ -10,7 +10,11 @@ import {
   expireOrder,
   findOpenOrder,
   getConnection,
+  markRefundRequested,
   PaymentsUnavailableError,
+  REFUND_WINDOW_DAYS,
+  refundDeadline,
+  refundEligibility,
   startOrder,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -18,7 +22,11 @@ import { courseProcedure } from '../init.js';
 import {
   CheckoutInputSchema,
   CheckoutOutputSchema,
+  MyOrderInputSchema,
+  MyOrderOutputSchema,
   PaymentAvailableOutputSchema,
+  RequestRefundInputSchema,
+  RequestRefundOutputSchema,
 } from '../schema/index.js';
 
 // Whether a Buy now can start: the connection record only, nothing about the
@@ -137,4 +145,150 @@ export const checkout = courseProcedure
         message: "Couldn't start the payment",
       });
     }
+  });
+
+const NO_PURCHASE = 'No purchase to refund';
+
+// Asks Stripe to refund the student's own paid order, once, then marks the
+// order. It never moves the order or the enrolment: `charge.refunded` does.
+// Stripe is called before the mark, so a crash between the two leaves a real
+// refund and no mark (the notice repairs it), never a mark and no refund.
+export const requestRefund = courseProcedure
+  .input(RequestRefundInputSchema)
+  .output(RequestRefundOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const { coreTable } = ctx;
+    const { courseId } = input;
+    const userId = ctx.user.sub;
+
+    const { data: enrolment } = await coreTable.entities.enrolment
+      .get({ courseId, userId })
+      .go();
+    if (!enrolment?.orderId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: NO_PURCHASE });
+    }
+    const { data: order } = await coreTable.entities.order
+      .get({ orderId: enrolment.orderId })
+      .go();
+    if (!order || order.userId !== userId || order.courseId !== courseId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: NO_PURCHASE });
+    }
+
+    const now = new Date().toISOString();
+    const decision = refundEligibility({
+      order,
+      enrolment,
+      connection: await getConnection(coreTable),
+      now,
+    });
+    if (!decision.eligible) {
+      switch (decision.reason) {
+        case 'already-requested':
+          return { refundRequestedAt: order.refundRequestedAt as string };
+        case 'window-ended':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: `The ${REFUND_WINDOW_DAYS}-day refund period for this course has ended`,
+          });
+        case 'completed':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: "A course can't be refunded after you have completed it",
+          });
+        case 'other-account':
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: "This purchase can't be refunded here right now",
+          });
+        default:
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: NO_PURCHASE,
+          });
+      }
+    }
+
+    const { paymentIntentId } = order;
+    const amount = order.amount - (order.refundedAmount ?? 0);
+    if (!paymentIntentId || amount <= 0) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: "This purchase can't be refunded here right now",
+      });
+    }
+
+    try {
+      await withStripe((stripe) =>
+        stripe.refunds.create(
+          { payment_intent: paymentIntentId, amount },
+          { idempotencyKey: `refund-${order.orderId}` },
+        ),
+      );
+    } catch (error) {
+      console.error('Could not create the refund', {
+        orderId: order.orderId,
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: "Couldn't request the refund",
+      });
+    }
+
+    await markRefundRequested({ coreTable, order, now });
+    // Another request may have marked it first; that time is the stored one.
+    const { data: marked } = await coreTable.entities.order
+      .get({ orderId: order.orderId })
+      .go();
+    return { refundRequestedAt: marked?.refundRequestedAt ?? now };
+  });
+
+// The caller's most recent paid or refunded order for a course, with what the
+// course page needs to show about refunding it. Reads only: no Stripe key.
+export const myOrder = courseProcedure
+  .input(MyOrderInputSchema)
+  .output(MyOrderOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const { coreTable } = ctx;
+    const { courseId } = input;
+    const userId = ctx.user.sub;
+
+    const { data: orders } = await coreTable.entities.order.query
+      .byStudentCourse({ userId, courseId })
+      .go({ pages: 'all' });
+    const order = orders
+      .filter((o) => o.status === 'paid' || o.status === 'refunded')
+      .sort((a, b) => (a.orderId < b.orderId ? 1 : -1))[0];
+    if (!order?.paidAt) return null;
+
+    const { data: enrolment } = await coreTable.entities.enrolment
+      .get({ courseId, userId })
+      .go();
+    const decision = refundEligibility({
+      order,
+      enrolment: enrolment ?? { status: 'dropped' },
+      connection: await getConnection(coreTable),
+      now: new Date().toISOString(),
+    });
+    const blocked =
+      !decision.eligible &&
+      (decision.reason === 'window-ended' ||
+        decision.reason === 'completed' ||
+        decision.reason === 'other-account')
+        ? decision.reason
+        : undefined;
+    return {
+      status: order.status as 'paid' | 'refunded',
+      amount: order.amount,
+      currency: order.currency,
+      paidAt: order.paidAt,
+      refundWindowDays: REFUND_WINDOW_DAYS,
+      refundableUntil: refundDeadline(order.paidAt),
+      canRequestRefund: decision.eligible,
+      ...(blocked ? { refundBlockedBy: blocked } : {}),
+      ...(order.refundRequestedAt
+        ? { refundRequestedAt: order.refundRequestedAt }
+        : {}),
+      ...(order.refundedAt ? { refundedAt: order.refundedAt } : {}),
+    };
   });

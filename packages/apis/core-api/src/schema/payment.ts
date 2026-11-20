@@ -25,3 +25,43 @@ export const PaymentAvailableOutputSchema = z.object({
 export type IPaymentAvailableOutput = z.output<
   typeof PaymentAvailableOutputSchema
 >;
+
+export const RequestRefundInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export type IRequestRefundInput = z.output<typeof RequestRefundInputSchema>;
+
+// Never the order ID, the payment intent or any other Stripe field.
+export const RequestRefundOutputSchema = z.object({
+  refundRequestedAt: z.string(),
+});
+
+export type IRequestRefundOutput = z.output<typeof RequestRefundOutputSchema>;
+
+export const MyOrderInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export type IMyOrderInput = z.output<typeof MyOrderInputSchema>;
+
+// The one output that exposes order fields, and only to the order's own
+// student: no order ID, account or payment intent.
+export const MyOrderOutputSchema = z
+  .object({
+    status: z.enum(['paid', 'refunded']),
+    amount: z.number(),
+    currency: z.string(),
+    paidAt: z.string(),
+    refundWindowDays: z.number(),
+    refundableUntil: z.string(),
+    canRequestRefund: z.boolean(),
+    refundBlockedBy: z
+      .enum(['window-ended', 'completed', 'other-account'])
+      .optional(),
+    refundRequestedAt: z.string().optional(),
+    refundedAt: z.string().optional(),
+  })
+  .nullable();
+
+export type IMyOrderOutput = z.output<typeof MyOrderOutputSchema>;

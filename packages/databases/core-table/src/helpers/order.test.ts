@@ -8,10 +8,13 @@ import {
   attachCheckoutSession,
   expireOrder,
   findOpenOrder,
+  markRefundRequested,
   type OrderConnection,
   type OrderCourse,
   type OrderRecord,
   PaymentsUnavailableError,
+  REFUND_WINDOW_DAYS,
+  refundEligibility,
   refundOrder,
   refundUndeliverable,
   restoreFreeEnrolment,
@@ -684,5 +687,151 @@ describe('restoreFreeEnrolment', () => {
     expect(restoredWon).not.toBe(settledWon);
     if (restoredWon) expect(enrolment).not.toHaveProperty('orderId');
     else expect(enrolment?.orderId).toBe('order-2');
+  });
+});
+
+describe('refundEligibility', () => {
+  const PAID = '2026-11-01T00:00:00.000Z';
+  const UNTIL = '2026-11-15T00:00:00.000Z';
+  const paid = (over: Partial<OrderRecord> = {}) =>
+    order({ status: 'paid', paidAt: PAID, paymentIntentId: 'pi', ...over });
+  const enrolment = { orderId: 'order-1', status: 'active' };
+  const active = { status: 'active', accountId: 'acct_1' };
+  const decide = (
+    over: {
+      order?: Partial<OrderRecord>;
+      enrolment?: { orderId?: string; status: string };
+      connection?: { status: string; accountId?: string };
+      now?: string;
+    } = {},
+  ) =>
+    refundEligibility({
+      order: paid(over.order),
+      enrolment: over.enrolment ?? enrolment,
+      connection: over.connection ?? active,
+      now: over.now ?? '2026-11-05T00:00:00.000Z',
+    });
+
+  it('has a 14-day window', () => {
+    expect(REFUND_WINDOW_DAYS).toBe(14);
+  });
+
+  it('is eligible inside the window, and at exactly the limit', () => {
+    expect(decide()).toEqual({ eligible: true, refundableUntil: UNTIL });
+    expect(decide({ now: UNTIL })).toEqual({
+      eligible: true,
+      refundableUntil: UNTIL,
+    });
+  });
+
+  it('is not eligible one millisecond after the limit', () => {
+    expect(decide({ now: '2026-11-15T00:00:00.001Z' })).toEqual({
+      eligible: false,
+      reason: 'window-ended',
+    });
+  });
+
+  it.each([
+    ['pending', { status: 'pending' as const }],
+    ['refunded', { status: 'refunded' as const }],
+    ['expired', { status: 'expired' as const }],
+  ])('refuses a %s order as not-paid', (_, over) => {
+    expect(decide({ order: over })).toEqual({
+      eligible: false,
+      reason: 'not-paid',
+    });
+  });
+
+  it('refuses an order the enrolment does not rest on', () => {
+    expect(
+      decide({ enrolment: { orderId: 'order-2', status: 'active' } }),
+    ).toEqual({ eligible: false, reason: 'not-current-order' });
+    expect(decide({ enrolment: { status: 'active' } })).toEqual({
+      eligible: false,
+      reason: 'not-current-order',
+    });
+    expect(
+      decide({ enrolment: { orderId: 'order-1', status: 'dropped' } }),
+    ).toEqual({ eligible: false, reason: 'not-current-order' });
+  });
+
+  it('refuses an order from another account, or with payments not connected', () => {
+    expect(
+      decide({ connection: { status: 'active', accountId: 'acct_2' } }),
+    ).toEqual({ eligible: false, reason: 'other-account' });
+    expect(
+      decide({ connection: { status: 'disconnected', accountId: 'acct_1' } }),
+    ).toEqual({ eligible: false, reason: 'other-account' });
+    expect(
+      refundEligibility({
+        order: paid(),
+        enrolment,
+        connection: undefined,
+        now: PAID,
+      }),
+    ).toEqual({ eligible: false, reason: 'other-account' });
+  });
+
+  it('refuses a request already made', () => {
+    expect(decide({ order: { refundRequestedAt: PAID } })).toEqual({
+      eligible: false,
+      reason: 'already-requested',
+    });
+  });
+
+  it('refuses a completed enrolment', () => {
+    expect(
+      decide({ enrolment: { orderId: 'order-1', status: 'completed' } }),
+    ).toEqual({ eligible: false, reason: 'completed' });
+  });
+
+  it('gives the first reason that applies', () => {
+    expect(
+      decide({
+        order: { refundRequestedAt: PAID },
+        enrolment: { orderId: 'order-1', status: 'completed' },
+        now: '2027-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({ eligible: false, reason: 'already-requested' });
+    expect(
+      decide({
+        enrolment: { orderId: 'order-1', status: 'completed' },
+        now: '2027-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({ eligible: false, reason: 'completed' });
+  });
+});
+
+describe('markRefundRequested', () => {
+  const paid = (over: Partial<OrderRecord> = {}) =>
+    order({ status: 'paid', paidAt: NOW, paymentIntentId: 'pi', ...over });
+  const mark = (fake: ReturnType<typeof setup>['fake'], now = LATER) =>
+    markRefundRequested({
+      coreTable: fake.coreTable,
+      order: { orderId: 'order-1' },
+      now,
+    });
+
+  it('sets refundRequestedAt once and leaves the status alone', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    await mark(fake);
+    await mark(fake, '2026-11-20T00:00:00.000Z');
+    expect(fake.row('order', { orderId: 'order-1' })).toMatchObject({
+      status: 'paid',
+      refundRequestedAt: LATER,
+    });
+  });
+
+  it.each([
+    ['refunded', { status: 'refunded' as const, refundedAt: NOW }],
+    ['pending', { status: 'pending' as const }],
+  ])('is a no-op on a %s order', async (_, over) => {
+    const { fake } = setup();
+    fake.put('order', paid(over));
+    await expect(mark(fake)).resolves.toBeUndefined();
+    expect(
+      fake.row('order', { orderId: 'order-1' })?.refundRequestedAt,
+    ).toBeUndefined();
   });
 });

@@ -112,6 +112,18 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       },
     }),
   }),
+  'order.refunded': defineType({
+    id: 'order.refunded',
+    name: 'Refunds',
+    description: 'A refund of a course you bought has gone through.',
+    params: ['courseTitle', 'courseId', 'amount'],
+    emailPolicy: 'required',
+    build: (p) => ({
+      title: `Your refund for ${p.courseTitle} is complete`,
+      body: `${p.amount} has been refunded for ${p.courseTitle}, and your access to the course has ended.`,
+      link: { portal: 'student', path: `/learn/${p.courseId}` },
+    }),
+  }),
   'review.received': defineType({
     id: 'review.received',
     name: 'Course reviews',

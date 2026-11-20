@@ -62,12 +62,19 @@ describe('PUBLIC_OPERATIONS', () => {
 describe('payment', () => {
   it('mounts checkout and available, neither public', async () => {
     expect(Object.keys(appRouter._def.procedures)).toEqual(
-      expect.arrayContaining(['payment.checkout', 'payment.available']),
+      expect.arrayContaining([
+        'payment.checkout',
+        'payment.available',
+        'payment.requestRefund',
+        'payment.myOrder',
+      ]),
     );
     expect(
       PUBLIC_OPERATIONS.filter((path) => path.startsWith('payment.')),
     ).toEqual([]);
     expect(await refusesAnonymousCallers('payment.checkout')).toBe(true);
+    expect(await refusesAnonymousCallers('payment.requestRefund')).toBe(true);
+    expect(await refusesAnonymousCallers('payment.myOrder')).toBe(true);
   });
 });
 

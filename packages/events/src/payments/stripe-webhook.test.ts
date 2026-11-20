@@ -17,6 +17,9 @@ const state = vi.hoisted(() => ({
   undeliverable: undefined as undefined | 'duplicate' | 'unavailable',
   settleCalls: 0,
   tableError: false,
+  // Notifications by `<userId>:<dedupeKey>`, as publishNotification keeps them.
+  notifications: new Map<string, any>(),
+  publishError: false,
 }));
 
 vi.mock('@discava/core-table', () => ({
@@ -57,6 +60,16 @@ vi.mock('@discava/core-table', () => ({
       current.refundedAmount = refundedTotal;
     }
   }),
+  publishNotification: vi.fn(async (_: unknown, input: any) => {
+    if (state.publishError) {
+      state.publishError = false;
+      throw new Error('TransactionConflict');
+    }
+    const key = `${input.userId}:${input.type}:${input.dedupeKey}`;
+    if (state.notifications.has(key)) return 'duplicate';
+    state.notifications.set(key, input);
+    return 'created';
+  }),
   refundUndeliverable: vi.fn(async (_: unknown, order: any, reason: string) => {
     const current = state.orders.get(order.orderId);
     if (current.status === 'pending') {
@@ -91,6 +104,9 @@ const deps: WebhookDeps = {
             go: async () => ({ data: state.orders.get(orderId) ?? null }),
           }),
         },
+        enrolment: {
+          get: () => ({ go: async () => ({ data: state.enrolment ?? null }) }),
+        },
       },
     }) as any,
   withStripe: async (call) => call({ refunds, paymentIntents } as any),
@@ -102,6 +118,7 @@ const order = () => ({
   orderId: 'o1',
   userId: 'u1',
   courseId: 'c1',
+  courseTitle: 'Algebra',
   amount: 4900,
   currency: 'usd',
   status: 'pending',
@@ -139,6 +156,8 @@ beforeEach(() => {
   state.settleCalls = 0;
   state.tableError = false;
   state.enrolment = undefined;
+  state.notifications = new Map();
+  state.publishError = false;
   refunds.create.mockResolvedValue({ id: 're_1' });
   paymentIntents.retrieve.mockResolvedValue({
     id: 'pi_1',
@@ -388,6 +407,75 @@ describe('charge.refunded', () => {
       completedAt: '2026-11-18T00:00:00.000Z',
       progressPercent: 100,
     });
+  });
+
+  it('tells the student once, whether they asked or an operator refunded', async () => {
+    await send(refundedEvent(4900));
+    expect([...state.notifications.values()]).toEqual([
+      {
+        type: 'order.refunded',
+        userId: 'u1',
+        params: { courseTitle: 'Algebra', courseId: 'c1', amount: '$49.00' },
+        dedupeKey: 'o1',
+        occurredAt: '2026-11-19T09:00:00.000Z',
+      },
+    ]);
+    // The student asked: refundRequestedAt is set. The notice is the same.
+    state.notifications.clear();
+    state.orders.set('o1', {
+      ...order(),
+      status: 'paid',
+      paymentIntentId: 'pi_1',
+      refundRequestedAt: '2026-11-19T08:00:00.000Z',
+    });
+    state.enrolment = { orderId: 'o1', status: 'active' };
+    await send(refundedEvent(4900, 'evt_r2'));
+    expect([...state.notifications.values()]).toHaveLength(1);
+    expect([...state.notifications.values()][0].params).toEqual({
+      courseTitle: 'Algebra',
+      courseId: 'c1',
+      amount: '$49.00',
+    });
+  });
+
+  it('publishes one notification for the same notice twice', async () => {
+    await send(refundedEvent(4900));
+    await send(refundedEvent(4900));
+    expect(state.notifications.size).toBe(1);
+  });
+
+  it('publishes nothing for a partial refund', async () => {
+    await send(refundedEvent(1000));
+    expect(state.notifications.size).toBe(0);
+  });
+
+  it.each(['duplicate', 'unavailable', 'mismatch'])(
+    'publishes nothing for an automatic refund (%s)',
+    async (refundReason) => {
+      state.orders.set('o1', {
+        ...order(),
+        status: 'refunded',
+        refundReason,
+        refundedAt: '2026-11-19T08:00:00.000Z',
+      });
+      await send(refundedEvent(4900));
+      expect(state.notifications.size).toBe(0);
+    },
+  );
+
+  it('publishes nothing when the enrolment names another order', async () => {
+    state.enrolment = { orderId: 'o2', status: 'active' };
+    await send(refundedEvent(4900));
+    expect(state.notifications.size).toBe(0);
+  });
+
+  it('fails the delivery when the publish fails, and the redelivery publishes exactly one', async () => {
+    state.publishError = true;
+    expect(await send(refundedEvent(4900))).toEqual({ status: 500 });
+    expect(state.orders.get('o1')?.status).toBe('refunded');
+    expect(state.notifications.size).toBe(0);
+    expect(await send(refundedEvent(4900))).toEqual({ status: 200 });
+    expect(state.notifications.size).toBe(1);
   });
 
   it('only records the amount on a partial refund', async () => {

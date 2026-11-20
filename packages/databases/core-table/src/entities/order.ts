@@ -127,6 +127,12 @@ export const createOrderEntity = async () =>
         refundReason: {
           type: ORDER_REFUND_REASONS,
         },
+        // Set once, when a student's refund request was accepted and Stripe
+        // was asked; never cleared, and absent on an operator's refund. Not a
+        // status: the order stays `paid` until `charge.refunded` arrives.
+        refundRequestedAt: {
+          type: 'string',
+        },
         createdAt: {
           type: 'string',
           required: true,

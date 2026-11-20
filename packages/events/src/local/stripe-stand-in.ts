@@ -59,6 +59,8 @@ interface PaymentIntent {
   amount: number;
   currency: string;
   refunded: number;
+  /** Each refund made, so a test can count them. */
+  refunds: { id: string; amount: number }[];
 }
 
 interface StripeEvent {
@@ -387,11 +389,16 @@ export const createStripeStandIn = ({
     }, delay).unref();
   };
 
-  const refundIntent = async (intent: PaymentIntent, amount?: number) => {
+  const refundIntent = async (
+    intent: PaymentIntent,
+    amount?: number,
+    refundId = id('re'),
+  ) => {
     const refunded = Math.min(
       intent.amount,
       intent.refunded + (amount ?? intent.amount),
     );
+    intent.refunds.push({ id: refundId, amount: refunded - intent.refunded });
     intent.refunded = refunded;
     const event = newEvent('charge.refunded', {
       id: `ch_${intent.id.slice(3)}`,
@@ -472,7 +479,8 @@ export const createStripeStandIn = ({
     path: string,
   ): Promise<boolean> => {
     if (request.method !== 'POST') return false;
-    const control = /^\/stripe\/test\/(replay|forge|expire|refund)$/.exec(path);
+    const control =
+      /^\/stripe\/test\/(replay|forge|expire|refund|refunds)$/.exec(path);
     if (!control) return false;
     const input = JSON.parse((await readBody(request)) || '{}') as {
       sessionId?: string;
@@ -481,6 +489,21 @@ export const createStripeStandIn = ({
       amount?: number;
     };
     const session = input.sessionId ? sessions.get(input.sessionId) : undefined;
+    if (control[1] === 'refunds') {
+      // Every refund made for the payment, with its amount.
+      const intent = session ? intents.get(session.paymentIntentId) : undefined;
+      if (!intent) {
+        error(
+          response,
+          404,
+          'invalid_request_error',
+          'No payment for that session',
+        );
+        return true;
+      }
+      send(response, 200, { refunds: intent.refunds });
+      return true;
+    }
     if (control[1] === 'refund') {
       // As an operator in the dashboard: the whole payment, or `amount` of it.
       const intent = session ? intents.get(session.paymentIntentId) : undefined;
@@ -1020,6 +1043,7 @@ export const createStripeStandIn = ({
         amount: session.amount,
         currency: session.currency,
         refunded: 0,
+        refunds: [],
       });
       if (slot) idempotent.set(slot, session);
       send(response, 200, sessionObject(session));
@@ -1094,7 +1118,7 @@ export const createStripeStandIn = ({
       };
       if (slot) idempotent.set(slot, refund);
       send(response, 200, refund);
-      await refundIntent(intent, refund.amount);
+      await refundIntent(intent, refund.amount, refund.id);
       return true;
     }
 
