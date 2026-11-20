@@ -139,13 +139,20 @@ test('a student completes a course, downloads their certificate and shares it', 
     expect(missingHtml).not.toContain('og:title');
     expect(missingHtml).not.toContain(title);
 
-    // The same address in the browser still draws the certificate.
-    await visitor.goto(`${PAGE_RENDERER}/certificates/${certificateId}`);
-    await expect(
-      visitor.getByRole('heading', { level: 1, name }),
-    ).toBeVisible();
-    await expect(visitor.getByText(title)).toBeVisible();
-    await screenshot(visitor, 'certificate-page-through-renderer');
+    // The same address in a browser that runs no scripts, as a crawler sees
+    // it. The renderer's local server doesn't serve the portal's assets, so
+    // the page itself isn't drawn here: the portal draws it on the deployed
+    // distribution, and the portal's own address above covers that.
+    const crawler = await visitor.context().browser()!.newContext({
+      javaScriptEnabled: false,
+    });
+    const crawlerPage = await crawler.newPage();
+    await crawlerPage.goto(`${PAGE_RENDERER}/certificates/${certificateId}`);
+    await expect(crawlerPage).toHaveTitle(
+      new RegExp(`${name} completed ${title}`),
+    );
+    await screenshot(crawlerPage, 'certificate-page-through-renderer');
+    await crawler.close();
   });
 
   await test.step('a changed ID finds no certificate', async () => {
