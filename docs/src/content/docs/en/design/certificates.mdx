@@ -65,7 +65,7 @@ The student portal builds the link in the learner's browser (`lib/linkedin-add-t
 
 ## The link preview
 
-Link-preview crawlers run no scripts, so the page renderer (see <Link path="design/public-pages">Public pages</Link>) answers `/certificates/<ID>` with a head built from `certificate.verify`: the title "<learner> completed <course>", the completion date, the site name and the ID. It never shows more than the page does. The page is always `noindex`, on every stage, because it names a person. Deeper paths such as `/certificates/<ID>/linkedin` get the plain template (research R-8).
+Link-preview crawlers run no scripts, so the page renderer (see <Link path="design/public-pages">Public pages</Link>) answers `/certificates/<ID>` with a head built from `certificate.verify`: the title "the learner completed the course", the completion date, the site name and the ID. It never shows more than the page does. The page is always `noindex`, on every stage, because it names a person. Deeper paths such as `/certificates/<ID>/linkedin` get the plain template (research R-8).
 
 ## Limitations
 
