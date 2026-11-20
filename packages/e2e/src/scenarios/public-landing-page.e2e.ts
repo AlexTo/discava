@@ -9,6 +9,7 @@ import {
   apiUser,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { setCourseCatalogue } from '../helpers/catalogue.js';
 import { COURSE_IMAGE_BARS } from '../helpers/images.js';
 import {
   addLesson,
@@ -398,6 +399,19 @@ test('the page renderer serves landing pages, the site map and robots.txt withou
     learningOutcomes: ['Be found by crawlers'],
     requirements: ['A browser'],
   });
+  await setCourseCatalogue(courseId, { level: 'beginner', language: 'en' });
+  const student = await apiUser('Sam', ['student']);
+  await student.core.course.enrol.mutate({ courseId });
+  await student.core.review.post.mutate({
+    courseId,
+    rating: 5,
+    text: 'Found by crawlers too.',
+  });
+  await instructor.instructor.review.respond.mutate({
+    courseId,
+    reviewerId: student.sub,
+    text: 'Thanks for the review.',
+  });
   const draft = await instructor.instructor.course.create.mutate({
     title: uniqueName('E2E crawler draft'),
   });
@@ -426,6 +440,19 @@ test('the page renderer serves landing pages, the site map and robots.txt withou
     await expect(
       crawlerPage.getByRole('heading', { level: 1, name: title }),
     ).toBeVisible();
+    await expect(
+      crawlerPage.getByText('Beginner', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      crawlerPage.getByText('English', { exact: true }),
+    ).toBeVisible();
+    await expect(crawlerPage.getByText(/^Response from /)).toBeVisible();
+    await expect(crawlerPage.getByText('Thanks for the review.')).toBeVisible();
+    await screenshot(
+      crawlerPage,
+      'level, language and review response as a crawler gets them',
+      { fullPage: true },
+    );
     await screenshot(crawlerPage, 'course page as a crawler gets it', {
       fullPage: true,
     });
