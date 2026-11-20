@@ -11,7 +11,7 @@
 pnpm nx run @discava/core-table:test -- --run curriculum invariants stream-features
 pnpm nx run @discava/common-server-utils:test -- --run lesson-media
 pnpm nx run @discava/instructor-api:test -- --run lesson.test.ts
-pnpm nx run @discava/core-api:test -- --run free-preview paid-access course.test.ts router.test.ts render handler
+pnpm nx run @discava/core-api:test -- --run free-preview paid-access course-public-view course-view router.test.ts render handler robots sitemap
 pnpm nx run @discava/common-constructs:test -- --run core-api.test.ts
 pnpm nx run @discava/student-portal:test -- --run free-preview course-page enrolment-actions
 pnpm nx run @discava/instructor-portal:test -- --run free-preview

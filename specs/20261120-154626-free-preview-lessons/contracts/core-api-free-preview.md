@@ -150,7 +150,7 @@ The procedure sets it with `isOpenFreePreview({ course, module, lesson })` for e
 
 `procedures/paid-access.test.ts` (extended): its table of enrolled procedures is run again against an open preview lesson of a priced course and refuses identically.
 
-`procedures/course.test.ts`: `publicView` returns `freePreview: true` for a marked ordinary lesson and `false` for an unmarked one and for a marked assignment lesson.
+`procedures/course-public-view.test.ts`: `publicView` returns `freePreview: true` for a marked ordinary lesson and `false` for an unmarked one and for a marked assignment lesson. `procedures/course-view.test.ts`: `course.view`'s lessons carry no `freePreview`.
 
 `router.test.ts`: the three operations exist, are in `PUBLIC_OPERATIONS`, and nothing else in the `freePreview` router is.
 
