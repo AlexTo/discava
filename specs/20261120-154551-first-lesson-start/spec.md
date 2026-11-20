@@ -48,6 +48,10 @@ Resolved without asking, using the recommended defaults (non-interactive run).
 - Q: Who is in the activation rate? → A: Every enrolment the course has had, including those that later ended, like "Enrolments" on the same page: a learner who started and then left did start. The rate is activated enrolments divided by all enrolments, and shows "No data" when there are none.
 - Q: Is there a time limit, such as "within 7 days of enrolling"? → A: No. Activation is counted whenever it happens. The page says "so far", because learners who enrolled recently have had less time.
 - Q: How will the owner tell whether this helped? → A: The analytics page shows activation for all time and for learners who enrolled in the last 30 or 90 days, plus how many learners answered and dismissed the prompt. Figures are rebuilt from the records, so enrolments from before this feature are included, and the owner can compare learners who enrolled before and after it shipped. No experiment or control group is built.
+- Q: Does the learner know who will read their answer before they post it? → A: Yes. Under the text box the prompt says "Everyone in this course can read your answer.", and the default text says "Tell the class".
+- Q: Is the enrolment confirmed when the course has no lessons and the learner lands on the course home? → A: Yes. The same line, "You're enrolled in <course>.", is shown once on the course home.
+- Q: Does the prompt take keyboard focus or interrupt a screen reader when the lesson opens? → A: No. Focus stays where the lesson page puts it today, so the first item comes first. The prompt is a labelled form reached in page order, and the confirmation line is announced politely, without moving focus.
+- Q: Is the prompt shown while the learner has a question's thread open, or when the lesson's questions fail to load? → A: No. It is shown with the lesson's list of questions only, where the ask form is shown today.
 - Q: Are reminders, goals or study plans part of this? → A: No, on purpose (issue #596): the largest test found they raise early engagement but not completion. Nothing here emails, notifies or schedules anything.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -65,7 +69,7 @@ A signed-in visitor on a course page presses **Enrol now** (a free course) or pa
 1. **Given** a free published course with shown lessons, **When** a signed-in visitor presses **Enrol now**, **Then** the first shown lesson opens, with the line "You're enrolled in <course>." and no dialog.
 2. **Given** a priced course, **When** the learner returns from a successful payment and the enrolment appears, **Then** the first shown lesson opens without a click.
 3. **Given** a course whose first module or first lesson is hidden or archived, **When** a learner enrols, **Then** the lesson that opens is the first one students can see.
-4. **Given** a course with no lesson shown to students, **When** a learner enrols, **Then** the course home opens and says there are no lessons yet.
+4. **Given** a course with no lesson shown to students, **When** a learner enrols, **Then** the course home opens, confirms the enrolment and says there are no lessons yet.
 5. **Given** a learner who left a course after completing its first two lessons, **When** they enrol again, **Then** the third lesson opens.
 6. **Given** an enrolled learner with progress, **When** they open the course from My Learning or the course page, **Then** they resume where they left off, exactly as today.
 7. **Given** the payment has not been confirmed yet, **When** the learner is back on the course page, **Then** they see "Confirming your payment" as today, and are not moved until the enrolment appears.
@@ -83,7 +87,7 @@ In the first lesson's Questions section, an enrolled learner sees a prompt above
 
 **Acceptance Scenarios**:
 
-1. **Given** an enrolled learner who has neither answered nor dismissed the prompt, **When** they open the first shown lesson, **Then** the prompt is shown above the lesson's questions.
+1. **Given** an enrolled learner who has neither answered nor dismissed the prompt, **When** they open the first shown lesson, **Then** the prompt is shown above the lesson's questions, says that everyone in the course can read the answer, and has not taken focus.
 2. **Given** the prompt is shown, **When** the learner writes an answer and presses **Post**, **Then** the answer appears in the lesson's list, marked as an answer to the course prompt, and the prompt disappears.
 3. **Given** the prompt is shown, **When** the learner presses **Not now**, **Then** the prompt disappears and nothing is posted.
 4. **Given** a learner who answered or dismissed the prompt, **When** they open the first lesson again, on any device, **Then** the prompt is not shown.
@@ -157,7 +161,7 @@ An instructor opens a course's settings, sees the first-lesson prompt with the d
 - **FR-002**: After a paid enrolment appears, the portal MUST open the same lesson without a click, whether the enrolment appears while the learner waits or was already there when they returned from paying.
 - **FR-003**: When the course has no lesson shown to students, the portal MUST open the course home.
 - **FR-004**: The lesson MUST open with its first item at the top and ready to use, and MUST NOT start playing media by itself.
-- **FR-005**: The lesson page MUST confirm the enrolment once ("You're enrolled in <course>.") when the learner arrives from enrolling, and not on later visits.
+- **FR-005**: The page the learner lands on (the lesson, or the course home when there is no lesson) MUST confirm the enrolment once ("You're enrolled in <course>.") when they arrive from enrolling, and not on later visits. The line MUST be announced to assistive technology without moving focus.
 - **FR-006**: Opening a course by any other route (My Learning, the course page's button for an enrolled learner, the course home) MUST behave as today, so returning learners resume where they left off.
 - **FR-007**: The move to the lesson after paying MUST replace the payment return address in the browser's history.
 - **FR-008**: The payment waiting, timed-out, cancelled and unavailable states MUST stay as the checkout spec defines them. A return address alone, without an enrolment, MUST NOT open a lesson.
@@ -165,7 +169,7 @@ An instructor opens a course's settings, sees the first-lesson prompt with the d
 **The first-lesson prompt**
 
 - **FR-009**: The first lesson shown to students MUST show a prompt in its Questions section to a learner whose enrolment has not ended and who has neither answered nor dismissed it, while the course is published. No other lesson shows it.
-- **FR-010**: The prompt MUST offer one text field, **Post** and **Not now**, with text labels only.
+- **FR-010**: The prompt MUST offer one labelled text field, **Post** and **Not now**, with text labels only, and MUST say that everyone in the course can read the answer. It MUST NOT take focus when the page opens, and is shown only with the lesson's list of questions (not inside an open thread, and not when the list failed to load).
 - **FR-011**: Posting MUST create one post in that lesson's Q&A, visible to everyone who can read the lesson's questions, marked as an answer to the course prompt, and open to replies, upvotes, reports and moderation like any question.
 - **FR-012**: A prompt answer MUST NOT appear in the instructor's Unanswered queue or count as an unanswered question.
 - **FR-013**: Whether a learner answered or dismissed the prompt MUST be remembered per learner and course on the server, so it holds on every device and browser, and MUST never be undone: not by deleting or hiding the answer, changing the prompt's text, reordering lessons, or ending and renewing the enrolment.
