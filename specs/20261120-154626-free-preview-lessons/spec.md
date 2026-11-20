@@ -101,13 +101,13 @@ A preview is for looking. It records nothing about the visitor, and the page off
 
 **Why this priority**: Without it a preview is a dead end, and a preview that silently recorded progress for someone who never enrolled would break the rules that tie student records to enrolments. The preview is still watchable without it.
 
-**Independent Test**: Signed out, watch a preview video to the end, then check that no record of any kind exists for the visit. Sign in, enrol (or buy, for a priced course) from the preview page, and land on the same lesson in the normal player with no progress yet.
+**Independent Test**: Signed out, watch a preview video to the end, then check that no record of any kind exists for the visit. Sign in, enrol in a free course from the preview page, and continue to the same lesson in the normal player with no progress yet.
 
 **Acceptance Scenarios**:
 
 1. **Given** a visitor watching a preview, **When** they play, pause, finish the video, read the text or download the file, **Then** no completion, progress, saved video position, quiz attempt, activity count or enrolment is recorded.
 2. **Given** a visitor on a preview page, **When** they look at it, **Then** it offers the same action the course's landing page offers them (Enrol now for a free course, Buy now with the price for a priced one, or the sign-in form of either), and says that progress is saved once they enrol.
-3. **Given** a visitor on a preview page of a priced course, **When** they choose Buy now and pay, **Then** they return enrolled and are taken to that lesson in the normal player.
+3. **Given** a signed-in visitor on a preview page of a free course, **When** they choose Enrol now, **Then** they are enrolled and offered that lesson in the normal player as the next step. On a priced course, Buy now goes through the payment exactly as from the landing page and returns there, as the checkout defines.
 4. **Given** a student with a current enrolment, **When** they open a preview address, **Then** they are taken to that lesson in the normal player, where their progress is recorded as usual.
 5. **Given** a preview page, **When** a visitor looks for the lesson's discussion, **Then** none is shown and nothing can be posted.
 6. **Given** a course with several open preview lessons, **When** a visitor is on one, **Then** the page lists the others so they can move between them, and links back to the landing page.
@@ -167,7 +167,7 @@ The landing page's content served to crawlers marks the open preview lessons in 
 - **FR-010**: From the moment a lesson stops being an open preview (it is unmarked, hidden or archived, its module is hidden or archived, or its course is archived), every preview request for it MUST be refused, with no delay and no cached answer. Permissions already issued end by their own life (one hour for a video, five minutes for a file) and are not revoked. Addresses already handed out MUST show a "preview no longer available" page, not a sign-in form and not a redirect.
 - **FR-011**: The public course landing page MUST label each open preview lesson "Free preview" in its outline and link it to the lesson's preview address. Lessons that are not open previews MUST look as they do today.
 - **FR-012**: The preview page MUST show the course's title with a link to its landing page, the lesson, a list of the course's other open preview lessons, and the same enrol or buy action, with the same rules, that the landing page offers that visitor. It MUST say that progress is saved once they enrol.
-- **FR-013**: A student with a current enrolment who opens a preview address MUST be taken to that lesson in the normal player. A visitor who enrols or buys from a preview page MUST land on that lesson in the normal player once enrolled.
+- **FR-013**: A student with a current enrolment who opens a preview address MUST be taken to that lesson in the normal player. A visitor who enrols in a free course from a preview page MUST be offered that lesson in the normal player as the next step. A purchase started from a preview page MUST follow the checkout's own flow unchanged, including where it returns to.
 - **FR-014**: The instructor portal MUST offer a Free preview control on each ordinary lesson, with a confirmation before marking that says anyone will be able to open the lesson without enrolling or paying. It MUST show a "Free preview" badge on marked lessons, and on a marked lesson that is not open (hidden, or in a draft course) MUST say it is not public yet. Assignment lessons MUST NOT offer the control.
 - **FR-015**: The landing page content served to crawlers MUST include the "Free preview" label and link for open preview lessons, and MUST reflect a change within 5 minutes, as the rest of that content does. A preview lesson's own address MUST NOT serve lesson content to crawlers, MUST carry a do-not-index marker, and MUST NOT be listed in the site map.
 - **FR-016**: Every endpoint this feature adds that anonymous callers can reach MUST be protected by the same per-stage controls as the existing public course endpoints: the web firewall where the stage enables it and the public request limits. A preview video MUST NOT play when embedded in another website.
@@ -192,7 +192,7 @@ The landing page's content served to crawlers marks the open preview lessons in 
 - **SC-004**: After a lesson stops being an open preview, 100% of preview requests for it are refused from the next request on, and no playback permission issued before the change works for longer than one hour after it.
 - **SC-005**: 0 records of any kind are created or changed by viewing previews, and the data-consistency check passes after every test.
 - **SC-006**: An instructor can mark or unmark a lesson in under 30 seconds, and the landing page shows the change to visitors within 5 minutes.
-- **SC-007**: A visitor on a preview page can start enrolling or buying in one action, and after enrolling is on the same lesson in the normal player without searching for it.
+- **SC-007**: A visitor on a preview page can start enrolling or buying in one action, and after enrolling in a free course reaches the same lesson in the normal player in one more action.
 - **SC-008**: 100% of crawler responses for a preview lesson's address contain no lesson content and carry a do-not-index marker.
 
 ## Assumptions
