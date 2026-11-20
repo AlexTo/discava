@@ -119,15 +119,20 @@ export const evaluateCertificateCriteria = ({
   const quizzes = assessedQuizzes.map((item) => {
     const settings = item.settings as QuizSettings;
     const summary = summaries.get(item.contentItemId);
-    const state: QuizRequirementState = summary?.passedAt
-      ? 'passed'
-      : !summary
-        ? 'not-attempted'
-        : settings.attemptsAllowed != null &&
-            summary.attemptsUsed >= settings.attemptsAllowed
-          ? 'no-attempts-left'
-          : 'not-passed';
-    return { item, summary, state, passMark: settings.passMarkPercent ?? 0 };
+    const passMark = settings.passMarkPercent ?? 0;
+    // `passedAt` is permanent, so a quiz whose pass mark was raised past the
+    // student's best score no longer counts: the certificate records both, and
+    // the score must reach the mark it lists.
+    const state: QuizRequirementState =
+      summary?.passedAt && summary.bestScore >= passMark
+        ? 'passed'
+        : !summary
+          ? 'not-attempted'
+          : settings.attemptsAllowed != null &&
+              summary.attemptsUsed >= settings.attemptsAllowed
+            ? 'no-attempts-left'
+            : 'not-passed';
+    return { item, summary, state, passMark };
   });
 
   const requirements: CertificateRequirement[] =

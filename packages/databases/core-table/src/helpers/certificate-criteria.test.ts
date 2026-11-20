@@ -170,6 +170,32 @@ describe('evaluateCertificateCriteria', () => {
     expect(assessment.assessedItemCount).toBe(0);
   });
 
+  it('does not count a quiz passed under a pass mark that has since been raised past the best score', () => {
+    const { met, requirements } = evaluateCertificateCriteria({
+      criteria: required,
+      curriculum: curriculumOf([quiz('q1', 70)]),
+      // Passed at 60 when the mark was 50; the mark is now 70.
+      quizSummaries: [summary('q1', 60, true)],
+    });
+    expect(met).toBe(false);
+    expect(requirements[0].quizzes).toEqual([
+      { contentItemId: 'q1', state: 'not-passed' },
+    ]);
+  });
+
+  it('still counts it when the best score reaches the raised mark', () => {
+    const { met, assessment } = evaluateCertificateCriteria({
+      criteria: required,
+      curriculum: curriculumOf([quiz('q1', 70)]),
+      quizSummaries: [summary('q1', 70, true)],
+    });
+    expect(met).toBe(true);
+    expect(assessment.assessedItems[0]).toMatchObject({
+      scorePercent: 70,
+      passMarkPercent: 70,
+    });
+  });
+
   it('gives each requirement state', () => {
     const limited = (id: string, order: number) =>
       quiz(
