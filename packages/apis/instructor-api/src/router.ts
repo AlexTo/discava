@@ -61,6 +61,7 @@ import {
   createContentItemVideoUrl,
   updateContentItemVideo,
 } from './procedures/content-item-video.js';
+import { updateContentItemVideoQuestions } from './procedures/content-item-video-questions.js';
 import {
   archiveCourse,
   createCourse,
@@ -234,6 +235,7 @@ export const appRouter = router({
     updateVideo: updateContentItemVideo,
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
+    updateVideoQuestions: updateContentItemVideoQuestions,
     createVideoUrl: createContentItemVideoUrl,
     captionUploadUrl: createContentItemCaptionUploadUrl,
     attachCaption: attachContentItemCaption,

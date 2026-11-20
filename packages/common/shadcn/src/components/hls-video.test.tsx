@@ -577,3 +577,51 @@ describe('HlsVideo captions', () => {
     expect(revoked).toEqual([]);
   });
 });
+
+describe('HlsVideo onTimeChange', () => {
+  const setup = (onTimeChange = vi.fn()) => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+    const { container } = render(
+      <HlsVideo url={URL} withCredentials onTimeChange={onTimeChange} />,
+    );
+    return { el: video(container), onTimeChange };
+  };
+  const emit = (el: HTMLElement, type: string, at: number) =>
+    act(() => {
+      media.currentTime = at;
+      el.dispatchEvent(new Event(type));
+    });
+
+  it('reports the current time on each time update', () => {
+    const { el, onTimeChange } = setup();
+
+    emit(el, 'timeupdate', 1.5);
+    emit(el, 'timeupdate', 2);
+
+    expect(onTimeChange.mock.calls).toEqual([[1.5], [2]]);
+  });
+
+  it('reports the time after a seek', () => {
+    const { el, onTimeChange } = setup();
+
+    emit(el, 'seeked', 42);
+
+    expect(onTimeChange).toHaveBeenCalledWith(42);
+  });
+
+  it('uses the latest callback without restarting playback', () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+    const { container, rerender } = render(
+      <HlsVideo url={URL} withCredentials onTimeChange={first} />,
+    );
+    rerender(<HlsVideo url={URL} withCredentials onTimeChange={second} />);
+
+    emit(video(container), 'timeupdate', 3);
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith(3);
+    expect(hls.instances).toHaveLength(1);
+  });
+});

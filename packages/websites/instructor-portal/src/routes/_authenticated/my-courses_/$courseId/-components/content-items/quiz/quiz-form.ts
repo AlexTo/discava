@@ -178,6 +178,38 @@ export interface QuizErrors {
   questions: Record<string, string[]>;
 }
 
+// What's wrong with one question; empty when it's fine. The video questions
+// editor checks its questions with the same rules.
+export const validateQuestion = (question: QuestionState): string[] => {
+  const problems: string[] = [];
+  if (!plainText(question.prompt)) {
+    problems.push('Write the question.');
+  }
+  if (question.options.length < MIN_OPTIONS) {
+    problems.push(`Give at least ${MIN_OPTIONS} options.`);
+  } else if (question.options.length > MAX_OPTIONS) {
+    problems.push(`Give at most ${MAX_OPTIONS} options.`);
+  }
+  if (question.options.some(({ text }) => !text.trim())) {
+    problems.push('Fill in every option, or remove the empty ones.');
+  }
+  if (
+    question.options.some(({ text }) => text.trim().length > MAX_OPTION_TEXT)
+  ) {
+    problems.push(`An option can be at most ${MAX_OPTION_TEXT} characters.`);
+  }
+  const correct = question.options.filter(({ optionId }) =>
+    question.correct.includes(optionId),
+  ).length;
+  if (question.kind === 'single' && correct !== 1) {
+    problems.push('Mark exactly 1 correct option.');
+  }
+  if (question.kind === 'multiple' && correct < 1) {
+    problems.push('Mark at least 1 correct option.');
+  }
+  return problems;
+};
+
 export const validateQuiz = (quiz: QuizState): QuizErrors => {
   const errors: QuizErrors = { quiz: [], questions: {} };
   const title = quiz.title.trim();
@@ -207,32 +239,7 @@ export const validateQuiz = (quiz: QuizState): QuizErrors => {
   }
 
   for (const question of quiz.questions) {
-    const problems: string[] = [];
-    if (!plainText(question.prompt)) {
-      problems.push('Write the question.');
-    }
-    if (question.options.length < MIN_OPTIONS) {
-      problems.push(`Give at least ${MIN_OPTIONS} options.`);
-    } else if (question.options.length > MAX_OPTIONS) {
-      problems.push(`Give at most ${MAX_OPTIONS} options.`);
-    }
-    if (question.options.some(({ text }) => !text.trim())) {
-      problems.push('Fill in every option, or remove the empty ones.');
-    }
-    if (
-      question.options.some(({ text }) => text.trim().length > MAX_OPTION_TEXT)
-    ) {
-      problems.push(`An option can be at most ${MAX_OPTION_TEXT} characters.`);
-    }
-    const correct = question.options.filter(({ optionId }) =>
-      question.correct.includes(optionId),
-    ).length;
-    if (question.kind === 'single' && correct !== 1) {
-      problems.push('Mark exactly 1 correct option.');
-    }
-    if (question.kind === 'multiple' && correct < 1) {
-      problems.push('Mark at least 1 correct option.');
-    }
+    const problems = validateQuestion(question);
     if (problems.length > 0) {
       errors.questions[question.questionId] = problems;
     }

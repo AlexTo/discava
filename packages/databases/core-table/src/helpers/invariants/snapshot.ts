@@ -120,6 +120,9 @@ export interface TableSnapshot {
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
+    | 'questions'
+    | 'answerKey'
+    | 'quizVersion'
   >[];
   coursePreviews: Pick<
     Item<typeof createCoursePreviewEntity>,
