@@ -15,6 +15,7 @@ import {
   CoursePlayerLayout,
 } from './course-player';
 import { QuestionsSection } from './discussion/questions-section';
+import { EnrolledNotice } from './enrolled-notice';
 import { useQuizFailed } from './quiz-item';
 
 // One item as a step: ✓ done, ⚠ a quiz finished without passing, or the
@@ -114,6 +115,7 @@ function Lesson({
     isLessonComplete,
     newItemCount,
     readOnly,
+    course,
   } = player;
   const index = lessons.findIndex(({ lesson }) => lesson.lessonId === lessonId);
 
@@ -149,6 +151,7 @@ function Lesson({
 
   return (
     <div className="space-y-8">
+      {course ? <EnrolledNotice courseTitle={course.title} /> : null}
       <div className="space-y-3">
         <p className="text-xs font-medium text-muted-foreground">
           Module {moduleIndex + 1}: {module.title}

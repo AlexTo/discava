@@ -19,7 +19,7 @@ import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { formatPrice } from '@discava/common-web-utils/price';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useLocation } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { CircleCheck, Sparkles } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
@@ -74,9 +74,21 @@ export function EnrolmentActions({
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
-  const [enrolledOpen, setEnrolledOpen] = useState(false);
   // Signing in from here comes back to this course, to finish enrolling.
   const here = useLocation().href;
+  const navigate = useNavigate();
+  // Enrolling, or returning from a confirmed payment, opens the learner's
+  // next lesson. `replace` keeps ?checkout=success out of the history, so
+  // Back can't bounce them into the lesson again.
+  const startLearning = useCallback(
+    (replace: boolean) =>
+      void navigate({
+        to: '/learn/$courseId/start',
+        params: { courseId },
+        ...(replace && { replace }),
+      }),
+    [navigate, courseId],
+  );
 
   const enrolmentQuery = useQuery(
     trpc.course.myEnrolment.queryOptions(
@@ -91,7 +103,7 @@ export function EnrolmentActions({
           trpc.course.myEnrolment.queryKey({ courseId }),
           enrolment,
         );
-        setEnrolledOpen(true);
+        startLearning(false);
       },
     }),
   );
@@ -99,12 +111,15 @@ export function EnrolmentActions({
   const enrolment = enrolmentQuery.data;
   const enrolled =
     enrolment?.status === 'active' || enrolment?.status === 'completed';
-  const openEnrolledDialog = useCallback(() => setEnrolledOpen(true), []);
+  const onEnrolledAfterCheckout = useCallback(
+    () => startLearning(true),
+    [startLearning],
+  );
   const checkoutReturn = useCheckoutReturn({
     courseId,
     enabled: isAuthenticated && !enrolmentQuery.isPending,
     enrolled,
-    onEnrolled: openEnrolledDialog,
+    onEnrolled: onEnrolledAfterCheckout,
   });
 
   // A stale page can show a course as free after it got a price.
@@ -306,30 +321,6 @@ export function EnrolmentActions({
           {apiErrorMessage(checkout.error)}
         </ErrorAlert>
       ) : null}
-
-      <Dialog open={enrolledOpen} onOpenChange={setEnrolledOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <CircleCheck className="size-6" />
-            </div>
-            <DialogTitle className="text-center">You're enrolled!</DialogTitle>
-            <DialogDescription className="text-center">
-              You're now enrolled in {courseTitle}.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="sm:justify-center">
-            <DialogClose asChild>
-              <Button variant="outline">Keep browsing</Button>
-            </DialogClose>
-            <Button asChild>
-              <Link to="/learn/$courseId/home" params={{ courseId }}>
-                Start learning
-              </Link>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={signInOpen} onOpenChange={setSignInOpen}>
         <DialogContent>

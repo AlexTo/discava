@@ -155,7 +155,8 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
   await test.step('the open checkout still finishes', async () => {
     await student.getByRole('button', { name: 'Pay', exact: true }).click();
     await student.waitForURL(/checkout=success/);
-    await expect(student.getByText('Enrolled', { exact: true })).toBeVisible({
+    // Once the payment is confirmed the course page opens the lesson itself.
+    await expect(student.getByText("You're enrolled in")).toBeVisible({
       timeout: 30_000,
     });
   });
