@@ -18,6 +18,10 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('@discava/core-table', () => ({
+  expireOrder: vi.fn(async (_: unknown, order: any) => {
+    const current = state.orders.get(order.orderId);
+    if (current.status === 'pending') current.status = 'expired';
+  }),
   settleOrderPaid: vi.fn(async ({ order, paymentIntentId, now }: any) => {
     state.settleCalls++;
     if (state.tableError) {
@@ -270,5 +274,46 @@ describe('verification', () => {
     });
     expect(await send(body)).toEqual({ status: 200 });
     expect(state.settleCalls).toBe(0);
+  });
+});
+
+describe('checkout.session.expired', () => {
+  const expiredEvent = (
+    clientReferenceId: string | null = 'o1',
+    id = 'evt_x',
+  ) =>
+    JSON.stringify({
+      id,
+      object: 'event',
+      type: 'checkout.session.expired',
+      data: {
+        object: {
+          id: 'cs_1',
+          object: 'checkout.session',
+          payment_status: 'unpaid',
+          client_reference_id: clientReferenceId,
+        },
+      },
+    });
+
+  it('moves a pending order to expired, and a repeat changes nothing', async () => {
+    expect(await send(expiredEvent())).toEqual({ status: 200 });
+    expect(state.orders.get('o1')?.status).toBe('expired');
+    expect(await send(expiredEvent())).toEqual({ status: 200 });
+    expect(state.orders.get('o1')?.status).toBe('expired');
+    expect(state.enrolments).toEqual([]);
+    expect(refunds.create).not.toHaveBeenCalled();
+  });
+
+  it('leaves a paid order alone', async () => {
+    await send(sessionEvent());
+    expect(await send(expiredEvent())).toEqual({ status: 200 });
+    expect(state.orders.get('o1')?.status).toBe('paid');
+  });
+
+  it('logs an unknown order and answers 200', async () => {
+    expect(await send(expiredEvent('nope'))).toEqual({ status: 200 });
+    expect(logger.error).toHaveBeenCalled();
+    expect(state.orders.get('o1')?.status).toBe('pending');
   });
 });

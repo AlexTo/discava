@@ -8,7 +8,7 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Stripe from 'stripe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStripeStandIn, type StripeStandIn } from './stripe-stand-in.js';
 
 let server: Server;
@@ -386,6 +386,45 @@ describe('the hosted page', () => {
       'http://localhost:2020/learn/c1?checkout=cancelled',
     );
     expect(hook.deliveries).toEqual([]);
+  });
+
+  it('expires a session through the control, delivering the event and closing the page', async () => {
+    const hook = await receiver();
+    const { session, secret } = await start(hook.url);
+    const response = await request('/stripe/test/expire', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(response.status).toBe(200);
+    const [delivery] = hook.deliveries as [{ body: string; signature: string }];
+    const event = Stripe.webhooks.constructEvent(
+      delivery.body,
+      delivery.signature,
+      secret,
+    );
+    expect(event.type).toBe('checkout.session.expired');
+    const html = await (await page(`/stripe/pay/${session.id}`)).text();
+    expect(html).toContain('expired');
+    // A second expiry delivers nothing more.
+    await request('/stripe/test/expire', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId: session.id }),
+    });
+    expect(hook.deliveries).toHaveLength(1);
+  });
+
+  it('expires an unpaid session by itself at its expires_at', async () => {
+    const hook = await receiver();
+    const { stripe } = await connect(hook.url);
+    await stripe.checkout.sessions.create(
+      sessionParams({ expires_at: Math.floor(Date.now() / 1000) + 1 }),
+    );
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1), {
+      timeout: 4000,
+    });
+    expect(JSON.parse(hook.deliveries[0]?.body ?? '{}').type).toBe(
+      'checkout.session.expired',
+    );
   });
 
   it('shows an expired page for an unknown session', async () => {

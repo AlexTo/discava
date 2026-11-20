@@ -345,6 +345,29 @@ describe('EnrolmentActions: paid courses', () => {
     expect(await buyButton()).toBeEnabled();
   });
 
+  it('starts a new checkout after an earlier one was cancelled or expired', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const { user, calls } = renderPriced(
+      {
+        'payment.checkout': () => ({
+          checkoutUrl: 'https://pay.test/session-2',
+        }),
+      },
+      { path: '/?checkout=cancelled' },
+    );
+
+    await user.click(await buyButton());
+
+    await vi.waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://pay.test/session-2'),
+    );
+    expect(calls).toContainEqual({
+      path: 'payment.checkout',
+      input: { courseId: 'course-1' },
+    });
+  });
+
   it('offers a dropped student a new purchase', async () => {
     renderPriced({
       'course.myEnrolment': () => enrolment({ status: 'dropped' }),

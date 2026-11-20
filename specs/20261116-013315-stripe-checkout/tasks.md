@@ -225,14 +225,14 @@ description: "Task list for Stripe checkout for paid courses"
 
 ### Tests for User Story 5 (write first, see them fail)
 
-- [ ] T048 [P] [US5] Extend `packages/events/src/payments/stripe-webhook.test.ts`: `checkout.session.expired` moves a `pending` order to `expired`; the same event twice, and after the order was paid, changes nothing; an unknown order is logged and answered 200. Extend `stripe-stand-in.test.ts`: `/stripe/test/expire` delivers `checkout.session.expired` and the pay page then shows the expired page.
-- [ ] T049 [P] [US5] Extend the `enrolment-actions.test.tsx` cases: `?checkout=cancelled` shows "Payment cancelled. You have not been charged." and **Buy now**; after an `expired` order, Buy now starts a new checkout (the API is called again).
+- [x] T048 [P] [US5] Extend `packages/events/src/payments/stripe-webhook.test.ts`: `checkout.session.expired` moves a `pending` order to `expired`; the same event twice, and after the order was paid, changes nothing; an unknown order is logged and answered 200. Extend `stripe-stand-in.test.ts`: `/stripe/test/expire` delivers `checkout.session.expired` and the pay page then shows the expired page.
+- [x] T049 [P] [US5] Extend the `enrolment-actions.test.tsx` cases: `?checkout=cancelled` shows "Payment cancelled. You have not been charged." and **Buy now**; after an `expired` order, Buy now starts a new checkout (the API is called again).
 
 ### Implementation for User Story 5
 
-- [ ] T050 [US5] `packages/events/src/payments/events/session-expired.ts` calling `expireOrder`, routed from `stripe-webhook.ts`; add the `/stripe/test/expire` control to the stand-in (and make an unpaid session expire by itself at its `expires_at`, delivering the event).
-- [ ] T051 [US5] The `?checkout=cancelled` alert and **Buy now** in `enrolment-actions.tsx`.
-- [ ] T052 [US5] Run the US5 tests plus lint and typecheck locally and fix until green.
+- [x] T050 [US5] `packages/events/src/payments/events/session-expired.ts` calling `expireOrder`, routed from `stripe-webhook.ts`; add the `/stripe/test/expire` control to the stand-in (and make an unpaid session expire by itself at its `expires_at`, delivering the event).
+- [x] T051 [US5] The `?checkout=cancelled` alert and **Buy now** in `enrolment-actions.tsx`.
+- [x] T052 [US5] Run the US5 tests plus lint and typecheck locally and fix until green.
 
 **Checkpoint**: abandoned checkouts close themselves; a retry works.
 
