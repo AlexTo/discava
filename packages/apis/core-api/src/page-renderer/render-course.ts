@@ -2,6 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import {
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '@discava/common-web-utils/catalogue-labels';
 import type {
   IPublicReview,
   IPublicViewCourseOutput,
@@ -81,9 +85,21 @@ export const renderCoursePage = (
 
   const facts: [string, string][] = [
     ['Price', priceText(course.priceAmount, course.priceCurrency)],
-    ...(course.level ? [['Level', course.level] as [string, string]] : []),
+    ...(course.level
+      ? [
+          ['Level', LEVEL_LABELS[course.level] ?? course.level] as [
+            string,
+            string,
+          ],
+        ]
+      : []),
     ...(course.language
-      ? [['Language', course.language] as [string, string]]
+      ? [
+          ['Language', LANGUAGE_LABELS[course.language] ?? course.language] as [
+            string,
+            string,
+          ],
+        ]
       : []),
     ...(course.durationHours !== undefined
       ? [['Duration', `${course.durationHours} hours`] as [string, string]]
@@ -145,6 +161,10 @@ export const renderCoursePage = (
           `<li><p class="font-semibold">${escapeHtml(review.reviewerName)}</p><p class="text-sm">${stars(review.rating)}</p>${
             review.text
               ? `<p class="text-sm text-muted-foreground">${escapeHtml(review.text)}</p>`
+              : ''
+          }${
+            review.response
+              ? `<div class="ml-4 border-l-2 pl-4 text-sm"><p class="font-medium">Response from ${escapeHtml(review.response.byName)}</p><p class="mt-1 text-muted-foreground">${escapeHtml(review.response.text)}</p></div>`
               : ''
           }</li>`,
       )

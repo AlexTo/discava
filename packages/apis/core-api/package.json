@@ -16,6 +16,7 @@
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/common-server-utils": "workspace:*",
+    "@discava/common-web-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
     "@discava/search": "workspace:*",
     "@libpdf/core": "catalog:",
@@ -32,7 +33,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@discava/common-web-utils": "workspace:*",
     "@types/aws-lambda": "catalog:",
     "@types/cors": "catalog:",
     "cors": "catalog:",

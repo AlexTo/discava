@@ -96,24 +96,6 @@ export const catalogueFiltersToInput = (
   ...(filters.minRating !== undefined && { minRating: filters.minRating }),
 });
 
-export const LEVEL_LABELS: Record<string, string> = {
-  beginner: 'Beginner',
-  intermediate: 'Intermediate',
-  advanced: 'Advanced',
-};
-
-export const LANGUAGE_LABELS: Record<string, string> = {
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-  pt: 'Portuguese',
-  zh: 'Chinese',
-  ja: 'Japanese',
-  hi: 'Hindi',
-  ar: 'Arabic',
-};
-
 export const DURATION_LABELS: Record<string, string> = {
   lt2: 'Under 2 hours',
   '2to10': '2 to 10 hours',

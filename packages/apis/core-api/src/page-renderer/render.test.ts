@@ -29,8 +29,8 @@ const fullCourse = {
   updatedAt: '2026-01-01T00:00:00.000Z',
   learningOutcomes: ['Write safe code'],
   requirements: ['A laptop'],
-  level: 'Beginner',
-  language: 'English',
+  level: 'beginner',
+  language: 'en',
   durationHours: 4,
   category: { slug: 'programming', name: 'Programming' },
   instructors: [
@@ -67,6 +67,11 @@ const reviews = {
       rating: 5,
       text: 'Great',
       createdAt: '2026-02-01T00:00:00.000Z',
+      response: {
+        text: 'Thanks Sam',
+        byName: 'Prof. Grace',
+        at: '2026-02-02T00:00:00.000Z',
+      },
     },
   ],
   cursor: null,
@@ -101,6 +106,11 @@ describe('renderCoursePage', () => {
     expect(page.root).toContain('Ownership');
     expect(page.root).toContain('href="/instructors/ada"');
     expect(page.root).toContain('Sam');
+    expect(page.root).toContain('Beginner');
+    expect(page.root).toContain('English');
+    expect(page.root).not.toContain('>beginner<');
+    expect(page.root).toContain('Response from Prof. Grace');
+    expect(page.root).toContain('Thanks Sam');
     expect(JSON.parse(page.pageData)).toHaveProperty('course.publicView');
     expect(JSON.parse(page.pageData)).toHaveProperty('review.summary');
     expect(JSON.parse(page.pageData)).toHaveProperty('review.list');
