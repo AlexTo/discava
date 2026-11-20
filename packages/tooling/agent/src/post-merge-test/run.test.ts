@@ -43,10 +43,14 @@ interface Scenario {
   mergedAs?: Record<string, number>;
   files?: Record<number, string[]>;
   existing?: string[];
+  /** Issue bodies opened by someone with no write access. */
+  fromStrangers?: string[];
   env?: Record<string, string>;
   /** The issue or pull request number GitHub refuses to lock. */
   lockFails?: number;
   alreadyLocked?: number[];
+  /** The run is expected to throw: the error is returned, not thrown. */
+  fails?: boolean;
 }
 
 const runScenario = (scenario: Scenario) => {
@@ -71,123 +75,145 @@ const runScenario = (scenario: Scenario) => {
   const order: string[] = [];
   const logs: string[] = [];
   const flag = (args: string[], name: string) => args[args.indexOf(name) + 1];
-  run({
-    env: {
-      GITHUB_REPOSITORY: REPOSITORY,
-      GITHUB_EVENT_PATH: eventPath,
-      GITHUB_EVENT_NAME: 'workflow_run',
-      ...scenario.env,
-    },
-    log: (message) => logs.push(message),
-    gh: (args) => {
-      const path = args[1] ?? '';
-      if (args[0] === 'label') {
-        return '';
-      }
-      if (args[0] === 'api' && args[2] === 'PUT') {
-        if (scenario.lockFails && args[3].includes(`/${scenario.lockFails}/`)) {
-          throw new Error('HTTP 403');
+  let error: Error | undefined;
+  try {
+    run({
+      env: {
+        GITHUB_REPOSITORY: REPOSITORY,
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_EVENT_NAME: 'workflow_run',
+        ...scenario.env,
+      },
+      log: (message) => logs.push(message),
+      gh: (args) => {
+        const path = args[1] ?? '';
+        if (args[0] === 'label') {
+          return '';
         }
-        locked.push(args[3]);
-        order.push(`lock ${args[3]}`);
-        return '';
-      }
-      const lockedState = /^repos\/o\/r\/issues\/(\d+)$/.exec(path);
-      if (lockedState) {
-        const n = Number(lockedState[1]);
-        return (scenario.alreadyLocked ?? []).includes(n) ||
-          locked.includes(`repos/o/r/issues/${n}/lock`)
-          ? 'true\n'
-          : 'false\n';
-      }
-      if (args[0] === 'issue' && args[1] === 'edit') {
-        labelled.push({ issue: args[2], label: flag(args, '--add-label') });
-        order.push(`label ${args[2]}`);
-        return '';
-      }
-      if (args[0] === 'issue' && args[1] === 'create') {
-        created.push({
-          title: flag(args, '--title'),
-          body: readFileSync(flag(args, '--body-file'), 'utf8'),
-          label: args.includes('--label') ? flag(args, '--label') : undefined,
-        });
-        return `https://github.com/o/r/issues/${900 + created.length}\n`;
-      }
-      if (args[0] === 'pr' && args[1] === 'view') {
-        const number = Number(args[2]);
-        return JSON.stringify({
-          number,
-          title: `fix(core-api): change ${number}`,
-          url: `https://github.com/o/r/pull/${number}`,
-          labels: [],
-          files: (
-            scenario.files?.[number] ?? ['packages/apis/core-api/src/a.ts']
-          ).map((p) => ({ path: p })),
-          mergeCommit: { oid: `merge${number}` },
-          body: 'Closes #5',
-        });
-      }
-      if (path === 'repos/o/r/actions/runs/100/jobs') {
-        return scenario.currentJobs ?? deployJobs('success');
-      }
-      if (path.startsWith('repos/o/r/actions/workflows/7/runs')) {
-        return JSON.stringify({
-          workflow_runs: [
-            { id: 100, head_sha: HEAD, created_at: '2026-11-20T10:00:00Z' },
-            ...(scenario.previous ?? []).map((r) => ({
-              id: r.id,
-              head_sha: r.sha,
-              created_at: '2026-11-19T10:00:00Z',
+        if (args[0] === 'api' && args[2] === 'PUT') {
+          if (
+            scenario.lockFails &&
+            args[3].includes(`/${scenario.lockFails}/`)
+          ) {
+            throw new Error('HTTP 403');
+          }
+          locked.push(args[3]);
+          order.push(`lock ${args[3]}`);
+          return '';
+        }
+        const lockedState = /^repos\/o\/r\/issues\/(\d+)$/.exec(path);
+        if (lockedState) {
+          const n = Number(lockedState[1]);
+          return (scenario.alreadyLocked ?? []).includes(n) ||
+            locked.includes(`repos/o/r/issues/${n}/lock`)
+            ? 'true\n'
+            : 'false\n';
+        }
+        if (args[0] === 'issue' && args[1] === 'edit') {
+          labelled.push({ issue: args[2], label: flag(args, '--add-label') });
+          order.push(`label ${args[2]}`);
+          return '';
+        }
+        if (args[0] === 'issue' && args[1] === 'create') {
+          created.push({
+            title: flag(args, '--title'),
+            body: readFileSync(flag(args, '--body-file'), 'utf8'),
+            label: args.includes('--label') ? flag(args, '--label') : undefined,
+          });
+          return `https://github.com/o/r/issues/${900 + created.length}\n`;
+        }
+        if (args[0] === 'pr' && args[1] === 'view') {
+          const number = Number(args[2]);
+          return JSON.stringify({
+            number,
+            title: `fix(core-api): change ${number}`,
+            url: `https://github.com/o/r/pull/${number}`,
+            labels: [],
+            files: (
+              scenario.files?.[number] ?? ['packages/apis/core-api/src/a.ts']
+            ).map((p) => ({ path: p })),
+            mergeCommit: { oid: `merge${number}` },
+            body: 'Closes #5',
+          });
+        }
+        if (path === 'repos/o/r/actions/runs/100/jobs') {
+          return scenario.currentJobs ?? deployJobs('success');
+        }
+        if (path.startsWith('repos/o/r/actions/workflows/7/runs')) {
+          return JSON.stringify({
+            workflow_runs: [
+              { id: 100, head_sha: HEAD, created_at: '2026-11-20T10:00:00Z' },
+              ...(scenario.previous ?? []).map((r) => ({
+                id: r.id,
+                head_sha: r.sha,
+                created_at: '2026-11-19T10:00:00Z',
+              })),
+            ],
+          });
+        }
+        const jobs = /^repos\/o\/r\/actions\/runs\/(\d+)\/jobs$/.exec(path);
+        if (jobs) {
+          return (
+            scenario.previous?.find((r) => r.id === Number(jobs[1]))?.jobs ?? ''
+          );
+        }
+        if (path.startsWith('repos/o/r/compare/')) {
+          return JSON.stringify({
+            status: 'ahead',
+            commits: (scenario.commits ?? []).map((sha) => ({ sha })),
+          });
+        }
+        const pulls = /^repos\/o\/r\/commits\/([\w-]+)\/pulls$/.exec(path);
+        if (pulls) {
+          if (pulls[1] === 'branch-commit') {
+            // A commit on #11's own branch: #11 merged as another commit.
+            return JSON.stringify([
+              {
+                number: 11,
+                merged_at: '2026-11-19T12:00:00Z',
+                merge_commit_sha: 'c1',
+              },
+            ]);
+          }
+          const number = scenario.mergedAs?.[pulls[1]];
+          return JSON.stringify(
+            number === undefined
+              ? []
+              : [
+                  {
+                    number,
+                    merged_at: '2026-11-19T12:00:00Z',
+                    merge_commit_sha: pulls[1],
+                  },
+                ],
+          );
+        }
+        if (path.startsWith('repos/o/r/issues?')) {
+          return [
+            ...(scenario.existing ?? []).map((body) => ({
+              body,
+              author: 'github-actions[bot]',
+              association: 'NONE',
             })),
-          ],
-        });
-      }
-      const jobs = /^repos\/o\/r\/actions\/runs\/(\d+)\/jobs$/.exec(path);
-      if (jobs) {
-        return (
-          scenario.previous?.find((r) => r.id === Number(jobs[1]))?.jobs ?? ''
-        );
-      }
-      if (path.startsWith('repos/o/r/compare/')) {
-        return JSON.stringify({
-          status: 'ahead',
-          commits: (scenario.commits ?? []).map((sha) => ({ sha })),
-        });
-      }
-      const pulls = /^repos\/o\/r\/commits\/([\w-]+)\/pulls$/.exec(path);
-      if (pulls) {
-        if (pulls[1] === 'branch-commit') {
-          // A commit on #11's own branch: #11 merged as another commit.
-          return JSON.stringify([
-            {
-              number: 11,
-              merged_at: '2026-11-19T12:00:00Z',
-              merge_commit_sha: 'c1',
-            },
-          ]);
+            ...(scenario.fromStrangers ?? []).map((body) => ({
+              body,
+              author: 'mallory',
+              association: 'NONE',
+            })),
+          ]
+            .map((issue) => JSON.stringify(issue))
+            .join('\n');
         }
-        const number = scenario.mergedAs?.[pulls[1]];
-        return JSON.stringify(
-          number === undefined
-            ? []
-            : [
-                {
-                  number,
-                  merged_at: '2026-11-19T12:00:00Z',
-                  merge_commit_sha: pulls[1],
-                },
-              ],
-        );
-      }
-      if (path.startsWith('repos/o/r/issues?')) {
-        return (scenario.existing ?? [])
-          .map((body) => JSON.stringify(body))
-          .join('\n');
-      }
-      throw new Error(`Unexpected gh ${args.join(' ')}`);
-    },
-  });
-  return { created, logs, locked, labelled, order };
+        throw new Error(`Unexpected gh ${args.join(' ')}`);
+      },
+    });
+  } catch (thrown) {
+    if (!scenario.fails) {
+      throw thrown;
+    }
+    error = thrown as Error;
+  }
+  return { created, logs, locked, labelled, order, error };
 };
 
 describe('run', () => {
@@ -246,13 +272,44 @@ describe('run', () => {
     ['the issue it closes', 5],
     ['the pull request', 12],
     ['the issue', 901],
-  ])('never labels the issue when %s could not be locked', (_, refused) => {
-    const { labelled, logs } = runScenario({
-      mergedAs: { [HEAD]: 12 },
-      lockFails: refused,
+  ])(
+    'never labels the issue and fails the run when %s could not be locked',
+    (_, refused) => {
+      const { labelled, logs, error } = runScenario({
+        mergedAs: { [HEAD]: 12 },
+        lockFails: refused,
+        fails: true,
+      });
+      expect(labelled).toEqual([]);
+      expect(logs.join('\n')).toContain('::warning::Could not lock');
+      expect(error?.message).toContain(
+        'Not handed to the test agent: https://github.com/o/r/issues/901',
+      );
+    },
+  );
+
+  it('still opens the other issues before failing for one it could not lock', () => {
+    const { created, labelled, error } = runScenario({
+      previous: [{ id: 98, sha: PREV, jobs: deployJobs('success') }],
+      commits: ['c1', HEAD],
+      mergedAs: { c1: 11, [HEAD]: 12 },
+      lockFails: 11,
+      fails: true,
     });
-    expect(labelled).toEqual([]);
-    expect(logs.join('\n')).toContain('::warning::Could not lock');
+    expect(created).toHaveLength(2);
+    expect(labelled.map((l) => l.issue)).toEqual(['902']);
+    expect(error?.message).toContain('issues/901');
+    expect(error?.message).not.toContain('issues/902');
+  });
+
+  it('ignores a marker in an issue a stranger opened', () => {
+    const { created } = runScenario({
+      mergedAs: { [HEAD]: 12 },
+      fromStrangers: [testMarker(12)],
+    });
+    expect(created.map((issue) => issue.title)).toEqual([
+      'test(post-merge): verify #12 change 12',
+    ]);
   });
 
   it('tests only the head commit when no previous deploy is found', () => {

@@ -12,6 +12,8 @@ import {
   type DeployJob,
   decide,
   deployedStage,
+  type IssueSummary,
+  isTrustedIssue,
   MARKER_PREFIX,
   type MergedPullRequest,
   renderIssue,
@@ -155,19 +157,23 @@ const pullRequest = (number: number, gh: Deps['gh']): MergedPullRequest => {
   };
 };
 
-// Every issue body that carries a test marker, open or closed. One JSON string
-// per line.
+// The body of every issue that carries a test marker, open or closed, and was
+// opened by this workflow or someone with write access: anyone can open an
+// issue, and a marker in a stranger's must not stop a pull request being
+// tested. One JSON object per line.
 const markedIssueBodies = (repository: string, gh: Deps['gh']): string[] =>
   gh([
     'api',
     `repos/${repository}/issues?state=all&per_page=100`,
     '--paginate',
     '--jq',
-    `.[] | select(.pull_request == null) | (.body // "") | select(contains("${MARKER_PREFIX}")) | @json`,
+    `.[] | select(.pull_request == null) | select((.body // "") | contains("${MARKER_PREFIX}")) | {body, author: .user.login, association: .author_association} | @json`,
   ])
     .split('\n')
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as string);
+    .map((line) => JSON.parse(line) as IssueSummary)
+    .filter(isTrustedIssue)
+    .map((issue) => issue.body);
 
 const ensureLabel = (gh: Deps['gh']): void => {
   try {
@@ -258,6 +264,9 @@ export const run = (deps: Deps): void => {
     ensureLabel(gh);
   }
 
+  // Issues opened but not handed to the agent, because something they point
+  // at could not be locked. The run fails for them: nobody reads its warnings.
+  const notHandedOver: string[] = [];
   for (const number of numbers) {
     const pr = pullRequest(number, gh);
     if (!force) {
@@ -288,7 +297,7 @@ export const run = (deps: Deps): void => {
     notice(`Created ${url} to test #${number}`);
     // The agent reads the issue, the pull request it tests and the issues
     // that pull request closes.
-    lockAgentIssue({
+    const handedOver = lockAgentIssue({
       repository,
       issueUrl: url,
       label: TEST_LABEL,
@@ -296,5 +305,13 @@ export const run = (deps: Deps): void => {
       gh,
       log,
     });
+    if (!handedOver) {
+      notHandedOver.push(url);
+    }
+  }
+  if (notHandedOver.length > 0) {
+    throw new Error(
+      `Not handed to the test agent: ${notHandedOver.join(', ')}. Lock what the warnings above name, then add the ${TEST_LABEL} label by hand`,
+    );
   }
 };

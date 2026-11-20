@@ -10,6 +10,7 @@ import {
   deployedStage,
   isDeployedPath,
   issueTitle,
+  isTrustedIssue,
   type MergedPullRequest,
   renderIssue,
   SKIP_LABEL,
@@ -131,6 +132,25 @@ describe('decide', () => {
         new Set(),
       ).test,
     ).toBe(false);
+  });
+});
+
+describe('isTrustedIssue', () => {
+  const issue = (author: string, association: string) => ({
+    body: testMarker(12),
+    author,
+    association,
+  });
+
+  it("trusts the workflow's own issues and those of people with write access", () => {
+    expect(isTrustedIssue(issue('github-actions[bot]', 'NONE'))).toBe(true);
+    expect(isTrustedIssue(issue('alice', 'OWNER'))).toBe(true);
+    expect(isTrustedIssue(issue('bob', 'COLLABORATOR'))).toBe(true);
+  });
+
+  it('does not trust anyone else', () => {
+    expect(isTrustedIssue(issue('mallory', 'NONE'))).toBe(false);
+    expect(isTrustedIssue(issue('carol', 'CONTRIBUTOR'))).toBe(false);
   });
 });
 

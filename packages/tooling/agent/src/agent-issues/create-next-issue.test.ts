@@ -77,6 +77,8 @@ interface Scenario {
   /** `gh issue view` fails, as it does for a number that is no issue. */
   linkedIssueMissing?: boolean;
   dryRun?: boolean;
+  /** GitHub refuses to lock the new issue. */
+  lockFails?: boolean;
 }
 
 // Runs the script against a stub `gh` that answers from the scenario and
@@ -132,6 +134,9 @@ const runScenario = (scenario: Scenario) => {
         return 'false\n';
       }
       if (command === 'api' && args[1] === '-X') {
+        if (scenario.lockFails) {
+          throw new Error('HTTP 403');
+        }
         locked.push(args[3]);
         return '';
       }
@@ -192,6 +197,18 @@ describe('a merged pull request', () => {
     expect(created[0].body).toContain('`T001` to `T002`');
     expect(created[0].body).toContain('`Refs #102`');
     expect(logs.join('\n')).toContain('Created https://github.com/');
+  });
+
+  it('fails the run when the new issue could not be locked, and never labels it', () => {
+    expect(() =>
+      runScenario({
+        pr: { labels: ['spec-ready'] },
+        files: specFiles,
+        lockFails: true,
+      }),
+    ).toThrow(
+      'Not handed to the agent: https://github.com/AlexTo/discava/issues/400',
+    );
   });
 
   it('without the label does nothing, even when it changes a spec', () => {

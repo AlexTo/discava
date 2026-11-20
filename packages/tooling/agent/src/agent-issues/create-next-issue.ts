@@ -161,6 +161,9 @@ export const run = (deps: Deps): void => {
   // stopped them; opening an issue from one would hand the agent the wrong
   // tasks, so the run fails instead.
   const unreadable: string[] = [];
+  // Issues opened but not handed to the agent, because they could not be
+  // locked. The run fails for them: nobody reads its warnings.
+  const notHandedOver: string[] = [];
   for (const folder of withTasks) {
     const read = (file: string) =>
       readFileSync(join(root, 'specs', folder, file), 'utf8');
@@ -218,7 +221,22 @@ export const run = (deps: Deps): void => {
       bodyFile(plan.issue.body),
     ]).trim();
     notice(`Created ${url}`);
-    lockAgentIssue({ repository, issueUrl: url, label: AGENT_LABEL, gh, log });
+    if (
+      !lockAgentIssue({
+        repository,
+        issueUrl: url,
+        label: AGENT_LABEL,
+        gh,
+        log,
+      })
+    ) {
+      notHandedOver.push(url);
+    }
+  }
+  if (notHandedOver.length > 0) {
+    throw new Error(
+      `Not handed to the agent: ${notHandedOver.join(', ')}. Lock what the warnings above name, then add the ${AGENT_LABEL} label by hand`,
+    );
   }
   if (unreadable.length > 0) {
     throw new Error(
