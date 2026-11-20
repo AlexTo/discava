@@ -70,7 +70,7 @@ A signed-in visitor on a course page presses **Enrol now** (a free course) or pa
 2. **Given** a priced course, **When** the learner returns from a successful payment and the enrolment appears, **Then** the first shown lesson opens without a click.
 3. **Given** a course whose first module or first lesson is hidden or archived, **When** a learner enrols, **Then** the lesson that opens is the first one students can see.
 4. **Given** a course with no lesson shown to students, **When** a learner enrols, **Then** the course home opens, confirms the enrolment and says there are no lessons yet.
-5. **Given** a learner who left a course after completing its first two lessons, **When** they enrol again, **Then** the third lesson opens.
+5. **Given** a learner who left a course after completing its first two lessons, **When** they enrol again, **Then** the third lesson opens. (The course page offers enrolling again only once the checkout spec's Phases 10 and 13 are built; until then this rule is tested where the landing page is chosen.)
 6. **Given** an enrolled learner with progress, **When** they open the course from My Learning or the course page, **Then** they resume where they left off, exactly as today.
 7. **Given** the payment has not been confirmed yet, **When** the learner is back on the course page, **Then** they see "Confirming your payment" as today, and are not moved until the enrolment appears.
 8. **Given** a learner landed in a lesson after paying, **When** they press the browser's Back button, **Then** they are not sent into the lesson again.
@@ -140,7 +140,7 @@ An instructor opens a course's settings, sees the first-lesson prompt with the d
 
 - **Course unpublished or lesson hidden between enrolling and landing**: the learner sees what the lesson page already shows for a lesson that is no longer available, with the way back to the course.
 - **Signed-out visitor**: enrolling still goes through sign-in and back to the course page first, as today. The move to the lesson happens when the enrolment is made.
-- **Payment confirmed late**: after the 60-second "still being confirmed" message, the learner refreshes. If they are enrolled by then, the course page shows the enrolled state with its usual button, as today.
+- **Payment confirmed late**: after the 60-second "still being confirmed" message, the learner refreshes. If they are enrolled by then, they are taken to their lesson, like any learner who returns from paying already enrolled.
 - **Bookmarked return address**: opening the payment return address again later, already enrolled, takes the learner to where they left off, never back to lesson one if they have moved on.
 - **First lesson has no items**: the learner still lands there. The page says there is nothing in the lesson yet, and the prompt is shown.
 - **Answer and dismissal at the same moment (two devices)**: one wins. The learner ends with either one answer or none, never both states.
@@ -174,7 +174,7 @@ An instructor opens a course's settings, sees the first-lesson prompt with the d
 - **FR-012**: A prompt answer MUST NOT appear in the instructor's Unanswered queue or count as an unanswered question.
 - **FR-013**: Whether a learner answered or dismissed the prompt MUST be remembered per learner and course on the server, so it holds on every device and browser, and MUST never be undone: not by deleting or hiding the answer, changing the prompt's text, reordering lessons, or ending and renewing the enrolment.
 - **FR-014**: A learner MUST be able to answer at most once per course. A second answer, or an answer after dismissing, MUST be refused, also when two requests arrive at the same moment.
-- **FR-015**: The server MUST refuse an answer from anyone who could not post a question in that lesson, and an answer aimed at a lesson that is not the first shown lesson.
+- **FR-015**: The server MUST refuse an answer from anyone who could not post a question in that lesson, from anyone without an enrolment of their own (an instructor who is not enrolled included), and an answer aimed at a lesson that is not the first shown lesson.
 - **FR-016**: The prompt's text MUST be the course's own text when the instructor has set one, and otherwise the default: "What do you want to be able to do with what this course teaches? Tell the class in a sentence or two."
 - **FR-017**: Posting or dismissing MUST NOT count as learning activity: it changes no progress, completion, "last active" time or activation figure.
 
@@ -214,7 +214,7 @@ An instructor opens a course's settings, sees the first-lesson prompt with the d
 - **SC-005**: 0 prompt answers appear in any Unanswered queue.
 - **SC-006**: For every course in the test data, the activation and prompt figures equal the figures counted directly from the records, in 100% of the consistency checks run after every end-to-end test.
 - **SC-007**: An instructor can read a course's activation share for all time and for the last 30 days in under 30 seconds from opening its analytics page.
-- **SC-008**: After release, the owner can compare the activation share of learners who enrolled in the 30 days before and the 30 days after it, from the analytics page alone.
+- **SC-008**: Thirty days after release, the owner can compare the activation share of learners who enrolled since release (the 30-day range) with that of learners who enrolled in the 90 days that include the time before it, from the analytics page alone.
 
 ## Assumptions
 

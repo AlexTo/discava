@@ -25,7 +25,7 @@ Signed-in only (`requireSignIn`), like the lesson route.
 | The course, the learner's completions or lesson progress still loading | "Opening your course…" with `role="status"` |
 | Loaded, a next lesson exists | Replaced by `/learn/<courseId>/lesson/<lessonId>` with history state `{ enrolled: true }` |
 | Loaded, no lesson shown | Replaced by `/learn/<courseId>/home` with the same state |
-| The course cannot be read (not enrolled, not found) | The same message the course home shows for that error |
+| The course cannot be read (not enrolled, not found) | The same message the course home shows for that error (the `Unavailable` component in `course-player.tsx`) |
 
 "Next lesson" is `useCoursePlayer`'s `nextLesson`: the first shown lesson not yet complete. Opening the start route by hand, enrolled, is the same as pressing **Continue**.
 

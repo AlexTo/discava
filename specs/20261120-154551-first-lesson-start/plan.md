@@ -31,7 +31,7 @@ Enrolling, free or paid, takes the learner straight to the lesson the course wou
 - No reminders, emails or notifications (FR-025).
 - An agent implements it without a local stack; e2e and concurrency tests run on PR CI.
 
-**Scale/Scope**: One route and three small components in the student portal, one form and one card in the instructor portal, two core-api procedures and one instructor-api procedure, one core-table helper file, one new invariant and two extended ones, three counters. Five implementation PRs.
+**Scale/Scope**: One route and three small components in the student portal, one form and one card in the instructor portal, two core-api procedures and one instructor-api procedure, one core-table helper file, one new invariant and two extended ones, three counters. Five implementation PRs and one docs PR.
 
 ## Constitution Check
 
