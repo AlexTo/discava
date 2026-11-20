@@ -63,7 +63,7 @@ Enrolling, free or paid, takes the learner straight to the lesson the course wou
 
 - `enrolment-actions.test.tsx`: the cases that expect the "You're enrolled!" dialog after `course.enrol` and after a confirmed payment now expect navigation to `/learn/<courseId>/start` (T003).
 - `packages/e2e/src/helpers/student-portal.ts` `enrol`: the dialog step is replaced by waiting for the landing page, after which the helper opens the course home, so its fifteen callers see the page they saw before (T006). `course-purchase.e2e.ts` line 80 clicks the dialog's **Start learning**; it now expects the lesson (T007).
-- `analytics-contributions.test.ts` and instructor-api `analytics.test.ts`: expected enrolment contributions and totals gain the new counters (T019, T022). No assertion is loosened.
+- `analytics-contributions.test.ts` and instructor-api `analytics.test.ts`: expected enrolment contributions and totals gain the new counters (T022, T024). No assertion is loosened.
 
 ## Design Decisions (detail in [research.md](./research.md))
 
