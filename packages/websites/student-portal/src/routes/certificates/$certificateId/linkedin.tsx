@@ -113,23 +113,34 @@ function Redirect({
   const url = useLinkedInAddToProfileUrl(
     certificate ?? { certificateId: '', courseTitle: '', completedAt: '' },
   );
-  const started = useRef(false);
+  // Read at run time so a new function each render doesn't restart the effect.
+  const recordRef = useRef(record);
+  recordRef.current = record;
+  const certificateId = certificate?.certificateId;
 
   useEffect(() => {
-    if (!certificate || started.current) {
+    if (!certificateId) {
       return;
     }
-    started.current = true;
-    const timeout = new Promise((resolve) =>
-      setTimeout(resolve, RECORD_TIMEOUT_MS),
-    );
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(resolve, RECORD_TIMEOUT_MS);
+    });
     const recorded = Promise.resolve()
-      .then(() => record(certificate.certificateId, source))
+      .then(() => recordRef.current(certificateId, source))
       .catch(() => {});
     void Promise.race([recorded, timeout]).then(() => {
-      window.location.replace(url);
+      if (!cancelled) {
+        window.location.replace(url);
+      }
     });
-  }, [certificate, source, record, url]);
+    // Leaving the page, or a rerun, drops the pending redirect.
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [certificateId, source, url]);
 
   return (
     <Message>
