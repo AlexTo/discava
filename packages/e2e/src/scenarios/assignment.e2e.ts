@@ -299,6 +299,89 @@ test.describe('submitting to an upload assignment', () => {
     ).toHaveCount(0);
   });
 
+  test('a student sees the resubmission request, then the grade and feedback', async ({
+    page,
+  }) => {
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const title = uniqueName('E2E graded assignment course');
+    const assignment = await createUploadAssignmentCourse(instructor, {
+      courseTitle: title,
+      assignmentTitle: ASSIGNMENT,
+    });
+    const feedback = (text: string) =>
+      JSON.stringify({
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+      });
+
+    await openCourse(page, title);
+    await enrol(page, newUser('Sam', ['student']));
+    await startFirstLesson(page);
+    await chooseSubmissionFile(page, ASSIGNMENT, WORKSHEET_PDF);
+    const item = await submitChosenFile(page, ASSIGNMENT);
+
+    // The student's id is found through the instructor's list.
+    const ref = {
+      courseId: assignment.courseId,
+      contentItemId: assignment.contentItemId,
+    };
+    const { rows } =
+      await instructor.instructor.assignmentSubmission.list.query(ref);
+    const userId = rows.find((row) => row.submittedAt)?.userId as string;
+    const student = { ...ref, userId };
+
+    await test.step('the instructor asks for a resubmission', async () => {
+      const current =
+        await instructor.instructor.assignmentSubmission.get.query(student);
+      await instructor.instructor.assignmentSubmission.requestResubmission.mutate(
+        {
+          ...student,
+          version: current.submission?.version ?? 1,
+          reviewRevision: current.submission?.reviewRevision ?? 0,
+          feedback: feedback('Cite your sources'),
+        },
+      );
+      await page.reload();
+      await expect(
+        item.getByText('Your instructor asked you to resubmit'),
+      ).toBeVisible();
+      await expect(item.getByText('Cite your sources')).toBeVisible();
+      await expect(item.getByLabel('Choose file')).toBeAttached();
+      await screenshot(page, 'the resubmission request beside the open form');
+    });
+
+    await test.step('the student resubmits and the instructor returns it', async () => {
+      await chooseSubmissionFile(page, ASSIGNMENT, {
+        name: 'second-draft.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('second draft'),
+      });
+      await item.getByRole('button', { name: 'Submit', exact: true }).click();
+      await expect(item.getByText('Version 2')).toBeVisible({
+        timeout: 30_000,
+      });
+      const current =
+        await instructor.instructor.assignmentSubmission.get.query(student);
+      await instructor.instructor.assignmentSubmission.return.mutate({
+        ...student,
+        version: current.submission?.version ?? 2,
+        reviewRevision: current.submission?.reviewRevision ?? 0,
+        points: 7,
+        feedback: feedback('Well argued'),
+      });
+      await page.reload();
+      await expect(item.getByText('7 / 10')).toBeVisible();
+      await expect(item.getByText('Well argued')).toBeVisible();
+      await expect(item.getByRole('button', { name: 'Resubmit' })).toHaveCount(
+        0,
+      );
+      await expect(item.getByLabel('Choose file')).toHaveCount(0);
+      await item.getByRole('button', { name: /Earlier feedback/ }).click();
+      await expect(item.getByText('Cite your sources')).toBeVisible();
+      await screenshot(page, 'the returned grade and feedback');
+    });
+  });
+
   test('an instructor creates an upload assignment in the portal, and a student sees it', async ({
     browser,
   }) => {
