@@ -92,6 +92,7 @@ describe('sitemapEntries', () => {
       }),
     );
     const paths = entries.map((entry) => entry.path);
+    expect(paths.some((path) => path.startsWith('/certificates'))).toBe(false);
     expect(paths.sort()).toEqual([
       '/category/cooking',
       '/instructors/ada',

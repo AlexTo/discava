@@ -40,6 +40,13 @@ const profile = {
   displayName: 'Ada Lovelace',
   courses: [{ courseId: 'c1', title: 'Intro to Rust', ratingCount: 0 }],
 };
+const certificate = {
+  certificateId: 'ABCD-EFGH-JKMN-PQRS',
+  learnerName: 'Sam <b> "Q" & Co',
+  courseTitle: 'Rust & "Go"',
+  completedAt: '2026-11-19T23:30:00.000Z',
+  completedOn: '19 November 2026',
+};
 const notFound = () => Promise.reject(new TRPCError({ code: 'NOT_FOUND' }));
 
 const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
@@ -48,6 +55,11 @@ const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
   );
   const profileView = vi.fn(async ({ handle }: { handle: string }) =>
     handle.toLowerCase() === 'ada' ? profile : notFound(),
+  );
+  const verify = vi.fn(async ({ certificateId }: { certificateId: string }) =>
+    certificateId.replace(/-/g, '').toUpperCase() === 'ABCDEFGHJKMNPQRS'
+      ? certificate
+      : notFound(),
   );
   const deps = {
     loadTemplate: async () => TEMPLATE,
@@ -61,6 +73,7 @@ const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
         list: async () => ({ items: [], cursor: null }),
       },
       instructorProfile: { publicView: profileView },
+      certificate: { verify },
     },
     coreTable: async () => ({}),
     mediaBaseUrl: async () => 'https://media.example.com/',
@@ -73,7 +86,12 @@ const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
     },
     ...overrides,
   } as unknown as PageRendererDeps;
-  return { render: createPageRenderer(deps), publicView, profileView };
+  return {
+    render: createPageRenderer(deps),
+    publicView,
+    profileView,
+    verify,
+  };
 };
 
 const get = (
@@ -270,5 +288,118 @@ describe('page renderer', () => {
       Object.keys(response.headers).map((key) => key.toLowerCase()),
     ).not.toContain('set-cookie');
     expect(publicView).toHaveBeenCalledWith({ courseId: 'c1' });
+  });
+
+  describe('certificates', () => {
+    it('renders the head for one certificate, never indexed, even where indexing is on', async () => {
+      const { render, verify } = build();
+      const response = await render(
+        get('/certificates/ABCD-EFGH-JKMN-PQRS', {
+          'x-discava-host': 'learn.example.com',
+        }),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['X-Robots-Tag']).toBe('noindex');
+      expect(response.headers['Cache-Control']).toBe(
+        'public, max-age=0, s-maxage=300',
+      );
+      expect(response.body).toContain(
+        '<meta name="robots" content="noindex" />',
+      );
+      expect(response.body).toContain(
+        'Sam &lt;b&gt; &quot;Q&quot; &amp; Co completed Rust &amp; &quot;Go&quot; | Discava',
+      );
+      expect(response.body).not.toContain('<b>');
+      expect(response.body).toContain('Certificate ID ABCD-EFGH-JKMN-PQRS.');
+      expect(response.body).toContain('<div id="root"></div>');
+      expect(verify).toHaveBeenCalledWith({
+        certificateId: 'ABCD-EFGH-JKMN-PQRS',
+      });
+    });
+
+    it('gives an ID without dashes the canonical display form', async () => {
+      const { render } = build();
+      const response = await render(get('/certificates/abcdefghjkmnpqrs'));
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain(
+        'href="https://learn.example.com/certificates/ABCD-EFGH-JKMN-PQRS"',
+      );
+    });
+
+    it('answers unknown and malformed IDs with the same 404 bytes', async () => {
+      const { render } = build();
+      const unknown = await render(get('/certificates/ZZZZ-ZZZZ-ZZZZ-ZZZZ'));
+      const malformed = await render(get('/certificates/nope'));
+      expect(unknown.statusCode).toBe(404);
+      expect(unknown.headers['X-Robots-Tag']).toBe('noindex');
+      expect(unknown.headers['Cache-Control']).toBe(
+        'public, max-age=0, s-maxage=60',
+      );
+      expect(malformed).toEqual(unknown);
+      expect(unknown.body).toContain('Not found');
+    });
+
+    it('gives the plain noindex template to deeper paths without a lookup', async () => {
+      const { render, verify } = build();
+      const response = await render(
+        get('/certificates/ABCD-EFGH-JKMN-PQRS/linkedin'),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['X-Robots-Tag']).toBe('noindex');
+      expect(response.body).toContain(
+        '<meta name="robots" content="noindex" />',
+      );
+      expect(response.body).not.toContain('og:title');
+      expect(verify).not.toHaveBeenCalled();
+    });
+
+    it('answers a bare /certificates with 404', async () => {
+      const { render } = build();
+      expect((await render(get('/certificates'))).statusCode).toBe(404);
+    });
+
+    it('sends the headers without the body for HEAD', async () => {
+      const { render } = build();
+      const response = await render(
+        get('/certificates/ABCD-EFGH-JKMN-PQRS', {}, 'HEAD'),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toBe('');
+      expect(response.headers['X-Robots-Tag']).toBe('noindex');
+    });
+
+    it('holds no user ID, course ID or email in the response', async () => {
+      const { render } = build({
+        caller: {
+          certificate: {
+            verify: async () => ({
+              ...certificate,
+              userId: 'user-123',
+              courseId: 'course-456',
+              email: 'sam@example.com',
+            }),
+          },
+        },
+      } as unknown as Partial<PageRendererDeps>);
+      const { body } = await render(get('/certificates/ABCD-EFGH-JKMN-PQRS'));
+      expect(body).not.toContain('user-123');
+      expect(body).not.toContain('course-456');
+      expect(body).not.toContain('sam@example.com');
+    });
+
+    it('answers 503 when the lookup fails', async () => {
+      const { render } = build({
+        caller: {
+          certificate: {
+            verify: async () => {
+              throw new Error('table down');
+            },
+          },
+        },
+      } as unknown as Partial<PageRendererDeps>);
+      const response = await render(get('/certificates/ABCD-EFGH-JKMN-PQRS'));
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['Cache-Control']).toBe('no-store');
+    });
   });
 });

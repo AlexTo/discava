@@ -30,6 +30,7 @@ import {
   type PageContext,
   type RenderedPage,
 } from './page.js';
+import { renderCertificatePage } from './render-certificate.js';
 import { renderCoursePage } from './render-course.js';
 import { renderProfilePage } from './render-profile.js';
 import { robotsTxt } from './robots.js';
@@ -229,6 +230,37 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           ]);
           return render(
             renderCoursePage(context, { course, summary, reviews }),
+          );
+        } catch (error) {
+          if (isNotFound(error)) return notFound();
+          throw error;
+        }
+      }
+      if (first === 'certificates' && id) {
+        if (rest.length > 0) {
+          // The signed-in routes under a certificate: never indexed.
+          return html(
+            200,
+            injectIntoTemplate(template, {
+              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
+              root: '',
+            }),
+            PAGE_CACHE,
+            { 'X-Robots-Tag': 'noindex' },
+          );
+        }
+        try {
+          const certificate = await deps.caller.certificate.verify({
+            certificateId: id,
+          });
+          return html(
+            200,
+            injectIntoTemplate(
+              template,
+              renderCertificatePage(context, certificate),
+            ),
+            PAGE_CACHE,
+            { 'X-Robots-Tag': 'noindex' },
           );
         } catch (error) {
           if (isNotFound(error)) return notFound();

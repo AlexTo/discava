@@ -51,6 +51,7 @@ export type StudentPortalProps = Omit<
 const PAGE_RENDERER_PATHS = [
   '/learn/*',
   '/instructors/*',
+  '/certificates/*',
   '/sitemap.xml',
   '/robots.txt',
 ];
