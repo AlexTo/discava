@@ -16,7 +16,7 @@ Nothing about Stripe is set when Discava is deployed. Until an administrator con
 Open **Payments** in the admin portal and paste a Stripe secret key:
 
 - A **secret key** (it starts `sk_`), from Developers, then API keys, in the Stripe dashboard.
-- Or a **restricted key** (it starts `rk_`) with write access to Checkout Sessions and Webhook Endpoints, and read access to Accounts and Events.
+- Or a **restricted key** (it starts `rk_`) with write access to Checkout Sessions, Refunds and Webhook Endpoints, and read access to Accounts, Events and PaymentIntents. Without Refunds and PaymentIntents, payments that can't be delivered aren't refunded and refunds made in the dashboard aren't recorded.
 
 Choose **Connect Stripe**. Discava checks the key, registers its own confirmation address (a webhook endpoint) in your Stripe account, and stores the key. You never create a webhook or copy a signing secret by hand.
 
@@ -47,10 +47,10 @@ The page lists the latest changes: who made each one, when, and how it ended. It
 
 Refund the payment in the Stripe dashboard.
 
-- **A full refund** ends the student's enrolment within seconds. Their progress is kept.
+- **A full refund** ends the student's enrolment within seconds and tells them, in the portal and by email. Their progress is kept.
 - **A partial refund** leaves their access as it is.
 
-A student whose payment can't be delivered is refunded automatically: the course was unpublished while they were paying, or they were already enrolled.
+A student whose payment can't be delivered is refunded automatically: the course was unpublished while they were paying, or they were already enrolled. They get no refund notification.
 
 ## For instructors: pricing a course
 

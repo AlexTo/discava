@@ -83,10 +83,24 @@ A paid session, expired session or refund whose order isn't in the table is logg
 
 ## Refunds
 
-A refund starts in Stripe, today from the Stripe dashboard. `charge.refunded` carries the total refunded so far, and `refundOrder` applies it:
+A refund starts in Stripe: from the Stripe dashboard, or from core-api's `payment.requestRefund` on the student's behalf. `charge.refunded` carries the total refunded so far, and `refundOrder` applies it:
 
 - **Below the order's amount**, only `refundedAmount` rises. The student keeps access.
 - **At the order's amount**, one transaction moves the order to `refunded` and sets the enrolment to `dropped`, but only if the enrolment still names this order. A refund notice delayed past a second purchase can't end the new enrolment.
+
+After a full refund, the webhook publishes an `order.refunded` notification ("Your refund for … is complete"), emailed as well as shown in the portal. It is sent only when the order is `refunded` with reason `requested` (every full refund recorded from `charge.refunded`, whether from the dashboard or a student's request) and the enrolment still names the order. Its dedupe key is the order ID, so a redelivered notice doesn't repeat it, and a publish that failed is retried by Stripe's redelivery. There is no notification for a partial refund, or for the automatic refund of a payment that couldn't be delivered.
+
+### Refund requests
+
+core-api's `payment.requestRefund` lets a student refund their own purchase, and `payment.myOrder` tells the course page whether they can. `refundEligibility` in core-table allows it only while:
+
+- the order is `paid` and the student's enrolment names it and isn't `dropped`;
+- the order was paid through the Stripe account connected now, and payments are connected;
+- no refund has been requested for it yet;
+- the student hasn't completed the course;
+- it is within `REFUND_WINDOW_DAYS` (14) of payment.
+
+`requestRefund` asks Stripe to refund what's left of the amount, with an idempotency key built from the order ID, then sets `refundRequestedAt` on the order. It never moves the order or the enrolment itself: the `charge.refunded` that follows does. Stripe is called before the mark, so a crash between the two leaves a refund the notice still records, never a mark with no refund.
 
 A dropped enrolment keeps its progress and completions. The student can come back:
 
@@ -123,9 +137,9 @@ Controls under `/stripe/test/` drive what a real Stripe account would: `refund`,
 
 ## Limitations
 
-- A student can't ask for a refund in the portal, or leave a course. Both are specified and not built yet. Refunds are made in the Stripe dashboard.
+- The student portal has no refund button yet. `payment.requestRefund` and `payment.myOrder` are live in core-api, but until the portal calls them, refunds are made in the Stripe dashboard.
+- A student can't leave a course. It is specified and not built yet.
 - No coupons at checkout. The coupon records and price function exist in core-table, and nothing uses them yet.
 - Card payments only, with no tax handling and no currency conversion.
-- A refund doesn't notify the student.
 
 <Link path="design/instructor-payouts">Instructor payouts</Link> covers what happens to the money after an order is paid.
