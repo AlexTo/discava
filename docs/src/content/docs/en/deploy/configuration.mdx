@@ -117,6 +117,26 @@ Emails go out through SES. Verify a domain or address in SES, in the stage's reg
 
 With neither set, no email is sent and each one is recorded as skipped. In-app notifications work regardless. A new SES account is in the sandbox and only sends to verified addresses until AWS grants production access.
 
+## Payments
+
+Stripe needs **no deploy-time configuration**: no secret to create and no webhook to register. After the deploy, an administrator pastes a Stripe key on the admin portal's Payments page, and Discava registers the stage's webhook address itself. <Link path="guides/payments">Paid courses and payments</Link> has the steps.
+
+The webhook API can have its own domain, `…_INFRA_PAYMENTS_DOMAIN_NAME` in the table above. If you add or change it after connecting Stripe, save the key again on the Payments page so the new address is registered.
+
+To pay instructors, the Stripe account must have Connect enabled.
+
+### Payout settings
+
+A stage's `payouts` entry in `stages.config.ts` sets what the platform keeps and when instructors are paid:
+
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `platformFeeBasisPoints` | The platform's fee on the amount paid, in basis points (2000 is 20%). Applies to sales recorded after a change | `2000` |
+| `holdDays` | Days a sale's earnings are held before they can be paid out, to cover refunds | `14` |
+| `minimumPayoutMinor` | The smallest payout sent, in the currency's smallest unit (1000 is 10.00). Smaller balances wait | `1000` |
+
+`discava-development` holds earnings for one day, so a tester sees them become payable quickly. A value that could produce wrong money, such as a fee above 10000, fails the build.
+
 ## Adding a stage
 
 1. Add an entry to `stages.config.ts` next to the existing two, with the settings it relaxes.
@@ -136,3 +156,4 @@ If you plan to deploy the new stage from your machine with environment overrides
 - <Link path="deploy/setup">Protect its GitHub environment</Link> with required reviewers
 - Give it custom domains and a verified SES identity
 - Review the request limits in `stages.config.ts` against the traffic you expect
+- If you sell courses, review the `payouts` settings and connect a **live** Stripe key on the admin portal's Payments page

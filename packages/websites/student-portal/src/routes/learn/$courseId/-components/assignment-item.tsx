@@ -212,7 +212,11 @@ export function AssignmentItem({
         objectKey: target.objectKey,
         fileName: file.name,
       });
-      queryClient.setQueryData(submissionKey, result);
+      // The rounds of feedback are the instructor's, so a submit keeps them.
+      queryClient.setQueryData(submissionKey, (previous) => ({
+        ...result,
+        feedback: previous?.feedback ?? [],
+      }));
       setFile(null);
       setResubmitting(false);
       // The submission also completed the item; progress follows once

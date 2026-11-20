@@ -44,13 +44,13 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/core-table:test -- --run assignment-submission assignment-grading notification-types invariants` passes, and `pnpm nx run @discava/tooling-agent:entity-writers` leaves no diff.
 
-- [ ] T001 [P] Tests first, then add three types to `NOTIFICATION_TYPES` in `packages/databases/core-table/src/helpers/notification-types.ts`, per [data-model.md](./data-model.md) (Notification types):
+- [x] T001 [P] Tests first, then add three types to `NOTIFICATION_TYPES` in `packages/databases/core-table/src/helpers/notification-types.ts`, per [data-model.md](./data-model.md) (Notification types):
   - `assignment.resubmission_requested`: student, `emailPolicy: 'default-on'`, params `['courseId', 'lessonId', 'assignmentTitle', 'courseTitle']`, title `Resubmission requested: "${assignmentTitle}"`, link `{ portal: 'student', path: '/learn/${courseId}/lesson/${lessonId}' }`.
   - `assignment.grade_updated`: student, `'default-on'`, same params and link, title `Your grade for "${assignmentTitle}" was updated`.
   - `assignment.submissions_received`: instructor, `emailPolicy: 'default-off'`, params `['courseId', 'contentItemId', 'assignmentTitle', 'courseTitle']`, title `New submissions to "${assignmentTitle}"`, body naming the course, link `{ portal: 'instructor', path: '/my-courses/${courseId}/assignments/${contentItemId}/submissions' }`.
 
   Extend `notification-types.test.ts`'s list of registered ids and policies, and add a `buildNotification` case per new type.
-- [ ] T002 Tests first, then change `packages/databases/core-table/src/entities/assignment-submission.ts` per [data-model.md](./data-model.md) (`assignmentSubmission`):
+- [x] T002 Tests first, then change `packages/databases/core-table/src/entities/assignment-submission.ts` per [data-model.md](./data-model.md) (`assignmentSubmission`):
   - `status: ['submitted', 'resubmission_requested', 'returned']`;
   - `reviewRevision` (number, required, default 0);
   - optional `points`, `pointsOutOf`, `returnedAt`, `returnedBy`, `gradedAt`, `waitingCourseId`, `waitingSince`;
@@ -60,7 +60,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a `submitted` item with both waiting attributes has `gsi1pk`/`gsi1sk`;
   - an item without them has neither;
   - a patch that removes both clears the keys.
-- [ ] T003 [P] Tests first, then add `packages/databases/core-table/src/entities/submission-feedback.ts` and `submission-feedback.test.ts`. Attributes and keys come from [data-model.md](./data-model.md) (`submissionFeedback`):
+- [x] T003 [P] Tests first, then add `packages/databases/core-table/src/entities/submission-feedback.ts` and `submission-feedback.test.ts`. Attributes and keys come from [data-model.md](./data-model.md) (`submissionFeedback`):
   - pk `[courseId, contentItemId, userId]`, sk `[givenAt, feedbackId]`;
   - `kind: ['resubmission_requested', 'returned', 'amended']`;
   - `feedback` optional string;
@@ -68,7 +68,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - `version`, `givenAt`, `givenBy` required.
 
   Also add `packages/databases/core-table/src/entities/submission-notice.ts` with its test: pk `[courseId, contentItemId]`, sk `[day]`, `ttl` a number. Register both in `entities/index.ts` and `src/service.ts`.
-- [ ] T004 Tests first, then add `packages/databases/core-table/src/helpers/assignment-grading.ts`. It holds pure `*Writes` functions that return transaction items and run no I/O, as `assignmentSubmissionWrites` does:
+- [x] T004 Tests first, then add `packages/databases/core-table/src/helpers/assignment-grading.ts`. It holds pure `*Writes` functions that return transaction items and run no I/O, as `assignmentSubmissionWrites` does:
   - `FEEDBACK_MAX_LENGTH = 20_000`.
   - `isValidPoints(points, maxPoints)`: a number, `0 ≤ points ≤ maxPoints`, at most two decimal places.
   - `waitingKeys(status, courseId, submittedAt)`: `{ waitingCourseId, waitingSince }` when `status === 'submitted'`, otherwise the two names to remove.
@@ -78,7 +78,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - `submissionsReceivedNotificationWrites(service, { courseId, contentItemId, day, instructorIds, … })`: a `submissionNotice` create with `attribute_not_exists` and `ttl` two days after `day`, plus one `assignment.submissions_received` per de-duplicated instructor (dedupe key `${contentItemId}:${day}`), capped at `MAX_SUBMISSION_NOTICE_INSTRUCTORS = floor((100 - 8) / 2)`. Follow `reviewNotifications` in `helpers/review.ts:162-206`.
 
   `assignment-grading.test.ts` checks each function's items, conditions, and the exact transaction size of 4 for the three instructor writes (data-model, Transaction contents). It also asserts that none of the three writes touches `itemCompletion` or the content item's `studentActivityCount` (spec FR-013).
-- [ ] T005 Tests first, then change `assignmentSubmissionWrites` in `packages/databases/core-table/src/helpers/assignment-submission.ts`:
+- [x] T005 Tests first, then change `assignmentSubmissionWrites` in `packages/databases/core-table/src/helpers/assignment-submission.ts`:
   - the resubmit `where` becomes `version = existing.version AND status IN ('submitted', 'resubmission_requested')`;
   - the patch sets `status: 'submitted'` and `waitingKeys(...)`;
   - the create sets `reviewRevision: 0` and `waitingKeys(...)`.
@@ -87,13 +87,13 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a resubmit from `resubmission_requested` returns to `submitted` with fresh waiting keys;
   - a resubmit of a `returned` submission is still refused by the condition;
   - a resubmit from `resubmission_requested` doesn't add to `studentActivityCount` and leaves the existing completion as it is (spec FR-013, data-model impact check).
-- [ ] T006 Tests first, then add `packages/databases/core-table/src/helpers/invariants/assignment-grading.ts` with the five checks in [data-model.md](./data-model.md) (Invariants): `submission-grade-shape`, `submission-waiting-keys`, `submission-feedback-has-submission`, `submission-feedback-shape` and `submission-latest-round-matches`.
+- [x] T006 Tests first, then add `packages/databases/core-table/src/helpers/invariants/assignment-grading.ts` with the five checks in [data-model.md](./data-model.md) (Invariants): `submission-grade-shape`, `submission-waiting-keys`, `submission-feedback-has-submission`, `submission-feedback-shape` and `submission-latest-round-matches`.
   - Register them in `helpers/invariants/index.ts`.
   - In `helpers/invariants/snapshot.ts`, add the new `assignmentSubmission` attributes, and add `submissionFeedback` to both `TableSnapshot` (as `Item<typeof createSubmissionFeedbackEntity>`) and `SNAPSHOT_ENTITIES`.
   - Add `'submission-notice'` to `NO_INVARIANTS` in `packages/databases/core-table/src/helpers/invariants-coverage.test.ts`, with the reason "only deduplicates the daily instructor notice; the notifications it guards are checked" (data-model: it holds no rule beyond its key). Without this, `invariants-coverage.test.ts` fails for the new entity file from T003.
   - Widen `checkAssignmentSubmissionShape` (`helpers/invariants/student-activity.ts:399-450`) to the new status and fields.
   - In `assignment-grading.test.ts`, starting from `consistentTable()`, break each clause and expect its violation. Also give `consistentTable()` a returned submission with two rounds (request, then return) so every check runs on real data.
-- [ ] T007 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json`.
+- [x] T007 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json`.
 
 ---
 
@@ -103,11 +103,11 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run assignment` passes.
 
-- [ ] T008 [P] Tests first, then widen `MySubmissionOutputSchema` (or its equivalent) in `packages/apis/core-api/src/schema/assignment.ts` to [contracts/core-api-assignment.md](./contracts/core-api-assignment.md):
+- [x] T008 [P] Tests first, then widen `MySubmissionOutputSchema` (or its equivalent) in `packages/apis/core-api/src/schema/assignment.ts` to [contracts/core-api-assignment.md](./contracts/core-api-assignment.md):
   - `status` gains `'resubmission_requested'`;
   - optional `grade: { points, pointsOutOf, returnedAt, gradedAt }`;
   - `feedback` is an array of `{ kind, feedback?, points?, pointsOutOf?, version, givenAt }`, without `givenBy`.
-- [ ] T009 Tests first, then change `packages/apis/core-api/src/procedures/assignment.ts`:
+- [x] T009 Tests first, then change `packages/apis/core-api/src/procedures/assignment.ts`:
   - `requireOpenForSubmitting` (`:138-151`) refuses only `returned`;
   - `toSubmission` maps the grade;
   - `mySubmission` queries `submissionFeedback` for the caller's pk in reverse (newest first) and returns the rounds, with the same visibility rules as today.
@@ -126,14 +126,14 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/instructor-api:test -- --run assignment-submission` passes and `pnpm nx run @discava/infra:synth` succeeds.
 
-- [ ] T010 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/schema/assignment-submission.ts` from [contracts/instructor-api-assignment-submission.md](./contracts/instructor-api-assignment-submission.md):
+- [x] T010 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/schema/assignment-submission.ts` from [contracts/instructor-api-assignment-submission.md](./contracts/instructor-api-assignment-submission.md):
   - `FeedbackSchema = z.string().max(20_000).refine(isValidTiptapDocument)`;
   - `PointsSchema = z.number().min(0).multipleOf(0.01)`;
   - inputs for `list` (`cursor` optional), `get`, `fileUrl`, `return` (`version`, `reviewRevision`, `points`, `feedback?`), `requestResubmission` (`feedback` required, refined to non-empty text as `schema/announcement.ts:17-24` does) and `amendGrade`;
   - the output schemas.
 
   Export them through `schema/index.ts`. Test the bounds: 20 001 characters refused, invalid Tiptap refused, an empty-text request refused, `points: -1` and `points: 1.005` refused.
-- [ ] T011 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/helpers/submission-list.ts`. It is a pure function that merges enrolments and submissions into rows and sorts them in the order of research R-4 and the contract:
+- [x] T011 [P] [US1] Tests first, then add `packages/apis/instructor-api/src/helpers/submission-list.ts`. It is a pure function that merges enrolments and submissions into rows and sorts them in the order of research R-4 and the contract:
   1. enrolled `submitted` by `submittedAt` ascending;
   2. `resubmission_requested`;
   3. `returned`;
@@ -148,7 +148,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a dropped student with one (last, `enrolled: false`);
   - the ties;
   - a page boundary staying stable when a row before the cursor changes state.
-- [ ] T012 [US1] Tests first, then add `listAssignmentSubmissions` and `getAssignmentSubmission` in `packages/apis/instructor-api/src/procedures/assignment-submission.ts`. Register them as `assignmentSubmission.list` and `.get` in `src/router.ts`.
+- [x] T012 [US1] Tests first, then add `listAssignmentSubmissions` and `getAssignmentSubmission` in `packages/apis/instructor-api/src/procedures/assignment-submission.ts`. Register them as `assignmentSubmission.list` and `.get` in `src/router.ts`.
   - Both are `courseInstructorProcedure`.
   - The item must be `type: 'assignment'` in the course (`NOT_FOUND` otherwise); hidden or archived content is allowed.
   - `list` reads access patterns A1, A2 and A9 from data-model and calls `submission-list.ts`.
@@ -159,8 +159,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a quiz item is `NOT_FOUND`;
   - the order and counts;
   - history newest first.
-- [ ] T013 [US1] Tests first, then add `assignmentSubmission.fileUrl` (`getSignedCloudFrontFileUrl(submission.file.key)`, or `localObjectUrl` when `isLocalDev()`; `NOT_FOUND` without a submission) in the same procedures file. Add it to the `MediaUrl` list in `INSTRUCTOR_API_DEDICATED_FUNCTIONS` (`packages/common/constructs/src/app/apis/instructor-api.ts:61-65`). Then check `pnpm nx run @discava/infra:synth` succeeds.
-- [ ] T014 [US1] Tests first, then add `returnAssignmentSubmission` and `amendAssignmentGrade` (`assignmentSubmission.return`, `.amendGrade`) to the procedures file. Each one:
+- [x] T013 [US1] Tests first, then add `assignmentSubmission.fileUrl` (`getSignedCloudFrontFileUrl(submission.file.key)`, or `localObjectUrl` when `isLocalDev()`; `NOT_FOUND` without a submission) in the same procedures file. Add it to the `MediaUrl` list in `INSTRUCTOR_API_DEDICATED_FUNCTIONS` (`packages/common/constructs/src/app/apis/instructor-api.ts:61-65`). Then check `pnpm nx run @discava/infra:synth` succeeds.
+- [x] T014 [US1] Tests first, then add `returnAssignmentSubmission` and `amendAssignmentGrade` (`assignmentSubmission.return`, `.amendGrade`) to the procedures file. Each one:
   1. reads the item (`maxPoints`, lesson title), course title, submission and enrolment;
   2. refuses `dropped` enrolment with `PRECONDITION_FAILED` "This student has left the course. Their work can be read but not graded.";
   3. refuses points over `maxPoints` with `BAD_REQUEST` "Points must be between 0 and N";
@@ -176,7 +176,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - two returns from one revision (one `CONFLICT`);
   - replaying a return that already committed (same `version` and `reviewRevision`) gets `CONFLICT` and writes no second notification (spec US2 scenario 4);
   - an amend keeps `returnedAt`.
-- [ ] T015 [US3] Tests first, then add `requestAssignmentResubmission` (`assignmentSubmission.requestResubmission`) to the procedures file with the same reads, enrolment and conflict handling as T014. It is allowed only from `submitted` and uses `requestResubmissionWrites`. Cases:
+- [x] T015 [US3] Tests first, then add `requestAssignmentResubmission` (`assignmentSubmission.requestResubmission`) to the procedures file with the same reads, enrolment and conflict handling as T014. It is allowed only from `submitted` and uses `requestResubmissionWrites`. Cases:
   - success;
   - from `resubmission_requested` and from `returned` refused;
   - empty feedback refused by the schema;

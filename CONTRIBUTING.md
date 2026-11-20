@@ -64,13 +64,15 @@ pnpm dev
 
 **Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
 
+**Payments.** No Stripe account is needed. As Carol, open Payments in the admin portal and connect the key `sk_test_local`; Alice can then price a course and Bob can buy it on the stand-in's payment page (Pay, Decline card, Cancel). `POST http://localhost:2024/stripe/test/refund`, `/replay` and `/expire` do what the Stripe dashboard or a redelivery would, and `POST http://localhost:2024/payout-run` runs the daily payout run once. The docs' [Payments](./docs/src/content/docs/en/design/payments.mdx) and [Instructor payouts](./docs/src/content/docs/en/design/instructor-payouts.mdx) design pages describe both.
+
 **Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run the command below. It also deletes `tmp/local-dev/`, which includes the Stripe key an administrator connected (`secrets/`), since the connection record it belongs to is in the table being wiped:
 
 ```sh
 pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
-**What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding and its extra audio output, real Transcribe output and the Transcribe completion event, caption access through CloudFront cookies, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, and the stuck-video reconciler. Check changes to those after deploying.
+**What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding and its extra audio output, real Transcribe output and the Transcribe completion event, caption access through CloudFront cookies, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, the stuck-video reconciler, and Stripe itself (its hosted checkout page, 3-D Secure, real webhook deliveries and Connect onboarding, checked with a test-mode key). Check changes to those after deploying.
 
 ### Adding a New Project or Component
 
@@ -141,7 +143,7 @@ pnpm --filter @discava/e2e exec playwright install chromium   # once
 pnpm nx e2e @discava/e2e
 ```
 
-A change to a main user flow should come with an end-to-end scenario, or an extended one. The flows are signing in, building and publishing a course, enrolling, and learning. See [`packages/e2e/README.md`](./packages/e2e/README.md) for the helpers and the rules on test data.
+A change to a main user flow should come with an end-to-end scenario, or an extended one. The flows are signing in, building and publishing a course, enrolling or buying, and learning. See [`packages/e2e/README.md`](./packages/e2e/README.md) for the helpers and the rules on test data.
 
 ### Writing Documentation
 

@@ -47,6 +47,8 @@ const readJson = async (request: IncomingMessage): Promise<unknown> => {
  *   Transcribe's StartTranscriptionJob (the job finishes in the background)
  * - `POST /schedules/transcode-cleanup` (LocalScheduleRequest), as a one-off
  *   Scheduler schedule targeting transcode-cleanup
+ * - `POST /schedules/certificate-reminder` (LocalScheduleRequest), as a
+ *   one-off Scheduler schedule targeting certificate-reminder
  * - `POST /triggers/pre-token-generation` (LocalSignInRequest), as Cognito
  *   running its pre token generation trigger at sign-in; answers 204 once
  *   the handler has run (400 without `userName` and `userAttributes.sub`)
@@ -79,6 +81,7 @@ export const startEventRunnerServer = ({
   cancelTranscodeJob,
   submitTranscriptionJob,
   scheduleTranscodeCleanup,
+  scheduleCertificateReminder,
   runPreTokenGeneration,
   emailInbox,
   routerQueues,
@@ -94,6 +97,7 @@ export const startEventRunnerServer = ({
   cancelTranscodeJob: (jobId: string) => boolean;
   submitTranscriptionJob: (request: LocalTranscriptionJobRequest) => void;
   scheduleTranscodeCleanup: (request: LocalScheduleRequest) => void;
+  scheduleCertificateReminder: (request: LocalScheduleRequest) => void;
   runPreTokenGeneration: (request: LocalSignInRequest) => Promise<void>;
   emailInbox: EmailInbox;
   routerQueues: () => Promise<{ features: LocalRouterFeatureState[] }>;
@@ -201,6 +205,15 @@ export const startEventRunnerServer = ({
         path === '/schedules/transcode-cleanup'
       ) {
         scheduleTranscodeCleanup(
+          (await readJson(request)) as LocalScheduleRequest,
+        );
+        return send(202);
+      }
+      if (
+        request.method === 'POST' &&
+        path === '/schedules/certificate-reminder'
+      ) {
+        scheduleCertificateReminder(
           (await readJson(request)) as LocalScheduleRequest,
         );
         return send(202);

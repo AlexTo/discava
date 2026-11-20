@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
+import { waitingKeys } from './assignment-grading.js';
 import { studentActivityWrites } from './student-activity.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
@@ -20,7 +21,9 @@ type TransactionEntities = Parameters<TransactionWrites>[0];
 // - the first submission creates the item's completion; a resubmission
 //   writes none;
 // - a resubmission only replaces the version it read, and only while the
-//   submission hasn't been returned;
+//   submission hasn't been returned (an instructor may have asked for it:
+//   it then goes back to `submitted` and to waiting, and counts nobody
+//   again);
 // - `late` and `submittedAt` are set here, from one time and the item's due
 //   date, so the stored flag always agrees with the stored time.
 
@@ -75,6 +78,11 @@ export const assignmentSubmissionWrites = (
   } = write;
   const late = isLateSubmission(at, dueAt);
   const key = { courseId, contentItemId, userId };
+  // A submitted (waiting) submission, which is what both writes leave.
+  const waiting = waitingKeys('submitted', courseId, at) as {
+    waitingCourseId: string;
+    waitingSince: string;
+  };
   const completionKey = { userId, courseId, lessonId, contentItemId };
 
   const activity = studentActivityWrites(entities, {
@@ -92,10 +100,17 @@ export const assignmentSubmissionWrites = (
       ...activity,
       assignmentSubmission
         .patch(key)
-        .set({ file, submittedAt: at, late, version: existing.version + 1 })
+        .set({
+          file,
+          submittedAt: at,
+          late,
+          version: existing.version + 1,
+          status: 'submitted',
+          ...waiting,
+        })
         .where(
           (attr, op) =>
-            `${op.eq(attr.version, existing.version)} AND ${op.eq(attr.status, 'submitted')}`,
+            `${op.eq(attr.version, existing.version)} AND (${op.eq(attr.status, 'submitted')} OR ${op.eq(attr.status, 'resubmission_requested')})`,
         )
         .commit(),
     ];
@@ -112,6 +127,8 @@ export const assignmentSubmissionWrites = (
         submittedAt: at,
         late,
         version: 1,
+        reviewRevision: 0,
+        ...waiting,
       })
       .commit(),
     // An existing completion (from before submissions counted) is checked,

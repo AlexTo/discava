@@ -1,0 +1,122 @@
+---
+title: Instructor payouts
+description: How instructor earnings are recorded from orders, the ledger and its day summaries, the daily payout run and its recovery, and the payment account rule.
+sidebar:
+  order: 11
+---
+
+import Link from '@components/link.astro';
+
+**Spec:** [`specs/20261116-013137-instructor-payouts/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-013137-instructor-payouts/)
+
+## The rule
+
+**Every sale and every refund is recorded once, and no earning is paid twice.** Earnings are an append-only ledger built from <Link path="design/payments">orders</Link>, and a payout takes ledger entries, never an amount computed on the side.
+
+## The revenue rules
+
+`helpers/revenue.ts` in core-table is pure integer arithmetic in a currency's smallest unit.
+
+- **Fee.** The platform keeps a fee on the amount paid, set per stage in basis points (2000 is 20%) and rounded half up. A sale keeps the fee it was recorded with: changing the setting affects later sales only.
+- **Split.** A course's instructors share a sale equally. The split is applied to the list price, the amount paid and the fee separately, and any remainder units go one each to the first instructors by ID, so the shares always add up to the whole.
+- **Net.** An instructor's net is their share of the amount paid minus their share of the fee.
+- **Refund.** A refund gives back the instructor's share of the refunded amount, less the fee returned on it. Each step is computed as the share of the new refunded total minus the share of the recorded one, so however a refund is cut into steps, the entries add up exactly once the order is fully refunded. A refund is capped at the amount paid.
+
+## The ledger
+
+| Record | Holds |
+| --- | --- |
+| `earningOrder` | The ledger's snapshot of one sale, and the refunded total recorded so far |
+| `earningEntry` | One line per instructor per sale or refund step: gross, discount, refund, fee and net, when it is released, and the payout that took it |
+| `earningDay` | The sum of an instructor's entries for one course, currency and UTC day |
+
+`helpers/earning.ts` is the only writer of all three. A sale, and each refund step, is **one transaction** holding the entries, the adds to their day rows and the order's counter, so the report and the ledger can't disagree.
+
+An entry never names the buyer. It also carries the Stripe account and mode its order was paid under: see [the payment account rule](#the-payment-account-rule).
+
+## Recording
+
+Recording is a <Link path="design/stream-event-router">stream feature</Link>, `earnings-recording`. It receives every change to an `order` and acts on the ones that are sales: an order that is `paid`, or `refunded` because a refund was made, with an amount above zero. An order refunded automatically as undeliverable was never a sale.
+
+The router delivers at least once and in any order, and the handler is built for that:
+
+- **Every order image carries all it needs**, so any one of them is enough to record the sale and bring its refunded total up to date. No record waits for another.
+- **Duplicates change nothing.** A sale's entries are created on the condition that they don't exist, and a refunded total the ledger has already reached records nothing.
+- **Order doesn't matter.** An older image arriving late finds a higher recorded total and does nothing.
+- **A failure retries the batch.** Everything that can be applied is, then the batch throws, and what was applied is a no-op the second time.
+
+A sale's entry is released `holdDays` after the order was paid. A refund's entry is released at once, so it reduces the next payout.
+
+## The Earnings page's reads
+
+instructor-api serves the caller's own figures and takes no instructor ID as input.
+
+- `earnings.report` sums day rows over a period of at most 366 days: one range query, grouped by currency and course.
+- `earnings.lines` pages through one course's entries, built field by field so nothing else on the record reaches the caller.
+- `payout.overview` sorts entries no payout has taken into **on hold**, **waiting for account setup**, **ready** and **held**, per currency, and lists the instructor's payouts.
+
+## Payout accounts
+
+An instructor is paid into a Stripe Connect Express account. `payout.startOnboarding` creates the account, idempotently, and returns Stripe's onboarding link. `payout.account` reads the account's state from Stripe and stores it in `payoutAccount`:
+
+| Status | Meaning |
+| --- | --- |
+| Not set up | No account yet |
+| In progress | The Stripe form isn't finished |
+| Active | Stripe can send transfers and payouts to it |
+| Restricted | Stripe needs something more |
+
+Nothing here calls Stripe unless the platform's connection is active.
+
+## The payout run
+
+One Lambda function, in the `Payouts` stack, runs once a day on an EventBridge schedule. It can read the Stripe key and nothing else of the secrets.
+
+1. **Bind to the payment account.** The run works for the connection's current account and mode, and only with a key shown to belong to it.
+2. **Recover.** Payouts an earlier run left unsettled are finished first.
+3. **For each instructor with an active account, per currency,** sum the released entries no payout has taken. A sum below the stage's minimum, or not above zero, waits.
+4. **Collect, seal and send.** A payout is created `collecting`, its entries are attached in batches of 99 (a transaction holds 100 items), and it is sealed `pending`. Then the transfer is created in Stripe, with the payout ID as its idempotency key and transfer group, and the payout is marked `sent`.
+
+| Status | Meaning |
+| --- | --- |
+| `collecting` | Entries are being attached |
+| `pending` | Sealed. Its transfer may or may not exist |
+| `sent` | Stripe accepted the transfer |
+| `releasing` | Giving its entries back |
+| `failed` | Stripe refused the transfer. Its entries are open again |
+
+### Why nothing is paid twice
+
+- An entry is attached on the condition that it has no payout, so two overlapping runs can't both take it.
+- A payout is marked `failed`, and its entries reopened, **only when Stripe definitely refused** the transfer: an invalid request or a permission error. A timeout, a 5xx, a rate limit or anything unrecognised leaves the payout `pending`.
+- Recovery looks for a `pending` payout's transfer by its transfer group before trying again. If it exists, the payout is marked sent. If not, the same idempotency key is used again.
+- A run claims an unsettled payout before touching it, and leaves alone one another run worked on in the last 15 minutes.
+
+One instructor's failure doesn't stop the others, but the run still ends as failed so an operator sees it.
+
+## The payment account rule
+
+An earning belongs to the Stripe account and mode its order was paid under, and money moves only inside that account. After an administrator switches account or mode:
+
+- Unpaid earnings from the old account are **held**. The run sends nothing for them, and the Earnings page tells the instructor to contact the platform.
+- Each instructor's payout account is per payment account, so they set up payouts again.
+- Switching back makes the old earnings payable as before.
+
+## Settings
+
+Per stage, under `payouts` in `stages.config.ts`. See <Link path="deploy/configuration">Stage configuration</Link>.
+
+## Invariants
+
+`helpers/invariants/earnings.ts` checks, after every end-to-end scenario, that entries match their order, refunds never exceed what was paid, day rows equal the sum of their entries, and a payout's amount equals its entries.
+
+## Local development
+
+The Stripe stand-in covers the Connect slice: Express accounts, onboarding links and transfers. `POST http://localhost:2024/payout-run` runs the payout run once, and `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` runs it on a timer.
+
+## Limitations
+
+- No tax handling, invoices or tax forms.
+- No currency conversion: each currency has its own balance and its own payouts.
+- Disputes and chargebacks aren't recorded.
+- Held earnings are paid by hand by the platform. Nothing moves them to the new account.

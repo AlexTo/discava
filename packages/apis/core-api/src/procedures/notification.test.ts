@@ -245,6 +245,9 @@ describe('notification.preferences', () => {
     const result = await call().preferences();
     expect(result.map((p) => p.type)).toEqual([
       'assignment.returned',
+      'assignment.resubmission_requested',
+      'assignment.grade_updated',
+      'assignment.submissions_received',
       'announcement.posted',
       'certificate.issued',
       'discussion.reply',
@@ -255,6 +258,9 @@ describe('notification.preferences', () => {
     ]);
     expect(result.map((p) => p.emailEnabled)).toEqual([
       true,
+      true,
+      true,
+      false,
       true,
       true,
       true,
@@ -295,6 +301,9 @@ describe('notification.preferences', () => {
     ];
     const result = await call().preferences();
     expect(result.map((p) => p.emailEnabled)).toEqual([
+      false,
+      true,
+      true,
       false,
       true,
       true,

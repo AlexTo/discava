@@ -5,6 +5,7 @@
 export * from './analytics.js';
 export * from './announcement.js';
 export * from './assignment.js';
+export * from './assignment-submission.js';
 export * from './content-item.js';
 export * from './course.js';
 export * from './course-catalogue.js';

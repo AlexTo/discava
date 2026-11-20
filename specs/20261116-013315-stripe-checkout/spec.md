@@ -12,6 +12,8 @@
 
 **Amendment (2026-11-19)**: "Ship the learner's refund and unenrol path in the same release as checkout" (#284's scope update). A student can ask for a refund themselves within a stated period, and can leave a course they did not pay for; see User Stories 7 and 8 and FR-031 to FR-040.
 
+**Design page**: [`design/payments`](../../docs/src/content/docs/en/design/payments.mdx)
+
 **Parent issue**: #284
 
 ## Clarifications

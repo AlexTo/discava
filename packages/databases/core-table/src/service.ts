@@ -46,6 +46,8 @@ import {
   createQuizScoreStatsEntity,
   createQuizSummaryEntity,
   createReviewEntity,
+  createSubmissionFeedbackEntity,
+  createSubmissionNoticeEntity,
   createUserEntity,
   createVideoPositionEntity,
 } from './entities/index.js';
@@ -103,6 +105,8 @@ export const createCoreTableService = async () => {
     earningDay,
     earningOrder,
     payout,
+    submissionFeedback,
+    submissionNotice,
   ] = await Promise.all([
     createUserEntity(),
     createCourseEntity(),
@@ -148,6 +152,8 @@ export const createCoreTableService = async () => {
     createEarningDayEntity(),
     createEarningOrderEntity(),
     createPayoutEntity(),
+    createSubmissionFeedbackEntity(),
+    createSubmissionNoticeEntity(),
   ]);
 
   return new Service({
@@ -195,6 +201,8 @@ export const createCoreTableService = async () => {
     earningDay,
     earningOrder,
     payout,
+    submissionFeedback,
+    submissionNotice,
   });
 };
 

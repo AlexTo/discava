@@ -65,7 +65,7 @@ Runs on pull requests to `main`: lint, test and build for the projects the chang
 
 ### Maintainer automation
 
-The `agent-*.yml` workflows and `archive-specs.yml` drive the project's spec-driven development process. They do nothing unless you use that process and can be left alone in a fork.
+The `agent-*.yml` workflows and `archive-specs.yml` drive the project's spec-driven development process, and `post-merge-verify.yml` opens a test issue for each pull request deployed to `discava-development`. They do nothing unless you use that process and can be left alone in a fork. `cache-cleanup.yml` keeps the Actions cache under GitHub's quota.
 
 ## Variables and secrets
 

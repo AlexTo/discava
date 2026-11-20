@@ -32,7 +32,7 @@ pnpm dev
 | S3Mock | 9090 | S3 |
 | ElasticMQ | 9324 | SQS |
 | OpenSearch | 9200 | OpenSearch Serverless |
-| Event runner | 2024 | The table's stream, MediaConvert, Transcribe, SES, EventBridge and Scheduler |
+| Event runner | 2024 | The table's stream, MediaConvert, Transcribe, SES, EventBridge, Scheduler and Stripe |
 | Local OIDC server | 9400 | Cognito |
 
 ## Sign in
@@ -48,6 +48,16 @@ Open the student portal at `http://localhost:4201`. It sends you to a local sign
 
 "Someone else" on that page signs you in with any claims you type, such as other groups.
 
+## Try a paid course
+
+No Stripe account is needed: the event runner stands in for Stripe.
+
+1. As Carol, open **Payments** in the admin portal (`http://localhost:4202`), paste `sk_test_local` and choose **Connect Stripe**.
+2. As Alice, set a price in a published course's settings.
+3. As Bob, open the course and choose **Buy now**. The local payment page offers **Pay**, **Decline card** and **Cancel**.
+
+<Link path="guides/payments">Paid courses and payments</Link> explains each step.
+
 ## Start fresh
 
 Local data lives in Docker volumes and survives restarts. To delete it, stop `pnpm dev` and run:
@@ -58,7 +68,7 @@ pnpm nx run @discava/tooling-local-dev:reset-local-data
 
 ## What only runs on AWS
 
-A few things have no local equivalent and are checked on a deployed stage: Cognito's Managed Login and sign-up, CloudFront's signed cookies, MediaConvert's exact encoding and real Transcribe captions.
+A few things have no local equivalent and are checked on a deployed stage: Cognito's Managed Login and sign-up, CloudFront's signed cookies, MediaConvert's exact encoding, real Transcribe captions, and Stripe's own checkout page, card checks and webhook deliveries.
 
 ## Next
 

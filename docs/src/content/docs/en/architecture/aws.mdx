@@ -11,21 +11,26 @@ A deployed installation is called a **stage**. A stage is a group of CloudFormat
 
 ## The stacks
 
-The application is split into eight stacks. One stack would exceed CloudFormation's limit of 500 resources, and separating stateful resources from code keeps routine deploys away from the data.
+The application is split into ten stacks. One stack would exceed CloudFormation's limit of 500 resources, and separating stateful resources from code keeps routine deploys away from the data.
 
 ```d2 title="Stacks and their dependencies (an arrow points at what a stack needs)"
 direction: up
 
 websites: "Websites"
 data: "Data"
+payments: "Payments"
 media: "MediaPipeline"
 core: "CoreApi"
 router: "StreamRouter"
+payouts: "Payouts"
 instr: "InstructorApi"
 admin: "AdminApi"
 rc: "RuntimeConfig"
 
 data -> websites
+payments -> data
+payouts -> data
+admin -> payments
 media -> data
 core -> data
 core -> media
@@ -48,18 +53,20 @@ rc -> admin
 They deploy in this order:
 
 ```
-Websites → Data → MediaPipeline → CoreApi → StreamRouter → InstructorApi → AdminApi → RuntimeConfig
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → RuntimeConfig
 ```
 
 | Stack | Contains | Why it is separate |
 | --- | --- | --- |
 | **Websites** | The three portals: an S3 bucket and CloudFront distribution each | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
 | **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the unsubscribe-link and Stripe secrets, the AppConfig application | Everything stateful. Changes rarely, and every other backend stack depends on it |
+| **Payments** | The Stripe webhook API: its API Gateway and function | Called by Stripe, not by signed-in users, so its firewall, request limits and domain are set apart from the other APIs |
 | **MediaPipeline** | MediaConvert pipeline, the functions reacting to finished transcodes and transcriptions, cleanup schedules, failure queues | Video processing, used by both core-api and instructor-api |
 | **CoreApi** | core-api's API Gateway and functions, the search re-index function, the email unsubscribe route | The API every user calls |
 | **StreamRouter** | The table stream's router function, one queue and failure queue per feature, the feature handlers | Background reactions to data changes, kept out of CoreApi's resource budget |
+| **Payouts** | The daily payout run and its schedule | Kept apart so no stack nears the resource limit. It reads the table and the Stripe key only |
 | **InstructorApi** | instructor-api's API Gateway and function, with its media and transcoding permissions | The instructors' API |
-| **AdminApi** | admin-api's API Gateway and function | The admins' API |
+| **AdminApi** | admin-api's API Gateway and functions, including the one that saves the Stripe key | The admins' API |
 | **RuntimeConfig** | AppConfig content and each portal's `runtime-config.json` | Reads values from every other stack, so it deploys last |
 
 When a portal or media distribution has WAF on, its web ACL is an extra small stack in `us-east-1`, where CloudFront requires it.
@@ -74,6 +81,7 @@ When a portal or media distribution has WAF on, its web ACL is an extra small st
 | Lesson media | CloudFront, signed requests only | A private S3 bucket |
 | Public media | CloudFront | A private S3 bucket |
 | Each API | API Gateway (REST, regional) | Lambda |
+| Stripe webhook | API Gateway (REST, regional) | Lambda |
 
 No S3 bucket is public. CloudFront reaches each through Origin Access Control.
 
@@ -81,8 +89,8 @@ No S3 bucket is public. CloudFront reaches each through Origin Access Control.
 
 All code runs in Lambda on Node.js 24.
 
-- **API functions.** core-api serves most procedures from one shared function, and gives a dedicated function to any procedure needing more access than the table, such as the one holding the key that signs video requests. That keeps powerful permissions off the function handling every other request.
-- **Event functions.** One per job: the two Cognito triggers, the stream router and its feature handlers, and the media pipeline's completion and cleanup handlers.
+- **API functions.** core-api serves most procedures from one shared function, and gives a dedicated function to any procedure needing more access than the table, such as the one holding the key that signs video requests. That keeps powerful permissions off the function handling every other request. admin-api does the same for saving the Stripe key: one function may write the Stripe secrets, and no other can.
+- **Event functions.** One per job: the two Cognito triggers, the stream router and its feature handlers, the media pipeline's completion and cleanup handlers, the Stripe webhook and the daily payout run.
 
 ### Data
 
@@ -101,7 +109,7 @@ All code runs in Lambda on Node.js 24.
 | --- | --- |
 | DynamoDB Streams | Every change to the core table |
 | SQS | One queue and one failure queue per stream feature, plus the media pipeline's failure queues |
-| EventBridge | Rules that fire when a MediaConvert or Transcribe job finishes, and a schedule that finds stuck videos |
+| EventBridge | Rules that fire when a MediaConvert or Transcribe job finishes, a schedule that finds stuck videos, and the daily schedule of the payout run |
 | EventBridge Scheduler | Delayed cleanups of temporary media |
 | SES | Notification emails |
 

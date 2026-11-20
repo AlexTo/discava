@@ -21,6 +21,14 @@ import {
   updateContentItemAssignment,
 } from './procedures/assignment.js';
 import {
+  amendAssignmentGrade,
+  assignmentSubmissionFileUrl,
+  getAssignmentSubmission,
+  listAssignmentSubmissions,
+  requestAssignmentResubmission,
+  returnAssignmentSubmission,
+} from './procedures/assignment-submission.js';
+import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
@@ -129,6 +137,14 @@ export const appRouter = router({
     courseSummaries,
     course: analyticsCourse,
     quiz: analyticsQuiz,
+  }),
+  assignmentSubmission: router({
+    list: listAssignmentSubmissions,
+    get: getAssignmentSubmission,
+    fileUrl: assignmentSubmissionFileUrl,
+    return: returnAssignmentSubmission,
+    requestResubmission: requestAssignmentResubmission,
+    amendGrade: amendAssignmentGrade,
   }),
   announcement: router({
     create: createAnnouncement,

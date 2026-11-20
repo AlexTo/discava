@@ -56,8 +56,12 @@ describe('submissions (#102)', () => {
         fileSize: 10,
         mimeType: 'application/pdf',
       },
+      status: 'submitted',
       version: 1,
+      reviewRevision: 0,
       submittedAt: SUBMITTED,
+      waitingCourseId: 'c1',
+      waitingSince: SUBMITTED,
     });
     return table.assignmentSubmissions[0];
   };
@@ -115,6 +119,13 @@ describe('submissions (#102)', () => {
       file[field] = field === 'fileSize' ? 0 : '';
       expect(violationsOf('assignment-submission-shape')[0]?.message).toMatch(
         message,
+      );
+    });
+
+    it('reports an unknown status', () => {
+      (submitted() as { status: string }).status = 'graded';
+      expect(violationsOf('assignment-submission-shape')[0]?.message).toMatch(
+        /status graded is not/,
       );
     });
 

@@ -20,7 +20,10 @@ describe('NOTIFICATION_TYPES', () => {
   it('has the v1 types and the discussion types', () => {
     expect(ids.sort()).toEqual([
       'announcement.posted',
+      'assignment.grade_updated',
+      'assignment.resubmission_requested',
       'assignment.returned',
+      'assignment.submissions_received',
       'certificate.issued',
       'certificate.reminder',
       'discussion.accepted',
@@ -33,7 +36,7 @@ describe('NOTIFICATION_TYPES', () => {
 
   it.each(ids)('%s is keyed by its own <area>.<event> id', (id) => {
     expect(NOTIFICATION_TYPES[id].id).toBe(id);
-    expect(id).toMatch(/^[a-z]+\.[a-z]+$/);
+    expect(id).toMatch(/^[a-z]+\.[a-z_]+$/);
   });
 
   it('sets the email policies', () => {
@@ -43,6 +46,9 @@ describe('NOTIFICATION_TYPES', () => {
       ),
     ).toEqual({
       'assignment.returned': 'default-on',
+      'assignment.resubmission_requested': 'default-on',
+      'assignment.grade_updated': 'default-on',
+      'assignment.submissions_received': 'default-off',
       'certificate.issued': 'default-on',
       'certificate.reminder': 'default-on',
       'announcement.posted': 'default-on',
@@ -161,6 +167,40 @@ describe('buildNotification', () => {
         courseTitle: 'C',
       }).link,
     ).toEqual({ portal: 'student', path: '/learn/c1/lesson/l1' });
+  });
+
+  it.each([
+    ['assignment.resubmission_requested', 'Resubmission requested: "A"'],
+    ['assignment.grade_updated', 'Your grade for "A" was updated'],
+  ])('builds %s for the student', (id, title) => {
+    const built = buildNotification(id, {
+      courseId: 'c1',
+      lessonId: 'l1',
+      assignmentTitle: 'A',
+      courseTitle: 'C',
+    });
+
+    expect(built.title).toBe(title);
+    expect(built.link).toEqual({
+      portal: 'student',
+      path: '/learn/c1/lesson/l1',
+    });
+  });
+
+  it('links new submissions to the instructor list, naming the course', () => {
+    const built = buildNotification('assignment.submissions_received', {
+      courseId: 'c1',
+      contentItemId: 'i1',
+      assignmentTitle: 'A',
+      courseTitle: 'C',
+    });
+
+    expect(built.title).toBe('New submissions to "A"');
+    expect(built.body).toContain('C');
+    expect(built.link).toEqual({
+      portal: 'instructor',
+      path: '/my-courses/c1/assignments/i1/submissions',
+    });
   });
 
   it('links an announcement to the course home', () => {
