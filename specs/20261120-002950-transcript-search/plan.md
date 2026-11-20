@@ -78,7 +78,7 @@ Each task names its change, and the PR repeats it.
 
 1. **A separate `transcripts` index** in the same collection (R-1). The public `courses` index is untouched.
 2. **A document is a passage**: cues windowed to 30 s or 600 characters, overlapping by one cue, with each cue's offset stored so a hit maps to a cue's start time through whole-passage highlighting (R-2).
-3. **A stream feature re-reads the item** on caption, version and visibility changes and makes the index match, with ids built from the record so any delivery order converges (R-3).
+3. **A stream feature re-reads the item** on caption, version and visibility changes and makes the index match, with ids built from the record so any delivery order converges, and a re-read after each write so overlapping syncs of one item end on the newest state (R-3).
 4. **Access from the table on every search**: enrolment, then the watchable set as the query's filter, then a version and track check on each hit (R-4).
 5. **Every track indexed, one searched per video**: the learner's caption language, else the default (R-5). `standard` text with an `english` sub-field.
 6. **A rebuild Lambda** for the first fill, repairs and later mapping changes (R-6).

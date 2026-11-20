@@ -11,8 +11,9 @@ In `packages/databases/core-table/src/helpers/stream-features.ts`:
   handler: 'transcript-indexing',
   batch: { maxRecords: 100, windowSeconds: 5 },
   maxReceiveCount: 5,
-  // The event source mapping's minimum: syncs of one item in parallel would
-  // race on its documents.
+  // The event source mapping's minimum. Two batches can still sync the same
+  // item at once; syncItemTranscripts' re-check (step 5) makes the one that
+  // finishes last write the newest state.
   maxConcurrency: 2,
 }
 ```
@@ -59,13 +60,20 @@ Any error fails the batch, and the queue retries it. A caption file that isn't f
    - otherwise, for each track of `tracksForPlayback(item.captionTracks, versionId)`: `readCaptionFile(track.key)`, `parseWebVtt`, `buildPassages`, `toTranscriptDocuments` (validated by `TranscriptDocumentSchema`).
 3. Existing ids: TP3 by `contentItemId`.
 4. One or more `_bulk` requests of at most 500 actions: `index` every wanted document under its id, `delete` every existing id that isn't wanted. A `_bulk` response with `errors` throws.
+5. Re-check: read the item, its lesson and its module again with `consistent: true`, and compare their `syncStateOf` with the one step 2 used. If it differs, go back to step 2 with the new reads. After 3 rounds that each saw a change, throw, so the queue retries the batch.
 
-Returns `{ indexed, removed }`.
+`syncStateOf(item, lesson, module)` (pure) is what the wanted documents depend on, without reading any caption file: whether all three are shown, the item's type, the version `playableVersion` gives, `captionTracksRev`, and the `trackId`s of `tracksForPlayback`.
+
+Why step 5: two batches can sync the same item at once (`maxConcurrency: 2`, and a lesson's or module's `sync-under` can overlap an item's own record). Without it, a sync that read the table before a change can finish last, delete the newer track's passages and write back the old track's. Search drops those (R-4), so the video would quietly stop being searchable until its next change or a rebuild. With it, the sync whose `_bulk` lands last has confirmed afterwards that the table still matches what it wrote.
+
+Returns `{ indexed, removed }`, summed over the rounds.
 
 **Properties** (each has a test):
 
 - Running it twice leaves the same documents.
 - Running the syncs for two changes in either order leaves the documents of the table's current state.
+- Two overlapping syncs, where the one that read the older state finishes last, leave the documents of the table's current state.
+- A state that keeps changing through 3 rounds throws.
 - It writes nothing to the core table.
 - Hidden, archived, not a video, not playable, deleted, or no tracks: every document of the item is deleted.
 

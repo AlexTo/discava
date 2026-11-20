@@ -192,7 +192,7 @@ A learner who doesn't use a mouse reaches the transcript with Tab, moves through
 
 - **FR-024**: Transcripts MUST become searchable, without anyone acting, after automatic captions are generated and after an instructor uploads a track.
 - **FR-025**: Text MUST stop being searchable, and stop being stored for search, after its track is replaced or removed, its video is replaced or deleted, or its video, lesson or module is hidden, archived or deleted. It MUST return when a hidden video, lesson or module is shown again.
-- **FR-026**: These updates MUST settle on the current state however the underlying changes are delivered: twice, late or out of order.
+- **FR-026**: These updates MUST settle on the current state however the underlying changes are delivered: twice, late, out of order, or with two updates for the same video running at once.
 - **FR-027**: A failure to update search MUST NOT fail or delay the instructor's change or the captioning of a video, and MUST be retried.
 - **FR-028**: An operator MUST be able to rebuild every stored transcript from the course records and caption files, for one course or all, removing anything stale. Running it twice leaves the same result.
 
