@@ -576,7 +576,11 @@ describe('recalculateStudent', () => {
       it('reads no quiz summary for a student who already has a certificate', async () => {
         completed('a', 'b', 'c', 'q');
         completedEnrolment();
-        db.certificates.set('student-1#course-1', { certificateId: 'X' });
+        db.certificates.set('student-1#course-1', {
+          certificateId: 'X',
+          issuedAt: NOW,
+          reminderScheduledAt: NOW,
+        });
 
         await run();
 
