@@ -5,10 +5,14 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CERTIFICATE_REMINDER_DELAY_DAYS,
+  certificateReminderDueAt,
+  claimCertificateReminder,
   formatCertificateId,
   generateCertificateId,
   issueCertificate,
   learnerName,
+  markCertificateReminderScheduled,
   normaliseCertificateId,
   recordLinkedInClick,
 } from './certificate.js';
@@ -416,5 +420,206 @@ describe('recordLinkedInClick', () => {
       throw new Error('boom');
     });
     await expect(click(coreTable)).rejects.toThrow('boom');
+  });
+});
+
+// An in-memory certificate entity that evaluates the `where` conditions the
+// reminder helpers and recordLinkedInClick use (`notExists`, joined by AND).
+const fakeForReminder = (initial: Record<string, unknown> = {}) => {
+  const item: Record<string, unknown> = {
+    userId: 'u1',
+    courseId: 'c1',
+    certificateId: '0123456789ABCDEF',
+    issuedAt: '2026-11-10T00:00:00.000Z',
+    ...initial,
+  };
+  const conditionFailed = () =>
+    new Error('conflict', {
+      cause: Object.assign(new Error('x'), {
+        name: 'ConditionalCheckFailedException',
+      }),
+    });
+  const patch = vi.fn(() => ({
+    set: (values: Record<string, unknown>) => ({
+      where: (cb: (attr: Record<string, string>, op: unknown) => string) => ({
+        go: async () => {
+          const attr = new Proxy({}, { get: (_t, name) => String(name) });
+          const op = { notExists: (name: string) => `notExists:${name}` };
+          const holds = cb(attr as Record<string, string>, op)
+            .split(' AND ')
+            .every((c) => item[c.replace('notExists:', '')] === undefined);
+          if (!holds) {
+            throw conditionFailed();
+          }
+          Object.assign(item, values);
+          return { data: item };
+        },
+      }),
+    }),
+  }));
+  const get = vi.fn(() => ({
+    go: async () => ({ data: { ...item } }),
+  }));
+  return {
+    coreTable: { entities: { certificate: { get, patch } } } as never,
+    item,
+    patch,
+    get,
+  };
+};
+
+describe('certificateReminderDueAt', () => {
+  it('is issuedAt plus three days', () => {
+    expect(CERTIFICATE_REMINDER_DELAY_DAYS).toBe(3);
+    expect(
+      certificateReminderDueAt({ issuedAt: '2026-11-10T12:30:00.000Z' }),
+    ).toBe('2026-11-13T12:30:00.000Z');
+  });
+});
+
+describe('markCertificateReminderScheduled', () => {
+  const mark = (coreTable: never, now = NOW) =>
+    markCertificateReminderScheduled({
+      coreTable,
+      userId: 'u1',
+      courseId: 'c1',
+      now,
+    });
+
+  it('sets reminderScheduledAt once', async () => {
+    const { coreTable, item } = fakeForReminder();
+    await mark(coreTable);
+    await mark(coreTable, new Date(NOW.getTime() + 1000));
+    expect(item.reminderScheduledAt).toBe(NOW.toISOString());
+  });
+
+  it('throws any other error', async () => {
+    const { coreTable, patch } = fakeForReminder();
+    patch.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    await expect(mark(coreTable)).rejects.toThrow('boom');
+  });
+});
+
+describe('claimCertificateReminder', () => {
+  const claim = (coreTable: never, now = NOW) =>
+    claimCertificateReminder({ coreTable, userId: 'u1', courseId: 'c1', now });
+  const click = (coreTable: never) =>
+    recordLinkedInClick({
+      coreTable,
+      certificateId: '0123456789ABCDEF',
+      source: 'certificate-page',
+      now: NOW,
+    });
+
+  it('returns undefined when there is no certificate', async () => {
+    const { coreTable, get } = fakeForReminder();
+    get.mockReturnValueOnce({ go: async () => ({ data: null }) } as never);
+    expect(await claim(coreTable)).toBeUndefined();
+  });
+
+  it('sets reminderSentAt and returns it', async () => {
+    const { coreTable, item } = fakeForReminder();
+    const claimed = await claim(coreTable);
+    expect(claimed?.reminderSentAt).toBe(NOW.toISOString());
+    expect(claimed?.certificate.certificateId).toBe('0123456789ABCDEF');
+    expect(item.reminderSentAt).toBe(NOW.toISOString());
+  });
+
+  it('returns the first time on a second claim', async () => {
+    const { coreTable, item, patch } = fakeForReminder();
+    await claim(coreTable);
+    const later = new Date(NOW.getTime() + 60_000);
+    expect((await claim(coreTable, later))?.reminderSentAt).toBe(
+      NOW.toISOString(),
+    );
+    expect(item.reminderSentAt).toBe(NOW.toISOString());
+    expect(patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns undefined and stores nothing after a click', async () => {
+    const { coreTable, item } = fakeForReminder({
+      linkedInClickedAt: '2026-11-11T00:00:00.000Z',
+      linkedInClickSource: 'my-learning',
+    });
+    expect(await claim(coreTable)).toBeUndefined();
+    expect(item.reminderSentAt).toBeUndefined();
+  });
+
+  it('still records a click after a claim', async () => {
+    const { coreTable, item } = fakeForReminder();
+    await claim(coreTable);
+    const { coreTable: withQuery } = (() => {
+      const query = {
+        byCertificateId: () => ({ go: async () => ({ data: [item] }) }),
+      };
+      const entities = (coreTable as { entities: { certificate: object } })
+        .entities;
+      return {
+        coreTable: {
+          entities: { certificate: { ...entities.certificate, query } },
+        } as never,
+      };
+    })();
+    expect(await click(withQuery)).toBe('recorded');
+    expect(item.reminderSentAt).toBeDefined();
+    expect(item.linkedInClickedAt).toBe(NOW.toISOString());
+  });
+
+  it('reads the other run’s claim back when its own condition fails', async () => {
+    const { coreTable, item, get } = fakeForReminder();
+    // The first read sees no claim; the other run's lands before our patch.
+    get.mockImplementationOnce(() => {
+      const snapshot = { ...item };
+      item.reminderSentAt = '2026-11-14T00:00:00.000Z';
+      return { go: async () => ({ data: snapshot }) } as never;
+    });
+    const claimed = await claim(coreTable);
+    expect(claimed?.reminderSentAt).toBe('2026-11-14T00:00:00.000Z');
+    expect(item.reminderSentAt).toBe('2026-11-14T00:00:00.000Z');
+  });
+
+  it('returns undefined when a click lands between the read and the claim', async () => {
+    const { coreTable, item, get } = fakeForReminder();
+    get.mockImplementationOnce(() => {
+      const snapshot = { ...item };
+      item.linkedInClickedAt = '2026-11-11T00:00:00.000Z';
+      return { go: async () => ({ data: snapshot }) } as never;
+    });
+    expect(await claim(coreTable)).toBeUndefined();
+    expect(item.reminderSentAt).toBeUndefined();
+  });
+
+  it('ends in one of the two allowed states when a claim and a click race', async () => {
+    const { coreTable, item } = fakeForReminder();
+    const query = {
+      byCertificateId: () => ({ go: async () => ({ data: [item] }) }),
+    };
+    const both = {
+      entities: {
+        certificate: {
+          ...(coreTable as { entities: { certificate: object } }).entities
+            .certificate,
+          query,
+        },
+      },
+    } as never;
+    const [claimed, clicked] = await Promise.all([claim(both), click(both)]);
+    if (claimed) {
+      expect(item.reminderSentAt).toBeDefined();
+    } else {
+      expect(item.reminderSentAt).toBeUndefined();
+    }
+    expect(clicked).toBe('recorded');
+    expect(item.linkedInClickedAt).toBeDefined();
+  });
+
+  it('throws any other error', async () => {
+    const { coreTable, patch } = fakeForReminder();
+    patch.mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    await expect(claim(coreTable)).rejects.toThrow('boom');
   });
 });

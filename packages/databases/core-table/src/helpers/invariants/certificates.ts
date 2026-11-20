@@ -125,18 +125,53 @@ export const checkCertificateLinkedInClickShape = (
     );
   });
 
-// Every `certificate.issued` notification has a link of /certificates/<ID>
-// naming a certificate of the same user, and a certificate has at most one.
-// A certificate with no such notification (issued before the notification
-// existed) isn't a violation.
+// The reminder is never claimed after a LinkedIn use is recorded, and never
+// before the certificate was issued. A certificate with `reminderScheduledAt`
+// and no `reminderSentAt` isn't a violation (not due yet, clicked, or emails
+// off).
+export const checkCertificateReminderNotAfterClick = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.certificates.flatMap((certificate) => {
+    const { userId, courseId, reminderSentAt, linkedInClickedAt } = certificate;
+    const problems: string[] = [];
+    if (
+      reminderSentAt &&
+      linkedInClickedAt &&
+      reminderSentAt > linkedInClickedAt
+    ) {
+      problems.push('reminderSentAt is after linkedInClickedAt');
+    }
+    if (
+      reminderSentAt &&
+      certificate.issuedAt &&
+      reminderSentAt < certificate.issuedAt
+    ) {
+      problems.push('reminderSentAt is before issuedAt');
+    }
+    return problems.map((message) =>
+      violation(
+        'certificate-reminder-not-after-click',
+        { userId, courseId },
+        message,
+      ),
+    );
+  });
+
+// Every `certificate.issued` and `certificate.reminder` notification has a
+// link of /certificates/<ID> naming a certificate of the same user, and a
+// certificate has at most one of each. A reminder's certificate has
+// `reminderSentAt` equal to the notification's `occurredAt`. A certificate
+// with no such notification (issued before the notification existed) isn't a
+// violation.
 export const checkCertificateNotificationsMatch = (
   snapshot: TableSnapshot,
 ): Violation[] => {
-  const issued = snapshot.notifications.filter(
-    (n) => n.type === 'certificate.issued',
+  const notifications = snapshot.notifications.filter(
+    (n) => n.type === 'certificate.issued' || n.type === 'certificate.reminder',
   );
   const perCertificate = new Map<string, number>();
-  return issued.flatMap((n) => {
+  return notifications.flatMap((n) => {
     const record = { userId: n.userId, occurredAt: n.occurredAt, id: n.id };
     const named = /^\/certificates\/([^/?#]+)$/.exec(n.link?.path ?? '')?.[1];
     const certificateId = named ? normaliseCertificateId(named) : undefined;
@@ -147,20 +182,24 @@ export const checkCertificateNotificationsMatch = (
       ? `link ${n.link?.path} does not name a certificate`
       : certificate.userId !== n.userId
         ? `link ${n.link?.path} names another user's certificate`
-        : undefined;
+        : n.type === 'certificate.reminder' &&
+            certificate.reminderSentAt !== n.occurredAt
+          ? `certificate ${certificateId} has reminderSentAt ${certificate.reminderSentAt}, not the notification's occurredAt`
+          : undefined;
     if (problem || !certificateId) {
       return [
         violation('certificate-notifications-match', record, problem ?? ''),
       ];
     }
-    const count = (perCertificate.get(certificateId) ?? 0) + 1;
-    perCertificate.set(certificateId, count);
+    const counted = `${n.type} ${certificateId}`;
+    const count = (perCertificate.get(counted) ?? 0) + 1;
+    perCertificate.set(counted, count);
     return count > 1
       ? [
           violation(
             'certificate-notifications-match',
             record,
-            `certificate ${certificateId} has more than one certificate.issued notification`,
+            `certificate ${certificateId} has more than one ${n.type} notification`,
           ),
         ]
       : [];
@@ -176,6 +215,10 @@ export const CERTIFICATES_CHECKS = [
   {
     name: 'certificate-linkedin-click-shape',
     check: checkCertificateLinkedInClickShape,
+  },
+  {
+    name: 'certificate-reminder-not-after-click',
+    check: checkCertificateReminderNotAfterClick,
   },
   {
     name: 'certificate-notifications-match',

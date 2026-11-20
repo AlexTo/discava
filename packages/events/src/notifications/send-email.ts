@@ -8,6 +8,8 @@ import {
   claimEmail,
   type createCoreTableService,
   type EmailSkipReason,
+  governingEmailType,
+  isEmailEnabled,
   markEmailFailed,
   markEmailSent,
   markEmailUnknown,
@@ -86,11 +88,13 @@ export const sendNotificationEmail = async (
     return 'skipped';
   }
 
-  const entry = NOTIFICATION_TYPES[notification.type];
+  // A type that follows another's setting is unsubscribed, and labelled, as
+  // that type.
+  const entry = governingEmailType(NOTIFICATION_TYPES[notification.type]);
   const token = signUnsubscribeToken(
     await config.unsubscribeSecret(),
     key.userId,
-    notification.type,
+    entry.id,
   );
   const trim = (url: string) => url.replace(/\/+$/, '');
   const message: EmailMessage = {
@@ -155,16 +159,10 @@ const checkRecipient = async (
   if (!user?.email) {
     return { skip: 'no-address' };
   }
-  if (entry.emailPolicy !== 'required') {
-    const { data: preference } = await coreTable.entities.notificationPreference
-      .get({ userId: notification.userId, type: notification.type })
-      .go();
-    const enabled = preference
-      ? preference.emailEnabled
-      : entry.emailPolicy === 'default-on';
-    if (!enabled) {
-      return { skip: 'opted-out' };
-    }
+  if (
+    !(await isEmailEnabled(coreTable, notification.userId, notification.type))
+  ) {
+    return { skip: 'opted-out' };
   }
   return { to: user.email };
 };

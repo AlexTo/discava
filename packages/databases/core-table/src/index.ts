@@ -139,7 +139,11 @@ export {
 } from './helpers/catalogue-vocabulary.js';
 export { type CategoryCreate, categoryWrites } from './helpers/category.js';
 export {
+  CERTIFICATE_REMINDER_DELAY_DAYS,
   type Certificate,
+  type CertificateReminderInput,
+  certificateReminderDueAt,
+  claimCertificateReminder,
   formatCertificateId,
   generateCertificateId,
   type IssueCertificateInput,
@@ -147,6 +151,7 @@ export {
   LINKEDIN_CLICK_SOURCES,
   type LinkedInClickSource,
   learnerName,
+  markCertificateReminderScheduled,
   normaliseCertificateId,
   type RecordLinkedInClickInput,
   recordLinkedInClick,
@@ -302,7 +307,11 @@ export {
   releaseEmailClaim,
   skipEmail,
 } from './helpers/notification-email.js';
-export { setNotificationPreference } from './helpers/notification-preference.js';
+export {
+  governingEmailType,
+  isEmailEnabled,
+  setNotificationPreference,
+} from './helpers/notification-preference.js';
 export {
   MARK_ALL_CHUNK,
   markNotificationRead,
