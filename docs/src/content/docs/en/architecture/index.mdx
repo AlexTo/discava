@@ -46,6 +46,8 @@ async: "Background work" {
 }
 
 email: "SES"
+stripe: "Stripe"
+pay: "Stripe webhook API"
 
 users -> edge
 users -> identity: "sign in"
@@ -59,6 +61,9 @@ async.handlers -> data.search: "index"
 async.handlers -> email
 async.media -> data.lesson: "renditions"
 users -> data.lesson: "watch"
+apis.core -> stripe: "start checkout"
+stripe -> pay: "signed confirmation"
+pay -> data.table
 ```
 
 ## The components
@@ -67,9 +72,9 @@ users -> data.lesson: "watch"
 
 | Portal | For | Talks to |
 | --- | --- | --- |
-| **Student portal** | Browsing the catalogue, learning, quizzes, discussions | core-api |
-| **Instructor portal** | Building courses, analytics, answering students | core-api, instructor-api |
-| **Admin portal** | Categories and review moderation | core-api, admin-api |
+| **Student portal** | Browsing the catalogue, buying and taking courses, quizzes, discussions | core-api |
+| **Instructor portal** | Building and pricing courses, analytics, earnings, answering students | core-api, instructor-api |
+| **Admin portal** | Categories, review moderation and the Stripe connection | core-api, admin-api |
 
 Each is a React single-page application: static files in a private S3 bucket, served by CloudFront. A portal learns where its APIs and sign-in page are from a `runtime-config.json` file deployed beside it, so the same build works on every stage.
 
@@ -83,15 +88,15 @@ Each API is an API Gateway REST API in front of Lambda functions, speaking [tRPC
 
 | API | Who may call it | Examples |
 | --- | --- | --- |
-| **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, lesson content, quizzes, discussions, search |
-| **instructor-api** | Members of `instructor` | Creating and editing courses, uploading media, analytics |
+| **core-api** | Any signed-in user, plus a few public procedures | Catalogue, enrolment, checkout, lesson content, quizzes, discussions, search |
+| **instructor-api** | Members of `instructor` | Creating, editing and pricing courses, uploading media, analytics, earnings and payouts |
 | **admin-api** | Members of `admin` | Category taxonomy, review moderation, the Stripe connection |
 
 Splitting by audience means each API has its own function, permissions, request limits and firewall. An instructor-only bug can't be reached with a student's token, and a flood of student traffic can't starve the instructor API.
 
 ### One table
 
-All application data is in a single DynamoDB table, the **core table**: courses, modules, lessons, enrolments, progress, quiz attempts, discussions, reviews and notifications. Related records share a partition, so a whole course's curriculum is one query.
+All application data is in a single DynamoDB table, the **core table**: courses, modules, lessons, enrolments, progress, quiz attempts, discussions, reviews, notifications, orders and instructor earnings. Related records share a partition, so a whole course's curriculum is one query.
 
 ### Search
 
@@ -105,12 +110,17 @@ Published courses are copied into an OpenSearch Serverless collection, which ans
 | **Upload bucket** | Files on their way in | Write-only by presigned URL, read by the processing job, short-lived |
 | **Public media** | Course images on catalogue cards | Readable by anyone through CloudFront |
 
+### Payments
+
+Paid courses are bought on Stripe's hosted checkout page, with a Stripe account an administrator connects in the admin portal. Stripe confirms each payment to a small API of its own, the **Stripe webhook API**, which verifies the message's signature and enrols the student. It is separate from the three tRPC APIs because Stripe, not a signed-in user, calls it. <Link path="design/payments">Payments</Link> has the design.
+
 ### Background work
 
-Two things happen outside a request:
+Three things happen outside a request:
 
-- **Reacting to data changes.** The table's change stream has one reader, the **stream router**, which hands each change to the queue of every feature that wants it: progress recalculation, search indexing, analytics and notification delivery.
+- **Reacting to data changes.** The table's change stream has one reader, the **stream router**, which hands each change to the queue of every feature that wants it: progress recalculation, search indexing, analytics, notification delivery and recording instructor earnings.
 - **Processing video.** An uploaded video is transcoded into adaptive streaming renditions by MediaConvert, then captioned by Transcribe.
+- **Paying instructors.** A daily run sends each instructor the earnings that are due, as a Stripe transfer. See <Link path="design/instructor-payouts">Instructor payouts</Link>.
 
 ## Design principles
 

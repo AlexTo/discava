@@ -84,6 +84,10 @@ export const LOCAL_EVENT_RUNNER = {
   // out a canceled job's write tail or students' CloudFront cookies (up to
   // hours); locally nothing writes late and there are no cookies.
   cleanupDelaySeconds: 60,
+  // How long a scheduled certificate reminder waits locally. It is long on
+  // purpose: a reminder must not land in an unrelated e2e test, so tests that
+  // want one fire it themselves with `delaySeconds: 0`.
+  certificateReminderDelaySeconds: 3600,
 };
 
 /**
@@ -198,7 +202,7 @@ export interface LocalTranscriptionJobRequest {
 /** A transcode cleanup to run later, in local dev, with Scheduler's payload. */
 export interface LocalScheduleRequest {
   payload: Record<string, string>;
-  /** How long to wait, instead of `LOCAL_EVENT_RUNNER.cleanupDelaySeconds`. */
+  /** How long to wait, instead of the route's default in `LOCAL_EVENT_RUNNER`. */
   delaySeconds?: number;
 }
 

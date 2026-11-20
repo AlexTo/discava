@@ -392,7 +392,7 @@ export const checkLastActivityAtCurrent = (
 // An assignment submission holds one file with a key,
 // name, size and type, in the student's own folder of its item
 // (`…/content-items/<id>/submissions/<userId>/`); it is for an upload
-// assignment, has a version from 1, and comes with the item's completion,
+// assignment, has a known status and a version from 1, and comes with the item's completion,
 // which the same transaction wrote. `late` isn't checked against the item's
 // dueAt: it describes the due date at submit time, and an instructor may move
 // or remove the date afterwards.
@@ -412,9 +412,19 @@ export const checkAssignmentSubmissionShape = (
     ),
   );
   return snapshot.assignmentSubmissions.flatMap((submission) => {
-    const { userId, courseId, contentItemId, file, version } = submission;
+    const { userId, courseId, contentItemId, file, version, status } =
+      submission;
     const record = { userId, courseId, contentItemId };
     const problems: string[] = [];
+    if (
+      status !== 'submitted' &&
+      status !== 'resubmission_requested' &&
+      status !== 'returned'
+    ) {
+      problems.push(
+        `status ${status} is not submitted, resubmission_requested or returned`,
+      );
+    }
     if (!file?.key || !file.fileName || !file.fileSize || !file.mimeType) {
       problems.push('file is missing its key, name, size or type');
     }

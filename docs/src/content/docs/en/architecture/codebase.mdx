@@ -32,8 +32,11 @@ packages/
 │   ├── server-utils/        Code shared by backend functions
 │   ├── web-utils/           Non-UI code shared by portals
 │   ├── shadcn/              UI components shared by portals
-│   ├── tiptap/              Rich-text document helpers
-│   └── scripts/             Deploy tooling and local stand-ins
+│   └── tiptap/              Rich-text document helpers
+├── tooling/
+│   ├── local-dev/           The Docker services local development runs instead of AWS
+│   ├── deploy/              Deploy and operations scripts
+│   └── agent/               CI and pull request tooling
 └── e2e/                     Playwright end-to-end tests
 docs/                        This site
 scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
@@ -49,6 +52,8 @@ scripts/setup-stage.sh       One-time AWS and GitHub setup per stage
 | Search | `packages/databases/search` | `constructs/src/app/opensearch`, `DataStack` |
 | Stream router and feature handlers | `packages/events/src/router` and one folder per feature | `constructs/src/core/stream-router.ts`, `StreamRouterStack` |
 | Media pipeline | `packages/events/src/media` | `constructs/src/app/media-convert`, `MediaPipelineStack` |
+| Stripe webhook | `packages/events/src/payments` | `constructs/src/app/apis/stripe-webhook-api.ts`, `PaymentsStack` |
+| Payout run | `packages/events/src/earnings` | `PayoutsStack` |
 | Cognito triggers | `packages/events/src/identity` | `DataStack` |
 
 ## How an API is put together
@@ -88,6 +93,8 @@ Every API and handler writes to the same table. A rule that more than one writer
 | MediaConvert | ffmpeg in Docker |
 | Transcribe | A stand-in that writes a placeholder caption track |
 | SES | Emails saved to a local inbox |
+| Stripe | A stand-in for its API, checkout page, webhook deliveries and Connect |
+| Secrets Manager (the Stripe key) | A git-ignored file under `tmp/local-dev/secrets/` |
 
 The event runner triggers the same handlers AWS would, through the same registry of stream features, so background behaviour is the same in both places. <Link path="guides/getting-started">Run Discava locally</Link> has the commands.
 

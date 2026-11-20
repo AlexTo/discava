@@ -22,6 +22,7 @@ const LAMBDAS: [name: string, input: string][] = [
   ['earnings-recording', 'src/earnings/earnings-recording.ts'],
   ['payout-run', 'src/earnings/payout-run.ts'],
   ['stripe-webhook', 'src/payments/stripe-webhook-handler.ts'],
+  ['certificate-reminder', 'src/certificates/certificate-reminder.ts'],
 ];
 
 export default defineConfig(
