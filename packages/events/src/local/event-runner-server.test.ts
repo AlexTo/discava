@@ -42,6 +42,7 @@ describe('startEventRunnerServer', () => {
       cancelTranscodeJob: vi.fn((jobId: string) => jobId === 'local-job-1'),
       submitTranscriptionJob: vi.fn(),
       scheduleTranscodeCleanup: vi.fn(),
+      scheduleCertificateReminder: vi.fn(),
       runPreTokenGeneration: vi.fn(async () => {}),
       emailInbox: {
         store: vi.fn(async () => ({ id: 'email-1' })),
@@ -180,6 +181,23 @@ describe('startEventRunnerServer', () => {
 
     expect(response.status).toBe(202);
     expect(handlers.scheduleTranscodeCleanup).toHaveBeenCalledWith({ payload });
+  });
+
+  it('schedules a certificate reminder with Scheduler’s payload and delay', async () => {
+    const { handlers, url } = start();
+    await new Promise((resolve) => server!.once('listening', resolve));
+    const body = {
+      payload: { userId: 'user-1', courseId: 'course-1' },
+      delaySeconds: 0,
+    };
+
+    const response = await fetch(url('/schedules/certificate-reminder'), {
+      method: 'POST',
+      ...json(body),
+    });
+
+    expect(response.status).toBe(202);
+    expect(handlers.scheduleCertificateReminder).toHaveBeenCalledWith(body);
   });
 
   it('runs the pre token generation trigger for a sign-in, answering once it has', async () => {

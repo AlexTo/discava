@@ -12,7 +12,12 @@ import {
   publishCertificateCourse,
   setCertificates,
 } from '../helpers/certificate.js';
-import { emailsFor } from '../helpers/notification.js';
+import {
+  certificateCourseIdOf,
+  emailsFor,
+  fireCertificateReminder,
+  localSubFor,
+} from '../helpers/notification.js';
 import { PORTALS } from '../helpers/portals.js';
 import { waitForQueuesToDrain } from '../helpers/router.js';
 import { screenshot } from '../helpers/screenshots.js';
@@ -338,5 +343,125 @@ test('an instructor turns certificates off and on for a course', async ({
         certificateControl(third).getByRole('link', { name: 'View' }),
       ).toBeVisible({ timeout: 2_000 });
     });
+  });
+});
+
+// The one reminder, three days after the certificate is issued, which the
+// scenario fires itself (see fireCertificateReminder) instead of waiting.
+test("a student who hasn't added their certificate gets one reminder", async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E certificate reminder course');
+  const reminderTitle = `Add your ${title} certificate to LinkedIn`;
+  const instructor = await browser.newPage();
+  const pageA = await browser.newPage();
+  const pageB = await browser.newPage();
+  const pageC = await browser.newPage();
+  const studentA = newUser('Ada', ['student']);
+  const studentB = newUser('Bea', ['student']);
+  const studentC = newUser('Cy', ['student']);
+  // How long a run that sends nothing is given to prove it.
+  const QUIET_MS = 3_000;
+
+  // The test never reaches LinkedIn.
+  await pageB
+    .context()
+    .route('https://www.linkedin.com/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<h1>LinkedIn</h1>' }),
+    );
+
+  await test.step('an instructor publishes a course and three students complete it', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ivy', ['instructor']));
+    await publishCertificateCourse(instructor, title);
+    await completeCourse(pageA, title, studentA);
+    await completeCourse(pageB, title, studentB);
+    await completeCourse(pageC, title, studentC);
+  });
+
+  await test.step('the first student gets one reminder, however often it runs', async () => {
+    const userId = localSubFor(studentA.username);
+    const courseId = await certificateCourseIdOf(userId);
+    await fireCertificateReminder(userId, courseId);
+    await waitForQueuesToDrain();
+    await expect
+      .poll(
+        async () => (await emailsFor(studentA.email, reminderTitle)).length,
+        { timeout: 30_000 },
+      )
+      .toBe(1);
+    const [email] = await emailsFor(studentA.email, reminderTitle);
+    expect(email!.text).toContain('source=reminder-email');
+
+    await pageA.reload();
+    await pageA
+      .getByRole('button', { name: /^Notifications, \d+ unread$/ })
+      .click();
+    await expect(pageA.getByText(reminderTitle)).toHaveCount(1);
+    await screenshot(pageA, 'certificate-reminder-notification');
+
+    await fireCertificateReminder(userId, courseId);
+    await pageA.waitForTimeout(QUIET_MS);
+    await waitForQueuesToDrain();
+    expect(await emailsFor(studentA.email, reminderTitle)).toHaveLength(1);
+  });
+
+  await test.step('a student who added it to LinkedIn first gets none', async () => {
+    await pageB.goto(`${PORTALS.student}/my-learning`);
+    await expectInCompleted(pageB, async () => {
+      await expect(
+        certificateControl(pageB).getByRole('link', {
+          name: 'Add to LinkedIn profile',
+        }),
+      ).toBeVisible({ timeout: 2_000 });
+    });
+    const recorded = pageB.waitForResponse(
+      (response) =>
+        response.url().includes('certificate.recordLinkedInClick') &&
+        response.status() === 200,
+    );
+    await certificateControl(pageB)
+      .getByRole('link', { name: 'Add to LinkedIn profile' })
+      .click();
+    await recorded;
+
+    const userId = localSubFor(studentB.username);
+    await fireCertificateReminder(userId, await certificateCourseIdOf(userId));
+    await pageB.waitForTimeout(QUIET_MS);
+    await waitForQueuesToDrain();
+    expect(await emailsFor(studentB.email, reminderTitle)).toHaveLength(0);
+    await pageB.reload();
+    await pageB
+      .getByRole('button', { name: /^Notifications, \d+ unread$/ })
+      .click();
+    await expect(pageB.getByText(reminderTitle)).toHaveCount(0);
+  });
+
+  await test.step('a student with certificate emails off gets none', async () => {
+    await pageC.goto(`${PORTALS.student}/my-learning`);
+    await pageC.getByRole('button', { name: 'Open user menu' }).click();
+    await pageC
+      .getByRole('menuitem', { name: 'Notification settings' })
+      .click();
+    // One "Certificates" row covers the issued email and the reminder.
+    await expect(
+      pageC.getByRole('switch', { name: 'Certificates' }),
+    ).toHaveCount(1);
+    const toggle = pageC.getByRole('switch', { name: 'Certificates' });
+    await toggle.click();
+    await expect(pageC.getByText('Saved', { exact: true })).toBeVisible();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await screenshot(pageC, 'certificate-email-setting');
+
+    const userId = localSubFor(studentC.username);
+    await fireCertificateReminder(userId, await certificateCourseIdOf(userId));
+    await pageC.waitForTimeout(QUIET_MS);
+    await waitForQueuesToDrain();
+    expect(await emailsFor(studentC.email, reminderTitle)).toHaveLength(0);
+    await pageC.goto(`${PORTALS.student}/my-learning`);
+    await pageC
+      .getByRole('button', { name: /^Notifications, \d+ unread$/ })
+      .click();
+    await expect(pageC.getByText(reminderTitle)).toHaveCount(0);
   });
 });
