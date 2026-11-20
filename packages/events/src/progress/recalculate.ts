@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  type Certificate,
   type Curriculum,
+  certificateReminderDueAt,
   computeProgress,
   type createCoreTableService,
   isConditionalCheckFailed,
   issueCertificate,
+  markCertificateReminderScheduled,
 } from '@discava/core-table';
+import { scheduleCertificateReminder } from '../certificates/reminder-schedule.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 
@@ -64,8 +68,10 @@ export const listEnrolledStudents = async (
 // and the writes that complete them are conditioned on that, so a run racing
 // another can't undo it. A student who isn't enrolled, or has dropped out,
 // is left alone. Once the enrolment is completed, the student's certificate
-// is issued if they don't have one yet (an error from that propagates, so the
-// batch is retried and a failed issue is picked up on the next pass).
+// is issued if they don't have one yet, and its one reminder is scheduled
+// unless it was already, sent, made unnecessary by a click, or is too late (an
+// error from either propagates, so the batch is retried and a failed issue or
+// schedule is picked up on the next pass).
 export const recalculateStudent = async (
   coreTable: CoreTable,
   courseId: string,
@@ -155,24 +161,49 @@ export const recalculateStudent = async (
     return;
   }
 
-  const { data: certificate } = await coreTable.entities.certificate
+  const { data: existingCertificate } = await coreTable.entities.certificate
     .get({ userId, courseId })
     .go();
-  if (certificate) {
+  let certificate: Certificate | undefined = existingCertificate ?? undefined;
+  if (!certificate) {
+    const [{ data: course }, { data: user }] = await Promise.all([
+      coreTable.entities.course.get({ courseId }).go(),
+      coreTable.entities.user.get({ userId }).go(),
+    ]);
+    if (!course) {
+      return;
+    }
+    certificate = await issueCertificate({
+      coreTable,
+      enrolment: { userId, courseId, status: 'completed', completedAt },
+      course,
+      user,
+      now: new Date(now),
+    });
+  }
+  if (
+    !certificate ||
+    certificate.reminderScheduledAt ||
+    certificate.reminderSentAt ||
+    certificate.linkedInClickedAt
+  ) {
     return;
   }
-  const [{ data: course }, { data: user }] = await Promise.all([
-    coreTable.entities.course.get({ courseId }).go(),
-    coreTable.entities.user.get({ userId }).go(),
-  ]);
-  if (!course) {
+  // A reminder is never sent late: past its due time, nothing is scheduled.
+  const dueAt = certificateReminderDueAt(certificate);
+  if (dueAt <= now) {
     return;
   }
-  await issueCertificate({
+  await scheduleCertificateReminder({
+    userId,
+    courseId,
+    certificateId: certificate.certificateId,
+    dueAt,
+  });
+  await markCertificateReminderScheduled({
     coreTable,
-    enrolment: { userId, courseId, status: 'completed', completedAt },
-    course,
-    user,
+    userId,
+    courseId,
     now: new Date(now),
   });
 };

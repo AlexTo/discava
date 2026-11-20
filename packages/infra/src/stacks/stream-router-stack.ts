@@ -5,6 +5,7 @@
 import {
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsCertificateReminder,
   EventsEarningsRecording,
   EventsNotificationDelivery,
   EventsProgressRecalculation,
@@ -13,6 +14,7 @@ import {
   RuntimeConfig,
   SearchCollection,
   StreamRouter,
+  suppressRules,
 } from '@discava/common-constructs';
 import type {
   NotificationsComponentConfig,
@@ -20,10 +22,13 @@ import type {
   StreamRouterComponentConfig,
 } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { Stack, StackProps } from 'aws-cdk-lib';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Function } from 'aws-cdk-lib/aws-lambda';
+import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
+import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
@@ -74,9 +79,12 @@ export class StreamRouterStack extends Stack {
     super(scope, id, props);
 
     const router = new EventsStreamRouter(this, 'StreamRouterFunction');
+    const reminder = this.createCertificateReminderLambda(coreTable);
     const handlers = {
-      'progress-recalculation':
-        this.createProgressRecalculationLambda(coreTable),
+      'progress-recalculation': this.createProgressRecalculationLambda(
+        coreTable,
+        reminder,
+      ),
       'search-indexing': this.createSearchIndexingLambda(
         coreTable,
         searchCollection,
@@ -120,14 +128,75 @@ export class StreamRouterStack extends Stack {
 
   // The single writer of lesson progress and of the enrolment's
   // progressPercent, status and completedAt, run from its feature's queue.
-  private createProgressRecalculationLambda(coreTable: CoreTable) {
+  //
+  // It also schedules each certificate's one reminder, so it may create
+  // schedules in the reminder's group and pass the scheduler role only to
+  // EventBridge Scheduler.
+  private createProgressRecalculationLambda(
+    coreTable: CoreTable,
+    reminder: { scheduleGroup: ScheduleGroup; schedulerRole: Role },
+  ) {
     const recalculation = new EventsProgressRecalculation(
       this,
       'ProgressRecalculation',
     );
     this.grantAppConfig(recalculation);
     coreTable.grantReadWriteData(recalculation);
+    reminder.scheduleGroup.grantWriteSchedules(recalculation);
+    recalculation.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['iam:PassRole'],
+        resources: [reminder.schedulerRole.roleArn],
+        conditions: {
+          StringEquals: { 'iam:PassedToService': 'scheduler.amazonaws.com' },
+        },
+      }),
+    );
     return recalculation;
+  }
+
+  // Run once per certificate by a one-time schedule, three days after it is
+  // issued: it reads and writes the table (the claim, then a notification) and
+  // sends no email itself. The schedule group is destroyed with the stack, as
+  // the transcode cleanup's is; the recalculation Lambda finds all three
+  // through the runtime config.
+  private createCertificateReminderLambda(coreTable: CoreTable) {
+    const reminder = new EventsCertificateReminder(this, 'CertificateReminder');
+    this.grantAppConfig(reminder);
+    coreTable.grantReadWriteData(reminder);
+
+    const scheduleGroup = new ScheduleGroup(this, 'CertificateReminderGroup', {
+      removalPolicy: RemovalPolicy.DESTROY,
+    });
+    const schedulerRole = new Role(this, 'CertificateReminderSchedulerRole', {
+      assumedBy: new ServicePrincipal('scheduler.amazonaws.com'),
+    });
+    reminder.grantInvoke(schedulerRole);
+
+    // Invoked asynchronously by each schedule: a reminder that keeps failing
+    // is kept in the queue, not dropped. The messages hold IDs only.
+    const failures = new Queue(this, 'CertificateReminderFailures', {
+      encryption: QueueEncryption.SQS_MANAGED,
+      enforceSSL: true,
+      retentionPeriod: Duration.days(14),
+    });
+    suppressRules(
+      failures,
+      ['CKV_AWS_27'],
+      'Encrypted with SQS-managed SSE, which this check does not recognise; KMS would need a customer managed key for Lambda to send to it',
+    );
+    reminder.configureAsyncInvoke({
+      retryAttempts: 2,
+      maxEventAge: Duration.hours(6),
+      onFailure: new SqsDestination(failures),
+    });
+
+    RuntimeConfig.ensure(this).set('certificates', 'Reminder', {
+      lambdaArn: reminder.functionArn,
+      schedulerRoleArn: schedulerRole.roleArn,
+      scheduleGroupName: scheduleGroup.scheduleGroupName,
+    });
+    return { reminder, scheduleGroup, schedulerRole };
   }
 
   // The single writer of the search collection's documents, run from its

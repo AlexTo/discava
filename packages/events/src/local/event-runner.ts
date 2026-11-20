@@ -32,6 +32,7 @@ import {
   STREAM_FEATURES,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
+import { handler as certificateReminder } from '../certificates/certificate-reminder.js';
 import { runPayouts } from '../earnings/payout-run.js';
 import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
@@ -85,6 +86,9 @@ import { waitForQueue } from './wait-for-queue.js';
 // - a scheduled cleanup coming due -> transcode-cleanup, with Scheduler's
 //   payload, the schedule's delaySeconds (default LOCAL_EVENT_RUNNER.cleanupDelaySeconds)
 //   after it's scheduled
+// - a scheduled certificate reminder coming due -> certificate-reminder, with
+//   Scheduler's payload, the schedule's delaySeconds (default
+//   LOCAL_EVENT_RUNNER.certificateReminderDelaySeconds) after it's scheduled
 // - a user first seen by an API's local server -> pre-token-generation, with
 //   the event Cognito sends on sign-in (#230; see syncLocalUser)
 
@@ -300,6 +304,17 @@ const server = startEventRunnerServer({
     );
     setTimeout(
       () => void invoke('transcode-cleanup', transcodeCleanup, payload),
+      delay * 1000,
+    ).unref();
+  },
+  scheduleCertificateReminder: ({ payload, delaySeconds }) => {
+    const delay =
+      delaySeconds ?? LOCAL_EVENT_RUNNER.certificateReminderDelaySeconds;
+    log(
+      `certificate-reminder scheduled in ${delay}s for ${payload.userId}/${payload.courseId}`,
+    );
+    setTimeout(
+      () => void invoke('certificate-reminder', certificateReminder, payload),
       delay * 1000,
     ).unref();
   },

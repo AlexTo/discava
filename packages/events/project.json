@@ -102,6 +102,12 @@
         "path": "src/payments/stripe-webhook-handler.ts",
         "name": "stripe-webhook",
         "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/certificates/certificate-reminder.ts",
+        "name": "certificate-reminder",
+        "iac": "cdk"
       }
     ]
   },
