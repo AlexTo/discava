@@ -226,10 +226,16 @@ test('a student is told about their certificate and adds it from the email', asy
   });
 
   await test.step('the bell tells them the certificate is ready', async () => {
-    await student.goto(`${PORTALS.student}/my-learning`);
+    // The certificate and its notification land together a few seconds after
+    // the last completion, so wait for the certificate first.
+    await expectInCompleted(student, async () => {
+      await expect(
+        certificateControl(student).getByRole('link', { name: 'View' }),
+      ).toBeVisible({ timeout: 2_000 });
+    });
     await student
       .getByRole('button', { name: /^Notifications, \d+ unread$/ })
-      .click({ timeout: 30_000 });
+      .click();
     await expect(
       student.getByText(`Your certificate for ${title} is ready`),
     ).toBeVisible();
