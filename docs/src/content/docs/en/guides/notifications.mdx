@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+import Link from '@components/link.astro';
+
 A notification is a short message for one person: it shows in the bell in every portal's header and, by their preferences, is sent as an email. Features publish notifications through helpers in `@discava/core-table`. Nothing else may write the notification records.
 
 ## Add an event type
@@ -15,7 +17,10 @@ Each kind of notification is one entry in `NOTIFICATION_TYPES` (`packages/databa
 - `name` and `description`: what the settings page shows.
 - `params`: the flat string params the notification is built from.
 - `emailPolicy`: `default-on`, `default-off`, `required` (always sent) or `never` (bell only).
-- `build(params)`: pure; returns the `title` (cut to 120 characters), `body` (cut to 500) and the `link` (`portal` and a `path` starting with `/`, with no secret in it).
+- `build(params)`: pure; returns the `title` (cut to 120 characters), `body` (cut to 500) and the `link` (`portal` and a `path` starting with `/`, with no secret in it). It may also return one optional `action` (`label` and `path`, in the same portal as the link): the email shows it as a second button and line, and the bell ignores it.
+- `emailPreferenceType` (optional): the id of another type whose email setting, unsubscribe token and settings label govern this one. The type has no setting of its own, `setNotificationPreference` refuses it and the settings page leaves it out. `isEmailEnabled` resolves it.
+
+Two types are for certificates: `certificate.issued` (its `link` is the certificate's page and its `action` is "Add to LinkedIn profile") and `certificate.reminder` (the same link and action, with `emailPreferenceType: 'certificate.issued'`). See <Link path="design/certificates">Certificates</Link>.
 
 Add a test for the entry in `notification-types.test.ts`. Nothing else changes: settings, the bell and the email pick it up.
 
