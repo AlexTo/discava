@@ -98,7 +98,18 @@ describe('featuresFor', () => {
   });
 
   it('routes a record to exactly the matching feature', () => {
+    expect(featuresFor(record('INSERT', 'NewImage', 'course'))).toEqual([
+      'search-indexing',
+    ]);
+    expect(featuresFor(record('MODIFY', 'NewImage', 'quizSummary'))).toEqual([
+      'progress-recalculation',
+      'analytics-update',
+    ]);
+  });
+
+  it('routes a course MODIFY to search indexing and the progress recalculation', () => {
     expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
+      'progress-recalculation',
       'search-indexing',
     ]);
     expect(featuresFor(record('INSERT', 'NewImage', 'enrolment'))).toEqual([
@@ -169,7 +180,7 @@ describe('featuresFor', () => {
     ];
     expect(
       featuresFor(record('MODIFY', 'NewImage', 'course'), features),
-    ).toEqual(['search-indexing', 'third']);
+    ).toEqual(['progress-recalculation', 'search-indexing', 'third']);
   });
 
   it('returns an empty list for a record matching none', () => {

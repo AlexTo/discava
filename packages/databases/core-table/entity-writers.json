@@ -60,6 +60,7 @@
   },
   "course": {
     "core-table": [
+      "packages/databases/core-table/src/helpers/certificate-criteria.ts",
       "packages/databases/core-table/src/helpers/course-catalogue.ts",
       "packages/databases/core-table/src/helpers/course-landing.ts"
     ],

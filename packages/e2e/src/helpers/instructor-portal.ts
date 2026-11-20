@@ -202,6 +202,21 @@ export const addQuiz = async (
   ).toBeVisible();
 };
 
+// Changes how many attempts the quiz `title` allows, from the course editor.
+export const setQuizAttempts = async (
+  page: Page,
+  title: string,
+  attempts: number,
+) => {
+  await page.getByRole('button', { name: `Edit ${title}` }).click();
+  const dialog = page.getByRole('dialog', { name: `Edit ${title}` });
+  await dialog.getByLabel('Number of attempts').fill(String(attempts));
+  await dialog.getByRole('button', { name: 'Save quiz' }).click();
+  await expect(dialog.getByRole('status')).toHaveText('Saved');
+  await dialog.getByRole('button', { name: 'Close' }).first().click();
+  await expect(dialog).toBeHidden();
+};
+
 // What the course editor calls each kind of content item in its controls'
 // names, e.g. "Hide text Reading one".
 export type ItemKind =

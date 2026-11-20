@@ -242,3 +242,148 @@ describe('studentsToRecalculate', () => {
     });
   });
 });
+
+describe('studentsToRecalculate for certificate criteria', () => {
+  const enrolled = vi.fn(async () => ['s1', 's2']);
+  const summary = (
+    before: { [key: string]: unknown } | undefined,
+    after: { [key: string]: unknown },
+  ) =>
+    record(
+      before ? 'MODIFY' : 'INSERT',
+      before && {
+        __edb_e__: 'quizSummary',
+        courseId: 'course-1',
+        userId: 's1',
+        ...before,
+      },
+      {
+        __edb_e__: 'quizSummary',
+        courseId: 'course-1',
+        userId: 's1',
+        ...after,
+      },
+    );
+  const course = (
+    before: { [key: string]: unknown },
+    after: { [key: string]: unknown },
+  ) =>
+    record(
+      'MODIFY',
+      { __edb_e__: 'course', courseId: 'course-1', ...before },
+      { __edb_e__: 'course', courseId: 'course-1', ...after },
+    );
+  const criteria = (version: number) => ({
+    certificateCriteria: { version, requireQuizPass: true },
+  });
+  const quiz = (passMarkPercent: number) => ({
+    type: 'quiz',
+    settings: { passMarkPercent },
+  });
+
+  it('recalculates the student of a first passing attempt only', async () => {
+    enrolled.mockClear();
+    const passed = { passedAt: '2026-01-01T00:00:00.000Z' };
+
+    expect(
+      asLists(
+        await studentsToRecalculate([summary(undefined, passed)], enrolled),
+      ),
+    ).toEqual({ 'course-1': ['s1'] });
+    expect(
+      asLists(
+        await studentsToRecalculate(
+          [summary({ bestScore: 40 }, { bestScore: 90, ...passed })],
+          enrolled,
+        ),
+      ),
+    ).toEqual({ 'course-1': ['s1'] });
+    // A failing attempt, and a second pass.
+    expect(
+      asLists(
+        await studentsToRecalculate(
+          [
+            summary(undefined, { bestScore: 10 }),
+            summary({ bestScore: 40, ...passed }, { bestScore: 95, ...passed }),
+          ],
+          enrolled,
+        ),
+      ),
+    ).toEqual({});
+    expect(enrolled).not.toHaveBeenCalled();
+  });
+
+  it('recalculates everyone enrolled when the criteria or the switch changes', async () => {
+    for (const [before, after] of [
+      [criteria(1), criteria(2)],
+      [{ certificatesEnabled: true }, { certificatesEnabled: false }],
+      [{ certificatesEnabled: false }, { certificatesEnabled: true }],
+    ]) {
+      expect(
+        asLists(await studentsToRecalculate([course(before, after)], enrolled)),
+      ).toEqual({ 'course-1': ['s1', 's2'] });
+    }
+  });
+
+  it('ignores a course edit that leaves the criteria and the switch alone', async () => {
+    enrolled.mockClear();
+
+    const result = await studentsToRecalculate(
+      [
+        course(
+          { title: 'Old', ...criteria(1) },
+          { title: 'New', ...criteria(1) },
+        ),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+    expect(enrolled).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['70 to 0', 70, 0, true],
+    ['0 to 70', 0, 70, true],
+    ['70 to 80', 70, 80, false],
+  ])(
+    'a quiz pass mark changed %s recalculates everyone enrolled: %s',
+    async (_, from, to, recalculated) => {
+      const result = await studentsToRecalculate(
+        [curriculumChange(quiz(from), quiz(to))],
+        enrolled,
+      );
+
+      expect(asLists(result)).toEqual(
+        recalculated ? { 'course-1': ['s1', 's2'] } : {},
+      );
+    },
+  );
+
+  it('ignores a settings edit of an item that is not a quiz', async () => {
+    const result = await studentsToRecalculate(
+      [
+        curriculumChange(
+          { type: 'text', settings: { passMarkPercent: 70 } },
+          { type: 'text', settings: { passMarkPercent: 0 } },
+        ),
+      ],
+      enrolled,
+    );
+
+    expect(asLists(result)).toEqual({});
+  });
+
+  it('recalculates a student once when a batch names them several ways', async () => {
+    const result = await studentsToRecalculate(
+      [
+        summary(undefined, { passedAt: '2026-01-01T00:00:00.000Z' }),
+        course(criteria(1), criteria(2)),
+        completion('s1'),
+      ],
+      enrolled,
+    );
+
+    expect([...(result.get('course-1') ?? [])].sort()).toEqual(['s1', 's2']);
+  });
+});

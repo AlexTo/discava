@@ -33,6 +33,7 @@ import {
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
+import { CourseCertificateCriteria } from './-components/course/course-certificate-criteria';
 import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseImage } from './-components/course/course-image';
 import { CourseModules } from './-components/course/course-modules';
@@ -190,6 +191,13 @@ function RouteComponent() {
               courseId={course.courseId}
               certificatesEnabled={course.certificatesEnabled}
             />
+            <div className="mt-3 ml-12">
+              <CourseCertificateCriteria
+                courseId={course.courseId}
+                certificatesEnabled={course.certificatesEnabled}
+                requireQuizPass={course.certificateCriteria.requireQuizPass}
+              />
+            </div>
           </div>
           <div className="mt-4 border-t pt-4">
             <CoursePriceForm
