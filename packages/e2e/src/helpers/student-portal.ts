@@ -33,7 +33,7 @@ export const openCourse = async (page: Page, title: string) => {
 // wherever `page` already is. The box is on every page (SiteLayout), so this
 // doesn't need to start from a particular one.
 export const searchWithSiteSearch = async (page: Page, query: string) => {
-  await page.getByRole('searchbox', { name: 'Search courses' }).fill(query);
+  await page.getByRole('combobox', { name: 'Search courses' }).fill(query);
   await page.keyboard.press('Enter');
   await page.waitForURL(/\/search\?query=/);
 };
@@ -42,8 +42,8 @@ export const searchWithSiteSearch = async (page: Page, query: string) => {
 // under it, without submitting. Typing three characters or more shows them
 // after a short pause.
 export const suggestInSiteSearch = async (page: Page, text: string) => {
-  await page.getByRole('searchbox', { name: 'Search courses' }).fill(text);
-  const suggestions = page.getByTestId('site-search-suggestions');
+  await page.getByRole('combobox', { name: 'Search courses' }).fill(text);
+  const suggestions = page.getByRole('listbox', { name: 'Course suggestions' });
   await expect(suggestions).toBeVisible();
   return suggestions;
 };

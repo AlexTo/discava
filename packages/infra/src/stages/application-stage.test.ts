@@ -16,6 +16,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import {
   actionsByRole,
+  actionsOf,
   methodSettings,
   resources,
   stackTemplates,
@@ -426,7 +427,7 @@ describe('notification delivery', () => {
     expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
   });
 
-  it('is told where the portals and the API are, and where its secret is', () => {
+  it('is told where the portals and the API are, where its secret is, and the runtime config app id', () => {
     const { Environment } = deliveryFunction(configured);
     expect(Object.keys(Environment.Variables).sort()).toEqual(
       [
@@ -434,6 +435,7 @@ describe('notification delivery', () => {
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
         'NOTIFICATIONS_FROM_ADDRESS',
+        'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
         'UNSUBSCRIBE_SECRET_ARN',
       ].sort(),
@@ -649,6 +651,36 @@ describe('payments (the Stripe webhook and checkout)', () => {
     expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
   });
 
+  it('gives the payouts function of instructor-api the API key to read, and neither write nor the signing secret', () => {
+    const instructorApi = stack('InstructorApi');
+    const policies = policiesOf(
+      instructorApi,
+      'InstructorApiPayoutsHandler',
+    ).join('');
+    expect(policies).toContain('ApiKey');
+    expect(policies).toContain('secretsmanager:GetSecretValue');
+    expect(policies).not.toContain('WebhookSigningSecret');
+    expect(policies).not.toContain('secretsmanager:PutSecretValue');
+    const [fn] = resources(
+      instructorApi,
+      'AWS::Lambda::Function',
+      'InstructorApiPayoutsHandler',
+    );
+    const variables = JSON.stringify(
+      (fn as { Environment: { Variables: object } }).Environment.Variables,
+    );
+    expect(variables).toContain('STRIPE_API_KEY_SECRET_ARN');
+    expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
+  });
+
+  it("keeps the Stripe key out of instructor-api's shared router function", () => {
+    const policies = policiesOf(
+      stack('InstructorApi'),
+      'InstructorApiRouterHandler',
+    ).join('');
+    expect(policies).not.toContain('ApiKey');
+  });
+
   it('lets no role but the admin connect function write either secret', () => {
     for (const [name, template] of stackTemplates({})) {
       for (const [role, actions] of Object.entries(actionsByRole(template))) {
@@ -665,5 +697,150 @@ describe('payments (the Stripe webhook and checkout)', () => {
       stack('AdminApi').findResources('AWS::Lambda::Function'),
     );
     expect(functions.match(/STRIPE_WEBHOOK_URL/g)?.length).toBe(2);
+  });
+});
+
+describe('earnings recording', () => {
+  const recordingFunction = (payouts?: {
+    platformFeeBasisPoints: number;
+    holdDays: number;
+  }) => {
+    const [fn] = resources(
+      synth({ payouts })('StreamRouter'),
+      'AWS::Lambda::Function',
+      'EarningsRecording',
+    );
+    return fn as { Environment: { Variables: Record<string, string> } };
+  };
+
+  it('has a queue, failure queue and alarm of its own, and still one stream mapping', () => {
+    const template = synth({})('StreamRouter');
+    for (const type of ['AWS::SQS::Queue', 'AWS::CloudWatch::Alarm']) {
+      expect(
+        Object.keys(template.findResources(type)).filter((id) =>
+          id.startsWith('StreamRouterEarningsRecording'),
+        ).length,
+        type,
+      ).toBeGreaterThan(0);
+    }
+    expect(
+      Object.keys(template.findResources('AWS::SQS::Queue')).some((id) =>
+        id.startsWith('StreamRouterEarningsRecordingFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      stackTemplates({}).flatMap(([name, t]) =>
+        Object.values(t.findResources('AWS::Lambda::EventSourceMapping'))
+          .filter((m) =>
+            JSON.stringify(m.Properties.EventSourceArn).includes('StreamArn'),
+          )
+          .map(() => name),
+      ),
+    ).toEqual(['StreamRouter']);
+  });
+
+  it("is invoked only by its feature's queue", () => {
+    const template = synth({})('StreamRouter');
+    const mappings = Object.values(
+      template.findResources('AWS::Lambda::EventSourceMapping'),
+    ).filter((m) =>
+      JSON.stringify(m.Properties.FunctionName).includes('EarningsRecording'),
+    );
+    expect(mappings).toHaveLength(1);
+    expect(JSON.stringify(mappings[0].Properties.EventSourceArn)).toContain(
+      'StreamRouterEarningsRecordingQueue',
+    );
+  });
+
+  it("carries the stage's fee and hold", () => {
+    expect(
+      recordingFunction({ platformFeeBasisPoints: 1500, holdDays: 7 })
+        .Environment.Variables,
+    ).toMatchObject({
+      PLATFORM_FEE_BASIS_POINTS: '1500',
+      PAYOUT_HOLD_DAYS: '7',
+    });
+  });
+
+  it('reads and writes the table and reads no secret', () => {
+    const actions = actionsOf(
+      synth({})('StreamRouter'),
+      'EarningsRecordingServiceRole',
+    );
+    expect(actions).toContain('dynamodb:PutItem');
+    expect(actions).not.toContain('secretsmanager:GetSecretValue');
+  });
+});
+
+describe('payout run', () => {
+  const stack = synth({});
+  const policiesOf = (template: Template, rolePrefix: string) =>
+    Object.values(template.findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        JSON.stringify(policy.Properties.Roles).includes(rolePrefix),
+      )
+      .map((policy) => JSON.stringify(policy.Properties.PolicyDocument));
+  const runFunction = (payouts?: {
+    platformFeeBasisPoints: number;
+    holdDays: number;
+    minimumPayoutMinor: number;
+  }) => {
+    const [fn] = resources(
+      synth({ payouts })('Payouts'),
+      'AWS::Lambda::Function',
+      'PayoutRun',
+    );
+    return fn as { Environment: { Variables: Record<string, string> } };
+  };
+
+  it('has a stack of its own that orders after Data', () => {
+    const app = new App();
+    const stage = new ApplicationStage(app, 'discava-test', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+    });
+    const payouts = stage.node.findChild('Payouts') as Stack;
+    app.synth();
+    expect(payouts.dependencies.map((d) => d.node.id)).toContain('Data');
+  });
+
+  it('runs once a day', () => {
+    const rules = Object.values(
+      stack('Payouts').findResources('AWS::Events::Rule'),
+    );
+    expect(rules).toHaveLength(1);
+    expect(rules[0].Properties.ScheduleExpression).toBe('rate(1 day)');
+    expect(JSON.stringify(rules[0].Properties.Targets)).toContain('PayoutRun');
+  });
+
+  it('carries the stage minimum, defaulting to 1000', () => {
+    expect(runFunction().Environment.Variables.PAYOUT_MINIMUM_MINOR).toBe(
+      '1000',
+    );
+    expect(
+      runFunction({
+        platformFeeBasisPoints: 1500,
+        holdDays: 7,
+        minimumPayoutMinor: 2500,
+      }).Environment.Variables.PAYOUT_MINIMUM_MINOR,
+    ).toBe('2500');
+  });
+
+  it('reads the API key but neither writes it nor reads the signing secret', () => {
+    const policies = policiesOf(stack('Payouts'), 'PayoutRun').join('');
+    expect(policies).toContain('ApiKey');
+    expect(policies).toContain('secretsmanager:GetSecretValue');
+    expect(policies).not.toContain('WebhookSigningSecret');
+    expect(policies).not.toContain('secretsmanager:PutSecretValue');
+    const variables = JSON.stringify(runFunction().Environment.Variables);
+    expect(variables).toContain('STRIPE_API_KEY_SECRET_ARN');
+    expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
+  });
+
+  it('has no stream or queue event source', () => {
+    expect(
+      Object.keys(
+        stack('Payouts').findResources('AWS::Lambda::EventSourceMapping'),
+      ),
+    ).toEqual([]);
   });
 });

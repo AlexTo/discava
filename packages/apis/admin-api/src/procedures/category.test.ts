@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import {
   InvalidRequestError,
   NameConflictError,
   NotFoundError,
 } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -18,29 +18,25 @@ import {
   renameCategory,
 } from './category.js';
 
-const { categoryQueryPrimary, courseScan, categoryWrites } = vi.hoisted(() => ({
-  categoryQueryPrimary: vi.fn(),
-  courseScan: vi.fn(),
-  categoryWrites: {
-    create: vi.fn(),
-    rename: vi.fn(),
-    archive: vi.fn(),
-  },
-}));
+const { categoryQueryPrimary, courseScanGo, categoryWrites, mockModule } =
+  await vi.hoisted(async () => ({
+    categoryWrites: {
+      create: vi.fn(),
+      rename: vi.fn(),
+      archive: vi.fn(),
+    },
+
+    ...(
+      await import('@discava/common-server-utils/trpc-testing')
+    ).mockCoreTable({ category: ['query.primary'], course: ['scan.go'] }),
+  }));
 
 // The helper's own rules (claims, slugs, races) are tested in core-table; here
 // it is replaced to check what the procedures hand it and how they map its
 // errors.
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  categoryWrites,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      category: { query: { primary: categoryQueryPrimary } },
-      course: { scan: { go: courseScan } },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), { categoryWrites }),
+);
 
 const router = t.router({
   list: listCategories,
@@ -48,18 +44,9 @@ const router = t.router({
   rename: renameCategory,
   archive: archiveCategory,
 });
-const caller = t.createCallerFactory(router);
 
 const callAs = (groups: string[] = ['admin']) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: { claims: { sub: 'admin-1', 'cognito:groups': groups } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: 'admin-1', groups });
 
 const science = {
   categoryId: 'cat-1',
@@ -205,7 +192,7 @@ describe('category.list', () => {
         ],
       }),
     });
-    courseScan.mockResolvedValue({
+    courseScanGo.mockResolvedValue({
       data: [
         { courseId: '1', categoryId: 'a', status: 'draft' },
         { courseId: '2', categoryId: 'a', status: 'published' },
@@ -238,6 +225,6 @@ describe('category.list', () => {
         courseCount: 1,
       },
     ]);
-    expect(courseScan).toHaveBeenCalledWith({ pages: 'all' });
+    expect(courseScanGo).toHaveBeenCalledWith({ pages: 'all' });
   });
 });

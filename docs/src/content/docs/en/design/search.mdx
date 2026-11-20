@@ -31,7 +31,7 @@ NextGen is only available in a subset of regions (as of writing: US East N. Virg
 | `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates missing indices / updates mappings, never deletes one; runs on every deploy, so an index deleted by hand comes back) |
 | `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
 | `packages/events` | `src/search/search-indexing.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
-| `packages/apis/core-api` | `course.publicSearch`: the tRPC procedure |
+| `packages/apis/core-api` | `course.publicSearch` and `course.publicSuggest`: the tRPC procedures |
 
 This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
 
@@ -67,7 +67,7 @@ A freshly created index starts empty: the stream only carries changes made after
 `src/search/search-reindex.ts` is a private Lambda (no event source, no API route) that pages through the published courses, writes them with `_bulk` using the same `toCourseDocument` the stream indexer uses, then deletes the documents of courses that aren't published any more. It runs under its own role because the collection's data access policy names only the stack's Lambda roles, so a person's AWS login gets a 403 on the data plane; `grantWrite`'s `aoss:WriteDocument` covers the deletes too. Run it after the index is recreated or an indexing bug:
 
 ```sh
-pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development
 ```
 
 It prints how many courses were indexed and how many stale documents were removed, and running it twice leaves the same documents. A catalogue too big for one invocation's 5-minute timeout would need the Lambda to hand off to itself. Locally, `pnpm nx run @discava/e2e:seed-local-courses` seeds the index instead.
@@ -83,7 +83,7 @@ Facets are `filter` aggregations in one search request (see `buildSearchRequest`
 A course published before the deploy has no document with these fields until it is next written, so after deploying the change **invoke the re-index Lambda once**:
 
 ```sh
-pnpm nx run @discava/common-scripts:reindex-search --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-search --stage=discava-development
 ```
 
 It rebuilds every published course's document, with the fields, from the course records. Running it again leaves the same documents.
@@ -94,9 +94,46 @@ It rebuilds every published course's document, with the fields, from the course 
 
 It's public, like `course.publicList`: a signed-out caller can search too. Visibility is enforced twice, once at index time (above) and again in the query itself, which always filters to `status: 'published'` even though every indexed course already is one. A bug in one isn't then the only thing standing between a caller and a draft or archived course.
 
+## Suggestions
+
+**Spec:** [`specs/20261119-195009-search-suggestions/`](https://github.com/AlexTo/discava/tree/main/specs/20261119-195009-search-suggestions/)
+
+The student portal's "What do you want to learn?" box shows up to 10 matching courses as you type. `course.publicSuggest` (`{ q }` in, `{ items: [{ courseId, title, imageKey? }] }` out) is built on `publicSearchProcedure`, in the same file as `publicSearch`, with its request built by `buildSuggestRequest` (`helpers/suggest-query.ts`).
+
+### Why not `publicSearch`
+
+`publicSearch` always runs five facet aggregations, reads every category from the core table and returns full result cards. Suggestions need none of that, and fire far more often. A separate procedure also gets its own input bounds (3 to 200 characters) and a shorter timeout without loosening `publicSearch`'s. A `mode` flag on `publicSearch` was rejected: one procedure with two output shapes is harder to type and test.
+
+### The query
+
+A `match_bool_prefix` on `title`, inside the same `function_score` with `ratingBoost` and the same `status: 'published'` filter as full search. Each analysed term but the last is matched as a whole (stemmed) term and the last as a prefix, so whole words stem as they do in full search and "pyth" finds "Python for Data Analysis". The request sets no `operator`, so the terms are OR'd: one matching term is enough, and a course matching more of them scores higher. "java zzzz" still suggests the Java courses. Requiring every term (`operator: 'and'`) would be a change to `suggest-query.ts`, not a docs change. Hits sort by score, then `publishedAt` descending, then `courseId`. There are no aggregations, `track_total_hits` is off, and only `courseId`, `title` and `imageKey` are fetched.
+
+It queries the existing `title` field, so the mapping doesn't change and no stage needs a re-index. The known limit: the last term is stemmed before the prefix is applied, so a part-typed word whose stem isn't a prefix of the indexed stem can miss until the next character is typed. If that proves too common, the follow-up is a `title.suggest` sub-field of type `search_as_you_type` with the `standard` analyzer, queried with `multi_match` `bool_prefix`. It is additive (`putMapping`) but needs one re-index per stage.
+
+### Typing, debounce and reuse
+
+- Nothing is sent under **3 characters** (after trimming) or over 200.
+- The trimmed text is **debounced by 300 ms** (`useDebouncedValue`), so a burst of typing sends one request, for the last text.
+- The query is keyed by the text, so a slow answer for "javas" lands in the "javas" cache entry and never replaces the list for "javascript". Retyping a recent text within `staleTime` (60 s) reuses its answer and sends nothing.
+- Submitting the form or choosing a row cancels the pending debounce, so no request fires for text that was already submitted.
+
+### Failure, timeout and throttle
+
+The request has a **3 s timeout** (`SUGGEST_REQUEST_TIMEOUT_MS`), shorter than `publicSearch`'s, so a cold collection doesn't hold Lambda concurrency on every pause. A `TimeoutError` becomes tRPC `TIMEOUT`, as in `publicSearch`. The portal treats any error, a 429 included, as "no suggestions": it shows no alert and does not retry, because the next pause replaces the request anyway.
+
+`course.publicSuggest` is in `PUBLIC_OPERATIONS`, which would give it the shared `publicThrottle`. That limit is shared by every caller, not counted per visitor, and is far too tight for suggestions, the most frequent request core-api gets: on `discava-development` it is 1 request/s with a burst of 3, so two people typing at once would make the dropdown quietly stop working. It therefore has a throttle of its own, set by two `coreApi` stage keys, `publicSuggestThrottleRateLimit` and `publicSuggestThrottleBurstLimit` (default 100 / 200), which only `course.publicSuggest` uses:
+
+| Stage | Suggest throttle (rate / burst) | Other public operations |
+|---|---|---|
+| `discava-development` | 5 / 10 | 1 / 3 |
+| `discava-production` | 100 / 200 | 20 / 40 |
+| Default (stage sets neither key) | 100 / 200 | 20 / 40 |
+
+One person typing steadily costs about 1 request/s. Development's 5 / 10 covers about five testers at once and keeps what an anonymous flood can reach small (WAF is off there, and core-api's reserved concurrency of 10 still caps concurrent requests). Production's 100 / 200 covers about 100 people typing at the same moment; a request is a 10-hit query with no core-table read, so it holds a Lambda for tens of milliseconds. Raise it with real traffic, like the stage's other limits. There is no per-IP rate rule on either stage, so one heavy caller can still use the whole limit, as for the other public operations.
+
 ## Local dev
 
-An `opensearchproject/opensearch` container (`packages/common/scripts/src/opensearch`, the same `runLocalContainer` pattern as DynamoDB local and S3Mock), security plugin disabled and memory capped, started by `@discava/search`'s `dev` target. Its image is pinned in `packages/databases/search/config.json` to a 3.x release rather than `latest`: [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) upgrades collections automatically to new open source releases and requires clients compatible with OpenSearch 3.x, so local dev stays on that line without moving every time a release lands. It's the newest release at the time, chosen over an older one to match Serverless, so unlike the other local images it wasn't held back two weeks. Re-pin it when Serverless moves to a newer minor version, and re-check the calls in `sync-indices.ts` and the procedures against its [list of supported operations](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html). `pnpm nx run @discava/common-scripts:reset-local-data` also wipes its indices. The local event runner (`packages/events/src/local/event-runner.ts`) routes `SEARCH_STREAM_FILTERS` matches to the same indexing handler deployed stages use.
+An `opensearchproject/opensearch` container (`packages/tooling/local-dev/src/opensearch`, the same `runLocalContainer` pattern as DynamoDB local and S3Mock), security plugin disabled and memory capped, started by `@discava/search`'s `dev` target. Its image is pinned in `packages/databases/search/config.json` to a 3.x release rather than `latest`: [OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-overview.html) upgrades collections automatically to new open source releases and requires clients compatible with OpenSearch 3.x, so local dev stays on that line without moving every time a release lands. It's the newest release at the time, chosen over an older one to match Serverless, so unlike the other local images it wasn't held back two weeks. Re-pin it when Serverless moves to a newer minor version, and re-check the calls in `sync-indices.ts` and the procedures against its [list of supported operations](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless-genref.html). `pnpm nx run @discava/tooling-local-dev:reset-local-data` also wipes its indices. The local event runner (`packages/events/src/local/event-runner.ts`) routes `SEARCH_STREAM_FILTERS` matches to the same indexing handler deployed stages use.
 
 ## Deviations from #1267
 

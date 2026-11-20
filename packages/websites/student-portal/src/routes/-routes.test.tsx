@@ -23,6 +23,7 @@ const handlers = {
     learnerName: 'Ada Lovelace',
     courseTitle: 'Linear Algebra',
     completedAt: '2026-10-05T12:00:00.000Z',
+    completedOn: '5 October 2026',
   }),
   'course.publicList': () => ({ items: [course] }),
   'course.publicSearch': () => ({
@@ -125,6 +126,32 @@ describe('/', () => {
       await screen.findByRole('heading', { name: /^Welcome/ }),
     ).toBeInTheDocument();
   });
+
+  it('shows the price or Free on the signed-in home’s course cards', async () => {
+    renderWithCoreApi(null, {
+      routeTree,
+      path: '/',
+      signedIn: true,
+      handlers: {
+        ...handlers,
+        'course.publicList': () => ({
+          items: [
+            { ...course, priceAmount: 2000, priceCurrency: 'USD' },
+            {
+              ...course,
+              courseId: 'course-2',
+              title: 'Calculus',
+              priceAmount: 0,
+              priceCurrency: 'USD',
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(await screen.findByText('$20.00')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+  });
 });
 
 describe('/learn/<courseId>/home', () => {
@@ -161,7 +188,7 @@ describe('the top bar', () => {
     const { router, user } = open('/learn/course-1');
 
     await user.type(
-      await screen.findByRole('searchbox', { name: 'Search courses' }),
+      await screen.findByRole('combobox', { name: 'Search courses' }),
       '  linear algebra {Enter}',
     );
 

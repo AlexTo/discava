@@ -3,29 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  buildEvent,
+  type CallerOptions,
+  callerFor,
+} from '@discava/common-server-utils/trpc-testing';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { protectedProcedure, t } from './init.js';
-
-const buildEvent = (claims?: Record<string, string>): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: claims ? { claims } : undefined,
-    },
-  }) as unknown as APIGatewayProxyEvent;
 
 const router = t.router({
   whoAmI: protectedProcedure.query((opts) => opts.ctx.user),
 });
-const caller = t.createCallerFactory(router);
-
-const callWhoAmI = (claims?: Record<string, string>) =>
-  caller({
-    event: buildEvent(claims),
-    context: {} as any,
-    info: {} as any,
-  }).whoAmI();
+const callWhoAmI = (options?: CallerOptions) =>
+  callerFor(router, options).whoAmI();
 
 describe('protectedProcedure', () => {
   it('throws UNAUTHORIZED when the caller has no Cognito claims', async () => {
@@ -47,7 +38,7 @@ describe('error responses', () => {
       req: new Request('http://api.test/whoAmI'),
       router,
       createContext: () => ({
-        event: buildEvent(undefined),
+        event: buildEvent(),
         context: {} as any,
         info: {} as any,
       }),

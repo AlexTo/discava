@@ -8,7 +8,7 @@ import {
   normaliseCertificateId,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { drawCertificatePdf } from '../helpers/certificate-pdf.js';
+import { drawCertificatePdf, formatDate } from '../helpers/certificate-pdf.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import {
   CertificatePdfInputSchema,
@@ -26,7 +26,7 @@ const notFound = () =>
 
 /**
  * Public: the details printed on a certificate, looked up by its ID. Returns
- * only those four fields, never the student's id, the course's id or anything
+ * only those fields, never the student's id, the course's id or anything
  * else on the record.
  */
 export const verifyCertificate = publicCourseProcedure
@@ -51,6 +51,7 @@ export const verifyCertificate = publicCourseProcedure
       learnerName: certificate.learnerName,
       courseTitle: certificate.courseTitle,
       completedAt: certificate.completedAt,
+      completedOn: formatDate(certificate.completedAt),
     };
   });
 

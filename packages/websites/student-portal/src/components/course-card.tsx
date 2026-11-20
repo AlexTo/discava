@@ -10,13 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
-import { Link } from '@tanstack/react-router';
-import { BarChart3, Clock3 } from 'lucide-react';
 import {
-  formatDuration,
   LANGUAGE_LABELS,
   LEVEL_LABELS,
-} from '../lib/catalogue-filters';
+} from '@discava/common-web-utils/catalogue-labels';
+import { formatPrice } from '@discava/common-web-utils/price';
+import { Link } from '@tanstack/react-router';
+import { BarChart3, Clock3 } from 'lucide-react';
+import { formatDuration } from '../lib/catalogue-filters';
 import type { DisplayCourse } from '../lib/course-display';
 import { CourseThumbnail } from './course-thumbnail';
 import { RatingSummary } from './rating-summary';
@@ -45,6 +46,11 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
           )}
         </div>
         <CardTitle className="mt-2">{course.title}</CardTitle>
+        {course.priceAmount !== undefined && course.priceCurrency ? (
+          <p className="text-sm font-semibold">
+            {formatPrice(course.priceAmount, course.priceCurrency)}
+          </p>
+        ) : null}
         <RatingSummary
           average={course.ratingAverage}
           count={course.ratingCount}

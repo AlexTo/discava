@@ -33,17 +33,13 @@
       }
     },
     "dev": {
-      "executor": "nx:run-commands",
-      "continuous": true,
-      "dependsOn": ["pull-image"],
-      "options": {
-        "commands": [
-          "tsx ../../common/scripts/src/dynamodb/start-container.ts",
-          "tsx ../../common/scripts/src/dynamodb/create-local-table.ts"
-        ],
-        "parallel": true,
-        "cwd": "{projectRoot}"
-      }
+      "executor": "nx:noop",
+      "dependsOn": [
+        {
+          "projects": ["@discava/tooling-local-dev"],
+          "target": "dynamodb"
+        }
+      ]
     },
     "format": {
       "executor": "nx:run-commands",
@@ -82,13 +78,6 @@
         "skip-lint": {
           "command": "node -e \"\""
         }
-      }
-    },
-    "pull-image": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "tsx ../../common/scripts/src/dynamodb/pull-image.ts",
-        "cwd": "{projectRoot}"
       }
     }
   }

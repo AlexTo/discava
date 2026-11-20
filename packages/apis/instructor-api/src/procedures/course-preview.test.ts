@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -99,25 +99,20 @@ vi.mock('../helpers/mediaconvert-client.js', () => ({
   bestEffortCancelTranscodeJob,
 }));
 
-const caller = t.createCallerFactory(
-  t.router({ createUploadUrl, create, replace, remove, createVideoUrl }),
-);
+const router = t.router({
+  createUploadUrl,
+  create,
+  replace,
+  remove,
+  createVideoUrl,
+});
 
 const SUB = 'instructor-1';
 const COURSE = 'course-1';
 const RAW = `courses/${COURSE}/preview/uploads/abc.mp4`;
 
 const call = (groups: string[] = ['instructor'], cookies: string[] = []) =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: { claims: { sub: SUB, 'cognito:groups': groups } },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-    responseCookies: cookies,
-  });
+  callerFor(router, { sub: SUB, groups, responseCookies: cookies });
 
 const conditionalCheckFailed = () =>
   Object.assign(new Error('conditional'), {

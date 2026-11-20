@@ -10,7 +10,7 @@ import { LOCAL_PORTAL_ORIGINS } from '@discava/common-infra-config/local-portals
  */
 export const LOCAL_DEV_CONFIG = {
   // Sign in with the local OIDC server instead of Cognito (#226; port, issuer
-  // and client from common-scripts' local-oidc/config.json).
+  // and client from tooling-local-dev's local-oidc/config.json).
   localOidc: {
     authority: 'http://localhost:9400/discava',
     clientId: 'local',

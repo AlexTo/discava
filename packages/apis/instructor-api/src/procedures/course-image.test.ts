@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -23,34 +23,24 @@ const {
   headPublicMediaObject,
   attachPublicMediaObject,
   bestEffortDetachPublicMediaObject,
-} = vi.hoisted(() => ({
-  courseGet: vi.fn(),
-  coursePatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   coursePatchSet: vi.fn(),
   coursePatchRemove: vi.fn(),
   coursePatchGo: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  courseInstructorQueryPrimary: vi.fn(),
-  courseInstructorPatch: vi.fn(),
   presignJpegUpload: vi.fn(),
   headPublicMediaObject: vi.fn(),
   attachPublicMediaObject: vi.fn(),
   bestEffortDetachPublicMediaObject: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    course: ['get', 'patch'],
+    courseInstructor: ['get', 'query.primary', 'patch'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      course: { get: courseGet, patch: coursePatch },
-      courseInstructor: {
-        get: courseInstructorGet,
-        query: { primary: courseInstructorQueryPrimary },
-        patch: courseInstructorPatch,
-      },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual()),
+);
 
 vi.mock('../helpers/public-media-client.js', () => ({
   presignJpegUpload,
@@ -60,20 +50,9 @@ vi.mock('../helpers/public-media-client.js', () => ({
 }));
 
 const router = t.router({ createCourseImageUploadUrl, updateCourseImage });
-const caller = t.createCallerFactory(router);
 
 const callAs = () =>
-  caller({
-    event: {
-      requestContext: {
-        authorizer: {
-          claims: { sub: 'instructor-1', 'cognito:groups': ['instructor'] },
-        },
-      },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+  callerFor(router, { sub: 'instructor-1', groups: ['instructor'] });
 
 const NEW_KEY =
   'courses/course-1/image/0f8fad5b-d9cb-469f-a165-70867728950e.jpg';

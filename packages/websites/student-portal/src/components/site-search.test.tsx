@@ -36,7 +36,7 @@ const open = async (handler: Handler = () => ({ items: [] }), path = '/') => {
     handlers: { [suggestPath]: handler },
   });
   await advance(0);
-  const box = screen.getByRole('searchbox', { name: 'Search courses' });
+  const box = screen.getByRole('combobox', { name: 'Search courses' });
   const type = async (text: string) => {
     fireEvent.focus(box);
     fireEvent.change(box, { target: { value: text } });
@@ -73,7 +73,7 @@ describe('SiteSearch suggestions', () => {
       { path: suggestPath, input: { q: 'pyt' } },
     ]);
     expect(
-      screen.getByRole('button', { name: 'Python for Data Analysis' }),
+      screen.getByRole('option', { name: 'Python for Data Analysis' }),
     ).toBeInTheDocument();
   });
 
@@ -111,7 +111,7 @@ describe('SiteSearch suggestions', () => {
     await advance(50);
 
     expect(
-      screen.getByRole('button', { name: 'JavaScript Deep Dive' }),
+      screen.getByRole('option', { name: 'JavaScript Deep Dive' }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Java Basics')).not.toBeInTheDocument();
   });
@@ -143,7 +143,7 @@ describe('SiteSearch suggestions', () => {
     await type('python');
     await advance(300);
     await advance(50);
-    fireEvent.click(screen.getByRole('button', { name: 'Python Basics' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Python Basics' }));
     await advance(0);
 
     expect(router.state.location.pathname).toBe('/learn/c1');
@@ -211,7 +211,8 @@ describe('SiteSearch suggestions', () => {
     await advance(300);
     await advance(50);
 
-    expect(screen.getAllByRole('button')).toHaveLength(10);
+    // The ten courses, then "See all results".
+    expect(screen.getAllByRole('option')).toHaveLength(11);
   });
 
   it('closes when the text drops under 3 characters', async () => {
@@ -236,5 +237,197 @@ describe('SiteSearch suggestions', () => {
     await advance(1_000);
 
     expect(suggestCalls(calls)).toEqual([]);
+  });
+
+  describe('keyboard and screen reader', () => {
+    const three = () => ({
+      items: [
+        course('c1', 'Python Basics'),
+        course('c2', 'Python Advanced'),
+        course('c3', 'Python Web'),
+      ],
+    });
+    const key = (box: HTMLElement, name: string) =>
+      fireEvent.keyDown(box, { key: name });
+    const openThree = async () => {
+      const opened = await open(three);
+      await opened.type('python');
+      await advance(300);
+      await advance(50);
+      return opened;
+    };
+
+    it('follows the combobox pattern', async () => {
+      const { box, type } = await open(three);
+      expect(box).toHaveAttribute('aria-expanded', 'false');
+      expect(box).toHaveAttribute('aria-autocomplete', 'list');
+
+      await type('python');
+      await advance(300);
+      await advance(50);
+
+      const list = screen.getByRole('listbox', { name: 'Course suggestions' });
+      expect(box).toHaveAttribute('aria-expanded', 'true');
+      expect(box).toHaveAttribute('aria-controls', list.id);
+      expect(screen.getAllByRole('option')).toHaveLength(4);
+      expect(box).not.toHaveAttribute('aria-activedescendant');
+    });
+
+    it('moves the highlight with Down and Up, wrapping, keeping the text', async () => {
+      const { box } = await openThree();
+      const options = screen.getAllByRole('option');
+
+      key(box, 'ArrowDown');
+      expect(box).toHaveAttribute('aria-activedescendant', options[0].id);
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      key(box, 'ArrowUp');
+      expect(box).toHaveAttribute('aria-activedescendant', options[3].id);
+      key(box, 'ArrowUp');
+      expect(box).toHaveAttribute('aria-activedescendant', options[2].id);
+      key(box, 'ArrowDown');
+      key(box, 'ArrowDown');
+      expect(box).toHaveAttribute('aria-activedescendant', options[0].id);
+      expect(box).toHaveValue('python');
+    });
+
+    it('chooses the highlighted row on Enter', async () => {
+      const { box, router } = await openThree();
+
+      key(box, 'ArrowDown');
+      key(box, 'ArrowDown');
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.pathname).toBe('/learn/c2');
+    });
+
+    it('closes on Escape and keeps the text', async () => {
+      const { box } = await openThree();
+
+      key(box, 'Escape');
+
+      expect(
+        screen.queryByRole('listbox', { name: 'Course suggestions' }),
+      ).not.toBeInTheDocument();
+      expect(box).toHaveAttribute('aria-expanded', 'false');
+      expect(box).toHaveValue('python');
+    });
+
+    it('closes when focus leaves', async () => {
+      const { box } = await openThree();
+
+      fireEvent.blur(box);
+
+      expect(
+        screen.queryByRole('listbox', { name: 'Course suggestions' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('resets the highlight when the answer changes', async () => {
+      const { box, type } = await open((input) => ({
+        items: [
+          course(`${(input as { q: string }).q}-1`, 'Python Basics'),
+          course(`${(input as { q: string }).q}-2`, 'Python Web'),
+        ],
+      }));
+      await type('python');
+      await advance(350);
+      key(box, 'ArrowDown');
+      await type('pythons');
+      await advance(350);
+
+      expect(box).not.toHaveAttribute('aria-activedescendant');
+    });
+
+    it('drops the highlight when the text is edited, so Enter submits', async () => {
+      const { box, router, type } = await openThree();
+
+      key(box, 'ArrowDown');
+      await type('python pandas');
+      expect(box).not.toHaveAttribute('aria-activedescendant');
+      key(box, 'Enter');
+      fireEvent.submit(box.closest('form') as HTMLFormElement);
+      await advance(0);
+
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({
+        query: 'python pandas',
+      });
+    });
+
+    it('announces the count of suggestions', async () => {
+      await openThree();
+
+      expect(screen.getByRole('status')).toHaveTextContent('3 suggestions');
+    });
+
+    it('announces when no course matches', async () => {
+      const { type } = await open();
+      await type('zzzzz');
+      await advance(300);
+      await advance(50);
+
+      expect(screen.getByRole('status')).toHaveTextContent('No courses match');
+    });
+
+    it('ends the list with "See all results", which opens the results', async () => {
+      const { router } = await openThree();
+
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(4);
+      fireEvent.click(options[3]);
+      await advance(0);
+
+      expect(options[3]).toHaveTextContent("See all results for 'python'");
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({ query: 'python' });
+      expect(
+        screen.queryByTestId('site-search-suggestions'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('reaches "See all results" with Up, then Enter opens the results', async () => {
+      const { box, router } = await openThree();
+
+      key(box, 'ArrowUp');
+      const last = screen.getAllByRole('option')[3];
+      expect(box).toHaveAttribute('aria-activedescendant', last.id);
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.pathname).toBe('/search');
+      expect(router.state.location.search).toEqual({ query: 'python' });
+    });
+
+    it('reaches "See all results" with Down, then Enter, and keeps the count to courses', async () => {
+      const { box, router, type } = await open(three);
+      await type(' python ');
+      await advance(300);
+      await advance(50);
+
+      for (let presses = 0; presses < 4; presses++) key(box, 'ArrowDown');
+      expect(screen.getByRole('status')).toHaveTextContent('3 suggestions');
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.search).toEqual({ query: 'python' });
+    });
+
+    it('keeps the dropdown open with "No courses match" and "See all results" for an empty answer', async () => {
+      const { box, router, type } = await open();
+      await type('zzzzz');
+      await advance(300);
+      await advance(50);
+
+      const list = screen.getByTestId('site-search-suggestions');
+      expect(list).toHaveTextContent('No courses match');
+      expect(box).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getAllByRole('option')).toHaveLength(1);
+      key(box, 'ArrowDown');
+      key(box, 'Enter');
+      await advance(0);
+
+      expect(router.state.location.search).toEqual({ query: 'zzzzz' });
+    });
   });
 });

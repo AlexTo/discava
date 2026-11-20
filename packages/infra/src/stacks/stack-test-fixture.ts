@@ -7,11 +7,16 @@
 import { type StageComponents } from '@discava/common-infra-config';
 import { App, Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
-import { ApplicationStage } from '../stages/application-stage.js';
+import {
+  ApplicationStage,
+  type ApplicationStageProps,
+} from '../stages/application-stage.js';
 
 // Synthesizes the application with a stage's settings and returns each of
 // its stacks' templates.
-export const synth = (components: StageComponents) => {
+export const synth = (
+  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
     ...components,
@@ -69,7 +74,9 @@ export const actionsOf = (template: Template, rolePrefix: string) =>
     .flatMap(([, actions]) => actions);
 
 // Every stack in the stage, by name, with its synthesized template.
-export const stackTemplates = (components: StageComponents) => {
+export const stackTemplates = (
+  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
     ...components,
@@ -77,4 +84,36 @@ export const stackTemplates = (components: StageComponents) => {
   return stage.node.children
     .filter((child): child is Stack => child instanceof Stack)
     .map((child) => [child.node.id, Template.fromStack(child)] as const);
+};
+
+// The logical ids of the stack's functions whose role can touch the core
+// table but which lack RUNTIME_CONFIG_APP_ID or the AppConfig read actions:
+// the core-table client resolves the table name through AppConfig, so such a
+// function fails on every invocation once deployed.
+export const tableFunctionsMissingAppConfig = (template: Template) => {
+  const byRole = actionsByRole(template);
+  return Object.entries(template.findResources('AWS::Lambda::Function'))
+    .filter(([, fn]) => {
+      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
+        'Fn::GetAtt'
+      ][0];
+      // The stream router only reads the table's stream, not its items.
+      return (byRole[role] ?? []).some((a) =>
+        /^dynamodb:(Get|BatchGet|Query|Put|Update)Item$|^dynamodb:Query$/.test(
+          a,
+        ),
+      );
+    })
+    .filter(([, fn]) => {
+      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
+        'Fn::GetAtt'
+      ][0];
+      const actions = byRole[role] ?? [];
+      return !(
+        fn.Properties.Environment?.Variables?.RUNTIME_CONFIG_APP_ID &&
+        actions.includes('appconfig:StartConfigurationSession') &&
+        actions.includes('appconfig:GetLatestConfiguration')
+      );
+    })
+    .map(([id]) => id);
 };

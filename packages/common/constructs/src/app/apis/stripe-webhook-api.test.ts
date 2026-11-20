@@ -83,8 +83,21 @@ describe('StripeWebhookApi', () => {
     expect(actions).toContain('secretsmanager:GetSecretValue');
     expect(actions).not.toContain('secretsmanager:PutSecretValue');
     expect(
-      actions.filter((a) => !/^(dynamodb|secretsmanager|kms|xray):/.test(a)),
+      actions.filter(
+        (a) => !/^(dynamodb|secretsmanager|kms|xray|appconfig):/.test(a),
+      ),
     ).toEqual([]);
+  });
+
+  it('gives the function the AppConfig application id and read access to resolve the table (#619)', () => {
+    const { template } = build();
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: Match.objectLike({
+          RUNTIME_CONFIG_APP_ID: Match.anyValue(),
+        }),
+      },
+    });
   });
 
   it("reports the custom domain's address when it has one", () => {

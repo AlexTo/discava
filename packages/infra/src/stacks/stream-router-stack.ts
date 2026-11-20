@@ -5,6 +5,7 @@
 import {
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsEarningsRecording,
   EventsNotificationDelivery,
   EventsProgressRecalculation,
   EventsSearchIndexing,
@@ -15,6 +16,7 @@ import {
 } from '@discava/common-constructs';
 import type {
   NotificationsComponentConfig,
+  PayoutSettings,
   StreamRouterComponentConfig,
 } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
@@ -38,14 +40,16 @@ export interface StreamRouterStackProps extends StackProps {
   readonly portalUrls: { student: string; instructor: string; admin: string };
   /** core-api's address, which the unsubscribe link points to. */
   readonly coreApiUrl: string;
+  /** The stage's fee and hold, which earnings recording applies to each sale. */
+  readonly payouts: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
 }
 
 /**
  * The only reader of the core table's stream and everything it feeds: the
  * router Lambda, one queue (with a failure queue and an alarm) per registered
  * feature in core-table's `STREAM_FEATURES`, and the feature handlers those
- * queues invoke (progress recalculation, search indexing, analytics and
- * notification delivery). Kept apart from CoreApi so a feature's queues and
+ * queues invoke (progress recalculation, search indexing, analytics, earnings
+ * recording and notification delivery). Kept apart from CoreApi so a feature's queues and
  * handler don't count against that stack's resource limit. Depends on Data,
  * and on Websites and CoreApi for the addresses notification emails link to.
  */
@@ -63,6 +67,7 @@ export class StreamRouterStack extends Stack {
       notificationUnsubscribeSecret,
       portalUrls,
       coreApiUrl,
+      payouts,
       ...props
     }: StreamRouterStackProps,
   ) {
@@ -83,6 +88,10 @@ export class StreamRouterStack extends Stack {
         notificationUnsubscribeSecret,
         portalUrls,
         coreApiUrl,
+      ),
+      'earnings-recording': this.createEarningsRecordingLambda(
+        coreTable,
+        payouts,
       ),
     };
 
@@ -146,6 +155,24 @@ export class StreamRouterStack extends Stack {
     return analytics;
   }
 
+  // The single writer of the instructors' earnings ledger, run from its
+  // feature's queue. It reads and writes the table and nothing else: it never
+  // calls Stripe and has no grant on the Stripe secrets.
+  private createEarningsRecordingLambda(
+    coreTable: CoreTable,
+    payouts: StreamRouterStackProps['payouts'],
+  ) {
+    const recording = new EventsEarningsRecording(this, 'EarningsRecording');
+    this.grantAppConfig(recording);
+    coreTable.grantReadWriteData(recording);
+    recording.addEnvironment(
+      'PLATFORM_FEE_BASIS_POINTS',
+      String(payouts.platformFeeBasisPoints),
+    );
+    recording.addEnvironment('PAYOUT_HOLD_DAYS', String(payouts.holdDays));
+    return recording;
+  }
+
   // Fans a broadcast out to its course's students and emails each
   // notification, run from its feature's queue. It reads and writes the
   // table, signs unsubscribe links with the secret, and may send mail only
@@ -163,6 +190,7 @@ export class StreamRouterStack extends Stack {
       'NotificationDelivery',
     );
     coreTable.grantReadWriteData(delivery);
+    this.grantAppConfig(delivery);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(delivery);
     delivery.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);

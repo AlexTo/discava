@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as CategoriesIndexRouteImport } from './routes/categories/index'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
@@ -17,6 +18,11 @@ import { Route as SettingsNotificationsRouteImport } from './routes/settings/not
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentsRoute = PaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReviewsRoute = ReviewsRouteImport.update({
@@ -37,12 +43,14 @@ const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories': typeof CategoriesIndexRoute
@@ -50,20 +58,29 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/reviews' | '/settings/notifications' | '/categories/'
+  fullPaths:
+    '/' | '/payments' | '/reviews' | '/settings/notifications' | '/categories/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/reviews' | '/settings/notifications' | '/categories'
-  id: '__root__' | '/' | '/reviews' | '/settings/notifications' | '/categories/'
+  to: '/' | '/payments' | '/reviews' | '/settings/notifications' | '/categories'
+  id:
+    | '__root__'
+    | '/'
+    | '/payments'
+    | '/reviews'
+    | '/settings/notifications'
+    | '/categories/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PaymentsRoute: typeof PaymentsRoute
   ReviewsRoute: typeof ReviewsRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   CategoriesIndexRoute: typeof CategoriesIndexRoute
@@ -76,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payments': {
+      id: '/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof PaymentsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reviews': {
@@ -104,6 +128,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PaymentsRoute: PaymentsRoute,
   ReviewsRoute: ReviewsRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
   CategoriesIndexRoute: CategoriesIndexRoute,

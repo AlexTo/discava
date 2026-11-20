@@ -1,6 +1,6 @@
 # Contract: the local Stripe stand-in
 
-Runs in the event runner (`packages/events`, `src/local/stripe-stand-in.ts`) on port 2024 when `LOCAL_DEV=true`; `common-server-utils/local-dev` holds `LOCAL_STRIPE` (the stand-in's accounts and the host and port the `stripe` SDK is pointed at; no key is built in as a secret: keys and signing secrets reach backend code only through the local secrets store, research R-18). Backend code uses the stand-in whenever `isLocalDev()`, as S3 does with S3Mock. State (accounts' endpoints, sessions, payments, refunds) is in memory.
+Runs in the event runner (`packages/events`, `src/local/stripe-stand-in.ts`) on port 2024 when `LOCAL_DEV=true`; `common-server-utils/local-dev` holds `LOCAL_STRIPE` (the stand-in's accounts and the host and port the `stripe` SDK is pointed at; no key is built in as a secret: keys and signing secrets reach backend code only through the local secrets store, research R-18). Backend code uses the stand-in whenever `isLocalDev()`, as S3 does with S3Mock. State (accounts' endpoints, sessions, payments, refunds) is in memory, except the Connect slice below, which is kept in the git-ignored `tmp/local-dev/stripe-connect.json` so a restart of `pnpm dev` does not strand stored payout accounts.
 
 ## Stripe API slice it implements (form-encoded, as the SDK sends)
 
@@ -12,6 +12,16 @@ Requests carry the key as a bearer token. The stand-in knows two accounts: `sk_t
 - `POST /v1/checkout/sessions`: validates `mode=payment`, one line item, `client_reference_id`, `metadata`, `expires_at`, success and cancel URLs, and `adaptive_pricing[enabled]=false` (a session without it is a 400 in Stripe's error shape, so dropping the setting of research R-10 fails locally); returns `{ id, url, expires_at, payment_status: 'unpaid', client_reference_id, metadata, amount_total, currency, payment_intent }`. Honours an `Idempotency-Key` header (same key, same session).
 - `GET /v1/payment_intents/:id`: returns `{ id, metadata, amount, currency, status }`.
 - `POST /v1/refunds`: for a payment intent, full or partial; honours the idempotency key; then delivers `charge.refunded`.
+
+### Connect slice (instructor payouts)
+
+Added by the instructor-payouts spec (`specs/20261116-013137-instructor-payouts`). Connected accounts, account links and transfers belong to the platform account whose key made them: another key sees `404 resource_missing`, and the restricted key gets a permission error from all of these.
+
+- `POST /v1/accounts` (`type=express`): creates `{ id: 'acct_…', type: 'express', metadata, details_submitted: false, payouts_enabled: false, capabilities: { transfers: 'inactive' } }`; idempotent by `Idempotency-Key`. `GET /v1/accounts/:id` reads it back.
+- `POST /v1/account_links` (`account`, `type=account_onboarding`, `return_url`, `refresh_url`): returns the URL of a local onboarding page, `GET /stripe/connect/onboard/:token`, with **Complete** (account becomes active: details submitted, transfers `active`, payouts enabled) and **Leave unfinished** (no change) buttons, text only, both redirecting to `return_url`.
+- `POST /v1/accounts/:id/login_links`: returns a URL of a local dashboard page.
+- `POST /v1/transfers` (`amount`, `currency`, `destination`, `transfer_group`, `metadata`): idempotent by key; refused in Stripe's invalid-request shape for an unknown destination, one of another platform account, or one whose status is not complete. `GET /v1/transfers?transfer_group=` lists a platform account's transfers, optionally of one group.
+- Test controls (`POST`): `/stripe/test/connected-accounts/:id/status` with `{ status: 'in_progress' | 'complete' | 'restricted' }`; `/stripe/test/transfers/fail-next` with `{ mode: 'rejected' | 'idempotency_conflict' | 'timeout' }` (the next transfer request is refused definitely, answers an idempotency conflict, or is created and never answered); `GET /stripe/test/transfers` lists every transfer.
 
 Anything else answers 404 with Stripe's error shape, so a code path that starts to use more of Stripe fails locally rather than silently.
 
@@ -26,4 +36,11 @@ Every event is delivered to each endpoint registered for that account whose `ena
 
 ## Tests
 
-`stripe-stand-in.test.ts`: both accounts and the 401 for an unknown key; a created endpoint returns its secret once and a signature made with it verifies, one made with another endpoint's does not; delete stops delivery; the restricted key's permission error;  each endpoint's shape against what the `stripe` SDK parses; the signature it produces verifies with `constructEvent`; Pay then redirect; Decline stays; idempotency key reuse; a session created without `adaptive_pricing[enabled]=false` is refused; replay N times; an unknown route is a 404 in Stripe's error shape.
+`stripe-stand-in.test.ts`: both accounts and the 401 for an unknown key; a created endpoint returns its secret once and a signature made with it verifies, one made with another endpoint's does not; delete stops delivery; the restricted key's permission error;  each endpoint's shape against what the `stripe` SDK parses; the signature it produces verifies with `constructEvent`; Pay then redirect; Decline stays; idempotency key reuse; a session created without `adaptive_pricing[enabled]=false` is refused; replay N times; an unknown route is a 404 in Stripe's error shape. The Connect slice: each endpoint's shape against what the SDK parses, idempotency of account and transfer creation, isolation between the two platform accounts, each status and failure control, and state surviving a restart.
+
+## Amendment 2026-11-19: learner refunds
+
+The student's refund request uses `POST /v1/refunds`, which the stand-in already implements. Two additions make it testable:
+
+- `POST /v1/refunds` refuses, in Stripe's error shape, a refund that would take the total refunded above the payment's amount (as Stripe does for a charge already fully refunded). A repeated request with the same idempotency key still returns the first refund and delivers nothing new.
+- A test control, `POST /stripe/test/refunds`: lists the refunds made for a payment intent or session, with their amounts, so a test can prove that many requests made one refund.

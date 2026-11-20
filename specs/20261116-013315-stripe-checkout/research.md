@@ -28,6 +28,8 @@
 
 **Free restore** (amendment 2026-11-19, PR review): a refund is the first writer of `dropped`, and `course.enrol` returns an existing enrolment whatever its status. So a refunded student whose course was later set to free would get the `dropped` record back from `enrol`, be refused by `requireEnrolment`, and be refused by `payment.checkout` (the course is free): no way in, against US3 scenario 2. `course.enrol` therefore restores a `dropped` enrolment through `restoreFreeEnrolment`, in one transaction with the course check `published` and `priceAmount = 0` (so a price set at the same moment cannot be raced, as FR-004 asks of a new enrolment), to `completed` if it has `completedAt` else `active`, removing `orderId` so `enrolment-order-matches` holds (an enrolment naming a `refunded` order must be `dropped`). `paid-course-enrolment-paid` still holds if the course is priced again: the enrolment's `createdAt` is older than the new `pricedAt`, which is the same grandfathering any free student gets. A payment still in flight for an order opened at the old price finds the restored enrolment and is refunded as `duplicate` (R-4). Rejected: stating the lock-out as intended (the student keeps progress they can never reach, in a course anyone else may enter for free); deleting the `dropped` enrolment so the create succeeds (loses `completedAt` and progress, and breaks `certificate-has-completed-enrolment`).
 
+**Leaving** (amendment 2026-11-19): a refund is no longer the only writer of `dropped`. A student may leave an enrolment that has no order (R-22), by a write in the same file with the same shape, so the widened invariants above already accept it and no reader changes. What still holds, and is now the rule that matters: an enrolment with an `orderId` reaches `dropped` only through this transaction.
+
 **Partial refunds** only add to `refundedAmount` (never lower it) and leave access alone. **Disputes** are not handled.
 
 ## R-4: Undeliverable payments are refunded automatically
@@ -159,3 +161,51 @@
 **Rationale**: The admin API is already planned and admin-only, so no extra API is created; keeping the write permission on its own function means the categories and reviews procedures, which share the router, cannot write credentials, and nothing open to students or instructors can (FR-029).
 
 **Alternatives**: an admin-group-checked procedure in core-api (puts a credential-writing permission in or beside a function every signed-in user reaches, and mixes authorisation models, the reason instructor-api exists); a second, payments-only admin API (more infrastructure for one page); letting the shared admin router write the secrets (broader than FR-029 allows).
+
+## R-20: A student's refund request asks Stripe; the confirmation still makes the change
+
+Added by the 2026-11-19 amendment (User Story 7).
+
+**Decision**: `payment.requestRefund` checks eligibility, calls Stripe `refunds.create` for the order's payment intent (amount: what has not been refunded yet; idempotency key `refund-<orderId>`), then writes `refundRequestedAt` on the order with a conditional write (`status = paid`, attribute absent). It does not move the order or touch the enrolment. Stripe then sends `charge.refunded`, and the handler of R-3 does what it does for an operator's refund. The procedure runs on the dedicated `PaymentsCheckout` function, which already holds the only core-api read permission on the API key.
+
+**Rationale**: it keeps one path that ends a paid enrolment, as R-1 and FR-008 keep one path that starts one, so the exactly-once reasoning and its tests are reused, not rewritten. Stripe is called before the write so that a crash between the two leaves a real refund and no mark, which the confirmation repairs; the other order would leave a mark and no refund, which nothing repairs. The idempotency key makes a repeated or concurrent request the same refund. `refundRequestedAt` is display state (the page says "Refund requested") and the guard against a second Stripe call; it is not a status, so the lifecycle and every conditional move in R-1 are unchanged.
+
+**Alternatives**: move the order to `refunded` and end the enrolment in the procedure (two writers of the same move, racing the confirmation that will arrive anyway, and a second place to keep the R5 guard); a new `refund_requested` status (every conditional move from `paid` and the `order-shape` rule would have to learn it); a queue for an administrator to approve (there is no admin order screen in this feature, and an unwatched queue leaves students waiting); mark first, then call Stripe (see above); a new dedicated function for refunds (a second function reading the key, for one call).
+
+**Open point**: Stripe's idempotency keys expire after about 24 hours. A second request after that would not be deduplicated by the key, so the `refundRequestedAt` guard, not the key, is what prevents it; if Stripe has already refunded in full it refuses a second refund anyway. The stand-in must refuse a refund above the remaining amount so tests cover this.
+
+## R-21: The refund terms: 14 days, not after completion, one constant
+
+Added by the 2026-11-19 amendment.
+
+**Decision**: `REFUND_WINDOW_DAYS = 14` in `core-table/src/helpers/order.ts`, counted from the order's `paidAt` and decided by the server's clock at the moment of the request. A completed enrolment is not eligible. `refundEligibility` is a pure function returning the reason, used by `requestRefund` to decide and by `payment.myOrder` to tell the page what to show. The number reaches the portal through `course.publicView` and `payment.myOrder`, never as a second literal.
+
+**Rationale**: a student must be able to read the terms before paying (FR-031), so they have to be simple enough for one line. Fourteen days is the usual consumer withdrawal period. Completion is the one condition that is both easy to state and closes the obvious abuse (finish, keep the certificate, take the money back), and it is already a field on the enrolment; it also means the earlier decision that certificates survive refunds needs no change. One platform-wide value fits "one price, one currency, per course": the marketplace, not each instructor, holds the money in this feature.
+
+**Alternatives**: 30 days (the largest marketplace's period; more generous, and longer exposure once payouts in #286 pay instructors out); a progress threshold such as "less than 30% watched" (harder to state, and progress changes when an instructor adds content); a per-course or per-instructor setting (a settings surface and a per-order snapshot of the terms, for a choice nobody has asked to make); an administrator setting (same snapshot problem; can follow). These are the maintainer's to confirm (T113); changing the number is a one-line change, and changing the completion rule is one branch in `refundEligibility`.
+
+**Not legal advice**: consumer law on digital content differs by country (some allow the right of withdrawal to be waived once the content is used, some do not). The terms here are the platform's own minimum, and an operator can always refund by hand.
+
+## R-22: Leaving a course: `dropped`, for unpaid enrolments only
+
+Added by the 2026-11-19 amendment (User Story 8).
+
+**Decision**: `course.unenrol` calls `unenrolFromCourse` in `helpers/order.ts`: one conditional write, enrolment to `dropped` where the status is `active` or `completed` and there is no `orderId`. Completions, progress, `completedAt` and certificates stay. An enrolment with an `orderId` is refused. Coming back is `course.enrol`, which already restores a `dropped` enrolment in a free course (the 2026-11-19 free restore in R-3), or `payment.checkout` if the course has a price.
+
+**Rationale**: `dropped` already means "not enrolled" to every reader (R-3), and the free restore already exists, so leaving and coming back need one new write and no new read path. Refusing a paid enrolment keeps `enrolment-order-matches` exactly as written (an enrolment's order is `paid`, or `refunded` with the enrolment `dropped`): a `dropped` enrolment resting on a `paid` order would be a student who paid and has no access, which that rule exists to catch. It also spares a student a mistake that costs money, since the way back into a priced course is to buy it. The write lives in `order.ts` because that file is the single writer of every move to `dropped`, and the condition on `orderId` is the same attribute the refund-end write is conditioned on, so the two cannot both win.
+
+**Alternatives**: let a paid student leave and come back for free on the strength of their `paid` order (needs a third restore path and a rule that a `paid` order may have a `dropped` enrolment, weakening the check that catches lost access); delete the enrolment (loses progress, breaks `student-records-enrolled`); a separate "hidden from My Learning" flag instead of leaving (does not remove the student from the course's counts, announcements or notifications, which is what leaving is for).
+
+**A grandfathered enrolment** (made while the course was free, in a course that now has a price) has no `orderId`, so it can be left; the student is warned that coming back means buying. After leaving it is a `dropped` enrolment older than `pricedAt`, which R-9's check does not flag because it only examines enrolments that are not `dropped`.
+
+**Counts**: the instructor analytics already count `dropped` enrolments for refunds; leaving feeds the same figure, so "dropped" there now means refunded or left. No stream filter changes (an enrolment MODIFY matches neither the progress nor the search filter).
+
+## R-23: Telling the student the refund went through
+
+Added by the 2026-11-19 amendment (FR-036). It replaces the earlier position that this feature sends no notices.
+
+**Decision**: a notification type `order.refunded` (student portal; email policy `required`; params the course title, course ID and formatted amount; link to the course page), published by the `charge.refunded` handler on every full-refund notice, after `refundOrder`, when the order is `refunded` with `refundReason` `requested` and the student's enrolment still names it. The publish uses `dedupeKey: orderId`, so `publishNotification` returns `'duplicate'` for a repeat. `refundOrder` is unchanged.
+
+**Rationale**: the page a student is looking at updates by itself, but an operator's refund, or a confirmation that arrives after they have left the page, would otherwise end their access with no word. Publishing is idempotent and separate from the move, so a publish that fails after the move (version-conflict retries exhausted, a table error, a timeout) fails the delivery, Stripe redelivers, `refundOrder` returns early as the order is no longer `paid`, and the handler publishes again; the dedupe key makes every later repeat a no-op. That gives exactly one notification with no separate record of "notified". `required` because it is about the student's money and their access, like a receipt, not something to opt out of. It is the same notification for a student's request and an operator's refund, since the outcome is the same.
+
+**Alternatives**: put `notificationWrites` in `refundOrder`'s own transaction (atomic, but a notification state version conflict would cancel the order and enrolment move, and it widens a writer other paths share); publish only when `refundOrder` made the move (at most once, not exactly once: a failed publish is never retried); publish from `requestRefund` (tells the student before the money has moved, and misses operator refunds); rely on Stripe's own refund email (off by default, operator-configured, and says nothing about access); also notify for automatic refunds of undeliverable payments (worth doing, but those students were never enrolled and the course-page states already cover them; left as it was).

@@ -5,6 +5,7 @@
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { asContentItemOutput } from '../helpers/content-item.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
   initialVisibilityFields,
@@ -22,7 +23,6 @@ import {
   UpdateContentItemTextInputSchema,
   UpdateContentItemTextOutputSchema,
 } from '../schema/index.js';
-import { asContentItemOutput } from './content-item-shared.js';
 
 export const createContentItemText = courseProcedure
   .input(CreateContentItemTextInputSchema)

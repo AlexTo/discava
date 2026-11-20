@@ -104,7 +104,7 @@ const indexedCourseIds = async (
  * documents of courses that aren't published any more (one unpublished while
  * the indexer was down would otherwise stay searchable). Idempotent: every
  * document id is the course's own id, so a second run rewrites the same
- * documents. Invoked by hand (`nx run @discava/common-scripts:reindex-search`)
+ * documents. Invoked by hand (`nx run @discava/tooling-deploy:reindex-search`)
  * after the index is recreated or an indexing bug; nothing triggers it.
  */
 export const searchReindex = async (): Promise<ReindexResult> => {

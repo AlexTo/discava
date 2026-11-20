@@ -10,19 +10,28 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import type { UserMenuItem } from '@discava/common-shadcn/components/user-menu';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
-import { BarChart3, BookOpen, Home } from 'lucide-react';
+import { BarChart3, BookOpen, Home, Wallet } from 'lucide-react';
 import type * as React from 'react';
 
 const navItems: PortalNavItem[] = [
   { label: 'Home', to: '/', icon: Home },
   { label: 'Dashboard', to: '/dashboard', icon: BarChart3 },
   { label: 'My Courses', to: '/my-courses', icon: BookOpen },
+  { label: 'Earnings', to: '/earnings', icon: Wallet },
 ];
 
 // Static labels for path segments that don't come from an entity a route
 // might load (e.g. a course title) - those instead go through
 // useBreadcrumbLabel.
-const segmentLabels = { 'my-courses': 'My Courses' };
+const segmentLabels = {
+  dashboard: 'Dashboard',
+  'my-courses': 'My Courses',
+  questions: 'Questions',
+  reviews: 'Reviews',
+  profile: 'Profile',
+  settings: 'Settings',
+  notifications: 'Notifications',
+};
 
 const userMenuItems: UserMenuItem[] = [
   { label: 'Public profile', to: '/profile' },

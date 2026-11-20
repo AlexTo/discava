@@ -1,12 +1,14 @@
 # Implementation Plan: Stripe Checkout for Paid Courses
 
-**Branch**: `20261116-013315-stripe-checkout` | **Date**: 2026-11-16 (amended 2026-11-18: admin-configured Stripe) | **Spec**: [spec.md](./spec.md)
+**Branch**: `20261116-013315-stripe-checkout` | **Date**: 2026-11-16 (amended 2026-11-18: admin-configured Stripe; 2026-11-19: learner refunds and leaving a course) | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/20261116-013315-stripe-checkout/spec.md`
 
 ## Summary
 
 A course gains a required price (amount in minor units plus currency; zero is free). core-api's `course.enrol` refuses a priced course, and a new `payment.checkout` procedure records a pending `order` and returns a Stripe-hosted Checkout URL. A new webhook Lambda, behind its own API Gateway, verifies Stripe's signature and, on `checkout.session.completed`, runs one `core-table` helper that marks the order paid and creates (or restores) the enrolment in one transaction. `checkout.session.expired` closes the order; `charge.refunded` records the refund and, for a full refund, ends the enrolment with the existing `dropped` status. Undeliverable payments (already enrolled, course no longer published, a paid session that does not match its order) are refunded automatically. A refunded student gets back into a course that is later set to free through `course.enrol`, which restores the same enrolment. Stripe credentials are not deployment settings: an administrator pastes the Stripe secret key on a Payments page in the admin portal, and a dedicated admin-api function verifies it, registers the platform's own webhook endpoint with Stripe, and writes the key and the returned signing secret into two Secrets Manager secrets; a singleton `paymentConnection` record holds the non-secret facts and a running "latest checkout expiry" that gates switching accounts. Until it is connected, checkout and pricing are refused. Locally, a Stripe stand-in in the event runner (hosted pay page, the slice of Stripe's API used, correctly signed webhooks, test controls for duplicates and refunds) takes the place of Stripe, selected by `LOCAL_DEV=true` like S3Mock and the local OIDC server.
+
+**Amendment 2026-11-19 (learner refunds and leaving a course).** Two procedures let a student end a paid enrolment with their money back, and one lets them leave an unpaid one. `payment.requestRefund` checks the terms (14 days from `paidAt`, enrolment not completed), asks Stripe to refund what is left, and records `refundRequestedAt`; the order and the enrolment still change only in the `charge.refunded` handler, which now also publishes one `order.refunded` notification. `payment.myOrder` gives the course page the state of the student's own purchase. `course.unenrol` moves an enrolment with no order to `dropped`, and the existing free restore in `course.enrol` brings it back. No new entity, index, function, stack or secret; one new order attribute, one widened invariant, one notification type (research R-20 to R-23).
 
 What the code showed that the spec could not:
 
@@ -67,6 +69,17 @@ No violations, so Complexity Tracking is empty.
 | `user` | Not read. Orders are keyed by Cognito `sub` | `instructor-has-user` | None |
 | Stream consumers | `order` inserts and modifies must match neither `PROGRESS_STREAM_FILTERS` nor `SEARCH_STREAM_FILTERS`. An enrolment MODIFY (restore, end) matches neither today. A `course` MODIFY of the price matches the search filter and re-indexes the same document with the price: wanted | `progress-stream.test.ts`, `search-stream.test.ts` | Add an assertion for each that an `order` write matches neither; add a search-stream case that a price-only course MODIFY is re-indexed. Restoring an enrolment does not trigger a progress recalculation (enrolment writes never do); progress is recomputed on the student's next activity or the next curriculum change, as for a new enrolment |
 
+**Impact check for the 2026-11-19 amendment.**
+
+| Record | Use | Existing invariants and tests that already cover it | What changes |
+|--------|-----|------------------------------------------------------|--------------|
+| `enrolment` | One more writer of `dropped`: `unenrolFromCourse`, for an enrolment with no `orderId` | `completed-at-iff-completed` and `certificate-has-completed-enrolment` (both already widened for `dropped`), `enrolment-order-matches`, `student-records-enrolled` | No rule changes. `enrolment-order-matches` is what forbids leaving a paid enrolment; a breaking test is added for a `dropped` enrolment whose order is still `paid` if none exists. `entity-writers` is regenerated |
+| `order` | One more writer: core-api's `markRefundRequested` sets `refundRequestedAt` on a `paid` order. Read by `payment.myOrder` (the caller's own, through the existing student-and-course index) | `order-shape`, `paid-order-has-enrolment`, `order-account-known` | `order-shape` widened: `refundRequestedAt` needs `paidAt`, is not before it, and the order is `paid` or `refunded`. New breaking tests; the old ones stay |
+| `paymentConnection` | Read by `refundEligibility` (is the order's account the active one) | `payment-connection-shape` | None. A refund does not open or extend the checkout window |
+| `notification` and its preferences | One more producer, the `charge.refunded` handler, through core-table's notification helpers | the notification invariants in `helpers/invariants/notifications.ts` | A new type in `notification-types.ts` with its test; no rule changes |
+| `certificate`, `itemCompletion`, `progress`, `quizAttempt`, assignment records | Untouched. A student who left keeps them, as a refunded student does | as in the table above | None |
+| Stream consumers | An enrolment MODIFY to `dropped` by leaving is the same change a refund makes: it matches neither the progress nor the search filter, and the analytics update counts it as dropped | `progress-stream.test.ts`, `search-stream.test.ts`, the analytics update tests | A test case that leaving is counted once, as a refund-end is |
+
 ## Design Decisions (detail in [research.md](./research.md))
 
 1. **State-based idempotence, no event log.** Every order move is conditioned on the status it comes from. A replayed, duplicated or concurrent confirmation finds the work done and does nothing; the handler still answers success (research R-1).
@@ -79,6 +92,11 @@ No violations, so Complexity Tracking is empty.
 8. **Price handling**: integers in minor units, one shared module `common-web-utils/price` (currencies, bounds, validation, formatting) used by instructor-api, core-api and the portals; orders carry `listAmount` and `amount` apart (R-8).
 9. **Grandfathering by `pricedAt`**: the time the price last became non-zero is on the course; an unpaid enrolment is legitimate only if it is older than that (with a 10 s skew allowance) (R-9).
 10. **Card-only, one-hour sessions, Adaptive Pricing off, polling return page**, per the Clarifications (R-10).
+
+11. **A student's refund request asks Stripe and records a time; the confirmation makes the change** (amendment 2026-11-19). `requestRefund` calls `refunds.create` with idempotency key `refund-<orderId>`, then marks the order; it never moves the order or the enrolment. One path still ends a paid enrolment (R-20).
+12. **Refund terms are one constant and one pure function**: `REFUND_WINDOW_DAYS = 14` and `refundEligibility`, used by the mutation to decide and by `payment.myOrder` to explain; a completed enrolment is not eligible (R-21).
+13. **Leaving is `dropped` for an enrolment with no order**, written in `order.ts` beside the refund-end write and conditioned on the same `orderId` attribute, so the two cannot both win; the existing free restore is the way back. A paid enrolment cannot be left (R-22).
+14. **One `order.refunded` notification per refunded order**, published by the webhook on every full-refund notice for an order that is `refunded` with reason `requested` and that its enrolment still names, with `dedupeKey: orderId`, so a redelivery retries a failed publish and a repeat is a no-op (R-23).
 
 ## Project Structure
 
@@ -169,6 +187,8 @@ CLAUDE.md, CONTRIBUTING.md                       # one sentence each; stand-in r
 
 **Structure Decision**: extend existing packages; the new deployable pieces are the webhook Lambda (in `packages/events`, where the other AWS-triggered handlers live), its small construct and stack, and the `PaymentsConnect` function inside the shared `admin-api`. The Stripe client and secret reading are used by core-api and events, so they live in `common-server-utils` (constitution VIII). The order lifecycle is used by core-api and events, so it lives in `core-table` helpers.
 
+**Amendment 2026-11-19, files touched** (all existing; no new package, construct or stack): `core-table/src/entities/order.ts`, `helpers/order.ts`, `helpers/invariants/payments.ts`, `helpers/notification-types.ts` (and their tests); `core-api/src/procedures/payment.ts`, `procedures/enrolment.ts` and `schema/`; `events/src/payments/events/charge-refunded.ts`; `student-portal/src/routes/learn/$courseId/-components/enrolment-actions.tsx`; `e2e/src/scenarios/learner-refund.e2e.ts`, `scenarios/leave-course.e2e.ts`, `concurrency/refund-request.e2e.ts`; the payments design page and the student guide. `requestRefund` joins `payment.checkout` on the `PaymentsCheckout` dedicated function; `payment.myOrder` and `course.unenrol` run on the shared core-api function.
+
 ## Risks
 
 - **R1: `common-web-utils/price` imported by backends.** The package is "non-UI code shared by portals" and a Biome rule stops the portals importing server-utils, not the reverse. T002 confirms no rule forbids a backend importing it; if one does, move the module to `core-table/helpers` and give the portals a generated copy of the constants through the course schema instead.
@@ -184,9 +204,17 @@ CLAUDE.md, CONTRIBUTING.md                       # one sentence each; stand-in r
 - **R12: a crash mid-switch leaves `changing`.** The lease expires in two minutes and the next save takes over (R-15); `abandonChange` releases it on a handled failure. Between the lease and its expiry checkout is refused ("unavailable right now"), which is deliberate.
 - **R7: pending orders whose Stripe `expired` event never arrives.** They stay `pending` after `expiresAt`; every reader treats a pending order past its `expiresAt` as closed, and no invariant requires them to be `expired`.
 
+- **R13: a requested refund whose confirmation never arrives.** Stripe refunded, the order shows "Refund requested", and the student still has access. Stripe retries a failed delivery for days, so this needs the webhook to be failing that long; the page keeps saying requested and nothing is lost. The docs tell an operator to look for `paid` orders with an old `refundRequestedAt`. No sweeper is added.
+- **R14: Stripe refuses the refund** (a dispute is open, the charge is too old for the card network, the balance cannot cover it). The call fails before anything is written, the student sees "Couldn't request the refund", and the error is logged with the order ID for an operator. A restricted key needs refund write permission, which the automatic refunds of R-4 already need (R11).
+- **R15: refunds requested after a payout.** Not a risk in this feature (the platform holds the money). Instructor payouts have since landed in part (#605 records earnings from orders and refunds; #608 the report): a sale is recorded when the order is paid, and a refund, including one with `refundReason` `requested` from a student's own request, is its own ledger line in the period it is recorded (instructor-payouts FR-008), so a refund inside the 14 days shows as a negative line against later earnings. No hold-back of an order's share until `REFUND_WINDOW_DAYS` has passed is built; if the payout run is added, it should read `paidAt` and `REFUND_WINDOW_DAYS` and leave out shares still inside the window.
+- **R16: `dropped` no longer means refunded.** Any text or figure that equates the two is now wrong: the course page's `dropped` row (rewritten in T107), the instructor analytics label for dropped enrolments, and the design docs. T107 and T112 check each; the invariants never made the equation, except through `orderId`, which is unchanged.
+- **R17: serial refunders.** A student can buy, use a course for up to 14 days without completing it, refund, and buy again later with a fresh period. Accepted for now: the terms are deliberately simple, an operator can see the pattern in Stripe, and a limit on repeat refunds of the same course is a small follow-up in `refundEligibility`.
+
 ## Constitution re-check after the amendment's design
 
 All eight principles still pass (table above is updated in place): no new service (one more function in an API that is planned anyway), Secrets Manager stays the only home of credentials, the local store keeps the whole flow runnable without AWS, the admin function is the single writer, and no scan or new index is needed (the connection is a singleton, the audit is one partition). The only hand-written pieces are the dedicated-function mechanism in admin-api and the entities, as elsewhere.
+
+**Re-check after the 2026-11-19 amendment's design.** All eight principles still pass. I: no new service or function; one more Stripe call from a function that already calls Stripe. II: nothing is scaffolded, so no generator applies. III: the stand-in already implements `refunds.create` and delivers `charge.refunded`, so both stories run locally with no account. IV: unit tests for the helpers and procedures, breaking tests for the widened `order-shape`, two e2e scenarios and a concurrency test (T089 to T111); impact check above. V: one optional attribute, no new index, no scan. VI: `requestRefund` acts only on the caller's own order, found through their own enrolment, returns no Stripe field, and the key is still read by the one dedicated function; `payment.myOrder` returns only the caller's order. VII: `refundRequestedAt` is optional and absent on existing orders by meaning, not by fallback. VIII: helpers stay in `helpers/order.ts`, a verb-named function runs its own I/O, buttons are text only.
 
 ## Complexity Tracking
 

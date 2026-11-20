@@ -17,6 +17,7 @@ import {
 } from '../../core/api/function-options.js';
 import { RestApi } from '../../core/api/rest-api.js';
 import type { RestApiIntegration } from '../../core/api/utils.js';
+import { RuntimeConfig } from '../../core/runtime-config.js';
 import type { StripeSecretGrants } from '../../core/stripe-secrets.js';
 import type { CoreTable } from '../dynamodb/core-table.js';
 import { EventsStripeWebhook } from '../lambda-functions/events-stripe-webhook.js';
@@ -114,6 +115,13 @@ export class StripeWebhookApi extends RestApi<
     }
 
     coreTable.grantReadWriteData(handler);
+    // The core-table client resolves the table name through AppConfig.
+    const runtimeConfig = RuntimeConfig.ensure(scope);
+    handler.addEnvironment(
+      'RUNTIME_CONFIG_APP_ID',
+      runtimeConfig.appConfigApplicationId,
+    );
+    runtimeConfig.grantReadAppConfig(handler);
     stripeSecrets.grantReadApiKey(handler);
     stripeSecrets.grantReadWebhookSecret(handler);
     handler.addEnvironment(

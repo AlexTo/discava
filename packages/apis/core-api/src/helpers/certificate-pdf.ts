@@ -35,7 +35,12 @@ const sanitise = (text: string): string =>
       : '?';
   }).join('');
 
-const formatDate = (completedAt: string): string => {
+/**
+ * The date a certificate shows, in UTC so it reads the same wherever and
+ * whenever it is viewed, e.g. `19 November 2026`. The PDF prints it and the
+ * certificate page shows the string the API returns.
+ */
+export const formatDate = (completedAt: string): string => {
   const date = new Date(completedAt);
   return Number.isNaN(date.getTime())
     ? sanitise(completedAt)

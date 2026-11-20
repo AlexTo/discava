@@ -25,7 +25,7 @@ export const loadManifest = (path: string): IndicesManifest =>
  * the mapping of one that does. Never deletes an index: removing a document
  * type from the manifest just stops it being kept in sync here, so no data
  * is lost by a manifest edit alone. Shared by local dev
- * (common-scripts' sync-local-indices.ts) and the deployed custom resource (handler.ts), so
+ * (tooling-local-dev's sync-local-indices.ts) and the deployed custom resource (handler.ts), so
  * both ways of running it stay identical.
  */
 export const syncIndices = async (

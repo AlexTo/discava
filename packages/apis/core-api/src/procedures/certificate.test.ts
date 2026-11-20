@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { PDF } from '@libpdf/core';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { drawCertificatePdf } from '../helpers/certificate-pdf.js';
 import { t } from '../init.js';
@@ -27,7 +27,7 @@ const { db, calls } = vi.hoisted(() => ({
 vi.mock('../helpers/certificate-pdf.js', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../helpers/certificate-pdf.js')>();
-  return { drawCertificatePdf: vi.fn(actual.drawCertificatePdf) };
+  return { ...actual, drawCertificatePdf: vi.fn(actual.drawCertificatePdf) };
 });
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
@@ -93,15 +93,9 @@ const caller = (
   { sub, origin }: { sub?: string; origin?: string } = {},
 ) =>
   (
-    t.createCallerFactory(t.router({ p: procedure }))({
-      event: {
-        headers: origin ? { origin } : {},
-        requestContext: {
-          authorizer: sub ? { claims: { sub } } : undefined,
-        },
-      } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
+    callerFor(t.router({ p: procedure }), {
+      sub,
+      headers: origin ? { origin } : {},
     }) as any
   ).p;
 
@@ -124,7 +118,16 @@ describe('certificate.verify', () => {
       learnerName: 'Erin Nguyen',
       courseTitle: 'Intro',
       completedAt: '2026-11-10T00:00:00.000Z',
+      completedOn: '10 November 2026',
     });
+  });
+
+  it('gives the date in UTC, as the PDF prints it', async () => {
+    db.certificates = [record({ completedAt: '2026-11-19T19:48:06.000Z' })];
+    const result = await caller(verifyCertificate)({
+      certificateId: '0123456789ABCDEF',
+    });
+    expect(result.completedOn).toBe('19 November 2026');
   });
 
   it('finds a lowercase, dash-less ID', async () => {
@@ -163,7 +166,7 @@ describe('certificate.verify', () => {
     expect(errors[1].message).toBe(errors[0].message);
   });
 
-  it('returns exactly four keys even when the record holds more', async () => {
+  it('returns exactly five keys even when the record holds more', async () => {
     db.certificates = [record()];
     const result = await caller(verifyCertificate)({
       certificateId: '0123456789ABCDEF',
@@ -171,6 +174,7 @@ describe('certificate.verify', () => {
     expect(Object.keys(result).sort()).toEqual([
       'certificateId',
       'completedAt',
+      'completedOn',
       'courseTitle',
       'learnerName',
     ]);

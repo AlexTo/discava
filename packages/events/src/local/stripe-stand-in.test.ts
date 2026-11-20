@@ -2,8 +2,11 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import Stripe from 'stripe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createStripeStandIn, type StripeStandIn } from './stripe-stand-in.js';
@@ -13,7 +16,13 @@ let standIn: StripeStandIn;
 let port: number;
 
 beforeEach(async () => {
-  standIn = createStripeStandIn({ retryDelayMs: 5 });
+  standIn = createStripeStandIn({
+    retryDelayMs: 5,
+    connectStateFile: join(
+      mkdtempSync(join(tmpdir(), 'stand-in-')),
+      'connect.json',
+    ),
+  });
   server = createServer(async (request, response) => {
     const path = new globalThis.URL(request.url ?? '/', 'http://localhost')
       .pathname;
@@ -500,5 +509,296 @@ describe('delivery', () => {
     );
     expect(event.type).toBe('charge.refunded');
     expect(event.data.object).toMatchObject({ amount_refunded: 4900 });
+  });
+});
+
+describe('connect (instructor payout accounts)', () => {
+  let stateFile: string;
+  beforeEach(async () => {
+    stateFile = join(mkdtempSync(join(tmpdir(), 'stand-in-')), 'connect.json');
+    await restart();
+  });
+
+  // A fresh stand-in over the same state file, as after a restart of pnpm dev.
+  const restart = async () => {
+    server.close();
+    standIn = createStripeStandIn({
+      retryDelayMs: 5,
+      connectStateFile: stateFile,
+    });
+    server = createServer(async (request, response) => {
+      const path = new globalThis.URL(request.url ?? '/', 'http://localhost')
+        .pathname;
+      if (!(await standIn.handle(request, response, path))) {
+        response.writeHead(404).end();
+      }
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    port = (server.address() as AddressInfo).port;
+  };
+
+  const post = (path: string, body: object) =>
+    request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const setStatus = (id: string, status: string) =>
+    post(`/stripe/test/connected-accounts/${id}/status`, { status });
+
+  const platform = () => stripeFor('sk_test_local');
+
+  it('creates an Express account in the shape the SDK parses, idempotently by key', async () => {
+    const stripe = platform();
+    const first = await stripe.accounts.create(
+      {
+        type: 'express',
+        capabilities: { transfers: { requested: true } },
+        metadata: { instructorId: 'i1' },
+      },
+      { idempotencyKey: 'k1' },
+    );
+    const again = await stripe.accounts.create(
+      { type: 'express' },
+      { idempotencyKey: 'k1' },
+    );
+    expect(again.id).toBe(first.id);
+    expect(first.metadata).toEqual({ instructorId: 'i1' });
+    expect(first.details_submitted).toBe(false);
+    expect(first.capabilities?.transfers).toBe('inactive');
+    const other = await stripe.accounts.create(
+      { type: 'express' },
+      { idempotencyKey: 'k2' },
+    );
+    expect(other.id).not.toBe(first.id);
+  });
+
+  it('hides accounts and transfers of one platform account from the other', async () => {
+    const account = await platform().accounts.create({ type: 'express' });
+    await setStatus(account.id, 'complete');
+    await platform().transfers.create({
+      amount: 100,
+      currency: 'usd',
+      destination: account.id,
+      transfer_group: 'g1',
+    });
+    const second = stripeFor('sk_test_local_2');
+    await expect(second.accounts.retrieve(account.id)).rejects.toMatchObject({
+      code: 'resource_missing',
+    });
+    const listed = await second.transfers.list({ transfer_group: 'g1' });
+    expect(listed.data).toEqual([]);
+    await expect(
+      second.transfers.create({
+        amount: 100,
+        currency: 'usd',
+        destination: account.id,
+      }),
+    ).rejects.toBeInstanceOf(Stripe.errors.StripeInvalidRequestError);
+  });
+
+  it('gives an onboarding link whose Complete and Leave buttons return', async () => {
+    const stripe = platform();
+    const account = await stripe.accounts.create({ type: 'express' });
+    const link = await stripe.accountLinks.create({
+      account: account.id,
+      type: 'account_onboarding',
+      return_url: 'http://localhost:1/back',
+      refresh_url: 'http://localhost:1/refresh',
+    });
+    // The link points at the runner's port; this test's server has its own.
+    link.url = link.url.replace(/^http:\/\/[^/]+/, `http://127.0.0.1:${port}`);
+    const html = await (await fetch(link.url)).text();
+    expect(html).toContain('Complete');
+    expect(html).toContain('Leave unfinished');
+
+    const leave = await fetch(`${link.url}/leave`, {
+      method: 'POST',
+      redirect: 'manual',
+    });
+    expect(leave.status).toBe(303);
+    expect(leave.headers.get('location')).toBe('http://localhost:1/back');
+    expect((await stripe.accounts.retrieve(account.id)).details_submitted).toBe(
+      false,
+    );
+
+    await fetch(`${link.url}/complete`, { method: 'POST', redirect: 'manual' });
+    const done = await stripe.accounts.retrieve(account.id);
+    expect(done.details_submitted).toBe(true);
+    expect(done.payouts_enabled).toBe(true);
+    expect(done.capabilities?.transfers).toBe('active');
+  });
+
+  it.each([
+    ['in_progress', false, false, 'inactive'],
+    ['complete', true, true, 'active'],
+    ['restricted', true, false, 'inactive'],
+  ])('sets an account %s', async (status, submitted, payouts, transfers) => {
+    const account = await platform().accounts.create({ type: 'express' });
+    await setStatus(account.id, status);
+    const read = await platform().accounts.retrieve(account.id);
+    expect(read.details_submitted).toBe(submitted);
+    expect(read.payouts_enabled).toBe(payouts);
+    expect(read.capabilities?.transfers).toBe(transfers);
+  });
+
+  it('makes a login link for an account', async () => {
+    const account = await platform().accounts.create({ type: 'express' });
+    const link = await platform().accounts.createLoginLink(account.id);
+    expect(link.url).toContain(account.id);
+  });
+
+  it('creates a transfer idempotently and lists it by group', async () => {
+    const stripe = platform();
+    const account = await stripe.accounts.create({ type: 'express' });
+    await setStatus(account.id, 'complete');
+    const params = {
+      amount: 2500,
+      currency: 'usd',
+      destination: account.id,
+      transfer_group: 'po_1',
+      metadata: { payoutId: 'po_1' },
+    };
+    const first = await stripe.transfers.create(params, {
+      idempotencyKey: 'po_1',
+    });
+    const again = await stripe.transfers.create(params, {
+      idempotencyKey: 'po_1',
+    });
+    expect(again.id).toBe(first.id);
+    expect(first.transfer_group).toBe('po_1');
+    expect(first.metadata).toEqual({ payoutId: 'po_1' });
+    await stripe.transfers.create(
+      { ...params, transfer_group: 'po_2' },
+      { idempotencyKey: 'po_2' },
+    );
+    const listed = await stripe.transfers.list({ transfer_group: 'po_1' });
+    expect(listed.data.map((t) => t.id)).toEqual([first.id]);
+    const all = await request('/stripe/test/transfers');
+    expect(all.body.transfers).toHaveLength(2);
+  });
+
+  it('refuses a transfer to an unknown or restricted destination', async () => {
+    const stripe = platform();
+    const account = await stripe.accounts.create({ type: 'express' });
+    for (const destination of ['acct_missing', account.id]) {
+      await expect(
+        stripe.transfers.create({ amount: 100, currency: 'usd', destination }),
+      ).rejects.toBeInstanceOf(Stripe.errors.StripeInvalidRequestError);
+    }
+    await setStatus(account.id, 'restricted');
+    await expect(
+      stripe.transfers.create({
+        amount: 100,
+        currency: 'usd',
+        destination: account.id,
+      }),
+    ).rejects.toBeInstanceOf(Stripe.errors.StripeInvalidRequestError);
+  });
+
+  describe('transfer failure controls', () => {
+    let accountId: string;
+    beforeEach(async () => {
+      accountId = (await platform().accounts.create({ type: 'express' })).id;
+      await setStatus(accountId, 'complete');
+    });
+    const transfer = (key: string) =>
+      platform().transfers.create(
+        { amount: 100, currency: 'usd', destination: accountId },
+        { idempotencyKey: key },
+      );
+
+    it('rejects the next transfer once', async () => {
+      await post('/stripe/test/transfers/fail-next', { mode: 'rejected' });
+      await expect(transfer('a')).rejects.toBeInstanceOf(
+        Stripe.errors.StripeInvalidRequestError,
+      );
+      await expect(transfer('a')).resolves.toMatchObject({ amount: 100 });
+    });
+
+    it('answers an idempotency conflict once', async () => {
+      await post('/stripe/test/transfers/fail-next', {
+        mode: 'idempotency_conflict',
+      });
+      await expect(transfer('a')).rejects.toBeInstanceOf(
+        Stripe.errors.StripeIdempotencyError,
+      );
+      await expect(transfer('a')).resolves.toBeDefined();
+    });
+
+    it('creates the transfer and never answers', async () => {
+      await post('/stripe/test/transfers/fail-next', { mode: 'timeout' });
+      const impatient = new Stripe('sk_test_local', {
+        host: '127.0.0.1',
+        port,
+        protocol: 'http',
+        maxNetworkRetries: 0,
+        timeout: 300,
+      });
+      await expect(
+        impatient.transfers.create(
+          { amount: 100, currency: 'usd', destination: accountId },
+          { idempotencyKey: 'a' },
+        ),
+      ).rejects.toBeInstanceOf(Stripe.errors.StripeConnectionError);
+      const listed = await request('/stripe/test/transfers');
+      expect(listed.body.transfers).toHaveLength(1);
+      await expect(transfer('a')).resolves.toMatchObject({
+        id: listed.body.transfers[0].id,
+      });
+    });
+
+    it('refuses an unknown mode', async () => {
+      const result = await post('/stripe/test/transfers/fail-next', {
+        mode: 'nope',
+      });
+      expect(result.status).toBe(400);
+    });
+  });
+
+  it('refuses Connect to the restricted key', async () => {
+    await expect(
+      stripeFor('rk_test_local_nowebhook').accounts.create({ type: 'express' }),
+    ).rejects.toBeInstanceOf(Stripe.errors.StripePermissionError);
+  });
+
+  it('keeps accounts, transfers and idempotency across a restart', async () => {
+    const account = await platform().accounts.create(
+      { type: 'express' },
+      { idempotencyKey: 'k' },
+    );
+    await setStatus(account.id, 'complete');
+    const t = await platform().transfers.create(
+      { amount: 100, currency: 'usd', destination: account.id },
+      { idempotencyKey: 't' },
+    );
+    await restart();
+    const read = await platform().accounts.retrieve(account.id);
+    expect(read.capabilities?.transfers).toBe('active');
+    expect(
+      (
+        await platform().accounts.create(
+          { type: 'express' },
+          { idempotencyKey: 'k' },
+        )
+      ).id,
+    ).toBe(account.id);
+    expect(
+      (
+        await platform().transfers.create(
+          { amount: 100, currency: 'usd', destination: account.id },
+          { idempotencyKey: 't' },
+        )
+      ).id,
+    ).toBe(t.id);
+  });
+
+  it('still answers 404 for the rest of Connect', async () => {
+    const result = await request('/v1/payouts', {
+      headers: { authorization: 'Bearer sk_test_local' },
+    });
+    expect(result.status).toBe(404);
   });
 });

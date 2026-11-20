@@ -7,6 +7,7 @@ import type { CoreTable } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
 import { writeUnderActiveAncestors } from '../helpers/ancestor-writes.js';
+import { asContentItemOutput } from '../helpers/content-item.js';
 import {
   getCourseOrThrow,
   requireCourseInstructor,
@@ -29,13 +30,12 @@ import {
   UpdateContentItemAssignmentInputSchema,
   UpdateContentItemAssignmentOutputSchema,
 } from '../schema/index.js';
-import { asContentItemOutput } from './content-item-shared.js';
 
 // Assignments (#102): a lesson of kind 'assignment' in a module's outline,
 // holding one content item. The lesson and its item are written together in
 // one transaction, and the item can't be added to, removed or archived
 // separately (see requireOrdinaryLesson and the delete guards in
-// content-item-shared.ts), so an assignment lesson always has exactly one.
+// helpers/content-item.ts), so an assignment lesson always has exactly one.
 
 // What the item holds beyond the keys, title and order every item has.
 type ItemAttributes =

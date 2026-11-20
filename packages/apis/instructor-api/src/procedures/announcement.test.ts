@@ -2,8 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { NOTIFICATION_TYPES } from '@discava/core-table';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -26,39 +27,34 @@ const {
   userGet,
   transactionWrite,
   transactionGo,
-} = vi.hoisted(() => ({
+  mockModule,
+} = await vi.hoisted(async () => ({
   announcementDeleteWrites: vi.fn(),
   announcementEditWrites: vi.fn(),
-  announcementGet: vi.fn(),
   announcementPage: vi.fn(),
   announcementWrites: vi.fn(),
   notifyCourseStudents: vi.fn(),
   publishNotification: vi.fn(),
-  courseGet: vi.fn(),
-  courseInstructorGet: vi.fn(),
-  userGet: vi.fn(),
-  transactionWrite: vi.fn(),
   transactionGo: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    announcement: ['get'],
+    course: ['get'],
+    courseInstructor: ['get'],
+    user: ['get'],
+    transaction: ['write'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) => ({
-  ...(await importActual<typeof import('@discava/core-table')>()),
-  announcementDeleteWrites,
-  announcementEditWrites,
-  announcementPage,
-  announcementWrites,
-  notifyCourseStudents,
-  publishNotification,
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      announcement: { get: announcementGet },
-      course: { get: courseGet },
-      courseInstructor: { get: courseInstructorGet },
-      user: { get: userGet },
-    },
-    transaction: { write: transactionWrite },
-  })),
-}));
+vi.mock('@discava/core-table', async (importActual) =>
+  mockModule(await importActual(), {
+    announcementDeleteWrites,
+    announcementEditWrites,
+    announcementPage,
+    announcementWrites,
+    notifyCourseStudents,
+    publishNotification,
+  }),
+);
 
 const router = t.router({
   createAnnouncement,
@@ -66,19 +62,11 @@ const router = t.router({
   listAnnouncements,
   updateAnnouncement,
 });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const ID = '0192f3a0-7c00-7000-8000-000000000001';
 const doc = (...text: string[]) =>

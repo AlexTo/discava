@@ -19,6 +19,8 @@ const LAMBDAS: [name: string, input: string][] = [
   ['stream-router', 'src/router/stream-router.ts'],
   ['notification-delivery', 'src/notifications/notification-delivery.ts'],
   ['notification-unsubscribe', 'src/notifications/notification-unsubscribe.ts'],
+  ['earnings-recording', 'src/earnings/earnings-recording.ts'],
+  ['payout-run', 'src/earnings/payout-run.ts'],
   ['stripe-webhook', 'src/payments/stripe-webhook-handler.ts'],
 ];
 

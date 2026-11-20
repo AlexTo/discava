@@ -64,7 +64,7 @@
           "target": "dev"
         },
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "s3mock"
         }
       ],

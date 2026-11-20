@@ -1,0 +1,185 @@
+{
+  "name": "@discava/tooling-local-dev",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/tooling/local-dev/src",
+  "projectType": "library",
+  "tags": [],
+  "metadata": {
+    "generator": "ts#project"
+  },
+  "targets": {
+    "reset-local-data": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/local-data/reset.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "notify-local": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/notify-local/notify.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "local-oidc": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-local-oidc-image"],
+      "options": {
+        "command": "tsx src/local-oidc/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "s3mock": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-s3mock-image"],
+      "options": {
+        "command": "tsx src/s3mock/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "elasticmq": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-elasticmq-image"],
+      "options": {
+        "command": "tsx src/elasticmq/start-container.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-local-oidc-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/local-oidc/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-s3mock-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/s3mock/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "pull-elasticmq-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/elasticmq/pull-image.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "assemble": {
+      "dependsOn": ["compile"]
+    },
+    "build": {
+      "dependsOn": [
+        "lint",
+        "compile",
+        "test",
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
+      ]
+    },
+    "compile": {
+      "executor": "nx:run-commands",
+      "outputs": ["{workspaceRoot}/dist/{projectRoot}/tsc"],
+      "options": {
+        "command": "tsc --build tsconfig.lib.json",
+        "cwd": "{projectRoot}"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome format {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome format --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "format",
+        {
+          "projects": ["@discava/source"],
+          "target": "license-check"
+        }
+      ],
+      "cache": true,
+      "inputs": ["biome"],
+      "options": {
+        "command": "biome lint {projectRoot}"
+      },
+      "configurations": {
+        "fix": {
+          "command": "biome check --write {projectRoot}"
+        },
+        "skip-lint": {
+          "command": "node -e \"\""
+        }
+      }
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["default", "^default"]
+    },
+    "dynamodb": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": ["pull-dynamodb-image"],
+      "options": {
+        "commands": [
+          "tsx ../../tooling/local-dev/src/dynamodb/start-container.ts",
+          "tsx ../../tooling/local-dev/src/dynamodb/create-local-table.ts"
+        ],
+        "parallel": true,
+        "cwd": "{workspaceRoot}/packages/databases/core-table"
+      }
+    },
+    "opensearch": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "dependsOn": [
+        "pull-opensearch-image",
+        {
+          "projects": ["@discava/search"],
+          "target": "generate-indices-manifest"
+        }
+      ],
+      "options": {
+        "commands": [
+          "tsx ../../tooling/local-dev/src/opensearch/start-container.ts",
+          "tsx ../../tooling/local-dev/src/opensearch/sync-local-indices.ts"
+        ],
+        "parallel": true,
+        "cwd": "{workspaceRoot}/packages/databases/search"
+      }
+    },
+    "pull-dynamodb-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx ../../tooling/local-dev/src/dynamodb/pull-image.ts",
+        "cwd": "{workspaceRoot}/packages/databases/core-table"
+      }
+    },
+    "pull-opensearch-image": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx ../../tooling/local-dev/src/opensearch/pull-image.ts",
+        "cwd": "{workspaceRoot}/packages/databases/search"
+      }
+    }
+  }
+}

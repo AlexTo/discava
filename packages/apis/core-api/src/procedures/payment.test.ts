@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { checkout, paymentAvailable } from './payment.js';
@@ -45,16 +45,9 @@ vi.mock('@discava/common-server-utils/stripe/client', () => ({
 }));
 
 const router = t.router({ checkout, available: paymentAvailable });
-const callerFor = (origin?: string) =>
-  t.createCallerFactory(router)({
-    event: {
-      headers: origin ? { origin } : {},
-      requestContext: { authorizer: { claims: { sub: 'student-1' } } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
-const caller = callerFor('http://localhost:2020');
+const callerAt = (origin?: string) =>
+  callerFor(router, { sub: 'student-1', headers: origin ? { origin } : {} });
+const caller = callerAt('http://localhost:2020');
 
 const course = {
   courseId: 'c1',
@@ -178,7 +171,7 @@ describe('payment.checkout', () => {
 
   it('is FORBIDDEN from an origin that is not allowed', async () => {
     await expect(
-      callerFor('https://evil.example').checkout({ courseId: 'c1' }),
+      callerAt('https://evil.example').checkout({ courseId: 'c1' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(mocks.startOrder).not.toHaveBeenCalled();
     expect(mocks.create).not.toHaveBeenCalled();

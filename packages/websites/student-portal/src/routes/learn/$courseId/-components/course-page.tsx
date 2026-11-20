@@ -14,6 +14,10 @@ import {
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import {
+  LANGUAGE_LABELS,
+  LEVEL_LABELS,
+} from '@discava/common-web-utils/catalogue-labels';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -27,11 +31,7 @@ import { useState } from 'react';
 import { useCoreApi } from '../../../../api';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
-import {
-  formatDuration,
-  LANGUAGE_LABELS,
-  LEVEL_LABELS,
-} from '../../../../lib/catalogue-filters';
+import { formatDuration } from '../../../../lib/catalogue-filters';
 import { CoursePreview } from './course-preview';
 import { EnrolmentActions } from './enrolment-actions';
 import { InstructorCard } from './instructor-card';
@@ -156,6 +156,8 @@ export function CoursePage({ courseId }: { courseId: string }) {
                 <EnrolmentActions
                   courseId={courseId}
                   courseTitle={course.title}
+                  priceAmount={course.priceAmount}
+                  priceCurrency={course.priceCurrency}
                 />
               </div>
             </div>

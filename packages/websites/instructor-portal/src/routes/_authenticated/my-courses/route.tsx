@@ -23,18 +23,10 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import {
-  BookOpen,
-  CalendarDays,
-  CirclePlus,
-  FileCheck2,
-  GraduationCap,
-  Search,
-  Users,
-} from 'lucide-react';
+import { BookOpen, CirclePlus, Search, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from 'react-oidc-context';
-import { useCoreApi } from '../../../api';
+import { useCoreApi, useInstructorApi } from '../../../api';
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
 import {
   type CourseStatus,
@@ -45,18 +37,10 @@ export const Route = createFileRoute('/_authenticated/my-courses')({
   component: RouteComponent,
 });
 
-// Placeholder workload and scheduling figures, the same on every card:
-// course.listByInstructor returns only the course records.
-const mockCourseDetails = {
-  term: 'Semester 2, 2026',
-  students: 24,
-  ungraded: 18,
-  modules: 8,
-  next: 'Course content coming soon',
-  updated: 'Updated recently',
-  surface:
-    'from-emerald-500/25 to-teal-500/10 text-emerald-700 dark:text-emerald-300',
-};
+const courseSurface =
+  'from-emerald-500/25 to-teal-500/10 text-emerald-700 dark:text-emerald-300';
+
+const updatedFormat = new Intl.DateTimeFormat('en-AU', { dateStyle: 'medium' });
 
 const courseStatusLabels: Record<string, CourseStatus> = {
   draft: 'Draft',
@@ -75,6 +59,7 @@ function RouteComponent() {
   const auth = useAuth();
   const instructorId = auth.user?.profile.sub;
   const trpc = useCoreApi();
+  const instructorTrpc = useInstructorApi();
   const publicMediaUrl = usePublicMediaUrl();
   const coursesQuery = useQuery(
     trpc.course.listByInstructor.queryOptions(
@@ -83,14 +68,42 @@ function RouteComponent() {
     ),
   );
 
+  // Enrolments come from the dashboard's analytics aggregates; until they
+  // load (or if they fail) the figure is shown as unavailable, not as zero.
+  const summariesQuery = useQuery(
+    instructorTrpc.analytics.courseSummaries.queryOptions(),
+  );
+  const enrolmentsByCourse = new Map(
+    (summariesQuery.data ?? []).map((summary) => [
+      summary.courseId,
+      summary.enrolments,
+    ]),
+  );
+
   const courses = (coursesQuery.data?.items ?? []).map((course) => ({
     courseId: course.courseId,
     title: course.title,
     description: course.description,
     imageUrl: publicMediaUrl(course.imageKey),
     status: courseStatusLabels[course.status] ?? 'Draft',
-    ...mockCourseDetails,
+    enrolments: enrolmentsByCourse.get(course.courseId),
+    updatedAt: course.updatedAt,
   }));
+
+  const publishedCourses = courses.filter(
+    (course) => course.status === 'Published',
+  );
+  const draftCourses = courses.filter((course) => course.status === 'Draft');
+  const archivedCourses = courses.filter(
+    (course) => course.status === 'Archived',
+  );
+  const publishedEnrolments = publishedCourses.reduce(
+    (total, course) => total + (course.enrolments ?? 0),
+    0,
+  );
+  const summaryReady = !coursesQuery.isPending && !coursesQuery.isError;
+  const plural = (count: number, noun: string) =>
+    `${count} ${noun}${count === 1 ? '' : 's'}`;
 
   const visibleCourses = courses.filter(
     (course) =>
@@ -110,7 +123,8 @@ function RouteComponent() {
             My Courses
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Manage every course you teach and see its current workload.
+            Manage every course you teach and see how many students are
+            enrolled.
           </p>
         </div>
         <CreateCourseDialog
@@ -129,27 +143,25 @@ function RouteComponent() {
         {[
           {
             label: 'Active courses',
-            value: '3',
-            detail: '74 enrolled students',
+            value: publishedCourses.length,
+            detail: summariesQuery.isSuccess
+              ? `${plural(publishedEnrolments, 'enrolment')} in total`
+              : undefined,
           },
-          {
-            label: 'Draft courses',
-            value: '1',
-            detail: 'Preparing for publication',
-          },
-          {
-            label: 'Awaiting grading',
-            value: '33',
-            detail: 'Across 3 assignments',
-          },
+          { label: 'Draft courses', value: draftCourses.length },
+          { label: 'Archived courses', value: archivedCourses.length },
         ].map((metric) => (
           <Card key={metric.label} className="gap-2 py-4">
             <CardContent className="px-5">
               <p className="text-sm text-muted-foreground">{metric.label}</p>
-              <p className="mt-1 text-2xl font-bold">{metric.value}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {metric.detail}
+              <p className="mt-1 text-2xl font-bold">
+                {summaryReady ? metric.value : '–'}
               </p>
+              {summaryReady && metric.detail && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {metric.detail}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -228,7 +240,7 @@ function RouteComponent() {
                   />
                 ) : (
                   <div
-                    className={`flex aspect-video items-end bg-gradient-to-br p-5 ${course.surface}`}
+                    className={`flex aspect-video items-end bg-gradient-to-br p-5 ${courseSurface}`}
                   >
                     <div className="flex size-11 items-center justify-center rounded-xl bg-background/85 shadow-sm backdrop-blur-sm">
                       <BookOpen className="size-5" />
@@ -246,49 +258,21 @@ function RouteComponent() {
                       {course.status}
                     </Badge>
                   </div>
-                  <CardDescription>
-                    {course.description || course.term}
-                  </CardDescription>
+                  <CardDescription>{course.description}</CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 px-5 pb-5">
-                  <div className="grid grid-cols-3 divide-x rounded-lg border bg-muted/20 py-3 text-center">
-                    <div className="px-2">
-                      <Users className="mx-auto size-4 text-muted-foreground" />
-                      <p className="mt-1 text-sm font-semibold">
-                        {course.students}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        Students
-                      </p>
-                    </div>
-                    <div className="px-2">
-                      <FileCheck2 className="mx-auto size-4 text-muted-foreground" />
-                      <p className="mt-1 text-sm font-semibold">
-                        {course.ungraded}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        Ungraded
-                      </p>
-                    </div>
-                    <div className="px-2">
-                      <BookOpen className="mx-auto size-4 text-muted-foreground" />
-                      <p className="mt-1 text-sm font-semibold">
-                        {course.modules}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        Modules
-                      </p>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                      <CalendarDays className="mt-0.5 size-3 shrink-0" />{' '}
-                      {course.next}
+                  <div className="rounded-lg border bg-muted/20 py-3 text-center">
+                    <Users className="mx-auto size-4 text-muted-foreground" />
+                    <p className="mt-1 text-sm font-semibold">
+                      {course.enrolments ?? '–'}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {course.updated}
+                    <p className="text-[10px] text-muted-foreground">
+                      Enrolments
                     </p>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Updated {updatedFormat.format(new Date(course.updatedAt))}
+                  </p>
                   <Button variant="outline" className="w-full" asChild>
                     <Link
                       to="/my-courses/$courseId"
@@ -324,12 +308,6 @@ function RouteComponent() {
           </Card>
         )}
       </section>
-
-      <div className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-        <GraduationCap className="size-4 shrink-0" /> Course titles and status
-        are live; workload and scheduling details shown here are illustrative
-        placeholders.
-      </div>
     </main>
   );
 }

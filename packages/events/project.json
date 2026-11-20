@@ -39,6 +39,18 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/earnings/earnings-recording.ts",
+        "name": "earnings-recording",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
+        "path": "src/earnings/payout-run.ts",
+        "name": "payout-run",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/progress/progress-recalculation.ts",
         "name": "progress-recalculation",
         "iac": "cdk"
@@ -140,11 +152,11 @@
           "target": "dev"
         },
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "s3mock"
         },
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "elasticmq"
         }
       ],

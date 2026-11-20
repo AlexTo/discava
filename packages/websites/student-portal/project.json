@@ -61,7 +61,7 @@
       "executor": "nx:run-commands",
       "dependsOn": [
         {
-          "projects": ["@discava/common-scripts"],
+          "projects": ["@discava/tooling-local-dev"],
           "target": "local-oidc"
         },
         {

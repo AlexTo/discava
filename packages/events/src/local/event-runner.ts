@@ -15,6 +15,7 @@ import {
   LOCAL_CORE_API_URL,
   LOCAL_EVENT_RUNNER,
   LOCAL_NOTIFICATIONS_FROM,
+  LOCAL_PAYOUTS,
   LOCAL_PORTAL_URLS,
   LOCAL_QUEUES,
   localBucketName,
@@ -31,6 +32,7 @@ import {
   STREAM_FEATURES,
 } from '@discava/core-table';
 import type { Context, DynamoDBRecord } from 'aws-lambda';
+import { runPayouts } from '../earnings/payout-run.js';
 import { syncUserFromPreTokenGenerationEvent } from '../identity/pre-token-generation.js';
 import { handler as transcodeCleanup } from '../media/transcode-cleanup.js';
 import { handler as transcodeComplete } from '../media/transcode-complete.js';
@@ -98,6 +100,16 @@ process.env.STUDENT_PORTAL_URL ??= LOCAL_PORTAL_URLS.student;
 process.env.INSTRUCTOR_PORTAL_URL ??= LOCAL_PORTAL_URLS.instructor;
 process.env.ADMIN_PORTAL_URL ??= LOCAL_PORTAL_URLS.admin;
 process.env.CORE_API_URL ??= LOCAL_CORE_API_URL;
+
+// What the earnings-recording handler reads when deployed from the stacks'
+// environment variables.
+process.env.PLATFORM_FEE_BASIS_POINTS ??= String(
+  LOCAL_PAYOUTS.platformFeeBasisPoints,
+);
+process.env.PAYOUT_HOLD_DAYS ??= String(LOCAL_PAYOUTS.holdDays);
+// What the payout run reads: a minimum of one minor unit, so a local run sends
+// whatever is released.
+process.env.PAYOUT_MINIMUM_MINOR ??= '1';
 
 const outcomeLogger = new Logger({ serviceName: 'TranscribeComplete' });
 
@@ -272,6 +284,12 @@ const server = startEventRunnerServer({
   port: LOCAL_EVENT_RUNNER.port,
   stripe: createStripeStandIn({ log }),
   stripeWebhook: handleStripeWebhook,
+  runPayoutRun: async (options) => {
+    log('payout run started');
+    const result = await runPayouts(options);
+    log('payout run finished', result);
+    return result;
+  },
   submitTranscodeJob: (request) => transcoder.submit(request),
   cancelTranscodeJob: (jobId) => transcoder.cancel(jobId),
   submitTranscriptionJob: (request) => transcriber.submit(request),
@@ -351,6 +369,21 @@ await waitForQueue({
 const runners = Promise.all(
   [...featureRunners.values()].map((runner) => runner.start(abort.signal)),
 );
+// The daily payout schedule, standing in for EventBridge: off unless
+// LOCAL_PAYOUT_RUN_INTERVAL_SECONDS is a positive number.
+const payoutIntervalSeconds = Number(
+  process.env.LOCAL_PAYOUT_RUN_INTERVAL_SECONDS ?? 0,
+);
+if (payoutIntervalSeconds > 0) {
+  log(`payout run every ${payoutIntervalSeconds}s`);
+  setInterval(
+    () =>
+      void runPayouts().catch((error) =>
+        log('payout run failed; not retried locally', error),
+      ),
+    payoutIntervalSeconds * 1000,
+  ).unref();
+}
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     abort.abort();

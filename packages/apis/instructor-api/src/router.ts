@@ -81,6 +81,10 @@ import {
   unhide as unhideDiscussionPost,
 } from './procedures/discussion.js';
 import {
+  lines as earningsLines,
+  report as earningsReport,
+} from './procedures/earnings.js';
+import {
   createLesson,
   deleteLesson,
   deleteLessonPermanently,
@@ -100,6 +104,12 @@ import {
   restoreModule,
   updateModule,
 } from './procedures/module.js';
+import {
+  account as payoutAccount,
+  dashboardLink as payoutDashboardLink,
+  overview as payoutOverview,
+  startOnboarding as payoutStartOnboarding,
+} from './procedures/payout.js';
 import {
   createProfilePhotoUploadUrl,
   getProfile,
@@ -164,6 +174,16 @@ export const appRouter = router({
     unhide: unhideDiscussionPost,
     remove: removeDiscussionPost,
     dismissReports,
+  }),
+  earnings: router({
+    report: earningsReport,
+    lines: earningsLines,
+  }),
+  payout: router({
+    account: payoutAccount,
+    startOnboarding: payoutStartOnboarding,
+    dashboardLink: payoutDashboardLink,
+    overview: payoutOverview,
   }),
   category: router({
     listActive: listActiveCategories,
