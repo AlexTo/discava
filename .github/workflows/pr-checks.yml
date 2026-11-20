@@ -243,6 +243,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      # The comment goes through the issues API. An agent's pull request is
+      # locked as soon as it opens (agent-lock.yml), and the token can't
+      # comment on a locked one with only pull-requests write
+      # ("Unable to create comment because issue is locked").
+      issues: write
       pull-requests: write
     steps:
       # The default branch's code, not the pull request's: this job can write
