@@ -8,6 +8,7 @@ import {
   DISCUSSION_MAX_REPORTERS,
   DISCUSSION_MAX_VISIBLE_REPLIES,
   discussionNotificationWrites,
+  firstShownLesson,
   toPostRead,
   toQuestionRead,
 } from '@discava/core-table';
@@ -35,6 +36,7 @@ import { requireDiscussionAccess } from '../helpers/discussion-access.js';
 import { courseProcedure } from '../init.js';
 import {
   AcceptInputSchema,
+  AnswerPromptInputSchema,
   AskInputSchema,
   DiscussionPostSchema,
   ListQuestionsInputSchema,
@@ -48,6 +50,7 @@ import {
   VoteInputSchema,
   VoteOutputSchema,
 } from '../schema/index.js';
+import { requireEnrolment } from './enrolment.js';
 
 const QUESTIONS_PAGE = 20;
 const REPLIES_PAGE = 50;
@@ -187,6 +190,85 @@ export const ask = courseProcedure
           postId,
           author: await authorOf(coreTable, user, access),
           title,
+          body,
+          now: new Date(),
+        },
+        result: async () =>
+          readOne(
+            coreTable,
+            ref,
+            user,
+            access,
+            requireStored(
+              await getPost(coreTable, ref, 'question', postId, postId),
+            ),
+          ),
+      };
+    });
+  });
+
+// The caller's answer to the course's first-lesson prompt: a question in the
+// course's first shown lesson that is never queued as unanswered, written with
+// the enrolment's `answered` state. Nothing is notified and no student
+// activity is recorded.
+export const answerPrompt = courseProcedure
+  .input(AnswerPromptInputSchema)
+  .output(DiscussionPostSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { postId, body, ...ref } = input;
+    const user = ctx.user;
+    let firstLessonId: string | undefined;
+
+    return writeWithRetry(coreTable, async () => {
+      const access = await requireDiscussionAccess(coreTable, user, ref);
+      // Only an enrolled student answers, an instructor of the course
+      // included.
+      requireEnrolment(access.course, access.enrolment);
+      const existing = await getPost(
+        coreTable,
+        ref,
+        'question',
+        postId,
+        postId,
+      );
+      // A retry by the same author returns the answer unchanged.
+      if (existing) {
+        if (existing.authorId !== user.sub || !existing.promptAnswer) {
+          throw idTaken();
+        }
+        return {
+          result: () => readOne(coreTable, ref, user, access, existing),
+        };
+      }
+      assertOpen(access);
+      if (firstLessonId === undefined) {
+        const { data } = await coreTable.collections
+          .curriculum({ courseId: ref.courseId })
+          .go({ pages: 'all' });
+        firstLessonId = firstShownLesson({
+          modules: data.module,
+          lessons: data.lesson,
+        })?.lessonId;
+      }
+      if (firstLessonId !== ref.lessonId) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: "This prompt belongs to the course's first lesson",
+        });
+      }
+      if (access.enrolment?.firstLessonPromptState !== undefined) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: "You've already answered or dismissed this prompt",
+        });
+      }
+      return {
+        op: {
+          type: 'answerPrompt',
+          ...ref,
+          postId,
+          author: await authorOf(coreTable, user, access),
           body,
           now: new Date(),
         },

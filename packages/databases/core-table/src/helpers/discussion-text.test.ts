@@ -115,4 +115,14 @@ describe('answeredState', () => {
       ).toBe(expected);
     },
   );
+
+  it.each([
+    ['shown', 'not-a-question'],
+    ['hidden', 'not-open'],
+    ['deleted', 'not-open'],
+  ] as const)('a %s prompt answer: %s', (state, expected) => {
+    expect(
+      answeredState({ state, instructorReplyCount: 0, promptAnswer: true }),
+    ).toBe(expected);
+  });
 });

@@ -111,9 +111,12 @@ export const toPost = (
     ...(post.kind === 'question' && {
       replyCount: post.replyCount ?? 0,
       accepted: post.acceptedPostId !== undefined,
+      // A prompt answer is never waiting for an answer.
       answered:
+        post.promptAnswer === true ||
         post.acceptedPostId !== undefined ||
         (post.instructorReplyCount ?? 0) > 0,
+      ...(post.promptAnswer === true && { promptAnswer: true }),
     }),
     upvotedByMe,
     mine: post.authorId === viewer.userId,

@@ -121,6 +121,7 @@
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
+      "packages/databases/core-table/src/helpers/first-lesson-prompt.ts",
       "packages/databases/core-table/src/helpers/order.ts",
       "packages/databases/core-table/src/helpers/student-activity.ts"
     ],

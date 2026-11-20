@@ -36,6 +36,7 @@ import {
 } from './procedures/course.js';
 import {
   accept,
+  answerPrompt,
   ask,
   listQuestions,
   removeOwn,
@@ -44,7 +45,11 @@ import {
   thread,
   vote,
 } from './procedures/discussion.js';
-import { enrol, myEnrolment } from './procedures/enrolment.js';
+import {
+  dismissFirstLessonPrompt,
+  enrol,
+  myEnrolment,
+} from './procedures/enrolment.js';
 import { instructorProfilePublicView } from './procedures/instructor-profile.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
@@ -85,6 +90,7 @@ export const router = t.router;
 export const appRouter = router({
   course: router({
     enrol,
+    dismissFirstLessonPrompt,
     myItemCompletions,
     myEnrolment,
     myEnrolments,
@@ -130,6 +136,7 @@ export const appRouter = router({
     listQuestions,
     thread,
     ask,
+    answerPrompt,
     reply,
     vote,
     accept,

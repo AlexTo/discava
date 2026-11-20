@@ -155,6 +155,7 @@ export interface TableSnapshot {
     | 'lastActivityAt'
     | 'createdAt'
     | 'orderId'
+    | 'firstLessonPromptState'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -353,6 +354,7 @@ export interface TableSnapshot {
     | 'acceptedPostId'
     | 'reportedBy'
     | 'unanswered'
+    | 'promptAnswer'
     | 'reported'
     | 'createdAt'
   >[];

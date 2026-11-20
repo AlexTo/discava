@@ -452,6 +452,136 @@ describe('discussion', () => {
     });
   });
 
+  describe('first-lesson-prompt-matches-answers', () => {
+    const answer = (over: Partial<Post> = {}): Post =>
+      question({ promptAnswer: true, replyCount: 0, voteCount: 0, ...over });
+    // The consistent table's enrolment is `student`.
+    const answerOf = (authorId: string, id: string, over: Partial<Post> = {}) =>
+      answer({ authorId, postId: id, threadId: id, ...over });
+    const AID = v7(AT2, 5);
+    const setState = (state?: 'answered' | 'dismissed') => {
+      table.enrolments[0].firstLessonPromptState = state;
+    };
+
+    it('passes an answered enrolment with its one answer, in any state', () => {
+      setState('answered');
+      hold([answerOf('student', AID, { createdAt: AT2 })], []);
+      expect(broken().invariants).toEqual([]);
+      hold([answerOf('student', AID, { createdAt: AT2, state: 'hidden' })], []);
+      expect(broken().invariants).toEqual([]);
+      hold(
+        [
+          answerOf('student', AID, {
+            createdAt: AT2,
+            state: 'deleted',
+            title: undefined,
+            body: undefined,
+          }),
+        ],
+        [],
+      );
+      expect(broken().invariants).toEqual([]);
+    });
+
+    it('passes a table with an answered and a dismissed enrolment, and trips no other check', () => {
+      table.enrolments.push({
+        courseId: 'c1',
+        userId: 'other',
+        status: 'active',
+        progressPercent: 0,
+        createdAt: table.enrolments[0].createdAt,
+        firstLessonPromptState: 'dismissed',
+      });
+      table.courseStats[0].enrolments = 2;
+      table.periodStats = table.periodStats.map((p) => ({
+        ...p,
+        enrolments: p.enrolments + 1,
+      }));
+      setState('answered');
+      hold([answerOf('student', AID, { createdAt: AT2 })], []);
+      const names = checkTableInvariants(table).map((v) => v.invariant);
+      for (const name of [
+        'last-activity-at-current',
+        'student-records-enrolled',
+        'enrolment-in-published-course',
+        'discussion-counts-match',
+        'first-lesson-prompt-matches-answers',
+      ]) {
+        expect(names).not.toContain(name);
+      }
+      expect(names.filter((n) => n.startsWith('payment'))).toEqual([]);
+    });
+
+    it("reports an answer whose author's enrolment has no state", () => {
+      hold([answerOf('student', AID, { createdAt: AT2 })], []);
+      expectOnly('first-lesson-prompt-matches-answers', /state none/);
+    });
+
+    it('reports an answer whose enrolment is dismissed', () => {
+      setState('dismissed');
+      hold([answerOf('student', AID, { createdAt: AT2 })], []);
+      expectOnly('first-lesson-prompt-matches-answers', /state dismissed/);
+    });
+
+    it('reports two answers by one learner', () => {
+      setState('answered');
+      hold(
+        [
+          answerOf('student', AID, { createdAt: AT2 }),
+          answerOf('student', v7(AT2, 6), { createdAt: AT2 }),
+        ],
+        [],
+      );
+      expect(
+        broken().violations.filter(
+          (v) => v.invariant === 'first-lesson-prompt-matches-answers',
+        ),
+      ).toHaveLength(2);
+    });
+
+    it('reports an answered enrolment with no post', () => {
+      setState('answered');
+      hold([], []);
+      expectOnly('first-lesson-prompt-matches-answers', /has no prompt answer/);
+    });
+
+    it('reports an answer by someone with no enrolment', () => {
+      hold([answerOf('stranger', AID, { createdAt: AT2 })], []);
+      expectOnly('first-lesson-prompt-matches-answers', /no enrolment/);
+    });
+
+    it('reports `promptAnswer` on a reply', () => {
+      setState('answered');
+      hold([
+        answerOf('student', AID, { createdAt: AT2, replyCount: 1 }),
+        reply({ threadId: AID, promptAnswer: true }),
+      ]);
+      expect(broken().violations.map((v) => v.invariant)).toContain(
+        'discussion-post-shape',
+      );
+    });
+
+    it('reports a `promptAnswer` that is not true', () => {
+      setState('answered');
+      hold(
+        [answerOf('student', AID, { createdAt: AT2, promptAnswer: false })],
+        [],
+      );
+      expect(broken().violations.map((v) => v.invariant)).toContain(
+        'discussion-post-shape',
+      );
+    });
+
+    it('reports a prompt answer that carries `unanswered`', () => {
+      setState('answered');
+      hold(
+        [answerOf('student', AID, { createdAt: AT2, unanswered: 'c1' })],
+        [],
+      );
+      expectOnly('discussion-unanswered-matches', /not unanswered/);
+    });
+  });
+
   describe('discussion-votes-valid', () => {
     it('reports a vote for a missing post', () => {
       table.discussionVotes = [

@@ -63,7 +63,7 @@ export const requireDiscussionAccess = async (
   ) {
     throw new TRPCError({ code: 'NOT_FOUND', message: NOT_AVAILABLE });
   }
-  return { course, module, lesson, isInstructor };
+  return { course, module, lesson, isInstructor, enrolment };
 };
 
 export type DiscussionAccess = Awaited<

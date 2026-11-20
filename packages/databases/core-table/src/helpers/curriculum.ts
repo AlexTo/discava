@@ -52,3 +52,38 @@ export const filterEffectivelyVisible = <
     contentItems: shownContentItems,
   };
 };
+
+// The first lesson students see: the first lesson of the first module, in
+// course order, once hidden and archived records and their descendants are
+// left out. Undefined when the course shows no lesson.
+export const firstShownLesson = <
+  M extends CurriculumRecordState & { moduleId: string; order: number },
+  L extends CurriculumRecordState & {
+    moduleId: string;
+    lessonId: string;
+    order: number;
+  },
+>({
+  modules,
+  lessons,
+}: {
+  modules: M[];
+  lessons: L[];
+}): L | undefined => {
+  const shown = filterEffectivelyVisible({
+    modules,
+    lessons,
+    contentItems: [],
+  });
+  const byOrder = (a: { order: number }, b: { order: number }) =>
+    a.order - b.order;
+  for (const { moduleId } of [...shown.modules].sort(byOrder)) {
+    const first = shown.lessons
+      .filter((lesson) => lesson.moduleId === moduleId)
+      .sort(byOrder)[0];
+    if (first) {
+      return first;
+    }
+  }
+  return undefined;
+};
