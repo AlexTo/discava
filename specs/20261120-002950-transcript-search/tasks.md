@@ -39,15 +39,15 @@ Paths are relative to the repository root. Only the last PR closes #590. Earlier
 
 **Independent test**: `pnpm nx run @discava/common-web-utils:test -- --run webvtt video-player` passes.
 
-- [ ] T001 [P] Tests first, then add `packages/common/web-utils/src/webvtt.ts` (new module; add `./webvtt` to the package's exports like `video-player`), per research R-10:
+- [x] T001 [P] Tests first, then add `packages/common/web-utils/src/webvtt.ts` (new module; add `./webvtt` to the package's exports like `video-player`), per research R-10:
   - `interface TranscriptCue { start: number; end: number; text: string }` (seconds);
   - `parseWebVtt(text: string): TranscriptCue[]`: skips the header, `NOTE`, `STYLE` and `REGION` blocks and cue identifiers; reads `hh:mm:ss.ttt` and `mm:ss.ttt` timings and ignores cue settings after them; joins a cue's lines with a space; drops every tag (`<v Ana>`, `<c.loud>`, `<i>`, `<00:00:01.000>`), decodes `&amp;`, `&lt;`, `&gt;`, `&nbsp;`, `&lrm;`, `&rlm;`, removes U+E000 and U+E001, collapses whitespace; drops cues whose text is empty; returns cues sorted by `start`; never throws (a file with no cue gives `[]`);
   - `activeCueIndex(cues, time): number`: the index of the last cue whose `start` is at or before `time`, or `-1` before the first, by binary search;
   - `spokenTime(seconds): string`: "40 seconds", "12 minutes 40 seconds", "1 hour 2 minutes 5 seconds".
 
   `webvtt.test.ts` covers: the sample file in [quickstart.md](./quickstart.md) (three cues, the third reading "We start with a random point & a step size."); a byte order mark; CRLF line endings; cue identifiers; a two-line cue; cue settings; a `NOTE` block between cues; overlapping cues; an empty file and one with only the header; `activeCueIndex` before the first cue, inside a cue, in a gap between cues (the earlier cue) and after the last.
-- [ ] T002 [P] Tests first, then add `transcriptOpen: boolean` (default `false`) to `PlayerPreferences` and `DEFAULT_PREFERENCES` in `packages/common/web-utils/src/video-player.ts`, loaded and validated like `captionsOn` (anything but a boolean is the default) and saved with the others. In `video-player.test.ts`, the expected default preferences gain `transcriptOpen: false`: this is the one intended change to existing assertions, so say so in the PR. Add cases for a saved `true`, a saved non-boolean, and a save that keeps the other fields.
-- [ ] T003 [P] Add `webVttOf(cues: { start: number; end: number; text: string }[]): string` to `packages/e2e/src/helpers/captions.ts`, beside `webVtt`, writing a valid multi-cue file with `hh:mm:ss.ttt` timings. No scenario uses it yet.
+- [x] T002 [P] Tests first, then add `transcriptOpen: boolean` (default `false`) to `PlayerPreferences` and `DEFAULT_PREFERENCES` in `packages/common/web-utils/src/video-player.ts`, loaded and validated like `captionsOn` (anything but a boolean is the default) and saved with the others. In `video-player.test.ts`, the expected default preferences gain `transcriptOpen: false`: this is the one intended change to existing assertions, so say so in the PR. Add cases for a saved `true`, a saved non-boolean, and a save that keeps the other fields.
+- [x] T003 [P] Add `webVttOf(cues: { start: number; end: number; text: string }[]): string` to `packages/e2e/src/helpers/captions.ts`, beside `webVtt`, writing a valid multi-cue file with `hh:mm:ss.ttt` timings. No scenario uses it yet.
 
 ---
 
@@ -57,7 +57,7 @@ Paths are relative to the repository root. Only the last PR closes #590. Earlier
 
 **Independent test**: The component tests in `transcript-panel.test.tsx`, `hls-video.test.tsx` and `video-controls.test.tsx` pass. The e2e test "a learner reads a video's transcript and jumps to a line" passes on PR CI, with screenshots.
 
-- [ ] T004 [US1] Tests first, then add `TranscriptPanel` in `packages/common/shadcn/src/components/transcript-panel.tsx`, presentational, per [contracts/transcript-panel-ui.md](./contracts/transcript-panel-ui.md) ("Structure" and "States"). Props: `id`, `cues: TranscriptCue[]`, `activeIndex: number`, `languageLabel: string`, `status: 'ready' | 'failed'`, `onChoose(cue)`, `className`.
+- [x] T004 [US1] Tests first, then add `TranscriptPanel` in `packages/common/shadcn/src/components/transcript-panel.tsx`, presentational, per [contracts/transcript-panel-ui.md](./contracts/transcript-panel-ui.md) ("Structure" and "States"). Props: `id`, `cues: TranscriptCue[]`, `activeIndex: number`, `languageLabel: string`, `status: 'ready' | 'failed'`, `onChoose(cue)`, `className`.
   - A `<section aria-label="Transcript (<languageLabel>)">` with a heading "Transcript" and the language.
   - An `<ol>` with one `<button type="button">` per cue: the time from `formatTime` (exported by `video-controls.tsx`) in an `aria-hidden` span, `spokenTime` in an `sr-only` span, then the text as a text node.
   - The active cue's button has `aria-current="true"`, a left border and a heavier weight.
@@ -66,14 +66,14 @@ Paths are relative to the repository root. Only the last PR closes #590. Earlier
   - Text labels only, no arrow icons.
 
   `transcript-panel.test.tsx`: every cue renders with its time; the region's name includes the language; `aria-current` is on `activeIndex` only; clicking a line calls `onChoose` with that cue; the two message states; cue text containing `<b>` is shown literally.
-- [ ] T005 [US1] Tests first, then change `packages/common/shadcn/src/components/video-controls.tsx`:
+- [x] T005 [US1] Tests first, then change `packages/common/shadcn/src/components/video-controls.tsx`:
   - `LoadedCaption` gains `cues: TranscriptCue[]`;
   - a new optional prop `transcript?: { open: boolean; panelId: string; onToggle(): void; onTrackChange(track: LoadedCaption | undefined): void }`;
   - with it and at least one caption or a `captionNotice` (the condition the captions menu already uses), the control bar shows a text button "Transcript" with `aria-expanded={open}` and `aria-controls={panelId}`, next to the captions menu;
   - `onTrackChange` is called with today's `lastTrack` (the chosen track, else the remembered language, else the default, else the first) whenever it changes, whether captions are on or off.
 
   Add cases to `video-controls.test.tsx`: no button without the prop, or with neither captions nor a `captionNotice`; the button with only a `captionNotice`; `aria-expanded` follows `open`; clicking calls `onToggle`; `onTrackChange` fires with the default track on mount, with the chosen track after a menu choice, and still with a track when captions are turned off. Existing cases pass unchanged apart from fixtures gaining `cues: []`.
-- [ ] T006 [US1] Tests first, then wire `packages/common/shadcn/src/components/hls-video.tsx`:
+- [x] T006 [US1] Tests first, then wire `packages/common/shadcn/src/components/hls-video.tsx`:
   - `useCaptionFiles` parses each fetched file once with `parseWebVtt` and puts `cues` on the loaded caption;
   - a new prop `transcript?: boolean` (default `false`). Without it the rendered output is exactly today's;
   - with it: the open state starts from `loadPreferences().transcriptOpen` and is saved on toggle (keeping the other preferences); the player and `TranscriptPanel` are wrapped in a `data-slot="hls-video-layout"` grid, one column by default and two from `lg` while the panel is open, with the panel as tall as the player from `lg` and `max-h-[min(20rem,50vh)]` below it; the panel is a sibling of `VideoControls`, outside its keyboard container; it isn't rendered in fullscreen;
@@ -82,8 +82,8 @@ Paths are relative to the repository root. Only the last PR closes #590. Earlier
   - `status` is `'failed'` when no track loaded and `useCaptionFiles` reports a notice; otherwise the panel shows the track `VideoControls` reports.
 
   Add cases to `hls-video.test.tsx` (the file already fakes `fetch` for caption files): no button and no layout wrapper without `transcript`; opening lists the fetched file's cues; a saved `transcriptOpen: true` opens it on mount; `timeupdate` moves `aria-current`; clicking a line sets `currentTime` and calls `play`; choosing another track in the captions menu changes the lines and the region's label; with captions off the default track's lines show; a file with `<v Ana>` and `&amp;` shows plain text; when every caption fetch fails, the button shows and the panel says "This transcript couldn't be loaded."
-- [ ] T007 [US1] Pass `transcript` to `HlsVideo` in `VideoPlayer` in `packages/websites/student-portal/src/routes/learn/$courseId/-components/content-item.tsx`. Don't pass it in `course-preview.tsx` or in the instructor portal. Add a component test beside the existing content-item tests: a ready video whose `contentItem.videoUrl` handler returns one caption shows a "Transcript" button, and a video with no captions shows none.
-- [ ] T008 [US1] Add `openTranscript(video)` and `transcriptLines(page)` to `packages/e2e/src/helpers/student-portal.ts` (find the button by role and name "Transcript", the region by name starting "Transcript", and lines by role `button` inside it). Add `packages/e2e/src/scenarios/transcript.e2e.ts` with the test "a learner reads a video's transcript and jumps to a line":
+- [x] T007 [US1] Pass `transcript` to `HlsVideo` in `VideoPlayer` in `packages/websites/student-portal/src/routes/learn/$courseId/-components/content-item.tsx`. Don't pass it in `course-preview.tsx` or in the instructor portal. Add a component test beside the existing content-item tests: a ready video whose `contentItem.videoUrl` handler returns one caption shows a "Transcript" button, and a video with no captions shows none.
+- [x] T008 [US1] Add `openTranscript(video)` and `transcriptLines(page)` to `packages/e2e/src/helpers/student-portal.ts` (find the button by role and name "Transcript", the region by name starting "Transcript", and lines by role `button` inside it). Add `packages/e2e/src/scenarios/transcript.e2e.ts` with the test "a learner reads a video's transcript and jumps to a line":
   - make a course with a captioned video with `createCaptionedVideoViaApi`, upload an English track built with `webVttOf` (three cues with a uniquely named phrase, the third starting at 9 s) through the instructor API, publish, and enrol a new student;
   - open the lesson, open the transcript, expect the three lines, and take `screenshot(page, 'transcript-panel-open')`;
   - choose the third line and expect the video's `currentTime` to be at least 9;

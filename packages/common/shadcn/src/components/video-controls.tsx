@@ -13,6 +13,7 @@ import {
   savePreferences,
   stepSpeed,
 } from '@discava/common-web-utils/video-player';
+import type { TranscriptCue } from '@discava/common-web-utils/webvtt';
 import { cn } from 'cn';
 import {
   MaximizeIcon,
@@ -55,6 +56,8 @@ export interface LoadedCaption {
   isDefault: boolean;
   // A blob URL of the file.
   src: string;
+  // The file's lines, for the transcript.
+  cues: TranscriptCue[];
 }
 
 const clamp = (value: number, min: number, max: number) =>
@@ -82,12 +85,22 @@ export function VideoControls({
   className,
   captions = [],
   captionNotice,
+  transcript,
 }: {
   // The `<video>` element to control.
   children: React.ReactNode;
   className?: string;
   captions?: LoadedCaption[];
   captionNotice?: string;
+  // Adds a "Transcript" button beside the captions menu. `onTrackChange`
+  // reports the track the transcript shows (the one a toggle would bring
+  // back), whether captions are on or off.
+  transcript?: {
+    open: boolean;
+    panelId: string;
+    onToggle: () => void;
+    onTrackChange: (track: LoadedCaption | undefined) => void;
+  };
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [paused, setPaused] = React.useState(true);
@@ -199,6 +212,19 @@ export function VideoControls({
   const captionsOn = captionChoice?.on ?? rememberedCaptions.on;
   const shownTrack = captionsOn ? lastTrack : undefined;
   const shownTrackId = shownTrack?.trackId;
+
+  const onTrackChange = transcript?.onTrackChange;
+  const onTrackChangeRef = React.useRef(onTrackChange);
+  onTrackChangeRef.current = onTrackChange;
+  const transcriptTrack = onTrackChange ? lastTrack : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new track object for the same track isn't a change
+  React.useEffect(() => {
+    onTrackChangeRef.current?.(transcriptTrack);
+  }, [
+    transcriptTrack?.trackId,
+    transcriptTrack?.src,
+    transcriptTrack === undefined,
+  ]);
 
   // Show the chosen track and hide the others, whenever either changes
   // (tracks arrive one by one as they load).
@@ -504,6 +530,19 @@ export function VideoControls({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+            {transcript && (captions.length > 0 || captionNotice) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-expanded={transcript.open}
+                aria-controls={transcript.panelId}
+                onClick={transcript.onToggle}
+                className="hover:bg-white/20 hover:text-white"
+              >
+                Transcript
+              </Button>
             )}
             {pipAvailable && (
               <Button

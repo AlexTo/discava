@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { PORTALS } from './portals.js';
 import { signIn, type User } from './users.js';
 
@@ -141,3 +141,15 @@ export const expectAfterReloads = async (
 // lists them).
 export const lessonSteps = (page: Page) =>
   page.getByRole('navigation', { name: 'Lesson steps' }).getByRole('link');
+
+// Opens the transcript panel of the video item `video` and returns it.
+export const openTranscript = async (page: Page, video: string) => {
+  const item = lessonItem(page, video);
+  await item.getByRole('button', { name: 'Transcript' }).click();
+  const panel = item.getByRole('region', { name: /^Transcript/ });
+  await expect(panel).toBeVisible();
+  return panel;
+};
+
+// The lines of an open transcript panel.
+export const transcriptLines = (panel: Locator) => panel.getByRole('button');

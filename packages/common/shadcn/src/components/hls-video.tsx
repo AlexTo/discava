@@ -4,10 +4,19 @@
  */
 import {
   createPositionReporter,
+  loadPreferences,
   type PlayerPosition,
+  savePreferences,
 } from '@discava/common-web-utils/video-player';
+import {
+  activeCueIndex,
+  parseWebVtt,
+  type TranscriptCue,
+} from '@discava/common-web-utils/webvtt';
+import { cn } from 'cn';
 import Hls from 'hls.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { TranscriptPanel } from './transcript-panel';
 import { Button } from './ui/button';
 import {
   formatTime,
@@ -78,7 +87,9 @@ function useCaptionFiles(
   captions: PlayerCaption[] | undefined,
   withCredentials: boolean,
 ) {
-  const [files, setFiles] = useState<Record<string, string | null>>({});
+  const [files, setFiles] = useState<
+    Record<string, { src: string; cues: TranscriptCue[] } | null>
+  >({});
   const signature = (captions ?? []).map((c) => `${c.trackId}@${c.url}`).join();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `signature` stands for `captions`, which a refetch replaces with equal tracks
@@ -110,7 +121,11 @@ function useCaptionFiles(
             return;
           }
           blobUrls.push(src);
-          setFiles((current) => ({ ...current, [caption.trackId]: src }));
+          const cues = parseWebVtt(text);
+          setFiles((current) => ({
+            ...current,
+            [caption.trackId]: { src, cues },
+          }));
         })
         .catch(() => {
           if (!cancelled) {
@@ -129,10 +144,10 @@ function useCaptionFiles(
   const loaded: LoadedCaption[] = [];
   const failed: string[] = [];
   for (const caption of captions ?? []) {
-    const src = files[caption.trackId];
-    if (src) {
-      loaded.push({ ...caption, src });
-    } else if (src === null) {
+    const file = files[caption.trackId];
+    if (file) {
+      loaded.push({ ...caption, ...file });
+    } else if (file === null) {
       failed.push(caption.label);
     }
   }
@@ -167,6 +182,12 @@ function useCaptionFiles(
  * control. The browser shows the cue text as plain text, a few lines up so
  * the control bar doesn't cover it.
  *
+ * With `transcript`, the control bar has a "Transcript" button that opens a
+ * panel of the chosen caption track's lines (see `TranscriptPanel`): beside
+ * the video on a wide screen, below it on a phone. The current line follows
+ * playback, and choosing a line seeks there and plays. Open or closed is
+ * remembered with the player preferences.
+ *
  * With `resumeAt` above 0 the video seeks there once it loads, stays paused,
  * and says "Resumed at m:ss" with a "Start over" button until it plays or
  * 8 seconds pass. With `onPositionChange` the player reports where the viewer
@@ -182,6 +203,7 @@ export function HlsVideo({
   captions,
   resumeAt = 0,
   autoPlay = false,
+  transcript = false,
   onPositionChange,
 }: {
   url: string;
@@ -197,11 +219,20 @@ export function HlsVideo({
   // Starts playing as soon as it can, for a video the viewer just asked to
   // play (the browser allows it after their click).
   autoPlay?: boolean;
+  // Offers the transcript panel (needs `captions`).
+  transcript?: boolean;
   onPositionChange?: (position: PlayerPosition) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [resumedAt, setResumedAt] = useState<number>();
   const captionFiles = useCaptionFiles(captions, withCredentials);
+  const panelId = useId();
+  const [transcriptOpen, setTranscriptOpen] = useState(
+    () => transcript && loadPreferences().transcriptOpen,
+  );
+  const [transcriptTrack, setTranscriptTrack] = useState<LoadedCaption>();
+  const [currentTime, setCurrentTime] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
   // The latest callback, so a new one each render doesn't restart playback
   // or the reporter.
   const onPositionChangeRef = useRef(onPositionChange);
@@ -307,6 +338,24 @@ export function HlsVideo({
   }, [url]);
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (!transcript || !video) {
+      return;
+    }
+    const update = () => setCurrentTime(video.currentTime);
+    const onFullscreenChange = () =>
+      setFullscreen(document.fullscreenElement !== null);
+    video.addEventListener('timeupdate', update);
+    video.addEventListener('seeked', update);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      video.removeEventListener('timeupdate', update);
+      video.removeEventListener('seeked', update);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+    };
+  }, [transcript]);
+
+  useEffect(() => {
     if (resumedAt === undefined) {
       return;
     }
@@ -322,11 +371,38 @@ export function HlsVideo({
     setResumedAt(undefined);
   };
 
-  return (
+  const toggleTranscript = () => {
+    const next = !transcriptOpen;
+    setTranscriptOpen(next);
+    savePreferences({ ...loadPreferences(), transcriptOpen: next });
+  };
+
+  const chooseCue = (cue: TranscriptCue) => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+    video.currentTime = cue.start;
+    setCurrentTime(cue.start);
+    // Rejects when the browser blocks or interrupts playback.
+    video.play()?.catch(() => {});
+  };
+
+  const player = (
     <VideoControls
       className={className}
       captions={captionFiles.loaded}
       captionNotice={captionFiles.notice}
+      transcript={
+        transcript
+          ? {
+              open: transcriptOpen,
+              panelId,
+              onToggle: toggleTranscript,
+              onTrackChange: setTranscriptTrack,
+            }
+          : undefined
+      }
     >
       <video
         ref={videoRef}
@@ -359,5 +435,34 @@ export function HlsVideo({
         </div>
       )}
     </VideoControls>
+  );
+
+  if (!transcript) {
+    return player;
+  }
+
+  const hasTranscript = captionFiles.loaded.length > 0 || captionFiles.notice;
+  const showPanel = transcriptOpen && hasTranscript && !fullscreen;
+  return (
+    <div
+      data-slot="hls-video-layout"
+      className={cn(
+        'grid grid-cols-1 gap-3',
+        showPanel && 'lg:grid-cols-[minmax(0,1fr)_20rem]',
+      )}
+    >
+      {player}
+      {showPanel && (
+        <TranscriptPanel
+          id={panelId}
+          cues={transcriptTrack?.cues ?? []}
+          activeIndex={activeCueIndex(transcriptTrack?.cues ?? [], currentTime)}
+          languageLabel={transcriptTrack?.label ?? ''}
+          status={!transcriptTrack && captionFiles.notice ? 'failed' : 'ready'}
+          onChoose={chooseCue}
+          className="max-h-[min(20rem,50vh)] lg:h-0 lg:max-h-none lg:min-h-full"
+        />
+      )}
+    </div>
   );
 }

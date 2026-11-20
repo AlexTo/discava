@@ -576,4 +576,167 @@ describe('HlsVideo captions', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(revoked).toEqual([]);
   });
+
+  describe('transcript', () => {
+    beforeEach(() => localStorage.clear());
+    afterEach(() => localStorage.clear());
+
+    const VTT = `WEBVTT
+
+00:01.000 --> 00:04.000
+First line
+
+00:05.000 --> 00:08.000
+<v Ana>Fish &amp; chips
+
+00:09.000 --> 00:12.000
+Third line
+`;
+    const respondWith = (text: string) =>
+      fetchMock.mockImplementation(async () => ({
+        ok: true,
+        status: 200,
+        text: async () => text,
+      }));
+    const open = async (utils: ReturnType<typeof render>) => {
+      await userEvent.click(
+        await utils.findByRole('button', { name: 'Transcript' }),
+      );
+    };
+
+    it('has no button and no layout wrapper without transcript', async () => {
+      const { container, findByRole, queryByRole } = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} />,
+      );
+      await findByRole('button', { name: /^Captions/ });
+      expect(queryByRole('button', { name: 'Transcript' })).toBeNull();
+      expect(
+        container.querySelector('[data-slot="hls-video-layout"]'),
+      ).toBeNull();
+    });
+
+    it('lists the fetched file’s cues when opened, and saves that', async () => {
+      respondWith(VTT);
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await utils.findByRole('button', { name: /^Captions/ });
+      await open(utils);
+      const panel = await utils.findByRole('region', {
+        name: 'Transcript (English)',
+      });
+      await waitFor(() => expect(panel.querySelectorAll('li')).toHaveLength(3));
+      expect(
+        JSON.parse(localStorage.getItem('discava-video-preferences') as string)
+          .transcriptOpen,
+      ).toBe(true);
+      expect(
+        utils.container.querySelector('[data-slot="hls-video-layout"]'),
+      ).not.toBeNull();
+    });
+
+    it('opens on mount when saved open', async () => {
+      respondWith(VTT);
+      localStorage.setItem(
+        'discava-video-preferences',
+        JSON.stringify({ transcriptOpen: true }),
+      );
+      const { findByRole } = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      expect(
+        await findByRole('region', { name: /^Transcript/ }),
+      ).toBeInTheDocument();
+    });
+
+    it('moves aria-current on timeupdate', async () => {
+      respondWith(VTT);
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      await utils.findByText('Third line');
+      const current = () =>
+        utils.container.querySelector('[aria-current="true"]');
+      expect(current()).toBeNull();
+      act(() => {
+        media.currentTime = 6;
+        video(utils.container).dispatchEvent(new Event('timeupdate'));
+      });
+      expect(current()).toHaveTextContent('Fish & chips');
+    });
+
+    it('seeks and plays when a line is chosen', async () => {
+      respondWith(VTT);
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      await userEvent.click(await utils.findByText('Third line'));
+      expect(media.currentTime).toBe(9);
+      expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    });
+
+    it('ignores a rejected play', async () => {
+      respondWith(VTT);
+      HTMLMediaElement.prototype.play = vi.fn(() =>
+        Promise.reject(new Error('blocked')),
+      );
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      await userEvent.click(await utils.findByText('Third line'));
+      expect(media.currentTime).toBe(9);
+    });
+
+    it('follows the chosen caption track, and shows the default with captions off', async () => {
+      fetchMock.mockImplementation(async (url: string) => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          `WEBVTT\n\n00:01.000 --> 00:02.000\n${url.endsWith('a.vtt') ? 'Hola' : 'Hello'}`,
+      }));
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      expect(await utils.findByText('Hello')).toBeInTheDocument();
+      await userEvent.click(
+        await utils.findByRole('button', { name: /^Captions/ }),
+      );
+      await userEvent.click(
+        await utils.findByRole('menuitemradio', { name: 'Spanish' }),
+      );
+      expect(await utils.findByText('Hola')).toBeInTheDocument();
+      expect(
+        utils.getByRole('region', { name: 'Transcript (Spanish)' }),
+      ).toBeInTheDocument();
+      await userEvent.click(utils.getByRole('button', { name: /^Captions/ }));
+      await userEvent.click(
+        await utils.findByRole('menuitemradio', { name: 'Off' }),
+      );
+      expect(utils.getByText('Hola')).toBeInTheDocument();
+    });
+
+    it('shows cue text as plain text', async () => {
+      respondWith(VTT);
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      expect(await utils.findByText('Fish & chips')).toBeInTheDocument();
+    });
+
+    it('says the transcript couldn’t be loaded when every fetch fails', async () => {
+      fetchMock.mockRejectedValue(new Error('network'));
+      const utils = render(
+        <HlsVideo url={URL} withCredentials captions={CAPTIONS} transcript />,
+      );
+      await open(utils);
+      expect(
+        await utils.findByText("This transcript couldn't be loaded."),
+      ).toBeInTheDocument();
+    });
+  });
 });
