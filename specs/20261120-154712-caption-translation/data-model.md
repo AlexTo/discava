@@ -68,7 +68,7 @@ A translated track's other fields: `language` is a caption tag, `label` is that 
 | `no-room` | no free place is left for it under the 10-track limit, taking languages in the course's order |
 | `pending` | otherwise: it is in `translate` |
 
-`remove` holds every translated track whose language isn't a course language any more, or whose state is `not-translated` or `no-room`.
+`remove` holds every translated track whose language isn't a course language any more, or whose state is `no-room` or `not-translated` for `language-mismatch`. When the stage has translation off (`disabled`), `remove` and `translate` are both empty: existing translated tracks stay (FR-029).
 
 ## Reported status (instructor-api)
 

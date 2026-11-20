@@ -62,7 +62,9 @@ Component tests with `renderWithInstructorApi`: loads and ticks saved languages;
 - While any row is `translating`, the dialog refetches its query every 5 seconds, and stops when none is.
 - The dialog's intro line becomes: "A video can have up to 10 tracks, one per language, including auto-translated ones."
 
-Component tests: each badge; no Remove on a translated track; each row text; the retry button; polling starts and stops.
+The course's preview area (`-components/course/preview-video-area.tsx`) shows the same "Translations" list, read-only, under the preview player. A preview is retried with the card's course-wide button.
+
+Component tests: each badge; no Remove on a translated track; each row text; the retry button; polling starts and stops; the preview area's list.
 
 ## End-to-end (`packages/e2e`)
 

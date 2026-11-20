@@ -22,7 +22,7 @@ Resolved without asking, using the recommended defaults below (non-interactive r
 - Q: When an instructor changes a course's caption languages, what happens to videos that are already there? → A: They follow the change. An added language is translated for every video that has captions; a removed language's translated tracks are removed, and uploaded tracks in that language stay (FR-019). The issue's wording covers new and re-transcoded videos; leaving existing videos out would make the menu differ from video to video in one course.
 - Q: Can an instructor remove one translated track from one video? → A: No. The course's caption languages decide which translated tracks exist, so a removed one would only be made again. To override a translation they upload their own file for that language; to drop a language they untick it on the course (FR-016).
 - Q: What happens at the 10-track limit? → A: A course has at most nine caption languages (one source track plus nine). On a video where uploaded tracks in other languages leave less room, translated tracks fill the free places in the course's language order and the rest are reported as "no room". An upload never fails because translated tracks hold the places: one translated track makes room (FR-002, FR-014).
-- Q: What limits what translation can cost? → A: Three things. The same source is never translated into the same language twice (FR-031); a stage can turn translation off or lower the number of languages per course (FR-029); and captions longer than 300,000 characters are not translated (FR-030). There is no per-instructor or per-course spending quota in this version.
+- Q: What limits what translation can cost? → A: Three things. A language that already has a track made from the current source is not translated again (FR-031); a stage can turn translation off or lower the number of languages per course (FR-029); and captions longer than 300,000 characters are not translated (FR-030). There is no per-instructor or per-course spending quota in this version.
 
 Further defaults taken in the requirements, for the owner to confirm:
 
@@ -162,6 +162,7 @@ Machine translation is paid for by the amount of text translated, and the platfo
 ### Edge Cases
 
 - **No room under the 10-track limit**: a video with uploaded tracks in languages the course didn't choose can have fewer than nine free places. Translated tracks fill the free places in the order the course lists its languages. A language left out is shown to the instructor as "No room (10 tracks at most)".
+- **Between a corrected source and its new translations**: when the source track is replaced, its translated tracks are taken away at once and come back as each is made again. For that short time a student who had a translated language on sees the default track.
 - **Source track changes while a translation is running**: a translation of a source track that has since been replaced is discarded, never shown.
 - **Video replaced while a translation is running**: the result is for the old version and is discarded; the new version is translated from its own captions.
 - **Video, lesson or course deleted while a translation is running**: the result is discarded and no file is left behind.
@@ -222,7 +223,7 @@ Machine translation is paid for by the amount of text translated, and the platfo
 
 - **FR-023**: A translation that fails, is slow or never finishes MUST NOT affect whether a video is ready or playable, its source track, or its other tracks.
 - **FR-024**: A failure for one language MUST NOT stop the other languages of the same video, or other videos, from being translated.
-- **FR-025**: The instructor MUST see, per video and per caption language, one of: translated, uploaded by you, translating, failed, no room, or not translated with the reason (no captions yet, captions too long, captions not in the course's language).
+- **FR-025**: The instructor MUST see, per video and per caption language, one of: translated, uploaded by you, translating, failed, captions too long, no room, or not translated with the reason (no captions yet, captions not in the course's language, translation not available on this site).
 - **FR-026**: The instructor MUST be able to ask for a video's missing translations to be tried again.
 - **FR-027**: Automatic captions MUST NOT be translated when the course states a teaching language and the automatic captions are in a different one. Captions the instructor uploaded are always trusted.
 
@@ -231,13 +232,13 @@ Machine translation is paid for by the amount of text translated, and the platfo
 - **FR-028**: Each stage MUST record how much text it sent for translation, how many translated tracks it made and how many translations failed, per target language, so that an operator can read them per day for that stage alone.
 - **FR-029**: Each stage MUST be able to turn caption translation off and to set a lower limit on caption languages per course. With translation off, nothing is translated, the language choice is shown as unavailable, and existing translated tracks stay.
 - **FR-030**: A source track MUST NOT be translated when its text is longer than a fixed size limit (300,000 characters, several times a long lecture). It is reported as "captions too long".
-- **FR-031**: The same source track MUST NOT be translated into the same language twice unless the instructor asks for it again or an earlier attempt failed.
+- **FR-031**: Once a translated track made from the current source track exists for a language, that language MUST NOT be translated again for that video. (Two translation runs for the same video that overlap in time may each translate a language once; only one result is kept.)
 - **FR-032**: The translation step MUST have only the access it needs: to translate text, to read and write caption files of lesson and preview videos, and to read and update the records that hold their tracks. It MUST NOT be able to read videos, uploads or students' data.
 
 **Local development and consistency**
 
 - **FR-033**: The whole flow MUST work in local development with no cloud account, using a stand-in for the translation step that produces a recognisable placeholder translation for each language, keeps every caption's timing, and can be made to fail on purpose so the failure path can be tested.
-- **FR-034**: The rules several writers keep (a translated track never coexists with an uploaded one in its language, is never the default, always names the source track it came from, and only exists for a language the course chose) MUST be enforced where the track list is computed, and checked by the data-consistency checks that run after every end-to-end test.
+- **FR-034**: The rules several writers keep (a translated track never coexists with an uploaded one in its language, is never the default, and is always made from the video's current source track) MUST be enforced where the track list is computed, and checked by the data-consistency checks that run after every end-to-end test. That translated tracks match the course's caption languages is brought about shortly after a change, not in the same step, so it is covered by the translation step's own tests.
 
 ### Key Entities
 
