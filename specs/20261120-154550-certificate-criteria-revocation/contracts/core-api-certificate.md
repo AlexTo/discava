@@ -54,7 +54,7 @@ Revoked certificates stay in the list, so My Learning can say what happened. Eve
 
 Input: `{ courseId: string }`
 
-Refused with `FORBIDDEN` unless the caller has an enrolment in the course that is not `dropped` (as the other enrolled-only procedures refuse).
+Refused unless the caller has an enrolment in the course that is not `dropped`, with the same error core-api's `requireEnrolment` gives the other enrolled-only procedures.
 
 Output:
 

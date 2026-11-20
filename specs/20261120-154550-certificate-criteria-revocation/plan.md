@@ -158,7 +158,7 @@ docs/src/content/docs/en/design/{certificates.mdx,progress-and-completion.mdx}
 | 1 | Criteria and assessment in the data layer; certificates issued with a statement under default criteria (no visible change) | hand backfill of dev data (T007) |
 | 2 | The quiz criterion: enforced, set by the instructor, with the stream cases (MVP) | 1 |
 | 3 | The learner's "what is still needed" panel | 2 |
-| 4 | The statement on the verification page and the PDF | 1 |
+| 4 | The statement on the verification page and the PDF | 2 (its e2e steps extend Phase 2's scenario) |
 | 5 | Revocation and restore: data, helpers, invariants, the three APIs, notifications | 1 |
 | 6 | Revocation in the three portals, e2e and concurrency tests | 5, 3, 4 |
 | 7 | Design pages and the reviewer's manual checks | 6 |
