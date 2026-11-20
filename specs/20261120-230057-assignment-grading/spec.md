@@ -130,7 +130,7 @@ The instructor home page shows the work waiting for grading across every course 
 - A student leaves the course while their submission is waiting: it leaves the waiting work and the grading queue at the same time as the enrolment ends.
 - The due date passes for a student who never submitted: they are listed as not submitted; there is no automatic zero.
 - The feedback contains formatting, mathematics or links: it is shown to the student exactly as the instructor wrote it, using the same rich-text rules as the rest of the course content.
-- Feedback is very long: it is limited to a reasonable size, and longer feedback is refused with a clear message, not cut off.
+- Feedback is very long: it is limited to 20 000 characters of stored rich text per round, and longer feedback is refused with a clear message, not cut off.
 - An assignment with many students: the list loads in pages and stays in the same order across pages.
 - A notification can't be delivered (for example the student's email bounces): the return still succeeds; delivery follows the notification pipeline's own rules.
 - A quiz assignment: graded automatically as today and not part of this feature; its submissions page doesn't exist.
@@ -142,13 +142,13 @@ The instructor home page shows the work waiting for grading across every course 
 **Listing and reading (instructors)**
 
 - **FR-001**: An instructor of a course MUST be able to list, for one upload assignment, every student enrolled in the course with their state: not submitted, waiting for grading, resubmission requested or returned, and for those with a submission, whether it is late, when it was last submitted and its version. Students no longer enrolled who have a submission MUST also be listed, marked as no longer enrolled, and are read-only: their submission can be read and downloaded but not returned, sent back or amended, and it MUST NOT count as waiting (in the list's ordering, the waiting count or the grading queue) while they are not enrolled.
-- **FR-002**: The list MUST order waiting submissions first by time waited (longest first), then resubmission requested, then returned, then not submitted, and MUST show each waiting submission's time waited since its last submission. It MUST load in pages with a stable order.
+- **FR-002**: The list MUST order waiting submissions first by time waited (longest first), then resubmission requested, then returned, then not submitted, then students no longer enrolled, and MUST show each waiting submission's time waited since its last submission. It MUST load in pages with a stable order.
 - **FR-003**: An instructor of the course MUST be able to open one student's submission and see the file's name, size and type, submitted time, late flag, version, state, the current grade and feedback if returned, and the history of earlier feedback; and MUST be able to download the file through a short-lived link. When the file is a PDF or an image (png, jpg, jpeg, gif, webp), it MUST also be shown in the page beside the grading form, through a short-lived link that displays it rather than downloading it; no other type is ever displayed in the page.
 - **FR-004**: Only instructors of the course MUST be able to list, read, download, return, send back or amend its submissions. Students MUST still be able to read only their own submission and feedback.
 
 **Returning (instructors)**
 
-- **FR-005**: An instructor MUST be able to return a submission that is waiting for grading or has a resubmission requested as **final**, with points (a number from 0 to the assignment's maximum, inclusive) and feedback (rich text, optional). Returning records the points, the maximum they are out of, the feedback, who returned it and when.
+- **FR-005**: An instructor MUST be able to return a submission that is waiting for grading or has a resubmission requested as **final**, with points (a number from 0 to the assignment's maximum, inclusive, with at most two decimal places) and feedback (rich text, optional). Returning records the points, the maximum they are out of, the feedback, who returned it and when.
 - **FR-006**: A submission returned as final MUST be locked against resubmission (the existing rule).
 - **FR-007**: An instructor MUST be able to **request a resubmission** of a submission that is waiting for grading, with feedback (required, non-empty) and no points. This puts it in a new state, resubmission requested, which lets the student submit again.
 - **FR-008**: A return or a resubmission request MUST apply only to the version the instructor viewed; if the student has submitted a newer version, or the submission has otherwise changed since, it MUST be refused and the current state shown.
@@ -178,7 +178,7 @@ The instructor home page shows the work waiting for grading across every course 
 
 **Consistency and platform**
 
-- **FR-023**: The rules that span records or writers (a returned submission carries points within the maximum it was graded against and a returner; a resubmission request carries feedback; the waiting-work lookup agrees with each submission's state and the student's enrolment) MUST be written through shared helpers and covered by data-consistency checks, each with a test that breaks it.
+- **FR-023**: The rules that span records or writers (a returned submission carries points within the maximum it was graded against and a returner; a resubmission request carries feedback; the stored waiting-work lookup agrees with each submission's state; students no longer enrolled are left out when the list, counts and queue are read, not by changing the stored lookup) MUST be written through shared helpers and covered by data-consistency checks, each with a test that breaks it.
 - **FR-024**: The feature MUST work end to end in local development without an AWS account, including notifications and file downloads.
 - **FR-025**: The main flow (student submits, instructor returns with feedback, student sees it) MUST be covered by an end-to-end scenario.
 
@@ -215,6 +215,7 @@ The instructor home page shows the work waiting for grading across every course 
 - Feedback with a resubmission request has no points; points are given only on a final return.
 - There is no limit on how many times a submission is sent back for resubmission.
 - Previewing other document types (for example Office files) inside the page is left for later; it would need a conversion service.
+- A PDF's preview may leave out embedded images in rare formats (JPEG 2000, JBIG2) that the portals' security settings don't let the in-page viewer decode; the rest of the page still shows, and the file can always be downloaded.
 - Returning doesn't affect completion or progress (decision 2 of #102: an upload assignment completes on submit).
 - The grading queue (Story 5) ships in its own pull request after Stories 1 to 4.
 - Issue #102 closes when this feature's last pull request merges; earlier pull requests must not use a closing keyword for it.

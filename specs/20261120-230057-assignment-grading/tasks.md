@@ -77,7 +77,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - `amendGradeWrites`: `where status = 'returned' AND reviewRevision = r`; it sets `points`, `pointsOutOf` and `gradedAt` and leaves `returnedAt`/`returnedBy`; a round of kind `amended`; `assignment.grade_updated`.
   - `submissionsReceivedNotificationWrites(service, { courseId, contentItemId, day, instructorIds, … })`: a `submissionNotice` create with `attribute_not_exists` and `ttl` two days after `day`, plus one `assignment.submissions_received` per de-duplicated instructor (dedupe key `${contentItemId}:${day}`), capped at `MAX_SUBMISSION_NOTICE_INSTRUCTORS = floor((100 - 8) / 2)`. Follow `reviewNotifications` in `helpers/review.ts:162-206`.
 
-  `assignment-grading.test.ts` checks each function's items, conditions, and the exact transaction size of 4 for the three instructor writes (data-model, Transaction contents).
+  `assignment-grading.test.ts` checks each function's items, conditions, and the exact transaction size of 4 for the three instructor writes (data-model, Transaction contents). It also asserts that none of the three writes touches `itemCompletion` or the content item's `studentActivityCount` (spec FR-013).
 - [ ] T005 Tests first, then change `assignmentSubmissionWrites` in `packages/databases/core-table/src/helpers/assignment-submission.ts`:
   - the resubmit `where` becomes `version = existing.version AND status IN ('submitted', 'resubmission_requested')`;
   - the patch sets `status: 'submitted'` and `waitingKeys(...)`;
@@ -85,7 +85,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
   In `assignment-submission.test.ts`, change the expected resubmit condition (an intended behavior change; say so in the PR) and add cases:
   - a resubmit from `resubmission_requested` returns to `submitted` with fresh waiting keys;
-  - a resubmit of a `returned` submission is still refused by the condition.
+  - a resubmit of a `returned` submission is still refused by the condition;
+  - a resubmit from `resubmission_requested` doesn't add to `studentActivityCount` and leaves the existing completion as it is (spec FR-013, data-model impact check).
 - [ ] T006 Tests first, then add `packages/databases/core-table/src/helpers/invariants/assignment-grading.ts` with the five checks in [data-model.md](./data-model.md) (Invariants): `submission-grade-shape`, `submission-waiting-keys`, `submission-feedback-has-submission`, `submission-feedback-shape` and `submission-latest-round-matches`.
   - Register them in `helpers/invariants/index.ts`.
   - Add the new attributes and `submissionFeedback` to `helpers/invariants/snapshot.ts`.
@@ -172,6 +173,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - stale `version`;
   - stale `reviewRevision`;
   - two returns from one revision (one `CONFLICT`);
+  - replaying a return that already committed (same `version` and `reviewRevision`) gets `CONFLICT` and writes no second notification (spec US2 scenario 4);
   - an amend keeps `returnedAt`.
 - [ ] T015 [US3] Tests first, then add `requestAssignmentResubmission` (`assignmentSubmission.requestResubmission`) to the procedures file with the same reads, enrolment and conflict handling as T014. It is allowed only from `submitted` and uses `requestResubmissionWrites`. Cases:
   - success;
@@ -253,9 +255,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   5. Return 17 / 20. The student sees the grade and feedback and no form, and has an "assignment returned" notification and email (`emailsFor`).
   6. Edit the grade to 18. The student has a "grade updated" notification.
   7. 25 points are refused.
-  8. A student whose enrolment is dropped (set through the existing refund helper, or skip if none exists in e2e helpers) shows read-only.
 
-  Call `screenshot()` after the list, the PDF preview, the request, the student's resubmission view, the return form, the student's returned view and the read-only state.
+  Call `screenshot()` after the list, the PDF preview, the request, the student's resubmission view, the return form, and the student's returned view. (The read-only state of a student who left the course is covered by T014 and T021: e2e has no helper to make a student leave.)
 - [ ] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
   - two instructors return the same submission at the same moment: exactly one succeeds and the other gets `CONFLICT`;
   - an instructor's return races the student's resubmit: exactly one commits, and if the resubmit won, the submission is waiting at the new version with no grade.

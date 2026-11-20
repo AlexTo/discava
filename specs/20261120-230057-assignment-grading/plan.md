@@ -87,14 +87,18 @@ Neither breaks a principle. Complexity Tracking is empty.
 
 ## Delivery
 
-Four pull requests, in order. None of them closes #102 except the last.
+Eight pull requests, one per phase of [tasks.md](./tasks.md), in order. None of them closes #102 except the last.
 
-| PR | Contents | Stories |
+| PR (phase) | Contents | Stories |
 |---|---|---|
-| 1. Foundation | Entity changes and the two new entities, `assignment-grading.ts` helpers, invariants, notification types, core-api submit, resubmit and `mySubmission` changes, `entity-writers.json` | — |
-| 2. Grading APIs and student view | instructor-api `assignmentSubmission.*`, student portal grade, feedback and resubmission states | 1, 2, 3 (API and student side) |
-| 3. Instructor screens | Submissions list, review page with preview, browser draft, course-editor link, daily notice wiring, e2e and concurrency | 1, 3, 4 |
-| 4. Grading queue | `gradingQueue.list`, home-page section | 5 |
+| 1. Grading data (core-table) | Entity changes and the two new entities, `assignment-grading.ts` helpers, invariants, notification types, `entity-writers.json` | — |
+| 2. Student side of the rules (core-api) | Resubmit from `resubmission_requested`, `mySubmission` returns the grade and feedback | — |
+| 3. Grading APIs (instructor-api) | `assignmentSubmission.*`, `fileUrl` in `MediaUrl` | 1, 3 |
+| 4. Student view (student portal) | Grade, feedback and resubmission states | 2, 3 |
+| 5. Instructor screens (instructor portal) | Submissions list, review page with preview, browser draft, course-editor link, e2e and concurrency | 1, 3 |
+| 6. Daily notice (core-api) | `submit` sends "new submissions" at most once per assignment per day | 4 |
+| 7. Grading queue | `gradingQueue.list`, home-page section | 5 |
+| 8. Docs and manual checks | Design page, CLAUDE.md notes, (human) checks | — |
 
 ## Project Structure
 
@@ -139,7 +143,7 @@ packages/
 ├── apis/
 │   ├── instructor-api/src/
 │   │   ├── procedures/assignment-submission.ts    # list, get, fileUrl, return, requestResubmission, amendGrade (+ test)
-│   │   ├── procedures/grading-queue.ts            # list (+ test), PR 4
+│   │   ├── procedures/grading-queue.ts            # list (+ test), phase 7
 │   │   ├── schema/assignment-submission.ts
 │   │   └── router.ts
 │   └── core-api/src/
@@ -153,7 +157,7 @@ packages/
 │   │       ├── components/app-layout.tsx          # segmentLabels: assignments, submissions
 │   │       ├── lib/grading-draft.ts               # (+ test)
 │   │       └── routes/_authenticated/
-│   │           ├── index.tsx                      # Waiting for grading (PR 4)
+│   │           ├── index.tsx                      # Waiting for grading (phase 7)
 │   │           ├── my-courses_/$courseId/-components/course/course-modules.tsx  # Submissions link
 │   │           └── my-courses_/$courseId_/assignments/$contentItemId/submissions/
 │   │               ├── index.tsx                  # list (+ test)
@@ -164,7 +168,7 @@ packages/
 │       └── assignment-feedback.tsx                # new
 └── e2e/src/
     ├── scenarios/assignment-grading.e2e.ts        # new
-    ├── scenarios/instructor-home.e2e.ts           # extended in PR 4 (queue shown; forbidden strings still absent)
+    ├── scenarios/instructor-home.e2e.ts           # extended in phase 7 (queue shown; forbidden strings still absent)
     ├── concurrency/concurrent-writes.e2e.ts       # return vs return, return vs resubmit
     └── helpers/assignment.ts                      # grading helpers
 ```
