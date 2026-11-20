@@ -193,7 +193,8 @@ function useCaptionFiles(
  * 8 seconds pass. With `onPositionChange` the player reports where the viewer
  * is (every 10 seconds while playing, and on pause, seek end and leaving the
  * page) so it can be saved; without it, as in the instructor's preview,
- * nothing is reported.
+ * nothing is reported. With `onTimeChange` it also reports the current time
+ * on every time update and after a seek.
  */
 export function HlsVideo({
   url,
@@ -205,6 +206,7 @@ export function HlsVideo({
   autoPlay = false,
   transcript = false,
   onPositionChange,
+  onTimeChange,
 }: {
   url: string;
   // The API's `withCredentials` for this `url`.
@@ -222,6 +224,9 @@ export function HlsVideo({
   // Offers the transcript panel (needs `captions`).
   transcript?: boolean;
   onPositionChange?: (position: PlayerPosition) => void;
+  // Called with the video's current time in seconds on each time update and
+  // after a seek, so a caller can follow the playhead.
+  onTimeChange?: (seconds: number) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [resumedAt, setResumedAt] = useState<number>();
@@ -237,6 +242,8 @@ export function HlsVideo({
   // or the reporter.
   const onPositionChangeRef = useRef(onPositionChange);
   onPositionChangeRef.current = onPositionChange;
+  const onTimeChangeRef = useRef(onTimeChange);
+  onTimeChangeRef.current = onTimeChange;
   // Read when the video loads, not a reason to resume again: the saved
   // position the caller holds moves on while the viewer watches.
   const resumeAtRef = useRef(resumeAt);
@@ -285,10 +292,16 @@ export function HlsVideo({
       (position) => onPositionChangeRef.current?.(position),
       { initialPosition: resumeAt },
     );
+    const reportTime = () => onTimeChangeRef.current?.(video.currentTime);
     const tick = () => {
+      reportTime();
       if (!video.paused && onPositionChangeRef.current) {
         reporter.tick(video.currentTime, video.duration);
       }
+    };
+    const onSeeked = () => {
+      reportTime();
+      flush();
     };
     const flush = () => {
       if (onPositionChangeRef.current) {
@@ -322,7 +335,7 @@ export function HlsVideo({
     video.addEventListener('loadedmetadata', resume);
     video.addEventListener('timeupdate', tick);
     video.addEventListener('pause', flush);
-    video.addEventListener('seeked', flush);
+    video.addEventListener('seeked', onSeeked);
     video.addEventListener('play', dismissNotice);
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -330,7 +343,7 @@ export function HlsVideo({
       video.removeEventListener('loadedmetadata', resume);
       video.removeEventListener('timeupdate', tick);
       video.removeEventListener('pause', flush);
-      video.removeEventListener('seeked', flush);
+      video.removeEventListener('seeked', onSeeked);
       video.removeEventListener('play', dismissNotice);
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', onVisibilityChange);

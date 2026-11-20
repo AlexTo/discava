@@ -9,11 +9,14 @@ import { isCaptionLanguage } from '@discava/common-web-utils/caption-languages';
 import { reportedCaptionsStatus } from '@discava/core-table';
 import { z } from 'zod';
 import {
+  MAX_VIDEO_QUESTIONS,
   QuizAnswerKeySchema,
   QuizQuestionSchema,
   QuizSettingsSchema,
   quizDefinitionShape,
   refineQuizDefinition,
+  VideoQuestionInputSchema,
+  VideoQuestionSchema,
 } from './quiz.js';
 import { CurriculumVisibilitySchema } from './visibility.js';
 
@@ -80,6 +83,12 @@ export const VideoContentItemSchema = z.object({
   // their S3 keys, are never returned here; createVideoUrl lists them.
   captionsStatus: CaptionsStatusSchema.optional(),
   captionTrackCount: z.number().int().min(0).optional(),
+  // Questions asked while the video plays or when it ends, with their key
+  // and the version the editor saves against. Absent on a video that never
+  // had any.
+  questions: z.array(VideoQuestionSchema).optional(),
+  answerKey: QuizAnswerKeySchema.optional(),
+  quizVersion: z.number().optional(),
 });
 
 export const TextContentItemSchema = z.object({
@@ -302,6 +311,33 @@ export const UpdateContentItemQuizOutputSchema = QuizContentItemSchema;
 
 export type IUpdateContentItemQuizOutput = z.output<
   typeof UpdateContentItemQuizOutputSchema
+>;
+
+// A video's questions are saved as one document, like a quiz's.
+export const UpdateVideoQuestionsInputSchema = z
+  .object({
+    courseId: z.string(),
+    moduleId: z.string(),
+    lessonId: z.string(),
+    contentItemId: z.string(),
+    // The version the editor loaded; 0 for a video that has never had
+    // questions. The save is refused with CONFLICT if it has moved on.
+    quizVersion: z.number().int().min(0),
+    questions: z.array(VideoQuestionInputSchema).max(MAX_VIDEO_QUESTIONS),
+    answerKey: QuizAnswerKeySchema,
+  })
+  .superRefine(refineQuizDefinition);
+
+export type IUpdateVideoQuestionsInput = z.output<
+  typeof UpdateVideoQuestionsInputSchema
+>;
+
+export const UpdateVideoQuestionsOutputSchema = withCaptionSummary(
+  VideoContentItemSchema,
+);
+
+export type IUpdateVideoQuestionsOutput = z.output<
+  typeof UpdateVideoQuestionsOutputSchema
 >;
 
 export const CreateContentItemVideoUrlInputSchema = z.object({
