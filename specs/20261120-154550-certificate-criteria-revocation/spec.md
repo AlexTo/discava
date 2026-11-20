@@ -63,6 +63,7 @@ An instructor turns on "Require passing every quiz" for a course. A student who 
 7. **Given** a user who is not an instructor of the course, **When** they try to change the criteria, **Then** it is refused.
 8. **Given** a quiz whose pass mark is zero, or a quiz hidden from students, **Then** it never blocks a certificate.
 9. **Given** a student who has dropped the course (left it, or was refunded), **Then** no certificate is issued to them, whatever they had passed.
+10. **Given** a student who completed every item but failed a quiz, **When** the instructor sets that quiz's pass mark to zero, **Then** that student's certificate is issued within seconds, without any other action.
 
 ---
 
@@ -153,6 +154,7 @@ An instructor adds a second criterion: every graded upload must have been return
 - The instructor adds a new quiz after a student completed the course but before they qualified: the new quiz is part of what they must pass. A student who already holds a certificate is not affected.
 - The instructor hides or archives the only quiz a student had not passed: the student now qualifies and gets the certificate within seconds.
 - A course requires passing every quiz but has no assessed quiz: the criterion is met by everyone, and the certificate says no graded assessment was required.
+- A quiz's pass mark is set to 0 (practice) after a student completed the course without passing it: the quiz is no longer assessed, so the student now qualifies and gets the certificate within seconds (FR-006). Setting it from 0 to a positive value adds the quiz to what must be passed, as adding a quiz does.
 - A quiz's pass mark is raised after a student passed it: the pass stands, as it does today.
 - A student is out of attempts on a quiz they did not pass: the certificate is out of reach until the instructor allows more attempts; the course home says so. Resetting one student's attempts is not part of this feature.
 - A certificate issued before this feature has no statement: existing development data is fixed by hand before this ships (see Assumptions), so no page handles a missing statement.
@@ -175,7 +177,7 @@ An instructor adds a second criterion: every graded upload must have been return
 - **FR-003**: A certificate MUST be issued only when certificates are on for the course, the student's enrolment is completed and not ended, and the criteria in force at that moment are met. It MUST then be issued exactly once, however often or concurrently the student's progress is processed.
 - **FR-004**: The quiz criterion MUST be met when the student has passed every assessed quiz: each quiz they can see, in a lesson or as a quiz assignment, whose pass mark is above zero. A pass MUST keep counting if the quiz or its pass mark changes later.
 - **FR-005**: Completing every item MUST keep marking the course completed, permanently, whether or not the certificate's criteria are met. Nothing else that depends on completion (My Learning, progress, the refund period) changes.
-- **FR-006**: A certificate MUST be issued within seconds of the last thing that makes the student qualify, without the student doing anything further. That includes: completing the last item, passing a quiz after the course was already completed, a change to the curriculum, a change to the criteria, and turning certificates on.
+- **FR-006**: A certificate MUST be issued within seconds of the last thing that makes the student qualify, without the student doing anything further. That includes: completing the last item, passing a quiz after the course was already completed, a change to the curriculum (including a quiz's pass mark moving to or from 0), a change to the criteria, and turning certificates on.
 - **FR-007**: Changing the criteria MUST NOT remove, revoke or alter any issued certificate.
 - **FR-008**: Whether the criteria are met MUST be decided by one shared rule, used both when issuing and when showing a learner what is missing, so the two cannot disagree.
 

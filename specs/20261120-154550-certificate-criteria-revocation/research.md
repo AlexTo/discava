@@ -65,12 +65,13 @@ The band is `min(90, floor(mean(scorePercent) / 10) * 10)`, each assessed item w
 
 ## R-5: What makes a waiting certificate arrive
 
-Today the progress recalculation runs for a new `itemCompletion` and for a visibility change to a module, lesson or item (`PROGRESS_STREAM_FILTERS`). Three more events can now make a student qualify:
+Today the progress recalculation runs for a new `itemCompletion` and for a visibility change to a module, lesson or item (`PROGRESS_STREAM_FILTERS`). Four more events can now make a student qualify:
 
 | Event | Why the existing triggers miss it | Decision |
 |-------|-----------------------------------|----------|
 | A quiz is passed after its item was already complete (attempts used up, limit raised, passed on a later attempt) | no `itemCompletion` is inserted | filter gains `quizSummary` INSERT and MODIFY; the handler acts only when `passedAt` appears; recalculates that one student |
 | The criteria change, or certificates are turned on | a `course` record is not a curriculum entity | filter gains `course` MODIFY; the handler acts only when `certificateCriteria.version` or `certificatesEnabled` differs between the old and new image; recalculates every enrolled student who has not dropped |
+| A quiz's pass mark is edited so that it crosses 0 (a quiz with `passMarkPercent` 0 is practice and not assessed, R-4; the instructor can set any value from 0 to 100) | the filter already matches a `contentItem` MODIFY, but `changesWhatStudentsSee` discards everything except visibility, archive and removal | no new filter entry; the handler also acts when a quiz item's `settings.passMarkPercent` is 0 in one image and not in the other (changes between two positive values do not change who is assessed and are discarded); recalculates every enrolled student who has not dropped |
 | A graded upload is returned or regraded (Phase 8) | not a completion | filter gains `assignmentSubmission` MODIFY; the handler acts when `status`, `points` or `returnedAt` changed; that one student |
 
 **Rationale**: a stream filter cannot compare images, so the handler already discards curriculum edits that change nothing students see (`changesWhatStudentsSee`); the new cases follow the same shape. Every quiz attempt and every course edit now reaches the handler, which discards most of them after comparing two fields: one cheap invocation per attempt, already batched for five seconds.

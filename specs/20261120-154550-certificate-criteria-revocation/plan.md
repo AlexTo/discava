@@ -12,7 +12,7 @@ What the code showed that the spec could not:
 
 1. **Completion is decided and certificates are issued in one place**: `recalculateStudent` (`packages/events/src/progress/recalculate.ts`). It already has the curriculum, reads the course and the user only for a completed student with no certificate, and calls `issueCertificate`, the only writer of `certificate`. The criteria check slots in at that call; nothing about `completed` changes (research R-1).
 2. **A quiz item completes when passed *or* out of attempts**, and `quizSummary.passedAt` is set once and never cleared. So "completed" does not imply "passed", which is exactly the gap the quiz criterion closes, and a pass is already a permanent, keyed fact per student and quiz.
-3. **Nothing re-runs the recalculation when a quiz is passed after its item completed, or when a course setting changes.** `PROGRESS_STREAM_FILTERS` matches a new `itemCompletion` and curriculum edits only. Three more stream cases are needed, each discarded by the handler unless a relevant field changed (R-5).
+3. **Nothing re-runs the recalculation when a quiz is passed after its item completed, or when a course setting changes.** `PROGRESS_STREAM_FILTERS` matches a new `itemCompletion` and curriculum edits only. Four more stream cases are needed (one a new handler case on an existing filter), each discarded by the handler unless a relevant field changed (R-5).
 4. **A certificate has no key by course.** Its primary key is the student; the public lookup uses `gsi1`. An instructor's list needs one more access pattern, served by the existing `gsi2pk-gsi2sk-index` (R-11).
 5. **`issueCertificate` returns an existing record before anything else**, and the recalculation stops when it finds one. A revoked certificate therefore blocks re-issue with no new code (R-7).
 6. **Refunds end the enrolment with `dropped` and keep `completedAt`**, and `certificate-has-completed-enrolment` already accepts that. Because this plan does not revoke on refund, that check and the checkout spec are untouched (R-8).
@@ -75,7 +75,7 @@ No violations, so Complexity Tracking is empty. Re-checked after design: unchang
 1. **The criteria gate the certificate, not completion** (R-1).
 2. **Criteria live on the course, versioned by a counter; the certificate copies what it was issued under** (R-2, R-3). Nothing joins an issued certificate back to the course.
 3. **One pure rule decides "met"**, used by the issuer and by the learner's view (R-4).
-4. **Three more stream cases wake the recalculation**, including turning certificates on, which #276 left to chance (R-5).
+4. **Four more stream cases wake the recalculation**, including turning certificates on, which #276 left to chance (R-5).
 5. **Criteria in force at evaluation apply**; issued certificates are never touched (R-6).
 6. **Revocation is a state on the certificate plus an append-only event**, written together by one helper; instructors and administrators only; restorable; never re-issued (R-7).
 7. **No automatic revocation on refund** (R-8, the maintainer's decision to confirm).

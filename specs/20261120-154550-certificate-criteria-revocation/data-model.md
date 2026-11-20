@@ -95,7 +95,7 @@ These are the only writers of `certificate` and `certificateEvent`. `entity-writ
 
 ## Stream consumers (constitution V)
 
-`PROGRESS_STREAM_FILTERS` (`helpers/progress-stream.ts`) gains `quizSummary` INSERT and MODIFY and `course` MODIFY (Phase 2), and `assignmentSubmission` MODIFY (Phase 8). The handler discards records that change nothing relevant (research R-5). The `progress-recalculation` entry in `STREAM_FEATURES` is built from that list, so the deployed router and the local event runner follow.
+`PROGRESS_STREAM_FILTERS` (`helpers/progress-stream.ts`) gains `quizSummary` INSERT and MODIFY and `course` MODIFY (Phase 2), and `assignmentSubmission` MODIFY (Phase 8). A quiz pass mark crossing 0 arrives through the existing `contentItem` MODIFY entry and is recognised in the handler. The handler discards records that change nothing relevant (research R-5). The `progress-recalculation` entry in `STREAM_FEATURES` is built from that list, so the deployed router and the local event runner follow.
 
 Checked, with a test each: a `certificate` MODIFY (revocation) and a `certificateEvent` INSERT match no feature's filters; a `course` MODIFY already reaches search indexing, which ignores the new attribute.
 
