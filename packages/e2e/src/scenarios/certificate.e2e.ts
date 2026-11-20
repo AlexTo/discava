@@ -250,7 +250,12 @@ test('an instructor turns certificates off and on for a course', async ({
 
   await test.step("the first student's certificate still verifies", async () => {
     await first.goto(`${PORTALS.student}${firstLink}`);
-    await expect(first.getByText(title)).toBeVisible();
+    // Scoped to the certificate: its owner's LinkedIn section lists the title too.
+    await expect(
+      first
+        .getByRole('region', { name: 'Certificate of completion' })
+        .getByText(title),
+    ).toBeVisible();
     await expect(first.getByText('Certificate not found')).toHaveCount(0);
   });
 
