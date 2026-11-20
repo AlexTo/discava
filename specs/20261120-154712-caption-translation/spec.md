@@ -12,6 +12,27 @@
 
 **Design page**: [`design/video-player`](../../docs/src/content/docs/en/design/video-player.mdx) (gains a "Translated captions" section)
 
+## Clarifications
+
+### Session 2026-11-20
+
+Resolved without asking, using the recommended defaults below (non-interactive run).
+
+- Q: Which track are a video's translations made from? → A: The video's default track. That is the automatic captions, or the instructor's own file when they replaced the automatic captions or supplied captions where none could be generated. So a corrected source file is what gets translated, and a video with only uploaded captions is translated too (FR-005).
+- Q: When an instructor changes a course's caption languages, what happens to videos that are already there? → A: They follow the change. An added language is translated for every video that has captions; a removed language's translated tracks are removed, and uploaded tracks in that language stay (FR-019). The issue's wording covers new and re-transcoded videos; leaving existing videos out would make the menu differ from video to video in one course.
+- Q: Can an instructor remove one translated track from one video? → A: No. The course's caption languages decide which translated tracks exist, so a removed one would only be made again. To override a translation they upload their own file for that language; to drop a language they untick it on the course (FR-016).
+- Q: What happens at the 10-track limit? → A: A course has at most nine caption languages (one source track plus nine). On a video where uploaded tracks in other languages leave less room, translated tracks fill the free places in the course's language order and the rest are reported as "no room". An upload never fails because translated tracks hold the places: one translated track makes room (FR-002, FR-014).
+- Q: What limits what translation can cost? → A: Three things. The same source is never translated into the same language twice (FR-031); a stage can turn translation off or lower the number of languages per course (FR-029); and captions longer than 300,000 characters are not translated (FR-030). There is no per-instructor or per-course spending quota in this version.
+
+Further defaults taken in the requirements, for the owner to confirm:
+
+- The supported languages are the ten a caption can already be uploaded in (English, Spanish, French, German, Portuguese, Japanese, Chinese, Hindi, Arabic, Vietnamese), not the full list the translation service offers (FR-002).
+- A translated track is named in its own language in the menu, with "(auto-translated)" after it (FR-010). Other tracks keep the labels they have.
+- Course preview videos are translated too (FR-009).
+- Automatic captions in a different language from the course's stated teaching language are not translated (FR-027).
+- Draft courses are translated as well as published ones (Assumptions).
+- Removing an uploaded track brings the machine translation for that language back (FR-015).
+
 ## User Scenarios & Testing *(mandatory)*
 
 Today a lesson video gets one automatic caption track, in the one language the stage is set up for, and an instructor can upload more tracks by hand, one per language, up to 10 per video (video player spec, #277 and #371). The player's captions menu already lists every track and remembers the language a student last chose.
