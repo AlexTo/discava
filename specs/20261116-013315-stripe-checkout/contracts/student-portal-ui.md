@@ -10,7 +10,7 @@
 | Signed out, course priced | price line, e.g. "$20.00"; **Sign in to buy** (the return-to keeps the course) |
 | Signed in, not enrolled, priced | price line; **Buy now** (calls `payment.checkout`, shows "Starting payment…", then sends the browser to `checkoutUrl`); an error alert with the API message |
 | Signed in, not enrolled, priced, `payment.available` is false | price line and "Payments are unavailable right now. Please try again later."; no **Buy now** |
-| `?checkout=success`, not yet enrolled | "Confirming your payment" with a progress indication; polls `course.myEnrolment` every 2 s for up to 60 s; on the enrolment appearing, the enrolled state and the usual enrolled dialog |
+| `?checkout=success`, not yet enrolled | "Confirming your payment" with a progress indication; polls `course.myEnrolment` every 2 s for up to 60 s; on the enrolment appearing, the learner is taken to their lesson (see `specs/20261120-154551-first-lesson-start/contracts/student-portal-ui.md`) |
 | `?checkout=success`, still not enrolled after 60 s | alert: "Your payment is still being confirmed. It is not lost: refresh in a minute." with a **Refresh** button; no **Buy now** |
 | `?checkout=cancelled` | alert "Payment cancelled. You have not been charged." and **Buy now** |
 | Enrolled or completed | as today |

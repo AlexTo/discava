@@ -1150,3 +1150,32 @@ describe('assignments in the outline', () => {
     expect(screen.queryByRole('button', { name: 'Mark as done' })).toBeNull();
   });
 });
+
+describe('the enrolled notice', () => {
+  const enrolledLine = "You're enrolled in Linear Algebra.";
+
+  it('shows above the lesson after enrolling, and not otherwise', async () => {
+    const { router } = openLesson('lesson-1');
+    await screen.findByRole('heading', { name: 'Lecture 1', level: 2 });
+    expect(screen.queryByText(enrolledLine)).toBeNull();
+
+    await act(() => router.navigate({ to: '/', state: { enrolled: true } }));
+
+    expect(await screen.findByText(enrolledLine)).toHaveAttribute(
+      'role',
+      'status',
+    );
+  });
+
+  it('shows on the course home after enrolling, and not otherwise', async () => {
+    const { router } = renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+    await outlineLink('Lecture 1');
+    expect(screen.queryByText(enrolledLine)).toBeNull();
+
+    await act(() => router.navigate({ to: '/', state: { enrolled: true } }));
+
+    expect(await screen.findByText(enrolledLine)).toBeInTheDocument();
+  });
+});

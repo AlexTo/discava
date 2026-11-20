@@ -42,7 +42,7 @@ const count = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
 // Why the course can't be shown, with a way on.
-function Unavailable({
+export function Unavailable({
   courseId,
   error,
 }: {

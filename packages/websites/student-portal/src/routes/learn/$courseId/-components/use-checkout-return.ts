@@ -23,8 +23,9 @@ export type CheckoutReturn = {
 // `?checkout=success`. The address proves nothing, so while the student is
 // not enrolled this refetches `course.myEnrolment` every 2 s for up to 60 s
 // and reports the state; the enrolment appearing is the only thing that
-// grants access. `onEnrolled` runs once, when it appears after having been
-// waited for.
+// grants access. `onEnrolled` runs once whenever the address says
+// `checkout=success` and the student is enrolled: after waiting for the
+// enrolment, or when it was already there on the first read.
 export function useCheckoutReturn({
   courseId,
   enabled,
@@ -49,11 +50,10 @@ export function useCheckoutReturn({
 
   const waiting = result === 'success' && enabled && !enrolled;
   const [timedOut, setTimedOut] = useState(false);
-  const waited = useRef(false);
+  const notified = useRef(false);
 
   useEffect(() => {
     if (!waiting) return;
-    waited.current = true;
     const poll = setInterval(() => {
       void queryClient.invalidateQueries({
         queryKey: trpc.course.myEnrolment.queryKey({ courseId }),
@@ -70,11 +70,11 @@ export function useCheckoutReturn({
   }, [waiting, queryClient, trpc, courseId]);
 
   useEffect(() => {
-    if (enrolled && waited.current) {
-      waited.current = false;
+    if (result === 'success' && enabled && enrolled && !notified.current) {
+      notified.current = true;
       onEnrolled();
     }
-  }, [enrolled, onEnrolled]);
+  }, [result, enabled, enrolled, onEnrolled]);
 
   return {
     result,
