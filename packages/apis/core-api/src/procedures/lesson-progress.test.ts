@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import { myLessonProgress } from './lesson-progress.js';
@@ -30,18 +30,11 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
-const caller = t.createCallerFactory(t.router({ myLessonProgress }));
+const router = t.router({ myLessonProgress });
 
 const USER_SUB = 'student-1';
 
-const callAsUser = () =>
-  caller({
-    event: {
-      requestContext: { authorizer: { claims: { sub: USER_SUB } } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const callAsUser = () => callerFor(router, { sub: USER_SUB });
 
 const progress = (lessonId: string, record: Record<string, unknown>) => ({
   userId: USER_SUB,
@@ -117,11 +110,7 @@ describe('course.myLessonProgress', () => {
   });
 
   it('rejects unauthenticated callers', async () => {
-    const anonymous = caller({
-      event: { requestContext: {} } as unknown as APIGatewayProxyEvent,
-      context: {} as any,
-      info: {} as any,
-    });
+    const anonymous = callerFor(router);
 
     await expect(
       anonymous.myLessonProgress({ courseId: 'course-1' }),

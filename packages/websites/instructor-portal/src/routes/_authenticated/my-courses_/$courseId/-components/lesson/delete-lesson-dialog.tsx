@@ -28,6 +28,7 @@ export function DeleteLessonDialog({
   title,
   archive,
   usedItems = 0,
+  noun = 'lesson',
   trigger,
 }: {
   courseId: string;
@@ -39,6 +40,8 @@ export function DeleteLessonDialog({
   archive: boolean;
   // How many of its items students have used, for the warning on archiving.
   usedItems?: number;
+  // What the lesson is called: 'lesson', or 'assignment'.
+  noun?: string;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -66,11 +69,11 @@ export function DeleteLessonDialog({
       <AlertDialogContent className="sm:max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {archive ? 'Archive lesson' : 'Delete lesson'}
+            {archive ? `Archive ${noun}` : `Delete ${noun}`}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {archive
-              ? `Students will no longer see "${title}" or its content. Their progress and results are kept, and the lesson can be restored.`
+              ? `Students will no longer see "${title}" or its content. Their progress and results are kept, and the ${noun} can be restored.`
               : `Are you sure you want to delete "${title}"? This can't be undone.`}
           </AlertDialogDescription>
           {archive && studentActivityNote({ items: usedItems }) && (
@@ -86,8 +89,8 @@ export function DeleteLessonDialog({
             type="error"
             header={
               archive
-                ? "Couldn't archive the lesson"
-                : "Couldn't delete the lesson"
+                ? `Couldn't archive the ${noun}`
+                : `Couldn't delete the ${noun}`
             }
           >
             {apiErrorMessage(error)}
@@ -116,10 +119,10 @@ export function DeleteLessonDialog({
             {archive
               ? isPending
                 ? 'Archiving…'
-                : 'Archive lesson'
+                : `Archive ${noun}`
               : isPending
                 ? 'Deleting…'
-                : 'Delete lesson'}
+                : `Delete ${noun}`}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

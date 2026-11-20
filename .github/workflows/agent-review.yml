@@ -12,7 +12,7 @@ name: Agent Review Status
 # `review-fix-1` to `review-fix-5`), then comments and stops
 # (`review-fix-exhausted`). The reviewer looks again by itself once the agent
 # pushes: a new head commit is a new review for its scan.
-# The rules are in packages/common/scripts/src/agent-review/.
+# The rules are in packages/tooling/agent/src/agent-review/.
 
 on:
   pull_request_review:

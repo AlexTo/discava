@@ -28,6 +28,7 @@ const modules = [
     lessons: [
       {
         lessonId: 'l1',
+        kind: 'lesson' as const,
         title: 'Lesson One',
         contentItems: [
           item('a'),
@@ -40,6 +41,7 @@ const modules = [
       },
       {
         lessonId: 'l2',
+        kind: 'lesson' as const,
         title: 'Lesson Two',
         archivedAt: '2024-03-01T00:00:00.000Z',
         contentItems: [
@@ -56,6 +58,7 @@ const modules = [
     lessons: [
       {
         lessonId: 'l3',
+        kind: 'lesson' as const,
         title: 'Lesson Three',
         contentItems: [item('e', { studentActivityCount: 1 }), item('f')],
       },
@@ -64,6 +67,28 @@ const modules = [
 ];
 
 describe('archivedEntries', () => {
+  it('calls an archived assignment an assignment, not a lesson', () => {
+    const entries = archivedEntries([
+      {
+        moduleId: 'm1',
+        title: 'Module One',
+        lessons: [
+          {
+            lessonId: 'l1',
+            kind: 'assignment',
+            title: 'Essay',
+            archivedAt: '2024-03-01T00:00:00.000Z',
+            contentItems: [item('a')],
+          },
+        ],
+      },
+    ]);
+
+    expect(entries.map(({ noun, title }) => [noun, title])).toEqual([
+      ['assignment', 'Essay'],
+    ]);
+  });
+
   it('lists only records archived in their own right, most recent first', () => {
     expect(
       archivedEntries(modules).map(({ kind, title, location, contents }) => ({

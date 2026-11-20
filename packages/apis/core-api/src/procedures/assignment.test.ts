@@ -4,7 +4,7 @@
  */
 
 import { RETIRED_VERSION_DELAY_MINUTES } from '@discava/common-server-utils/media-keys';
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -161,18 +161,10 @@ const router = t.router({
   mySubmission,
   submissionFileUrl,
 });
-const caller = t.createCallerFactory(router);
 
 const USER_SUB = 'student-1';
 
-const callAs = (sub?: string) =>
-  caller({
-    event: {
-      requestContext: { authorizer: { claims: sub ? { sub } : {} } },
-    } as unknown as APIGatewayProxyEvent,
-    context: {} as any,
-    info: {} as any,
-  });
+const callAs = (sub?: string) => callerFor(router, { sub });
 
 const ref = {
   courseId: 'course-1',

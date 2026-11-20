@@ -427,7 +427,7 @@ describe('notification delivery', () => {
     expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
   });
 
-  it('is told where the portals and the API are, and where its secret is', () => {
+  it('is told where the portals and the API are, where its secret is, and the runtime config app id', () => {
     const { Environment } = deliveryFunction(configured);
     expect(Object.keys(Environment.Variables).sort()).toEqual(
       [
@@ -435,6 +435,7 @@ describe('notification delivery', () => {
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
         'NOTIFICATIONS_FROM_ADDRESS',
+        'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
         'UNSUBSCRIBE_SECRET_ARN',
       ].sort(),
@@ -768,5 +769,78 @@ describe('earnings recording', () => {
     );
     expect(actions).toContain('dynamodb:PutItem');
     expect(actions).not.toContain('secretsmanager:GetSecretValue');
+  });
+});
+
+describe('payout run', () => {
+  const stack = synth({});
+  const policiesOf = (template: Template, rolePrefix: string) =>
+    Object.values(template.findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        JSON.stringify(policy.Properties.Roles).includes(rolePrefix),
+      )
+      .map((policy) => JSON.stringify(policy.Properties.PolicyDocument));
+  const runFunction = (payouts?: {
+    platformFeeBasisPoints: number;
+    holdDays: number;
+    minimumPayoutMinor: number;
+  }) => {
+    const [fn] = resources(
+      synth({ payouts })('Payouts'),
+      'AWS::Lambda::Function',
+      'PayoutRun',
+    );
+    return fn as { Environment: { Variables: Record<string, string> } };
+  };
+
+  it('has a stack of its own that orders after Data', () => {
+    const app = new App();
+    const stage = new ApplicationStage(app, 'discava-test', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+    });
+    const payouts = stage.node.findChild('Payouts') as Stack;
+    app.synth();
+    expect(payouts.dependencies.map((d) => d.node.id)).toContain('Data');
+  });
+
+  it('runs once a day', () => {
+    const rules = Object.values(
+      stack('Payouts').findResources('AWS::Events::Rule'),
+    );
+    expect(rules).toHaveLength(1);
+    expect(rules[0].Properties.ScheduleExpression).toBe('rate(1 day)');
+    expect(JSON.stringify(rules[0].Properties.Targets)).toContain('PayoutRun');
+  });
+
+  it('carries the stage minimum, defaulting to 1000', () => {
+    expect(runFunction().Environment.Variables.PAYOUT_MINIMUM_MINOR).toBe(
+      '1000',
+    );
+    expect(
+      runFunction({
+        platformFeeBasisPoints: 1500,
+        holdDays: 7,
+        minimumPayoutMinor: 2500,
+      }).Environment.Variables.PAYOUT_MINIMUM_MINOR,
+    ).toBe('2500');
+  });
+
+  it('reads the API key but neither writes it nor reads the signing secret', () => {
+    const policies = policiesOf(stack('Payouts'), 'PayoutRun').join('');
+    expect(policies).toContain('ApiKey');
+    expect(policies).toContain('secretsmanager:GetSecretValue');
+    expect(policies).not.toContain('WebhookSigningSecret');
+    expect(policies).not.toContain('secretsmanager:PutSecretValue');
+    const variables = JSON.stringify(runFunction().Environment.Variables);
+    expect(variables).toContain('STRIPE_API_KEY_SECRET_ARN');
+    expect(variables).not.toContain('STRIPE_WEBHOOK_SECRET_ARN');
+  });
+
+  it('has no stream or queue event source', () => {
+    expect(
+      Object.keys(
+        stack('Payouts').findResources('AWS::Lambda::EventSourceMapping'),
+      ),
+    ).toEqual([]);
   });
 });

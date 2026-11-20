@@ -5,7 +5,7 @@
 # that job in .github/workflows/pr-checks.yml. Skip with `git push --no-verify`.
 
 MAP=packages/databases/core-table/entity-writers.json
-PATHS="packages/apis packages/events packages/databases packages/common/scripts"
+PATHS="packages/apis packages/events packages/databases packages/tooling"
 BASE="$(git merge-base HEAD origin/main 2>/dev/null)" || exit 0
 
 # shellcheck disable=SC2086
@@ -24,7 +24,7 @@ if ! git diff --quiet HEAD -- $PATHS; then
 fi
 
 echo "pre-push: checking ${MAP} is up to date…"
-pnpm nx run @discava/common-scripts:entity-writers --output-style=static >/dev/null || exit 1
+pnpm nx run @discava/tooling-agent:entity-writers --output-style=static >/dev/null || exit 1
 
 if ! git diff --quiet -- "$MAP"; then
   echo "${RED}pre-push: ${MAP} was out of date with the code, and has been regenerated.${NC}"

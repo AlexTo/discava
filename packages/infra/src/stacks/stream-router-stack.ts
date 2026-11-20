@@ -190,6 +190,7 @@ export class StreamRouterStack extends Stack {
       'NotificationDelivery',
     );
     coreTable.grantReadWriteData(delivery);
+    this.grantAppConfig(delivery);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(delivery);
     delivery.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);

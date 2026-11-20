@@ -6,7 +6,7 @@ import { expect, type Page } from '@playwright/test';
 
 export type Role = 'student' | 'instructor' | 'admin';
 
-// One of the local OIDC page's fixed test users (common/scripts'
+// One of the local OIDC page's fixed test users (tooling-local-dev's
 // local-oidc/login.html). They share data with whoever uses the local stack,
 // so scenarios only read as them; anything that writes uses newUser.
 export interface TestUser {

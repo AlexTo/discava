@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -28,13 +28,8 @@ const {
   putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
-} = vi.hoisted(() => ({
-  courseInstructorGet: vi.fn(),
-  courseGet: vi.fn(),
-  moduleGet: vi.fn(),
-  lessonGet: vi.fn(),
-  contentItemGet: vi.fn(),
-  contentItemPatch: vi.fn(),
+  mockModule,
+} = await vi.hoisted(async () => ({
   patchSet: vi.fn(),
   patchRemove: vi.fn(),
   patchWhere: vi.fn(),
@@ -45,20 +40,18 @@ const {
   putCaptionFile: vi.fn(),
   bestEffortDeleteCaptionFile: vi.fn(),
   bestEffortDeleteCaptionUpload: vi.fn(),
+  ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
+    courseInstructor: ['get'],
+    course: ['get'],
+    module: ['get'],
+    lesson: ['get'],
+    contentItem: ['get', 'patch'],
+  }),
 }));
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: {
-      courseInstructor: { get: courseInstructorGet },
-      course: { get: courseGet },
-      module: { get: moduleGet },
-      lesson: { get: lessonGet },
-      contentItem: { get: contentItemGet, patch: contentItemPatch },
-    },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock(
   '@discava/common-server-utils/lesson-files',
@@ -85,7 +78,6 @@ const router = t.router({
   attachCaption: attachContentItemCaption,
   removeCaption: removeContentItemCaption,
 });
-const caller = t.createCallerFactory(router);
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const COURSE_ID = 'course-1';
@@ -111,15 +103,8 @@ const conditionalCheckFailedError = (): Error =>
     }),
   });
 
-const buildEvent = (groups: string[]): APIGatewayProxyEvent =>
-  ({
-    requestContext: {
-      authorizer: { claims: { sub: INSTRUCTOR_SUB, 'cognito:groups': groups } },
-    },
-  }) as unknown as APIGatewayProxyEvent;
-
 const callAs = (groups: string[] = ['instructor']) =>
-  caller({ event: buildEvent(groups), context: {} as any, info: {} as any });
+  callerFor(router, { sub: INSTRUCTOR_SUB, groups });
 
 const track = (
   trackId: string,

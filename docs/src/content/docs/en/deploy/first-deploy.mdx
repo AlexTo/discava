@@ -88,7 +88,7 @@ APP_ID=$(aws cloudformation describe-stacks \
   --query 'Stacks[0].Outputs[?contains(OutputKey, `RuntimeConfigApplicationId`)].OutputValue' \
   --output text)
 
-RUNTIME_CONFIG_APP_ID=$APP_ID pnpm nx run @discava/common-scripts:seed-categories
+RUNTIME_CONFIG_APP_ID=$APP_ID pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
 It uses your AWS credentials and region, and skips categories that already exist.

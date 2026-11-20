@@ -10,7 +10,7 @@ name: Agent CI Status
 # fails on an agent's branch (`openhands/issue-<n>`), at most five times per
 # pull request (labels `ci-fix-1` to `ci-fix-5`), then comments and stops
 # (`ci-fix-exhausted`). A passing run posts nothing.
-# The rules are in packages/common/scripts/src/agent-ci/.
+# The rules are in packages/tooling/agent/src/agent-ci/.
 
 on:
   workflow_run:

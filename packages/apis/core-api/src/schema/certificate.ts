@@ -20,6 +20,8 @@ export const VerifyCertificateOutputSchema = z.object({
   learnerName: z.string(),
   courseTitle: z.string(),
   completedAt: z.string(),
+  // `completedAt` as the PDF prints it (UTC, e.g. `19 November 2026`).
+  completedOn: z.string(),
 });
 
 export type IVerifyCertificateOutput = z.output<

@@ -60,14 +60,14 @@ pnpm dev
 
 **Lesson videos** transcode on your machine with ffmpeg: a few minutes for a long lecture. `LOCAL_TRANSCODE_RENDITIONS=360p pnpm dev` makes only the 360p rendition, for speed. Jobs work in the git-ignored `tmp/local-dev/transcode/`, and a failed job keeps its files and an `error.log` there. Each finished video also gets a placeholder caption track, written by the local Transcribe stand-in and handled by the same completion code as the real event, so the captions menu can be tried without Transcribe. Course progress updates a few seconds after a change, as when deployed.
 
-**Notifications.** `pnpm nx run @discava/common-scripts:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
+**Notifications.** `pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
 
-**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/common-scripts:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
 
 **Starting fresh.** Local data lives in Docker volumes and survives restarts. To delete it all, stop `pnpm dev`, then run the command below. It also deletes `tmp/local-dev/`, which includes the Stripe key an administrator connected (`secrets/`), since the connection record it belongs to is in the table being wiped:
 
 ```sh
-pnpm nx run @discava/common-scripts:reset-local-data
+pnpm nx run @discava/tooling-local-dev:reset-local-data
 ```
 
 **What only runs on dev:** CloudFront signing and cookies, MediaConvert's exact encoding and its extra audio output, real Transcribe output and the Transcribe completion event, caption access through CloudFront cookies, Cognito Managed Login and sign-up, EventBridge and stream retries, the failure queues, and the stuck-video reconciler. Check changes to those after deploying.
@@ -98,10 +98,10 @@ Two checks make sure a change that could need a new rule gets one:
 - **Who writes each entity.** `core-table`'s `entity-writers.json` lists, for every entity, the files in each package that write it. It's generated from the code with the TypeScript compiler, so after changing which code writes the core table, regenerate it and commit the result:
 
   ```sh
-  pnpm nx run @discava/common-scripts:entity-writers
+  pnpm nx run @discava/tooling-agent:entity-writers
   ```
 
-  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/common/scripts`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds under `helpers/invariants/` (not its tests) name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/common-scripts:invariant-coverage` to try the check locally against `origin/main`.
+  A `pre-push` hook does this for you when the branch changes code under `packages/apis`, `packages/events`, `packages/databases` or `packages/tooling`: it regenerates the file and stops the push if it changed, so you can commit it and push again. The `Invariant coverage` PR check fails while the file is out of date. It also fails when, compared with `main`, an entity gains a writing package beside the ones it had, a file outside `core-table` starts writing an entity that several packages write, or a new entity appears, unless the lines the pull request adds under `helpers/invariants/` (not its tests) name that entity or its `TableSnapshot` key (`snapshot.enrolments`, say). If no rule spanning the writers is at stake, a maintainer adds the `no-new-invariant` label and re-runs the job. Run `pnpm nx run @discava/tooling-agent:invariant-coverage` to try the check locally against `origin/main`.
 
 ### Testing Portal Components
 

@@ -43,15 +43,14 @@ const getCoreTable = () => {
   return coreTablePromise;
 };
 
+// The table is opened on the first write, so a malformed or forged token is
+// refused before any table access.
 const defaultDeps = async (): Promise<UnsubscribeDeps> => {
-  const [secret, service] = await Promise.all([
-    resolveUnsubscribeSecret(),
-    getCoreTable(),
-  ]);
+  const secret = await resolveUnsubscribeSecret();
   return {
     secret,
-    setEmailEnabled: (userId, type, enabled) =>
-      setNotificationPreference(service, userId, type, enabled),
+    setEmailEnabled: async (userId, type, enabled) =>
+      setNotificationPreference(await getCoreTable(), userId, type, enabled),
     typeInfo: (type) =>
       Object.hasOwn(NOTIFICATION_TYPES, type)
         ? NOTIFICATION_TYPES[type]

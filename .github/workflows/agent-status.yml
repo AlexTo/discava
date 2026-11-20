@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       target:
-        description: The @discava/common-scripts Nx target that posts the status.
+        description: The @discava/tooling-agent Nx target that posts the status.
         required: true
         type: string
 
@@ -36,6 +36,6 @@ jobs:
           set-nx-shas: false
 
       - name: Post the status
-        run: pnpm nx run @discava/common-scripts:${{ inputs.target }}
+        run: pnpm nx run @discava/tooling-agent:${{ inputs.target }}
         env:
           GH_TOKEN: ${{ github.token }}

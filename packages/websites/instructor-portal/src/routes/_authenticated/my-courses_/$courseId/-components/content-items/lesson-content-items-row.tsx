@@ -50,6 +50,9 @@ export type ContentItem = {
   // A file item's file (#102).
   fileName?: string;
   fileSize?: number;
+  // An upload assignment's grading and deadline (#102).
+  maxPoints?: number;
+  dueAt?: string;
 };
 
 // What the video row says about a video's captions.

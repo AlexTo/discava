@@ -16,6 +16,6 @@ CI deploys through the `cfn-execution-<stage>` role and caps every role the stac
 
 - Add what CloudFormation needs to the execution role's policies, and what the functions need at runtime to the boundary. The execution role carries no boundary, so a permission added to the boundary never fixes a deploy.
 - Both are scoped by name prefix (`<stage>-*`, or `<stage without hyphens>*` for secrets and some other kinds). Give a resource whose CloudFormation-generated name wouldn't match an explicit name, e.g. `Names.uniqueResourceName(this, { separator: '/' })` as the Stripe and unsubscribe secrets do.
-- Cover the new statements in `packages/common/scripts/src/setup-stage.test.ts`, and re-run the script for each stage before the deploy.
+- Cover the new statements in `packages/tooling/deploy/src/setup-stage.test.ts`, and re-run the script for each stage before the deploy.
 
 The constructs it composes are described in `packages/common/constructs/CLAUDE.md`, and the per-stage config in `packages/common/infra-config/CLAUDE.md`.

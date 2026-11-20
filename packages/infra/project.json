@@ -61,7 +61,7 @@
       "executor": "nx:run-commands",
       "dependsOn": ["^assemble", "compile"],
       "options": {
-        "command": "tsx packages/common/scripts/src/infra/infra-deploy.ts packages/infra"
+        "command": "tsx packages/tooling/deploy/src/infra/infra-deploy.ts packages/infra"
       }
     },
     "deploy-ci": {
@@ -75,14 +75,14 @@
       "executor": "nx:run-commands",
       "dependsOn": ["^assemble", "compile"],
       "options": {
-        "command": "tsx packages/common/scripts/src/infra/infra-deploy.ts packages/infra \"discava-infra-sandbox/**\" --express"
+        "command": "tsx packages/tooling/deploy/src/infra/infra-deploy.ts packages/infra \"discava-infra-sandbox/**\" --express"
       }
     },
     "destroy": {
       "executor": "nx:run-commands",
       "dependsOn": ["^assemble", "compile"],
       "options": {
-        "command": "tsx packages/common/scripts/src/infra/infra-destroy.ts packages/infra"
+        "command": "tsx packages/tooling/deploy/src/infra/infra-destroy.ts packages/infra"
       }
     },
     "destroy-ci": {

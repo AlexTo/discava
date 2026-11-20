@@ -16,9 +16,6 @@ export const Route = createFileRoute('/certificates/$certificateId/')({
   component: RouteComponent,
 });
 
-const longDate = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { dateStyle: 'long' });
-
 const isNotFound = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code === 'NOT_FOUND';
 
@@ -82,7 +79,7 @@ function RouteComponent() {
             has completed the course
           </p>
           <h2 className="text-xl font-semibold">{query.data.courseTitle}</h2>
-          <p className="text-sm">{longDate(query.data.completedAt)}</p>
+          <p className="text-sm">{query.data.completedOn}</p>
           <p className="pt-4 text-xs text-muted-foreground">
             Certificate ID: {query.data.certificateId}
           </p>

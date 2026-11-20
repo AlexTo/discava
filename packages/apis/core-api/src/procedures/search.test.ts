@@ -9,17 +9,18 @@ import { buildSuggestRequest } from '../helpers/suggest-query.js';
 import { t } from '../init.js';
 import { publicSearchCourses, publicSuggestCourses } from './search.js';
 
-const { searchMock, categoryQuery } = vi.hoisted(() => ({
-  searchMock: vi.fn(),
-  categoryQuery: vi.fn(),
-}));
+const { searchMock, categoryQueryPrimary, mockModule } = await vi.hoisted(
+  async () => ({
+    searchMock: vi.fn(),
+    ...(
+      await import('@discava/common-server-utils/trpc-testing')
+    ).mockCoreTable({ category: ['query.primary'] }),
+  }),
+);
 
-vi.mock('@discava/core-table', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@discava/core-table')>()),
-  createCoreTableService: vi.fn(async () => ({
-    entities: { category: { query: { primary: categoryQuery } } },
-  })),
-}));
+vi.mock('@discava/core-table', async (importOriginal) =>
+  mockModule(await importOriginal()),
+);
 
 vi.mock('@discava/search', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/search')>()),
@@ -60,7 +61,7 @@ const noFacets = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  categoryQuery.mockReturnValue({ go: async () => ({ data: [] }) });
+  categoryQueryPrimary.mockReturnValue({ go: async () => ({ data: [] }) });
 });
 
 describe('course.publicSearch', () => {
@@ -188,7 +189,7 @@ describe('course.publicSearch', () => {
   });
 
   it('returns each hit with its category, tags, level, language and duration', async () => {
-    categoryQuery.mockReturnValue({
+    categoryQueryPrimary.mockReturnValue({
       go: async () => ({ data: [category('cat-1', 'Science', 'archived')] }),
     });
     searchMock.mockResolvedValue(
@@ -353,7 +354,7 @@ describe('course.publicSearch', () => {
     });
 
     it('maps buckets to names and drops archived and unknown categories', async () => {
-      categoryQuery.mockReturnValue({
+      categoryQueryPrimary.mockReturnValue({
         go: async () => ({
           data: [
             category('cat-1', 'Science'),
@@ -387,7 +388,7 @@ describe('course.publicSearch', () => {
     });
 
     it('lists selected values even with a zero count', async () => {
-      categoryQuery.mockReturnValue({
+      categoryQueryPrimary.mockReturnValue({
         go: async () => ({ data: [category('cat-1', 'Science')] }),
       });
       searchMock.mockResolvedValue(withAggregations({}));
@@ -470,7 +471,7 @@ describe('course.publicSuggest', () => {
     expect(request.index).toBe('courses');
     expect(request.body).toEqual(buildSuggestRequest({ q: 'pyth' }));
     expect(options.requestTimeout).toBe(3_000);
-    expect(categoryQuery).not.toHaveBeenCalled();
+    expect(categoryQueryPrimary).not.toHaveBeenCalled();
   });
 
   it('turns a cold-start timeout into a clear, retriable error', async () => {
