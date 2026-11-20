@@ -136,16 +136,16 @@ A learner who doesn't use a mouse reaches the transcript with Tab, moves through
 ### Edge Cases
 
 - **Captions still being generated**: the video plays with no "Transcript" button. Once the captions exist, the button is there the next time the lesson loads.
-- **A caption file that fails to load**: the transcript says it couldn't be loaded and the video keeps playing, as the captions menu already does.
+- **A caption file that fails to load**: the transcript shows another of the video's tracks, chosen the way the captions menu chooses. If none loaded, it says the transcript couldn't be loaded. The video keeps playing either way.
 - **A caption file with styling or speaker markup**: lines show as plain text. Markup, positioning and voice tags are dropped, and nothing in a caption file is ever treated as page markup.
 - **Lines that overlap in time**: the highlight is on the latest line that has started. Silence between lines keeps the last spoken line highlighted.
 - **A very long video**: a two-hour lecture's transcript (a few thousand lines) opens and scrolls without the page freezing.
 - **Fullscreen and picture-in-picture**: the panel isn't shown inside fullscreen. It's where the learner left it on leaving fullscreen.
 - **Two videos in one lesson**: each has its own transcript, opened and followed separately.
-- **A result whose moment is gone when it's opened** (the video was replaced, hidden or deleted after the search): the lesson opens as it does today for that case. A time past the end of the video starts at the beginning.
+- **A result whose moment is gone when it's opened** (the video was replaced, hidden or deleted after the search): the lesson opens as it does today for that case. A time past the end of the video is treated as its end, the way a saved position is today.
 - **A link to a moment shared with someone not enrolled**: they see what a lesson link shows them today. Nothing about the transcript is revealed.
 - **Search while the search service is starting up**: on a stage where search scales to zero, the first request can time out. The page says search is starting and to try again, as course search does.
-- **Search text that is only punctuation, or longer than 200 characters**: refused with a short message, with no request made for under 2 characters.
+- **Search text that is too short, too long or only punctuation**: under 2 characters shows a short hint and makes no request, the box takes at most 200 characters, and punctuation alone finds nothing.
 - **Special characters and other scripts**: any text can be searched without an error. Languages written without spaces between words match less precisely (see Assumptions).
 - **The same moment matched twice**: a moment appears once in the results, even when the words searched fall where two stored passages meet.
 - **Two changes to a video's captions within a few seconds**: search settles on the final state. Text left over from the middle state is never shown (Story 3) and is cleared by the rebuild.
@@ -158,7 +158,7 @@ A learner who doesn't use a mouse reaches the transcript with Tab, moves through
 
 **Transcript panel**
 
-- **FR-001**: The student lesson player MUST offer a "Transcript" control whenever the video has at least one caption track the learner's browser has loaded, and MUST NOT offer it otherwise.
+- **FR-001**: The student lesson player MUST offer a "Transcript" control whenever the video has at least one caption track, and MUST NOT offer it otherwise. When none of the video's caption files could be loaded, the transcript MUST say so instead of listing lines.
 - **FR-002**: The transcript MUST list every line of the track, in order, each with its start time, as plain text.
 - **FR-003**: The transcript MUST show the track the learner selected for captions. With captions off, it MUST show the track captions would use (the remembered language if the video has it, otherwise the default track). It MUST name the language shown, and MUST change when the learner picks another track.
 - **FR-004**: While the video plays, the line being spoken MUST be highlighted and kept in view within the panel, without scrolling the page.

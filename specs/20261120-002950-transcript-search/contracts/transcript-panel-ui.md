@@ -20,10 +20,11 @@ In `packages/common/shadcn/src/components/`. Only the student portal's lesson pl
 | State | "Transcript" control | Panel |
 |-------|----------------------|-------|
 | `transcript` not set | Absent | Absent |
-| No track loaded (none exist, or still loading) | Absent | Absent |
+| No track exists, or the files are still loading | Absent | Absent |
 | Tracks loaded, panel closed (default) | Shown, `aria-expanded="false"` | Not rendered |
 | Panel open | Shown, `aria-expanded="true"` | Lists every cue of the track |
-| The track to show failed to load | Shown | "This transcript couldn't be loaded." |
+| No track loaded and at least one failed (the player's `captionNotice` is set) | Shown | "This transcript couldn't be loaded." |
+| Some tracks loaded, the learner's language among the failed ones | Shown | The track `VideoControls` falls back to, as the captions menu does |
 | The track has no cues after parsing | Shown | "This transcript is empty." |
 | Fullscreen | Shown | Hidden while fullscreen |
 
@@ -77,6 +78,7 @@ Open or closed is `transcriptOpen` in the saved player preferences.
 `transcript-panel.test.tsx`, `hls-video.test.tsx`, `video-controls.test.tsx`:
 
 - the control is absent without `transcript`, and without tracks;
+- with every caption file failing, the control is shown and the panel says it couldn't be loaded;
 - opening lists every cue with its time, and saves `transcriptOpen`;
 - a saved `transcriptOpen: true` opens it on mount;
 - `timeupdate` moves `aria-current`;

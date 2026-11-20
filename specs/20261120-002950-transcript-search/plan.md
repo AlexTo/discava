@@ -66,9 +66,10 @@ Nothing is written to the core table.
 
 No invariant is added: an invariant checks the core table, and the index isn't in it. What stands in for one is the sync's own tests (the index equals the watchable state after any order of changes), `transcript.search`'s refusal tests, and the rebuild, whose second run must remove nothing. `stream-features.test.ts` gains the routing cases for the new feature, and asserts the existing features' routing is unchanged (T019). `entity-writers.json` doesn't change, since nothing new writes the table.
 
-**Weakened or changed tests (constitution IV).** None is weakened. Three existing test files change because code moves or a prop is added, with their assertions kept:
+**Weakened or changed tests (constitution IV).** None is weakened. Four existing test files change because code moves or a field is added, with their assertions kept:
 - `packages/apis/core-api/src/helpers/playback.test.ts`: the `playableManifest` cases move to `common-server-utils/src/media-keys.test.ts` unchanged (T012).
 - `packages/common/web-utils/src/video-player.test.ts`: the expected default preferences gain `transcriptOpen: false` (T002).
+- `packages/common/shadcn/src/components/video-controls.test.tsx`: caption fixtures gain `cues: []`, a field `LoadedCaption` now requires (T005).
 - `packages/infra` and `common-constructs` snapshots gain the new queue, functions and grants (T020, T034).
 
 Each task names its change, and the PR repeats it.
