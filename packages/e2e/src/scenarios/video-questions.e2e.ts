@@ -77,8 +77,9 @@ test('an instructor adds questions to a video', async ({ browser }) => {
       dialog.getByRole('switch', { name: 'At the end, question 2' }),
     ).toBeChecked();
     await dialog.getByRole('button', { name: 'Expand Question 1' }).click();
-    await expect(dialog.getByLabel('Question 1', { exact: true })).toHaveValue(
-      'What is on screen?',
-    );
+    // The prompt is a rich text editor, not an input: read its text.
+    await expect(
+      dialog.getByLabel('Question 1', { exact: true }),
+    ).toContainText('What is on screen?');
   });
 });
