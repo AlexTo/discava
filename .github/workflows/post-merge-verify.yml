@@ -1,0 +1,71 @@
+name: Post-merge Verify
+
+# Opens a test issue for each pull request a Deploy run put on
+# discava-development, labelled `openhands-test`: the test agent (OpenHands
+# polls for the label) then tests the change end to end on the deployed stack,
+# clicking through the portals with Playwright, calling the APIs as the Cognito
+# test users and checking the stored data, and reports on the issue. Its
+# standing instructions are in .github/ISSUE_TEMPLATE/test-deployed-pr.md.
+# Each issue, and the pull request it tests, is locked as soon as the issue is
+# opened: the agent holds AWS credentials and reads both, so only
+# collaborators with write access may comment on them.
+#
+# A Deploy run that deployed nothing (its commit was no longer main's latest)
+# or deployed another stage is ignored; the next deploy picks up every pull
+# request merged since the stage's previous deploy. Pull requests that change
+# only docs, specs, tests, tooling or CI, or carry `skip-deploy-test`, get no
+# issue, and neither does one that already has one. Run it by hand with a pull
+# request number to open an issue for it regardless (e.g. to test it again).
+# The rules are in packages/tooling/agent/src/post-merge-test/.
+
+on:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Merged pull request to test on the deployed stage, e.g. 634
+        required: true
+        type: string
+
+concurrency:
+  # One at a time, so two deploys close together can't both open an issue for
+  # the same pull request.
+  group: post-merge-verify
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  # Locking a pull request goes through the issues API, which refuses the
+  # workflow's token for a pull request unless it can write pull requests too.
+  pull-requests: write
+
+jobs:
+  open-test-issues:
+    name: Open test issues for the deployed pull requests
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/init-monorepo
+        with:
+          setup-uv: false
+          set-nx-shas: false
+
+      - name: Open the test issues
+        run: pnpm nx run @discava/tooling-agent:post-merge-test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Read by the script as data, never put into a command line.
+          PR_NUMBER: ${{ inputs.pr_number }}
+          TEST_STAGE: discava-development

@@ -103,6 +103,7 @@ const runScenario = (scenario: Scenario) => {
   const created: { title: string; body: string; label: string }[] = [];
   const comments: { pr: string; body: string }[] = [];
   const logs: string[] = [];
+  const locked: string[] = [];
   const arg = (args: string[], flag: string) => args[args.indexOf(flag) + 1];
   run({
     env: {
@@ -126,6 +127,13 @@ const runScenario = (scenario: Scenario) => {
         return (scenario.issueBodies ?? [])
           .map((body) => JSON.stringify(body))
           .join('\n');
+      }
+      if (command === 'api' && args[1] === `repos/${REPOSITORY}/issues/400`) {
+        return 'false\n';
+      }
+      if (command === 'api' && args[1] === '-X') {
+        locked.push(args[3]);
+        return '';
       }
       if (command === 'issue' && subcommand === 'view') {
         if (scenario.linkedIssueMissing) {
@@ -151,18 +159,20 @@ const runScenario = (scenario: Scenario) => {
       throw new Error(`Unexpected gh call: ${args.join(' ')}`);
     },
   });
-  return { calls, created, comments, logs };
+  return { calls, created, comments, logs, locked };
 };
 
 const specFiles = [`specs/${FOLDER}/tasks.md`, `specs/${FOLDER}/spec.md`];
 
 describe('a merged pull request', () => {
   it('labelled spec-ready opens the first issue, labelled for the agent', () => {
-    const { created, logs } = runScenario({
+    const { created, logs, locked } = runScenario({
       pr: { labels: ['spec-ready'] },
       files: specFiles,
     });
     expect(created).toHaveLength(1);
+    // Locked, so only collaborators can comment on what the agent reads.
+    expect(locked).toEqual([`repos/${REPOSITORY}/issues/400/lock`]);
     expect(created[0].title).toBe(
       'feat(assignment-submissions): submit work (with setup and foundations)',
     );

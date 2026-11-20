@@ -5,6 +5,7 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { lockAgentIssue } from '../helpers/conversation-lock.js';
 import { closedIssue, specFolders } from './discover.js';
 import { decide } from './gate.js';
 import {
@@ -219,6 +220,7 @@ export const run = (deps: Deps): void => {
       AGENT_LABEL,
     ]).trim();
     notice(`Created ${url}`);
+    lockAgentIssue({ repository, issueUrl: url, label: AGENT_LABEL, gh, log });
   }
   if (unreadable.length > 0) {
     throw new Error(
