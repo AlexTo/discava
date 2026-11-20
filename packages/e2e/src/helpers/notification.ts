@@ -110,3 +110,47 @@ export const unsubscribeLinkIn = (email: InboxEmail): string => {
   }
   return link;
 };
+
+// Fires the certificate reminder for a student's certificate now, as its
+// schedule does three days after the certificate is issued. The local event
+// runner would wait an hour (a reminder must not land in an unrelated test),
+// so a scenario asks for no wait. The runner answers once it has queued the
+// run, not once the run is done.
+export const fireCertificateReminder = async (
+  userId: string,
+  courseId: string,
+) => {
+  const response = await fetch(
+    `${SERVICES.eventRunner}schedules/certificate-reminder`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ payload: { userId, courseId }, delaySeconds: 0 }),
+    },
+  );
+  expect(
+    response.status,
+    `POST /schedules/certificate-reminder: ${response.status}`,
+  ).toBe(202);
+};
+
+// The course of a user's one certificate, once it has been issued.
+export const certificateCourseIdOf = async (
+  userId: string,
+): Promise<string> => {
+  const coreTable = await createCoreTableService();
+  let courseId = '';
+  await expect
+    .poll(
+      async () => {
+        const { data } = await coreTable.entities.certificate.query
+          .primary({ userId })
+          .go();
+        courseId = data[0]?.courseId ?? '';
+        return courseId;
+      },
+      { timeout: 30_000 },
+    )
+    .not.toBe('');
+  return courseId;
+};

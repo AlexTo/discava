@@ -306,9 +306,10 @@ describe('the stream router', () => {
   it('has a queue, failure queue, alarm and mapping per registered feature', () => {
     const template = stack('StreamRouter');
     const features = STREAM_FEATURES.length;
-    // Each feature's queue and failure queue, and the router's failures.
+    // Each feature's queue and failure queue, the router's failures, and the
+    // certificate reminder's.
     expect(Object.keys(template.findResources('AWS::SQS::Queue'))).toHaveLength(
-      features * 2 + 1,
+      features * 2 + 2,
     );
     expect(
       Object.keys(template.findResources('AWS::CloudWatch::Alarm')),
