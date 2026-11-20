@@ -114,7 +114,7 @@ test('enrolling lands in the first shown lesson', async ({ browser }) => {
   });
 
   await test.step('opening the lesson again from the course home shows no confirmation', async () => {
-    await student.getByRole('link', { name: 'Continue learning' }).click();
+    await student.getByRole('link', { name: 'Start learning' }).click();
     await expect(student).toHaveURL(/\/home$/);
     await student.getByRole('link', { name: 'Start', exact: true }).click();
     await expect(
