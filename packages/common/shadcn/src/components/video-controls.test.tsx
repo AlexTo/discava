@@ -485,6 +485,7 @@ describe('VideoControls captions', () => {
       label: 'Spanish',
       isDefault: false,
       src: 'blob:es',
+      cues: [],
     },
     {
       trackId: 'b',
@@ -492,6 +493,7 @@ describe('VideoControls captions', () => {
       label: 'English',
       isDefault: true,
       src: 'blob:en',
+      cues: [],
     },
   ];
 
@@ -515,9 +517,14 @@ describe('VideoControls captions', () => {
   const setupCaptions = (
     captions: LoadedCaption[] | undefined = CAPTIONS,
     captionNotice?: string,
+    transcript?: React.ComponentProps<typeof VideoControls>['transcript'],
   ) => {
     const result = render(
-      <VideoControls captions={captions} captionNotice={captionNotice}>
+      <VideoControls
+        captions={captions}
+        captionNotice={captionNotice}
+        transcript={transcript}
+      >
         <video data-testid="video">
           {captions.map((c) => (
             <track
@@ -688,5 +695,66 @@ describe('VideoControls captions', () => {
     const { container, modeOf } = setupCaptions();
     press(container, 'c');
     expect(modeOf('b')).toBe('showing');
+  });
+
+  describe('transcript', () => {
+    const transcriptProps = (open = false) => ({
+      open,
+      panelId: 'panel',
+      onToggle: vi.fn(),
+      onTrackChange: vi.fn(),
+    });
+    const transcriptButton = () =>
+      screen.queryByRole('button', { name: 'Transcript' });
+
+    it('has no button without the prop', () => {
+      setupCaptions();
+      expect(transcriptButton()).toBeNull();
+    });
+
+    it('has no button with neither captions nor a notice', () => {
+      setupCaptions([], undefined, transcriptProps());
+      expect(transcriptButton()).toBeNull();
+    });
+
+    it('has the button with only a caption notice', () => {
+      setupCaptions([], 'Could not load.', transcriptProps());
+      expect(transcriptButton()).toBeInTheDocument();
+    });
+
+    it('follows open in aria-expanded and controls the panel', () => {
+      setupCaptions(CAPTIONS, undefined, transcriptProps(false));
+      expect(transcriptButton()).toHaveAttribute('aria-expanded', 'false');
+      expect(transcriptButton()).toHaveAttribute('aria-controls', 'panel');
+      cleanup();
+      setupCaptions(CAPTIONS, undefined, transcriptProps(true));
+      expect(transcriptButton()).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('calls onToggle when clicked', async () => {
+      const props = transcriptProps();
+      setupCaptions(CAPTIONS, undefined, props);
+      await userEvent.click(transcriptButton() as HTMLElement);
+      expect(props.onToggle).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports the default track on mount', () => {
+      const props = transcriptProps();
+      setupCaptions(CAPTIONS, undefined, props);
+      expect(props.onTrackChange).toHaveBeenLastCalledWith(CAPTIONS[1]);
+    });
+
+    it('reports the chosen track, and still one with captions off', async () => {
+      const props = transcriptProps();
+      setupCaptions(CAPTIONS, undefined, props);
+      await userEvent.click(captionsButton());
+      await userEvent.click(
+        screen.getByRole('menuitemradio', { name: 'Spanish' }),
+      );
+      expect(props.onTrackChange).toHaveBeenLastCalledWith(CAPTIONS[0]);
+      await userEvent.click(captionsButton());
+      await userEvent.click(screen.getByRole('menuitemradio', { name: 'Off' }));
+      expect(props.onTrackChange).toHaveBeenLastCalledWith(CAPTIONS[0]);
+    });
   });
 });

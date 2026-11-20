@@ -596,6 +596,9 @@ describe('LessonPage', () => {
       expect(
         await within(lecture).findByRole('button', { name: /^Captions/ }),
       ).toBeInTheDocument();
+      expect(
+        within(lecture).getByRole('button', { name: 'Transcript' }),
+      ).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledWith(
         'https://media.example.com/nonce/captions/track-1.vtt',
         { credentials: 'include' },
@@ -610,6 +613,9 @@ describe('LessonPage', () => {
 
       expect(
         within(lecture).queryByRole('button', { name: /^Captions/ }),
+      ).toBeNull();
+      expect(
+        within(lecture).queryByRole('button', { name: 'Transcript' }),
       ).toBeNull();
     });
   });

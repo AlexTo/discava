@@ -104,6 +104,7 @@ describe('preferences', () => {
       muted: false,
       captionsOn: false,
       captionLanguage: undefined,
+      transcriptOpen: false,
     });
   });
 
@@ -114,6 +115,7 @@ describe('preferences', () => {
       muted: true,
       captionsOn: true,
       captionLanguage: 'en',
+      transcriptOpen: true,
     };
     savePreferences(prefs);
     expect(loadPreferences()).toEqual(prefs);
@@ -128,6 +130,11 @@ describe('preferences', () => {
     ['a non-boolean muted', { muted: 'yes' }, { muted: false }],
     ['a non-boolean captionsOn', { captionsOn: 1 }, { captionsOn: false }],
     [
+      'a non-boolean transcriptOpen',
+      { transcriptOpen: 'yes' },
+      { transcriptOpen: false },
+    ],
+    [
       'a non-string language',
       { captionLanguage: 5 },
       { captionLanguage: undefined },
@@ -138,6 +145,24 @@ describe('preferences', () => {
       JSON.stringify({ ...DEFAULT_PREFERENCES, ...stored }),
     );
     expect(loadPreferences()).toEqual({ ...DEFAULT_PREFERENCES, ...expected });
+  });
+
+  it('loads a saved transcriptOpen of true', () => {
+    localStorage.setItem(
+      'discava-video-preferences',
+      JSON.stringify({ transcriptOpen: true }),
+    );
+    expect(loadPreferences().transcriptOpen).toBe(true);
+  });
+
+  it('keeps the other fields when saving transcriptOpen', () => {
+    savePreferences({ ...loadPreferences(), speed: 2 });
+    savePreferences({ ...loadPreferences(), transcriptOpen: true });
+    expect(loadPreferences()).toEqual({
+      ...DEFAULT_PREFERENCES,
+      speed: 2,
+      transcriptOpen: true,
+    });
   });
 
   it('keeps valid fields when others are invalid', () => {
