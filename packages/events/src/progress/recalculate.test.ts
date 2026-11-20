@@ -7,6 +7,19 @@ import type { Curriculum } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { recalculateStudent } from './recalculate.js';
 
+// The reminder's schedule and its mark, recorded in order; the table's own
+// logic is core-table's to test.
+const calls: string[] = [];
+const scheduleCertificateReminder = vi.hoisted(() => vi.fn());
+const markCertificateReminderScheduled = vi.hoisted(() => vi.fn());
+vi.mock('../certificates/reminder-schedule.js', () => ({
+  scheduleCertificateReminder,
+}));
+vi.mock('@discava/core-table', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@discava/core-table')>()),
+  markCertificateReminderScheduled,
+}));
+
 // The table, as the recalculation reads and writes it.
 const db = {
   enrolment: null as Record<string, unknown> | null,
@@ -241,6 +254,13 @@ beforeEach(() => {
   db.notifications = new Map();
   db.notificationStates = new Map();
   createCertificate = async () => {};
+  calls.length = 0;
+  scheduleCertificateReminder.mockImplementation(async () => {
+    calls.push('schedule');
+  });
+  markCertificateReminderScheduled.mockImplementation(async () => {
+    calls.push('mark');
+  });
 });
 
 describe('recalculateStudent', () => {
@@ -509,7 +529,11 @@ describe('recalculateStudent', () => {
         { lessonId: 'l1', status: 'completed' },
         { lessonId: 'l2', status: 'completed' },
       ];
-      db.certificates.set('student-1#course-1', { certificateId: 'EXISTING' });
+      db.certificates.set('student-1#course-1', {
+        certificateId: 'EXISTING',
+        issuedAt: NOW,
+        reminderScheduledAt: NOW,
+      });
 
       await recalculate();
 
@@ -541,6 +565,97 @@ describe('recalculateStudent', () => {
       await recalculate();
 
       expect(db.certificates.size).toBe(1);
+    });
+  });
+
+  describe('the certificate reminder', () => {
+    const existing = (extra: Record<string, unknown> = {}) => {
+      completed('a', 'b', 'c');
+      completedEnrolment();
+      db.progress = [
+        { lessonId: 'l1', status: 'completed' },
+        { lessonId: 'l2', status: 'completed' },
+      ];
+      db.certificates.set('student-1#course-1', {
+        certificateId: 'EXISTING',
+        issuedAt: NOW,
+        ...extra,
+      });
+    };
+
+    it('is scheduled, then marked, once the certificate is issued', async () => {
+      completed('a', 'b', 'c');
+
+      await recalculate();
+
+      expect(calls).toEqual(['schedule', 'mark']);
+      expect(scheduleCertificateReminder).toHaveBeenCalledWith({
+        userId: 'student-1',
+        courseId: 'course-1',
+        certificateId: [...db.certificates.values()][0]?.certificateId,
+        dueAt: '2024-02-04T00:00:00.000Z',
+      });
+      expect(markCertificateReminderScheduled).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'student-1',
+          courseId: 'course-1',
+          now: new Date(NOW),
+        }),
+      );
+    });
+
+    it('is scheduled for an existing certificate that has none of the marks', async () => {
+      existing();
+
+      await recalculate();
+
+      expect(calls).toEqual(['schedule', 'mark']);
+      expect(scheduleCertificateReminder).toHaveBeenCalledWith(
+        expect.objectContaining({ certificateId: 'EXISTING' }),
+      );
+    });
+
+    it.each([
+      ['scheduled', { reminderScheduledAt: NOW }],
+      ['sent', { reminderSentAt: NOW }],
+      ['clicked', { linkedInClickedAt: NOW }],
+      ['past due', { issuedAt: '2024-01-01T00:00:00.000Z' }],
+    ])(
+      'is not scheduled for a certificate that is %s',
+      async (_name, extra) => {
+        existing(extra);
+
+        await recalculate();
+
+        expect(calls).toEqual([]);
+      },
+    );
+
+    it('costs a scheduled student one certificate read and no course or user read', async () => {
+      existing({ reminderScheduledAt: NOW });
+
+      await recalculate();
+
+      expect(coreTable.entities.certificate.get).toHaveBeenCalledTimes(1);
+      expect(reads.course).not.toHaveBeenCalled();
+      expect(reads.user).not.toHaveBeenCalled();
+    });
+
+    it('fails the run after the certificate is stored, and the next run schedules without issuing again', async () => {
+      completed('a', 'b', 'c');
+      scheduleCertificateReminder.mockRejectedValueOnce(new Error('throttled'));
+
+      await expect(recalculate()).rejects.toThrow('throttled');
+      expect(db.certificates.size).toBe(1);
+      expect(db.notifications.size).toBe(1);
+      expect(markCertificateReminderScheduled).not.toHaveBeenCalled();
+
+      completedEnrolment(NOW);
+      coreTable.entities.certificate.create.mockClear();
+      await recalculate();
+
+      expect(coreTable.entities.certificate.create).not.toHaveBeenCalled();
+      expect(calls).toEqual(['schedule', 'mark']);
     });
   });
 
