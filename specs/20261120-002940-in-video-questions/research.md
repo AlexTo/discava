@@ -149,6 +149,8 @@ Decisions made while planning, each checked against the code on `main` (2026-11-
 
 **Decision**: No infrastructure change. The two new core-api procedures run on the existing shared router Lambda with the table access it has, and the new instructor-api procedure on its router. `videoAnswerSheet` is one more entity in the one table. The analytics stream feature keeps its name, handler and queue, and its filter list is data read from `ANALYTICS_STREAM_FILTERS` by both the deployed router and the local event runner.
 
+The API Gateway methods are derived from each router (`routerToOperations` in `common-constructs`' `core-api.ts` and `instructor-api.ts`), so the four new operations (`contentItem.updateVideoQuestions` and `analytics.videoQuestions` on instructor-api, `videoQuestion.view` and `videoQuestion.answer` on core-api) each add a method to their API's stack with no construct change. The tasks that add them check `synth` still succeeds, which is where CloudFormation's 500-resource limit per stack would show.
+
 **Rationale**: constitution I and III are met without work: everything runs under `pnpm dev` as it stands. The e2e helpers already produce a ready three-second video locally (`THREE_SECOND_VIDEO`, ffmpeg in Docker), which is long enough for a question at 0:01 and an end check.
 
 ## R-15: Limits

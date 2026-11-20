@@ -52,17 +52,17 @@ An instructor puts up to 20 questions on a video item, each at a moment or at th
 
 | Record | What changes | Existing cover | Extended or added |
 |---|---|---|---|
-| `contentItem.studentActivityCount` (video) | Now also counts learners with an answer sheet. Two writers can claim a learner's first record: `contentItem.complete` and `videoQuestion.answer` | `activity-count-matches-students` and its tests; `completion.test.ts` | The invariant counts sheets (T011). Both writers go through one helper with a cross check (T009, T010), covered by unit tests and a concurrency test (T029) |
+| `contentItem.studentActivityCount` (video) | Now also counts learners with an answer sheet. Two writers can claim a learner's first record: `contentItem.complete` and `videoQuestion.answer` | `activity-count-matches-students` and its tests; `completion.test.ts` | The invariant counts sheets (T015). Both writers go through one helper with a cross check (T013, T014, T022), covered by unit tests and a concurrency test (T029) |
 | `contentItem.questions`, `answerKey`, `quizVersion` | Now also on videos | The quiz save tests; curriculum invariants | New `video-questions-shape` (T004) |
-| `enrolment.lastActivityAt` | Also moved by an answer, through `studentActivityWrites` | `last-activity-at-current` | Extended to sheets (T011) |
-| `itemCompletion` | Read and condition-checked when answering. Never created by an answer | `progress-matches-completions`, `completed-at-iff-completed` | Unchanged; tests assert an answer creates none (T025) |
-| `quizQuestionStats`, `periodStats` | Sheets contribute counts and active learners | `analytics-matches-records`, `analytics-contributions.test.ts`, `analytics.e2e.ts` | Contributions, rebuild and invariant extended (T012 to T014) |
-| `videoAnswerSheet` | New | none | Added to the snapshot, with `video-answer-sheet-shape` and the four placement checks (T008, T011) |
-| `quizAttempt`, `quizSummary`, `progress`, `certificate` | Untouched | | Tests assert so (T025) |
+| `enrolment.lastActivityAt` | Also moved by an answer, through `studentActivityWrites` | `last-activity-at-current` | Extended to sheets (T015) |
+| `itemCompletion` | Read and condition-checked when answering. Never created by an answer | `progress-matches-completions`, `completed-at-iff-completed` | Unchanged; tests assert an answer creates none (T022) |
+| `quizQuestionStats`, `periodStats` | Sheets contribute counts and active learners | `analytics-matches-records`, `analytics-contributions.test.ts`, `analytics.e2e.ts` | Contributions, rebuild and invariant extended (T016, T017) |
+| `videoAnswerSheet` | New | none | Added to the snapshot, with `video-answer-sheet-shape` and the four placement checks (T012, T015) |
+| `quizAttempt`, `quizSummary`, `progress`, `certificate` | Untouched | | Tests assert so (T022) |
 
 "Active learner" in the analytics gains "answered a video question". That is a definition change, recorded in research R-7 and made in the docs task.
 
-**Weakened or changed tests (constitution IV).** None is weakened. Three existing tests gain an expectation because an output gains a field: `contentItem.videoUrl`'s output assertions gain `questionCount` (T024), and tests that compare the whole `analytics.course` output gain `videoQuestions` and `modulesWithoutQuestions` (T041). Each task names its change, and the PR says so. Every existing player test must pass unchanged (SC-002).
+**Weakened or changed tests (constitution IV).** None is weakened. Three sets of existing tests gain an expectation because an output gains a field: `contentItem.videoUrl`'s output assertions gain `questionCount` (T020), and tests that compare the whole `analytics.course` output gain `videoQuestions` (T039) and `modulesWithoutQuestions` (T043). Each task names its change, and the PR says so. Every existing player test must pass unchanged (SC-002).
 
 ## Design Decisions (detail in [research.md](./research.md))
 
