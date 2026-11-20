@@ -192,7 +192,7 @@ It gets no `comprehend:DetectDominantLanguage` (the source language is always st
 
 **What drives it**: characters in the source track, times the number of languages translated. Nothing is charged for a language that already has a fresh translated track or an upload, and nothing when the feature is off.
 
-**Scale, as an estimate only**: speech at 150 words a minute is about 9,000 words an hour, around 55,000 characters. At the listed price that is roughly $0.80 per hour of video per language, so a 20-hour course in nine languages would be on the order of $150, once. These figures are arithmetic on an assumed speaking rate, not measurements; T050 measures a real lecture.
+**Scale, as an estimate only**: speech at 150 words a minute is about 9,000 words an hour, around 55,000 characters. At the listed price that is roughly $0.80 per hour of video per language, so a 20-hour course in nine languages would be on the order of $150, once. These figures are arithmetic on an assumed speaking rate, not measurements; T049 measures a real lecture.
 
 **Bounds** (spec, clarification 5): the same source is not translated into the same language twice (R-6), a stage can lower the languages per course or turn translation off (R-9), and a source track over 300,000 characters is not translated (R-7). There is no spending quota per course or instructor.
 
