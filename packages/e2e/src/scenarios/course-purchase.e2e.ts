@@ -44,6 +44,7 @@ test('a student buys a paid course and starts learning', async ({
   });
 
   const student = await browser.newPage();
+  let sessionId = '';
 
   await test.step('a visitor sees the price and is asked to sign in to buy', async () => {
     await openCourse(student, title);
@@ -67,6 +68,7 @@ test('a student buys a paid course and starts learning', async ({
   await test.step('the student pays on the hosted page and is enrolled', async () => {
     await student.getByRole('button', { name: 'Buy now' }).click();
     await student.waitForURL(/\/stripe\/pay\//);
+    sessionId = /\/stripe\/pay\/([^/?#]+)/.exec(student.url())?.[1] ?? '';
     await screenshot(student, 'hosted-payment-page');
     await student.getByRole('button', { name: 'Pay', exact: true }).click();
     await student.waitForURL(/checkout=success/);
@@ -79,5 +81,22 @@ test('a student buys a paid course and starts learning', async ({
     await screenshot(student, 'enrolled-after-payment');
     await student.getByRole('link', { name: 'Start learning' }).click();
     await student.waitForURL(/\/learn\/[0-9a-f-]+\/home$/);
+  });
+
+  await test.step('a full refund ends the enrolment and Buy now returns', async () => {
+    const refund = await fetch('http://localhost:2024/stripe/test/refund', {
+      method: 'POST',
+      headers: { authorization: 'Bearer sk_test_local' },
+      body: JSON.stringify({ sessionId }),
+    });
+    expect(refund.status).toBe(200);
+    await openCourse(student, title);
+    await expect(student.getByText('Your enrolment has ended.')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      student.getByRole('button', { name: 'Buy now' }),
+    ).toBeVisible();
+    await screenshot(student, 'enrolment-ended-after-refund');
   });
 });

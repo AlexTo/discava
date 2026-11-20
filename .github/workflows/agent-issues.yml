@@ -10,6 +10,8 @@ name: Agent Issues
 # the agent's own pull requests tick tasks.md, so a path filter would loop.
 # It can also be run by hand for one spec folder: a spec merged without its
 # label, or a chain that stalled and has been sorted out.
+# The issue is opened unlabelled, locked so only collaborators can comment on
+# what the agent reads, and labelled only then (packages/tooling/agent/src/helpers/conversation-lock.ts).
 # The rules are in packages/tooling/agent/src/agent-issues/.
 
 on:
