@@ -579,7 +579,9 @@ describe('payments (the Stripe webhook and checkout)', () => {
     app.synth();
     const dependencies = payments.dependencies.map((d) => d.node.id);
     expect(dependencies).toContain('Data');
-  });
+    // The first full synth of the stage in the file: it took 31 to 35 s on a
+    // loaded CI runner (3 s locally), past the 30 s default.
+  }, 90_000);
 
   it('serves POST /stripe/webhook as the only method, with no authorizer', () => {
     const template = stack('Payments');
