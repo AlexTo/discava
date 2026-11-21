@@ -141,7 +141,9 @@ test('a learner is asked a video question, answers it and carries on', async ({
     await question.getByRole('radio', { name: 'A cat' }).check();
     await question.getByRole('button', { name: 'Submit answer' }).click();
     await expect(question.getByRole('status')).toContainText('Not quite');
-    await expect(question.getByText('Colour bars')).toBeVisible();
+    await expect(
+      question.getByText('Colour bars', { exact: true }),
+    ).toBeVisible();
     await expect(
       question.getByText('The test video is a set of colour bars'),
     ).toBeVisible();
