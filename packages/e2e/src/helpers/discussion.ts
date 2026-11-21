@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomBytes } from 'node:crypto';
-import type { Page } from '@playwright/test';
 import { type ApiUser, apiUser, createPublishedCourseViaApi } from './api.js';
 
 // A UUID v7 minted now, the id the discussion API wants for a new post: its
@@ -37,47 +36,6 @@ export const createDiscussionCourse = async (title: string) => {
     lessonId: lesson.lessonId,
   };
   return { instructor, key };
-};
-
-// A published course with two visible lessons (each with a text item), made
-// by a new instructor.
-export const createTwoLessonCourse = async (title: string) => {
-  const instructor = await apiUser('Ivy', ['instructor']);
-  const api = instructor.instructor;
-  const { courseId } = await api.course.create.mutate({ title });
-  const { moduleId } = await api.module.create.mutate({
-    courseId,
-    title: 'Module 1',
-  });
-  const lessonIds: string[] = [];
-  for (const lessonTitle of ['Lesson 1', 'Lesson 2']) {
-    const { lessonId } = await api.lesson.create.mutate({
-      courseId,
-      moduleId,
-      title: lessonTitle,
-    });
-    await api.contentItem.createText.mutate({
-      courseId,
-      moduleId,
-      lessonId,
-      title: `Reading for ${lessonTitle}`,
-      body: JSON.stringify({
-        type: 'doc',
-        content: [
-          { type: 'paragraph', content: [{ type: 'text', text: lessonTitle }] },
-        ],
-      }),
-    });
-    lessonIds.push(lessonId);
-  }
-  await api.course.publish.mutate({ courseId });
-  return { instructor, courseId, moduleId, lessonIds };
-};
-
-// Answers the first-lesson prompt shown in the open lesson.
-export const answerFirstLessonPrompt = async (page: Page, text: string) => {
-  await page.getByLabel('Your answer').fill(text);
-  await page.getByRole('button', { name: 'Post', exact: true }).click();
 };
 
 // A new student enrolled in the course.
