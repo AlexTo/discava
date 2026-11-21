@@ -108,7 +108,7 @@ Portal domains are picked up automatically as the APIs' allowed CORS origins and
 
 ## Notification emails
 
-Emails go out through SES. Verify a domain or address in SES, in the stage's region, then set:
+Emails go out through SES. Verify a domain or address in SES, in the stage's region. With a root domain, the setup script does the rest: once the root is a verified SES domain identity, running it again sends emails as `notifications@<root>`. To use another sender, set:
 
 | Variable | Example |
 | --- | --- |

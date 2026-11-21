@@ -273,7 +273,11 @@ export class StreamRouterStack extends Stack {
         notifications.fromAddress,
       );
     }
-    if (notifications?.sesIdentity) {
+    if (notifications?.sesIdentity && notifications.fromAddress) {
+      // SES authorises a send against the sender's identity and, while the
+      // account is in the SES sandbox, against each recipient's verified
+      // identity too, so the grant covers every identity in the account and
+      // the condition pins the sender to the configured address.
       delivery.addToRolePolicy(
         new PolicyStatement({
           actions: ['ses:SendEmail'],
@@ -281,9 +285,12 @@ export class StreamRouterStack extends Stack {
             this.formatArn({
               service: 'ses',
               resource: 'identity',
-              resourceName: notifications.sesIdentity,
+              resourceName: '*',
             }),
           ],
+          conditions: {
+            StringEquals: { 'ses:FromAddress': notifications.fromAddress },
+          },
         }),
       );
     }

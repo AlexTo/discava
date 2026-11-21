@@ -38,7 +38,9 @@ lower() {
 #   authenticated `gh` CLI)
 # - optionally serves every component from a subdomain of one root domain,
 #   using the issued ACM certificate it finds for each (stopping if one is
-#   missing), with the root as HLS playback's signed-cookie domain; stored as
+#   missing), with the root as HLS playback's signed-cookie domain, and
+#   notification emails sent as notifications@<root> when the root is a
+#   verified SES domain identity in the stage's region; stored as
 #   <STAGE>_INFRA_<COMPONENT>_* variables on that GitHub environment (see
 #   packages/common/infra-config/src/env-overrides.ts), which the deploy
 #   workflow forwards to synth
@@ -332,6 +334,15 @@ find_certificate() {
     --output text 2>/dev/null || true)
 }
 
+# Prints True when the identity is verified for sending in the stage's region.
+ses_identity_verified() {
+  aws sesv2 get-email-identity \
+    --region "$AWS_REGION" \
+    --email-identity "$1" \
+    --query VerifiedForSendingStatus \
+    --output text 2>/dev/null || true
+}
+
 # GitHub sets a job's OIDC token subject to `<prefix>:environment:<name>` when
 # it runs in an environment. The prefix is `repo:<owner>/<repo>` by default,
 # but repositories using immutable subject claims embed the owner and repo IDs
@@ -578,7 +589,10 @@ readonly DOMAIN_SPECS=(
   "publicMedia|PUBLIC_MEDIA|Public media|cloudfront|media"
 )
 readonly COOKIE_DOMAIN_VARIABLE="${STAGE_INFRA_ENV_PREFIX}LESSON_MEDIA_COOKIE_DOMAIN"
-paragraph "Give a root domain and every component is served from a subdomain of it (core-api.<root>, instructor-api.<root>, <root> and www.<root> for the student portal, instructor.<root>, admin.<root>, lesson-media.<root>, media.<root>), each with the issued ACM certificate found for it: in $AWS_REGION for the APIs, in $GLOBAL_REGION for the CloudFront components. Leave it blank for the generated *.execute-api.amazonaws.com / *.cloudfront.net hostnames. DNS records aren't created for you."
+readonly NOTIFICATIONS_FROM_VARIABLE="${STAGE_INFRA_ENV_PREFIX}NOTIFICATIONS_FROM_ADDRESS"
+readonly NOTIFICATIONS_IDENTITY_VARIABLE="${STAGE_INFRA_ENV_PREFIX}NOTIFICATIONS_SES_IDENTITY"
+readonly NOTIFICATIONS_FROM_LOCAL_PART="notifications"
+paragraph "Give a root domain and every component is served from a subdomain of it (core-api.<root>, instructor-api.<root>, <root> and www.<root> for the student portal, instructor.<root>, admin.<root>, lesson-media.<root>, media.<root>), each with the issued ACM certificate found for it: in $AWS_REGION for the APIs, in $GLOBAL_REGION for the CloudFront components. Notification emails are sent as $NOTIFICATIONS_FROM_LOCAL_PART@<root> when <root> is a verified SES identity in $AWS_REGION. Leave it blank for the generated *.execute-api.amazonaws.com / *.cloudfront.net hostnames and no notification email. DNS records and SES identities aren't created for you."
 # The default is the root the student portal is already served from.
 root_domain_variable="${STAGE_ENV_PREFIX}ROOT_DOMAIN"
 root_domain_default="${!root_domain_variable:-}"
@@ -610,7 +624,9 @@ if [[ -z "$ROOT_DOMAIN" ]]; then
         [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
       done
     done
-    [[ -z "$(github_environment_variable "$COOKIE_DOMAIN_VARIABLE")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$COOKIE_DOMAIN_VARIABLE")
+    for variable in "$COOKIE_DOMAIN_VARIABLE" "$NOTIFICATIONS_FROM_VARIABLE" "$NOTIFICATIONS_IDENTITY_VARIABLE"; do
+      [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
+    done
   fi
 else
   readonly CORE_API_DOMAIN="core-api.$ROOT_DOMAIN"
@@ -654,6 +670,24 @@ else
   # HLS playback's signed cookies are issued by Instructor API and sent to
   # Lesson media, so they're set for the root both are subdomains of.
   DOMAIN_VARIABLES+=("$COOKIE_DOMAIN_VARIABLE=$ROOT_DOMAIN")
+
+  # Notification emails are sent as notifications@<root>, through the root's
+  # SES domain identity. Without a verified one they're recorded as skipped,
+  # so a missing identity is a warning, not a stop.
+  if [[ "$(ses_identity_verified "$ROOT_DOMAIN")" == True ]]; then
+    echo "Notification email: $NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN (SES identity $ROOT_DOMAIN)"
+    DOMAIN_VARIABLES+=(
+      "$NOTIFICATIONS_FROM_VARIABLE=$NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN"
+      "$NOTIFICATIONS_IDENTITY_VARIABLE=$ROOT_DOMAIN"
+    )
+  else
+    paragraph "Notification email: $ROOT_DOMAIN isn't a verified SES identity in $AWS_REGION, so notification emails will be recorded as skipped. To send them, create the domain identity in SES ($AWS_REGION), add the DKIM CNAME records it lists to $ROOT_DOMAIN's DNS, wait until SES shows it verified, and re-run. While the account is in the SES sandbox, each recipient address must be verified too." >&2
+    if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
+      for variable in "$NOTIFICATIONS_FROM_VARIABLE" "$NOTIFICATIONS_IDENTITY_VARIABLE"; do
+        [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
+      done
+    fi
+  fi
 fi
 
 # Policy documents are written to fixed names in one private directory:
@@ -1848,6 +1882,12 @@ upsert_boundary_policy() {
         "transcribe:TagResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "NotificationEmail",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:$AWS_PARTITION:ses:$AWS_REGION:$ACCOUNT_ID:identity/*"
     }
   ]
 }
