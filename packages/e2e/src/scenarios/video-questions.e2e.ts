@@ -123,7 +123,7 @@ test('a learner is asked a video question, answers it and carries on', async ({
   await startFirstLesson(page);
 
   const player = page.getByRole('group', { name: 'Video player' });
-  await player.getByRole('button', { name: 'Play' }).click();
+  await player.getByRole('button', { name: 'Play', exact: true }).click();
 
   const question = openVideoQuestion(page);
   await test.step('the video pauses at 0:01 with the question focused', async () => {
