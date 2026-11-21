@@ -123,7 +123,7 @@ test('an instructor edits the landing page and a signed-out visitor sees it', as
     const tabs = visitor.getByRole('navigation', { name: 'Course sections' });
     const sections: Array<[string, string, string]> = [
       ['About', 'about', 'About this course'],
-      ['Modules', 'modules', 'There are 1 modules in this course'],
+      ['Modules', 'modules', 'There is 1 module in this course'],
       ['Instructors', 'instructors', 'Instructors'],
     ];
     for (const [tab, id, heading] of sections) {
