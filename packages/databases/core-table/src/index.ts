@@ -495,6 +495,10 @@ export {
   studentActivityWrites,
 } from './helpers/student-activity.js';
 export {
+  matchesTranscriptStreamFilters,
+  TRANSCRIPT_STREAM_FILTERS,
+} from './helpers/transcript-stream.js';
+export {
   type IUserProfile,
   profileChanged,
   syncUserProfile,
