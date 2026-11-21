@@ -73,13 +73,13 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import {
-  listActiveCategories,
-  updateCourseCatalogue,
-} from './procedures/course-catalogue.js';
-import {
   courseCaptionLanguages,
   updateCourseCaptionLanguages,
 } from './procedures/course-caption-languages.js';
+import {
+  listActiveCategories,
+  updateCourseCatalogue,
+} from './procedures/course-catalogue.js';
 import {
   createCourseImageUploadUrl,
   updateCourseImage,
