@@ -112,32 +112,25 @@ export function CompletedWithNew({ count: n }: { count: number }) {
 }
 
 // The course's modules and lessons, each lesson ticked once complete. Every
-// module starts open; the current lesson is highlighted.
+// module starts open (which are closed is the layout's state, so it survives
+// the panel remounting between lessons); the current lesson is highlighted.
 function CourseOutline({
   courseId,
   modules,
   activeLessonId,
   isLessonComplete,
   newItemCount,
+  closedModuleIds,
+  toggle,
 }: {
   courseId: string;
   modules: PlayerModule[];
   activeLessonId?: string;
+  closedModuleIds: Set<string>;
+  toggle: (moduleId: string) => void;
   isLessonComplete: CoursePlayer['isLessonComplete'];
   newItemCount: CoursePlayer['newItemCount'];
 }) {
-  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const toggle = (moduleId: string) =>
-    setClosedModuleIds((current) => {
-      const next = new Set(current);
-      if (!next.delete(moduleId)) {
-        next.add(moduleId);
-      }
-      return next;
-    });
-
   return (
     <nav aria-label="Course outline" className="space-y-3">
       {modules.map((module, moduleIndex) => {
@@ -272,6 +265,17 @@ export function CoursePlayerLayout({
 }) {
   const player = useCoursePlayer(courseId);
   const { course, enrolment } = player;
+  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggle = (moduleId: string) =>
+    setClosedModuleIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(moduleId)) {
+        next.add(moduleId);
+      }
+      return next;
+    });
 
   if (player.isPending) {
     return (
@@ -342,6 +346,8 @@ export function CoursePlayerLayout({
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <aside className="min-w-0 lg:sticky lg:top-20 lg:h-fit">
           <ResponsivePanel
+            // A new lesson closes the panel again on a phone.
+            key={activeLessonId}
             label="Course outline"
             summary={
               activeLesson
@@ -362,6 +368,8 @@ export function CoursePlayerLayout({
               activeLessonId={activeLessonId}
               isLessonComplete={player.isLessonComplete}
               newItemCount={player.newItemCount}
+              closedModuleIds={closedModuleIds}
+              toggle={toggle}
             />
           </ResponsivePanel>
         </aside>

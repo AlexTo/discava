@@ -59,8 +59,19 @@ test('a lesson with long titles fits a phone', async ({ page }) => {
       .getByRole('navigation', { name: 'Course outline' })
       .getByRole('link', { name: new RegExp(lessonTitles[1] ?? '') })
       .click();
+    const second = page.getByRole('heading', {
+      level: 2,
+      name: lessonTitles[1],
+    });
+    await expect(second).toBeVisible();
+    // The outline closes again, so the lesson is the first thing on screen.
     await expect(
-      page.getByRole('heading', { level: 2, name: lessonTitles[1] }),
-    ).toBeVisible();
+      page.getByRole('button', { name: /^Course outline/ }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    const box = await second.boundingBox();
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
+      PHONE.height,
+    );
+    await expectNoSidewaysScroll(page);
   });
 });

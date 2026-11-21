@@ -237,6 +237,18 @@ const outline = async () => {
 const outlineLink = async (name: string) =>
   within(await outline()).getByRole('link', { name: new RegExp(name) });
 
+function Navigating() {
+  const [lessonId, setLessonId] = useState('lesson-1');
+  return (
+    <>
+      <button type="button" onClick={() => setLessonId('lesson-2')}>
+        Go to 2
+      </button>
+      <LessonPage courseId="course-1" lessonId={lessonId} />
+    </>
+  );
+}
+
 describe('the course outline panel', () => {
   it('starts closed on a lesson, showing the lesson title', async () => {
     renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
@@ -261,6 +273,23 @@ describe('the course outline panel', () => {
       'page',
     );
     expect(await outlineLink('Lecture 1')).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes again when another lesson is chosen', async () => {
+    renderWithCoreApi(<Navigating />, { handlers: handlers() });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^Course outline/ }),
+    );
+    expect(
+      screen.getByRole('button', { name: /^Course outline/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to 2' }));
+    const trigger = await screen.findByRole('button', {
+      name: /^Course outline.*Lecture 2/,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('shows the lesson count on the course home', async () => {
