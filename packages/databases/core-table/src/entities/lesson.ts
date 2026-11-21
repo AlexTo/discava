@@ -59,6 +59,14 @@ export const createLessonEntity = async () =>
           type: ['hidden', 'visible'] as const,
           required: true,
         },
+        // Present with the value `true` when an instructor has marked the
+        // lesson as a free preview, removed when unmarked, never stored as
+        // `false`. Only a lesson of `kind` `lesson` carries it. Being marked
+        // is not being open: see `isOpenFreePreview` in
+        // ../helpers/curriculum.ts.
+        freePreview: {
+          type: 'boolean',
+        },
         // Soft delete for courses that aren't drafts. Set only on the
         // archived record itself; its descendants are hidden by being under
         // an archived ancestor, not by being archived themselves, so a
