@@ -47,7 +47,7 @@ test('an instructor requires every quiz to be passed for a certificate', async (
   // Takes the text item and the quiz, answering `answer`, as a new student.
   const attempt = async (
     page: typeof first,
-    answer: string,
+    answers: string[],
     user = newUser('Sam', ['student']),
   ) => {
     await openCourse(page, title);
@@ -55,7 +55,10 @@ test('an instructor requires every quiz to be passed for a certificate', async (
     await startFirstLesson(page);
     lessonUrl = page.url();
     await markItemDone(page, 'Only reading');
-    await takeQuiz(page, 'Quiz one', answer);
+    // A quiz counts as done once it is passed or out of attempts.
+    for (const answer of answers) {
+      await takeQuiz(page, 'Quiz one', answer);
+    }
     await page.getByRole('link', { name: title }).click();
     await expectCourseCompleted(page);
   };
@@ -89,7 +92,7 @@ test('an instructor requires every quiz to be passed for a certificate', async (
   });
 
   await test.step('a student who fails the quiz completes the course without a certificate', async () => {
-    await attempt(first, '3');
+    await attempt(first, ['3']);
     await first.goto(`${PORTALS.student}/my-learning`);
     await expectInCompleted(first, async () => {
       await expect(
@@ -112,7 +115,8 @@ test('an instructor requires every quiz to be passed for a certificate', async (
   });
 
   await test.step('a second student fails, and unticking the criterion gives them a certificate', async () => {
-    await attempt(second, '3');
+    // The quiz now allows two attempts, so both are used.
+    await attempt(second, ['3', '3']);
     await setCertificateCriteria(instructor, courseUrl, {
       requireQuizPass: false,
     });
