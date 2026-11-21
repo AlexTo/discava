@@ -201,6 +201,30 @@ describe('Review page', () => {
     ).toMatchObject({ reviewRevision: 5, points: 18 });
   });
 
+  it('seeds Edit grade with the grade just returned', async () => {
+    let returned = false;
+    const { user } = render(
+      () =>
+        view({
+          submission: returned
+            ? submission({ state: 'returned', points: 17, pointsOutOf: 20 })
+            : submission(),
+        }),
+      {
+        'assignmentSubmission.return': () => {
+          returned = true;
+          return { reviewRevision: 6 };
+        },
+      },
+    );
+
+    await user.type(await screen.findByLabelText('Points'), '17');
+    await user.click(screen.getByRole('button', { name: 'Return' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit grade' }));
+
+    expect(screen.getByLabelText('Points')).toHaveValue(17);
+  });
+
   it('replaces the form with a notice for a student who left', async () => {
     render(() =>
       view({
