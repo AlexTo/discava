@@ -76,7 +76,9 @@ afterEach(() => {
 });
 
 describe('UserMenu items', () => {
-  const openMenu = async (items?: { label: string; to: string }[]) => {
+  const openMenu = async (
+    items?: { label: string; to: string; className?: string }[],
+  ) => {
     const auth = {
       user: { profile: { sub: 'instructor-1', given_name: 'Alice' } },
     } as unknown as AuthContextProps;
@@ -98,6 +100,17 @@ describe('UserMenu items', () => {
     expect(
       screen.getByRole('menuitem', { name: 'Public profile' }),
     ).toHaveAttribute('href', '/profile');
+  });
+
+  it("applies an item's className to its entry", async () => {
+    await openMenu([
+      { label: 'My Learning', to: '/my-learning', className: 'sm:hidden' },
+    ]);
+
+    expect(screen.getByRole('menuitem', { name: 'My Learning' })).toHaveClass(
+      'sm:hidden',
+      'cursor-pointer',
+    );
   });
 
   it('has no portal-only links by default', async () => {

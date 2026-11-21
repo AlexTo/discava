@@ -7,6 +7,7 @@ import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
 import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { Link } from '@tanstack/react-router';
+import { cn } from 'cn';
 import { useAuth } from 'react-oidc-context';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import {
@@ -21,6 +22,8 @@ import {
 export interface UserMenuItem {
   label: string;
   to: string;
+  /** Extra classes for the entry, e.g. `sm:hidden` to show it on phones only. */
+  className?: string;
 }
 
 export interface UserMenuProps {
@@ -54,7 +57,11 @@ export const UserMenu = ({ items = [] }: UserMenuProps) => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {items.map((item) => (
-          <DropdownMenuItem key={item.to} asChild className="cursor-pointer">
+          <DropdownMenuItem
+            key={item.to}
+            asChild
+            className={cn('cursor-pointer', item.className)}
+          >
             <Link to={item.to}>{item.label}</Link>
           </DropdownMenuItem>
         ))}

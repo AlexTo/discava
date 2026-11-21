@@ -11,6 +11,7 @@ import {
 import {
   FREE_PREVIEW_COOKIE_LIFETIME_SECONDS,
   manifestNonce,
+  playableManifest,
 } from '@discava/common-server-utils/media-keys';
 import { isShown, tracksForPlayback } from '@discava/core-table';
 import {
@@ -18,7 +19,6 @@ import {
   loadOpenFreePreview,
   previewNotAvailable,
 } from '../helpers/free-preview.js';
-import { playableManifest } from '../helpers/playback.js';
 import { publicCourseProcedure } from '../init.js';
 import {
   FileUrlOutputSchema,
