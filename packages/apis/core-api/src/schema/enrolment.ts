@@ -13,6 +13,8 @@ export const EnrolmentSchema = z.object({
   completedAt: z.string().optional(),
   // When the student last completed an item or submitted a quiz attempt.
   lastActivityAt: z.string().optional(),
+  // What the student did with the first-lesson prompt; absent while it is open.
+  firstLessonPromptState: z.enum(['answered', 'dismissed']).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -26,6 +28,12 @@ export const EnrolInputSchema = z.object({
 export type IEnrolInput = z.output<typeof EnrolInputSchema>;
 
 export const EnrolOutputSchema = EnrolmentSchema;
+
+export const DismissFirstLessonPromptInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export const DismissFirstLessonPromptOutputSchema = EnrolmentSchema;
 
 export const MyEnrolmentInputSchema = z.object({
   courseId: z.string(),

@@ -168,6 +168,8 @@ export const ModuleSchema = z.object({
 export type IModule = z.output<typeof ModuleSchema>;
 
 export const ViewCourseOutputSchema = CourseSchema.extend({
+  // The text to show in the first lesson: the course's own, else the default.
+  firstLessonPrompt: z.string(),
   modules: z.array(ModuleSchema),
 });
 

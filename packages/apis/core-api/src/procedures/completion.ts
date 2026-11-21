@@ -11,6 +11,7 @@ import {
   isShown,
   studentActivityAt,
   studentActivityWrites,
+  videoFirstRecordCheck,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -45,7 +46,8 @@ const asCompletion = (record: IItemCompletion): IItemCompletion => ({
 // - the module, lesson and item are still visible and not archived,
 // - the student is still enrolled,
 // and creates the completion only if there isn't one. For a text or video
-// item that is the student's first record of it, so the same transaction
+// item that is the student's first record of it (a video's may be an answer
+// to one of its questions), so the same transaction
 // increments the item's studentActivityCount: each student is counted once.
 // A quiz completes itself when an attempt passes or uses the last attempt
 // (see quiz.submitAttempt); it's accepted here only once that holds, which
@@ -72,6 +74,7 @@ export const completeContentItem = courseProcedure
         enrolment,
         { data: completion },
         { data: summary },
+        { data: sheet },
       ] = await Promise.all([
         coreTable.entities.course.get({ courseId }).go(),
         coreTable.entities.module.get({ courseId, moduleId }).go(),
@@ -80,6 +83,9 @@ export const completeContentItem = courseProcedure
         getEnrolment(coreTable, courseId, userId),
         coreTable.entities.itemCompletion.get(completionKey).go(),
         coreTable.entities.quizSummary
+          .get({ userId, courseId, contentItemId })
+          .go(),
+        coreTable.entities.videoAnswerSheet
           .get({ userId, courseId, contentItemId })
           .go(),
       ]);
@@ -133,7 +139,13 @@ export const completeContentItem = courseProcedure
         }
       }
 
-      // A quiz's activity was counted by its first attempt.
+      // A quiz's activity was counted by its first attempt, and a video's by
+      // its first answer when the learner answered before marking it done.
+      // Without an answer sheet this claims a video's first record, so it
+      // checks that no sheet appeared meanwhile (an answer at the same moment
+      // cancels one of the two, which reads again and finds the other).
+      const isVideo = item.type === 'video';
+      const claimsFirstRecord = !isQuiz && !(isVideo && sheet);
       const completedAt = studentActivityAt(enrolment!);
       const { canceled, data } = await coreTable.transaction
         .write((entities) => [
@@ -141,12 +153,15 @@ export const completeContentItem = courseProcedure
             ...itemKey,
             userId,
             at: completedAt,
-            firstRecord: !isQuiz,
+            firstRecord: claimsFirstRecord,
             ...(isQuiz && { quizVersion: item.quizVersion as number }),
           }),
           entities.itemCompletion
             .create({ ...completionKey, moduleId, completedAt })
             .commit(),
+          ...(isVideo && claimsFirstRecord
+            ? [videoFirstRecordCheck(entities, completionKey, 'sheet')]
+            : []),
         ])
         .go();
 

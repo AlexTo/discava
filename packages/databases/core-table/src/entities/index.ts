@@ -47,4 +47,5 @@ export { createReviewEntity } from './review.js';
 export { createSubmissionFeedbackEntity } from './submission-feedback.js';
 export { createSubmissionNoticeEntity } from './submission-notice.js';
 export { createUserEntity } from './user.js';
+export { createVideoAnswerSheetEntity } from './video-answer-sheet.js';
 export { createVideoPositionEntity } from './video-position.js';

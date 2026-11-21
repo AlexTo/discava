@@ -49,6 +49,7 @@ import {
   createSubmissionFeedbackEntity,
   createSubmissionNoticeEntity,
   createUserEntity,
+  createVideoAnswerSheetEntity,
   createVideoPositionEntity,
 } from './entities/index.js';
 
@@ -75,6 +76,7 @@ export const createCoreTableService = async () => {
     quizSummary,
     itemCompletion,
     certificate,
+    videoAnswerSheet,
     videoPosition,
     courseStats,
     periodStats,
@@ -122,6 +124,7 @@ export const createCoreTableService = async () => {
     createQuizSummaryEntity(),
     createItemCompletionEntity(),
     createCertificateEntity(),
+    createVideoAnswerSheetEntity(),
     createVideoPositionEntity(),
     createCourseStatsEntity(),
     createPeriodStatsEntity(),
@@ -171,6 +174,7 @@ export const createCoreTableService = async () => {
     quizSummary,
     itemCompletion,
     certificate,
+    videoAnswerSheet,
     videoPosition,
     courseStats,
     periodStats,

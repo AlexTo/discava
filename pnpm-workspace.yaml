@@ -115,6 +115,8 @@ catalog:
   embla-carousel-react: ^8.6.0
   react-dropzone: 20.1.1
   react-easy-crop: 6.2.4
+  react-pdf: 11.1.0
+  pdfjs-dist: 6.5.438
   hls.js: 1.7.3
   cn: 0.5.2
   recharts: 3.10.1

@@ -32,6 +32,13 @@ export const createCourseEntity = async () =>
         description: {
           type: 'string',
         },
+        // The instructor's own first-lesson prompt: plain text, 1 to 200
+        // characters after trimming. Absent means the course uses
+        // DEFAULT_FIRST_LESSON_PROMPT. Written only by instructor-api's
+        // course.setFirstLessonPrompt, which removes it when cleared.
+        firstLessonPrompt: {
+          type: 'string',
+        },
         status: {
           type: ['draft', 'published', 'archived'] as const,
           required: true,

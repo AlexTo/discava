@@ -52,7 +52,10 @@ describe('sqsStreamRecords', () => {
   });
 
   it('round-trips what the router sends, in the shape the handlers parse', () => {
-    const records = [streamRecord('1', 'course'), streamRecord('2', 'lesson')];
+    const records = [
+      streamRecord('1', 'courseRating'),
+      streamRecord('2', 'lesson'),
+    ];
     const routed = routeRecords(records).messages;
     const body = [...routed.values()].flat().map((m) => ({ body: m.body }));
     const parsed = DynamoDBStreamSchema.parse(

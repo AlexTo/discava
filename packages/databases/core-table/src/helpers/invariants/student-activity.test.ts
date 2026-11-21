@@ -27,7 +27,7 @@ describe('activity-count-matches-students', () => {
   });
 
   it('reports a count higher than the students with records', () => {
-    item('video').studentActivityCount = 1;
+    item('file').studentActivityCount = 1;
     expectOnly('activity-count-matches-students', /1, but 0 students/);
   });
 
@@ -237,8 +237,8 @@ describe('student-records-enrolled', () => {
     table.enrolments = [];
     const { invariants, violations } = broken();
     expect(invariants).toEqual(['student-records-enrolled']);
-    // Two completions, two attempts and a summary.
-    expect(violations).toHaveLength(5);
+    // Two completions, two attempts, a summary and a video answer sheet.
+    expect(violations).toHaveLength(6);
   });
 
   it('still counts a dropped enrolment', () => {
@@ -283,6 +283,86 @@ describe('last-activity-at-current', () => {
   it('reports a missing lastActivityAt when there was activity', () => {
     table.enrolments[0].lastActivityAt = undefined;
     expectOnly('last-activity-at-current', /not set/);
+  });
+});
+
+describe('video answer sheets', () => {
+  const sheet = () => table.videoAnswerSheets[0];
+
+  it('counts a student with only a sheet', () => {
+    item('video').studentActivityCount = 0;
+    expectOnly('activity-count-matches-students', /0, but 1 students/);
+  });
+
+  it('counts a student with a sheet and a completion once', () => {
+    table.itemCompletions.push({
+      ...ids,
+      userId: 'student',
+      contentItemId: 'video',
+      completedAt: AT.a2,
+    });
+    table.enrolments[0].progressPercent = 75;
+    expect(broken().invariants).toEqual([]);
+  });
+
+  it('reports a sheet for an item that does not exist', () => {
+    sheet().contentItemId = 'gone';
+    expect(broken().invariants).toContain('student-records-have-targets');
+  });
+
+  it('reports a sheet by a student not enrolled', () => {
+    table.enrolments = [];
+    expect(broken().invariants).toContain('student-records-enrolled');
+  });
+
+  it('reports a sheet filed under another lesson', () => {
+    sheet().lessonId = 'elsewhere';
+    expectOnly('student-records-placed-with-item');
+  });
+
+  it("reports an answer later than the enrolment's last activity", () => {
+    sheet().answers.q1.answeredAt = '2026-01-03T00:00:00.000Z';
+    expectOnly('last-activity-at-current', /latest activity was at 2026-01-03/);
+  });
+});
+
+describe('video-answer-sheet-shape', () => {
+  const sheet = () => table.videoAnswerSheets[0];
+  const entry = () => sheet().answers.q1;
+  const reported = () => {
+    table.quizQuestionStats = []; // the aggregates are not the point here
+    return checkTableInvariants(table).filter(
+      (v) => v.invariant === 'video-answer-sheet-shape',
+    );
+  };
+
+  it('accepts the consistent sheet', () => {
+    expect(reported()).toEqual([]);
+  });
+
+  it('reports a sheet on an item that is not a video', () => {
+    sheet().contentItemId = 'text';
+    expect(reported().map((v) => v.message)).toContain(
+      'answers to a text item',
+    );
+  });
+
+  it('reports an answerCount that is not the number of entries', () => {
+    sheet().answerCount = 2;
+    expect(reported().map((v) => v.message)).toEqual([
+      'answerCount is 2, but there are 1 entries',
+    ]);
+  });
+
+  it.each([
+    ['no options', { optionIds: [] }],
+    ['a correct flag that is not a boolean', { correct: 'yes' }],
+    ['an invalid answeredAt', { answeredAt: 'yesterday' }],
+    ['a quizVersion of 0', { quizVersion: 0 }],
+    ["a quizVersion beyond the item's", { quizVersion: 3 }],
+  ])('reports an entry with %s', (_, change) => {
+    sheet().answers.q1 = { ...entry(), ...change };
+    expect(reported()).toHaveLength(1);
   });
 });
 

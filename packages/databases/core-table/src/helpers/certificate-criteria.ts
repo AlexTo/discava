@@ -6,7 +6,9 @@ import type { EntityItem } from 'electrodb';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
+import type { CoreTable } from '../service.js';
 import { filterEffectivelyVisible } from './curriculum.js';
+import { isConditionalCheckFailed, VersionConflictError } from './errors.js';
 
 type Item<F extends () => Promise<any>> = EntityItem<Awaited<ReturnType<F>>>;
 
@@ -185,4 +187,53 @@ export const evaluateCertificateCriteria = ({
     }),
   };
   return { met, requirements, assessment };
+};
+
+// Sets what a course's certificates require. Nothing is written when the
+// values are the stored ones; otherwise `version` goes up by one, so a
+// certificate's `assessment` says which rules it was issued under. The patch is
+// conditioned on the version just read: a concurrent change makes it read
+// again and retry once.
+export const setCertificateCriteria = async ({
+  coreTable,
+  courseId,
+  criteria,
+}: {
+  coreTable: CoreTable;
+  courseId: string;
+  criteria: Pick<CertificateCriteria, 'requireQuizPass'>;
+}) => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data: course } = await coreTable.entities.course
+      .get({ courseId })
+      .go();
+    if (!course) {
+      throw new Error(`Course ${courseId} not found`);
+    }
+    const stored = course.certificateCriteria;
+    if (stored.requireQuizPass === criteria.requireQuizPass) {
+      return course;
+    }
+    try {
+      const { data } = await coreTable.entities.course
+        .patch({ courseId })
+        .set({
+          certificateCriteria: {
+            ...stored,
+            ...criteria,
+            version: stored.version + 1,
+          },
+        })
+        .where((attr, op) =>
+          op.eq(attr.certificateCriteria.version, stored.version),
+        )
+        .go({ response: 'all_new' });
+      return data;
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) {
+        throw error;
+      }
+    }
+  }
+  throw new VersionConflictError();
 };

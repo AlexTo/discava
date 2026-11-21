@@ -33,6 +33,11 @@ export const CourseSchema = z.object({
   learningOutcomes: z.array(z.string()).optional(),
   requirements: z.array(z.string()).optional(),
   certificatesEnabled: z.boolean(),
+  certificateCriteria: z.object({
+    version: z.number(),
+    requireQuizPass: z.boolean(),
+    minUploadScorePercent: z.number().optional(),
+  }),
   priceAmount: z.number(),
   priceCurrency: z.string(),
   createdAt: z.string(),
@@ -130,6 +135,23 @@ export const SetCourseCertificatesOutputSchema = CourseSchema;
 
 export type ISetCourseCertificatesOutput = z.output<
   typeof SetCourseCertificatesOutputSchema
+>;
+
+export const SetCertificateCriteriaInputSchema = z
+  .object({
+    courseId: z.string(),
+    requireQuizPass: z.boolean(),
+  })
+  .strict();
+
+export type ISetCertificateCriteriaInput = z.output<
+  typeof SetCertificateCriteriaInputSchema
+>;
+
+export const SetCertificateCriteriaOutputSchema = CourseSchema;
+
+export type ISetCertificateCriteriaOutput = z.output<
+  typeof SetCertificateCriteriaOutputSchema
 >;
 
 export const SetCoursePriceInputSchema = z.object({

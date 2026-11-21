@@ -67,6 +67,15 @@ describe('discussionPost', () => {
     expect(() => post.create(record as never).params()).toThrow();
   });
 
+  it('accepts a question with and without promptAnswer', () => {
+    const without = post.create(question).params() as Params;
+    expect(without.Item).not.toHaveProperty('promptAnswer');
+    const { Item } = post
+      .create({ ...question, promptAnswer: true })
+      .params() as Params;
+    expect(Item.promptAnswer).toBe(true);
+  });
+
   it('refuses a kind other than question or reply', () => {
     expect(() =>
       post.create({ ...question, kind: 'comment' } as never).params(),

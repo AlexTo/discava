@@ -104,6 +104,63 @@ describe('analyticsUpdate', () => {
     expect(counters()['c1 QUIZ#quiz1#Q#q1 misses']).toBeUndefined();
   });
 
+  describe('a video answer sheet', () => {
+    const entry = (correct: boolean, answeredAt: string) => ({
+      optionIds: ['a'],
+      correct,
+      answeredAt,
+      quizVersion: 1,
+    });
+    const sheet = (answers: Record<string, unknown>) => ({
+      courseId: 'c1',
+      userId: 'u1',
+      contentItemId: 'video1',
+      answers,
+      answerCount: Object.keys(answers).length,
+    });
+    const first = { q1: entry(false, '2026-11-17T08:00:00.000Z') };
+    const both = { ...first, q2: entry(true, '2026-11-17T08:05:00.000Z') };
+
+    it('counts each entry once, however the sheet grew', async () => {
+      const { apply, counters } = memoryApply();
+      await analyticsUpdate(
+        batch(
+          record('INSERT', 'videoAnswerSheet', undefined, sheet(first)),
+          record('MODIFY', 'videoAnswerSheet', sheet(first), sheet(both)),
+        ),
+        apply,
+      );
+
+      expect(counters()).toEqual({
+        'c1 QUIZ#video1#Q#q1 attempts': 1,
+        'c1 QUIZ#video1#Q#q1 misses': 1,
+        'c1 QUIZ#video1#Q#q2 attempts': 1,
+        'c1 DAY#2026-11-17 activeLearners': 1,
+        'c1 WEEK#2026-W47 activeLearners': 1,
+      });
+    });
+
+    it('changes nothing when a record is delivered again', async () => {
+      const { apply, counters } = memoryApply();
+      const records = batch(
+        record('INSERT', 'videoAnswerSheet', undefined, sheet(first), 'e-ins'),
+        record(
+          'MODIFY',
+          'videoAnswerSheet',
+          sheet(first),
+          sheet(both),
+          'e-mod',
+        ),
+      );
+      await analyticsUpdate(records, apply);
+      const once = counters();
+      const second = await analyticsUpdate(records, apply);
+
+      expect(counters()).toEqual(once);
+      expect(second.applied).toBe(0);
+    });
+  });
+
   it('turns enrolment inserts and status changes into counts', async () => {
     const { apply, counters } = memoryApply();
     await analyticsUpdate(

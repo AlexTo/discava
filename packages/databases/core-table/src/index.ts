@@ -182,6 +182,7 @@ export {
   evaluateCertificateCriteria,
   type QuizRequirementState,
   scoreBand,
+  setCertificateCriteria,
 } from './helpers/certificate-criteria.js';
 export {
   TRANSCODE_PENDING_ATTRIBUTES,
@@ -222,6 +223,7 @@ export {
 export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,
+  firstShownLesson,
   isOpenFreePreview,
   isShown,
 } from './helpers/curriculum.js';
@@ -289,6 +291,17 @@ export {
   SlugUnavailableError,
   VersionConflictError,
 } from './helpers/errors.js';
+export {
+  DEFAULT_FIRST_LESSON_PROMPT,
+  dismissFirstLessonPrompt,
+  FIRST_LESSON_PROMPT_MAX,
+  type FirstLessonPromptState,
+  firstLessonPromptStateWrites,
+  NotEnrolledError,
+  normaliseFirstLessonPrompt,
+  promptAnswerTitle,
+  resolveFirstLessonPrompt,
+} from './helpers/first-lesson-prompt.js';
 export {
   classifyProfileCancellation,
   defaultDisplayName,
@@ -494,4 +507,14 @@ export {
   VIDEO_POSITION_MAX_SECONDS,
   videoPositionToStore,
 } from './helpers/video-position.js';
+export {
+  type StoredVideoAnswerKey,
+  type StoredVideoQuestion,
+  type VideoAnswer,
+  type VideoAnswerEntry,
+  type VideoRecordKey,
+  videoAnswerWrites,
+  videoFirstRecordCheck,
+  videoQuestionsOf,
+} from './helpers/video-question.js';
 export { type CoreTable, createCoreTableService } from './service.js';

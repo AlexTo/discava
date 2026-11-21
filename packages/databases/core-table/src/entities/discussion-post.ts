@@ -115,6 +115,14 @@ export const createDiscussionPostEntity = async () =>
         unanswered: {
           type: 'string',
         },
+        // Questions only, read-only: `true` on a question that answers the
+        // first-lesson prompt. Never set on a reply, and never `false`. Such a
+        // question never carries `unanswered`. Written only by
+        // `discussionWrites`' answerPrompt.
+        promptAnswer: {
+          type: 'boolean',
+          readOnly: true,
+        },
         // Set and removed with `unanswered`: the question's createdAt, which
         // orders byUnanswered oldest first.
         unansweredSince: {

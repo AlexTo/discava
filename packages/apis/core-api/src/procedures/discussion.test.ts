@@ -4,11 +4,12 @@
  */
 
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
-import { postIdTime } from '@discava/core-table';
+import { DiscussionInputError, postIdTime } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
   accept,
+  answerPrompt,
   ask,
   listQuestions,
   removeOwn,
@@ -90,6 +91,14 @@ const table = () => ({
       },
     },
   },
+  collections: {
+    curriculum: () => ({
+      go: async () => {
+        state.userCalls.push(['curriculum']);
+        return { data: state.curriculum };
+      },
+    }),
+  },
   transaction: {
     write: (build: (entities: unknown) => unknown) => ({
       go: async () => {
@@ -104,6 +113,7 @@ const router = t.router({
   listQuestions,
   thread,
   ask,
+  answerPrompt,
   reply,
   vote,
   accept,
@@ -162,6 +172,13 @@ beforeEach(() => {
     module: { visibility: 'visible' },
     lesson: { visibility: 'visible' },
     enrolment: { status: 'active' },
+    curriculum: {
+      module: [{ moduleId: 'm1', order: 1, visibility: 'visible' }],
+      lesson: [
+        { moduleId: 'm1', lessonId: 'l1', order: 1, visibility: 'visible' },
+        { moduleId: 'm1', lessonId: 'l2', order: 2, visibility: 'visible' },
+      ],
+    },
     instructorRecord: null,
     user: { givenName: 'Me', familyName: 'Myself' },
     posts: new Map(),
@@ -187,6 +204,7 @@ const calls: Record<string, (c: ReturnType<typeof as>) => Promise<unknown>> = {
   listQuestions: (c) => c.listQuestions(ref),
   thread: (c) => c.thread({ ...ref, threadId: 'q1' }),
   ask: (c) => c.ask({ ...ref, postId: NEW_ID, title: 'T', body: 'B' }),
+  answerPrompt: (c) => c.answerPrompt({ ...ref, postId: NEW_ID, body: 'B' }),
   reply: (c) => c.reply({ ...ref, threadId: 'q1', postId: NEW_ID, body: 'B' }),
   vote: (c) => c.vote({ ...ref, threadId: 'q1', postId: 'q1', voted: true }),
   accept: (c) => c.accept({ ...ref, threadId: 'q1', postId: 'r1' }),
@@ -420,6 +438,177 @@ describe('thread', () => {
     await expect(
       as(ME).thread({ ...ref, threadId: 'q1', cursor }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('answerPrompt', () => {
+  const input = { ...ref, postId: NEW_ID, body: ' I want to build ' };
+  const created = (over: Record<string, unknown> = {}) =>
+    put(
+      question({
+        postId: NEW_ID,
+        threadId: NEW_ID,
+        authorId: ME,
+        promptAnswer: true,
+        ...over,
+      }),
+    );
+
+  it('writes the answer as the caller, with no notification', async () => {
+    write.mockImplementation(async () => (created(), { canceled: false }));
+    const post = await as(ME).answerPrompt(input);
+    expect(post).toMatchObject({
+      postId: NEW_ID,
+      kind: 'question',
+      promptAnswer: true,
+      answered: true,
+      mine: true,
+    });
+    expect(discussionWrites).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'answerPrompt',
+        ...ref,
+        postId: NEW_ID,
+        author: { userId: ME, name: 'Me Myself', isInstructor: false },
+        body: ' I want to build ',
+      }),
+    );
+    expect(discussionNotificationWrites).not.toHaveBeenCalled();
+    expect(state.built).toEqual(['post-item']);
+  });
+
+  it('reads the curriculum once, even when a cancelled write is retried', async () => {
+    write.mockResolvedValueOnce({ canceled: true });
+    write.mockImplementation(async () => (created(), { canceled: false }));
+    await as(ME).answerPrompt(input);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(
+      state.userCalls.filter(([kind]: string[]) => kind === 'curriculum'),
+    ).toHaveLength(1);
+  });
+
+  it('returns the existing answer for a retry by the same author, writing nothing', async () => {
+    created();
+    const post = await as(ME).answerPrompt(input);
+    expect(post.postId).toBe(NEW_ID);
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('refuses an id another user, or an ordinary question, already used', async () => {
+    created({ authorId: 'someone' });
+    await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    state.posts.clear();
+    created({ promptAnswer: undefined });
+    await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it.each(['answered', 'dismissed'])(
+    'refuses a learner whose prompt is %s',
+    async (firstLessonPromptState) => {
+      state.enrolment = { status: 'active', firstLessonPromptState };
+      await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+        code: 'PRECONDITION_FAILED',
+        message: "You've already answered or dismissed this prompt",
+      });
+      expect(write).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a lesson that is not the first shown lesson', async () => {
+    await expect(
+      as(ME).answerPrompt({ ...input, lessonId: 'l2' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: "This prompt belongs to the course's first lesson",
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('takes the first shown lesson when the first one is hidden', async () => {
+    state.curriculum.lesson[0].visibility = 'hidden';
+    await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    write.mockImplementation(async () => (created(), { canceled: false }));
+    state.lesson = { visibility: 'visible' };
+    await as(ME).answerPrompt({ ...input, lessonId: 'l2' });
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an instructor of the course who is not enrolled', async () => {
+    await expect(asInstructor().answerPrompt(input)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('lets an instructor who is also enrolled answer, as the instructor', async () => {
+    state.enrolment = { status: 'active' };
+    state.instructorRecord = { instructorId: 'teacher' };
+    write.mockImplementation(
+      async () => (created({ authorId: 'teacher' }), { canceled: false }),
+    );
+    await as('teacher', ['instructor']).answerPrompt(input);
+    expect(discussionWrites.mock.calls[0][1].author).toMatchObject({
+      userId: 'teacher',
+      isInstructor: true,
+    });
+  });
+
+  it('refuses a signed-out caller', async () => {
+    await expect(callerFor(router).answerPrompt(input)).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+
+  it.each([
+    ['an archived course', () => (state.course = { status: 'archived' })],
+    ['a draft course', () => (state.course = { status: 'draft' })],
+  ])('is closed for %s', async (_n, change) => {
+    change();
+    await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+      code: expect.stringMatching(/PRECONDITION_FAILED|NOT_FOUND/),
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('turns a bad body into BAD_REQUEST', async () => {
+    discussionWrites.mockImplementation(() => {
+      throw new DiscussionInputError('body must not be empty');
+    });
+    await expect(
+      as(ME).answerPrompt({ ...input, body: '  ' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('retries a cancelled write up to three times, then conflicts', async () => {
+    write.mockResolvedValue({ canceled: true });
+    await expect(as(ME).answerPrompt(input)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+    expect(write).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('a prompt answer in a list', () => {
+  it('shows promptAnswer to a student, and not on a hidden answer', async () => {
+    state.page = () => [
+      question({ postId: 'p1', threadId: 'p1', promptAnswer: true }),
+      question({
+        postId: 'p2',
+        threadId: 'p2',
+        promptAnswer: true,
+        state: 'hidden',
+      }),
+    ];
+    const { items } = await as(ME).listQuestions(ref);
+    expect(items[0]).toMatchObject({ promptAnswer: true, answered: true });
+    expect(items[1]).not.toHaveProperty('promptAnswer');
   });
 });
 

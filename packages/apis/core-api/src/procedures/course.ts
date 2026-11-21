@@ -13,6 +13,7 @@ import {
   type CoreTable,
   filterEffectivelyVisible,
   isOpenFreePreview,
+  resolveFirstLessonPrompt,
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -370,6 +371,7 @@ export const viewCourse = courseProcedure
     // zod output schema is what actually validates the shape at runtime.
     return {
       ...course,
+      firstLessonPrompt: resolveFirstLessonPrompt(course),
       modules: modules
         .slice()
         .sort((a, b) => a.order - b.order)

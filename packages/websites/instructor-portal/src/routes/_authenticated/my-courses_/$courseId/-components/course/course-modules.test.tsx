@@ -10,6 +10,34 @@ import {
 } from '../../../../../../test/render-with-instructor-api';
 import { CourseModules } from './course-modules';
 
+// Link needs a router context this test doesn't set up: a plain anchor
+// pointing at the route it would link to.
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
+    Link: ({
+      to,
+      params,
+      children,
+      ...props
+    }: {
+      to: string;
+      params: Record<string, string>;
+      children: React.ReactNode;
+    } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a
+        href={Object.entries(params).reduce(
+          (path, [key, value]) => path.replace(`$${key}`, value),
+          to,
+        )}
+        {...props}
+      >
+        {children}
+      </a>
+    ),
+  });
+});
+
 // Dragging needs real layout, which jsdom doesn't have (the deployed portal is
 // checked in a browser for that). Here dnd-kit's provider is replaced by one
 // that hands each sortable row its own list's drop handler, so a drop can be
@@ -306,6 +334,39 @@ describe('CourseModules', () => {
       expect(
         within(row).queryByRole('button', { name: /lesson Essay/ }),
       ).not.toBeInTheDocument();
+    });
+
+    it('links an upload assignment to its submissions', () => {
+      renderModules({ modules: assignmentModules });
+
+      expect(
+        screen.getByRole('link', { name: 'Submissions for Essay' }),
+      ).toHaveAttribute(
+        'href',
+        '/my-courses/course-1/assignments/ci2/submissions',
+      );
+    });
+
+    it('has no submissions link on a quiz assignment or a lesson', () => {
+      const [mod] = assignmentModules;
+      renderModules({
+        modules: [
+          {
+            ...mod,
+            lessons: [
+              mod.lessons[0],
+              {
+                ...mod.lessons[1],
+                contentItems: [
+                  { ...mod.lessons[1].contentItems[0], type: 'quiz' },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(screen.queryByRole('link', { name: /Submissions/ })).toBeNull();
     });
 
     it('offers no add-item buttons, nor a control for its item as text', () => {

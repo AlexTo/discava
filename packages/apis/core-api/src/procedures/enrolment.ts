@@ -7,13 +7,17 @@ import { transactionConflict } from '@discava/common-server-utils/trpc-api-base'
 import type { CoreTable } from '@discava/core-table';
 import {
   cancellationReasons,
+  dismissFirstLessonPrompt as dismissPrompt,
   failedAt,
   hasTransactionConflict,
+  NotEnrolledError,
   restoreFreeEnrolment,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
 import {
+  DismissFirstLessonPromptInputSchema,
+  DismissFirstLessonPromptOutputSchema,
   EnrolInputSchema,
   EnrolOutputSchema,
   type IEnrolment,
@@ -148,3 +152,31 @@ export const myEnrolment = courseProcedure
   .query(async ({ ctx, input }) =>
     getEnrolment(ctx.coreTable, input.courseId, ctx.user.sub),
   );
+
+// Closes the first-lesson prompt without answering it. Works whatever the
+// course's status, so a prompt can always be closed; an enrolment whose state
+// is already set is returned as it is, so a double click or a second device is
+// harmless.
+export const dismissFirstLessonPrompt = courseProcedure
+  .input(DismissFirstLessonPromptInputSchema)
+  .output(DismissFirstLessonPromptOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { courseId } = input;
+    try {
+      return (await dismissPrompt(coreTable, {
+        courseId,
+        userId: ctx.user.sub,
+      })) as IEnrolment;
+    } catch (error) {
+      if (!(error instanceof NotEnrolledError)) {
+        throw error;
+      }
+      // Refused as the other enrolment-gated procedures refuse.
+      const { data: course } = await coreTable.entities.course
+        .get({ courseId })
+        .go();
+      requireEnrolment(course ?? { status: 'missing' }, null);
+      throw error;
+    }
+  });

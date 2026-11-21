@@ -48,8 +48,14 @@ const courseContributions = async (
   coreTable: CoreTable,
   courseId: string,
 ): Promise<{ sum: Contributions; funnel: FunnelMarker[] }> => {
-  const { enrolment, itemCompletion, quizAttempt, quizSummary, progress } =
-    coreTable.entities;
+  const {
+    enrolment,
+    itemCompletion,
+    quizAttempt,
+    quizSummary,
+    videoAnswerSheet,
+    progress,
+  } = coreTable.entities;
   const funnel: FunnelMarker[] = [];
   const { data: enrolments } = await enrolment.query
     .primary({ courseId })
@@ -60,12 +66,14 @@ const courseContributions = async (
   // Each student's records by keyed query: their partition, the course's prefix.
   await forEachLimited(enrolments, 10, async (enrolled) => {
     const { userId } = enrolled;
-    const [completions, attempts, summaries, lessons] = await Promise.all([
-      itemCompletion.query.primary({ userId }).begins({ courseId }).go(all),
-      quizAttempt.query.primary({ userId }).begins({ courseId }).go(all),
-      quizSummary.query.primary({ userId }).begins({ courseId }).go(all),
-      progress.query.primary({ userId }).begins({ courseId }).go(all),
-    ]);
+    const [completions, attempts, summaries, sheets, lessons] =
+      await Promise.all([
+        itemCompletion.query.primary({ userId }).begins({ courseId }).go(all),
+        quizAttempt.query.primary({ userId }).begins({ courseId }).go(all),
+        quizSummary.query.primary({ userId }).begins({ courseId }).go(all),
+        videoAnswerSheet.query.primary({ userId }).begins({ courseId }).go(all),
+        progress.query.primary({ userId }).begins({ courseId }).go(all),
+      ]);
     for (const record of lessons.data) {
       const status = funnelStatus(record, enrolled);
       if (status) {
@@ -78,6 +86,7 @@ const courseContributions = async (
       ),
       ...attempts.data.map((record) => contributions('quizAttempt', record)),
       ...summaries.data.map((record) => contributions('quizSummary', record)),
+      ...sheets.data.map((record) => contributions('videoAnswerSheet', record)),
       funnelContributions(lessons.data, enrolled),
     );
   });

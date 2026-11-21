@@ -43,7 +43,7 @@ const getCoreTable = () => {
 const CONCURRENCY = 10;
 
 // The curriculum entities whose changes reach this feature, alongside new
-// item completions: see PROGRESS_STREAM_FILTERS in core-table's stream
+// item completions, quiz summaries and courses: see PROGRESS_STREAM_FILTERS in core-table's stream
 // feature registry. ElectroDB stores each record's entity name in `__edb_e__`.
 const curriculumEntities = new Set<string>(CURRICULUM_ENTITIES);
 
@@ -65,10 +65,54 @@ const changesWhatStudentsSee = (record: StreamRecord) => {
   );
 };
 
+type Settings = { passMarkPercent?: unknown } | undefined;
+
+// A quiz's pass mark changed. The rule counts a quiz as passed only when the
+// student's best score reaches the current mark, so any change (0 to 70, or
+// 80 down to 60 bringing a best score of 70 back to passed) can change who
+// is eligible.
+const changesQuizPassMark = (record: StreamRecord) => {
+  if (record.eventName !== 'MODIFY') {
+    return false;
+  }
+  const before: Image = record.dynamodb.OldImage;
+  const after: Image = record.dynamodb.NewImage;
+  if (after?.type !== 'quiz') {
+    return false;
+  }
+  const mark = (image: Image) =>
+    Number((image?.settings as Settings)?.passMarkPercent ?? 0);
+  return mark(before) !== mark(after);
+};
+
+// A student's quiz record that can make them eligible: a first pass, or a
+// better best score on a quiz already passed (the pass only counts while the
+// best score reaches the current pass mark).
+const improvesQuizPass = (record: StreamRecord) => {
+  const before: Image = record.dynamodb.OldImage;
+  const after: Image = record.dynamodb.NewImage;
+  return (
+    Boolean(after?.passedAt) &&
+    (!before?.passedAt || Number(after?.bestScore) > Number(before?.bestScore))
+  );
+};
+
+// The certificate rules changed, or certificates were switched on or off.
+const changesCertificateRules = (record: StreamRecord) => {
+  const before: Image = record.dynamodb.OldImage;
+  const after: Image = record.dynamodb.NewImage;
+  const version = (image: Image) =>
+    (image?.certificateCriteria as { version?: unknown } | undefined)?.version;
+  return (
+    version(before) !== version(after) ||
+    before?.certificatesEnabled !== after?.certificatesEnabled
+  );
+};
+
 // The students to recalculate, per course: the student of each completion
-// recorded, and everyone enrolled in a course whose visible curriculum
-// changed. Each is recalculated once per batch, however many records name
-// them.
+// recorded or quiz pass improved, and everyone enrolled in a course whose
+// visible curriculum, certificate criteria or assessed quizzes changed. Each
+// is recalculated once per batch, however many records name them.
 export const studentsToRecalculate = async (
   records: StreamRecord[],
   listStudents: (courseId: string) => Promise<string[]>,
@@ -88,10 +132,18 @@ export const studentsToRecalculate = async (
     const entity = image?.__edb_e__;
     if (entity === 'itemCompletion' && record.eventName === 'INSERT') {
       add(String(image?.courseId), [String(image?.userId)]);
+    } else if (entity === 'quizSummary') {
+      if (improvesQuizPass(record)) {
+        add(String(image?.courseId), [String(image?.userId)]);
+      }
+    } else if (entity === 'course') {
+      if (record.eventName === 'MODIFY' && changesCertificateRules(record)) {
+        changedCourses.add(String(image?.courseId));
+      }
     } else if (
       typeof entity === 'string' &&
       curriculumEntities.has(entity) &&
-      changesWhatStudentsSee(record)
+      (changesWhatStudentsSee(record) || changesQuizPassMark(record))
     ) {
       changedCourses.add(String(image?.courseId));
     }

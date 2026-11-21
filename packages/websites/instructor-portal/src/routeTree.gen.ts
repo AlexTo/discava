@@ -21,6 +21,8 @@ import { Route as AuthenticatedMyCoursesCourseIdRouteRouteImport } from './route
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedMyCoursesCourseIdQuestionsRouteRouteImport } from './routes/_authenticated/my-courses_/$courseId_/questions/route'
 import { Route as AuthenticatedMyCoursesCourseIdReviewsRouteImport } from './routes/_authenticated/my-courses_/$courseId_/reviews'
+import { Route as AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRouteImport } from './routes/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/index'
+import { Route as AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRouteImport } from './routes/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -89,6 +91,22 @@ const AuthenticatedMyCoursesCourseIdReviewsRoute =
     path: '/my-courses/$courseId/reviews',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute =
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRouteImport.update(
+    {
+      id: '/my-courses_/$courseId_/assignments/$contentItemId/submissions/',
+      path: '/my-courses/$courseId/assignments/$contentItemId/submissions/',
+      getParentRoute: () => AuthenticatedRouteRoute,
+    } as any,
+  )
+const AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute =
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRouteImport.update(
+    {
+      id: '/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId',
+      path: '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId',
+      getParentRoute: () => AuthenticatedRouteRoute,
+    } as any,
+  )
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
@@ -102,6 +120,8 @@ export interface FileRoutesByFullPath {
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
+  '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
+  '/my-courses/$courseId/assignments/$contentItemId/submissions/': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
@@ -115,6 +135,8 @@ export interface FileRoutesByTo {
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
+  '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
+  '/my-courses/$courseId/assignments/$contentItemId/submissions': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -130,6 +152,8 @@ export interface FileRoutesById {
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/my-courses_/$courseId_/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
   '/_authenticated/my-courses_/$courseId_/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
+  '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
+  '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -145,6 +169,8 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/my-courses/$courseId/questions'
     | '/my-courses/$courseId/reviews'
+    | '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
+    | '/my-courses/$courseId/assignments/$contentItemId/submissions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/signin'
@@ -158,6 +184,8 @@ export interface FileRouteTypes {
     | '/settings/notifications'
     | '/my-courses/$courseId/questions'
     | '/my-courses/$courseId/reviews'
+    | '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
+    | '/my-courses/$courseId/assignments/$contentItemId/submissions'
   id:
     | '__root__'
     | '/_authenticated'
@@ -172,6 +200,8 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/notifications'
     | '/_authenticated/my-courses_/$courseId_/questions'
     | '/_authenticated/my-courses_/$courseId_/reviews'
+    | '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId'
+    | '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -265,6 +295,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMyCoursesCourseIdReviewsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/': {
+      id: '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/'
+      path: '/my-courses/$courseId/assignments/$contentItemId/submissions'
+      fullPath: '/my-courses/$courseId/assignments/$contentItemId/submissions/'
+      preLoaderRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId': {
+      id: '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId'
+      path: '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
+      fullPath: '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
+      preLoaderRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -279,6 +323,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedMyCoursesCourseIdQuestionsRouteRoute: typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
   AuthenticatedMyCoursesCourseIdReviewsRoute: typeof AuthenticatedMyCoursesCourseIdReviewsRoute
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -297,6 +343,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedMyCoursesCourseIdQuestionsRouteRoute,
   AuthenticatedMyCoursesCourseIdReviewsRoute:
     AuthenticatedMyCoursesCourseIdReviewsRoute,
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute:
+    AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute,
+  AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute:
+    AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

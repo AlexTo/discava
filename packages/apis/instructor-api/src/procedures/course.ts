@@ -14,6 +14,7 @@ import {
   getConnection,
   hasTransactionConflict,
   isConditionalCheckFailed,
+  setCertificateCriteria,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
@@ -33,6 +34,8 @@ import {
   PublishCourseOutputSchema,
   RestoreCourseInputSchema,
   RestoreCourseOutputSchema,
+  SetCertificateCriteriaInputSchema,
+  SetCertificateCriteriaOutputSchema,
   SetCourseCertificatesInputSchema,
   SetCourseCertificatesOutputSchema,
   SetCoursePriceInputSchema,
@@ -320,6 +323,33 @@ export const setCourseCertificates = courseInstructorProcedure(
 
     await refreshInstructorCourseUpdatedAt(
       coreTable,
+      courseId,
+      course.updatedAt,
+    );
+
+    return course;
+  });
+
+// What a student needs besides completing the course to get a certificate.
+// Like the switch above it only decides what happens from now on: the
+// recalculation reacts to the new version and issues certificates to students
+// who now qualify, and certificates already issued are never touched. Allowed
+// in any course status.
+export const setCourseCertificateCriteria = courseInstructorProcedure(
+  SetCertificateCriteriaInputSchema,
+)
+  .output(SetCertificateCriteriaOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const { courseId, requireQuizPass } = input;
+
+    const course = await setCertificateCriteria({
+      coreTable: ctx.coreTable,
+      courseId,
+      criteria: { requireQuizPass },
+    });
+
+    await refreshInstructorCourseUpdatedAt(
+      ctx.coreTable,
       courseId,
       course.updatedAt,
     );

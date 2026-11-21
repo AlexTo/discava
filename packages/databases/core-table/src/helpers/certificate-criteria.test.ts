@@ -4,11 +4,14 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import type { CoreTable } from '../service.js';
 import {
   DEFAULT_CERTIFICATE_CRITERIA,
   evaluateCertificateCriteria,
   scoreBand,
+  setCertificateCriteria,
 } from './certificate-criteria.js';
+import { VersionConflictError } from './errors.js';
 
 const shown = { visibility: 'visible' as const };
 const quiz = (
@@ -224,5 +227,143 @@ describe('evaluateCertificateCriteria', () => {
       'no-attempts-left',
       'not-passed',
     ]);
+  });
+});
+
+// A course table with one course, whose patch is conditioned on the stored
+// criteria version as the real one is. `beforeFirstPatch` runs between the
+// first caller's read and its write, which is where a concurrent change lands.
+const fakeCourseTable = (
+  stored: { certificateCriteria: Record<string, unknown> } | undefined,
+  beforeFirstPatch?: (state: { course: typeof stored }) => void,
+  everyTime = false,
+) => {
+  const state = { course: stored, patches: 0 };
+  let interleaved = false;
+  const conflict = Object.assign(new Error('conditional'), {
+    cause: Object.assign(new Error('conditional'), {
+      name: 'ConditionalCheckFailedException',
+    }),
+  });
+  const coreTable = {
+    entities: {
+      course: {
+        get: () => ({
+          go: async () => ({
+            data: state.course && structuredClone(state.course),
+          }),
+        }),
+        patch: () => {
+          let values: Record<string, unknown> = {};
+          let expected: unknown;
+          const chain = {
+            set: (v: Record<string, unknown>) => {
+              values = v;
+              return chain;
+            },
+            where: (cb: (attr: unknown, op: unknown) => unknown) => {
+              cb(
+                { certificateCriteria: { version: 'version' } },
+                { eq: (_: unknown, version: unknown) => (expected = version) },
+              );
+              return chain;
+            },
+            go: async () => {
+              if (everyTime || !interleaved) {
+                interleaved = true;
+                beforeFirstPatch?.(state);
+              }
+              state.patches++;
+              if (state.course?.certificateCriteria.version !== expected) {
+                throw conflict;
+              }
+              state.course = { ...state.course, ...values };
+              return { data: structuredClone(state.course) };
+            },
+          };
+          return chain;
+        },
+      },
+    },
+  } as unknown as CoreTable;
+  return { state, coreTable };
+};
+
+describe('setCertificateCriteria', () => {
+  const course = (requireQuizPass: boolean, version = 1) => ({
+    courseId: 'c1',
+    certificateCriteria: { version, requireQuizPass },
+  });
+  const set = (coreTable: CoreTable, requireQuizPass: boolean) =>
+    setCertificateCriteria({
+      coreTable,
+      courseId: 'c1',
+      criteria: { requireQuizPass },
+    });
+
+  it('bumps the version by one when the values change', async () => {
+    const { coreTable, state } = fakeCourseTable(course(false));
+
+    const updated = await set(coreTable, true);
+
+    expect(updated.certificateCriteria).toEqual({
+      version: 2,
+      requireQuizPass: true,
+    });
+    expect(state.patches).toBe(1);
+  });
+
+  it('writes nothing when the values are the stored ones', async () => {
+    const { coreTable, state } = fakeCourseTable(course(true, 3));
+
+    const same = await set(coreTable, true);
+
+    expect(same.certificateCriteria.version).toBe(3);
+    expect(state.patches).toBe(0);
+  });
+
+  it('retries once from a fresh read when the version moved', async () => {
+    // Two other changes land first: on, then off again (version 3).
+    const { coreTable, state } = fakeCourseTable(course(false), (s) => {
+      s.course = course(false, 3);
+    });
+
+    const updated = await set(coreTable, true);
+
+    expect(updated.certificateCriteria).toEqual({
+      version: 4,
+      requireQuizPass: true,
+    });
+    expect(state.patches).toBe(2);
+  });
+
+  it('ends with one change when a concurrent one made the same change', async () => {
+    const { coreTable, state } = fakeCourseTable(course(false), (s) => {
+      s.course = course(true, 2);
+    });
+
+    const result = await set(coreTable, true);
+
+    expect(result.certificateCriteria.version).toBe(2);
+    expect(state.patches).toBe(1);
+  });
+
+  it('throws when the version moves again on the retry', async () => {
+    let version = 1;
+    const { coreTable } = fakeCourseTable(
+      course(false),
+      (s) => {
+        s.course = course(false, ++version);
+      },
+      true,
+    );
+
+    await expect(set(coreTable, true)).rejects.toThrow(VersionConflictError);
+  });
+
+  it('throws when the course is missing', async () => {
+    const { coreTable } = fakeCourseTable(undefined);
+
+    await expect(set(coreTable, true)).rejects.toThrow('not found');
   });
 });

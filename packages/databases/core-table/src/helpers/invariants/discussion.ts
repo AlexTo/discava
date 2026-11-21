@@ -75,6 +75,14 @@ export const checkDiscussionPostShape = (
     } else {
       problems.push(`kind ${p.kind} is not allowed`);
     }
+    if (p.promptAnswer !== undefined) {
+      if (p.promptAnswer !== true) {
+        problems.push('promptAnswer is not true');
+      }
+      if (p.kind !== 'question') {
+        problems.push('a post that is not a question has promptAnswer');
+      }
+    }
     if (deleted) {
       if (p.body !== undefined) {
         problems.push('a deleted post still has a body');
@@ -266,6 +274,59 @@ export const checkDiscussionUnansweredMatches = (
     ];
   });
 
+// An answer to the first-lesson prompt and its enrolment's state go together:
+// every post with `promptAnswer` is a question whose author has an `answered`
+// enrolment in that course, an author has at most one per course, and every
+// `answered` enrolment has exactly one such post by that learner, in any state
+// (a hidden or deleted answer still counts).
+export const checkFirstLessonPromptMatchesAnswers = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const answers = snapshot.discussionPosts.filter(
+    (p) => p.promptAnswer !== undefined,
+  );
+  const enrolments = new Map(
+    snapshot.enrolments.map((e) => [`${e.courseId}/${e.userId}`, e]),
+  );
+  const byLearner = groupBy(answers, (p) => `${p.courseId}/${p.authorId}`);
+  const problems = answers.flatMap((p) => {
+    const enrolment = enrolments.get(`${p.courseId}/${p.authorId}`);
+    const problem =
+      p.kind !== 'question'
+        ? 'a prompt answer is not a question'
+        : enrolment === undefined
+          ? 'its author has no enrolment in the course'
+          : enrolment.firstLessonPromptState !== 'answered'
+            ? `its author's enrolment has state ${enrolment.firstLessonPromptState ?? 'none'}, not answered`
+            : (byLearner.get(`${p.courseId}/${p.authorId}`)?.length ?? 0) > 1
+              ? 'its author has more than one prompt answer in the course'
+              : undefined;
+    return problem
+      ? [
+          violation(
+            'first-lesson-prompt-matches-answers',
+            discussionKey(p),
+            problem,
+          ),
+        ]
+      : [];
+  });
+  const missing = snapshot.enrolments
+    .filter(
+      (e) =>
+        e.firstLessonPromptState === 'answered' &&
+        !byLearner.has(`${e.courseId}/${e.userId}`),
+    )
+    .map((e) =>
+      violation(
+        'first-lesson-prompt-matches-answers',
+        { courseId: e.courseId, userId: e.userId },
+        'an answered enrolment has no prompt answer',
+      ),
+    );
+  return [...problems, ...missing];
+};
+
 // A vote is for a post that exists, by someone other than its author,
 // with the lesson and thread the post has.
 export const checkDiscussionVotesValid = (
@@ -337,6 +398,10 @@ export const DISCUSSION_CHECKS = [
   {
     name: 'discussion-unanswered-matches',
     check: checkDiscussionUnansweredMatches,
+  },
+  {
+    name: 'first-lesson-prompt-matches-answers',
+    check: checkFirstLessonPromptMatchesAnswers,
   },
   { name: 'discussion-votes-valid', check: checkDiscussionVotesValid },
   { name: 'discussion-reports-valid', check: checkDiscussionReportsValid },

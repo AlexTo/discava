@@ -60,6 +60,7 @@
   },
   "course": {
     "core-table": [
+      "packages/databases/core-table/src/helpers/certificate-criteria.ts",
       "packages/databases/core-table/src/helpers/course-catalogue.ts",
       "packages/databases/core-table/src/helpers/course-landing.ts"
     ],
@@ -121,6 +122,7 @@
   "enrolment": {
     "core-api": ["packages/apis/core-api/src/procedures/enrolment.ts"],
     "core-table": [
+      "packages/databases/core-table/src/helpers/first-lesson-prompt.ts",
       "packages/databases/core-table/src/helpers/order.ts",
       "packages/databases/core-table/src/helpers/student-activity.ts"
     ],
@@ -250,6 +252,11 @@
   },
   "user": {
     "core-table": ["packages/databases/core-table/src/helpers/user.ts"]
+  },
+  "videoAnswerSheet": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/video-question.ts"
+    ]
   },
   "videoPosition": {
     "core-api": ["packages/apis/core-api/src/procedures/content-item.ts"]

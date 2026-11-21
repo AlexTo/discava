@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
+import { DEFAULT_FIRST_LESSON_PROMPT } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -97,7 +98,28 @@ describe('viewCourse', () => {
     expect(curriculumCollection.mock.results[0].value.go).toHaveBeenCalledWith({
       pages: 'all',
     });
-    expect(result).toEqual({ ...course, modules: [] });
+    expect(result).toEqual({
+      ...course,
+      firstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
+      modules: [],
+    });
+  });
+
+  it("returns the course's own first-lesson prompt when it has one", async () => {
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [{ ...course, firstLessonPrompt: 'Why this course?' }],
+          module: [],
+          lesson: [],
+          contentItem: [],
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    expect(result.firstLessonPrompt).toBe('Why this course?');
   });
 
   it('returns lessons without a freePreview field, marked or not', async () => {
@@ -198,6 +220,7 @@ describe('viewCourse', () => {
 
     expect(result).toEqual({
       ...course,
+      firstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
       modules: [
         {
           ...module1,
@@ -466,6 +489,7 @@ describe('viewCourse', () => {
 
     expect(result).toEqual({
       ...course,
+      firstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
       modules: [
         {
           ...module2,
@@ -752,6 +776,7 @@ describe('viewCourse', () => {
 
     expect(result).toEqual({
       ...course,
+      firstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
       modules: [
         {
           ...shownModule,
