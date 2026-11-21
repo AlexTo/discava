@@ -63,24 +63,32 @@
       "syncGenerators": ["@nx/js:typescript-sync", "@aws/nx-plugin:ts#sync"],
       "inputs": ["default"]
     },
-    "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["default"]
-    },
-    "@nx/vitest:test": {
-      "cache": true,
-      "inputs": ["default", "^production"],
-      "configurations": {
-        "update-snapshot": {
-          "args": "--update"
+    "test": [
+      {
+        "dependsOn": ["^build"],
+        "inputs": ["default"]
+      },
+      {
+        "filter": {
+          "plugin": "@nx/vitest"
+        },
+        "cache": true,
+        "inputs": ["default", "^production"],
+        "configurations": {
+          "update-snapshot": {
+            "args": "--update"
+          }
         }
       }
-    },
+    ],
     "build": {
       "cache": true,
       "inputs": ["default"],
       "dependsOn": [
-        { "projects": ["@discava/source"], "target": "graphify-update" }
+        {
+          "projects": ["@discava/source"],
+          "target": "graphify-update"
+        }
       ]
     },
     "lint": {
