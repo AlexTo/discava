@@ -166,8 +166,9 @@ describe('page titles', () => {
   });
 
   it('keeps each page’s own title when navigating between routes, and moves focus to its h1', async () => {
-    const { router } = open('/my-learning', {}, true);
+    const { router, user } = open('/my-learning', {}, true);
     await titleIs('My Learning · Discava');
+    await user.keyboard('{Tab}');
 
     await act(() => router.navigate({ to: '/search', search: {} }));
     await titleIs('Search · Discava');

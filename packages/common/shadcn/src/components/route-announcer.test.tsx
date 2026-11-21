@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { usePageTitle } from '../hooks/use-page-title';
 import { RouteAnnouncer } from './route-announcer';
@@ -27,6 +27,8 @@ function Shell({
   );
 }
 
+const interact = () => fireEvent.keyDown(document.body, { key: 'Tab' });
+
 afterEach(() => vi.restoreAllMocks());
 
 describe('RouteAnnouncer', () => {
@@ -45,6 +47,7 @@ describe('RouteAnnouncer', () => {
         <h1>A</h1>
       </Shell>,
     );
+    interact();
     rerender(
       <Shell pathname="/b">
         <h1>B</h1>
@@ -57,6 +60,7 @@ describe('RouteAnnouncer', () => {
 
   it('waits for a heading that is added later', async () => {
     const { rerender } = render(<Shell pathname="/a" />);
+    interact();
     rerender(<Shell pathname="/b" />);
     expect(document.body).toHaveFocus();
     rerender(
@@ -67,6 +71,20 @@ describe('RouteAnnouncer', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Late' })).toHaveFocus(),
     );
+  });
+
+  it('focuses nothing when the path changes before any key or click', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+      </Shell>,
+    );
+    rerender(
+      <Shell pathname="/b">
+        <h1>B</h1>
+      </Shell>,
+    );
+    expect(document.body).toHaveFocus();
   });
 
   it('focuses nothing when the pathname is unchanged', () => {
@@ -94,6 +112,7 @@ describe('RouteAnnouncer', () => {
       },
     );
     const { rerender, unmount } = render(<Shell pathname="/a" />);
+    interact();
     rerender(<Shell pathname="/b" />);
     unmount();
     expect(disconnect).toHaveBeenCalled();

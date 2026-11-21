@@ -59,6 +59,7 @@ test('an instructor publishes a course, and a student completes it', async ({
     // Following the search result's link moved focus to the page's heading.
     await expect(student).toHaveTitle(`${course} · Discava`);
     await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
+    await screenshot(student, 'course page after following a link');
     await student.goBack();
     await expect(student).toHaveTitle(`Search: ${course} · Discava`);
     await student.goForward();
@@ -76,6 +77,7 @@ test('an instructor publishes a course, and a student completes it', async ({
     ).toBeVisible();
     await expect(student.getByText(reading)).toBeVisible();
     await expect(student).toHaveTitle(`Lesson one · ${course} · Discava`);
+    await screenshot(student, 'lesson page with its own title');
     await student.getByRole('button', { name: 'Mark as done' }).click();
     await expect(student.getByText('1/1 lessons complete')).toBeVisible();
     await student.goBack();
