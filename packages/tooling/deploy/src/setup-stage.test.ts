@@ -1044,6 +1044,58 @@ describe.concurrent('setup-stage.sh custom domains', {
 
   it.each([
     ['a verified root', 'example.com'],
+    ['a root that is no SES identity', 'mail.example.com'],
+  ])(
+    "keeps a hand-set sender in the script's own format, on another identity, with %s",
+    async (_, verified) => {
+      // A sending subdomain is a usual SES setup, and its pair has the same
+      // notifications@<identity> shape the script uses for the root.
+      const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        SES_VERIFIED_IDENTITY: verified,
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+          'example.com,www.example.com',
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+          'notifications@mail.example.com',
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+          'mail.example.com',
+      });
+
+      expect(status).toBe(0);
+      expect(output).toContain(
+        'Notification email: keeping the sender set by hand (notifications@mail.example.com, SES identity mail.example.com)',
+      );
+      expect(
+        ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+      ).toEqual([]);
+    },
+  );
+
+  it('moves its own sender to a new root', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: 'example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'old.example.net',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'notifications@old.example.net',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'old.example.net',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toEqual(
+      expect.arrayContaining([
+        set('NOTIFICATIONS_FROM_ADDRESS', 'notifications@example.com'),
+        set('NOTIFICATIONS_SES_IDENTITY', 'example.com'),
+      ]),
+    );
+  });
+
+  it.each([
+    ['a verified root', 'example.com'],
     ['a root that is no SES identity', 'other.example.org'],
   ])('keeps a sender set by hand on re-run, with %s', async (_, verified) => {
     const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
@@ -1083,6 +1135,9 @@ describe.concurrent('setup-stage.sh custom domains', {
   it('removes the notification variables when the root is left blank', async () => {
     const { status, ghVariableCalls } = await runSetup(GH_READY, {
       DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
+      // The root the previous run stored, whose sender the script set.
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'example.com,www.example.com',
       GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
         'notifications@example.com',
       GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:

@@ -672,17 +672,26 @@ fi
 
 # Notification emails are sent as notifications@<root>, through the root's SES
 # domain identity. The script only manages that pair while it's unset or still
-# its own (notifications@<identity> with <identity>): a sender set by hand, as
-# the deploy docs allow, is kept on every re-run. Without a sender, emails are
-# recorded as skipped, so a missing identity is a warning, not a stop.
+# its own: notifications@<identity> with <identity>, where <identity> is the
+# root given now or the one a previous run stored (the student portal's first
+# domain). Any other sender was set by hand, as the deploy docs allow, and is
+# kept on every re-run. Without a sender, emails are recorded as skipped, so a
+# missing identity is a warning, not a stop.
 notifications_from=""
 notifications_identity=""
+previous_root_domain=""
 if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
   notifications_from="$(github_environment_variable "$NOTIFICATIONS_FROM_VARIABLE")"
   notifications_identity="$(github_environment_variable "$NOTIFICATIONS_IDENTITY_VARIABLE")"
+  previous_root_domain="$(github_environment_variable "${STAGE_INFRA_ENV_PREFIX}STUDENT_PORTAL_DOMAIN_NAMES")"
+  previous_root_domain="${previous_root_domain%%,*}"
 fi
-if [[ -n "$notifications_from$notifications_identity" &&
-  "$notifications_from" != "$NOTIFICATIONS_FROM_LOCAL_PART@$notifications_identity" ]]; then
+notifications_sender_is_own() {
+  [[ -n "$notifications_identity" &&
+    "$notifications_from" == "$NOTIFICATIONS_FROM_LOCAL_PART@$notifications_identity" &&
+    ("$notifications_identity" == "$ROOT_DOMAIN" || "$notifications_identity" == "$previous_root_domain") ]]
+}
+if [[ -n "$notifications_from$notifications_identity" ]] && ! notifications_sender_is_own; then
   echo "Notification email: keeping the sender set by hand (${notifications_from:-no address}, SES identity ${notifications_identity:-none})"
 elif [[ -n "$ROOT_DOMAIN" && "$(ses_identity_verified "$ROOT_DOMAIN")" == True ]]; then
   echo "Notification email: $NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN (SES identity $ROOT_DOMAIN)"
