@@ -119,3 +119,31 @@ export const tableFunctionsMissingAppConfig = (template: Template) => {
     })
     .map(([id]) => id);
 };
+
+// The logical ids of the stack's functions whose role can touch the core
+// table or the search collection but which lack the matching deploy-time
+// setting: the core-table and search clients read these from the environment,
+// so such a function fails on every invocation once deployed.
+export const functionsMissingSettings = (template: Template) => {
+  const byRole = actionsByRole(template);
+  return Object.entries(template.findResources('AWS::Lambda::Function'))
+    .filter(([, fn]) => {
+      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
+        'Fn::GetAtt'
+      ][0];
+      const actions = byRole[role] ?? [];
+      const variables = fn.Properties.Environment?.Variables ?? {};
+      // The stream router only reads the table's stream, not its items.
+      const usesTable = actions.some((a) =>
+        /^dynamodb:(Get|BatchGet|Query|Put|Update)Item$|^dynamodb:Query$/.test(
+          a,
+        ),
+      );
+      const usesSearch = actions.includes('aoss:APIAccessAll');
+      return (
+        (usesTable && !variables.DISCAVA_DYNAMODB_CORE_TABLE) ||
+        (usesSearch && !variables.DISCAVA_OPENSEARCH_SEARCH)
+      );
+    })
+    .map(([id]) => id);
+};

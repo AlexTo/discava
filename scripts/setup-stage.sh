@@ -1041,7 +1041,7 @@ upsert_managed_policy() {
 # - <role>-data: S3, DynamoDB, KMS, OpenSearch Serverless and CloudWatch Logs
 # - <role>-edge: CloudFront, WAF, API Gateway and Cognito
 # - <role>-compute: Lambda and its event sources, SQS, EventBridge, Scheduler,
-#   MediaConvert and AppConfig
+#   MediaConvert, AppConfig and the stage's settings parameters
 # A new permission goes in the group it belongs to; the tests check each
 # policy still fits.
 create_execution_policy_files() {
@@ -1665,6 +1665,19 @@ EOF
         "appconfig:ListTagsForResource"
       ],
       "Resource": "arn:$AWS_PARTITION:appconfig:$AWS_REGION:$ACCOUNT_ID:*"
+    },
+    {
+      "Sid": "StageSettingsParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:GetParameters",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:$AWS_PARTITION:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$TARGET_STAGE/*"
     }
   ]
 }
@@ -1752,6 +1765,12 @@ upsert_boundary_policy() {
       "Effect": "Allow",
       "Action": "dynamodb:ListStreams",
       "Resource": "*"
+    },
+    {
+      "Sid": "StageSettingsParameterRead",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:$AWS_PARTITION:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$TARGET_STAGE/*"
     },
     {
       "Sid": "StageQueues",

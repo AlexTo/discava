@@ -50,18 +50,18 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 
 **Independent test**: `pnpm nx run @discava/common-server-utils:test -- --run settings` and `pnpm nx run @discava/common-constructs:test -- --run` pass, and `pnpm nx run-many --target build --projects @discava/common-server-utils,@discava/common-constructs,@discava/infra` succeeds.
 
-- [ ] T001 [P] Tests first, then add `packages/common/server-utils/src/settings.ts` as a public module (`@discava/common-server-utils/settings`), following [contracts/settings-readers.md](./contracts/settings-readers.md). Add it to the package's `exports` the way the other modules are listed. It exports:
+- [x] T001 [P] Tests first, then add `packages/common/server-utils/src/settings.ts` as a public module (`@discava/common-server-utils/settings`), following [contracts/settings-readers.md](./contracts/settings-readers.md). Add it to the package's `exports` the way the other modules are listed. It exports:
   - `settingEnvName(namespace, key)`: `DISCAVA_` plus namespace and key, each split at lower-to-upper case changes, upper-cased and joined with `_`. For example `('s3', 'LessonMediaBucket')` gives `DISCAVA_S3_LESSON_MEDIA_BUCKET`, `('mediaConvert', 'VideoTranscodePipeline')` gives `DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE`, and `('captionTranslation', 'Settings')` gives `DISCAVA_CAPTION_TRANSLATION_SETTINGS`.
   - `readSetting<T>(namespace, key)`: parses the variable's JSON. It throws `Missing deploy-time setting <NAME>` when the variable is unset or empty, and `Invalid deploy-time setting <NAME>` when the value isn't JSON. Neither message may include the value.
   - `readOptionalSetting<T>(namespace, key)`: as `readSetting`, but returns `undefined` when the variable is unset or empty.
 
   In `settings.test.ts`, cover the name for every row of [data-model.md](./data-model.md)'s catalogue, present, absent, empty and invalid values, and that no error message contains the value.
-- [ ] T002 [P] Tests first, then add `packages/common/constructs/src/core/settings.ts`. Export both functions from the package index.
+- [x] T002 [P] Tests first, then add `packages/common/constructs/src/core/settings.ts`. Export both functions from the package index.
   - `addSetting(fn, namespace, key, value)` calls `fn.addEnvironment(settingEnvName(namespace, key), typeof value === 'string' ? JSON.stringify(value) : Stack.of(fn).toJsonString(value))`.
   - `pageRendererParameterName(scope)` returns `/${Stage.of(scope)!.stageName}/page-renderer`.
 
   In `settings.test.ts`, check that a value holding a token from another stack synthesises as an import in the function's stack, that a plain object is its JSON, and the parameter name in a stage called `discava-development`.
-- [ ] T003 Tests first, then add `bindSettings(fn)` to each construct that publishes a runtime-config object today. Each calls `addSetting` with exactly the object it passes to `RuntimeConfig.set` (keep the `set` calls: Phase 4 removes them):
+- [x] T003 Tests first, then add `bindSettings(fn)` to each construct that publishes a runtime-config object today. Each calls `addSetting` with exactly the object it passes to `RuntimeConfig.set` (keep the `set` calls: Phase 4 removes them):
   - `CoreTable` in `packages/common/constructs/src/core/dynamodb.ts`;
   - `MediaBucket` in `core/media-bucket.ts`;
   - `UploadBucket` in `core/upload-bucket.ts`;
@@ -70,8 +70,8 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
   - `VideoTranscodePipeline` in `app/media-convert/video-transcode-pipeline.ts`.
 
   `PublicBucket` also exposes `baseUrl` (`https://<cloudFrontDomainName>/`, the value it puts in `connection.media`). Each construct's test asserts that a function bound to it gets the variable named in data-model.md with the published fields.
-- [ ] T004 Tests first, then add `functionsMissingSettings(template)` to `packages/infra/src/stacks/stack-test-fixture.ts`, beside `tableFunctionsMissingAppConfig`, which stays until Phase 2. It returns the logical IDs of every `AWS::Lambda::Function` whose role's policies grant a `dynamodb:` action on the core table without `DISCAVA_DYNAMODB_CORE_TABLE` in `Environment.Variables`, or `aoss:APIAccessAll` without `DISCAVA_OPENSEARCH_SEARCH`. Unit-test it against a hand-built template with one function of each kind, with and without the variable. Don't assert it in the stack tests yet.
-- [ ] T005 [P] Tests first, then in `scripts/setup-stage.sh`:
+- [x] T004 Tests first, then add `functionsMissingSettings(template)` to `packages/infra/src/stacks/stack-test-fixture.ts`, beside `tableFunctionsMissingAppConfig`, which stays until Phase 2. It returns the logical IDs of every `AWS::Lambda::Function` whose role's policies grant a `dynamodb:` action on the core table without `DISCAVA_DYNAMODB_CORE_TABLE` in `Environment.Variables`, or `aoss:APIAccessAll` without `DISCAVA_OPENSEARCH_SEARCH`. Unit-test it against a hand-built template with one function of each kind, with and without the variable. Don't assert it in the stack tests yet.
+- [x] T005 [P] Tests first, then in `scripts/setup-stage.sh`:
   - Add the execution-role statement `StageSettingsParameters`: `ssm:PutParameter`, `ssm:DeleteParameter`, `ssm:GetParameters`, `ssm:AddTagsToResource`, `ssm:RemoveTagsFromResource`, `ssm:ListTagsForResource` on `arn:$AWS_PARTITION:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$TARGET_STAGE/*`.
   - In the permissions boundary, add `StageSettingsParameterRead` with `ssm:GetParameter` on the same ARN.
 
