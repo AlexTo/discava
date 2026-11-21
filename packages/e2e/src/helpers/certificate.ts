@@ -53,6 +53,27 @@ export const setCertificates = async (
   await expect(toggle).toHaveAttribute('aria-checked', String(enabled));
 };
 
+// Ticks or unticks "Require passing every quiz" in the course editor at
+// `courseUrl`, and waits for the checkbox to show the saved state.
+export const setCertificateCriteria = async (
+  page: Page,
+  courseUrl: string,
+  { requireQuizPass }: { requireQuizPass: boolean },
+) => {
+  await page.goto(courseUrl);
+  const checkbox = page.getByRole('checkbox', {
+    name: 'Require passing every quiz',
+  });
+  await expect(checkbox).toBeVisible();
+  if ((await checkbox.isChecked()) !== requireQuizPass) {
+    await checkbox.setChecked(requireQuizPass);
+  }
+  await expect(checkbox).toBeChecked({ checked: requireQuizPass });
+  // Saved, not just shown: it is still there after a reload.
+  await page.reload();
+  await expect(checkbox).toBeChecked({ checked: requireQuizPass });
+};
+
 // A student enrols in the course `title` (signing in as `user` first, when
 // given) and completes its only reading, and waits for the course to say so.
 export const completeCourse = async (

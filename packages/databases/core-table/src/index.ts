@@ -182,6 +182,7 @@ export {
   evaluateCertificateCriteria,
   type QuizRequirementState,
   scoreBand,
+  setCertificateCriteria,
 } from './helpers/certificate-criteria.js';
 export {
   TRANSCODE_PENDING_ATTRIBUTES,

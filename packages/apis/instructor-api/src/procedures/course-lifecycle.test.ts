@@ -22,6 +22,7 @@ import {
   archiveCourse,
   createCourse,
   restoreCourse,
+  setCourseCertificateCriteria,
   setCourseCertificates,
   viewCourse,
 } from './course.js';
@@ -76,6 +77,7 @@ const router = t.router({
   archiveCourse,
   restoreCourse,
   setCourseCertificates,
+  setCourseCertificateCriteria,
   viewCourse,
 });
 
@@ -517,6 +519,107 @@ describe('setCourseCertificates', () => {
     expect(coursePatch).toHaveBeenCalledTimes(1);
     expect(transactionWrite).not.toHaveBeenCalled();
   });
+});
+
+describe('setCourseCertificateCriteria', () => {
+  const input = { courseId: course.courseId, requireQuizPass: true };
+  const required = { version: 2, requireQuizPass: true };
+
+  it('rejects callers who are not in the instructor group before checking course membership', async () => {
+    await expect(
+      callAs(['student']).setCourseCertificateCriteria(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(courseInstructorGet).not.toHaveBeenCalled();
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('throws FORBIDDEN when the caller does not teach the course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: undefined }),
+    });
+
+    await expect(
+      callAs().setCourseCertificateCriteria(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('stores the criteria with the next version and returns them', async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, certificateCriteria: required },
+    });
+
+    const result = await callAs().setCourseCertificateCriteria(input);
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      certificateCriteria: required,
+    });
+    expect(result.certificateCriteria).toEqual(required);
+  });
+
+  it('keeps the version and writes nothing when the values are unchanged', async () => {
+    const result = await callAs().setCourseCertificateCriteria({
+      ...input,
+      requireQuizPass: false,
+    });
+
+    expect(result.certificateCriteria.version).toBe(1);
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it("moves updatedAt and every instructor's courseUpdatedAt", async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: {
+        ...course,
+        certificateCriteria: required,
+        updatedAt: '2024-03-01T00:00:00.000Z',
+      },
+    });
+    courseInstructorQueryPrimary.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [
+          { courseId: course.courseId, instructorId: INSTRUCTOR_SUB },
+          { courseId: course.courseId, instructorId: 'co-instructor' },
+        ],
+      }),
+    });
+
+    const result = await callAs().setCourseCertificateCriteria(input);
+
+    expect(result.updatedAt).toBe('2024-03-01T00:00:00.000Z');
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: course.courseId,
+      instructorId: 'co-instructor',
+    });
+    expect(courseInstructorPatchSet).toHaveBeenCalledWith({
+      courseUpdatedAt: '2024-03-01T00:00:00.000Z',
+    });
+  });
+
+  it('refuses minUploadScorePercent until graded uploads exist', async () => {
+    await expect(
+      callAs().setCourseCertificateCriteria({
+        ...input,
+        minUploadScorePercent: 70,
+      } as never),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it.each(['draft', 'published', 'archived'] as const)(
+    'changes the criteria of a %s course',
+    async (status) => {
+      givenCourse({ status });
+      coursePatchGo.mockResolvedValueOnce({
+        data: { ...course, status, certificateCriteria: required },
+      });
+
+      const result = await callAs().setCourseCertificateCriteria(input);
+
+      expect(result.status).toBe(status);
+      expect(coursePatchWhere).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 describe('viewCourse', () => {
