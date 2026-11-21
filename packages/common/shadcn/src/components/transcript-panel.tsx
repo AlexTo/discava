@@ -148,77 +148,80 @@ export function TranscriptPanel({
         <h3 className="text-sm font-semibold">Transcript</h3>
         <span className="text-xs text-muted-foreground">{languageLabel}</span>
       </div>
-      {!following && (
-        <button
-          type="button"
-          onClick={jumpToCurrent}
-          className="border-b px-3 py-1.5 text-left text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
-        >
-          Jump to current line
-        </button>
-      )}
-      <div
-        ref={scrollRef}
-        onWheel={pause}
-        onTouchMove={pause}
-        onPointerDown={(event) => {
-          // Lines cover the content, so a press on the area itself is its scrollbar.
-          if (event.target === event.currentTarget) {
-            pause();
-          }
-        }}
-        className="relative min-h-0 flex-1 overflow-y-auto"
-      >
-        {status === 'failed' ? (
-          <p className="p-3 text-sm text-muted-foreground">
-            This transcript couldn't be loaded.
-          </p>
-        ) : cues.length === 0 ? (
-          <p className="p-3 text-sm text-muted-foreground">
-            This transcript is empty.
-          </p>
-        ) : (
-          <ol onKeyDown={onKeyDown}>
-            {cues.map((cue, index) => {
-              const active = index === activeIndex;
-              return (
-                <li key={`${cue.start}-${index}`}>
-                  <button
-                    ref={(node) => {
-                      lineRefs.current[index] = node;
-                    }}
-                    type="button"
-                    tabIndex={index === tabStop ? 0 : -1}
-                    onFocus={() => {
-                      setFocusedIndex(index);
-                      if (!movingFocus.current) {
-                        pause();
-                      }
-                    }}
-                    aria-current={active ? 'true' : undefined}
-                    onClick={() => {
-                      onChoose(cue);
-                      resume();
-                    }}
-                    className={cn(
-                      'flex w-full gap-3 border-l-2 border-transparent px-3 py-1.5 text-left text-sm break-words hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
-                      active && 'border-primary bg-accent/50 font-semibold',
-                    )}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className="shrink-0 tabular-nums text-muted-foreground"
-                    >
-                      {formatTime(cue.start)}
-                    </span>
-                    <span className="sr-only">{spokenTime(cue.start)}</span>
-                    {cue.text}
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
+      {/* Over the list, not in the flow: a button that appeared above it would move a line mid-click. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {!following && (
+          <button
+            type="button"
+            onClick={jumpToCurrent}
+            className="absolute top-2 right-3 z-10 rounded-full border bg-background px-3 py-1 text-sm font-medium text-primary shadow-sm hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+          >
+            Jump to current line
+          </button>
         )}
+        <div
+          ref={scrollRef}
+          onWheel={pause}
+          onTouchMove={pause}
+          onPointerDown={(event) => {
+            // Lines cover the content, so a press on the area itself is its scrollbar.
+            if (event.target === event.currentTarget) {
+              pause();
+            }
+          }}
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
+          {status === 'failed' ? (
+            <p className="p-3 text-sm text-muted-foreground">
+              This transcript couldn't be loaded.
+            </p>
+          ) : cues.length === 0 ? (
+            <p className="p-3 text-sm text-muted-foreground">
+              This transcript is empty.
+            </p>
+          ) : (
+            <ol onKeyDown={onKeyDown}>
+              {cues.map((cue, index) => {
+                const active = index === activeIndex;
+                return (
+                  <li key={`${cue.start}-${index}`}>
+                    <button
+                      ref={(node) => {
+                        lineRefs.current[index] = node;
+                      }}
+                      type="button"
+                      tabIndex={index === tabStop ? 0 : -1}
+                      onFocus={() => {
+                        setFocusedIndex(index);
+                        if (!movingFocus.current) {
+                          pause();
+                        }
+                      }}
+                      aria-current={active ? 'true' : undefined}
+                      onClick={() => {
+                        onChoose(cue);
+                        resume();
+                      }}
+                      className={cn(
+                        'flex w-full gap-3 border-l-2 border-transparent px-3 py-1.5 text-left text-sm break-words hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
+                        active && 'border-primary bg-accent/50 font-semibold',
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 tabular-nums text-muted-foreground"
+                      >
+                        {formatTime(cue.start)}
+                      </span>
+                      <span className="sr-only">{spokenTime(cue.start)}</span>
+                      {cue.text}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
       </div>
     </section>
   );
