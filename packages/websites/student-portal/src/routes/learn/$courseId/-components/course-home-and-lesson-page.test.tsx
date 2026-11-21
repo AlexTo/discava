@@ -995,7 +995,9 @@ describe('LessonPage', () => {
     await user.click(
       within(quiz).getByRole('button', { name: /Review answers/ }),
     );
-    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: 'Submit answers' }),
+    );
 
     expect(
       await within(quiz).findByText(/This attempt: 100%/),
@@ -1047,7 +1049,9 @@ describe('LessonPage', () => {
     await user.click(
       within(quiz).getByRole('button', { name: /Review answers/ }),
     );
-    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: 'Submit answers' }),
+    );
 
     expect(
       await within(quiz).findByText('This quiz was updated'),
