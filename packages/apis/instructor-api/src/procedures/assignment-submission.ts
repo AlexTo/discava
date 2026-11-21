@@ -296,7 +296,9 @@ const staleMessage = (
   }
   return action === 'amendGrade'
     ? 'The grade was changed by someone else'
-    : 'Another instructor already returned this';
+    : action === 'requestResubmission'
+      ? 'Another instructor already reviewed this'
+      : 'Another instructor already returned this';
 };
 
 const stateAllowed = (action: Action, status: StoredSubmission['status']) =>

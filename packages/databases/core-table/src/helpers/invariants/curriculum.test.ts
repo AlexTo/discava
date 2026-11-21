@@ -335,6 +335,47 @@ describe('assignment-lesson-shape', () => {
   });
 });
 
+describe('free-preview-on-ordinary-lesson', () => {
+  it.each([
+    ['draft', 'hidden'],
+    ['draft', 'visible'],
+    ['published', 'hidden'],
+    ['published', 'visible'],
+  ] as const)(
+    'accepts a marked ordinary lesson in a %s course, %s',
+    (status, visibility) => {
+      table.courses[0].status = status;
+      table.lessons[0].freePreview = true;
+      table.lessons[0].visibility = visibility;
+      expect(broken().violations.map((v) => v.invariant)).not.toContain(
+        'free-preview-on-ordinary-lesson',
+      );
+    },
+  );
+
+  it('reports an assignment lesson carrying the mark', () => {
+    table.lessons.push({
+      ...ids,
+      ...shown,
+      lessonId: 'a1',
+      kind: 'assignment',
+      freePreview: true,
+      order: 2,
+    });
+    expect(broken().violations.map((v) => v.invariant)).toContain(
+      'free-preview-on-ordinary-lesson',
+    );
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/assignment lesson is marked/),
+    );
+  });
+
+  it('reports a lesson storing freePreview false', () => {
+    table.lessons[0].freePreview = false;
+    expectOnly('free-preview-on-ordinary-lesson', /stores freePreview false/);
+  });
+});
+
 describe('video-questions-shape', () => {
   const question = (questionId: string) => ({
     questionId,

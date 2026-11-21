@@ -18,6 +18,28 @@ interface CurriculumRecordState {
 export const isShown = (record: CurriculumRecordState) =>
   record.visibility === 'visible' && !record.archivedAt;
 
+// Whether anyone, enrolled or not, may open a lesson's videos, text and
+// files: the course is published, the lesson and its module are shown, and
+// the lesson is an ordinary one an instructor marked as a free preview. A
+// marked lesson in a draft course, or under a hidden module, is not open.
+export const isOpenFreePreview = ({
+  course,
+  module,
+  lesson,
+}: {
+  course: { status: string };
+  module: CurriculumRecordState;
+  lesson: CurriculumRecordState & {
+    kind: 'lesson' | 'assignment';
+    freePreview?: boolean;
+  };
+}) =>
+  course.status === 'published' &&
+  isShown(module) &&
+  isShown(lesson) &&
+  lesson.kind === 'lesson' &&
+  lesson.freePreview === true;
+
 // Narrows a course's curriculum to what students may see: a module, lesson or
 // content item is kept only if it and every ancestor is visible and not
 // archived. Every student-facing read, student write and progress calculation
