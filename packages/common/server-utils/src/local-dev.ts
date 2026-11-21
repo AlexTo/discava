@@ -232,6 +232,12 @@ export const LOCAL_NOTIFICATIONS_FROM = 'notifications@discava.local';
 /** The platform fee and earnings hold in local dev (the stage settings' documented defaults, with a one-day hold as discava-development has). */
 export const LOCAL_PAYOUTS = { platformFeeBasisPoints: 2000, holdDays: 1 };
 
+/** The caption translation settings in local dev, where there is no AppConfig: on, with every language a course can choose. */
+export const LOCAL_CAPTION_TRANSLATION = {
+  enabled: true,
+  maxLanguagesPerCourse: 9,
+};
+
 /** The unsubscribe-token secret in local dev, where there is no Secrets Manager. */
 export const LOCAL_UNSUBSCRIBE_SECRET = 'local-dev-unsubscribe-secret';
 

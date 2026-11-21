@@ -19,6 +19,7 @@
     "@aws-sdk/client-scheduler": "catalog:",
     "@aws-sdk/client-sqs": "catalog:",
     "@aws-sdk/client-transcribe": "catalog:",
+    "@aws-sdk/client-translate": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/common-web-utils": "workspace:*",
     "@discava/core-table": "workspace:*",

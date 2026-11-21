@@ -4,6 +4,7 @@
  */
 import { RuntimeConfig } from '@discava/common-constructs';
 import type {
+  CaptionTranslationSettings,
   PayoutSettings,
   StageComponents,
 } from '@discava/common-infra-config';
@@ -25,6 +26,8 @@ export type ApplicationStageProps = StageProps &
     /** The stage's payout settings. @default the documented defaults (2000 basis points, 14 days, a minimum of 1000) */
     payouts?: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'> &
       Partial<Pick<PayoutSettings, 'minimumPayoutMinor'>>;
+    /** The stage's caption translation settings. @default translation on, up to nine languages a course */
+    captionTranslation?: CaptionTranslationSettings;
   };
 
 /**
@@ -68,6 +71,7 @@ export class ApplicationStage extends Stage {
       search,
       notifications,
       payouts = { platformFeeBasisPoints: 2000, holdDays: 14 },
+      captionTranslation,
       ...props
     }: ApplicationStageProps,
   ) {
@@ -145,6 +149,7 @@ export class ApplicationStage extends Stage {
       portalUrls: websites.portalUrls,
       coreApiUrl: coreApiStack.apiUrl,
       payouts,
+      captionTranslation,
     });
 
     new PayoutsStack(this, 'Payouts', {
