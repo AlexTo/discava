@@ -101,7 +101,10 @@ const CognitoAuthInternal: React.FC<
     );
   }
 
-  if (autoSignIn || auth.isLoading) {
+  // `isLoading` is also true while a redirect the page started is under way
+  // (`activeNavigator`): keep that page, e.g. the student portal's "Signing
+  // you in…", on screen until the browser leaves.
+  if (autoSignIn || (auth.isLoading && !auth.activeNavigator)) {
     return <Spinner />;
   }
 
