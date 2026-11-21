@@ -210,20 +210,20 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/instructor-portal:test -- --run submissions grading-draft file-preview` passes; CI's E2E job passes `assignment-grading.e2e.ts`.
 
-- [ ] T018 [P] [US1] Tests first, then add `packages/websites/instructor-portal/src/lib/grading-draft.ts`, modelled on `readQuizDraft`/`writeQuizDraft` in `packages/common/web-utils/src/quiz.ts:200-220`:
+- [x] T018 [P] [US1] Tests first, then add `packages/websites/instructor-portal/src/lib/grading-draft.ts`, modelled on `readQuizDraft`/`writeQuizDraft` in `packages/common/web-utils/src/quiz.ts:200-220`:
   - `readGradingDraft(ref)`, `writeGradingDraft(ref, { points?: string, feedback?: string })` and `clearGradingDraft(ref)`;
   - key `discava:grading-draft:${courseId}:${contentItemId}:${userId}`;
   - every storage access in try/catch, and a failure means no draft.
 
   `grading-draft.test.ts` covers the round trip, clearing, and storage that throws.
-- [ ] T019 [P] [US1] Add `react-pdf` 11.x to the `catalog:` in `pnpm-workspace.yaml` (`catalogMode: strict`), with `pdfjs-dist` at least 6.2.108 (CVE-2026-16633), and to `packages/websites/instructor-portal/package.json`.
+- [x] T019 [P] [US1] Add `react-pdf` 11.x to the `catalog:` in `pnpm-workspace.yaml` (`catalogMode: strict`), with `pdfjs-dist` at least 6.2.108 (CVE-2026-16633), and to `packages/websites/instructor-portal/package.json`.
   - Tests first, then add `-components/file-preview.tsx` and `-components/pdf-preview.tsx` under `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/`.
   - `file-preview` chooses by `previewable`: `<img>` for `'image'`; a `React.lazy` import of `pdf-preview` for `'pdf'`; otherwise the file's name, type, size and a "Download" button.
   - `pdf-preview` uses react-pdf with the worker set via `new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url)`, `isEvalSupported: false`, and page navigation. On a load or render error it shows "This file can't be previewed" and "Download".
   - Both fetch a fresh URL from `assignmentSubmission.fileUrl` when shown.
   - Tests mock react-pdf: an image renders `<img>`; a docx shows Download only; a PDF load error shows the fallback.
   - Check `pnpm nx run @discava/instructor-portal:build` puts pdf.js in its own chunk.
-- [ ] T020 [US1] Tests first, then add the list route `…/assignments/$contentItemId/submissions/index.tsx` and `-components/submissions-table.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md) (Submissions list):
+- [x] T020 [US1] Tests first, then add the list route `…/assignments/$contentItemId/submissions/index.tsx` and `-components/submissions-table.tsx` per [contracts/portal-ui.md](./contracts/portal-ui.md) (Submissions list):
   - header with "Back to course";
   - count chips;
   - table of Student, Status, Submitted (`relativeTime` from `@discava/common-web-utils/discussion`, plus a "Late" badge), Version and Points;
@@ -237,7 +237,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - add a "Submissions" link for upload assignments in the lesson row of `-components/course/course-modules.tsx` (`:175-195`).
 
   Component tests: order as given by the API, badges, paging, empty state, and the link only on upload assignments (not quiz assignments).
-- [ ] T021 [US1] Tests first, then add the review route `…/submissions/$userId.tsx` with `-components/grading-form.tsx` and `-components/feedback-history.tsx` per the contract (Review page):
+- [x] T021 [US1] Tests first, then add the review route `…/submissions/$userId.tsx` with `-components/grading-form.tsx` and `-components/feedback-history.tsx` per the contract (Review page):
   - details;
   - `FilePreview`;
   - a points input ("out of N") and the local `RichTextEditor` for feedback;
@@ -247,8 +247,8 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - the history, newest first.
 
   The form loads and saves its draft through `grading-draft.ts` (debounced) and clears it on success. On `CONFLICT` it shows the server's message, refetches `get` and keeps the draft. Sending passes the `version` and `reviewRevision` it rendered. Tests: return, amend, the not-enrolled state, draft restored after remount, draft kept on `CONFLICT`, points over the maximum refused before sending.
-- [ ] T022 [US3] In `grading-form.tsx`, add "Request resubmission". It is shown only when the state is `submitted`, disabled until the feedback has text, and calls `assignmentSubmission.requestResubmission`. Component tests: hidden for `resubmission_requested` and `returned`; disabled with empty feedback; sends the feedback.
-- [ ] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
+- [x] T022 [US3] In `grading-form.tsx`, add "Request resubmission". It is shown only when the state is `submitted`, disabled until the feedback has text, and calls `assignmentSubmission.requestResubmission`. Component tests: hidden for `resubmission_requested` and `returned`; disabled with empty feedback; sends the feedback.
+- [x] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
   1. Two students submit (one PDF, one docx). The instructor's list shows both waiting, oldest first.
   2. The PDF previews and the docx offers Download.
   3. Request resubmission. The student sees the feedback and the open form, and has a "Resubmission requested" notification.
@@ -258,7 +258,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   7. 25 points are refused.
 
   Call `screenshot()` after the list, the PDF preview, the request, the student's resubmission view, the return form, and the student's returned view. (The read-only state of a student who left the course is covered by T014 and T021: e2e has no helper to make a student leave.)
-- [ ] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
+- [x] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
   - two instructors return the same submission at the same moment: exactly one succeeds and the other gets `CONFLICT`;
   - an instructor's return races the student's resubmit: exactly one commits, and if the resubmit won, the submission is waiting at the new version with no grade.
 
