@@ -26,7 +26,7 @@ Steps 1 to 5 run on a branch with no AWS account and no Docker. They are what an
    grep -rnE "getAppConfig|resolveAppConfigValue|RUNTIME_CONFIG_APP_ID|OPENSEARCH_ENDPOINT" packages --include=*.ts --exclude-dir=node_modules
    ```
 
-   Expected after phase 3: only the page renderer's lines. After phase 4: nothing. After the removal PR, `grep -rn "aws-appconfig\|appconfig" packages --include=*.ts --exclude-dir=node_modules` finds only the stage test that bans it.
+   Expected after phase 2: only the bucket, media, scheduler and caption translation readers. After phase 3: nothing. After the removal PR (phase 4), `grep -rn "aws-appconfig\|appconfig" packages --include=*.ts --exclude-dir=node_modules` finds only the stage test that bans it.
 
 4. **Build, synth and checkov:**
 

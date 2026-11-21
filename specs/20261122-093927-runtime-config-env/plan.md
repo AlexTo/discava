@@ -174,11 +174,22 @@ packages/infra/CLAUDE.md, packages/tooling/deploy/CLAUDE.md, packages/tooling/de
 
 `tasks.md` has the detail. The order and the independence:
 
-1. **Foundation**: the `settings` module and its tests, the `bindSettings` and `addSetting` helpers on the constructs, and `functionsMissingSettings` in the stack fixture. Nothing reads the settings yet, so behaviour doesn't change.
-2. **Switch the table and search** (US1, MVP): `core-table` and `search` read settings. Every function granted on the table or collection gets the variable and loses `RUNTIME_CONFIG_APP_ID` and its AppConfig grant if it reads nothing else from AppConfig. Index sync moves to the new name.
-3. **Switch buckets, media and schedulers** (US1): the `common-server-utils` readers, `mediaconvert-client`, `transcribe-client`, `reminder-schedule` and caption translation settings. After this, no function except the page renderer has `RUNTIME_CONFIG_APP_ID` or an AppConfig grant.
-4. **Page renderer and operator scripts** (US1, US5): `setup-stage.sh` parameter rights, the parameter in Data, the renderer's settings helper, the `CoreTableName` output, and the scripts and first-deploy guide. **Human, before merge**: re-run `scripts/setup-stage.sh` for each stage.
-5. **Remove AppConfig and rename to `PortalConfig`** (US3, US4): the AppConfig code in `RuntimeConfig`, `placeIn`, the stage test that bans AppConfig, the `setup-stage.sh` AppConfig rights, and the dependencies. **Human, before merge**: delete `<stage>/RuntimeConfig` on each existing stage.
-6. **Docs, then the deployed checks** (US2): architecture, security and design pages, the nested `CLAUDE.md` files, and CONTRIBUTING's "how a function gets a setting". **Human**: the quickstart walk on `discava-development`, and Cost Explorer the next day.
+1. **Foundation**:
+   - the `settings` module and its tests;
+   - the `bindSettings`, `addSetting` and `pageRendererParameterName` helpers;
+   - `functionsMissingSettings` in the stack fixture;
+   - the `setup-stage.sh` parameter rights.
 
-Phases 2, 3 and 4 each leave `main` deployable: a function either reads settings or still reads AppConfig, which still exists. Phase 5 needs phases 2 to 4 merged and deployed on every stage first.
+   Nothing reads the settings yet, so behaviour doesn't change.
+2. **Switch everything that reads the table or search** (US1, US5, MVP):
+   - `core-table` and `search` read settings, and every function granted on the table or collection gets the variable;
+   - the page renderer reads its parameter, which Data creates;
+   - the operator scripts use `DISCAVA_DYNAMODB_CORE_TABLE` and Data's `CoreTableName` output;
+   - index sync moves to the new name.
+
+   These go together because once `@discava/core-table` reads its setting, any table reader left on AppConfig breaks. A function loses `RUNTIME_CONFIG_APP_ID` and its AppConfig grant once it reads nothing else from AppConfig. **Human, before merge**: re-run `scripts/setup-stage.sh` for each stage.
+3. **Switch buckets, media and schedulers** (US1): the `common-server-utils` readers, `mediaconvert-client`, `transcribe-client`, `reminder-schedule` and caption translation settings. After this, no function has `RUNTIME_CONFIG_APP_ID` or an AppConfig grant.
+4. **Remove AppConfig and rename to `PortalConfig`** (US3, US4): the AppConfig code in `RuntimeConfig`, `placeIn`, the stage test that bans AppConfig, the `setup-stage.sh` AppConfig rights, and the dependencies. **Human, before merge**: delete `<stage>-RuntimeConfig` on each existing stage.
+5. **Docs, then the deployed checks** (US2): architecture, security and design pages, the nested `CLAUDE.md` files, and CONTRIBUTING's "how a function gets a setting". **Human**: the quickstart walk on `discava-development`, and Cost Explorer the next day.
+
+Phases 2 and 3 each leave `main` deployable: a function either reads settings or still reads AppConfig, which still exists. Phase 4 needs phases 2 and 3 merged and deployed on every stage first.
