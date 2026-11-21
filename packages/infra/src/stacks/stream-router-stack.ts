@@ -41,7 +41,7 @@ export interface StreamRouterStackProps extends StackProps {
   readonly streamRouter?: StreamRouterComponentConfig;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
-  /** Holds the caption files the transcript indexer reads. */
+  /** Holds the caption files the transcript indexer reads and the caption translation function reads and writes. */
   readonly lessonMediaBucket: LessonMediaBucket;
   /** Sender and SES identity for notification emails. @default no sender, no SES access */
   readonly notifications?: NotificationsComponentConfig;
@@ -53,8 +53,6 @@ export interface StreamRouterStackProps extends StackProps {
   readonly coreApiUrl: string;
   /** The stage's fee and hold, which earnings recording applies to each sale. */
   readonly payouts: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
-  /** Where the caption translation function reads and writes caption files. */
-  readonly lessonMediaBucket: LessonMediaBucket;
   /** The stage's caption translation settings. @default translation on, up to nine languages a course */
   readonly captionTranslation?: CaptionTranslationSettings;
 }
@@ -84,7 +82,6 @@ export class StreamRouterStack extends Stack {
       portalUrls,
       coreApiUrl,
       payouts,
-      lessonMediaBucket,
       captionTranslation,
       ...props
     }: StreamRouterStackProps,

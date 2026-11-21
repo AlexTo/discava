@@ -149,7 +149,6 @@ export class ApplicationStage extends Stage {
       portalUrls: websites.portalUrls,
       coreApiUrl: coreApiStack.apiUrl,
       payouts,
-      lessonMediaBucket: data.lessonMediaBucket,
       captionTranslation,
     });
 
