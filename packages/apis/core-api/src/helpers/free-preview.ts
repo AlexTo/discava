@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { playableManifest } from '@discava/common-server-utils/media-keys';
 import { type CoreTable, isOpenFreePreview } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import type { IFreePreviewItem } from '../schema/index.js';
-import { playableManifest } from './playback.js';
 
 // The one named exception to "content needs an enrolment" (research R-2, R-9):
 // a lesson an instructor marked as a free preview is open to anyone while
