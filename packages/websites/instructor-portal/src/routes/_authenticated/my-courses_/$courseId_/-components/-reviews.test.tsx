@@ -157,7 +157,11 @@ describe('ReviewsScreen', () => {
       },
     });
 
-    expect(await screen.findByText('Boom')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('Review text 1')).toBeInTheDocument();

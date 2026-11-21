@@ -230,7 +230,7 @@ describe('EnrolmentActions', () => {
     });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      "Couldn't reach Discava. Check your connection and try again.",
+      'Something went wrong on our side. Try again in a moment.',
     );
     await user.click(screen.getByRole('button', { name: 'Try again' }));
 
