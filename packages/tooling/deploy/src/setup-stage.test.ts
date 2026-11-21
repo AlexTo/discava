@@ -1022,6 +1022,8 @@ describe.concurrent('setup-stage.sh custom domains', {
       SES_VERIFIED_IDENTITY: 'other.example.org',
       GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
         'notifications@example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'example.com',
     });
 
     expect(status).toBe(0);
@@ -1034,7 +1036,48 @@ describe.concurrent('setup-stage.sh custom domains', {
       expect.stringContaining(
         'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS',
       ),
+      expect.stringContaining(
+        'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY',
+      ),
     ]);
+  });
+
+  it.each([
+    ['a verified root', 'example.com'],
+    ['a root that is no SES identity', 'other.example.org'],
+  ])('keeps a sender set by hand on re-run, with %s', async (_, verified) => {
+    const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: verified,
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'ops@example.org',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'ops@example.org',
+    });
+
+    expect(status).toBe(0);
+    expect(output).toContain(
+      'Notification email: keeping the sender set by hand (ops@example.org, SES identity ops@example.org)',
+    );
+    expect(
+      ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+    ).toEqual([]);
+  });
+
+  it('keeps a sender set by hand when the root is left blank', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'alerts@example.org',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'example.org',
+    });
+
+    expect(status).toBe(0);
+    expect(
+      ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+    ).toEqual([]);
   });
 
   it('removes the notification variables when the root is left blank', async () => {

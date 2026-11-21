@@ -624,9 +624,7 @@ if [[ -z "$ROOT_DOMAIN" ]]; then
         [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
       done
     done
-    for variable in "$COOKIE_DOMAIN_VARIABLE" "$NOTIFICATIONS_FROM_VARIABLE" "$NOTIFICATIONS_IDENTITY_VARIABLE"; do
-      [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
-    done
+    [[ -z "$(github_environment_variable "$COOKIE_DOMAIN_VARIABLE")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$COOKIE_DOMAIN_VARIABLE")
   fi
 else
   readonly CORE_API_DOMAIN="core-api.$ROOT_DOMAIN"
@@ -670,24 +668,34 @@ else
   # HLS playback's signed cookies are issued by Instructor API and sent to
   # Lesson media, so they're set for the root both are subdomains of.
   DOMAIN_VARIABLES+=("$COOKIE_DOMAIN_VARIABLE=$ROOT_DOMAIN")
+fi
 
-  # Notification emails are sent as notifications@<root>, through the root's
-  # SES domain identity. Without a verified one they're recorded as skipped,
-  # so a missing identity is a warning, not a stop.
-  if [[ "$(ses_identity_verified "$ROOT_DOMAIN")" == True ]]; then
-    echo "Notification email: $NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN (SES identity $ROOT_DOMAIN)"
-    DOMAIN_VARIABLES+=(
-      "$NOTIFICATIONS_FROM_VARIABLE=$NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN"
-      "$NOTIFICATIONS_IDENTITY_VARIABLE=$ROOT_DOMAIN"
-    )
-  else
+# Notification emails are sent as notifications@<root>, through the root's SES
+# domain identity. The script only manages that pair while it's unset or still
+# its own (notifications@<identity> with <identity>): a sender set by hand, as
+# the deploy docs allow, is kept on every re-run. Without a sender, emails are
+# recorded as skipped, so a missing identity is a warning, not a stop.
+notifications_from=""
+notifications_identity=""
+if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
+  notifications_from="$(github_environment_variable "$NOTIFICATIONS_FROM_VARIABLE")"
+  notifications_identity="$(github_environment_variable "$NOTIFICATIONS_IDENTITY_VARIABLE")"
+fi
+if [[ -n "$notifications_from$notifications_identity" &&
+  "$notifications_from" != "$NOTIFICATIONS_FROM_LOCAL_PART@$notifications_identity" ]]; then
+  echo "Notification email: keeping the sender set by hand (${notifications_from:-no address}, SES identity ${notifications_identity:-none})"
+elif [[ -n "$ROOT_DOMAIN" && "$(ses_identity_verified "$ROOT_DOMAIN")" == True ]]; then
+  echo "Notification email: $NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN (SES identity $ROOT_DOMAIN)"
+  DOMAIN_VARIABLES+=(
+    "$NOTIFICATIONS_FROM_VARIABLE=$NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN"
+    "$NOTIFICATIONS_IDENTITY_VARIABLE=$ROOT_DOMAIN"
+  )
+else
+  if [[ -n "$ROOT_DOMAIN" ]]; then
     paragraph "Notification email: $ROOT_DOMAIN isn't a verified SES identity in $AWS_REGION, so notification emails will be recorded as skipped. To send them, create the domain identity in SES ($AWS_REGION), add the DKIM CNAME records it lists to $ROOT_DOMAIN's DNS, wait until SES shows it verified, and re-run. While the account is in the SES sandbox, each recipient address must be verified too." >&2
-    if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
-      for variable in "$NOTIFICATIONS_FROM_VARIABLE" "$NOTIFICATIONS_IDENTITY_VARIABLE"; do
-        [[ -z "$(github_environment_variable "$variable")" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$variable")
-      done
-    fi
   fi
+  [[ -z "$notifications_from" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$NOTIFICATIONS_FROM_VARIABLE")
+  [[ -z "$notifications_identity" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$NOTIFICATIONS_IDENTITY_VARIABLE")
 fi
 
 # Policy documents are written to fixed names in one private directory:
