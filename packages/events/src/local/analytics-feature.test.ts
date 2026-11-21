@@ -98,4 +98,54 @@ describe('the analytics-update feature locally', () => {
       inFlight: 0,
     });
   });
+
+  it('gets a video answer sheet INSERT to the handler as its entries', async () => {
+    const changes: { counts: { sk: string; attribute: string }[] }[] = [];
+    const record = {
+      eventID: 'e2',
+      eventName: 'INSERT',
+      eventSource: 'aws:dynamodb',
+      eventVersion: '1.1',
+      awsRegion: 'local',
+      eventSourceARN: 'arn:aws:dynamodb:local:000000000000:table/t/stream/1',
+      dynamodb: {
+        Keys: { pk: { S: 'x' }, sk: { S: 'y' } },
+        SequenceNumber: '2',
+        SizeBytes: 1,
+        StreamViewType: 'NEW_AND_OLD_IMAGES',
+        NewImage: {
+          __edb_e__: { S: 'videoAnswerSheet' },
+          courseId: { S: 'c1' },
+          userId: { S: 'u1' },
+          contentItemId: { S: 'video1' },
+          answerCount: { N: '1' },
+          answers: {
+            M: {
+              q1: {
+                M: {
+                  optionIds: { L: [{ S: 'a' }] },
+                  correct: { BOOL: false },
+                  answeredAt: { S: '2026-11-17T08:00:00.000Z' },
+                  quizVersion: { N: '1' },
+                },
+              },
+            },
+          },
+        },
+      },
+    } as unknown as DynamoDBRecord;
+
+    await analyticsUpdate(
+      DynamoDBStreamSchema.parse({ Records: [record] }),
+      async (change) => {
+        changes.push(change);
+        return 'applied';
+      },
+    );
+
+    expect(changes).toHaveLength(1);
+    expect(
+      changes[0].counts.map(({ sk, attribute }) => `${sk} ${attribute}`),
+    ).toEqual(['QUIZ#video1#Q#q1 attempts', 'QUIZ#video1#Q#q1 misses']);
+  });
 });

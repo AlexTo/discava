@@ -47,6 +47,7 @@ import type { createReviewEntity } from '../../entities/review.js';
 import type { createSubmissionFeedbackEntity } from '../../entities/submission-feedback.js';
 import type { createSubmissionNoticeEntity } from '../../entities/submission-notice.js';
 import type { createUserEntity } from '../../entities/user.js';
+import type { createVideoAnswerSheetEntity } from '../../entities/video-answer-sheet.js';
 import type { createVideoPositionEntity } from '../../entities/video-position.js';
 import type { createCoreTableService } from '../../service.js';
 
@@ -161,6 +162,7 @@ export interface TableSnapshot {
     | 'lastActivityAt'
     | 'createdAt'
     | 'orderId'
+    | 'firstLessonPromptState'
   >[];
   itemCompletions: Pick<
     Item<typeof createItemCompletionEntity>,
@@ -253,6 +255,16 @@ export interface TableSnapshot {
     | 'assessment'
     | 'reminderScheduledAt'
     | 'reminderSentAt'
+  >[];
+  videoAnswerSheets: Pick<
+    Item<typeof createVideoAnswerSheetEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'moduleId'
+    | 'lessonId'
+    | 'contentItemId'
+    | 'answers'
+    | 'answerCount'
   >[];
   videoPositions: Pick<
     Item<typeof createVideoPositionEntity>,
@@ -359,6 +371,7 @@ export interface TableSnapshot {
     | 'acceptedPostId'
     | 'reportedBy'
     | 'unanswered'
+    | 'promptAnswer'
     | 'reported'
     | 'createdAt'
   >[];
@@ -552,6 +565,7 @@ export const SNAPSHOT_ENTITIES = {
   submissionFeedback: 'submissionFeedback',
   submissionNotices: 'submissionNotice',
   certificates: 'certificate',
+  videoAnswerSheets: 'videoAnswerSheet',
   videoPositions: 'videoPosition',
   users: 'user',
   courseStats: 'courseStats',

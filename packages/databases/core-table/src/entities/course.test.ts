@@ -42,6 +42,17 @@ describe('course', () => {
     expect(Item.priceAmount).toBe(0);
   });
 
+  it('accepts a record with and without firstLessonPrompt', () => {
+    const without = course.create(record).params() as {
+      Item: Record<string, unknown>;
+    };
+    expect(without.Item).not.toHaveProperty('firstLessonPrompt');
+    const { Item } = course
+      .create({ ...record, firstLessonPrompt: 'What is your goal?' })
+      .params() as { Item: Record<string, unknown> };
+    expect(Item.firstLessonPrompt).toBe('What is your goal?');
+  });
+
   it('round-trips learningOutcomes and requirements', () => {
     const { Item } = course
       .create({

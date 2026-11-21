@@ -97,20 +97,20 @@ Paths are relative to the repository root. Only the last PR closes #590. Earlier
 
 **Independent test**: The keyboard and following cases in `transcript-panel.test.tsx` and `hls-video.test.tsx` pass. The e2e test drives the panel by keyboard only.
 
-- [ ] T009 [US5] Tests first, then add the keyboard pattern of [contracts/transcript-panel-ui.md](./contracts/transcript-panel-ui.md) ("Pointer and keyboard") to `packages/common/shadcn/src/components/transcript-panel.tsx`:
+- [x] T009 [US5] Tests first, then add the keyboard pattern of [contracts/transcript-panel-ui.md](./contracts/transcript-panel-ui.md) ("Pointer and keyboard") to `packages/common/shadcn/src/components/transcript-panel.tsx`:
   - a roving tab stop: exactly one line has `tabIndex={0}` (the last focused line, else the active one, else the first) and the rest `-1`;
   - Down, Up, Home and End move focus to the next, previous, first and last line and call `preventDefault`;
   - Enter and Space stay the button's own activation, and focus stays on the line after `onChoose`.
 
   Component tests: one `tabIndex=0`; each of the four keys; Down on the last line stays there; Enter calls `onChoose` and keeps focus. In `hls-video.test.tsx`: with focus on a line, ArrowUp and ArrowRight change neither `video.volume` nor `video.currentTime`.
-- [ ] T010 [US5] Tests first, then add following control to `packages/common/shadcn/src/components/transcript-panel.tsx` (research R-11):
+- [x] T010 [US5] Tests first, then add following control to `packages/common/shadcn/src/components/transcript-panel.tsx` (research R-11):
   - `wheel`, `touchmove`, a `pointerdown` on the scroll area's own scrollbar, or `focusin` on a line pauses following;
   - while paused, a text button "Jump to current line" shows above the list. Choosing it, or choosing a line, resumes following and scrolls the active line to the centre;
   - scrolling uses `behavior: 'smooth'` only when `matchMedia('(prefers-reduced-motion: reduce)')` doesn't match;
   - no live region is added.
 
   Component tests: a `wheel` event shows the button and a later `activeIndex` change doesn't change `scrollTop`; choosing the button hides it; choosing a line hides it; with reduced motion matched the scroll call has no smooth behavior; the panel contains no `aria-live` or `role="status"` element.
-- [ ] T011 [US5] Extend the Phase 2 test in `packages/e2e/src/scenarios/transcript.e2e.ts` with a keyboard-only step: focus the "Transcript" button and press Enter to open, Tab to the list, press Down twice then Enter, and expect the video at the third line and focus still on it; press Tab once and expect focus outside the transcript region. Take `screenshot(page, 'transcript-panel-keyboard')`.
+- [x] T011 [US5] Extend the Phase 2 test in `packages/e2e/src/scenarios/transcript.e2e.ts` with a keyboard-only step: focus the "Transcript" button and press Enter to open, Tab to the list, press Down twice then Enter, and expect the video at the third line and focus still on it; press Tab once and expect focus outside the transcript region. Take `screenshot(page, 'transcript-panel-keyboard')`.
 
 ---
 

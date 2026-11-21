@@ -12,6 +12,10 @@ import {
   DISCUSSION_TITLE_MAX,
   normaliseDiscussionText,
 } from './discussion-text.js';
+import {
+  firstLessonPromptStateWrites,
+  promptAnswerTitle,
+} from './first-lesson-prompt.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -49,6 +53,8 @@ export interface DiscussionPostRead {
   authorId?: string;
   authorIsInstructor?: boolean;
   state: PostState;
+  /** `true` on an answer to the first-lesson prompt. */
+  promptAnswer?: boolean;
 }
 
 /** A question as the caller read it. */
@@ -58,6 +64,8 @@ export interface DiscussionQuestionRead {
   acceptedPostId?: string;
   replyCount?: number;
   instructorReplyCount?: number;
+  /** `true` on an answer to the first-lesson prompt. */
+  promptAnswer?: boolean;
   /** The question's createdAt, which orders the unanswered queue. */
   createdAt: string;
 }
@@ -70,6 +78,7 @@ export const toPostRead = (post: DiscussionPostRead): DiscussionPostRead => ({
   authorId: post.authorId,
   authorIsInstructor: post.authorIsInstructor,
   state: post.state,
+  promptAnswer: post.promptAnswer,
 });
 
 /** The read an operation's conditions pin, from a stored question. */
@@ -81,6 +90,7 @@ export const toQuestionRead = (
   acceptedPostId: question.acceptedPostId,
   replyCount: question.replyCount,
   instructorReplyCount: question.instructorReplyCount,
+  promptAnswer: question.promptAnswer,
   createdAt: question.createdAt,
 });
 
@@ -97,6 +107,13 @@ export type DiscussionOperation =
       postId: string;
       author: DiscussionAuthor;
       title: string;
+      body: string;
+      now: Date;
+    })
+  | (Scope & {
+      type: 'answerPrompt';
+      postId: string;
+      author: DiscussionAuthor;
       body: string;
       now: Date;
     })
@@ -150,6 +167,8 @@ export const discussionWrites = (
   switch (op.type) {
     case 'ask':
       return ask(entities, op);
+    case 'answerPrompt':
+      return answerPrompt(entities, op);
     case 'reply':
       return reply(entities, op);
     case 'vote':
@@ -296,6 +315,34 @@ const ask = (
   ];
 };
 
+// An answer to the first-lesson prompt: a question that never joins the
+// unanswered queue, written with the enrolment's state in one transaction, so
+// a learner has at most one. It is not student activity: nothing here moves
+// lastActivityAt or the progress counters.
+const answerPrompt = (
+  entities: TransactionEntities,
+  op: Extract<DiscussionOperation, { type: 'answerPrompt' }>,
+): Items => {
+  const post = newPost(op, op);
+  return [
+    ...checks(entities, op),
+    entities.discussionPost
+      .create({
+        ...post,
+        kind: 'question',
+        threadId: op.postId,
+        title: promptAnswerTitle(post.body),
+        promptAnswer: true,
+      })
+      .commit(),
+    firstLessonPromptStateWrites(entities, {
+      courseId: op.courseId,
+      userId: op.author.userId,
+      state: 'answered',
+    }),
+  ];
+};
+
 const reply = (
   entities: TransactionEntities,
   op: Extract<DiscussionOperation, { type: 'reply' }>,
@@ -412,6 +459,7 @@ const unansweredChange = (
     state: next.state ?? question.state,
     acceptedPostId: next.acceptedPostId,
     instructorReplyCount: next.instructorReplyCount,
+    promptAnswer: question.promptAnswer,
   });
   if (was === will || (was !== 'unanswered' && will !== 'unanswered')) {
     return 'keep' as const;

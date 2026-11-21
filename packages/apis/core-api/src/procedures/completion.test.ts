@@ -68,6 +68,7 @@ const entities = {
   contentItem: stored('contentItem'),
   enrolment: stored('enrolment'),
   quizSummary: stored('quizSummary'),
+  videoAnswerSheet: stored('videoAnswerSheet'),
   itemCompletion: {
     ...stored('itemCompletion'),
     query: { primary: completionQuery },
@@ -92,6 +93,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
               'contentItem',
               'enrolment',
               'itemCompletion',
+              'videoAnswerSheet',
             ].map((name) => [name, transactionEntity(name)]),
           ),
         );
@@ -244,14 +246,80 @@ describe('complete', () => {
     expect(result).toEqual({ ...ref, completedAt: expect.any(String) });
   });
 
-  it('completes a video the same way', async () => {
-    db.contentItem = { ...db.contentItem, type: 'video' };
+  describe('a video', () => {
+    beforeEach(() => {
+      db.contentItem = { ...db.contentItem, type: 'video' };
+    });
 
+    // Invariant: the learner's first record on a video, a completion or an
+    // answer sheet, counts them once; each writer checks for the other.
+    it('counts the student and checks for an answer sheet when there is none', async () => {
+      await complete();
+
+      const [transaction] = transactions;
+      expect(itemOf(transaction, 'contentItem').add).toEqual({
+        studentActivityCount: 1,
+      });
+      expect(transaction.map(({ entity, op }) => `${entity}.${op}`)).toEqual([
+        'course.check',
+        'module.check',
+        'lesson.check',
+        'contentItem.update',
+        'enrolment.patch',
+        'itemCompletion.create',
+        'videoAnswerSheet.check',
+      ]);
+      expect(itemOf(transaction, 'videoAnswerSheet')).toMatchObject({
+        key: {
+          userId: USER_SUB,
+          courseId: 'course-1',
+          contentItemId: 'item-1',
+        },
+        condition: 'notExists(userId)',
+      });
+    });
+
+    it('is completed without counting the student again when they have answered', async () => {
+      db.videoAnswerSheet = { userId: USER_SUB, ...ref, answerCount: 1 };
+
+      await complete();
+
+      const [transaction] = transactions;
+      expect(itemOf(transaction, 'contentItem').op).toBe('check');
+      expect(itemOf(transaction, 'contentItem').add).toBeUndefined();
+      expect(
+        transaction.some(({ entity }) => entity === 'videoAnswerSheet'),
+      ).toBe(false);
+    });
+
+    it('retries when an answer lands at the same moment, then finds the sheet', async () => {
+      transactionGo.mockImplementationOnce(async () => {
+        db.videoAnswerSheet = { userId: USER_SUB, ...ref, answerCount: 1 };
+        return cancelledWith([
+          'None',
+          'None',
+          'None',
+          'None',
+          'None',
+          'None',
+          'ConditionalCheckFailed',
+        ]);
+      });
+
+      await complete();
+
+      expect(transactions).toHaveLength(2);
+      expect(itemOf(transactions[0], 'contentItem').op).toBe('update');
+      expect(itemOf(transactions[1], 'contentItem').op).toBe('check');
+    });
+  });
+
+  it('does not check for an answer sheet on a text item', async () => {
     await complete();
 
-    expect(itemOf(transactions[0], 'contentItem').add).toEqual({
-      studentActivityCount: 1,
-    });
+    expect(
+      transactions[0].some(({ entity }) => entity === 'videoAnswerSheet'),
+    ).toBe(false);
   });
 
   // Invariant: a student's activity times never go backwards, even when

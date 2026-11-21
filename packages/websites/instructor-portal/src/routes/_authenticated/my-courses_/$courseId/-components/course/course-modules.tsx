@@ -11,6 +11,7 @@ import {
 } from '@discava/common-shadcn/components/ui/card';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
   BookOpen,
   CirclePlus,
@@ -155,6 +156,17 @@ function ModuleLessons({
               >
                 {isAssignment ? 'Assignment' : 'Lesson'}
               </Badge>
+              {isAssignment && item && item.type !== 'quiz' && (
+                <Button asChild variant="outline" size="sm">
+                  <Link
+                    to="/my-courses/$courseId/assignments/$contentItemId/submissions"
+                    params={{ courseId, contentItemId: item.contentItemId }}
+                    aria-label={`Submissions for ${lesson.title}`}
+                  >
+                    Submissions
+                  </Link>
+                </Button>
+              )}
               {!readOnly && (
                 <>
                   <LessonVisibilityButton

@@ -37,6 +37,9 @@ export const checkAnalyticsMatchesRecords = (
       ),
       ...snapshot.quizAttempts.map((r) => contributions('quizAttempt', r)),
       ...snapshot.quizSummaries.map((r) => contributions('quizSummary', r)),
+      ...snapshot.videoAnswerSheets.map((r) =>
+        contributions('videoAnswerSheet', r),
+      ),
       ...snapshot.enrolments.map((enrolled) =>
         funnelContributions(
           snapshot.progress.filter(

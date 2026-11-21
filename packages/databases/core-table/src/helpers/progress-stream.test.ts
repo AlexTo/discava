@@ -31,6 +31,10 @@ describe('matchesProgressStreamFilters', () => {
     ['an edited lesson', record('MODIFY', 'NewImage', 'lesson')],
     ['an edited content item', record('MODIFY', 'NewImage', 'contentItem')],
     ['a removed lesson', record('REMOVE', 'OldImage', 'lesson')],
+    // The recalculation itself discards the ones that change no certificate.
+    ['a new quiz summary', record('INSERT', 'NewImage', 'quizSummary')],
+    ['a changed quiz summary', record('MODIFY', 'NewImage', 'quizSummary')],
+    ['a course edit', record('MODIFY', 'NewImage', 'course')],
   ])('lets through %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(true);
   });
@@ -41,9 +45,6 @@ describe('matchesProgressStreamFilters', () => {
     ['an enrolment write', record('MODIFY', 'NewImage', 'enrolment')],
     ['a removed completion', record('REMOVE', 'OldImage', 'itemCompletion')],
     ['a new lesson', record('INSERT', 'NewImage', 'lesson')],
-    ['a course edit', record('MODIFY', 'NewImage', 'course')],
-    // A landing-page edit changes only learningOutcomes and requirements.
-    ['a course landing edit', record('MODIFY', 'NewImage', 'course')],
     ['a new preview', record('INSERT', 'NewImage', 'coursePreview')],
     ['an edited preview', record('MODIFY', 'NewImage', 'coursePreview')],
     ['a removed preview', record('REMOVE', 'OldImage', 'coursePreview')],
@@ -60,6 +61,8 @@ describe('matchesProgressStreamFilters', () => {
     // A student's saved video position, written every few seconds.
     ['a new video position', record('INSERT', 'NewImage', 'videoPosition')],
     ['a saved video position', record('MODIFY', 'NewImage', 'videoPosition')],
+    ['a new course', record('INSERT', 'NewImage', 'course')],
+    ['a removed quiz summary', record('REMOVE', 'OldImage', 'quizSummary')],
     ['a new certificate', record('INSERT', 'NewImage', 'certificate')],
     ['a certificate LinkedIn use', record('MODIFY', 'NewImage', 'certificate')],
     // Discussion records: nothing in progress depends on them.

@@ -28,6 +28,7 @@ describe('analytics-matches-records', () => {
     table.itemCompletions = [];
     table.quizAttempts = [];
     table.quizSummaries = [];
+    table.videoAnswerSheets = [];
     table.progress = [];
     table.courseStats = [];
     table.periodStats = [];
@@ -35,6 +36,16 @@ describe('analytics-matches-records', () => {
     table.quizQuestionStats = [];
     table.quizScoreStats = [];
     expect(violations()).toEqual([]);
+  });
+
+  it('reports a video answer sheet entry with no matching attempts', () => {
+    table.quizQuestionStats = table.quizQuestionStats.filter(
+      (q) => q.contentItemId !== 'video',
+    );
+    expect(violations().map((v) => v.message)).toEqual([
+      'attempts is 0, but its records add up to 1',
+      'misses is 0, but its records add up to 1',
+    ]);
   });
 
   it('reports an enrolments count that is off by one, with the course', () => {

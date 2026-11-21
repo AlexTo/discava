@@ -67,24 +67,34 @@ export const checkPostId = (id: string, now: Date): PostIdCheck =>
     DISCUSSION_POST_ID_WINDOW_MS,
   );
 
-export type AnsweredState = 'unanswered' | 'answered' | 'not-open';
+export type AnsweredState =
+  | 'unanswered'
+  | 'answered'
+  | 'not-open'
+  | 'not-a-question';
 
 /**
  * Whether a question is waiting for an answer: only a shown question with no
  * accepted answer and no instructor reply is `unanswered`. A hidden or deleted
- * one is `not-open`.
+ * one is `not-open`. A shown answer to the first-lesson prompt is never
+ * waiting for one: `not-a-question`.
  */
 export const answeredState = ({
   state,
   acceptedPostId,
   instructorReplyCount,
+  promptAnswer,
 }: {
   state: 'shown' | 'hidden' | 'deleted';
   acceptedPostId?: string;
   instructorReplyCount?: number;
+  promptAnswer?: boolean;
 }): AnsweredState => {
   if (state !== 'shown') {
     return 'not-open';
+  }
+  if (promptAnswer) {
+    return 'not-a-question';
   }
   return acceptedPostId === undefined && (instructorReplyCount ?? 0) === 0
     ? 'unanswered'

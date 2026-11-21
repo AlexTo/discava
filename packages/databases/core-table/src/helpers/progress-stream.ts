@@ -5,10 +5,12 @@
 import { CURRICULUM_ENTITIES } from './curriculum.js';
 
 /**
- * Which of the core table's stream records can change a student's progress,
- * and so reach the progress recalculation: a new item completion, and an edit
- * to or removal of a module, lesson or content item. Its own writes (progress,
- * enrolment) match none of these, so it never triggers itself. ElectroDB
+ * Which of the core table's stream records can change a student's progress
+ * or certificate, and so reach the progress recalculation: a new item
+ * completion, an edit to or removal of a module, lesson or content item, a
+ * quiz summary written (a pass is one of them) and a course edit (its
+ * certificate criteria). Its own writes (progress, enrolment, certificate)
+ * match none of these, so it never triggers itself. ElectroDB
  * stores each record's entity name in `__edb_e__`; a filter can't compare the
  * old and new images, so the recalculation itself checks that a curriculum
  * edit changed what students see.
@@ -25,6 +27,12 @@ export const PROGRESS_STREAM_FILTERS: readonly {
   { eventName: 'INSERT', image: 'NewImage', entities: ['itemCompletion'] },
   { eventName: 'MODIFY', image: 'NewImage', entities: CURRICULUM_ENTITIES },
   { eventName: 'REMOVE', image: 'OldImage', entities: CURRICULUM_ENTITIES },
+  { eventName: 'INSERT', image: 'NewImage', entities: ['quizSummary'] },
+  {
+    eventName: 'MODIFY',
+    image: 'NewImage',
+    entities: ['quizSummary', 'course'],
+  },
 ];
 
 /** A stream record, as GetRecords returns it and a Lambda receives it. */

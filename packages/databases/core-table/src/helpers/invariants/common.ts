@@ -30,7 +30,7 @@ export const violation = (
 ): Violation => ({ invariant, record, message });
 
 // Every record a student's work in a course leaves, with its key: their
-// completions, quiz attempts, quiz summaries and assignment submissions.
+// completions, quiz attempts, quiz summaries, video answer sheets and assignment submissions.
 export const studentRecords = (snapshot: TableSnapshot) => [
   ...snapshot.itemCompletions.map((r) => ({
     ...r,
@@ -54,6 +54,15 @@ export const studentRecords = (snapshot: TableSnapshot) => [
   ...snapshot.quizSummaries.map((r) => ({
     ...r,
     kind: 'quiz summary',
+    key: {
+      userId: r.userId,
+      courseId: r.courseId,
+      contentItemId: r.contentItemId,
+    },
+  })),
+  ...snapshot.videoAnswerSheets.map((r) => ({
+    ...r,
+    kind: 'video answer sheet',
     key: {
       userId: r.userId,
       courseId: r.courseId,

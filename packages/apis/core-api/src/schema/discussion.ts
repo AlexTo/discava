@@ -39,6 +39,8 @@ export const DiscussionPostSchema = z.object({
   answered: z.boolean().optional(),
   upvotedByMe: z.boolean().optional(),
   mine: z.boolean().optional(),
+  // `true` on a question that answers the first-lesson prompt.
+  promptAnswer: z.boolean().optional(),
   // Instructors only; never the reporters.
   reportCount: z.number().optional(),
 });
@@ -69,6 +71,11 @@ export const ThreadOutputSchema = z.object({
 export const AskInputSchema = LessonRefSchema.extend({
   postId: z.string().min(1),
   title: z.string().max(DISCUSSION_TITLE_MAX * 4),
+  body: z.string().max(DISCUSSION_BODY_MAX * 4),
+});
+
+export const AnswerPromptInputSchema = LessonRefSchema.extend({
+  postId: z.string().min(1),
   body: z.string().max(DISCUSSION_BODY_MAX * 4),
 });
 

@@ -32,7 +32,7 @@ describe('routeRecords', () => {
   it('sends one message per record to the feature it matches', () => {
     const { messages, refused } = routeRecords([
       record('1', 'INSERT', 'itemCompletion'),
-      record('2', 'MODIFY', 'course'),
+      record('2', 'INSERT', 'course'),
       record('3', 'MODIFY', 'lesson'),
     ]);
     expect(refused).toEqual([]);
@@ -45,7 +45,7 @@ describe('routeRecords', () => {
   });
 
   it('carries the record as JSON with feature and entity attributes', () => {
-    const r = record('1', 'MODIFY', 'course');
+    const r = record('1', 'INSERT', 'course');
     const message = routeRecords([r]).messages.get('search-indexing')?.[0];
     expect(JSON.parse(message?.body ?? '')).toEqual(r);
     expect(message?.attributes).toEqual({
@@ -66,7 +66,7 @@ describe('routeRecords', () => {
       ...STREAM_FEATURES,
       { ...(STREAM_FEATURES[1] as StreamFeature), name: 'copy' },
     ];
-    const { messages } = routeRecords([record('1', 'MODIFY', 'course')], both);
+    const { messages } = routeRecords([record('1', 'INSERT', 'course')], both);
     expect([...messages.keys()]).toEqual(['search-indexing', 'copy']);
   });
 
@@ -79,10 +79,10 @@ describe('routeRecords', () => {
   });
 
   it('returns an oversized record as refused and does not send it', () => {
-    const big = record('1', 'MODIFY', 'course', {
+    const big = record('1', 'INSERT', 'course', {
       title: { S: 'x'.repeat(500) },
     });
-    const small = record('2', 'MODIFY', 'course');
+    const small = record('2', 'INSERT', 'course');
     const { messages, refused } = routeRecords(
       [big, small],
       STREAM_FEATURES,

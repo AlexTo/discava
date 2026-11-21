@@ -92,6 +92,7 @@ describe('discussion', () => {
     'listQuestions',
     'thread',
     'ask',
+    'answerPrompt',
     'reply',
     'vote',
     'accept',
@@ -113,5 +114,17 @@ describe('discussion', () => {
     expect(
       PUBLIC_OPERATIONS.filter((path) => path.startsWith('discussion.')),
     ).toEqual([]);
+  });
+});
+
+describe('course.dismissFirstLessonPrompt', () => {
+  it('is mounted, refuses an anonymous caller and is not public', async () => {
+    expect(Object.keys(appRouter._def.procedures)).toContain(
+      'course.dismissFirstLessonPrompt',
+    );
+    expect(
+      await refusesAnonymousCallers('course.dismissFirstLessonPrompt'),
+    ).toBe(true);
+    expect(PUBLIC_OPERATIONS).not.toContain('course.dismissFirstLessonPrompt');
   });
 });
