@@ -535,6 +535,16 @@ describe('requestResubmission', () => {
     await expect(request()).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
+  it('is CONFLICT for a stale review revision without saying it was returned', async () => {
+    assignmentSubmissionGet.mockReturnValue(
+      resolves({ ...submitted, reviewRevision: 4 }),
+    );
+    await expect(request()).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Another instructor already reviewed this',
+    });
+  });
+
   it('refuses a student who left', async () => {
     enrolmentGet.mockReturnValue(resolves({ status: 'dropped' }));
     await expect(request()).rejects.toMatchObject({

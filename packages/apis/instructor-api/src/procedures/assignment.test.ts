@@ -254,7 +254,7 @@ describe('createUploadAssignment', () => {
         visibility: 'visible',
       }),
     );
-    expect(result).toEqual(assignmentLesson);
+    expect(result).toEqual({ ...assignmentLesson, freePreview: false });
   });
 
   it('starts hidden in a course that is not a draft', async () => {

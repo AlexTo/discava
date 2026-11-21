@@ -323,6 +323,23 @@ describe('payments: price, orders and the connection', () => {
       expect(violationsOf('paid-course-enrolment-paid')).toEqual([]);
     });
 
+    it('still reports an unpaid late enrolment in a course with a free preview lesson', () => {
+      paidTable();
+      table.lessons[0].freePreview = true;
+      table.enrolments[0].orderId = undefined;
+      table.orders = [];
+      table.enrolments[0].createdAt = '2026-01-05T00:00:11.000Z';
+      expect(violationsOf('paid-course-enrolment-paid')).toHaveLength(1);
+    });
+
+    it('reports nothing for a free preview lesson with no enrolment', () => {
+      paidTable();
+      table.lessons[0].freePreview = true;
+      table.enrolments = [];
+      table.orders = [];
+      expect(violationsOf('paid-course-enrolment-paid')).toEqual([]);
+    });
+
     it('does not report a course set back to free with paid orders', () => {
       paidTable();
       Object.assign(table.courses[0], { priceAmount: 0, pricedAt: undefined });

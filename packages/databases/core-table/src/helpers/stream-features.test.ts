@@ -159,6 +159,14 @@ describe('featuresFor', () => {
     expect(featuresFor(record('REMOVE', 'OldImage', 'order'))).toEqual([]);
   });
 
+  it('routes a lesson MODIFY that only sets freePreview to progress recalculation alone', () => {
+    // Whether a lesson is marked doesn't change what a search document,
+    // analytics, a notification or an earning is built from.
+    expect(featuresFor(record('MODIFY', 'NewImage', 'lesson'))).toEqual([
+      'progress-recalculation',
+    ]);
+  });
+
   it('routes a record matching two features to both', () => {
     const features: readonly StreamFeature[] = [
       ...STREAM_FEATURES,

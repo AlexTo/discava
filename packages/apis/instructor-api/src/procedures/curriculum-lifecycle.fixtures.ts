@@ -208,6 +208,15 @@ export const transactionEntity = (entity: string) => ({
       }),
     }),
     remove: (remove: string[]) => ({
+      where: (where: (attr: any, op: any) => string) => ({
+        commit: () => ({
+          entity,
+          op: 'patch',
+          key,
+          remove,
+          condition: renderCondition(where),
+        }),
+      }),
       commit: () => ({ entity, op: 'patch', key, remove }),
     }),
   }),

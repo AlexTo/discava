@@ -222,6 +222,7 @@ export {
 export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,
+  isOpenFreePreview,
   isShown,
 } from './helpers/curriculum.js';
 export {

@@ -31,6 +31,8 @@ import { HiddenBadge } from '../hidden-badge';
 import { CreateLessonDialog } from '../lesson/create-lesson-dialog';
 import { DeleteLessonDialog } from '../lesson/delete-lesson-dialog';
 import { EditLessonDialog } from '../lesson/edit-lesson-dialog';
+import { FreePreviewBadge } from '../lesson/free-preview-badge';
+import { FreePreviewButton } from '../lesson/free-preview-button';
 import { CreateModuleDialog } from '../module/create-module-dialog';
 import { DeleteModuleDialog } from '../module/delete-module-dialog';
 import { EditModuleDialog } from '../module/edit-module-dialog';
@@ -48,6 +50,9 @@ type Lesson = {
   title: string;
   description?: string;
   visibility: 'hidden' | 'visible';
+  // Set by an instructor on an ordinary lesson; not the same as being open.
+  freePreview?: boolean;
+  archivedAt?: string;
   contentItems: ContentItem[];
 };
 
@@ -90,6 +95,8 @@ function ModuleLessons({
   const { lesson: lessonApi } = useInstructorApi();
   const reorder = useMutation(lessonApi.reorder.mutationOptions());
   const refreshCourse = useRefreshCourse(courseId);
+  // Marked lessons are open to anyone only in a published course.
+  const published = !draft && !readOnly;
 
   return (
     <SortableList
@@ -133,6 +140,15 @@ function ModuleLessons({
               </div>
               <span className="font-medium">{lesson.title}</span>
               {lesson.visibility === 'hidden' && <HiddenBadge />}
+              {lesson.freePreview === true && (
+                <FreePreviewBadge
+                  open={
+                    published &&
+                    module.visibility === 'visible' &&
+                    lesson.visibility === 'visible'
+                  }
+                />
+              )}
               <Badge
                 variant="outline"
                 className="hidden text-[10px] sm:inline-flex"
@@ -151,6 +167,15 @@ function ModuleLessons({
                     noun={noun}
                     className="ml-auto"
                   />
+                  {!isAssignment && !lesson.archivedAt && (
+                    <FreePreviewButton
+                      courseId={courseId}
+                      moduleId={module.moduleId}
+                      lessonId={lesson.lessonId}
+                      title={lesson.title}
+                      freePreview={lesson.freePreview === true}
+                    />
+                  )}
                   {isAssignment ? (
                     item &&
                     (item.type === 'quiz' ? (
