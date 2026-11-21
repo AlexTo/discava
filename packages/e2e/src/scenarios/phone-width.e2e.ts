@@ -233,3 +233,42 @@ test('search results come first on a phone, with the filters collapsed', async (
     await expectNoSidewaysScroll(page);
   });
 });
+
+test('a long description does not make a tall card on a phone', async ({
+  page,
+}) => {
+  const scope = uniqueName('phonecards').toLowerCase();
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const longTitle = uniqueName('E2E phone long description');
+  const shortTitle = uniqueName('E2E phone short description');
+  const long = await createPublishedCourseViaApi(
+    instructor,
+    longTitle,
+    'A long description of the course. '.repeat(15).slice(0, 500),
+  );
+  const short = await createPublishedCourseViaApi(
+    instructor,
+    shortTitle,
+    'One line.',
+  );
+  await setCourseCatalogue(long.courseId, { tags: [scope] });
+  await setCourseCatalogue(short.courseId, { tags: [scope] });
+
+  await page.goto(
+    `${PORTALS.student}/search?${new URLSearchParams({ tags: JSON.stringify([scope]) })}`,
+  );
+  const card = (title: string) =>
+    page.locator('[data-slot="card"]').filter({ hasText: title });
+  await expectAfterReloads(page, async () => {
+    await expect(card(longTitle)).toBeVisible({ timeout: 2_000 });
+    await expect(card(shortTitle)).toBeVisible({ timeout: 2_000 });
+  });
+  const tall = await card(longTitle).boundingBox();
+  const small = await card(shortTitle).boundingBox();
+  expect(tall?.height).toBeLessThanOrEqual((small?.height ?? 0) * 1.5);
+  await expectNoSidewaysScroll(page);
+  await screenshot(page, 'course cards at phone width');
+
+  await card(longTitle).getByRole('link', { name: longTitle }).click();
+  await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
+});

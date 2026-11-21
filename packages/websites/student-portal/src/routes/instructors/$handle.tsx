@@ -94,7 +94,7 @@ function RouteComponent() {
       ) : (
         <>
           <header className="flex flex-col items-start gap-6 sm:flex-row">
-            <Avatar size="lg" className="size-28">
+            <Avatar className="size-28">
               {photoUrlFor(profile.photoKey) ? (
                 <AvatarImage src={photoUrlFor(profile.photoKey)} alt="" />
               ) : null}
@@ -130,16 +130,22 @@ function RouteComponent() {
             >
               Courses by {profile.displayName}
             </h2>
-            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {profile.courses.map((course) => {
-                const display: DisplayCourse = {
-                  ...toDisplayCourse(course),
-                  // The profile does not carry descriptions.
-                  description: '',
-                };
-                return <CourseCard key={course.courseId} course={display} />;
-              })}
-            </div>
+            {profile.courses.length === 0 ? (
+              <p className="mt-6 text-sm text-muted-foreground">
+                No published courses yet.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {profile.courses.map((course) => {
+                  const display: DisplayCourse = {
+                    ...toDisplayCourse(course),
+                    // The profile does not carry descriptions.
+                    description: '',
+                  };
+                  return <CourseCard key={course.courseId} course={display} />;
+                })}
+              </div>
+            )}
           </section>
         </>
       )}

@@ -353,15 +353,11 @@ test('search sorts and filters courses by their ratings', async ({ page }) => {
         ...params,
       })}`,
     );
-  // The result cards in order, by their preview links.
+  // The result cards in order, by their title links.
   const titles = () =>
     page
-      .getByRole('link', { name: /^Preview / })
-      .evaluateAll((links) =>
-        links.map((link) =>
-          (link.getAttribute('aria-label') ?? '').replace(/^Preview /, ''),
-        ),
-      );
+      .locator('main a[href^="/learn/"]')
+      .evaluateAll((links) => links.map((link) => link.textContent?.trim()));
 
   await test.step('every course shows its rating or that it has none', async () => {
     await expectAfterReloads(page, async () => {
@@ -400,5 +396,48 @@ test('search sorts and filters courses by their ratings', async ({ page }) => {
     await expect(page).toHaveURL(/minRating=3/);
     await page.getByRole('button', { name: 'Clear filters' }).click();
     await expect(page).not.toHaveURL(/sort=|minRating=/);
+  });
+});
+
+test('a long description is cut to three lines, and a card opens from its title', async ({
+  page,
+}) => {
+  const scope = uniqueName('cards').toLowerCase();
+  const instructor = await apiUser('Cora', ['instructor']);
+  const longTitle = uniqueName('Long description');
+  const shortTitle = uniqueName('Short description');
+  const long = await createPublishedCourseViaApi(
+    instructor,
+    longTitle,
+    'A long description of the course. '.repeat(15).slice(0, 500),
+  );
+  const short = await createPublishedCourseViaApi(
+    instructor,
+    shortTitle,
+    'One line.',
+  );
+  await setCourseCatalogue(long.courseId, { tags: [scope] });
+  await setCourseCatalogue(short.courseId, { tags: [scope] });
+
+  await page.goto(
+    `${PORTALS.student}/search?${new URLSearchParams({ tags: JSON.stringify([scope]) })}`,
+  );
+  const card = (title: string) =>
+    page.locator('[data-slot="card"]').filter({ hasText: title });
+  await expectAfterReloads(page, async () => {
+    await expect(card(longTitle)).toBeVisible({ timeout: 2_000 });
+    await expect(card(shortTitle)).toBeVisible({ timeout: 2_000 });
+  });
+
+  await test.step('the taller card is at most 1.5 times the shorter', async () => {
+    const tall = await card(longTitle).boundingBox();
+    const small = await card(shortTitle).boundingBox();
+    expect(tall?.height).toBeLessThanOrEqual((small?.height ?? 0) * 1.5);
+    await screenshot(page, 'course cards');
+  });
+
+  await test.step('clicking a card’s title opens the course', async () => {
+    await page.getByRole('link', { name: longTitle }).click();
+    await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
   });
 });
