@@ -51,6 +51,7 @@ beforeAll(async () => {
           courseId: 'c',
           title: 't',
           certificatesEnabled: true,
+          certificateCriteria: { version: 1, requireQuizPass: false },
           priceAmount: 0,
           priceCurrency: 'USD',
         })

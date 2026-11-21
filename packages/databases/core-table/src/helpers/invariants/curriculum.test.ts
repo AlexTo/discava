@@ -334,3 +334,123 @@ describe('assignment-lesson-shape', () => {
     );
   });
 });
+
+describe('free-preview-on-ordinary-lesson', () => {
+  it.each([
+    ['draft', 'hidden'],
+    ['draft', 'visible'],
+    ['published', 'hidden'],
+    ['published', 'visible'],
+  ] as const)(
+    'accepts a marked ordinary lesson in a %s course, %s',
+    (status, visibility) => {
+      table.courses[0].status = status;
+      table.lessons[0].freePreview = true;
+      table.lessons[0].visibility = visibility;
+      expect(broken().violations.map((v) => v.invariant)).not.toContain(
+        'free-preview-on-ordinary-lesson',
+      );
+    },
+  );
+
+  it('reports an assignment lesson carrying the mark', () => {
+    table.lessons.push({
+      ...ids,
+      ...shown,
+      lessonId: 'a1',
+      kind: 'assignment',
+      freePreview: true,
+      order: 2,
+    });
+    expect(broken().violations.map((v) => v.invariant)).toContain(
+      'free-preview-on-ordinary-lesson',
+    );
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/assignment lesson is marked/),
+    );
+  });
+
+  it('reports a lesson storing freePreview false', () => {
+    table.lessons[0].freePreview = false;
+    expectOnly('free-preview-on-ordinary-lesson', /stores freePreview false/);
+  });
+});
+
+describe('video-questions-shape', () => {
+  const question = (questionId: string) => ({
+    questionId,
+    kind: 'single' as const,
+    prompt: '{}',
+    options: [
+      { optionId: 'a', text: 'Yes' },
+      { optionId: 'b', text: 'No' },
+    ],
+    atSeconds: 1,
+    contentHash: 'h',
+  });
+  const withQuestions = (ids: string[], quizVersion?: number) => {
+    const video = item('video');
+    video.questions = ids.map(question);
+    video.answerKey = Object.fromEntries(
+      ids.map((id) => [id, { correctOptionIds: ['a'] }]),
+    );
+    video.quizVersion = quizVersion;
+    return video;
+  };
+
+  it('accepts a video with none, and a video with questions and a matching key', () => {
+    expect(broken().violations).toEqual([]);
+    withQuestions(['q1', 'q2'], 1);
+    expect(broken().violations).toEqual([]);
+    withQuestions([], 2);
+    expect(broken().violations).toEqual([]);
+  });
+
+  it('reports more than 20 questions', () => {
+    withQuestions(
+      Array.from({ length: 21 }, (_, i) => `q${i}`),
+      1,
+    );
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/21 questions, over 20/),
+    );
+  });
+
+  it('reports two questions with one id', () => {
+    const video = withQuestions(['q1', 'q2'], 1);
+    video.questions = [question('q1'), question('q1')];
+    video.answerKey = { q1: { correctOptionIds: ['a'] } };
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/share an id/),
+    );
+  });
+
+  it('reports a key entry for no question, and a question with no entry', () => {
+    const video = withQuestions(['q1'], 1);
+    video.answerKey = {
+      q1: { correctOptionIds: ['a'] },
+      q9: { correctOptionIds: [] },
+    };
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/answer key doesn't match/),
+    );
+    video.answerKey = {};
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/answer key doesn't match/),
+    );
+  });
+
+  it('reports questions without a quizVersion', () => {
+    withQuestions(['q1'], undefined);
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/no quizVersion/),
+    );
+  });
+
+  it('reports questions on an item that is neither a quiz nor a video', () => {
+    item('text').questions = [question('q1')];
+    expect(broken().messages).toContainEqual(
+      expect.stringMatching(/text item holds video questions/),
+    );
+  });
+});

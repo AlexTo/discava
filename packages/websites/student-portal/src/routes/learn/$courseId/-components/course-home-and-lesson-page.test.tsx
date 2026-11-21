@@ -596,6 +596,9 @@ describe('LessonPage', () => {
       expect(
         await within(lecture).findByRole('button', { name: /^Captions/ }),
       ).toBeInTheDocument();
+      expect(
+        within(lecture).getByRole('button', { name: 'Transcript' }),
+      ).toBeInTheDocument();
       expect(fetchMock).toHaveBeenCalledWith(
         'https://media.example.com/nonce/captions/track-1.vtt',
         { credentials: 'include' },
@@ -610,6 +613,9 @@ describe('LessonPage', () => {
 
       expect(
         within(lecture).queryByRole('button', { name: /^Captions/ }),
+      ).toBeNull();
+      expect(
+        within(lecture).queryByRole('button', { name: 'Transcript' }),
       ).toBeNull();
     });
   });
@@ -1148,5 +1154,34 @@ describe('assignments in the outline', () => {
       screen.queryByRole('navigation', { name: 'Lesson steps' }),
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'Mark as done' })).toBeNull();
+  });
+});
+
+describe('the enrolled notice', () => {
+  const enrolledLine = "You're enrolled in Linear Algebra.";
+
+  it('shows above the lesson after enrolling, and not otherwise', async () => {
+    const { router } = openLesson('lesson-1');
+    await screen.findByRole('heading', { name: 'Lecture 1', level: 2 });
+    expect(screen.queryByText(enrolledLine)).toBeNull();
+
+    await act(() => router.navigate({ to: '/', state: { enrolled: true } }));
+
+    expect(await screen.findByText(enrolledLine)).toHaveAttribute(
+      'role',
+      'status',
+    );
+  });
+
+  it('shows on the course home after enrolling, and not otherwise', async () => {
+    const { router } = renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+    await outlineLink('Lecture 1');
+    expect(screen.queryByText(enrolledLine)).toBeNull();
+
+    await act(() => router.navigate({ to: '/', state: { enrolled: true } }));
+
+    expect(await screen.findByText(enrolledLine)).toBeInTheDocument();
   });
 });

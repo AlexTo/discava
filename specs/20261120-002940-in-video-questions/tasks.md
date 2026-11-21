@@ -39,12 +39,12 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
 
 **Independent test**: `pnpm nx run @discava/instructor-api:test -- --run content-item-video-questions content-item.test`, `pnpm nx run @discava/core-api:test -- --run course-view course-public-view` and `pnpm nx run @discava/core-table:test -- --run curriculum` pass.
 
-- [ ] T001 [P] Tests first, then add the schemas in [contracts/instructor-api-video-questions.md](./contracts/instructor-api-video-questions.md):
+- [x] T001 [P] Tests first, then add the schemas in [contracts/instructor-api-video-questions.md](./contracts/instructor-api-video-questions.md):
   - in `packages/apis/instructor-api/src/schema/quiz.ts`: `MAX_VIDEO_QUESTIONS = 20`, `VideoQuestionInputSchema` (`QuizQuestionSchema` plus `atSeconds: z.number().int().min(0).max(86_400).nullable()`), `VideoQuestionSchema` (that plus `contentHash: z.string()`), with their `I…` types;
   - in `packages/apis/instructor-api/src/schema/content-item.ts`: optional `questions`, `answerKey` and `quizVersion` on `VideoContentItemSchema`, and `UpdateVideoQuestionsInputSchema` (the item ref, `quizVersion: z.number().int().min(0)`, `questions` of at most 20, `answerKey`, refined with `refineQuizDefinition`) and `UpdateVideoQuestionsOutputSchema`, exported through `schema/index.ts`.
 
   `refineQuizDefinition` takes the questions and key, so it applies as it is; widen its parameter type only as far as accepting the video question shape. Cases in `packages/apis/instructor-api/src/schema/content-item.test.ts`: 21 questions refused, an empty list with an empty key accepted, `atSeconds` of -1, 1.5 and 86,401 refused and `null` accepted, and one case for each `refineQuizDefinition` rule (no key entry, a key entry for an unknown question, two correct options on a single choice question, a correct id that isn't an option).
-- [ ] T002 Tests first, then add `updateContentItemVideoQuestions` in `packages/apis/instructor-api/src/procedures/content-item-video-questions.ts` and register it as `contentItem.updateVideoQuestions` in `packages/apis/instructor-api/src/router.ts`, following `updateContentItemQuiz` in `procedures/content-item-quiz.ts`:
+- [x] T002 Tests first, then add `updateContentItemVideoQuestions` in `packages/apis/instructor-api/src/procedures/content-item-video-questions.ts` and register it as `contentItem.updateVideoQuestions` in `packages/apis/instructor-api/src/router.ts`, following `updateContentItemQuiz` in `procedures/content-item-quiz.ts`:
   - `courseInstructorProcedure`, the item must exist (`NOT_FOUND`) and be a video (`BAD_REQUEST`), `requireNotArchived` and `requireAncestorsNotArchived`;
   - `CONFLICT` "The questions were modified by another request; reload them and retry" when the stored `quizVersion` (0 when absent) isn't the one sent;
   - each question stored with `contentHash = hashQuizQuestions([{ questionId, kind, prompt, options }])` from `helpers/quiz-hash.ts`, and the list sorted: timed questions by `atSeconds`, keeping the sent order for equal moments, then end questions in the sent order;
@@ -52,9 +52,9 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
   - nothing else on the item changes, and no transcode is submitted.
 
   `procedures/content-item-video-questions.test.ts` (fixtures as in `content-item-video.fixtures.ts`) covers every row of the contract's behavior table, plus: an instructor of another course and a non-instructor are refused; two saves from one version give one success and one `CONFLICT`; `contentHash` stays the same when only `atSeconds`, the key or the explanation changes and differs when the prompt or an option changes; the stored order; an empty save; `course.view` returns the saved questions with their key. Then check `pnpm nx run @discava/infra:synth` still succeeds: the API's routes are derived from the router, so the new operation adds a method to the instructor API's stack (research R-14).
-- [ ] T003 [P] Add cases to `packages/apis/core-api/src/procedures/course-view.test.ts` and `course-public-view.test.ts`: a video item stored with `questions`, `answerKey` and `quizVersion` comes back without any of the three (spec FR-013, SC-009). No source change is expected, because `ContentItemSchema`'s video shape already strips them; if a case fails, fix the output schema, not the test.
-- [ ] T004 [P] Tests first, then add the `video-questions-shape` invariant to `packages/databases/core-table/src/helpers/invariants/curriculum.ts` ([data-model.md](./data-model.md), Invariants): a video's `questions` number at most 20 with unique ids, its `answerKey` has exactly their ids, `quizVersion` is present when either is, and an item that is neither a quiz nor a video has none of the three. Add `questions`, `answerKey` and `quizVersion` to the `contentItems` pick in `helpers/invariants/snapshot.ts` if they aren't there. In `helpers/invariants/curriculum.test.ts`, starting from `consistentTable()`, break each clause and expect the violation.
-- [ ] T005 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json` if it changed (a new file now writes `contentItem`).
+- [x] T003 [P] Add cases to `packages/apis/core-api/src/procedures/course-view.test.ts` and `course-public-view.test.ts`: a video item stored with `questions`, `answerKey` and `quizVersion` comes back without any of the three (spec FR-013, SC-009). No source change is expected, because `ContentItemSchema`'s video shape already strips them; if a case fails, fix the output schema, not the test.
+- [x] T004 [P] Tests first, then add the `video-questions-shape` invariant to `packages/databases/core-table/src/helpers/invariants/curriculum.ts` ([data-model.md](./data-model.md), Invariants): a video's `questions` number at most 20 with unique ids, its `answerKey` has exactly their ids, `quizVersion` is present when either is, and an item that is neither a quiz nor a video has none of the three. Add `questions`, `answerKey` and `quizVersion` to the `contentItems` pick in `helpers/invariants/snapshot.ts` if they aren't there. In `helpers/invariants/curriculum.test.ts`, starting from `consistentTable()`, break each clause and expect the violation.
+- [x] T005 Run `pnpm nx run @discava/tooling-agent:entity-writers` and commit `packages/databases/core-table/entity-writers.json` if it changed (a new file now writes `contentItem`).
 
 ---
 
@@ -64,8 +64,8 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
 
 **Independent test**: The instructor portal's component tests for the editor pass. On PR CI, the e2e test "an instructor adds questions to a video" passes with screenshots.
 
-- [ ] T006 [P] [US1] Tests first, then add the optional `onTimeChange?: (seconds: number) => void` prop to `HlsVideo` in `packages/common/shadcn/src/components/hls-video.tsx`, called with the video's current time on each `timeupdate` and after a seek. Without the prop nothing changes. Cases in `hls-video.test.tsx`; every existing case passes unchanged.
-- [ ] T007 [P] [US1] Tests first, then add `video-questions-form.ts` in `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/-components/content-items/video-questions/`, mirroring `../quiz/quiz-form.ts` and reusing its `QuestionState`, `newQuestion` and per-question validation:
+- [x] T006 [P] [US1] Tests first, then add the optional `onTimeChange?: (seconds: number) => void` prop to `HlsVideo` in `packages/common/shadcn/src/components/hls-video.tsx`, called with the video's current time on each `timeupdate` and after a seek. Without the prop nothing changes. Cases in `hls-video.test.tsx`; every existing case passes unchanged.
+- [x] T007 [P] [US1] Tests first, then add `video-questions-form.ts` in `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/-components/content-items/video-questions/`, mirroring `../quiz/quiz-form.ts` and reusing its `QuestionState`, `newQuestion` and per-question validation:
   - state: the quiz question state plus `atSeconds: number | null`;
   - `fromVideoItem(item)` and `toVideoQuestionsInput(state, quizVersion)`;
   - `parseTime('1:30') → 90` and `formatTime(90) → '1:30'` (`m:ss`, and `h:mm:ss` from an hour), refusing anything else;
@@ -74,7 +74,7 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
   - `isAfterEnd(question, durationSeconds)`.
 
   `video-questions-form.test.ts` covers each.
-- [ ] T008 [US1] Tests first, then build the editor dialog in the same folder, as [contracts/instructor-portal-ui.md](./contracts/instructor-portal-ui.md) describes: `video-questions-dialog.tsx`, `video-questions-editor.tsx` and `use-video-questions-editor.ts`.
+- [x] T008 [US1] Tests first, then build the editor dialog in the same folder, as [contracts/instructor-portal-ui.md](./contracts/instructor-portal-ui.md) describes: `video-questions-dialog.tsx`, `video-questions-editor.tsx` and `use-video-questions-editor.ts`.
   - The player (`HlsVideo` with the URL from `contentItem.createVideoUrl`, and `onTimeChange` from T006), the current time, **Add a question here** (the current time rounded down) and **Add an end question**.
   - One card per question in asking order, reusing `../quiz/question-card.tsx`, with an **Ask at** time field and an **At the end** switch, **Move up** and **Move down** for questions sharing a moment, and remove.
   - The note "After the end of the video: asked with the end check" on a question at or past the duration.
@@ -82,7 +82,7 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
   - Text-only buttons, no arrow icons.
 
   Component tests with `renderWithInstructorApi`: adding at the current time, editing the time re-sorts the list, marking as an end question, reordering within a moment only, removing, the 20 limit, and each validation error marking its card.
-- [ ] T009 [US1] [US6] Tests first, then wire saving in `use-video-questions-editor.ts` and the dialog:
+- [x] T009 [US1] [US6] Tests first, then wire saving in `use-video-questions-editor.ts` and the dialog:
   - **Save** calls `contentItem.updateVideoQuestions` with the loaded `quizVersion` (0 when the video has none) and keeps the returned version for the next save, then refreshes the course (as the quiz builder does with `useRefreshCourse`);
   - `CONFLICT` offers to reload the latest questions; other errors show in an `ErrorAlert`;
   - closing with unsaved changes asks first;
@@ -90,8 +90,8 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
   - when the video's `studentActivityCount` is above 0, the notice "N learners have used this video. Answers already recorded are kept and aren't regraded." (spec FR-034).
 
   Component tests for each, asserting the mutation's input with `calls`.
-- [ ] T010 [US1] Tests first, then add the **Questions** button to a video's row in `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/-components/content-items/lesson-content-items-row.tsx`, beside **Captions**: labelled "Questions" or "Questions (3)" (spec FR-008), with `aria-label` "Questions for <title>", opening the dialog from T008, and disabled with a reason while the video has no playable version. Cases in `lesson-content-items-row.test.tsx`.
-- [ ] T011 [US1] Add `packages/e2e/src/helpers/video-questions.ts` (open the editor from a video's row, add a question at the current time, fill a question card, save) and the test "an instructor adds questions to a video" in a new `packages/e2e/src/scenarios/video-questions.e2e.ts`: an instructor made for the test uploads the three-second video (`addVideoToLastLesson` in `helpers/instructor-portal.ts`), opens **Questions**, adds a question at 0:01 and an end question, saves, reloads, and sees both in the editor and "Questions (2)" on the row. Take `screenshot(page, 'video questions editor')` and `screenshot(page, 'video row with question count')`.
+- [x] T010 [US1] Tests first, then add the **Questions** button to a video's row in `packages/websites/instructor-portal/src/routes/_authenticated/my-courses_/$courseId/-components/content-items/lesson-content-items-row.tsx`, beside **Captions**: labelled "Questions" or "Questions (3)" (spec FR-008), with `aria-label` "Questions for <title>", opening the dialog from T008, and disabled with a reason while the video has no playable version. Cases in `lesson-content-items-row.test.tsx`.
+- [x] T011 [US1] Add `packages/e2e/src/helpers/video-questions.ts` (open the editor from a video's row, add a question at the current time, fill a question card, save) and the test "an instructor adds questions to a video" in a new `packages/e2e/src/scenarios/video-questions.e2e.ts`: an instructor made for the test uploads the three-second video (`addVideoToLastLesson` in `helpers/instructor-portal.ts`), opens **Questions**, adds a question at 0:01 and an end question, saves, reloads, and sees both in the editor and "Questions (2)" on the row. Take `screenshot(page, 'video questions editor')` and `screenshot(page, 'video row with question count')`.
 
 ---
 

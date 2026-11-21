@@ -18,6 +18,14 @@ export const LessonSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   order: z.number(),
+  // True only when the record carries the mark; every procedure that returns
+  // a lesson passes it through here, so an unmarked lesson (no attribute)
+  // reads as false. Marked is not open: see `isOpenFreePreview` in
+  // `@discava/core-table`.
+  freePreview: z
+    .boolean()
+    .optional()
+    .transform((freePreview) => freePreview === true),
   visibility: CurriculumVisibilitySchema,
   archivedAt: z.string().optional(),
   publishedAt: z.string().optional(),
@@ -71,6 +79,20 @@ const LessonKeySchema = z.object({
   moduleId: z.string(),
   lessonId: z.string(),
 });
+
+export const SetLessonFreePreviewInputSchema = LessonKeySchema.extend({
+  freePreview: z.boolean(),
+});
+
+export type ISetLessonFreePreviewInput = z.output<
+  typeof SetLessonFreePreviewInputSchema
+>;
+
+export const SetLessonFreePreviewOutputSchema = LessonSchema;
+
+export type ISetLessonFreePreviewOutput = z.output<
+  typeof SetLessonFreePreviewOutputSchema
+>;
 
 export const PublishLessonInputSchema = LessonKeySchema;
 

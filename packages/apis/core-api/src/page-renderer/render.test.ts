@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { PageContext } from './page.js';
+import { renderCertificatePage } from './render-certificate.js';
 import { renderCoursePage } from './render-course.js';
 import { renderProfilePage } from './render-profile.js';
 
@@ -221,5 +222,43 @@ describe('renderProfilePage', () => {
     const all = `${page.head}${page.root}${page.pageData}`;
     expect(all.match(/<script/g)).toHaveLength(1);
     expect(all).not.toContain('<script>alert');
+  });
+});
+
+describe('renderCertificatePage', () => {
+  const certificate = {
+    certificateId: 'ABCD-EFGH-JKMN-PQRS',
+    learnerName: 'Sam <b> "Q" & Co',
+    courseTitle: 'Rust <i> & "Go"',
+    completedAt: '2026-11-19T23:30:00.000Z',
+    completedOn: '19 November 2026',
+  };
+
+  it('has the social card, a noindex tag and no structured data', () => {
+    const page = renderCertificatePage(context(true), certificate);
+    expect(page.root).toBe('');
+    expect(page.head).toContain('<meta name="robots" content="noindex" />');
+    expect(page.head).not.toContain('ld+json');
+    expect(page.head).toContain(
+      '<link rel="canonical" href="https://learn.example.com/certificates/ABCD-EFGH-JKMN-PQRS" />',
+    );
+    expect(page.head).toContain(
+      'content="Certificate of completion, 19 November 2026. Issued by Discava. Certificate ID ABCD-EFGH-JKMN-PQRS."',
+    );
+    expect(page.head).toContain(
+      '<meta property="og:image" content="https://learn.example.com/og-default.png" />',
+    );
+    expect(page.head).toContain(
+      '<meta property="og:type" content="website" />',
+    );
+  });
+
+  it('escapes the learner name and the course title', () => {
+    const { head } = renderCertificatePage(context(true), certificate);
+    expect(head).toContain(
+      'Sam &lt;b&gt; &quot;Q&quot; &amp; Co completed Rust &lt;i&gt; &amp; &quot;Go&quot; | Discava',
+    );
+    expect(head).not.toContain('<b>');
+    expect(head).not.toContain('<i>');
   });
 });

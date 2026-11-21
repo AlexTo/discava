@@ -1,6 +1,6 @@
 ---
 title: Certificates
-description: How a certificate of completion is issued, switched on or off per course, shared and verified.
+description: How a certificate of completion is issued, switched on or off per course, shared, added to LinkedIn and verified.
 sidebar:
   order: 3
 ---
@@ -8,6 +8,8 @@ sidebar:
 import Link from '@components/link.astro';
 
 **Spec:** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/)
+
+**Spec:** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/) (adding a certificate to LinkedIn)
 
 ## The rule
 
@@ -34,10 +36,41 @@ An instructor turns **Issue a certificate on completion** on or off in the cours
 
 ## Sharing and verifying
 
-A student finds their certificates in **My Learning**, on each completed course: **View** opens the public page, **Download PDF** saves a one-page A4 certificate that carries the same ID and the page's address, and **Copy link** copies the public page's address. Anyone with the link, or the ID, can check it on that page.
+A student finds their certificates in **My Learning**, on each completed course, with four actions:
+
+- **View** opens the public page.
+- **Download PDF** saves a one-page A4 certificate that carries the same ID and the page's address.
+- **Copy link** copies the public page's address.
+- **Add to LinkedIn profile** opens LinkedIn's form for a new certification (see below).
+
+Anyone with the link, or the ID, can check a certificate on that page.
+
+## Adding it to LinkedIn
+
+The student portal builds the link in the learner's browser (`lib/linkedin-add-to-profile.ts`, `buildLinkedInAddToProfileUrl`) and opens it. No server builds or sees it, and nothing is sent to LinkedIn until the learner clicks.
+
+- **What is sent**: LinkedIn's `profile/add` address with `startTask=CERTIFICATION_NAME`, `name` (the course title printed on the certificate), the issuer (`organizationName` from the stage's `siteName`, or `organizationId` instead when the stage sets `linkedInOrganizationId`, never both), `issueYear` and `issueMonth` (from the completion date in UTC), `certUrl` (the public page's address) and `certId` (as displayed). There is no expiry. Every value is percent-encoded.
+- **What never is**: the learner's name, email, user ID or any session value. LinkedIn knows who the member is; we don't tell it. The link carries `rel="noopener noreferrer"` so the browser doesn't name the referring page, and no LinkedIn script or API is loaded or called.
+- **What the click records**: the first click calls the public `certificate.recordLinkedInClick({ certificateId, source })`, which sets `linkedInClickedAt` and `linkedInClickSource` on the certificate once and never changes them. A failure to record never stops the form from opening. The record means "the learner opened the form", not "the certificate is on LinkedIn": LinkedIn sends nothing back.
+- **Where a click can come from**: `linkedInClickSource` is one of `my-learning`, `certificate-page`, `issued-email` and `reminder-email`. The two emails link to `/certificates/<ID>/linkedin?source=…`. That portal route works signed out, records the use and replaces the page with LinkedIn's address.
+- **Reading uptake**: the share of certificates with `linkedInClickedAt`, split by `linkedInClickSource`. The figure is derived from the stored records.
+- **If LinkedIn ignores the values**: the link still opens the right form, and the owner's view of the public page lists every value to copy by hand. LinkedIn's own help says customised links may not autofill; a maintainer checked on 2026-11-20 that the form opens with the values (research R-1 to R-3 in the spec).
+
+## Telling the learner
+
+- **The notification** `certificate.issued` is written in the same transaction as the certificate by `issueCertificate`, with the certificate ID as its dedupe key, so there is never a certificate without its notification, and a retry doesn't make a second one.
+- **The email** has two links: the certificate's page, and **Add to LinkedIn profile** (the notification's optional `action`, which the bell ignores).
+- **The setting**: one switch, **Certificates**, in Notification settings governs both the issue email and the reminder. `certificate.reminder` has no setting of its own (`emailPreferenceType` points at `certificate.issued`), and unsubscribing from the first email also stops the reminder.
+- **The reminder**: three days after issue, a one-time EventBridge Scheduler schedule (`cert-reminder-<ID>`) invokes the `certificate-reminder` Lambda. It stops if the email type is off. Otherwise it claims the reminder with a conditional write of `reminderSentAt` that only succeeds when no click has been recorded and no reminder was sent, then publishes `certificate.reminder` with the stored time. A click and a send are safe against each other: whichever write lands first decides. A later recalculation repairs a certificate that was issued but never scheduled (research R-4 to R-7).
+
+## The link preview
+
+Link-preview crawlers run no scripts, so the page renderer (see <Link path="design/public-pages">Public pages</Link>) answers `/certificates/<ID>` with a head built from `certificate.verify`: the title "the learner completed the course", the completion date, the site name and the ID. It never shows more than the page does. The page is always `noindex`, on every stage, because it names a person. Deeper paths such as `/certificates/<ID>/linkedin` get the plain template (research R-8).
 
 ## Limitations
 
 - There is no backfill: a student who completed a course before certificates existed gets a certificate only when their progress is recalculated for some other reason.
-- There is no revocation. A certificate can't be withdrawn once issued.
+- There is no revocation yet (#594). A certificate can't be withdrawn once issued.
+- LinkedIn sends nothing back, so Discava can't tell whether a certificate was saved to a profile, only that the form was opened.
+- Anyone holding the certificate ID can record a first use. Its only effect is one reminder fewer.
 - The PDF uses standard fonts, so characters outside Latin-1 (for example Chinese, Japanese or emoji) print as `?`. The public page shows them correctly.

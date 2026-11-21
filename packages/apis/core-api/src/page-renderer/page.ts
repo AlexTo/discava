@@ -36,7 +36,10 @@ export const buildHead = (
     path: string;
     type: 'website' | 'profile';
     image?: string;
-    structuredData: unknown;
+    /** Omitted: no structured data script. */
+    structuredData?: unknown;
+    /** Emit the robots tag whatever `context.allowIndexing` is. */
+    noindex?: boolean;
   },
 ): string => {
   const title = escapeHtml(`${page.title} | ${context.siteName}`);
@@ -47,7 +50,9 @@ export const buildHead = (
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
     `<link rel="canonical" href="${url}" />`,
-    context.allowIndexing ? '' : '<meta name="robots" content="noindex" />',
+    context.allowIndexing && !page.noindex
+      ? ''
+      : '<meta name="robots" content="noindex" />',
     `<meta property="og:type" content="${page.type}" />`,
     `<meta property="og:site_name" content="${escapeHtml(context.siteName)}" />`,
     `<meta property="og:title" content="${title}" />`,
@@ -58,7 +63,9 @@ export const buildHead = (
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="${image}" />`,
-    `<script type="application/ld+json">${jsonForScript(page.structuredData)}</script>`,
+    page.structuredData === undefined
+      ? ''
+      : `<script type="application/ld+json">${jsonForScript(page.structuredData)}</script>`,
   ]
     .filter(Boolean)
     .join('\n');

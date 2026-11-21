@@ -30,6 +30,7 @@ import {
 } from './edit-lesson-text-dialog';
 import { QuizBuilderDialog } from './quiz/quiz-builder-dialog';
 import { VideoCaptionsDialog } from './video-captions-dialog';
+import { VideoQuestionsDialog } from './video-questions/video-questions-dialog';
 
 export type ContentItem = {
   contentItemId: string;
@@ -54,6 +55,11 @@ export type ContentItem = {
   maxPoints?: number;
   dueAt?: string;
 };
+
+// Whether students (and the questions editor) can play the video: it's
+// ready, or still being replaced over a version that plays.
+const isPlayable = (item: ContentItem) =>
+  item.status === 'ready' || Boolean(item.previousS3Key);
 
 // What the video row says about a video's captions.
 const captionsLabel = (item: ContentItem) => {
@@ -238,6 +244,32 @@ export function LessonContentItemsRow({
             {captionsLabel(item)}
           </Badge>
         )}
+        <VideoQuestionsDialog
+          courseId={courseId}
+          moduleId={moduleId}
+          lessonId={lessonId}
+          contentItemId={item.contentItemId}
+          title={item.title}
+          trigger={
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              aria-label={`Questions for ${item.title}`}
+              disabled={!isPlayable(item)}
+              title={
+                isPlayable(item)
+                  ? undefined
+                  : 'The video has no playable version yet. Questions can be added once it has finished processing.'
+              }
+              className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
+            >
+              {item.questions?.length
+                ? `Questions (${item.questions.length})`
+                : 'Questions'}
+            </Button>
+          }
+        />
         {!readOnly && (
           <>
             {item.status === 'ready' && (

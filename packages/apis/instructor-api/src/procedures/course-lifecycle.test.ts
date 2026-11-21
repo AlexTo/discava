@@ -170,6 +170,15 @@ describe('createCourse', () => {
     );
   });
 
+  it('stores the default certificate criteria on a new course', async () => {
+    await callAs().createCourse({ title: 'Intro to DynamoDB' });
+    expect(courseCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        certificateCriteria: { version: 1, requireQuizPass: false },
+      }),
+    );
+  });
+
   it('returns the course fetched after the transaction commits', async () => {
     const result = await callAs().createCourse({ title: 'Intro to DynamoDB' });
     expect(result).toEqual(course);
@@ -646,6 +655,7 @@ describe('viewCourse', () => {
           lessons: [
             {
               ...lesson,
+              freePreview: false,
               contentItems: [
                 contentItem('item-1', 1),
                 contentItem('item-2', 2),

@@ -107,6 +107,8 @@ export interface PlayerPreferences {
   captionsOn: boolean;
   /** The last caption track chosen. */
   captionLanguage: string | undefined;
+  /** Whether the transcript panel is open. */
+  transcriptOpen: boolean;
 }
 
 export const DEFAULT_PREFERENCES: PlayerPreferences = {
@@ -115,6 +117,7 @@ export const DEFAULT_PREFERENCES: PlayerPreferences = {
   muted: false,
   captionsOn: false,
   captionLanguage: undefined,
+  transcriptOpen: false,
 };
 
 const STORAGE_KEY = 'discava-video-preferences';
@@ -135,7 +138,7 @@ export function loadPreferences(): PlayerPreferences {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) {
     return { ...DEFAULT_PREFERENCES };
   }
-  const { speed, volume, muted, captionsOn, captionLanguage } =
+  const { speed, volume, muted, captionsOn, captionLanguage, transcriptOpen } =
     stored as Record<string, unknown>;
   return {
     speed:
@@ -153,6 +156,10 @@ export function loadPreferences(): PlayerPreferences {
         : DEFAULT_PREFERENCES.captionsOn,
     captionLanguage:
       typeof captionLanguage === 'string' ? captionLanguage : undefined,
+    transcriptOpen:
+      typeof transcriptOpen === 'boolean'
+        ? transcriptOpen
+        : DEFAULT_PREFERENCES.transcriptOpen,
   };
 }
 

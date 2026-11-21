@@ -3,7 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, expect, it } from 'vitest';
-import { manifestNonce, previewManifestNonce } from './media-keys.js';
+import {
+  FREE_PREVIEW_COOKIE_LIFETIME_SECONDS,
+  manifestNonce,
+  previewManifestNonce,
+  RETIRED_VERSION_DELAY_MINUTES,
+  SIGNED_COOKIE_LIFETIME_SECONDS,
+} from './media-keys.js';
+
+describe('FREE_PREVIEW_COOKIE_LIFETIME_SECONDS', () => {
+  it('is an hour, no longer than any other signed cookie', () => {
+    expect(FREE_PREVIEW_COOKIE_LIFETIME_SECONDS).toBe(3600);
+    expect(FREE_PREVIEW_COOKIE_LIFETIME_SECONDS).toBeLessThanOrEqual(
+      SIGNED_COOKIE_LIFETIME_SECONDS,
+    );
+    expect(RETIRED_VERSION_DELAY_MINUTES * 60).toBeGreaterThan(
+      FREE_PREVIEW_COOKIE_LIFETIME_SECONDS,
+    );
+  });
+});
 
 describe('manifestNonce', () => {
   it('reads the nonce folder a manifest lives under', () => {

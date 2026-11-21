@@ -350,7 +350,7 @@ describe('publishLesson', () => {
         condition: NOT_ARCHIVED,
       },
     ]);
-    expect(result).toEqual(lesson);
+    expect(result).toEqual({ ...lesson, freePreview: false });
   });
 
   it('refuses to publish an archived lesson', async () => {

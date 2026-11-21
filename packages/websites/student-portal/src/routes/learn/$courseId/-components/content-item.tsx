@@ -128,6 +128,7 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
       withCredentials={videoQuery.data.withCredentials}
       title={item.title}
       captions={videoQuery.data.captions}
+      transcript
       resumeAt={videoQuery.data.resumeAt}
       onPositionChange={(position) =>
         savePosition.mutate({

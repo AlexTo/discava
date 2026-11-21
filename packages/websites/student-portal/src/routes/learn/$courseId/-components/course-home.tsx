@@ -8,6 +8,7 @@ import { Link } from '@tanstack/react-router';
 import { BookOpen, CircleCheck } from 'lucide-react';
 import { Announcements } from './announcements';
 import { type CoursePlayer, CoursePlayerLayout } from './course-player';
+import { EnrolledNotice } from './enrolled-notice';
 
 function NextUp({
   courseId,
@@ -101,6 +102,9 @@ export function CourseHome({ courseId }: { courseId: string }) {
     <CoursePlayerLayout courseId={courseId}>
       {(player) => (
         <div className="space-y-6">
+          {player.course ? (
+            <EnrolledNotice courseTitle={player.course.title} />
+          ) : null}
           <NextUp courseId={courseId} player={player} />
           <Announcements courseId={courseId} />
           {player.course?.description ? (

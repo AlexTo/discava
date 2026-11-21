@@ -73,6 +73,7 @@ export interface TableSnapshot {
     | 'priceAmount'
     | 'priceCurrency'
     | 'pricedAt'
+    | 'certificateCriteria'
   >[];
   modules: Pick<
     Item<typeof createModuleEntity>,
@@ -90,6 +91,7 @@ export interface TableSnapshot {
     | 'moduleId'
     | 'lessonId'
     | 'kind'
+    | 'freePreview'
     | 'order'
     | 'visibility'
     | 'archivedAt'
@@ -123,6 +125,9 @@ export interface TableSnapshot {
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
+    | 'questions'
+    | 'answerKey'
+    | 'quizVersion'
   >[];
   coursePreviews: Pick<
     Item<typeof createCoursePreviewEntity>,
@@ -245,6 +250,7 @@ export interface TableSnapshot {
     | 'issuedAt'
     | 'linkedInClickedAt'
     | 'linkedInClickSource'
+    | 'assessment'
     | 'reminderScheduledAt'
     | 'reminderSentAt'
   >[];

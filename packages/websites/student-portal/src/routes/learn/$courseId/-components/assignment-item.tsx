@@ -27,6 +27,7 @@ import {
   errorCode,
   type PlayerItem,
 } from '../../../../hooks/use-course-player';
+import { AssignmentFeedback } from './assignment-feedback';
 
 // What a submission may be, as core-api allows it (LESSON_FILE_TYPES, which
 // the portal can't import: it's server code): one file of at most 100 MB.
@@ -144,6 +145,17 @@ export function AssignmentItem({
     trpc.assignment.mySubmission.queryOptions(ref),
   );
   const locked = submission?.status === 'returned';
+  const requested = submission?.status === 'resubmission_requested';
+  // Newest first. A returned or requested state shows the latest round in
+  // full; otherwise (submitted again) every round stays under "Earlier
+  // feedback", so a request is not lost once the student resubmits.
+  const rounds = submission?.feedback ?? [];
+  const showsLatest = requested || locked;
+  const latestFeedback = showsLatest ? rounds[0] : undefined;
+  const earlierFeedback = showsLatest ? rounds.slice(1) : rounds;
+  const amended = submission?.feedback.some(
+    (round) => round.kind === 'amended',
+  );
   const busy = phase !== 'idle';
   const pastDue =
     item.dueAt !== undefined && Date.now() > Date.parse(item.dueAt);
@@ -330,11 +342,45 @@ export function AssignmentItem({
                   : apiErrorMessage(downloadError)}
               </ErrorAlert>
             ) : null}
-            {locked ? (
-              <p className="text-sm text-muted-foreground">
-                This submission has been returned and can't be changed
-              </p>
+            {requested ? (
+              <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
+                <p className="text-sm font-medium">
+                  Your instructor asked you to resubmit
+                </p>
+                {latestFeedback?.feedback ? (
+                  <RichTextView value={latestFeedback.feedback} />
+                ) : null}
+              </div>
             ) : null}
+            {locked ? (
+              <div className="space-y-2">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                  <span className="font-medium">Returned</span>
+                  {submission.grade ? (
+                    <span className="font-medium">
+                      {submission.grade.points} / {submission.grade.pointsOutOf}
+                    </span>
+                  ) : null}
+                  {submission.grade ? (
+                    <span className="text-muted-foreground">
+                      Returned {when(submission.grade.returnedAt)}
+                    </span>
+                  ) : null}
+                  {submission.grade && amended ? (
+                    <span className="text-muted-foreground">
+                      updated {when(submission.grade.gradedAt)}
+                    </span>
+                  ) : null}
+                </p>
+                {latestFeedback?.feedback ? (
+                  <RichTextView value={latestFeedback.feedback} />
+                ) : null}
+                <p className="text-sm text-muted-foreground">
+                  This submission has been returned and can't be changed
+                </p>
+              </div>
+            ) : null}
+            <AssignmentFeedback rounds={earlierFeedback} />
           </div>
         ) : done ? (
           <p className="text-sm font-medium">
@@ -356,7 +402,7 @@ export function AssignmentItem({
         <ErrorAlert header="This course is archived">
           Work can no longer be submitted.
         </ErrorAlert>
-      ) : locked ? null : submission && !resubmitting ? (
+      ) : locked ? null : submission && !resubmitting && !requested ? (
         <Button
           type="button"
           variant="outline"

@@ -61,6 +61,7 @@ import {
   createContentItemVideoUrl,
   updateContentItemVideo,
 } from './procedures/content-item-video.js';
+import { updateContentItemVideoQuestions } from './procedures/content-item-video-questions.js';
 import {
   archiveCourse,
   createCourse,
@@ -100,6 +101,7 @@ import {
   publishLesson,
   reorderLessons,
   restoreLesson,
+  setLessonFreePreview,
   updateLesson,
 } from './procedures/lesson.js';
 import {
@@ -220,6 +222,7 @@ export const appRouter = router({
     delete: deleteLesson,
     publish: publishLesson,
     hide: hideLesson,
+    setFreePreview: setLessonFreePreview,
     reorder: reorderLessons,
     createQuizAssignment,
     createUploadAssignment,
@@ -234,6 +237,7 @@ export const appRouter = router({
     updateVideo: updateContentItemVideo,
     updateText: updateContentItemText,
     updateQuiz: updateContentItemQuiz,
+    updateVideoQuestions: updateContentItemVideoQuestions,
     createVideoUrl: createContentItemVideoUrl,
     captionUploadUrl: createContentItemCaptionUploadUrl,
     attachCaption: attachContentItemCaption,

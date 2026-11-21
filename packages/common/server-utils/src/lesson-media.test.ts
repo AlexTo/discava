@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SIGNED_COOKIE_LIFETIME_SECONDS } from './media-keys.js';
 
 const { getAppConfig, getSecret, getSignedCookies } = vi.hoisted(() => ({
   getAppConfig: vi.fn(),
@@ -89,6 +90,46 @@ describe('getSignedCloudFrontCookies', () => {
       expect(result).toContainEqual(
         expect.stringContaining(`${name}=${value};`),
       );
+    }
+  });
+
+  it('lasts the default lifetime when none is given', async () => {
+    const { getSignedCloudFrontCookies } = await importFreshModule();
+    const now = Date.now();
+
+    const result = await getSignedCloudFrontCookies(PREFIX_KEY);
+
+    const policy = JSON.parse(getSignedCookies.mock.calls[0]![0].policy);
+    const expires = policy.Statement[0].Condition.DateLessThan['AWS:EpochTime'];
+    expect(expires).toBeGreaterThanOrEqual(
+      Math.floor(now / 1000) + SIGNED_COOKIE_LIFETIME_SECONDS,
+    );
+    expect(expires).toBeLessThanOrEqual(
+      Math.ceil(Date.now() / 1000) + SIGNED_COOKIE_LIFETIME_SECONDS,
+    );
+    for (const cookie of result) {
+      expect(cookie).toContain(`Max-Age=${SIGNED_COOKIE_LIFETIME_SECONDS}`);
+    }
+  });
+
+  it('expires the policy and the cookies after a given lifetime, for the same prefix only', async () => {
+    const { getSignedCloudFrontCookies } = await importFreshModule();
+    const now = Date.now();
+
+    const result = await getSignedCloudFrontCookies(PREFIX_KEY, {
+      lifetimeSeconds: 3600,
+    });
+
+    const policy = JSON.parse(getSignedCookies.mock.calls[0]![0].policy);
+    const expires = policy.Statement[0].Condition.DateLessThan['AWS:EpochTime'];
+    expect(expires).toBeGreaterThanOrEqual(Math.floor(now / 1000) + 3600);
+    expect(expires).toBeLessThanOrEqual(Math.ceil(Date.now() / 1000) + 3600);
+    expect(policy.Statement[0].Resource).toBe(
+      `https://${DOMAIN_NAME}/${PREFIX_KEY}*`,
+    );
+    for (const cookie of result) {
+      expect(cookie).toContain('Max-Age=3600');
+      expect(cookie).toContain(`Path=/${PREFIX_KEY}`);
     }
   });
 

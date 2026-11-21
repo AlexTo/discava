@@ -42,6 +42,7 @@
       "packages/apis/instructor-api/src/procedures/content-item-quiz.ts",
       "packages/apis/instructor-api/src/procedures/content-item-shared.ts",
       "packages/apis/instructor-api/src/procedures/content-item-text.ts",
+      "packages/apis/instructor-api/src/procedures/content-item-video-questions.ts",
       "packages/apis/instructor-api/src/procedures/content-item-video.ts",
       "packages/apis/instructor-api/src/procedures/lesson.ts",
       "packages/apis/instructor-api/src/procedures/module.ts"

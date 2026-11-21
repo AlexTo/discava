@@ -81,8 +81,6 @@ const resolvePrivateKey = async (secretArn: string): Promise<string> => {
 
 // The cookies gate every request for the rest of the viewing session
 // (manifest, renditions, every segment), so they must outlast one sitting.
-const COOKIE_EXPIRY_SECONDS = SIGNED_COOKIE_LIFETIME_SECONDS;
-
 /**
  * Signs CloudFront cookies via a custom policy whose wildcard resource
  * covers every object under `prefixKey` -- HLS needs the manifest plus
@@ -94,6 +92,11 @@ const COOKIE_EXPIRY_SECONDS = SIGNED_COOKIE_LIFETIME_SECONDS;
  */
 export const getSignedCloudFrontCookies = async (
   prefixKey: string,
+  {
+    lifetimeSeconds = SIGNED_COOKIE_LIFETIME_SECONDS,
+  }: {
+    lifetimeSeconds?: number;
+  } = {},
 ): Promise<string[]> => {
   // Local dev serves lesson media straight from S3Mock, unsigned (#137).
   if (isLocalDev()) {
@@ -106,7 +109,7 @@ export const getSignedCloudFrontCookies = async (
     cookieDomain,
   } = await resolveCloudFrontConfig();
   const privateKey = await resolvePrivateKey(cloudFrontPrivateKeySecretArn);
-  const expiresAt = Date.now() + COOKIE_EXPIRY_SECONDS * 1000;
+  const expiresAt = Date.now() + lifetimeSeconds * 1000;
 
   const policy = JSON.stringify({
     Statement: [
@@ -125,7 +128,7 @@ export const getSignedCloudFrontCookies = async (
     privateKey,
   });
 
-  const attributes = `Domain=${cookieDomain}; Path=/${prefixKey}; Secure; HttpOnly; SameSite=None; Max-Age=${COOKIE_EXPIRY_SECONDS}`;
+  const attributes = `Domain=${cookieDomain}; Path=/${prefixKey}; Secure; HttpOnly; SameSite=None; Max-Age=${lifetimeSeconds}`;
   return Object.entries(signedCookies).map(
     ([name, value]) => `${name}=${value}; ${attributes}`,
   );

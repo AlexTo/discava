@@ -92,3 +92,17 @@ export const shownCue = (video: Locator) =>
     const cues = track?.activeCues;
     return cues && cues.length > 0 ? (cues[0] as VTTCue).text : '';
   });
+
+/** A valid multi-cue WebVTT file, with `hh:mm:ss.ttt` timings. */
+export const webVttOf = (
+  cues: { start: number; end: number; text: string }[],
+) => {
+  const timestamp = (total: number) => {
+    const ms = Math.round(total * 1000);
+    const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+    return `${pad(Math.floor(ms / 3_600_000))}:${pad(Math.floor((ms % 3_600_000) / 60_000))}:${pad(Math.floor((ms % 60_000) / 1000))}.${pad(ms % 1000, 3)}`;
+  };
+  return `WEBVTT\n\n${cues
+    .map((c) => `${timestamp(c.start)} --> ${timestamp(c.end)}\n${c.text}\n`)
+    .join('\n')}`;
+};

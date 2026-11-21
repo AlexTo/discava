@@ -62,6 +62,20 @@ export const createCourseEntity = async () =>
           type: 'boolean',
           required: true,
         },
+        // What a student must have done, beyond completing the course, to earn
+        // a certificate. Required, set to DEFAULT_CERTIFICATE_CRITERIA on
+        // creation; nothing reads a missing value as "no criteria" (as
+        // `certificatesEnabled` above). `version` goes up with every change
+        // that alters a value; `minUploadScorePercent` is for graded uploads.
+        certificateCriteria: {
+          type: 'map',
+          required: true,
+          properties: {
+            version: { type: 'number', required: true },
+            requireQuizPass: { type: 'boolean', required: true },
+            minUploadScorePercent: { type: 'number' },
+          },
+        },
         // What the course costs, in the smallest unit of `priceCurrency`
         // (cents or pence). `0` is free; otherwise 100 to 1,000,000. Required,
         // set to 0 on creation; nothing reads a missing value as free. Written

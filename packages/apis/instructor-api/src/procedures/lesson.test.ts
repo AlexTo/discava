@@ -271,7 +271,7 @@ describe('createLesson', () => {
       moduleId: MODULE_ID,
       title: 'Welcome',
     });
-    expect(result).toEqual(lesson);
+    expect(result).toEqual({ ...lesson, freePreview: false });
   });
 
   it('passes the description through to the created lesson', async () => {
@@ -382,7 +382,7 @@ describe('updateLesson', () => {
       lessonId: lesson.lessonId,
       title: 'Updated title',
     });
-    expect(result).toEqual(updatedLesson);
+    expect(result).toEqual({ ...updatedLesson, freePreview: false });
   });
 });
 
@@ -446,7 +446,7 @@ describe('deleteLesson', () => {
       moduleId: MODULE_ID,
       lessonId: lesson.lessonId,
     });
-    expect(result).toEqual(lesson);
+    expect(result).toEqual({ ...lesson, freePreview: false });
   });
 
   it('throws INTERNAL_SERVER_ERROR when the transaction is canceled for a reason other than a stale content item', async () => {

@@ -9,6 +9,9 @@ import { z } from 'zod';
 export const MAX_QUIZ_QUESTIONS = 50;
 export const MIN_QUESTION_OPTIONS = 2;
 export const MAX_QUESTION_OPTIONS = 10;
+export const MAX_VIDEO_QUESTIONS = 20;
+// As core-table's VIDEO_POSITION_MAX_SECONDS.
+const MAX_AT_SECONDS = 86_400;
 
 // A DynamoDB item is capped at 400 KB. The questions and answer key are the
 // bulk of a quiz item, so their combined JSON size is bounded well under it.
@@ -39,6 +42,21 @@ export const QuizQuestionSchema = z.object({
 });
 
 export type IQuizQuestion = z.output<typeof QuizQuestionSchema>;
+
+// What the editor sends for one video question.
+export const VideoQuestionInputSchema = QuizQuestionSchema.extend({
+  // Whole seconds from the start; null asks it when the video ends.
+  atSeconds: z.number().int().min(0).max(MAX_AT_SECONDS).nullable(),
+});
+
+// What is stored and returned: the server adds the hash of what a student
+// sees of this question (questionId, kind, prompt, options; not atSeconds).
+export const VideoQuestionSchema = VideoQuestionInputSchema.extend({
+  contentHash: z.string(),
+});
+
+export type IVideoQuestionInput = z.output<typeof VideoQuestionInputSchema>;
+export type IVideoQuestion = z.output<typeof VideoQuestionSchema>;
 
 export const QuizAnswerKeyEntrySchema = z.object({
   correctOptionIds: z.array(z.string().min(1)),
@@ -77,7 +95,13 @@ export type IQuizDefinition = z.output<
 >;
 
 export const refineQuizDefinition = (
-  { questions, answerKey }: Pick<IQuizDefinition, 'questions' | 'answerKey'>,
+  {
+    questions,
+    answerKey,
+  }: {
+    questions: IQuizQuestion[] | IVideoQuestionInput[];
+    answerKey: IQuizAnswerKey;
+  },
   ctx: z.RefinementCtx,
 ) => {
   const issue = (message: string, path: (string | number)[]) =>

@@ -18,7 +18,7 @@ import {
   fireCertificateReminder,
   localSubFor,
 } from '../helpers/notification.js';
-import { PORTALS } from '../helpers/portals.js';
+import { PAGE_RENDERER, PORTALS } from '../helpers/portals.js';
 import { waitForQueuesToDrain } from '../helpers/router.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
@@ -110,6 +110,49 @@ test('a student completes a course, downloads their certificate and shares it', 
     await screenshot(visitor, 'certificate-page');
     await expect(visitor.getByText(learner.email)).toHaveCount(0);
     await expect(visitor.getByText(learner.username)).toHaveCount(0);
+  });
+
+  await test.step("a certificate's page carries a social card", async () => {
+    const response = await visitor.request.get(
+      `${PAGE_RENDERER}/certificates/${certificateId}`,
+    );
+    expect(response.status()).toBe(200);
+    const html = await response.text();
+    const name = `${learner.givenName} ${learner.familyName}`;
+    expect(html).toMatch(
+      new RegExp(`property="og:title" content="[^"]*${name}[^"]*${title}`),
+    );
+    expect(html).toMatch(
+      new RegExp(`property="og:description" content="[^"]*${certificateId}`),
+    );
+    expect(html).toContain('<meta name="robots" content="noindex" />');
+    expect(response.headers()['x-robots-tag']).toBe('noindex');
+    expect(html).not.toContain(learner.email);
+
+    // A made-up ID answers 404 with none of the card.
+    const last = certificateId.endsWith('0') ? '1' : '0';
+    const missing = await visitor.request.get(
+      `${PAGE_RENDERER}/certificates/${certificateId.slice(0, -1)}${last}`,
+    );
+    expect(missing.status()).toBe(404);
+    const missingHtml = await missing.text();
+    expect(missingHtml).not.toContain('og:title');
+    expect(missingHtml).not.toContain(title);
+
+    // The same address in a browser that runs no scripts, as a crawler sees
+    // it. The renderer's local server doesn't serve the portal's assets, so
+    // the page itself isn't drawn here: the portal draws it on the deployed
+    // distribution, and the portal's own address above covers that.
+    const crawler = await visitor.context().browser()!.newContext({
+      javaScriptEnabled: false,
+    });
+    const crawlerPage = await crawler.newPage();
+    await crawlerPage.goto(`${PAGE_RENDERER}/certificates/${certificateId}`);
+    await expect(crawlerPage).toHaveTitle(
+      new RegExp(`${name} completed ${title}`),
+    );
+    await screenshot(crawlerPage, 'certificate-page-through-renderer');
+    await crawler.close();
   });
 
   await test.step('a changed ID finds no certificate', async () => {
