@@ -1896,7 +1896,8 @@ upsert_boundary_policy() {
         "sns:Publish",
         "transcribe:GetTranscriptionJob",
         "transcribe:StartTranscriptionJob",
-        "transcribe:TagResource"
+        "transcribe:TagResource",
+        "translate:TranslateText"
       ],
       "Resource": "*"
     },
