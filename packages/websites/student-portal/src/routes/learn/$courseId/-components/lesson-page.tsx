@@ -6,7 +6,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle, CircleCheck, FileX } from 'lucide-react';
-import { Fragment } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import type { PlayerItem } from '../../../../hooks/use-course-player';
 import { ContentItem, ITEM_TYPES, itemAnchor } from './content-item';
 import {
@@ -113,10 +113,12 @@ function Lesson({
   courseId,
   lessonId,
   player,
+  moment,
 }: {
   courseId: string;
   lessonId: string;
   player: CoursePlayer;
+  moment: LessonMoment;
 }) {
   const {
     lessons,
@@ -128,6 +130,30 @@ function Lesson({
     course,
   } = player;
   const index = lessons.findIndex(({ lesson }) => lesson.lessonId === lessonId);
+
+  // The video a search result opens: only a video of this lesson counts.
+  const momentItemId = lessons[index]?.lesson.contentItems.find(
+    (item) => item.contentItemId === moment.item && item.type === 'video',
+  )?.contentItemId;
+  const scrolledTo = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!momentItemId || scrolledTo.current === momentItemId) {
+      return;
+    }
+    const target = document.getElementById(itemAnchor(momentItemId));
+    if (!target) {
+      return;
+    }
+    scrolledTo.current = momentItemId;
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    target.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
+    target.focus({ preventScroll: true });
+  }, [momentItemId]);
 
   // Hidden, archived or deleted by the instructor (or never in this course):
   // course.view lists only what a student may see.
@@ -199,6 +225,9 @@ function Lesson({
               done={completedItemIds.has(item.contentItemId)}
               isNew={newItemIds.has(item.contentItemId)}
               readOnly={readOnly}
+              startAt={
+                item.contentItemId === momentItemId ? moment.t : undefined
+              }
             />
           </Fragment>
         ))
@@ -249,18 +278,34 @@ function Lesson({
   );
 }
 
-// One lesson of a course: all its items on one scrolling page.
+// The video and second a transcript search result opens (the route's search).
+export interface LessonMoment {
+  item?: string;
+  t?: number;
+}
+
+// One lesson of a course: all its items on one scrolling page. With `item`
+// and `t` it opens that video at that second.
 export function LessonPage({
   courseId,
   lessonId,
+  item,
+  t,
 }: {
   courseId: string;
   lessonId: string;
+  item?: string;
+  t?: number;
 }) {
   return (
     <CoursePlayerLayout courseId={courseId} activeLessonId={lessonId}>
       {(player) => (
-        <Lesson courseId={courseId} lessonId={lessonId} player={player} />
+        <Lesson
+          courseId={courseId}
+          lessonId={lessonId}
+          player={player}
+          moment={{ item, t }}
+        />
       )}
     </CoursePlayerLayout>
   );

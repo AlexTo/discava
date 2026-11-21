@@ -89,6 +89,7 @@ import {
   publicSearchCourses,
   publicSuggestCourses,
 } from './procedures/search.js';
+import { searchTranscripts } from './procedures/transcript.js';
 
 export const router = t.router;
 
@@ -108,6 +109,9 @@ export const appRouter = router({
     publicView: publicViewCourse,
     previewVideoUrl,
     view: viewCourse,
+  }),
+  transcript: router({
+    search: searchTranscripts,
   }),
   announcement: router({
     list: listAnnouncements,
