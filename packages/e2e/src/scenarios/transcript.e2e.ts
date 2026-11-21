@@ -86,7 +86,18 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
     await page.keyboard.press('Enter');
     const keyboardPanel = page.getByRole('region', { name: /^Transcript/ });
     await expect(keyboardPanel).toBeVisible();
-    await page.keyboard.press('Tab');
+    // The control bar has more buttons after "Transcript": Tab on to the list.
+    const inList = () =>
+      page.evaluate(
+        () =>
+          !!document.activeElement?.closest(
+            '[data-slot="transcript-panel"] ol',
+          ),
+      );
+    for (let tabs = 0; tabs < 10 && !(await inList()); tabs++) {
+      await page.keyboard.press('Tab');
+    }
+    expect(await inList()).toBe(true);
     const keyboardLines = transcriptLines(keyboardPanel);
     await expect(keyboardLines.nth(0)).toBeFocused();
     await page.keyboard.press('ArrowDown');
