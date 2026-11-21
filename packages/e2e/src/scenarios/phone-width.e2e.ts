@@ -8,11 +8,12 @@ import {
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { enrolAndLand, openCourse } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
-import { newUser, uniqueName } from '../helpers/users.js';
+import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
 
 // The student portal on a small phone: pages fit the width, and nothing needed
@@ -110,5 +111,52 @@ test('a course page with six section tabs fits a phone and scrolls its tabs', as
     await last.click();
     await expect(page).toHaveURL(`${coursePageUrl(courseId)}#reviews`);
     await expectNoSidewaysScroll(page);
+  });
+});
+
+test('search and the user menu work on a phone for an instructor-student', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E phone search course');
+  const instructor = await apiUser('Ivy', ['instructor', 'student']);
+  await createPublishedCourseViaApi(instructor, title);
+
+  await page.goto(PORTALS.student);
+  await page.getByRole('link', { name: 'Sign in' }).click();
+  await signIn(page, newUser('Ines', ['instructor', 'student']));
+  const menuButton = page.getByRole('button', { name: 'Open user menu' });
+  await expect(menuButton).toBeVisible();
+
+  await test.step('the top bar fits and the user menu is fully visible', async () => {
+    await expectNoSidewaysScroll(page);
+    const box = await menuButton.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(PHONE.width);
+  });
+
+  await test.step('the search box shows what is typed and the suggestions are wide', async () => {
+    const search = page.getByRole('combobox', { name: 'Search courses' });
+    await search.fill(title.slice(0, 20));
+    const suggestions = page.getByRole('listbox', {
+      name: 'Course suggestions',
+    });
+    await expect(suggestions).toBeVisible();
+    expect((await search.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(
+      150,
+    );
+    expect(
+      (await suggestions.boundingBox())?.width ?? 0,
+    ).toBeGreaterThanOrEqual(320);
+    await screenshot(page, 'search suggestions at phone width');
+    await search.fill('');
+  });
+
+  await test.step('the user menu starts with My Learning, then Instructor', async () => {
+    await menuButton.click();
+    const items = page.getByRole('menuitem');
+    await expect(items.nth(0)).toHaveText('My Learning');
+    await expect(items.nth(1)).toHaveText('Instructor');
+    await screenshot(page, 'user menu at phone width');
   });
 });

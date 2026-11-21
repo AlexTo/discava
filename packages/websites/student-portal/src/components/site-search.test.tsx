@@ -378,7 +378,7 @@ describe('SiteSearch suggestions', () => {
       fireEvent.click(options[3]);
       await advance(0);
 
-      expect(options[3]).toHaveTextContent("See all results for 'python'");
+      expect(options[3]).toHaveTextContent('See all results for ‘python’');
       expect(router.state.location.pathname).toBe('/search');
       expect(router.state.location.search).toEqual({ query: 'python' });
       expect(

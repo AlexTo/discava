@@ -57,24 +57,44 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
           </div>
           {isAuthenticated ? (
             <div className="flex shrink-0 items-center gap-2">
-              {instructorPortal ? (
+              {/* Below sm the same two links are the user menu's first entries. */}
+              <div className="hidden items-center gap-2 sm:flex">
+                {instructorPortal ? (
+                  <Button variant="ghost" asChild>
+                    <a href={instructorPortal}>Instructor</a>
+                  </Button>
+                ) : null}
                 <Button variant="ghost" asChild>
-                  <a href={instructorPortal}>Instructor</a>
+                  <Link
+                    to="/my-learning"
+                    activeProps={{
+                      'aria-current': 'page',
+                      className: 'bg-accent',
+                    }}
+                  >
+                    My Learning
+                  </Link>
                 </Button>
-              ) : null}
-              <Button variant="ghost" asChild>
-                <Link
-                  to="/my-learning"
-                  activeProps={{
-                    'aria-current': 'page',
-                    className: 'bg-accent',
-                  }}
-                >
-                  My Learning
-                </Link>
-              </Button>
+              </div>
               <NotificationBell portal="student" />
-              <UserMenu />
+              <UserMenu
+                items={[
+                  {
+                    label: 'My Learning',
+                    to: '/my-learning',
+                    className: 'sm:hidden',
+                  },
+                  ...(instructorPortal
+                    ? [
+                        {
+                          label: 'Instructor',
+                          to: instructorPortal,
+                          className: 'sm:hidden',
+                        },
+                      ]
+                    : []),
+                ]}
+              />
             </div>
           ) : (
             <Button className="shrink-0" asChild>
