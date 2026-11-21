@@ -281,7 +281,7 @@ describe('studentsToRecalculate for certificate criteria', () => {
     settings: { passMarkPercent },
   });
 
-  it('recalculates the student of a first passing attempt only', async () => {
+  it('recalculates the student of a first pass or a better score on a passed quiz', async () => {
     enrolled.mockClear();
     const passed = { passedAt: '2026-01-01T00:00:00.000Z' };
 
@@ -298,13 +298,22 @@ describe('studentsToRecalculate for certificate criteria', () => {
         ),
       ),
     ).toEqual({ 'course-1': ['s1'] });
-    // A failing attempt, and a second pass.
+    // A later attempt that raises the best score of a quiz already passed.
+    expect(
+      asLists(
+        await studentsToRecalculate(
+          [summary({ bestScore: 70, ...passed }, { bestScore: 95, ...passed })],
+          enrolled,
+        ),
+      ),
+    ).toEqual({ 'course-1': ['s1'] });
+    // A failing attempt, and a second pass that doesn't raise the best score.
     expect(
       asLists(
         await studentsToRecalculate(
           [
             summary(undefined, { bestScore: 10 }),
-            summary({ bestScore: 40, ...passed }, { bestScore: 95, ...passed }),
+            summary({ bestScore: 95, ...passed }, { bestScore: 95, ...passed }),
           ],
           enrolled,
         ),
@@ -345,7 +354,9 @@ describe('studentsToRecalculate for certificate criteria', () => {
   it.each([
     ['70 to 0', 70, 0, true],
     ['0 to 70', 0, 70, true],
-    ['70 to 80', 70, 80, false],
+    ['70 to 80', 70, 80, true],
+    ['80 to 60', 80, 60, true],
+    ['70 to 70', 70, 70, false],
   ])(
     'a quiz pass mark changed %s recalculates everyone enrolled: %s',
     async (_, from, to, recalculated) => {

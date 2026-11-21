@@ -67,10 +67,11 @@ const changesWhatStudentsSee = (record: StreamRecord) => {
 
 type Settings = { passMarkPercent?: unknown } | undefined;
 
-// A quiz was made assessed or unassessed: its pass mark went to or from 0.
-// A change between two marks above 0 changes no one's eligibility, since a
-// passed quiz stays passed and the certificate lists what it listed.
-const changesWhetherQuizIsAssessed = (record: StreamRecord) => {
+// A quiz's pass mark changed. The rule counts a quiz as passed only when the
+// student's best score reaches the current mark, so any change (0 to 70, or
+// 80 down to 60 bringing a best score of 70 back to passed) can change who
+// is eligible.
+const changesQuizPassMark = (record: StreamRecord) => {
   if (record.eventName !== 'MODIFY') {
     return false;
   }
@@ -79,15 +80,22 @@ const changesWhetherQuizIsAssessed = (record: StreamRecord) => {
   if (after?.type !== 'quiz') {
     return false;
   }
-  const assessed = (image: Image) =>
-    Number((image?.settings as Settings)?.passMarkPercent ?? 0) > 0;
-  return assessed(before) !== assessed(after);
+  const mark = (image: Image) =>
+    Number((image?.settings as Settings)?.passMarkPercent ?? 0);
+  return mark(before) !== mark(after);
 };
 
-// A student's first pass of a quiz.
-const isFirstPass = (record: StreamRecord) =>
-  Boolean(record.dynamodb.NewImage?.passedAt) &&
-  !record.dynamodb.OldImage?.passedAt;
+// A student's quiz record that can make them eligible: a first pass, or a
+// better best score on a quiz already passed (the pass only counts while the
+// best score reaches the current pass mark).
+const improvesQuizPass = (record: StreamRecord) => {
+  const before: Image = record.dynamodb.OldImage;
+  const after: Image = record.dynamodb.NewImage;
+  return (
+    Boolean(after?.passedAt) &&
+    (!before?.passedAt || Number(after?.bestScore) > Number(before?.bestScore))
+  );
+};
 
 // The certificate rules changed, or certificates were switched on or off.
 const changesCertificateRules = (record: StreamRecord) => {
@@ -102,7 +110,7 @@ const changesCertificateRules = (record: StreamRecord) => {
 };
 
 // The students to recalculate, per course: the student of each completion
-// recorded or quiz first passed, and everyone enrolled in a course whose
+// recorded or quiz pass improved, and everyone enrolled in a course whose
 // visible curriculum, certificate criteria or assessed quizzes changed. Each
 // is recalculated once per batch, however many records name them.
 export const studentsToRecalculate = async (
@@ -125,7 +133,7 @@ export const studentsToRecalculate = async (
     if (entity === 'itemCompletion' && record.eventName === 'INSERT') {
       add(String(image?.courseId), [String(image?.userId)]);
     } else if (entity === 'quizSummary') {
-      if (isFirstPass(record)) {
+      if (improvesQuizPass(record)) {
         add(String(image?.courseId), [String(image?.userId)]);
       }
     } else if (entity === 'course') {
@@ -135,7 +143,7 @@ export const studentsToRecalculate = async (
     } else if (
       typeof entity === 'string' &&
       curriculumEntities.has(entity) &&
-      (changesWhatStudentsSee(record) || changesWhetherQuizIsAssessed(record))
+      (changesWhatStudentsSee(record) || changesQuizPassMark(record))
     ) {
       changedCourses.add(String(image?.courseId));
     }
