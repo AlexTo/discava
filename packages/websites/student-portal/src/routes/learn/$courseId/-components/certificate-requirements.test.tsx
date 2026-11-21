@@ -152,7 +152,7 @@ describe('CertificateRequirements', () => {
     let fail = true;
     render(() => {
       if (fail) {
-        throw new ApiError('INTERNAL_SERVER_ERROR', 'Something broke');
+        throw new ApiError('PRECONDITION_FAILED', 'Something broke');
       }
       return answer();
     });
