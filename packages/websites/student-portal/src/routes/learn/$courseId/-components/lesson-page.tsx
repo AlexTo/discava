@@ -258,7 +258,18 @@ export function LessonPage({
   lessonId: string;
 }) {
   return (
-    <CoursePlayerLayout courseId={courseId} activeLessonId={lessonId}>
+    <CoursePlayerLayout
+      courseId={courseId}
+      activeLessonId={lessonId}
+      titleParts={(course) => {
+        if (!course) return ['Lesson'];
+        const lesson = course.modules
+          .flatMap((module) => module.lessons)
+          .find((candidate) => candidate.lessonId === lessonId);
+        // A lesson the course no longer lists has the course's title only.
+        return lesson ? [lesson.title, course.title] : [course.title];
+      }}
+    >
       {(player) => (
         <Lesson courseId={courseId} lessonId={lessonId} player={player} />
       )}

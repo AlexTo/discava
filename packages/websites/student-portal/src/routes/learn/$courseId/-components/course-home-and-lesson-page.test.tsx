@@ -1318,3 +1318,65 @@ describe('the enrolled notice', () => {
     expect(await screen.findByText(enrolledLine)).toBeInTheDocument();
   });
 });
+
+describe('the page title and main heading', () => {
+  it('names the lesson and the course on a lesson, with one h1', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers(),
+    });
+
+    await screen.findByRole('heading', { name: 'Lecture 2', level: 2 });
+    expect(document.title).toBe('Lecture 2 · Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('says "Lesson" while the course loads and when it fails', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers({
+        'course.view': () => new Promise(() => {}),
+      }),
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+    expect(document.title).toBe('Lesson · Discava');
+    cleanup();
+
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers({
+        'course.view': () => {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+        },
+      }),
+    });
+    await screen.findByText(/Couldn't load this course/);
+    expect(document.title).toBe('Lesson · Discava');
+  });
+
+  it('has the course’s title alone for a lesson the course no longer lists', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="gone" />, {
+      handlers: handlers(),
+    });
+
+    await screen.findByRole('heading', {
+      name: 'This lesson has been removed by your instructor',
+      level: 2,
+    });
+    expect(document.title).toBe('Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('names the course on its home, "Course" while loading', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({ 'course.view': () => new Promise(() => {}) }),
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+    expect(document.title).toBe('Course · Discava');
+    cleanup();
+
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+    await outlineLink('Lecture 1');
+    expect(document.title).toBe('Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+});

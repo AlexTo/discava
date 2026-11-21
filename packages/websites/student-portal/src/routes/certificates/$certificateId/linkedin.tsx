@@ -5,6 +5,7 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
@@ -44,6 +45,7 @@ const useNoReferrer = () => {
 };
 
 function RouteComponent() {
+  usePageTitle('Add to LinkedIn');
   const { certificateId } = Route.useParams();
   const { source } = Route.useSearch();
   const trpc = useCoreApi();
