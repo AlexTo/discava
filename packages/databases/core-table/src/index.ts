@@ -223,6 +223,7 @@ export {
 export {
   CURRICULUM_ENTITIES,
   filterEffectivelyVisible,
+  firstShownLesson,
   isOpenFreePreview,
   isShown,
 } from './helpers/curriculum.js';
@@ -290,6 +291,17 @@ export {
   SlugUnavailableError,
   VersionConflictError,
 } from './helpers/errors.js';
+export {
+  DEFAULT_FIRST_LESSON_PROMPT,
+  dismissFirstLessonPrompt,
+  FIRST_LESSON_PROMPT_MAX,
+  type FirstLessonPromptState,
+  firstLessonPromptStateWrites,
+  NotEnrolledError,
+  normaliseFirstLessonPrompt,
+  promptAnswerTitle,
+  resolveFirstLessonPrompt,
+} from './helpers/first-lesson-prompt.js';
 export {
   classifyProfileCancellation,
   defaultDisplayName,

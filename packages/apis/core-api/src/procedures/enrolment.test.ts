@@ -2,10 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
+import { NotEnrolledError } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { enrol, myEnrolment } from './enrolment.js';
+import { dismissFirstLessonPrompt, enrol, myEnrolment } from './enrolment.js';
 
 const {
   enrolmentGet,
@@ -16,6 +18,7 @@ const {
   transactionGo,
   courseGet,
   restoreFreeEnrolment,
+  dismissPrompt,
   mockModule,
 } = await vi.hoisted(async () => ({
   enrolmentCreate: vi.fn(),
@@ -23,6 +26,7 @@ const {
   courseCheckWhere: vi.fn(),
   transactionGo: vi.fn(),
   restoreFreeEnrolment: vi.fn(),
+  dismissPrompt: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     enrolment: ['get'],
     course: ['get'],
@@ -31,10 +35,13 @@ const {
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) =>
-  mockModule(await importOriginal(), { restoreFreeEnrolment }),
+  mockModule(await importOriginal(), {
+    restoreFreeEnrolment,
+    dismissFirstLessonPrompt: dismissPrompt,
+  }),
 );
 
-const router = t.router({ enrol, myEnrolment });
+const router = t.router({ enrol, myEnrolment, dismissFirstLessonPrompt });
 
 const USER_SUB = 'student-1';
 
@@ -311,5 +318,96 @@ describe('myEnrolment', () => {
     await expect(
       callAnonymously().myEnrolment({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+});
+
+describe('first-lesson prompt state', () => {
+  it('is returned by enrol and myEnrolment, still without the orderId', async () => {
+    const answered = {
+      ...enrolment,
+      firstLessonPromptState: 'answered' as const,
+      orderId: 'order-secret',
+    };
+    storedEnrolment(answered);
+    transactionGo.mockResolvedValue({ canceled: false, data: [] });
+    const enrolled = await callAsUser().enrol({ courseId: 'course-1' });
+    const mine = await callAsUser().myEnrolment({ courseId: 'course-1' });
+    for (const result of [enrolled, mine]) {
+      expect(result).toMatchObject({ firstLessonPromptState: 'answered' });
+      expect(result).not.toHaveProperty('orderId');
+    }
+  });
+
+  it('is absent while the prompt is open', async () => {
+    expect(
+      await callAsUser().myEnrolment({ courseId: 'course-1' }),
+    ).not.toHaveProperty('firstLessonPromptState');
+  });
+});
+
+describe('dismissFirstLessonPrompt', () => {
+  const dismissed = {
+    ...enrolment,
+    firstLessonPromptState: 'dismissed' as const,
+    orderId: 'order-secret',
+  };
+
+  it('rejects unauthenticated callers', async () => {
+    await expect(
+      callAnonymously().dismissFirstLessonPrompt({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(dismissPrompt).not.toHaveBeenCalled();
+  });
+
+  it('dismisses for the caller and returns the enrolment without the orderId', async () => {
+    dismissPrompt.mockResolvedValue(dismissed);
+    const result = await callAsUser().dismissFirstLessonPrompt({
+      courseId: 'course-1',
+    });
+    expect(dismissPrompt).toHaveBeenCalledWith(expect.anything(), {
+      courseId: 'course-1',
+      userId: USER_SUB,
+    });
+    expect(result).toMatchObject({ firstLessonPromptState: 'dismissed' });
+    expect(result).not.toHaveProperty('orderId');
+  });
+
+  it('succeeds again, and after an answer returns the answered enrolment', async () => {
+    dismissPrompt.mockResolvedValue({
+      ...enrolment,
+      firstLessonPromptState: 'answered',
+    });
+    const first = await callAsUser().dismissFirstLessonPrompt({
+      courseId: 'course-1',
+    });
+    const second = await callAsUser().dismissFirstLessonPrompt({
+      courseId: 'course-1',
+    });
+    expect(first).toEqual(second);
+    expect(second.firstLessonPromptState).toBe('answered');
+  });
+
+  it.each([
+    ['a published course', { status: 'published' }, 'FORBIDDEN'],
+    ['an archived course', { status: 'archived' }, 'NOT_FOUND'],
+    ['a draft course', { status: 'draft' }, 'NOT_FOUND'],
+    ['a missing course', null, 'NOT_FOUND'],
+  ])(
+    'refuses a caller who is not enrolled in %s',
+    async (_name, course, code) => {
+      dismissPrompt.mockRejectedValue(new NotEnrolledError());
+      storedCourse(course);
+      await expect(
+        callAsUser().dismissFirstLessonPrompt({ courseId: 'course-1' }),
+      ).rejects.toMatchObject({ code });
+    },
+  );
+
+  it("works whatever the course's status", async () => {
+    storedCourse({ status: 'archived' });
+    dismissPrompt.mockResolvedValue(dismissed);
+    await expect(
+      callAsUser().dismissFirstLessonPrompt({ courseId: 'course-1' }),
+    ).resolves.toMatchObject({ firstLessonPromptState: 'dismissed' });
   });
 });

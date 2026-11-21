@@ -46,6 +46,12 @@ export const createEnrolmentEntity = async () =>
         lastActivityAt: {
           type: 'string',
         },
+        // What the learner did with the first-lesson prompt. Absent while it
+        // is still open. Set once and never changed or removed; written only
+        // by the helpers in ../helpers/first-lesson-prompt.ts.
+        firstLessonPromptState: {
+          type: ['answered', 'dismissed'] as const,
+        },
         // The order that currently entitles the enrolment: absent for a free
         // enrolment, kept when a refund ends it so the refund stays traceable.
         // Written only by the helpers in ../helpers/order.ts; no API exposes it.

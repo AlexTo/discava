@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterEffectivelyVisible,
+  firstShownLesson,
   isOpenFreePreview,
   isShown,
 } from './curriculum.js';
@@ -100,5 +101,69 @@ describe('filterEffectivelyVisible', () => {
     expect(
       shown.contentItems.map(({ contentItemId }) => contentItemId),
     ).toEqual(['c-visible']);
+  });
+});
+
+describe('firstShownLesson', () => {
+  const module = (moduleId: string, order: number, state = visible) => ({
+    moduleId,
+    order,
+    ...state,
+  });
+  const lesson = (
+    moduleId: string,
+    lessonId: string,
+    order: number,
+    state = visible,
+  ) => ({ moduleId, lessonId, order, ...state });
+
+  it('is the first lesson of the first module in course order', () => {
+    expect(
+      firstShownLesson({
+        modules: [module('m2', 2), module('m1', 1)],
+        lessons: [
+          lesson('m2', 'x', 1),
+          lesson('m1', 'b', 2),
+          lesson('m1', 'a', 1),
+        ],
+      })?.lessonId,
+    ).toBe('a');
+  });
+
+  it('skips a hidden first module', () => {
+    expect(
+      firstShownLesson({
+        modules: [module('m1', 1, hidden), module('m2', 2)],
+        lessons: [lesson('m1', 'a', 1), lesson('m2', 'b', 1)],
+      })?.lessonId,
+    ).toBe('b');
+  });
+
+  it('skips a hidden first lesson', () => {
+    expect(
+      firstShownLesson({
+        modules: [module('m1', 1)],
+        lessons: [lesson('m1', 'a', 1, hidden), lesson('m1', 'b', 2)],
+      })?.lessonId,
+    ).toBe('b');
+  });
+
+  it('skips an archived lesson', () => {
+    expect(
+      firstShownLesson({
+        modules: [module('m1', 1)],
+        lessons: [lesson('m1', 'a', 1, archived), lesson('m1', 'b', 2)],
+      })?.lessonId,
+    ).toBe('b');
+  });
+
+  it('is undefined when no lesson is shown', () => {
+    expect(firstShownLesson({ modules: [], lessons: [] })).toBeUndefined();
+    expect(
+      firstShownLesson({
+        modules: [module('m1', 1), module('m2', 2, hidden)],
+        lessons: [lesson('m1', 'a', 1, hidden), lesson('m2', 'b', 1)],
+      }),
+    ).toBeUndefined();
   });
 });
