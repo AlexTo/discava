@@ -314,6 +314,44 @@ test.describe('an instructor grading an upload assignment', () => {
   });
 });
 
+test('two students’ first submissions of the day at once both succeed and notify the instructor once', async () => {
+  const assignment = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('Concurrent notice'),
+    assignmentTitle: 'Essay',
+  });
+  const students = [
+    await apiUser('Sue', ['student']),
+    await apiUser('Tom', ['student']),
+  ];
+  const inputs = await Promise.all(
+    students.map(async (one, index) => {
+      await one.core.course.enrol.mutate({ courseId: assignment.courseId });
+      return uploadSubmissionFile(
+        one,
+        assignment,
+        `essay-${index}.txt`,
+        Buffer.from(`essay ${index}`),
+      );
+    }),
+  );
+
+  const results = await Promise.allSettled(
+    students.map((one, index) =>
+      one.core.assignment.submit.mutate(inputs[index]!),
+    ),
+  );
+
+  expect(errorCodes(results)).toEqual([]);
+  const { items } = await instructor.core.notification.list.query({});
+  expect(
+    items.filter(({ title }) => title === 'New submissions to "Essay"'),
+  ).toHaveLength(1);
+
+  await instructor.instructor.course.archive.mutate({
+    courseId: assignment.courseId,
+  });
+});
+
 test.describe('an instructor', () => {
   test('adding modules at once gives each its own place', async () => {
     const results = await race(() =>

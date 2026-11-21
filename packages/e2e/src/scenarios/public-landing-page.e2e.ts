@@ -116,6 +116,31 @@ test('an instructor edits the landing page and a signed-out visitor sees it', as
       fullPage: true,
     });
   });
+
+  await test.step('the section tabs and the modules card stay on the course page', async () => {
+    const courseId = instructor.url().split('/').pop() as string;
+    const coursePage = coursePageUrl(courseId);
+    const tabs = visitor.getByRole('navigation', { name: 'Course sections' });
+    const sections: Array<[string, string, string]> = [
+      ['About', 'about', 'About this course'],
+      ['Modules', 'modules', 'There is 1 module in this course'],
+      ['Instructors', 'instructors', 'Instructors'],
+    ];
+    for (const [tab, id, heading] of sections) {
+      await tabs.getByRole('link', { name: tab }).click();
+      await expect(visitor).toHaveURL(`${coursePage}#${id}`);
+      const box = await visitor
+        .getByRole('heading', { level: 2, name: heading })
+        .boundingBox();
+      // Below the sticky top bar and section tabs, and on the screen.
+      expect(box?.y ?? 0).toBeGreaterThan(100);
+      expect(box?.y ?? 0).toBeLessThan(visitor.viewportSize()?.height ?? 0);
+    }
+    await visitor.evaluate(() => window.scrollTo(0, 0));
+    await visitor.getByRole('link', { name: /1 module/ }).click();
+    await expect(visitor).toHaveURL(`${coursePage}#modules`);
+    await screenshot(visitor, 'course page after choosing Modules');
+  });
 });
 
 // A course that is archived is not found for anyone, including a student who

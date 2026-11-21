@@ -186,7 +186,13 @@ describe('publicViewCourse', () => {
       ...publishedCourse,
       ...noExtras,
       modules: [
-        { ...module2, lessons: [lesson2, lesson1] },
+        {
+          ...module2,
+          lessons: [lesson2, lesson1].map((lesson) => ({
+            ...lesson,
+            freePreview: false,
+          })),
+        },
         { ...module1, lessons: [] },
       ],
     });
@@ -326,7 +332,59 @@ describe('publicViewCourse', () => {
     expect(result).toEqual({
       ...publishedCourse,
       ...noExtras,
-      modules: [{ ...shownModule, lessons: [shownLesson] }],
+      modules: [
+        {
+          ...shownModule,
+          lessons: [{ ...shownLesson, freePreview: false }],
+        },
+      ],
+    });
+  });
+
+  describe('freePreview', () => {
+    it('is true for a marked ordinary lesson, false for an unmarked one and for a marked assignment lesson', async () => {
+      const base = {
+        courseId: publishedCourse.courseId,
+        moduleId: 'module-1',
+        order: 1,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      };
+      const lesson = (lessonId: string, extra: object) =>
+        visible({
+          ...base,
+          lessonId,
+          title: lessonId,
+          kind: 'lesson' as const,
+          ...extra,
+        });
+      curriculumCollection.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            course: [publishedCourse],
+            module: [visible({ ...base, title: 'Module' })].map((m) => ({
+              ...m,
+              moduleId: 'module-1',
+            })),
+            lesson: [
+              lesson('marked', { freePreview: true }),
+              lesson('unmarked', {}),
+              lesson('assignment', { kind: 'assignment', freePreview: true }),
+            ],
+            contentItem: [],
+          },
+        }),
+      });
+
+      const result = await callAnonymously().publicViewCourse({
+        courseId: publishedCourse.courseId,
+      });
+
+      expect(
+        Object.fromEntries(
+          result.modules[0]!.lessons.map((l) => [l.lessonId, l.freePreview]),
+        ),
+      ).toEqual({ marked: true, unmarked: false, assignment: false });
     });
   });
 

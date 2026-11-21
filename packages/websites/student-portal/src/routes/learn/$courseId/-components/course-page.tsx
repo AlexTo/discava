@@ -175,8 +175,10 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </div>
           <Card className="mt-8 py-0 shadow-sm">
             <CardContent className="grid divide-y p-0 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-              <a
-                href="#modules"
+              <Link
+                to="/learn/$courseId"
+                params={{ courseId }}
+                hash="modules"
                 className="px-5 py-4 transition-colors hover:bg-muted/40"
               >
                 <p className="font-semibold underline-offset-4 hover:underline">
@@ -185,7 +187,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Work through them in order, at your own pace.
                 </p>
-              </a>
+              </Link>
               <div className="px-5 py-4">
                 <p className="font-semibold">
                   {count(lessonCount, 'lesson', 'lessons')}
@@ -209,15 +211,17 @@ export function CoursePage({ courseId }: { courseId: string }) {
         aria-label="Course sections"
         className="sticky top-16 z-40 border-b bg-background/95 backdrop-blur"
       >
-        <div className="mx-auto flex max-w-5xl gap-1 px-6 lg:px-8">
+        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-6 lg:px-8">
           {sections.map(({ id, label }) => (
-            <a
+            <Link
               key={id}
-              href={`#${id}`}
-              className="border-b-2 border-transparent px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
+              to="/learn/$courseId"
+              params={{ courseId }}
+              hash={id}
+              className="shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-3 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground"
             >
               {label}
-            </a>
+            </Link>
           ))}
         </div>
       </nav>

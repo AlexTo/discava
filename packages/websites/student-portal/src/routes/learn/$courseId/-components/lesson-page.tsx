@@ -39,13 +39,23 @@ function Step({
       : ITEM_TYPES[item.type].icon;
   return (
     <li>
-      <a
-        href={`#${itemAnchor(item.contentItemId)}`}
+      <Link
+        to="/learn/$courseId/lesson/$lessonId"
+        params={{ courseId: item.courseId, lessonId: item.lessonId }}
+        hash={itemAnchor(item.contentItemId)}
         onClick={(event) => {
           event.preventDefault();
-          document
-            .getElementById(itemAnchor(item.contentItemId))
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const target = document.getElementById(
+            itemAnchor(item.contentItemId),
+          );
+          const reduceMotion = window.matchMedia(
+            '(prefers-reduced-motion: reduce)',
+          ).matches;
+          target?.scrollIntoView({
+            behavior: reduceMotion ? 'auto' : 'smooth',
+            block: 'start',
+          });
+          target?.focus({ preventScroll: true });
         }}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/60',
@@ -67,7 +77,7 @@ function Step({
             New
           </span>
         ) : null}
-      </a>
+      </Link>
     </li>
   );
 }
@@ -153,10 +163,12 @@ function Lesson({
     <div className="space-y-8">
       {course ? <EnrolledNotice courseTitle={course.title} /> : null}
       <div className="space-y-3">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="min-w-0 break-words text-xs font-medium text-muted-foreground">
           Module {moduleIndex + 1}: {module.title}
         </p>
-        <h2 className="text-2xl font-semibold">{lesson.title}</h2>
+        <h2 className="min-w-0 break-words text-2xl font-semibold">
+          {lesson.title}
+        </h2>
         {isLessonComplete(lesson) && newItemCount(lesson) > 0 ? (
           <p className="text-sm text-muted-foreground">
             <CompletedWithNew count={newItemCount(lesson)} />

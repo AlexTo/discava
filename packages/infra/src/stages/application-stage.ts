@@ -143,6 +143,7 @@ export class ApplicationStage extends Stage {
       streamRouter,
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
+      lessonMediaBucket: data.lessonMediaBucket,
       notifications,
       notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       portalUrls: websites.portalUrls,

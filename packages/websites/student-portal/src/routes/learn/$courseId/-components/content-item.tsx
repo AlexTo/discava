@@ -279,7 +279,8 @@ export function ContentItem({
     <article
       id={itemAnchor(item.contentItemId)}
       aria-labelledby={`${itemAnchor(item.contentItemId)}-title`}
-      className="scroll-mt-24 space-y-4"
+      tabIndex={-1}
+      className="scroll-mt-24 space-y-4 focus:outline-none"
     >
       <header>
         <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -288,7 +289,7 @@ export function ContentItem({
         </p>
         <h3
           id={`${itemAnchor(item.contentItemId)}-title`}
-          className="mt-1 text-lg font-semibold"
+          className="mt-1 min-w-0 break-words text-lg font-semibold"
         >
           {item.title}
         </h3>

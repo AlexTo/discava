@@ -28,7 +28,9 @@ const SAMPLE = [
   record('INSERT', 'NewImage', 'itemCompletion'),
   record('MODIFY', 'NewImage', 'lesson'),
   record('MODIFY', 'NewImage', 'module'),
+  record('INSERT', 'NewImage', 'contentItem'),
   record('MODIFY', 'NewImage', 'contentItem'),
+  record('REMOVE', 'OldImage', 'contentItem'),
   record('INSERT', 'NewImage', 'course'),
   record('MODIFY', 'NewImage', 'course'),
   record('REMOVE', 'OldImage', 'course'),
@@ -108,6 +110,33 @@ describe('featuresFor', () => {
   });
 
   it('routes a course MODIFY to search indexing and the progress recalculation', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
+      'progress-recalculation',
+      'search-indexing',
+    ]);
+    expect(featuresFor(record('INSERT', 'NewImage', 'enrolment'))).toEqual([
+      'analytics-update',
+    ]);
+  });
+
+  it('routes a contentItem MODIFY to transcript indexing and the feature it reached before', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'contentItem'))).toEqual([
+      'progress-recalculation',
+      'transcript-indexing',
+    ]);
+    expect(featuresFor(record('INSERT', 'NewImage', 'contentItem'))).toEqual([
+      'transcript-indexing',
+    ]);
+    expect(featuresFor(record('REMOVE', 'OldImage', 'contentItem'))).toEqual([
+      'progress-recalculation',
+      'transcript-indexing',
+    ]);
+  });
+
+  it('leaves the routing of a lesson, course and enrolment record unchanged', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'lesson'))).toEqual([
+      'progress-recalculation',
+    ]);
     expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
       'progress-recalculation',
       'search-indexing',
