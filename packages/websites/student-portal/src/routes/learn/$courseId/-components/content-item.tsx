@@ -51,7 +51,14 @@ export const itemAnchor = (contentItemId: string) => `item-${contentItemId}`;
 
 // A ready video's stream. The URL comes with signed cookies valid for four
 // hours, so it isn't refetched on focus or for an hour.
-function VideoPlayer({ item }: { item: PlayerItem }) {
+function VideoPlayer({
+  item,
+  startAt,
+}: {
+  item: PlayerItem;
+  // A moment to open at, from a transcript search result.
+  startAt?: number;
+}) {
   const trpc = useCoreApi();
   const { courseId, moduleId, lessonId, contentItemId } = item;
   const videoQuery = useQuery(
@@ -130,6 +137,7 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
       captions={videoQuery.data.captions}
       transcript
       resumeAt={videoQuery.data.resumeAt}
+      startAt={startAt}
       onPositionChange={(position) =>
         savePosition.mutate({
           courseId,
@@ -267,12 +275,15 @@ export function ContentItem({
   done,
   isNew = false,
   readOnly,
+  startAt,
 }: {
   item: PlayerItem;
   done: boolean;
   // Added since the student completed its lesson.
   isNew?: boolean;
   readOnly: boolean;
+  // For a video: the second to open at, from a transcript search result.
+  startAt?: number;
 }) {
   const { label, icon: Icon } = ITEM_TYPES[item.type];
   return (
@@ -303,7 +314,9 @@ export function ContentItem({
       {item.type === 'text' ? (
         <RichTextView value={item.body} className="prose-base" />
       ) : null}
-      {item.type === 'video' ? <VideoPlayer item={item} /> : null}
+      {item.type === 'video' ? (
+        <VideoPlayer item={item} startAt={startAt} />
+      ) : null}
       {item.type === 'file' ? <FileDownload item={item} /> : null}
       {item.type === 'quiz' ? (
         <QuizItem item={item} readOnly={readOnly} />
