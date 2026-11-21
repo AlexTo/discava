@@ -36,7 +36,11 @@ export function QuestionScreen({
   return (
     <fieldset aria-labelledby={`${id}-legend`} className="space-y-4">
       <div id={`${id}-legend`} className="space-y-2">
-        <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <p
+          data-quiz-focus
+          tabIndex={-1}
+          className="flex items-center gap-2 text-xs font-medium text-muted-foreground outline-none"
+        >
           Question {number} of {total} <QuizMarkerBadge marker={marker} />
         </p>
         <RichTextView value={question.prompt} className="prose-base" />
