@@ -116,7 +116,15 @@ test.describe('a visitor watches a free preview', () => {
       await expect(
         visitor.getByRole('link', { name: 'Open', exact: true }),
       ).toBeVisible();
-      await expect(visitor.getByText('Free preview')).toHaveCount(1);
+      const outlineRow = (title: string) =>
+        visitor.getByRole('listitem').filter({ hasText: title });
+      await expect(
+        outlineRow('Open').getByText('Free preview', { exact: true }),
+      ).toBeVisible();
+      await expect(outlineRow('Locked')).toBeVisible();
+      await expect(outlineRow('Locked').getByText('Free preview')).toHaveCount(
+        0,
+      );
       await expect(
         visitor.getByRole('link', { name: 'Locked', exact: true }),
       ).toHaveCount(0);
