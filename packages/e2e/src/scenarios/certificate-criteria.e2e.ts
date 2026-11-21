@@ -120,7 +120,9 @@ test('an instructor requires every quiz to be passed for a certificate', async (
     await expect(first.getByText('You earned a certificate')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(first.getByRole('link', { name: 'View' })).toBeVisible();
+    await expect(
+      first.getByRole('link', { name: 'View', exact: true }),
+    ).toBeVisible();
     await screenshot(first, 'certificate-requirements-met');
     await first.goto(`${PORTALS.student}/my-learning`);
     await expectInCompleted(first, async () => {
