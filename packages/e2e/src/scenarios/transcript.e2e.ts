@@ -3,14 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { apiUser, createCaptionedVideoViaApi } from '../helpers/api.js';
+import {
+  type ApiUser,
+  apiUser,
+  createCaptionedVideoViaApi,
+} from '../helpers/api.js';
 import { webVttOf } from '../helpers/captions.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
+  expectAfterReloads,
   lessonVideo,
   openCourse,
   openTranscript,
+  searchTranscripts,
   startFirstLesson,
   transcriptLines,
 } from '../helpers/student-portal.js';
@@ -141,4 +147,111 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
   ).toBe(true);
   await panel.scrollIntoViewIfNeeded();
   await screenshot(page, 'transcript-panel-phone');
+});
+
+// A course with one captioned video, published. The two words of `phrase`
+// are said in two neighbouring caption lines, the first starting at 2 s: the
+// test video is 3 s long and a player never opens on its last second.
+const publishCourseWithPhrase = async (
+  instructor: ApiUser,
+  title: string,
+  phrase: string,
+) => {
+  const video = await createCaptionedVideoViaApi(instructor, title);
+  const [first, second] = phrase.split(' ');
+  const target =
+    await instructor.instructor.contentItem.captionUploadUrl.mutate(video);
+  const response = await fetch(target.url, {
+    method: 'PUT',
+    headers: target.headers,
+    body: webVttOf([
+      { start: 0, end: 2, text: 'Welcome to this lesson' },
+      { start: 2, end: 2.5, text: `and now ${first}` },
+      { start: 2.5, end: 3, text: `${second} appears` },
+    ]),
+  });
+  expect(response.ok).toBe(true);
+  await instructor.instructor.contentItem.attachCaption.mutate({
+    ...video,
+    uploadId: target.uploadId,
+    language: 'en-US',
+  });
+  await instructor.instructor.course.publish.mutate({
+    courseId: video.courseId,
+  });
+  return video;
+};
+
+// Search over what was said in a course: a moment is found, and choosing it
+// opens the lesson's video at that second.
+test('a learner searches a course’s transcripts and opens the moment', async ({
+  page,
+}) => {
+  const phrase = `${uniqueName('nebula')} ${uniqueName('pulsar')}`;
+  const title = uniqueName('E2E transcript search course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  await publishCourseWithPhrase(instructor, title, phrase);
+
+  await openCourse(page, title);
+  await enrol(page, newUser('Sam', ['student']));
+
+  // Indexing lags the upload by a few seconds.
+  await searchTranscripts(page, phrase);
+  const result = page.getByRole('link', { name: /Lesson 1/ });
+  await expectAfterReloads(page, async () => {
+    await expect(result).toHaveCount(1, { timeout: 5_000 });
+  });
+  await expect(result).toContainText('Video');
+  await expect(result).toContainText('0:02');
+  await screenshot(page, 'transcript-search-results');
+
+  await result.click();
+  await page.waitForURL(/\/lesson\/[0-9a-f-]+\?.*item=.*t=2/);
+  await expect(page.getByText('Starting at 0:02')).toBeVisible();
+  await expect
+    .poll(() =>
+      lessonVideo(page, 'Video').evaluate(
+        (v: HTMLVideoElement) => v.currentTime,
+      ),
+    )
+    .toBe(2);
+  await screenshot(page, 'transcript-search-opened');
+
+  await searchTranscripts(page, uniqueName('nonsense'));
+  await expect(page.getByText(/No moments match/).first()).toBeVisible();
+  await screenshot(page, 'transcript-search-empty');
+});
+
+test('transcript search is refused to someone not enrolled, and hides a hidden lesson at once', async () => {
+  const phrase = `${uniqueName('nebula')} ${uniqueName('pulsar')}`;
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await publishCourseWithPhrase(
+    instructor,
+    uniqueName('E2E transcript access course'),
+    phrase,
+  );
+  const enrolled = await apiUser('Sam', ['student']);
+  const outsider = await apiUser('Olly', ['student']);
+  await enrolled.core.course.enrol.mutate({ courseId: video.courseId });
+  const search = (user: ApiUser) =>
+    user.core.transcript.search.query({ courseId: video.courseId, q: phrase });
+
+  await expect(search(outsider)).rejects.toMatchObject({
+    data: { code: 'FORBIDDEN' },
+  });
+
+  // Indexing lags the upload by a few seconds.
+  await expect
+    .poll(async () => (await search(enrolled)).items.length, {
+      timeout: 60_000,
+    })
+    .toBe(1);
+
+  await instructor.instructor.lesson.hide.mutate({
+    courseId: video.courseId,
+    moduleId: video.moduleId,
+    lessonId: video.lessonId,
+  });
+  // No waiting: the index still holds it, the access rule doesn't.
+  expect((await search(enrolled)).items).toEqual([]);
 });
