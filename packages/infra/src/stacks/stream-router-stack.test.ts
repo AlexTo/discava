@@ -43,6 +43,63 @@ describe('search indexing (#53)', () => {
   });
 });
 
+describe('transcript indexing', () => {
+  const template = synth({})('StreamRouter');
+  const statements = Object.values(
+    template.findResources('AWS::IAM::Policy', {
+      Properties: {
+        Roles: [
+          { Ref: Match.stringLikeRegexp('^TranscriptIndexingServiceRole') },
+        ],
+      },
+    }),
+  ).flatMap(
+    (policy) =>
+      (
+        policy as {
+          Properties: {
+            PolicyDocument: {
+              Statement: { Action: string | string[]; Resource: unknown }[];
+            };
+          };
+        }
+      ).Properties.PolicyDocument.Statement,
+  );
+  const actions = statements.flatMap((statement) => [statement.Action].flat());
+
+  // It reads the table (the item, its lesson and module) and the caption
+  // files, and writes only the search collection.
+  it('lets the function read the table and the lesson media bucket, write the search collection, and write no table item', () => {
+    expect(actions).toContain('dynamodb:GetItem');
+    expect(actions).toContain('s3:GetObject*');
+    expect(actions).toContain('aoss:APIAccessAll');
+    for (const action of [
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:DeleteItem',
+      'dynamodb:BatchWriteItem',
+    ]) {
+      expect(actions).not.toContain(action);
+    }
+  });
+
+  it('does not let the function write or delete caption files', () => {
+    expect(
+      actions.filter((action) => /^s3:(Put|Delete|Abort)/.test(action)),
+    ).toEqual([]);
+  });
+
+  it('has a function, a queue, a failure queue and an alarm for the feature', () => {
+    expect(
+      Object.keys(template.findResources('AWS::Lambda::Function')).some((id) =>
+        id.startsWith('TranscriptIndexing'),
+      ),
+    ).toBe(true);
+    const queues = JSON.stringify(template.findResources('AWS::SQS::Queue'));
+    expect(queues).toContain('TranscriptIndexing');
+  });
+});
+
 describe('runtime config (#619)', () => {
   it('gives every function that uses the core table the AppConfig application id and read access', () => {
     expect(tableFunctionsMissingAppConfig(synth({})('StreamRouter'))).toEqual(

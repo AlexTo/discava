@@ -16,6 +16,7 @@ import {
 } from '@discava/core-table';
 import { type ITranscriptDocument, resolveIndexName } from '@discava/search';
 import type { Client } from '@opensearch-project/opensearch';
+import type { EntityItem } from 'electrodb';
 import type { TranscriptItemKey } from './transcript-actions.js';
 import { toTranscriptDocuments } from './transcript-document.js';
 
@@ -95,9 +96,9 @@ type BulkAction =
 const bulk = async (client: Client, actions: BulkAction[]) => {
   const index = resolveIndexName('transcripts');
   for (let i = 0; i < actions.length; i += BATCH_SIZE) {
-    const body = actions
+    const body: Record<string, unknown>[] = actions
       .slice(i, i + BATCH_SIZE)
-      .flatMap((action) =>
+      .flatMap((action): Record<string, unknown>[] =>
         action.type === 'index'
           ? [{ index: { _index: index, _id: action.id } }, action.document]
           : [{ delete: { _index: index, _id: action.id } }],
@@ -120,9 +121,7 @@ export const deleteTranscriptsBy = async (
   return ids.length;
 };
 
-type ItemRecord = NonNullable<
-  Awaited<ReturnType<CoreTable['entities']['contentItem']['get']>>['data']
->;
+type ItemRecord = EntityItem<CoreTable['entities']['contentItem']>;
 type VisibilityRecord = {
   visibility: 'hidden' | 'visible';
   archivedAt?: string;
