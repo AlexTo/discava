@@ -38,6 +38,20 @@ describe('ErrorAlert', () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  // Left to auto-placement, the button falls in Alert's zero-width icon
+  // column and its label spills out of the alert (#775).
+  it('puts the retry button in the content column, at its own width', () => {
+    render(
+      <ErrorAlert header="Heads up" onRetry={() => undefined}>
+        Details
+      </ErrorAlert>,
+    );
+    expect(screen.getByRole('button', { name: 'Try again' })).toHaveClass(
+      'col-start-2',
+      'justify-self-start',
+    );
+  });
+
   it('labels the retry button as asked', () => {
     render(
       <ErrorAlert
