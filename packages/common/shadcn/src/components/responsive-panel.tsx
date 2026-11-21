@@ -25,7 +25,8 @@ interface ResponsivePanelProps {
 /**
  * Content that is a closed, full-width disclosure button below the `lg`
  * breakpoint and always shown from `lg` up. The switch is CSS only: no width
- * is measured, so first paint is the same either way.
+ * is measured, so first paint is the same either way. The content stays
+ * mounted (hidden while closed) so that `lg:!block` can show it.
  */
 export function ResponsivePanel({
   label,
@@ -58,7 +59,10 @@ export function ResponsivePanel({
           />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-3 lg:mt-0 lg:!block">
+      <CollapsibleContent
+        forceMount
+        className={cn('mt-3 lg:mt-0 lg:!block', !open && 'hidden')}
+      >
         {children}
       </CollapsibleContent>
     </Collapsible>

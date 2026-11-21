@@ -16,11 +16,13 @@ describe('ResponsivePanel', () => {
     );
     const trigger = screen.getByRole('button', { name: /Course outline/ });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('Lesson links')).not.toBeInTheDocument();
+    // jsdom has no layout: closed means the `hidden` class below lg.
+    const content = screen.getByText('Lesson links').parentElement;
+    expect(content).toHaveClass('hidden');
 
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Lesson links')).toBeInTheDocument();
+    expect(content).not.toHaveClass('hidden');
   });
 
   it('shows the summary beside the label', () => {
@@ -34,7 +36,7 @@ describe('ResponsivePanel', () => {
     expect(trigger).toHaveTextContent('2 active');
   });
 
-  it('hides the trigger and shows the content from the lg breakpoint', async () => {
+  it('hides the trigger and shows the content from the lg breakpoint', () => {
     render(
       <ResponsivePanel label="Filters">
         <p>content</p>
@@ -42,7 +44,7 @@ describe('ResponsivePanel', () => {
     );
     const trigger = screen.getByRole('button', { name: /Filters/ });
     expect(trigger).toHaveClass('lg:hidden');
-    await userEvent.click(trigger);
+    // Mounted while closed, so the lg class can show it without a click.
     expect(screen.getByText('content').parentElement).toHaveClass('lg:!block');
   });
 });

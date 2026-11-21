@@ -248,9 +248,12 @@ describe('the course outline panel', () => {
     });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(trigger).toHaveTextContent('Lecture 2');
-    expect(
-      screen.queryByRole('navigation', { name: 'Course outline' }),
-    ).not.toBeInTheDocument();
+    // Mounted but hidden below lg (jsdom has no layout, so check the class).
+    const panel = screen.getByRole('navigation', {
+      name: 'Course outline',
+      hidden: true,
+    }).parentElement;
+    expect(panel).toHaveClass('hidden');
 
     await userEvent.click(trigger);
     expect(await outlineLink('Lecture 2')).toHaveAttribute(
