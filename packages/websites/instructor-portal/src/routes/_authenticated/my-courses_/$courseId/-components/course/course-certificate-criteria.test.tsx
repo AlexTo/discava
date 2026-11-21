@@ -94,7 +94,11 @@ describe('CourseCertificateCriteria', () => {
     expect(
       await screen.findByText("Couldn't change the certificate criteria"),
     ).toBeInTheDocument();
-    expect(screen.getByText('Something broke')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(checkbox().checked).toBe(false);
   });
 

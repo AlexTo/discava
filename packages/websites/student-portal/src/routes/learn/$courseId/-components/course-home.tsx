@@ -99,7 +99,10 @@ function NextUp({
 // A course's own home: its outline, and where to pick up.
 export function CourseHome({ courseId }: { courseId: string }) {
   return (
-    <CoursePlayerLayout courseId={courseId}>
+    <CoursePlayerLayout
+      courseId={courseId}
+      titleParts={(course) => [course?.title ?? 'Course']}
+    >
       {(player) => (
         <div className="space-y-6">
           {player.course ? (

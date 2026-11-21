@@ -151,4 +151,27 @@ describe('StartCourse', () => {
     ).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  it('offers to try again when the course failed to load', async () => {
+    let calls = 0;
+    const { user } = render({
+      'course.view': () => {
+        calls += 1;
+        if (calls === 1) {
+          throw new ApiError(
+            'INTERNAL_SERVER_ERROR',
+            'Output validation failed',
+          );
+        }
+        return threeLessons;
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong on our side. Try again in a moment.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+  });
 });

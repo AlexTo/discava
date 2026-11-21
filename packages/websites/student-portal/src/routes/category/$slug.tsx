@@ -7,6 +7,7 @@ import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
@@ -72,6 +73,7 @@ function RouteComponent() {
     ),
   );
   const category = categoryQuery.data;
+  usePageTitle(category?.name ?? 'Category');
 
   const setSearch = (nextQuery: string, next: CatalogueFilters) =>
     navigate({
@@ -101,17 +103,12 @@ function RouteComponent() {
           message="There is no category at this address."
         />
       ) : categoryQuery.isError || !category ? (
-        <ErrorAlert type="error" header="Couldn't load this category">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load this category"
+          onRetry={() => categoryQuery.refetch()}
+        >
           <p>{apiErrorMessage(categoryQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => categoryQuery.refetch()}
-          >
-            Try again
-          </Button>
         </ErrorAlert>
       ) : category.status === 'archived' ? (
         <Unavailable

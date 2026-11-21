@@ -136,22 +136,14 @@ export function CatalogueResults({
             header={
               coldStart ? 'Search is starting up' : "Couldn't search courses"
             }
+            onRetry={() => searchQuery.refetch()}
           >
             <p>{apiErrorMessage(searchQuery.error)}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() => searchQuery.refetch()}
-            >
-              Try again
-            </Button>
           </ErrorAlert>
         ) : results.length === 0 ? (
           <div className="rounded-2xl border border-dashed px-6 py-14 text-center">
             <Search className="mx-auto size-8 text-muted-foreground" />
-            <h3 className="mt-4 font-semibold">No courses match</h3>
+            <h2 className="mt-4 font-semibold">No courses match</h2>
             <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>
             {hasCatalogueFilters(filters) && (
               <Button

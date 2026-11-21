@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import {
@@ -22,5 +24,6 @@ export const Route = createFileRoute('/')({
 
 function RouteComponent() {
   const { isAuthenticated } = useAuth();
+  usePageTitle(isAuthenticated ? 'Home' : 'Browse courses');
   return isAuthenticated ? <SignedInHome /> : <Catalogue />;
 }

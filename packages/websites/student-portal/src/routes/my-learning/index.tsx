@@ -11,6 +11,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@discava/common-shadcn/components/ui/tabs';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -36,6 +37,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 function MyLearning() {
+  usePageTitle('My Learning');
   const trpc = useCoreApi();
   const enrolmentsQuery = useQuery(trpc.course.myEnrolments.queryOptions());
   const enrolments = enrolmentsQuery.data?.items ?? [];
