@@ -205,7 +205,7 @@ Whoever next builds or changes a screen in a portal, a person or an agent, finds
 
 - A course with one module and one lesson: the phone-width outline control still appears and names that lesson.
 - A lesson the instructor removed: the "removed" message shows as today, with a title that does not name the removed lesson.
-- A course page with only the two section tabs every course has ("About", "Modules" and "Reviews" are always present; the others depend on the course): the tab bar does not scroll.
+- A course page with only the three section tabs every course has ("About", "Modules" and "Reviews"; the others depend on the course): the tab bar does not scroll.
 - A quiz with one question: no question navigator is needed; if shown it has one control.
 - A quiz whose questions change while the student is answering: they are sent to the review as today, and focus moves there.
 - A filter change that returns no courses: the panel stays, so the filter can be undone, and "Clear filters" still shows.
