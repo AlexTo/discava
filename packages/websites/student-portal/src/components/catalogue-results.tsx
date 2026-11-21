@@ -4,15 +4,21 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { ResponsivePanel } from '@discava/common-shadcn/components/responsive-panel';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { useCoreApi } from '../api';
 import {
   type CatalogueFilters,
   catalogueFiltersToInput,
+  countCatalogueFilters,
   hasCatalogueFilters,
   NO_FILTERS,
 } from '../lib/catalogue-filters';
@@ -73,6 +79,9 @@ export function CatalogueResults({
         // Wait for the categories to resolve a slug to its id.
         enabled:
           !!fixedCategoryId || !filters.category || !categoriesQuery.isPending,
+        // Keep the last results (and the filter panel, and the focus in it)
+        // on screen while a filter change loads.
+        placeholderData: keepPreviousData,
         getNextPageParam: (lastPage) => lastPage.cursor,
         // A cold collection's first request times out server-side (#267);
         // the wake it triggered keeps going, so the same query a few
@@ -85,19 +94,33 @@ export function CatalogueResults({
   );
   const results = searchQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const facets = searchQuery.data?.pages[0]?.facets;
+  const activeCount = countCatalogueFilters(filters);
   const coldStart = isColdStart(searchQuery.error ?? searchQuery.failureReason);
 
   return (
     <div className="mt-6 grid gap-8 lg:grid-cols-[16rem_1fr]">
       {facets && (
-        <CatalogueFilterPanel
-          facets={facets}
-          filters={filters}
-          onChange={onFiltersChange}
-          showCategory={!fixedCategoryId}
-        />
+        <ResponsivePanel
+          label="Filters"
+          summary={activeCount > 0 ? `${activeCount} active` : undefined}
+        >
+          <CatalogueFilterPanel
+            facets={facets}
+            filters={filters}
+            onChange={onFiltersChange}
+            showCategory={!fixedCategoryId}
+          />
+        </ResponsivePanel>
       )}
-      <div className={facets ? '' : 'lg:col-span-2'}>
+      <div
+        className={[
+          !facets && 'lg:col-span-2',
+          searchQuery.isPlaceholderData && 'opacity-60',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        aria-busy={searchQuery.isPlaceholderData ? 'true' : undefined}
+      >
         {searchQuery.isLoading || searchQuery.isPending ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <Spinner />
