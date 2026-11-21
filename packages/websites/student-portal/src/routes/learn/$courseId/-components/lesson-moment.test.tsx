@@ -6,6 +6,7 @@
 import { cleanup, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithCoreApi } from '../../../../test/render-with-core-api';
+import { Route } from '../lesson/$lessonId';
 import { LessonPage } from './lesson-page';
 
 // The player is stubbed to show what it was given; its own behaviour is
@@ -163,5 +164,30 @@ describe('opening a lesson at a moment', () => {
     open({ item: 'video-1' });
 
     expect(await startAt('First video')).toBe('none');
+  });
+});
+
+describe('the lesson route’s search', () => {
+  const validate = (search: Record<string, unknown>) =>
+    (
+      Route.options.validateSearch as (
+        search: Record<string, unknown>,
+      ) => Record<string, unknown>
+    )(search);
+
+  it('keeps an item and a whole number of seconds from 0', () => {
+    expect(validate({ item: 'video-1', t: 760 })).toEqual({
+      item: 'video-1',
+      t: 760,
+    });
+    expect(validate({ t: 0 })).toEqual({ t: 0 });
+  });
+
+  it.each([-5, 'abc', 1.5, null])('drops t=%s', (t) => {
+    expect(validate({ item: 'video-1', t })).toEqual({ item: 'video-1' });
+  });
+
+  it('drops an item that is not text', () => {
+    expect(validate({ item: 7 })).toEqual({});
   });
 });
