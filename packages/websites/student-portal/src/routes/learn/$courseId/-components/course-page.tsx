@@ -350,7 +350,27 @@ export function CoursePage({ courseId }: { courseId: string }) {
                                 ) : (
                                   <FileText className="size-4 shrink-0 text-muted-foreground" />
                                 )}
-                                <span className="text-sm">{lesson.title}</span>
+                                {lesson.freePreview ? (
+                                  <>
+                                    <Link
+                                      to="/learn/$courseId/preview/$lessonId"
+                                      params={{
+                                        courseId,
+                                        lessonId: lesson.lessonId,
+                                      }}
+                                      className="text-sm underline-offset-4 hover:underline"
+                                    >
+                                      {lesson.title}
+                                    </Link>
+                                    <Badge variant="secondary">
+                                      Free preview
+                                    </Badge>
+                                  </>
+                                ) : (
+                                  <span className="text-sm">
+                                    {lesson.title}
+                                  </span>
+                                )}
                                 {lesson.kind === 'assignment' ? (
                                   <span className="text-xs text-muted-foreground">
                                     Assignment
