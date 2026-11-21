@@ -64,16 +64,16 @@ An admin changes the platform's display name from "Discava" to their organisatio
 
 ### User Story 3 - Admin chooses a brand colour (Priority: P3)
 
-An admin picks a brand colour. Primary buttons, links, active navigation items, focus rings and other accent elements in all three portals and on the public pages take on that colour. The settings page shows a live preview and warns before saving a colour whose text would be hard to read.
+An admin picks a brand colour. Primary buttons, active navigation items, focus rings, other accent elements and (when readable on the page background) links in all three portals and on the public pages take on that colour. The settings page shows a live preview and warns before saving a colour whose text would be hard to read.
 
 **Why this priority**: Colour makes the brand feel complete, but the request calls it optional, and the default neutral palette works for any logo.
 
-**Independent Test**: Choose a brand colour, save, then open each portal and a public page and confirm primary buttons and links use it, with readable text on top.
+**Independent Test**: Choose a brand colour, save, then open each portal and a public page and confirm primary buttons use it, with readable text on top.
 
 **Acceptance Scenarios**:
 
-1. **Given** the default palette, **When** an admin saves a brand colour, **Then** primary buttons, links, active navigation and focus indicators in all three portals and on the public pages use that colour on their next page load.
-2. **Given** an admin picks a colour, **When** they view the preview, **Then** it shows sample buttons, links and navigation in that colour, with the text colour on those elements chosen for readability.
+1. **Given** the default palette, **When** an admin saves a brand colour, **Then** primary buttons, active navigation and focus indicators in all three portals and on the public pages use that colour on their next page load, and links use it too if it reaches 4.5:1 against the page background.
+2. **Given** an admin picks a colour, **When** they view the preview, **Then** it shows sample buttons, a link and navigation in the brand, with the text colour on those elements chosen for readability.
 3. **Given** an admin picks a colour against which no text colour reaches the readability threshold, **When** they try to save, **Then** the save is refused with a message explaining that text on it would be unreadable.
 
 ---
@@ -114,7 +114,7 @@ An admin who is unhappy with a change resets any part of the brand (name, logo, 
 - **FR-001**: The admin portal MUST provide a branding settings page where an admin can view and change the platform name, logo, icon, default share image and brand colour.
 - **FR-002**: Only admins MUST be able to change branding. Any other signed-in user or anonymous visitor MUST be refused, and the refusal MUST leave the brand unchanged.
 - **FR-003**: Admins MUST be able to upload a logo in PNG, JPEG, WebP or SVG format, up to 1 MB, with a width-to-height ratio between 1:1 and 4:1.
-- **FR-004**: Admins MUST be able to upload an icon in PNG or SVG format, up to 1 MB. A PNG icon MUST be square and at least 192 × 192 pixels; an SVG icon MUST have a square aspect ratio.
+- **FR-004**: Admins MUST be able to upload an icon in PNG format, up to 1 MB, square and at least 192 × 192 pixels. (Amended in planning: home-screen icons on iOS cannot be SVG, so SVG icons could not meet FR-015 everywhere.)
 - **FR-004a**: Admins MUST be able to upload a default share image in PNG, JPEG or WebP format, up to 2 MB, at least 1200 × 630 pixels with a width-to-height ratio between 1.8:1 and 2:1.
 - **FR-005**: The system MUST refuse an uploaded image that does not meet FR-003, FR-004 or FR-004a, with a message naming the rule broken, and MUST keep the current brand unchanged.
 - **FR-006**: The system MUST make sure no uploaded image can run scripts or load outside content in a visitor's browser.
@@ -133,7 +133,7 @@ An admin who is unhappy with a change resets any part of the brand (name, logo, 
 - **FR-015**: Every portal page and public page MUST use the current icon as its browser tab, bookmark and home-screen icon.
 - **FR-016**: Page titles in all three portals and on the public pages MUST use the current platform name where they use "Discava" today.
 - **FR-017**: Public pages (course landing pages, instructor profiles, certificate pages, the not-found page) MUST use the current platform name as the site name in share previews, and the current logo and colour wherever they show the brand. A public page without an image of its own (an instructor profile without a photo, a course without a cover image, the home page) MUST use the current default share image as its share preview image.
-- **FR-018**: When a brand colour is set, primary actions, links, active navigation, focus indicators and the other accent elements (selected tabs, toggles, progress bars, badges) MUST use it in all three portals and on the public pages. Elements that convey meaning by colour (errors, warnings, success) MUST keep their own colours.
+- **FR-018**: When a brand colour is set, primary actions, active navigation, focus indicators and the other accent elements (selected tabs, toggles, progress bars, badges) MUST use it in all three portals and on the public pages. Links MUST use it only when it reaches a contrast ratio of at least 4.5:1 against the page background, and otherwise keep the default text colour (amended in planning: a pale brand colour would make links unreadable). Elements that convey meaning by colour (errors, warnings, success) MUST keep their own colours.
 - **FR-019**: Any part of the brand not set by an admin MUST fall back to the Discava default, and any part that cannot be loaded MUST fall back to the default without breaking the page.
 - **FR-020**: A saved brand change MUST reach every new page load within 5 minutes (SC-002), including for visitors whose browsers cached the previous logo or icon. The admin who saved MUST see the new brand in the admin portal straight away, without waiting.
 - **FR-021**: Branding MUST work in local development with no AWS account, using the same admin flow and a local stand-in for image storage.
