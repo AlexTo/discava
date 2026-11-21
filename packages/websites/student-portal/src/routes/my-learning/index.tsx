@@ -15,10 +15,10 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useCoreApi } from '../../api';
+import { CertificateActions } from '../../components/certificate-actions';
 import { CourseProgressCard } from '../../components/course-progress-card';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
 import { requireSignIn } from '../../lib/require-sign-in';
-import { CertificateActions } from './-components/certificate-actions';
 
 // The student's courses, in progress and completed, as on Coursera's
 // /my-learning: each with its progress and what's next.
