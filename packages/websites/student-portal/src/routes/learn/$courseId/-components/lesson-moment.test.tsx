@@ -191,3 +191,24 @@ describe('the lesson route’s search', () => {
     expect(validate({ item: 7 })).toEqual({});
   });
 });
+
+describe('the transcript search box in the course player', () => {
+  it('is rendered for a learner with an enrolment', async () => {
+    open({});
+
+    expect(
+      await screen.findByRole('search', {
+        name: "Search this course's transcripts",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('is not rendered without an enrolment', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-1" />, {
+      handlers: { ...handlers, 'course.myEnrolment': () => null },
+    });
+
+    await screen.findByTestId('player-First video');
+    expect(screen.queryByRole('search')).toBeNull();
+  });
+});

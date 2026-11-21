@@ -37,6 +37,8 @@ import {
   useCoursePlayer,
 } from '../../../../hooks/use-course-player';
 
+import { TranscriptSearchBox } from './transcript-search-box';
+
 export type { CoursePlayer };
 
 const count = (n: number, one: string, many: string) =>
@@ -257,10 +259,16 @@ function CourseOutline({
 export function CoursePlayerLayout({
   courseId,
   activeLessonId,
+  crumb,
+  query,
   children,
 }: {
   courseId: string;
   activeLessonId?: string;
+  // The last crumb of a page that isn't a lesson, such as "Search".
+  crumb?: string;
+  // The transcript search box's text, on the results page.
+  query?: string;
   children: (player: CoursePlayer) => ReactNode;
 }) {
   const player = useCoursePlayer(courseId);
@@ -299,6 +307,7 @@ export function CoursePlayerLayout({
       link: { to: '/learn/$courseId/home', params: { courseId } },
     },
     ...(activeLesson ? [{ label: activeLesson.title }] : []),
+    ...(crumb ? [{ label: crumb }] : []),
   ];
 
   return (
@@ -334,6 +343,12 @@ export function CoursePlayerLayout({
           </div>
         ) : null}
       </div>
+
+      {enrolment ? (
+        <div className="mt-4">
+          <TranscriptSearchBox courseId={courseId} query={query} />
+        </div>
+      ) : null}
 
       {player.readOnly ? (
         <div className="mt-6">
