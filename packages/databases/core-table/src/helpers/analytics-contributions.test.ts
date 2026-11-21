@@ -383,6 +383,7 @@ const fakeCoreTable = (records: {
   enrolments: Record<string, unknown>[];
   itemCompletions?: Record<string, unknown>[];
   quizAttempts?: Record<string, unknown>[];
+  videoAnswerSheets?: Record<string, unknown>[];
   progress?: Record<string, unknown>[];
   funnelMarkers?: Record<string, unknown>[];
   stored?: Record<string, Record<string, unknown>[]>;
@@ -425,6 +426,7 @@ const fakeCoreTable = (records: {
       itemCompletion: ofUser(records.itemCompletions),
       quizAttempt: ofUser(records.quizAttempts),
       quizSummary: ofUser(records.quizSummaries),
+      videoAnswerSheet: ofUser(records.videoAnswerSheets),
       progress: ofUser(records.progress),
       analyticsMarker: {
         ...putter('analyticsMarker'),
@@ -775,5 +777,128 @@ describe('rebuildCourseAnalytics for quizzes', () => {
         band9: 1,
       }),
     ]);
+  });
+});
+
+const answer = (correct: boolean, answeredAt: string) => ({
+  optionIds: ['a'],
+  correct,
+  answeredAt,
+  quizVersion: 1,
+});
+
+const sheet = (answers: Record<string, unknown>) => ({
+  courseId: 'c1',
+  contentItemId: 'video1',
+  userId: 'u1',
+  answers,
+  answerCount: Object.keys(answers).length,
+});
+
+const videoSk = (questionId: string) => `QUIZ#video1#Q#${questionId}`;
+
+describe('contributions of a video answer sheet', () => {
+  const two = {
+    q1: answer(true, '2026-11-17T08:00:00.000Z'),
+    q2: answer(false, '2026-11-18T08:00:00.000Z'),
+  };
+
+  it('counts an attempt on each entry and a miss on each incorrect one', () => {
+    const result = contributions('videoAnswerSheet', sheet(two));
+
+    expect(result.counts).toEqual([
+      expect.objectContaining({
+        kind: 'quizQuestionStats',
+        sk: videoSk('q1'),
+        attribute: 'attempts',
+        amount: 1,
+      }),
+      expect.objectContaining({
+        sk: videoSk('q2'),
+        attribute: 'attempts',
+        amount: 1,
+      }),
+      expect.objectContaining({
+        sk: videoSk('q2'),
+        attribute: 'misses',
+        amount: 1,
+      }),
+    ]);
+  });
+
+  it('makes the learner active on the day and week of each entry', () => {
+    const { members } = contributions('videoAnswerSheet', sheet(two));
+
+    expect(members.map(({ period }) => period).sort()).toEqual([
+      'DAY#2026-11-17',
+      'DAY#2026-11-18',
+      'WEEK#2026-W47',
+    ]);
+    expect(members.every(({ userId }) => userId === 'u1')).toBe(true);
+  });
+
+  it('adds only the new entry when a sheet goes from two entries to three', () => {
+    const three = { ...two, q3: answer(false, '2026-11-18T09:00:00.000Z') };
+    const change = contributionsOfChange(
+      'videoAnswerSheet',
+      sheet(two),
+      sheet(three),
+    );
+
+    expect(change.counts).toEqual([
+      expect.objectContaining({
+        sk: videoSk('q3'),
+        attribute: 'attempts',
+        amount: 1,
+      }),
+      expect.objectContaining({
+        sk: videoSk('q3'),
+        attribute: 'misses',
+        amount: 1,
+      }),
+    ]);
+  });
+
+  it('gives nothing for a malformed image', () => {
+    for (const image of [
+      { ...sheet(two), answers: 'nope' },
+      { ...sheet(two), answers: [two.q1] },
+      { ...sheet(two), contentItemId: undefined },
+      { ...sheet({ q1: 'nope' }) },
+    ]) {
+      const result = contributions('videoAnswerSheet', image);
+      expect(result.counts).toEqual([]);
+    }
+  });
+});
+
+describe('rebuildCourseAnalytics for video answer sheets', () => {
+  it('adds each sheet entry to the question items', async () => {
+    const { coreTable, puts } = fakeCoreTable({
+      enrolments: [enrolment()],
+      videoAnswerSheets: [
+        sheet({
+          q1: answer(true, '2026-11-17T08:00:00.000Z'),
+          q2: answer(false, '2026-11-17T08:01:00.000Z'),
+        }),
+      ],
+    });
+    await rebuildCourseAnalytics(coreTable, 'c1');
+
+    expect(puts.filter(({ kind }) => kind === 'quizQuestionStats')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          contentItemId: 'video1',
+          questionId: 'q1',
+          attempts: 1,
+        }),
+        expect.objectContaining({
+          contentItemId: 'video1',
+          questionId: 'q2',
+          attempts: 1,
+          misses: 1,
+        }),
+      ]),
+    );
   });
 });

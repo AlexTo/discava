@@ -29,6 +29,14 @@ describe('matchesAnalyticsStreamFilters', () => {
     ['a changed progress record', record('MODIFY', 'NewImage', 'progress')],
     ['a new quiz summary', record('INSERT', 'NewImage', 'quizSummary')],
     ['a changed quiz summary', record('MODIFY', 'NewImage', 'quizSummary')],
+    [
+      'a new video answer sheet',
+      record('INSERT', 'NewImage', 'videoAnswerSheet'),
+    ],
+    [
+      'a changed video answer sheet',
+      record('MODIFY', 'NewImage', 'videoAnswerSheet'),
+    ],
     ['a new item completion', record('INSERT', 'NewImage', 'itemCompletion')],
     ['a new quiz attempt', record('INSERT', 'NewImage', 'quizAttempt')],
     ['a removed enrolment', record('REMOVE', 'OldImage', 'enrolment')],
@@ -60,6 +68,10 @@ describe('matchesAnalyticsStreamFilters', () => {
     [
       'a changed item completion',
       record('MODIFY', 'NewImage', 'itemCompletion'),
+    ],
+    [
+      'a removed video answer sheet',
+      record('REMOVE', 'OldImage', 'videoAnswerSheet'),
     ],
     ['a removed quiz attempt', record('REMOVE', 'OldImage', 'quizAttempt')],
     ['an edited lesson', record('MODIFY', 'NewImage', 'lesson')],

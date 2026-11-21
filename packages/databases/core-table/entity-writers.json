@@ -251,6 +251,11 @@
   "user": {
     "core-table": ["packages/databases/core-table/src/helpers/user.ts"]
   },
+  "videoAnswerSheet": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/video-question.ts"
+    ]
+  },
   "videoPosition": {
     "core-api": ["packages/apis/core-api/src/procedures/content-item.ts"]
   }

@@ -233,6 +233,7 @@ describe('draft-course-nothing-archived', () => {
     table.itemCompletions = [];
     table.quizAttempts = [];
     table.quizSummaries = [];
+    table.videoAnswerSheets = [];
     table.progress = [];
     for (const i of table.contentItems) i.studentActivityCount = 0;
     expect(broken().invariants).toEqual([]);
@@ -395,6 +396,9 @@ describe('video-questions-shape', () => {
       ids.map((id) => [id, { correctOptionIds: ['a'] }]),
     );
     video.quizVersion = quizVersion;
+    // The student's answer was judged by a version this video no longer has.
+    table.videoAnswerSheets = [];
+    video.studentActivityCount = 0;
     return video;
   };
 

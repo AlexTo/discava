@@ -494,4 +494,14 @@ export {
   VIDEO_POSITION_MAX_SECONDS,
   videoPositionToStore,
 } from './helpers/video-position.js';
+export {
+  type StoredVideoAnswerKey,
+  type StoredVideoQuestion,
+  type VideoAnswer,
+  type VideoAnswerEntry,
+  type VideoRecordKey,
+  videoAnswerWrites,
+  videoFirstRecordCheck,
+  videoQuestionsOf,
+} from './helpers/video-question.js';
 export { type CoreTable, createCoreTableService } from './service.js';

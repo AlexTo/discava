@@ -4,6 +4,7 @@
  */
 import { computeProgress } from '../progress.js';
 import { isValidPosition } from '../video-position.js';
+import type { VideoAnswerEntry } from '../video-question.js';
 import {
   type Check,
   groupBy,
@@ -15,7 +16,7 @@ import type { TableSnapshot } from './snapshot.js';
 
 // A content item's studentActivityCount is the number of distinct
 // students with records for it: an itemCompletion, an assignmentSubmission,
-// or for a quiz a quizSummary. Each is created in the transaction that
+// for a quiz a quizSummary, or for a video a videoAnswerSheet. Each is created in the transaction that
 // increments the count, and none is ever removed, so the count is exact. It gates permanent
 // deletion, so too low a count could let student data be destroyed.
 export const checkActivityCountMatchesStudents = (
@@ -25,6 +26,7 @@ export const checkActivityCountMatchesStudents = (
   for (const { contentItemId, userId } of [
     ...snapshot.itemCompletions,
     ...snapshot.quizSummaries,
+    ...snapshot.videoAnswerSheets,
     ...snapshot.assignmentSubmissions,
   ]) {
     students.set(
@@ -367,6 +369,11 @@ export const checkLastActivityAtCurrent = (
     ...snapshot.itemCompletions.map((r) => ({ ...r, at: r.completedAt })),
     ...snapshot.quizAttempts.map((r) => ({ ...r, at: r.submittedAt })),
     ...snapshot.assignmentSubmissions.map((r) => ({ ...r, at: r.submittedAt })),
+    ...snapshot.videoAnswerSheets.flatMap((sheet) =>
+      answerEntries(sheet).flatMap(({ answeredAt }) =>
+        typeof answeredAt === 'string' ? [{ ...sheet, at: answeredAt }] : [],
+      ),
+    ),
   ]) {
     const key = `${userId} ${courseId}`;
     const current = latest.get(key);
@@ -450,6 +457,73 @@ export const checkAssignmentSubmissionShape = (
   });
 };
 
+// A sheet's entries: each question's recorded answer. A malformed `answers`
+// has none, which video-answer-sheet-shape reports.
+const answerEntries = ({ answers }: { answers: unknown }) =>
+  typeof answers === 'object' && answers !== null && !Array.isArray(answers)
+    ? Object.values(answers as Record<string, Partial<VideoAnswerEntry>>)
+    : [];
+
+// A video answer sheet is for a video, `answerCount` is the number of its
+// entries, and each entry names at least one option, says whether it was
+// correct, has a valid time and was judged by a version of the video's
+// questions from 1 up to the current one (a version only ever rises).
+export const checkVideoAnswerSheetShape = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const items = new Map(
+    snapshot.contentItems.map((item) => [
+      `${item.courseId} ${item.contentItemId}`,
+      item,
+    ]),
+  );
+  return snapshot.videoAnswerSheets.flatMap((sheet) => {
+    const { userId, courseId, contentItemId } = sheet;
+    const record = { userId, courseId, contentItemId };
+    const item = items.get(`${courseId} ${contentItemId}`);
+    const problems: string[] = [];
+    if (item && item.type !== 'video') {
+      problems.push(`answers to a ${item.type} item`);
+    }
+    const entries = answerEntries(sheet);
+    if (sheet.answerCount !== entries.length) {
+      problems.push(
+        `answerCount is ${sheet.answerCount}, but there are ${entries.length} entries`,
+      );
+    }
+    const current =
+      typeof item?.quizVersion === 'number' ? item.quizVersion : 0;
+    for (const entry of entries) {
+      if (!Array.isArray(entry.optionIds) || entry.optionIds.length === 0) {
+        problems.push('an entry has no options');
+      }
+      if (typeof entry.correct !== 'boolean') {
+        problems.push('an entry has no correct flag');
+      }
+      if (
+        typeof entry.answeredAt !== 'string' ||
+        Number.isNaN(new Date(entry.answeredAt).getTime())
+      ) {
+        problems.push('an entry has no valid answeredAt');
+      }
+      const version = entry.quizVersion;
+      if (
+        typeof version !== 'number' ||
+        !Number.isInteger(version) ||
+        version < 1 ||
+        (item && version > current)
+      ) {
+        problems.push(
+          `an entry's quizVersion ${version} is not from 1 to the item's ${current}`,
+        );
+      }
+    }
+    return problems.map((message) =>
+      violation('video-answer-sheet-shape', record, message),
+    );
+  });
+};
+
 // A saved position is whole seconds from 0 to the cap,
 // for a named version of the video. Positions are deliberately not in
 // studentRecords (and so not in the targets and placement checks above): a
@@ -507,4 +581,5 @@ export const STUDENT_ACTIVITY_CHECKS = [
     check: checkAssignmentSubmissionShape,
   },
   { name: 'video-position-valid', check: checkVideoPositionValid },
+  { name: 'video-answer-sheet-shape', check: checkVideoAnswerSheetShape },
 ] as const satisfies readonly Check[];
