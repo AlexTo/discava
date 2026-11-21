@@ -2,19 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-
-/**
- * The manifest a student plays for a video item: its own once transcoded,
- * otherwise the previous version kept while a replacement transcodes or
- * after the replacement failed (#209). Undefined when there's nothing to
- * play yet: a first upload still transcoding, or one that failed.
- */
-export const playableManifest = (item: {
-  status?: string;
-  s3Key?: string;
-  previousS3Key?: string;
-}): string | undefined =>
-  item.status === 'ready' ? item.s3Key : item.previousS3Key;
+import { playableManifest } from '@discava/common-server-utils/media-keys';
 
 // Caption attributes of a video record: S3 keys, the writers' revision and the
 // captioning status. Students get a video's tracks only from videoUrl, as
