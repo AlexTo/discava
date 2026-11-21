@@ -10,6 +10,18 @@
 
 **Parent issue**: none
 
+## Clarifications
+
+### Session 2026-11-21
+
+Resolved without asking, using the recommended defaults (non-interactive run). Each is a default for the maintainer to confirm in review.
+
+- Q: On a phone, where does the course outline go so that the lesson comes first? → A: It stays above the lesson, closed behind a "Course outline" control that names the current lesson. Putting it after the lesson would hide it below the discussion and the lesson navigation, a long scroll away; a closed control costs one line and keeps the outline where students already look (FR-003, US1 scenarios 3 and 4).
+- Q: On a phone, where do "My Learning" and the instructor portal link go when the top bar has no room for them? → A: Into the user menu, as its first entries, below the width where the bar cannot fit them beside a usable search box. At wider widths the bar is unchanged. A second row or a separate menu button would add a control to every page for two links (FR-005, US3 scenario 4).
+- Q: What does a page's tab title look like? → A: The page's own name first, then its parent where it has one, then "Discava", separated by " · ": "Projections · Linear Algebra · Discava" for a lesson, "Linear Algebra · Discava" for a course, "Search: vectors · Discava" for a search, "My Learning · Discava" for a fixed page. The most specific part comes first because a narrow tab shows only the start (FR-011, US7).
+- Q: The quiz card, the error wording and other pieces are shared with the instructor and admin portals. Do those portals change too? → A: Yes, wherever the fix is in shared code: an instructor previewing a quiz gets the same focus handling and numbered navigator, and every portal gets the same error sentences. Nothing else in those portals is touched, and they are not re-audited here (FR-029).
+- Q: Are the written UI rules enforced automatically? → A: Partly. The rules are written checks an agent loads and a reviewer applies. This feature adds automated checks only where a rule is cheap to test and was broken: no sideways scroll on the audited pages at phone width, and in-page links staying on their page. A lint rule for every guideline is not part of this feature (FR-031 to FR-034, US9).
+
 ## User Scenarios & Testing *(mandatory)*
 
 Two audits walked the student portal as a visitor and as a signed-in student, at a desktop width (1440px) and a phone width (375px), and checked each screen against the Web Interface Guidelines: the flow from a course's page through enrolling, the first lesson and a quiz, and the pages a visitor finds courses with (home, search, category, instructor profile, sign-in). They found defects that stop people using the product on a phone or with a keyboard, links that leave the page they belong to, and errors that say nothing useful. This feature fixes them.
@@ -72,7 +84,7 @@ A signed-in student on a phone taps the search box in the top bar, types, sees w
 1. **Given** any page at phone width, signed in as an instructor-student, **When** the page loads, **Then** the top bar is no wider than the screen and the user menu is fully visible.
 2. **Given** the same user, **When** they type in the search box, **Then** at least 20 characters of what they typed are visible.
 3. **Given** suggestions for what was typed, **When** the list opens at phone width, **Then** it is nearly as wide as the screen, and two courses whose titles share their first 20 characters can be told apart.
-4. **Given** a phone-width top bar, **When** a signed-in user looks for "My Learning" and, for an instructor, the instructor portal, **Then** both are still reachable in at most two taps.
+4. **Given** a phone-width top bar, **When** a signed-in user opens the user menu, **Then** "My Learning" and, for an instructor, the instructor portal are its first entries.
 5. **Given** desktop width, **When** any user loads any page, **Then** the top bar looks and works as it does today.
 
 ---
@@ -212,7 +224,7 @@ Whoever next builds or changes a screen in a portal, a person or an agent, finds
 - **FR-002**: On the lesson and course-home pages at desktop width, the lesson column MUST be wider than the outline column whatever the lengths of the titles in the outline.
 - **FR-003**: On the lesson page below desktop layout, the course outline MUST start closed behind a control labelled "Course outline" that names the current lesson, and MUST open to the same outline as today.
 - **FR-004**: On the home, search and category pages below desktop layout, the filter panel MUST start closed behind a control labelled "Filters" that shows the number of active filters, and the first course MUST start within the first screen at phone width.
-- **FR-005**: The top bar MUST fit the screen at phone width for every kind of signed-in user, with the search box showing at least 20 typed characters and the user menu fully visible. "My Learning" and the instructor portal link MUST stay reachable in at most two taps.
+- **FR-005**: The top bar MUST fit the screen at phone width for every kind of signed-in user, with the search box showing at least 20 typed characters and the user menu fully visible. Where the bar cannot fit "My Learning" and the instructor portal link beside the search box, they MUST move into the user menu as its first entries, reachable in two taps.
 - **FR-006**: The search suggestions MUST be visible at phone width, span nearly the screen's width, and show enough of each title to tell apart two titles that share their first 20 characters.
 - **FR-007**: A bar of tabs or chips that can be wider than the screen MUST scroll within itself.
 
@@ -221,7 +233,7 @@ Whoever next builds or changes a screen in a portal, a person or an agent, finds
 - **FR-008**: Every link to a section of the current page MUST lead to that section of that page, when clicked and when opened in a new tab.
 - **FR-009**: No link may lead to the element that contains it.
 - **FR-010**: Following a link to another page of the portal MUST move focus to the new page's main heading.
-- **FR-011**: Every page MUST set the tab's title to its own name followed by "Discava", and MUST replace it when the page changes, including on Back.
+- **FR-011**: Every page MUST set the tab's title to its own name, then its parent's where it has one, then "Discava", separated by " · ", and MUST replace it when the page changes, including on Back.
 - **FR-012**: Every page MUST have exactly one main heading, with no heading level skipped.
 - **FR-013**: A lesson's step links MUST honour the system's reduced-motion setting and MUST move focus to the item they lead to.
 
@@ -262,6 +274,7 @@ Whoever next builds or changes a screen in a portal, a person or an agent, finds
 - **FR-031**: The project's agent instructions for the portals and the shared UI components MUST carry the UI rules this feature follows, each stated as a check, loaded automatically when an agent works in those folders.
 - **FR-032**: Those instructions MUST say how to audit a screen: at phone and desktop width; in its loading, empty, error and long-content states; with the keyboard alone; saving screenshots where the project's conventions say.
 - **FR-033**: Those instructions MUST point to the Web Interface Guidelines for rules they do not restate, and MUST NOT repeat or contradict the project's existing conventions.
+- **FR-034**: The end-to-end tests MUST fail if an audited page scrolls sideways at phone width, or if a section link on the course page leaves that page.
 
 ## Success Criteria *(mandatory)*
 
