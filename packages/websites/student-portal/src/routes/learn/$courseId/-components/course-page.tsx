@@ -97,7 +97,11 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </>
         ) : (
           <div className="text-left">
-            <ErrorAlert type="error" header="Couldn't load this course">
+            <ErrorAlert
+              type="error"
+              header="Couldn't load this course"
+              onRetry={() => courseQuery.refetch()}
+            >
               {apiErrorMessage(courseQuery.error)}
             </ErrorAlert>
           </div>

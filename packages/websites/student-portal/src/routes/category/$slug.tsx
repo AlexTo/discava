@@ -101,17 +101,12 @@ function RouteComponent() {
           message="There is no category at this address."
         />
       ) : categoryQuery.isError || !category ? (
-        <ErrorAlert type="error" header="Couldn't load this category">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load this category"
+          onRetry={() => categoryQuery.refetch()}
+        >
           <p>{apiErrorMessage(categoryQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => categoryQuery.refetch()}
-          >
-            Try again
-          </Button>
         </ErrorAlert>
       ) : category.status === 'archived' ? (
         <Unavailable

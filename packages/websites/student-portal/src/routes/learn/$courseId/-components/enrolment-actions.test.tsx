@@ -218,6 +218,25 @@ describe('EnrolmentActions', () => {
     );
     expect(await enrolButton()).toBeEnabled();
   });
+
+  it('checks the enrolment again when asked to try again', async () => {
+    let calls = 0;
+    const { user } = renderPreview({
+      'course.myEnrolment': () => {
+        calls += 1;
+        if (calls === 1) throw new Error('Failed to fetch');
+        return null;
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't reach Discava. Check your connection and try again.",
+    );
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await vi.waitFor(() => expect(calls).toBe(2));
+    await vi.waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
 });
 
 const priced = { ...course, priceAmount: 2000, priceCurrency: 'USD' };
