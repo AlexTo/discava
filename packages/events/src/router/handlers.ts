@@ -4,6 +4,7 @@
  */
 import { handler as analyticsUpdate } from '../analytics/analytics-update.js';
 import { handler as earningsRecording } from '../earnings/earnings-recording.js';
+import { handler as captionTranslation } from '../media/caption-translation.js';
 import { handler as notificationDelivery } from '../notifications/notification-delivery.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { handler as searchIndexing } from '../search/search-indexing.js';
@@ -16,6 +17,7 @@ import { handler as searchIndexing } from '../search/search-indexing.js';
  */
 export const HANDLERS = {
   'analytics-update': analyticsUpdate,
+  'caption-translation': captionTranslation,
   'earnings-recording': earningsRecording,
   'notification-delivery': notificationDelivery,
   'progress-recalculation': progressRecalculation,

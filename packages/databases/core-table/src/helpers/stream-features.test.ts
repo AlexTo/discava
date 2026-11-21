@@ -170,6 +170,24 @@ describe('featuresFor', () => {
     expect(featuresFor(record('REMOVE', 'OldImage', 'order'))).toEqual([]);
   });
 
+  it('routes a changed default caption track to caption translation', () => {
+    const video = (tracks: unknown[]) => ({
+      __edb_e__: { S: 'contentItem' },
+      captionTracks: { L: tracks },
+    });
+    expect(
+      featuresFor({
+        eventName: 'MODIFY',
+        dynamodb: {
+          OldImage: video([]),
+          NewImage: video([
+            { M: { trackId: { S: 't' }, language: { S: 'en-US' } } },
+          ]),
+        },
+      } as never),
+    ).toContain('caption-translation');
+  });
+
   it('routes a lesson MODIFY that only sets freePreview to progress recalculation alone', () => {
     // Whether a lesson is marked doesn't change what a search document,
     // analytics, a notification or an earning is built from.

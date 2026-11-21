@@ -142,6 +142,7 @@ export {
   writeCaptionsReady,
   writeCaptionTracks,
   writeCaptionTranslationOutcome,
+  writeTranslatedCaptionTracks,
 } from './helpers/caption-tracks.js';
 export {
   CATEGORY_NAME_MAX_LENGTH,

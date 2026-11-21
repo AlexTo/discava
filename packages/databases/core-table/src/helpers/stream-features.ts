@@ -7,6 +7,10 @@ import {
   matchesAnalyticsStreamFilters,
 } from './analytics-stream.js';
 import {
+  CAPTION_TRANSLATION_STREAM_FILTERS,
+  matchesCaptionTranslationStreamFilters,
+} from './caption-translation-stream.js';
+import {
   EARNINGS_STREAM_FILTERS,
   matchesEarningsStreamFilters,
 } from './earnings-stream.js';
@@ -106,6 +110,16 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     // mapping's minimum.
     maxConcurrency: 2,
   },
+  {
+    name: 'caption-translation',
+    filters: CAPTION_TRANSLATION_STREAM_FILTERS,
+    handler: 'caption-translation',
+    // Small batches: a video's translation can take minutes.
+    batch: { maxRecords: 5, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // The event source mapping's minimum.
+    maxConcurrency: 2,
+  },
 ];
 
 // The features with their own filter module keep their own matchers, so they stay the one
@@ -117,6 +131,7 @@ const MATCHERS: Readonly<Record<string, Matcher>> = {
   'analytics-update': matchesAnalyticsStreamFilters,
   'notification-delivery': matchesNotificationStreamFilters,
   'earnings-recording': matchesEarningsStreamFilters,
+  'caption-translation': matchesCaptionTranslationStreamFilters,
 };
 
 const matchesFilters = (

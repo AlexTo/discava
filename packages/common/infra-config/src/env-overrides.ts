@@ -156,6 +156,12 @@ const COMPONENT_FIELDS: Record<
   },
 };
 
+// Stage-level settings that sit beside `infra`: <STAGE>_<SETTING>_<FIELD>.
+const CAPTION_TRANSLATION_FIELDS: Record<string, FieldKind> = {
+  enabled: 'boolean',
+  maxLanguagesPerCourse: 'number',
+};
+
 // Component settings live under `infra` in a stage's config, so their
 // variables carry that segment too: <STAGE>_INFRA_<COMPONENT>_<FIELD>. It
 // keeps them apart from any other kind of per-stage setting added beside
@@ -256,8 +262,27 @@ export function applyEnvOverrides(
     }
   }
 
+  let captionTranslation: Record<string, boolean | number> | undefined;
+  for (const [field, kind] of Object.entries(CAPTION_TRANSLATION_FIELDS)) {
+    const envKey = `${stageSegment}_CAPTION_TRANSLATION_${toEnvSegment(field)}`;
+    const raw = process.env[envKey];
+    if (raw === undefined) continue;
+    captionTranslation ??= {};
+    captionTranslation[field] = parseEnvValue(raw, kind, envKey) as
+      | boolean
+      | number;
+  }
+
   return {
     ...base,
+    ...(captionTranslation
+      ? {
+          captionTranslation: {
+            ...base.captionTranslation,
+            ...captionTranslation,
+          },
+        }
+      : {}),
     ...(region ? { region } : {}),
     ...(account ? { account } : {}),
     ...(Object.keys(components).length

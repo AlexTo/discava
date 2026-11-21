@@ -5,24 +5,27 @@
 import {
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsCaptionTranslation,
   EventsCertificateReminder,
   EventsEarningsRecording,
   EventsNotificationDelivery,
   EventsProgressRecalculation,
   EventsSearchIndexing,
   EventsStreamRouter,
+  LessonMediaBucket,
   RuntimeConfig,
   SearchCollection,
   StreamRouter,
   suppressRules,
 } from '@discava/common-constructs';
 import type {
+  CaptionTranslationSettings,
   NotificationsComponentConfig,
   PayoutSettings,
   StreamRouterComponentConfig,
 } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps, Stage } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Function } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
@@ -47,6 +50,10 @@ export interface StreamRouterStackProps extends StackProps {
   readonly coreApiUrl: string;
   /** The stage's fee and hold, which earnings recording applies to each sale. */
   readonly payouts: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
+  /** Where the caption translation function reads and writes caption files. */
+  readonly lessonMediaBucket: LessonMediaBucket;
+  /** The stage's caption translation settings. @default translation on, up to nine languages a course */
+  readonly captionTranslation?: CaptionTranslationSettings;
 }
 
 /**
@@ -73,6 +80,8 @@ export class StreamRouterStack extends Stack {
       portalUrls,
       coreApiUrl,
       payouts,
+      lessonMediaBucket,
+      captionTranslation,
       ...props
     }: StreamRouterStackProps,
   ) {
@@ -101,7 +110,18 @@ export class StreamRouterStack extends Stack {
         coreTable,
         payouts,
       ),
+      'caption-translation': this.createCaptionTranslationLambda(
+        coreTable,
+        lessonMediaBucket,
+      ),
     };
+
+    // One object under one key: the AppConfig reader treats a falsy value as
+    // missing, and \`enabled: false\` must be readable.
+    RuntimeConfig.ensure(this).set('captionTranslation', 'Settings', {
+      enabled: captionTranslation?.enabled ?? true,
+      maxLanguagesPerCourse: captionTranslation?.maxLanguagesPerCourse ?? 9,
+    });
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
       table: coreTable.table,
@@ -240,6 +260,40 @@ export class StreamRouterStack extends Stack {
     );
     recording.addEnvironment('PAYOUT_HOLD_DAYS', String(payouts.holdDays));
     return recording;
+  }
+
+  // Translates each video's default caption track into its course's caption
+  // languages, run from its feature's queue. It reads and writes the table, and
+  // reads, puts and deletes caption files under the captions folders only: it
+  // never touches a video, a transcode or a transcription.
+  private createCaptionTranslationLambda(
+    coreTable: CoreTable,
+    lessonMediaBucket: LessonMediaBucket,
+  ) {
+    const translation = new EventsCaptionTranslation(
+      this,
+      'CaptionTranslation',
+    );
+    this.grantAppConfig(translation);
+    coreTable.grantReadWriteData(translation);
+    // A caption file's key is courses/<id>/.../<nonce>/captions/<track>.vtt;
+    // IAM's * spans slashes.
+    const captionFiles = 'courses/*/captions/*';
+    lessonMediaBucket.grantRead(translation, captionFiles);
+    lessonMediaBucket.grantPut(translation, captionFiles);
+    lessonMediaBucket.grantDelete(translation, captionFiles);
+    translation.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['translate:TranslateText'],
+        // TranslateText names no resource to scope to.
+        resources: ['*'],
+      }),
+    );
+    translation.addEnvironment(
+      'STAGE_NAME',
+      Stage.of(this)?.stageName ?? 'unknown',
+    );
+    return translation;
   }
 
   // Fans a broadcast out to its course's students and emails each
