@@ -276,7 +276,18 @@ test("a lesson's step links lead to their items", async ({ page }) => {
     await expect(first).toBeVisible();
     const before = page.url();
     await lessonSteps(page).nth(2).click();
-    await expect(page.locator(`#item-${lastId}`)).toBeInViewport();
+    const item = page.locator(`#item-${lastId}`);
+    await expect(item).toBeFocused();
+    // The scroll is smooth: wait for the item to settle just below the
+    // header, as when its address is visited directly. Merely intersecting
+    // the viewport already holds before the click.
+    await expect
+      .poll(async () => {
+        const header = await page.getByRole('banner').first().boundingBox();
+        const box = await item.boundingBox();
+        return (box?.y ?? Number.POSITIVE_INFINITY) - (header?.height ?? 0);
+      })
+      .toBeLessThanOrEqual(40);
     expect(page.url()).toBe(before);
     await screenshot(page, 'lesson after clicking a step');
   });
