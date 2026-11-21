@@ -273,7 +273,7 @@ export function HlsVideo({
   const onCueRef = useRef(onCue);
   onCueRef.current = onCue;
   // The cue that opened the overlay now showing, while one does.
-  const openCueRef = useRef<PlayerCue>();
+  const openCueRef = useRef<PlayerCue | undefined>(undefined);
   const hasOverlay = overlay !== undefined && overlay !== null;
   if (!hasOverlay) {
     openCueRef.current = undefined;

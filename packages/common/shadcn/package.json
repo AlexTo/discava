@@ -44,6 +44,7 @@
     "./styles/*": "./src/styles/*",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
+    "./hooks/use-video-questions": "./src/hooks/use-video-questions.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./discussion/*": "./src/discussion/*.tsx"
   },

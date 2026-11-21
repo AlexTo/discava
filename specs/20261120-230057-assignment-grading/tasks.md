@@ -248,7 +248,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
   The form loads and saves its draft through `grading-draft.ts` (debounced) and clears it on success. On `CONFLICT` it shows the server's message, refetches `get` and keeps the draft. Sending passes the `version` and `reviewRevision` it rendered. Tests: return, amend, the not-enrolled state, draft restored after remount, draft kept on `CONFLICT`, points over the maximum refused before sending.
 - [ ] T022 [US3] In `grading-form.tsx`, add "Request resubmission". It is shown only when the state is `submitted`, disabled until the feedback has text, and calls `assignmentSubmission.requestResubmission`. Component tests: hidden for `resubmission_requested` and `returned`; disabled with empty feedback; sends the feedback.
-- [x] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
+- [ ] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
   1. Two students submit (one PDF, one docx). The instructor's list shows both waiting, oldest first.
   2. The PDF previews and the docx offers Download.
   3. Request resubmission. The student sees the feedback and the open form, and has a "Resubmission requested" notification.
@@ -258,7 +258,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   7. 25 points are refused.
 
   Call `screenshot()` after the list, the PDF preview, the request, the student's resubmission view, the return form, and the student's returned view. (The read-only state of a student who left the course is covered by T014 and T021: e2e has no helper to make a student leave.)
-- [x] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
+- [ ] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
   - two instructors return the same submission at the same moment: exactly one succeeds and the other gets `CONFLICT`;
   - an instructor's return races the student's resubmit: exactly one commits, and if the resubmit won, the submission is waiting at the new version with no grade.
 
@@ -270,7 +270,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run assignment` passes; CI's E2E job passes the new cases.
 
-- [x] T025 [US4] Tests first, then change `submit` in `packages/apis/core-api/src/procedures/assignment.ts`:
+- [ ] T025 [US4] Tests first, then change `submit` in `packages/apis/core-api/src/procedures/assignment.ts`:
   1. compute `day` (UTC `YYYY-MM-DD`) from the submit time;
   2. get the `submissionNotice` for `{ courseId, contentItemId, day }`;
   3. if it's absent, load the course's instructors (`courseInstructor.query.primary({ courseId })`, as `core-api/src/procedures/review.ts:216-236` does), the course title and the assignment lesson title, and append `submissionsReceivedNotificationWrites` to the transaction;
@@ -282,7 +282,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a marker race retries and succeeds;
   - instructors beyond the cap are not notified;
   - a resubmission also counts.
-- [x] T026 [US4] Extend `assignment-grading.e2e.ts`: three students submit to one assignment on the same day. Each instructor has exactly one "New submissions" notification, and it opens the assignment's submissions. The list shows the three oldest first with a time waited. Add a concurrency case to `concurrent-writes.e2e.ts`: two students' first submissions of the day at the same moment both succeed, and instructors get one notification.
+- [ ] T026 [US4] Extend `assignment-grading.e2e.ts`: three students submit to one assignment on the same day. Each instructor has exactly one "New submissions" notification, and it opens the assignment's submissions. The list shows the three oldest first with a time waited. Add a concurrency case to `concurrent-writes.e2e.ts`: two students' first submissions of the day at the same moment both succeed, and instructors get one notification.
 
 ---
 
