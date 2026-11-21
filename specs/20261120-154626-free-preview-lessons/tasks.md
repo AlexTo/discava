@@ -128,7 +128,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
   - in `procedures/course.ts`, `publicViewCourse` sets `freePreview: isOpenFreePreview({ course, module, lesson })` on each lesson it returns;
   - in `procedures/enrolment.ts`, add to the comment above `requireEnrolment` that open preview lessons are read through the `freePreview` router and never through a procedure that calls this function;
   - in `packages/common/constructs/src/app/apis/core-api.ts` add `'freePreview.videoUrl'` and `'freePreview.fileUrl'` to `CORE_API_DEDICATED_FUNCTIONS.MediaUrl`, and update its comment (playback and download links, for enrolled students and for free preview lessons).
-- [ ] T023 [US2] Run `pnpm nx run @discava/core-api:test`, `pnpm nx run @discava/common-constructs:test` and `pnpm nx run @discava/infra:test` (run once), lint, typecheck and `pnpm nx run @discava/infra:synth`, and fix failures in the code. Update a CDK snapshot only if the three new public methods changed it, and say in the PR description that the only differences are those methods without the authorizer, with the public throttle, and two of them integrated with `MediaUrl`.
+- [x] T023 [US2] Run `pnpm nx run @discava/core-api:test`, `pnpm nx run @discava/common-constructs:test` and `pnpm nx run @discava/infra:test` (run once), lint, typecheck and `pnpm nx run @discava/infra:synth`, and fix failures in the code. Update a CDK snapshot only if the three new public methods changed it, and say in the PR description that the only differences are those methods without the authorizer, with the public throttle, and two of them integrated with `MediaUrl`.
 
 **Checkpoint**: the preview route works and is closed to everything but open previews; no page uses it yet.
 
@@ -142,7 +142,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ### Tests for User Story 1 (write first, see them fail)
 
-- [ ] T024 [P] [US1] Component tests in `packages/websites/student-portal/src/routes/learn/$courseId/-components/free-preview-item.test.tsx` with `renderWithCoreApi`, per [contracts/portal-ui.md](./contracts/portal-ui.md) "Layout of an open preview":
+- [x] T024 [P] [US1] Component tests in `packages/websites/student-portal/src/routes/learn/$courseId/-components/free-preview-item.test.tsx` with `renderWithCoreApi`, per [contracts/portal-ui.md](./contracts/portal-ui.md) "Layout of an open preview":
   - each item row of the table (playable video, video being prepared, text, file, locked quiz with its question count and no start button);
   - `freePreview.videoUrl` is not called before **Play**, and `freePreview.fileUrl` not before **Download**;
   - with fake timers, the video query refetches after 30 minutes while mounted, and a response with the same address does not remount `HlsVideo`;

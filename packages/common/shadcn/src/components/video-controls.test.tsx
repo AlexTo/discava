@@ -758,3 +758,143 @@ describe('VideoControls captions', () => {
     });
   });
 });
+
+describe('VideoControls overlay', () => {
+  const setupOverlay = (
+    overlay: React.ReactNode,
+    onOverlayDismiss = vi.fn(),
+  ) => {
+    const ui = (node: React.ReactNode) => (
+      <VideoControls overlay={node} onOverlayDismiss={onOverlayDismiss}>
+        <video data-testid="video" />
+      </VideoControls>
+    );
+    const result = render(ui(overlay));
+    const video = screen.getByTestId('video') as HTMLVideoElement;
+    const container = video.closest(
+      '[data-slot="video-controls"]',
+    ) as HTMLElement;
+    return {
+      ...result,
+      video,
+      container,
+      onOverlayDismiss,
+      update: (node: React.ReactNode) => result.rerender(ui(node)),
+    };
+  };
+
+  const card = (
+    <div>
+      <h2 data-autofocus tabIndex={-1}>
+        Question at 0:10
+      </h2>
+      <button type="button">Submit answer</button>
+    </div>
+  );
+
+  it('shows the overlay inside the container, named', () => {
+    const { container } = setupOverlay(card);
+    const overlay = screen.getByRole('group', { name: 'Video question' });
+    expect(container.contains(overlay)).toBe(true);
+    expect(overlay).toHaveTextContent('Question at 0:10');
+  });
+
+  it('renders nothing extra without an overlay', () => {
+    const { container } = setupOverlay(undefined);
+    expect(container.querySelector('[data-slot="video-overlay"]')).toBeNull();
+    expect(
+      container.querySelector('[aria-label="Video controls"]'),
+    ).not.toHaveAttribute('inert');
+  });
+
+  it('pauses a playing video and plays it again when the overlay clears', () => {
+    media.paused = false;
+    const { update, video } = setupOverlay(undefined);
+    update(card);
+    expect(pause).toHaveBeenCalled();
+    expect(video.paused).toBe(true);
+
+    update(undefined);
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a video that was paused paused', () => {
+    const { update } = setupOverlay(undefined);
+    update(card);
+    update(undefined);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('does not play again a video that ended', () => {
+    media.paused = false;
+    const { update, video } = setupOverlay(undefined);
+    update(card);
+    Object.defineProperty(video, 'ended', { configurable: true, value: true });
+    update(undefined);
+    expect(play).not.toHaveBeenCalled();
+  });
+
+  it('keeps the video paused if something plays it', () => {
+    const { video } = setupOverlay(card);
+    pause.mockClear();
+    act(() => {
+      video.dispatchEvent(new Event('play'));
+    });
+    expect(pause).toHaveBeenCalled();
+  });
+
+  it('leaves picture-in-picture first', () => {
+    const exit = vi.fn(() => Promise.resolve());
+    const { video, update } = setupOverlay(undefined);
+    Object.defineProperty(document, 'pictureInPictureElement', {
+      configurable: true,
+      value: video,
+    });
+    document.exitPictureInPicture = exit;
+    update(card);
+    expect(exit).toHaveBeenCalled();
+    Reflect.deleteProperty(document, 'pictureInPictureElement');
+  });
+
+  it('makes the control bar inert', () => {
+    const { container } = setupOverlay(card);
+    expect(
+      container.querySelector('[aria-label="Video controls"]'),
+    ).toHaveAttribute('inert');
+  });
+
+  it('moves focus to the autofocus element, and back to Play when it clears', () => {
+    const { update } = setupOverlay(undefined);
+    update(card);
+    expect(
+      screen.getByRole('heading', { name: 'Question at 0:10' }),
+    ).toHaveFocus();
+
+    update(undefined);
+    expect(screen.getByRole('button', { name: 'Play' })).toHaveFocus();
+  });
+
+  // FR-040: Space and the other shortcuts do nothing while a question is open.
+  it('ignores the shortcuts, except Escape, which dismisses', () => {
+    const { container, onOverlayDismiss } = setupOverlay(card);
+    play.mockClear();
+    pause.mockClear();
+    for (const key of [' ', 'k', 'l', 'ArrowRight', 'm', 'f', '5']) {
+      press(container, key);
+    }
+    expect(play).not.toHaveBeenCalled();
+    expect(pause).not.toHaveBeenCalled();
+    expect(media.currentTime).toBe(0);
+    expect(onOverlayDismiss).not.toHaveBeenCalled();
+
+    press(container, 'Escape');
+    expect(onOverlayDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('has the overlay stay clear of sideways scrolling', () => {
+    setupOverlay(card);
+    expect(screen.getByRole('group', { name: 'Video question' })).toHaveClass(
+      'overflow-x-hidden',
+    );
+  });
+});

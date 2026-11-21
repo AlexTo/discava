@@ -248,7 +248,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
   The form loads and saves its draft through `grading-draft.ts` (debounced) and clears it on success. On `CONFLICT` it shows the server's message, refetches `get` and keeps the draft. Sending passes the `version` and `reviewRevision` it rendered. Tests: return, amend, the not-enrolled state, draft restored after remount, draft kept on `CONFLICT`, points over the maximum refused before sending.
 - [ ] T022 [US3] In `grading-form.tsx`, add "Request resubmission". It is shown only when the state is `submitted`, disabled until the feedback has text, and calls `assignmentSubmission.requestResubmission`. Component tests: hidden for `resubmission_requested` and `returned`; disabled with empty feedback; sends the feedback.
-- [ ] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
+- [x] T023 [US1] Add grading helpers to `packages/e2e/src/helpers/assignment.ts`: `openSubmissions`, `openSubmissionReview`, `returnSubmission(points, feedback)`, `requestResubmission(feedback)` and `editGrade`. Then add `packages/e2e/src/scenarios/assignment-grading.e2e.ts`, with its own users and uniquely named course (`createUploadAssignmentCourse`, `newUser`). Steps:
   1. Two students submit (one PDF, one docx). The instructor's list shows both waiting, oldest first.
   2. The PDF previews and the docx offers Download.
   3. Request resubmission. The student sees the feedback and the open form, and has a "Resubmission requested" notification.
@@ -258,7 +258,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   7. 25 points are refused.
 
   Call `screenshot()` after the list, the PDF preview, the request, the student's resubmission view, the return form, and the student's returned view. (The read-only state of a student who left the course is covered by T014 and T021: e2e has no helper to make a student leave.)
-- [ ] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
+- [x] T024 [US1] Add to `packages/e2e/src/concurrency/concurrent-writes.e2e.ts`, through `apiClients`:
   - two instructors return the same submission at the same moment: exactly one succeeds and the other gets `CONFLICT`;
   - an instructor's return races the student's resubmit: exactly one commits, and if the resubmit won, the submission is waiting at the new version with no grade.
 

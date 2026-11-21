@@ -788,3 +788,162 @@ describe('HlsVideo onTimeChange', () => {
     expect(hls.instances).toHaveLength(1);
   });
 });
+
+describe('HlsVideo cues', () => {
+  const cue = (id: string, atSeconds: number | null, state = 'unanswered') =>
+    ({ id, atSeconds, state, label: id }) as any;
+
+  const setup = (
+    cues = [cue('a', 10), cue('b', 30), cue('end', null)],
+    extra: { onPositionChange?: any } = {},
+  ) => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+    const onCue = vi.fn();
+    const result = render(
+      <HlsVideo
+        url={URL}
+        withCredentials
+        cues={cues}
+        onCue={onCue}
+        {...extra}
+      />,
+    );
+    const el = video(result.container);
+    act(() => {
+      el.dispatchEvent(new Event('loadedmetadata'));
+    });
+    media.paused = false;
+    return { el, onCue, ...result };
+  };
+  const emit = (el: HTMLElement, type: string, at?: number) =>
+    act(() => {
+      if (at !== undefined) {
+        media.currentTime = at;
+      }
+      el.dispatchEvent(new Event(type));
+    });
+
+  it('reports the cue two time updates straddle', () => {
+    const { el, onCue } = setup();
+
+    emit(el, 'timeupdate', 9.5);
+    emit(el, 'timeupdate', 10.1);
+
+    expect(onCue).toHaveBeenCalledTimes(1);
+    expect(onCue).toHaveBeenCalledWith(['a'], 'reached');
+  });
+
+  it('reports a cue once, not on the updates after it', () => {
+    const { el, onCue } = setup();
+
+    emit(el, 'timeupdate', 9.5);
+    emit(el, 'timeupdate', 10.1);
+    emit(el, 'timeupdate', 10.6);
+
+    expect(onCue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report an answered cue', () => {
+    const { el, onCue } = setup([cue('a', 10, 'answered')]);
+
+    emit(el, 'timeupdate', 9.5);
+    emit(el, 'timeupdate', 10.1);
+
+    expect(onCue).not.toHaveBeenCalled();
+  });
+
+  it('reaches a cue at 0 on the first update after play starts', () => {
+    const { el, onCue } = setup([cue('z', 0)]);
+
+    emit(el, 'timeupdate', 0.2);
+
+    expect(onCue).toHaveBeenCalledWith(['z'], 'reached');
+  });
+
+  it('reports nothing while paused', () => {
+    const { el, onCue } = setup();
+    media.paused = true;
+
+    emit(el, 'timeupdate', 9.5);
+    emit(el, 'timeupdate', 10.1);
+
+    expect(onCue).not.toHaveBeenCalled();
+  });
+
+  // FR-014: a seek across a cue doesn't ask it.
+  it('reports nothing for a seek across a cue, nor for the update after it', () => {
+    const { el, onCue } = setup();
+
+    emit(el, 'timeupdate', 5);
+    emit(el, 'seeking');
+    emit(el, 'timeupdate', 12);
+    emit(el, 'seeked', 12);
+    emit(el, 'timeupdate', 12.2);
+
+    expect(onCue).not.toHaveBeenCalled();
+  });
+
+  it('reports a cue passed by normal playback after a seek', () => {
+    const { el, onCue } = setup();
+
+    emit(el, 'seeking');
+    emit(el, 'seeked', 29);
+    emit(el, 'timeupdate', 29.2);
+    emit(el, 'timeupdate', 30.1);
+
+    expect(onCue).toHaveBeenCalledWith(['b'], 'reached');
+  });
+
+  it('reports nothing for a jump the events missed', () => {
+    const { el, onCue } = setup();
+
+    emit(el, 'timeupdate', 5);
+    emit(el, 'timeupdate', 20);
+
+    expect(onCue).not.toHaveBeenCalled();
+  });
+
+  it('reports the unanswered cues left at the end', () => {
+    const { el, onCue } = setup([
+      cue('a', 10, 'answered'),
+      cue('end', null),
+      cue('end2', null, 'answered'),
+    ]);
+
+    emit(el, 'ended');
+
+    expect(onCue).toHaveBeenCalledWith(['end'], 'ended');
+  });
+
+  it('saves the position just before the open cue', () => {
+    vi.useFakeTimers();
+    const onPositionChange = vi.fn();
+    const { el, rerender } = setup(undefined, { onPositionChange });
+    emit(el, 'timeupdate', 9.5);
+    emit(el, 'timeupdate', 10.1);
+
+    rerender(
+      <HlsVideo
+        url={URL}
+        withCredentials
+        cues={[cue('a', 10), cue('b', 30), cue('end', null)]}
+        onCue={vi.fn()}
+        onPositionChange={onPositionChange}
+        overlay={<p>Question</p>}
+      />,
+    );
+    media.paused = true;
+    emit(el, 'pause');
+
+    expect(onPositionChange).toHaveBeenCalledWith({
+      positionSeconds: 9,
+      durationSeconds: 120,
+    });
+  });
+
+  it('changes nothing without cues', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+    const { container } = render(<HlsVideo url={URL} withCredentials />);
+    expect(container.querySelector('[data-slot="video-overlay"]')).toBeNull();
+  });
+});
