@@ -42,3 +42,13 @@ export const publicCourseProcedure = publicProcedure.concat(
 export const publicSearchProcedure = publicProcedure
   .concat(createSearchPlugin())
   .concat(createCoreTablePlugin());
+
+/**
+ * Like protectedProcedure, additionally exposing ctx.search and ctx.coreTable,
+ * for searches only a signed-in learner may run over a course they are
+ * enrolled in: the procedure reads the course's curriculum to scope the query
+ * and to name what it finds, which publicSearchProcedure's callers never see.
+ */
+export const courseSearchProcedure = protectedProcedure
+  .concat(createSearchPlugin())
+  .concat(createCoreTablePlugin());
