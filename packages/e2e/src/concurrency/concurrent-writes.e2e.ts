@@ -240,8 +240,6 @@ test.describe('an instructor grading an upload assignment', () => {
         Buffer.from('essay'),
       ),
     );
-    second = await apiUser('Ines', ['instructor']);
-    await addCourseInstructor(assignment.courseId, second);
   });
 
   test.afterEach(async () => {
@@ -251,8 +249,12 @@ test.describe('an instructor grading an upload assignment', () => {
   });
 
   test('two instructors returning one submission at once: one succeeds, one gets CONFLICT', async () => {
+    // Only this test needs a second instructor; one who never calls an API
+    // would leave a course instructor without a user record.
+    second = await apiUser('Ines', ['instructor']);
+    await addCourseInstructor(assignment.courseId, second);
     const { submission } =
-      await instructor.instructor.assignmentSubmission.get.query(key());
+      await second.instructor.assignmentSubmission.get.query(key());
     const input = {
       ...key(),
       version: submission!.version,

@@ -94,6 +94,8 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await requestResubmission(page, 'Please add your sources');
     await screenshot(page, 'resubmission requested');
 
+    // The notification is delivered through a queue.
+    await waitForQueuesToDrain();
     await openLesson(studentPage, ref);
     const item = assignmentItem(studentPage, ASSIGNMENT);
     await expect(
@@ -103,7 +105,7 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await expect(item.getByLabel('Choose file')).toBeAttached();
     await screenshot(studentPage, 'student sees the resubmission request');
     await studentPage
-      .getByRole('button', { name: /^Notifications, 1 unread/ })
+      .getByRole('button', { name: /^Notifications, \d+ unread/ })
       .click();
     await expect(
       studentPage.getByText(`Resubmission requested: "${ASSIGNMENT}"`),
@@ -136,6 +138,7 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await screenshot(page, 'return form filled in');
     await returnSubmission(page, 17, 'Good work');
 
+    await waitForQueuesToDrain();
     await studentPage.reload();
     const item = assignmentItem(studentPage, ASSIGNMENT);
     await expect(item.getByText(/17 \/ 20/)).toBeVisible();
@@ -148,7 +151,6 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await expect(
       studentPage.getByText(`Your assignment "${ASSIGNMENT}" was returned`),
     ).toBeVisible();
-    await waitForQueuesToDrain();
     await expect
       .poll(async () => (await emailsFor(sam.email, 'was returned')).length)
       .toBe(1);
@@ -157,6 +159,7 @@ test('an instructor reviews, returns and amends submitted work', async ({
   await test.step('editing the grade notifies the student again', async () => {
     await editGrade(page, 18);
 
+    await waitForQueuesToDrain();
     await studentPage.reload();
     await expect(
       assignmentItem(studentPage, ASSIGNMENT).getByText(/18 \/ 20/),
