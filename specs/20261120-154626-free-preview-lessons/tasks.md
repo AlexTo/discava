@@ -142,27 +142,27 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ### Tests for User Story 1 (write first, see them fail)
 
-- [ ] T024 [P] [US1] Component tests in `packages/websites/student-portal/src/routes/learn/$courseId/-components/free-preview-item.test.tsx` with `renderWithCoreApi`, per [contracts/portal-ui.md](./contracts/portal-ui.md) "Layout of an open preview":
+- [x] T024 [P] [US1] Component tests in `packages/websites/student-portal/src/routes/learn/$courseId/-components/free-preview-item.test.tsx` with `renderWithCoreApi`, per [contracts/portal-ui.md](./contracts/portal-ui.md) "Layout of an open preview":
   - each item row of the table (playable video, video being prepared, text, file, locked quiz with its question count and no start button);
   - `freePreview.videoUrl` is not called before **Play**, and `freePreview.fileUrl` not before **Download**;
   - with fake timers, the video query refetches after 30 minutes while mounted, and a response with the same address does not remount `HlsVideo`;
   - a `NOT_FOUND` from `freePreview.videoUrl` shows "This video is not available";
   - the calls list never contains `contentItem.videoUrl`, `contentItem.fileUrl`, `contentItem.saveVideoPosition`, `contentItem.complete` or `quiz.view`.
-- [ ] T025 [P] [US1] Component tests in `-components/free-preview-page.test.tsx` (same folder), per the contract's "States":
+- [x] T025 [P] [US1] Component tests in `-components/free-preview-page.test.tsx` (same folder), per the contract's "States":
   - an open preview shows the course title linking to the landing page, the lesson's title and description and its items, with no "Mark as done", no progress and no discussion;
   - `course.publicView` `NOT_FOUND` shows "This preview is no longer available." with no link;
   - a lesson missing from the outline, or present with `freePreview: false`, shows the same message with "View the course", and `freePreview.lesson` is never called;
   - `freePreview.lesson` `NOT_FOUND` shows the same message;
   - a lesson with no items shows "This lesson has nothing to show yet.";
   - signed out, `course.myEnrolment` and `course.view` are never called.
-- [ ] T026 [P] [US1] Extend `-components/course-page.test.tsx`: in the outline a lesson with `freePreview: true` is a link to `/learn/$courseId/preview/$lessonId` with a "Free preview" badge; a lesson with `freePreview: false` is plain text as before; the existing assertions stay.
+- [x] T026 [P] [US1] Extend `-components/course-page.test.tsx`: in the outline a lesson with `freePreview: true` is a link to `/learn/$courseId/preview/$lessonId` with a "Free preview" badge; a lesson with `freePreview: false` is plain text as before; the existing assertions stay.
 
 ### Implementation for User Story 1
 
-- [ ] T027 [US1] Add `-components/free-preview-item.tsx` per the contract: a video component of its own over `HlsVideo` (a poster with a text-only **Play** button; the query enabled on press, `refetchInterval` 30 minutes, `refetchIntervalInBackground: true`, `refetchOnWindowFocus: false`, `retry: false`); the text body rendered with the same renderer the lesson page's text items use (extract it from `content-item.tsx` into its own file in `-components/` if it is not already separate, without changing its behaviour); a file row with a text-only **Download** button that requests the link at that moment; the locked quiz card. Do not import `VideoPlayer`, `MarkAsDone`, `useCompleteItem` or the course player hook.
-- [ ] T028 [US1] Add `-components/free-preview-page.tsx` and the route `packages/websites/student-portal/src/routes/learn/$courseId/preview/$lessonId.tsx` (public: no `requireSignIn`; a comment saying why), per the contract's "Data" and "States": `course.publicView` first, the lesson found in its outline, `freePreview.lesson` only for a lesson the outline marks, `retry: false`. Regenerate `routeTree.gen.ts` with the router generator, not by hand.
-- [ ] T029 [US1] In `-components/course-page.tsx`, render an outline lesson with `freePreview: true` as a `Link` to the preview route followed by a "Free preview" badge (a `Badge` from `@discava/common-shadcn`, no arrow icon); leave other rows as they are.
-- [ ] T030 [US2] Extend `packages/e2e/src/scenarios/free-preview.e2e.ts` with the visitor's side, using `helpers/free-preview.ts` and the API helpers in `helpers/api.ts` (a priced course needs `connectLocalStripe`). In a signed-out browser context:
+- [x] T027 [US1] Add `-components/free-preview-item.tsx` per the contract: a video component of its own over `HlsVideo` (a poster with a text-only **Play** button; the query enabled on press, `refetchInterval` 30 minutes, `refetchIntervalInBackground: true`, `refetchOnWindowFocus: false`, `retry: false`); the text body rendered with the same renderer the lesson page's text items use (extract it from `content-item.tsx` into its own file in `-components/` if it is not already separate, without changing its behaviour); a file row with a text-only **Download** button that requests the link at that moment; the locked quiz card. Do not import `VideoPlayer`, `MarkAsDone`, `useCompleteItem` or the course player hook.
+- [x] T028 [US1] Add `-components/free-preview-page.tsx` and the route `packages/websites/student-portal/src/routes/learn/$courseId/preview/$lessonId.tsx` (public: no `requireSignIn`; a comment saying why), per the contract's "Data" and "States": `course.publicView` first, the lesson found in its outline, `freePreview.lesson` only for a lesson the outline marks, `retry: false`. Regenerate `routeTree.gen.ts` with the router generator, not by hand.
+- [x] T029 [US1] In `-components/course-page.tsx`, render an outline lesson with `freePreview: true` as a `Link` to the preview route followed by a "Free preview" badge (a `Badge` from `@discava/common-shadcn`, no arrow icon); leave other rows as they are.
+- [x] T030 [US2] Extend `packages/e2e/src/scenarios/free-preview.e2e.ts` with the visitor's side, using `helpers/free-preview.ts` and the API helpers in `helpers/api.ts` (a priced course needs `connectLocalStripe`). In a signed-out browser context:
   - the landing page labels only the marked lesson; following the link shows its text, its file and the locked quiz; **Play** starts the video; **Download** saves the file. `screenshot(page, …)` at the outline label, the preview page and the playing video;
   - **attacks, through the API with no token**: `freePreview.lesson`, `freePreview.videoUrl` and `freePreview.fileUrl` for the unmarked lesson are `NOT_FOUND`; `freePreview.videoUrl` and `freePreview.fileUrl` with the marked lesson's IDs and the unmarked lesson's video and file item IDs are `NOT_FOUND`; `contentItem.videoUrl` for the marked lesson's video is `UNAUTHORIZED`;
   - as a signed-in student who is not enrolled: the preview page is the same, and `contentItem.videoUrl`, `contentItem.fileUrl` and `course.view` for the marked lesson are `FORBIDDEN`;
@@ -170,7 +170,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
   - the instructor unmarks the lesson: the next `freePreview.lesson` is `NOT_FOUND` and a reload of the preview address shows "This preview is no longer available." (screenshot); the same after marking again and hiding the lesson, and after archiving the course.
 
   The table invariants run after every test, which is what shows a preview recorded nothing.
-- [ ] T031 [US1] Run `pnpm nx run @discava/student-portal:test` (run once), lint and typecheck, and fix failures.
+- [x] T031 [US1] Run `pnpm nx run @discava/student-portal:test` (run once), lint and typecheck, and fix failures.
 
 **Checkpoint**: visitors can watch previews; the page does not yet offer enrolment.
 
