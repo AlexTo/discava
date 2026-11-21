@@ -19,3 +19,4 @@ export * from './payment.js';
 export * from './quiz.js';
 export * from './review.js';
 export * from './search.js';
+export * from './video-question.js';

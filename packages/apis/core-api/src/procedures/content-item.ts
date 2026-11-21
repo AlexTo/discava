@@ -14,6 +14,7 @@ import {
   resumeAt,
   tracksForPlayback,
   videoPositionToStore,
+  videoQuestionsOf,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { playableManifest } from '../helpers/playback.js';
@@ -112,6 +113,12 @@ export const videoUrl = courseProcedure
       versionId,
       resumeAt: resumeAt(position ?? undefined, versionId),
       captions,
+      // Questions are asked where answers can be recorded: not in an archived
+      // course.
+      questionCount:
+        course.status === 'published'
+          ? videoQuestionsOf(item).questions.length
+          : 0,
     };
   });
 

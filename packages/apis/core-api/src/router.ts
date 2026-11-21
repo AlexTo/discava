@@ -79,6 +79,10 @@ import {
   publicSearchCourses,
   publicSuggestCourses,
 } from './procedures/search.js';
+import {
+  answerVideoQuestion,
+  viewVideoQuestions,
+} from './procedures/video-question.js';
 
 export const router = t.router;
 
@@ -157,6 +161,10 @@ export const appRouter = router({
     delete: deleteReview,
     summary: reviewSummary,
     list: listReviews,
+  }),
+  videoQuestion: router({
+    view: viewVideoQuestions,
+    answer: answerVideoQuestion,
   }),
   quiz: router({
     view: viewQuiz,
