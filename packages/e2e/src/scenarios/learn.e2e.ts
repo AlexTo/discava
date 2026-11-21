@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { apiUser, createLongTitledCourseViaApi } from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -150,4 +151,30 @@ test('enrolling in a course with no lessons lands on the course home', async ({
   await expect(student.getByText("You're enrolled in")).toBeVisible();
   await expect(student.getByText('No lessons yet')).toBeVisible();
   await screenshot(student, 'landed-on-course-home');
+});
+
+// The lesson is the wide column: at desktop width it is at least 1.8 times the
+// outline's width, however long the module and lesson titles are.
+test('the lesson column is wider than the outline', async ({ page }) => {
+  const title = uniqueName('E2E wide lesson course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { lessonTitles } = await createLongTitledCourseViaApi(
+    instructor,
+    title,
+  );
+
+  await openCourse(page, title);
+  await enrolAndLand(page, newUser('Wes', ['student']));
+  await expect(
+    page.getByRole('heading', { level: 2, name: lessonTitles[0] }),
+  ).toBeVisible();
+
+  const outline = await page.locator('aside').boundingBox();
+  const lesson = await page.locator('main section').first().boundingBox();
+  expect(outline).not.toBeNull();
+  expect(lesson).not.toBeNull();
+  expect(lesson?.width ?? 0).toBeGreaterThanOrEqual(
+    (outline?.width ?? Number.POSITIVE_INFINITY) * 1.8,
+  );
+  await screenshot(page, 'lesson columns at desktop width');
 });

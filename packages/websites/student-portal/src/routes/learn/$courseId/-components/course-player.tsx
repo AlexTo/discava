@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { ResponsivePanel } from '@discava/common-shadcn/components/responsive-panel';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import {
@@ -310,7 +311,7 @@ export function CoursePlayerLayout({
       </div>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-balance min-w-0 break-words text-2xl font-bold tracking-tight sm:text-3xl">
           {course.title}
         </h1>
         {enrolment ? (
@@ -338,15 +339,31 @@ export function CoursePlayerLayout({
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_2fr]">
-        <aside className="lg:sticky lg:top-20 lg:h-fit">
-          <CourseOutline
-            courseId={courseId}
-            modules={course.modules}
-            activeLessonId={activeLessonId}
-            isLessonComplete={player.isLessonComplete}
-            newItemCount={player.newItemCount}
-          />
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <aside className="min-w-0 lg:sticky lg:top-20 lg:h-fit">
+          <ResponsivePanel
+            label="Course outline"
+            summary={
+              activeLesson
+                ? activeLesson.title
+                : count(
+                    course.modules.reduce(
+                      (total, module) => total + module.lessons.length,
+                      0,
+                    ),
+                    'lesson',
+                    'lessons',
+                  )
+            }
+          >
+            <CourseOutline
+              courseId={courseId}
+              modules={course.modules}
+              activeLessonId={activeLessonId}
+              isLessonComplete={player.isLessonComplete}
+              newItemCount={player.newItemCount}
+            />
+          </ResponsivePanel>
         </aside>
         <section className="min-w-0">{children(player)}</section>
       </div>

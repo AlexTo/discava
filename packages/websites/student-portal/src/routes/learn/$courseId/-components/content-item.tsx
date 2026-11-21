@@ -288,7 +288,7 @@ export function ContentItem({
         </p>
         <h3
           id={`${itemAnchor(item.contentItemId)}-title`}
-          className="mt-1 text-lg font-semibold"
+          className="mt-1 min-w-0 break-words text-lg font-semibold"
         >
           {item.title}
         </h3>
