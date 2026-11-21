@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { apiUser, createLongTitledCourseViaApi } from '../helpers/api.js';
+import type { Route } from '@playwright/test';
+import {
+  apiUser,
+  createLongTitledCourseViaApi,
+  createPublishedQuizCourseViaApi,
+} from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -19,6 +24,7 @@ import {
   enrolAndLand,
   expectCourseCompleted,
   openCourse,
+  startFirstLesson,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -177,4 +183,31 @@ test('the lesson column is wider than the outline', async ({ page }) => {
     (outline?.width ?? Number.POSITIVE_INFINITY) * 1.8,
   );
   await screenshot(page, 'lesson columns at desktop width');
+});
+
+// A request that gets no answer says so in a sentence, and "Try again" asks
+// for it again without a reload.
+test('a quiz that fails to load offers to try again', async ({ page }) => {
+  const title = uniqueName('E2E quiz load error course');
+  await createPublishedQuizCourseViaApi(
+    await apiUser('Ivy', ['instructor']),
+    title,
+  );
+  await openCourse(page, title);
+  await enrol(page, newUser('Wes', ['student']));
+
+  const fail = async (route: Route) => route.abort('connectionfailed');
+  await page.route('**/quiz.view*', fail);
+  await startFirstLesson(page);
+
+  await expect(
+    page.getByText(
+      "Couldn't reach Discava. Check your connection and try again.",
+    ),
+  ).toBeVisible();
+  await screenshot(page, 'quiz load error with Try again');
+
+  await page.unroute('**/quiz.view*', fail);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('button', { name: 'Start quiz' })).toBeVisible();
 });

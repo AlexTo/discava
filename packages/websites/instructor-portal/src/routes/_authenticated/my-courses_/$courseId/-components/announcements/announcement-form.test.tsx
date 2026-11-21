@@ -90,7 +90,11 @@ describe('AnnouncementForm', () => {
 
     await typeAnnouncement(user);
     await user.click(screen.getByRole('button', { name: 'Post announcement' }));
-    expect(await screen.findByText('Try later')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Title')).toHaveValue('Welcome');
 
     await user.click(screen.getByRole('button', { name: 'Post announcement' }));
