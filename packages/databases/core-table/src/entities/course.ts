@@ -121,6 +121,13 @@ export const createCourseEntity = async () =>
         language: {
           type: LANGUAGES,
         },
+        // Caption languages the course's videos are translated into, in the
+        // instructor's order. Written only by setCourseCaptionLanguages
+        // (helpers/course-catalogue.ts).
+        captionLanguages: {
+          type: 'list',
+          items: { type: 'string' },
+        },
         durationHours: {
           type: 'number',
         },

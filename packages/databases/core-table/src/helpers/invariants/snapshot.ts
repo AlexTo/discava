@@ -67,6 +67,7 @@ export interface TableSnapshot {
     | 'tags'
     | 'level'
     | 'language'
+    | 'captionLanguages'
     | 'durationHours'
     | 'learningOutcomes'
     | 'requirements'
@@ -120,6 +121,8 @@ export interface TableSnapshot {
     | 'captionTracksRev'
     | 'captionsStatus'
     | 'captionsPendingSince'
+    | 'captionTranslation'
+    | 'captionTranslationRequestedAt'
     | 'fileName'
     | 'fileSize'
     | 'mimeType'
@@ -142,6 +145,8 @@ export interface TableSnapshot {
     | 'captionTracksRev'
     | 'captionsStatus'
     | 'captionsPendingSince'
+    | 'captionTranslation'
+    | 'captionTranslationRequestedAt'
   >[];
   courseInstructors: Pick<
     Item<typeof createCourseInstructorEntity>,

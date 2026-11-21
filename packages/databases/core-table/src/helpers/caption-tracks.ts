@@ -4,6 +4,7 @@
  */
 
 import type { createCoreTableService } from '../service.js';
+import { isConditionalCheckFailed } from './errors.js';
 
 // A video's caption tracks live on its contentItem (captionTracks, with
 // captionTracksRev as the condition that serialises writers). Every writer --
@@ -20,10 +21,13 @@ export interface CaptionTrack {
   // BCP 47 tag from the shared caption languages.
   language: string;
   label: string;
-  source: 'auto' | 'uploaded';
+  source: 'auto' | 'uploaded' | 'translated';
   // S3 key in the lesson media bucket.
   key: string;
   isDefault: boolean;
+  // On a translated track only: the trackId of the default track it was made
+  // from.
+  sourceTrackId?: string;
 }
 
 export type CaptionChange =
@@ -48,77 +52,207 @@ export interface CaptionChangeResult {
   replaced?: CaptionTrack;
   // The track a remove took out, so its file can be deleted.
   removed?: CaptionTrack;
-  // An auto add that was not applied because an uploaded track already holds
-  // the language: a late Transcribe result never overwrites an instructor's
-  // upload. The caller logs it and still treats captioning as done.
+  // The translated track an uploaded add of a new language evicted from a
+  // full list, so its file can be deleted.
+  evicted?: CaptionTrack;
+  // Every translated track of the version, taken out because the version's
+  // default track is now another track: they were made from the old one.
+  staleTranslated?: CaptionTrack[];
+  // An add that was not applied: an auto add because an uploaded track already
+  // holds the language (a late Transcribe result never overwrites an
+  // instructor's upload), or a translated add that lost to an upload, a
+  // newer source, a translation of the same source or a full list. The caller
+  // logs it; an auto caller still treats captioning as done.
   dropped?: true;
 }
+
+const isDefaultOf = (nonce: string) => (t: CaptionTrack) =>
+  t.nonce === nonce && t.isDefault;
+
+// The translated track to make room for an upload: the one whose language is
+// last in the course's caption languages, or the last added when none is listed.
+const pickEvicted = (
+  tracks: readonly CaptionTrack[],
+  nonce: string,
+  captionLanguages: readonly string[] | undefined,
+): CaptionTrack | undefined => {
+  const translated = tracks.filter(
+    (t) => t.nonce === nonce && t.source === 'translated',
+  );
+  const listed = translated
+    .map((t) => ({ t, index: captionLanguages?.indexOf(t.language) ?? -1 }))
+    .filter(({ index }) => index !== -1)
+    .sort((a, b) => b.index - a.index);
+  return listed[0]?.t ?? translated.at(-1);
+};
+
+const applyAdd = (
+  tracks: CaptionTrack[],
+  change: Extract<CaptionChange, { type: 'add' }>,
+  captionLanguages: readonly string[] | undefined,
+): CaptionChangeResult => {
+  const added = change.track;
+  const nonce = change.nonce;
+  const sameLanguage = tracks.findIndex(
+    (t) => t.nonce === nonce && t.language === added.language,
+  );
+  const held = sameLanguage === -1 ? undefined : tracks[sameLanguage];
+
+  if (added.source === 'translated') {
+    const source = tracks.find(isDefaultOf(nonce));
+    if (
+      (held &&
+        (held.source !== 'translated' ||
+          held.sourceTrackId === added.sourceTrackId)) ||
+      !source ||
+      added.sourceTrackId !== source.trackId
+    ) {
+      return { tracks, dropped: true };
+    }
+    const track = { ...added, isDefault: false };
+    if (held) {
+      tracks[sameLanguage] = track;
+      return { tracks, replaced: held };
+    }
+    if (tracks.length >= MAX_CAPTION_TRACKS) {
+      return { tracks, dropped: true };
+    }
+    return { tracks: [...tracks, track] };
+  }
+
+  // An auto track becomes the default, so the translated tracks made from the
+  // old one go, the one holding the language being the one it replaces.
+  let replaced: CaptionTrack | undefined;
+  let staleTranslated: CaptionTrack[] | undefined;
+  let list = tracks;
+  if (added.source === 'auto') {
+    const translated = tracks.filter(
+      (t) => t.nonce === nonce && t.source === 'translated',
+    );
+    replaced = translated.find((t) => t.language === added.language);
+    const rest = translated.filter((t) => t !== replaced);
+    staleTranslated = rest.length > 0 ? rest : undefined;
+    list = tracks.filter((t) => !translated.includes(t));
+  } else if (held?.source === 'translated') {
+    replaced = held;
+    list = tracks.filter((t) => t !== held);
+  }
+
+  const sameIndex = replaced
+    ? -1
+    : list.findIndex((t) => t.nonce === nonce && t.language === added.language);
+  const result = (r: CaptionChangeResult): CaptionChangeResult => ({
+    ...r,
+    ...(replaced ? { replaced } : {}),
+    ...(staleTranslated ? { staleTranslated } : {}),
+  });
+
+  if (sameIndex !== -1) {
+    const existing = list[sameIndex];
+    if (added.source === 'auto' && existing.source === 'uploaded') {
+      return { tracks, dropped: true };
+    }
+    list[sameIndex] = { ...added, isDefault: existing.isDefault };
+    return result({ tracks: list, replaced: existing });
+  }
+
+  let evicted: CaptionTrack | undefined;
+  if (list.length >= MAX_CAPTION_TRACKS) {
+    evicted =
+      added.source === 'uploaded' && !replaced
+        ? pickEvicted(list, nonce, captionLanguages)
+        : undefined;
+    if (!evicted) {
+      throw new CaptionTrackError(
+        'TOO_MANY_TRACKS',
+        `A video can have at most ${MAX_CAPTION_TRACKS} caption tracks`,
+      );
+    }
+    list = list.filter((t) => t !== evicted);
+  }
+  const hasDefault = list.some(isDefaultOf(nonce));
+  const extra = evicted ? { evicted } : {};
+  if (added.source === 'auto') {
+    // The auto track is the default whenever it exists.
+    return result({
+      tracks: [
+        ...list.map((t) =>
+          t.nonce === nonce ? { ...t, isDefault: false } : t,
+        ),
+        { ...added, isDefault: true },
+      ],
+    });
+  }
+  return result({
+    tracks: [...list, { ...added, isDefault: !hasDefault }],
+    ...extra,
+  });
+};
+
+const applyRemove = (
+  tracks: CaptionTrack[],
+  change: Extract<CaptionChange, { type: 'remove' }>,
+): CaptionChangeResult => {
+  const index = tracks.findIndex((t) => t.trackId === change.trackId);
+  if (index === -1) {
+    return { tracks };
+  }
+  const [removed] = tracks.splice(index, 1);
+  if (removed.isDefault) {
+    const oldest = tracks.find(
+      (t) => t.nonce === change.nonce && t.source !== 'translated',
+    );
+    if (oldest) {
+      tracks[tracks.indexOf(oldest)] = { ...oldest, isDefault: true };
+    }
+  }
+  return { tracks, removed };
+};
 
 /**
  * The tracks after a change, as a new list. `currentNonce` is the nonce of the
  * item's current ready version: a change for any other version is refused with
- * STALE_VERSION.
+ * STALE_VERSION. `captionLanguages` is the course's, in order: it decides
+ * which translated track an upload evicts from a full list.
  */
 export const applyCaptionChange = (
   current: readonly CaptionTrack[] | undefined,
   change: CaptionChange,
-  { currentNonce }: { currentNonce: string | undefined },
+  {
+    currentNonce,
+    captionLanguages,
+  }: {
+    currentNonce: string | undefined;
+    captionLanguages?: readonly string[];
+  },
 ): CaptionChangeResult => {
   if (currentNonce === undefined || change.nonce !== currentNonce) {
     throw new CaptionTrackError('STALE_VERSION', 'The video changed');
   }
   const tracks = [...(current ?? [])];
+  const before = tracks.find(isDefaultOf(change.nonce))?.trackId;
+  const result =
+    change.type === 'remove'
+      ? applyRemove(tracks, change)
+      : applyAdd(tracks, change, captionLanguages);
 
-  if (change.type === 'remove') {
-    const index = tracks.findIndex((t) => t.trackId === change.trackId);
-    if (index === -1) {
-      return { tracks };
-    }
-    const [removed] = tracks.splice(index, 1);
-    if (removed.isDefault) {
-      const oldest = tracks.find((t) => t.nonce === change.nonce);
-      if (oldest) {
-        tracks[tracks.indexOf(oldest)] = { ...oldest, isDefault: true };
-      }
-    }
-    return { tracks, removed };
+  // Translated tracks were made from the default they name: when another
+  // track is the default now, they all go.
+  const after = result.tracks.find(isDefaultOf(change.nonce))?.trackId;
+  if (after === before) {
+    return result;
   }
-
-  const added = change.track;
-  const sameLanguage = tracks.findIndex(
-    (t) => t.nonce === change.nonce && t.language === added.language,
+  const stale = result.tracks.filter(
+    (t) => t.nonce === change.nonce && t.source === 'translated',
   );
-
-  if (sameLanguage !== -1) {
-    const replaced = tracks[sameLanguage];
-    if (added.source === 'auto' && replaced.source === 'uploaded') {
-      return { tracks, dropped: true };
-    }
-    tracks[sameLanguage] = { ...added, isDefault: replaced.isDefault };
-    return { tracks, replaced };
+  if (stale.length === 0) {
+    return result;
   }
-
-  if (tracks.length >= MAX_CAPTION_TRACKS) {
-    throw new CaptionTrackError(
-      'TOO_MANY_TRACKS',
-      `A video can have at most ${MAX_CAPTION_TRACKS} caption tracks`,
-    );
-  }
-  const hasDefault = tracks.some(
-    (t) => t.nonce === change.nonce && t.isDefault,
-  );
-  if (added.source === 'auto') {
-    // The auto track is the default whenever it exists.
-    return {
-      tracks: [
-        ...tracks.map((t) =>
-          t.nonce === change.nonce ? { ...t, isDefault: false } : t,
-        ),
-        { ...added, isDefault: true },
-      ],
-    };
-  }
-  return { tracks: [...tracks, { ...added, isDefault: !hasDefault }] };
+  return {
+    ...result,
+    tracks: result.tracks.filter((t) => !stale.includes(t)),
+    staleTranslated: [...(result.staleTranslated ?? []), ...stale],
+  };
 };
 
 /** The tracks of one version only: the version swap drops all the others. */
@@ -168,10 +302,123 @@ export const reportedCaptionsStatus = (
   return status;
 };
 
+export interface CaptionTranslationSettings {
+  enabled: boolean;
+  maxLanguagesPerCourse: number;
+}
+
+export type CaptionLanguageState =
+  | {
+      language: string;
+      state: 'uploaded' | 'translated' | 'no-room' | 'pending';
+    }
+  | {
+      language: string;
+      state: 'not-translated';
+      reason: 'disabled' | 'no-captions' | 'language-mismatch';
+    };
+
+export interface CaptionTranslationPlan {
+  // The version's default track, which every translation is made from.
+  sourceTrack?: CaptionTrack;
+  // Languages to make now, in the course's order.
+  translate: string[];
+  // Translated tracks no longer wanted.
+  remove: CaptionTrack[];
+  // One entry per course language.
+  languages: CaptionLanguageState[];
+}
+
+/**
+ * What translating a version's default track into a course's caption
+ * languages still needs: which languages to make, which translated tracks to
+ * remove, and the state of each course language. Pure; only the tracks of
+ * `nonce` count.
+ */
+export const planCaptionTranslations = (
+  tracks: readonly CaptionTrack[] | undefined,
+  {
+    nonce,
+    captionLanguages,
+    courseLanguage,
+    settings,
+  }: {
+    nonce: string;
+    captionLanguages: readonly string[] | undefined;
+    courseLanguage: string | undefined;
+    settings: CaptionTranslationSettings;
+  },
+): CaptionTranslationPlan => {
+  const version = dropOtherVersions(tracks, nonce);
+  const sourceTrack = version.find((t) => t.isDefault);
+  const wanted = captionLanguages ?? [];
+  const translatedTracks = version.filter((t) => t.source === 'translated');
+  const holder = (language: string) =>
+    version.find((t) => t.language === language);
+
+  if (!settings.enabled) {
+    return {
+      sourceTrack,
+      translate: [],
+      remove: [],
+      languages: wanted.map((language) => ({
+        language,
+        state: 'not-translated',
+        reason: 'disabled',
+      })),
+    };
+  }
+
+  const mismatch =
+    sourceTrack?.source === 'auto' &&
+    courseLanguage !== undefined &&
+    courseLanguage !== sourceTrack.language.split('-')[0];
+  const unwanted = new Set(
+    translatedTracks.filter((t) => !wanted.includes(t.language)),
+  );
+  const translate: string[] = [];
+  // The places the translated tracks may take, once the others have theirs.
+  let room =
+    MAX_CAPTION_TRACKS -
+    version.filter((t) => t.source !== 'translated').length;
+
+  const languages = wanted.map((language): CaptionLanguageState => {
+    const held = holder(language);
+    if (!sourceTrack) {
+      return { language, state: 'not-translated', reason: 'no-captions' };
+    }
+    if (held && held.source !== 'translated') {
+      return { language, state: 'uploaded' };
+    }
+    if (mismatch) {
+      if (held) {
+        unwanted.add(held);
+      }
+      return { language, state: 'not-translated', reason: 'language-mismatch' };
+    }
+    const current = held?.sourceTrackId === sourceTrack.trackId;
+    if (room <= 0) {
+      if (held) {
+        unwanted.add(held);
+      }
+      return { language, state: 'no-room' };
+    }
+    room -= 1;
+    if (current) {
+      return { language, state: 'translated' };
+    }
+    translate.push(language);
+    return { language, state: 'pending' };
+  });
+
+  return { sourceTrack, translate, remove: [...unwanted], languages };
+};
+
 // The shape of ElectroDB's where() callback arguments, as much as this needs.
 // Its operations build condition strings, which are combined as text.
 interface ConditionOps {
   eq(attribute: unknown, value: unknown): string;
+  exists(attribute: unknown): string;
   notExists(attribute: unknown): string;
   contains(attribute: unknown, value: unknown): string;
 }
@@ -236,6 +483,17 @@ export type CaptionEntities = Pick<
   Awaited<ReturnType<typeof createCoreTableService>>['entities'],
   'contentItem' | 'coursePreview'
 >;
+
+const recordExists = (attr: { status: unknown }, op: ConditionOps): string =>
+  op.exists(attr.status);
+
+/** The `.where()` condition for a write while the record still plays `nonce`. */
+const playsReadyVersion =
+  (nonce: string) =>
+  (attr: { status: unknown; s3Key: unknown }, op: ConditionOps): string =>
+    [op.eq(attr.status, 'ready'), op.contains(attr.s3Key, `/${nonce}/`)].join(
+      ' AND ',
+    );
 
 const patchOf = (
   entities: CaptionEntities,
@@ -321,5 +579,60 @@ export const writeCaptionTracks = async (
     })
     .remove(['captionsPendingSince'])
     .where(captionWriteCondition(rev, nonce))
+    .go();
+};
+
+/**
+ * Asks for the record's translations to be worked out again: clears the
+ * recorded outcome and touches captionTranslationRequestedAt, which is what the
+ * stream matcher passes. A missing record is left missing.
+ */
+export const requestCaptionTranslation = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+): Promise<void> => {
+  try {
+    await patchOf(entities, key)
+      .set({ captionTranslationRequestedAt: new Date().toISOString() })
+      .remove(['captionTranslation'])
+      .where(recordExists)
+      .go();
+  } catch (error) {
+    if (!isConditionalCheckFailed(error)) {
+      throw error;
+    }
+  }
+};
+
+/**
+ * Records what a translation run could not do (or clears the record when it
+ * did everything), while the record still plays `nonce`. It never touches
+ * the tracks or the captioning status.
+ */
+export const writeCaptionTranslationOutcome = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+  {
+    nonce,
+    sourceTrackId,
+    failures,
+  }: {
+    nonce: string;
+    sourceTrackId: string;
+    failures: { language: string; reason: 'failed' | 'too-long' }[];
+  },
+): Promise<void> => {
+  const patch = patchOf(entities, key);
+  await (failures.length === 0
+    ? patch.remove(['captionTranslation'])
+    : patch.set({
+        captionTranslation: {
+          sourceTrackId,
+          failures,
+          updatedAt: new Date().toISOString(),
+        },
+      })
+  )
+    .where(playsReadyVersion(nonce))
     .go();
 };
