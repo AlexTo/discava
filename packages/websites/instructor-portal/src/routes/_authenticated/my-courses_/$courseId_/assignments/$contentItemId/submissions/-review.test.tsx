@@ -149,6 +149,9 @@ describe('Review page', () => {
     await waitFor(() =>
       expect(localStorage.getItem('discava:grading-draft:c1:i1:u1')).toBeNull(),
     );
+    // The draft is saved after a short delay: it must not come back.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(localStorage.getItem('discava:grading-draft:c1:i1:u1')).toBeNull();
   });
 
   it('refuses points over the maximum before sending', async () => {

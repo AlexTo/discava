@@ -77,6 +77,8 @@ export function GradingForm({
     initial?.feedback,
   );
   const [error, setError] = useState<string>();
+  // Remounts the editor, which reads its value only once, after a send.
+  const [editorKey, setEditorKey] = useState(0);
 
   const returnWork = useMutation(
     trpc.assignmentSubmission.return.mutationOptions(),
@@ -114,7 +116,10 @@ export function GradingForm({
     try {
       await action();
       clearGradingDraft(draftRef);
+      // Emptied too, or the draft effect would write the points straight back.
+      setPoints('');
       setFeedback(undefined);
+      setEditorKey((key) => key + 1);
       setEditing(false);
       await refetch();
     } catch (failure) {
@@ -220,6 +225,7 @@ export function GradingForm({
       <div className="space-y-2">
         <Label>Feedback</Label>
         <RichTextEditor
+          key={editorKey}
           value={feedback}
           onChange={setFeedback}
           ariaLabel="Feedback"
@@ -249,7 +255,12 @@ export function GradingForm({
             type="button"
             variant="ghost"
             disabled={busy}
-            onClick={() => setEditing(false)}
+            onClick={() => {
+              clearGradingDraft(draftRef);
+              setPoints('');
+              setFeedback(undefined);
+              setEditing(false);
+            }}
           >
             Cancel
           </Button>
