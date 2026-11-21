@@ -39,13 +39,23 @@ function Step({
       : ITEM_TYPES[item.type].icon;
   return (
     <li>
-      <a
-        href={`#${itemAnchor(item.contentItemId)}`}
+      <Link
+        to="/learn/$courseId/lesson/$lessonId"
+        params={{ courseId: item.courseId, lessonId: item.lessonId }}
+        hash={itemAnchor(item.contentItemId)}
         onClick={(event) => {
           event.preventDefault();
-          document
-            .getElementById(itemAnchor(item.contentItemId))
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const target = document.getElementById(
+            itemAnchor(item.contentItemId),
+          );
+          const reduceMotion = window.matchMedia(
+            '(prefers-reduced-motion: reduce)',
+          ).matches;
+          target?.scrollIntoView({
+            behavior: reduceMotion ? 'auto' : 'smooth',
+            block: 'start',
+          });
+          target?.focus({ preventScroll: true });
         }}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/60',
@@ -67,7 +77,7 @@ function Step({
             New
           </span>
         ) : null}
-      </a>
+      </Link>
     </li>
   );
 }

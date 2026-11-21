@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { apiUser, createLongTitledCourseViaApi } from '../helpers/api.js';
+import {
+  apiUser,
+  createLongTitledCourseViaApi,
+  createPublishedCourseViaApi,
+} from '../helpers/api.js';
+import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { enrolAndLand, openCourse } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
@@ -72,6 +77,38 @@ test('a lesson with long titles fits a phone', async ({ page }) => {
     expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(
       PHONE.height,
     );
+    await expectNoSidewaysScroll(page);
+  });
+});
+
+test('a course page with six section tabs fits a phone and scrolls its tabs', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E phone tabs course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  await setLandingViaApi(instructor, courseId, {
+    learningOutcomes: ['Read a wide tab bar'],
+    requirements: ['A phone'],
+  });
+
+  await page.goto(coursePageUrl(courseId));
+  await expect(
+    page.getByRole('heading', { level: 1, name: title }),
+  ).toBeVisible();
+  const tabs = page.getByRole('navigation', { name: 'Course sections' });
+  await expect(tabs.getByRole('link')).toHaveCount(6);
+
+  await test.step('the page does not scroll sideways', async () => {
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course page with six tabs at phone width');
+  });
+
+  await test.step('the last tab can be scrolled into view and clicked', async () => {
+    const last = tabs.getByRole('link', { name: 'Reviews' });
+    await last.scrollIntoViewIfNeeded();
+    await last.click();
+    await expect(page).toHaveURL(`${coursePageUrl(courseId)}#reviews`);
     await expectNoSidewaysScroll(page);
   });
 });
