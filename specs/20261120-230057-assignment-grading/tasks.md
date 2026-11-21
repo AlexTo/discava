@@ -270,7 +270,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run assignment` passes; CI's E2E job passes the new cases.
 
-- [ ] T025 [US4] Tests first, then change `submit` in `packages/apis/core-api/src/procedures/assignment.ts`:
+- [x] T025 [US4] Tests first, then change `submit` in `packages/apis/core-api/src/procedures/assignment.ts`:
   1. compute `day` (UTC `YYYY-MM-DD`) from the submit time;
   2. get the `submissionNotice` for `{ courseId, contentItemId, day }`;
   3. if it's absent, load the course's instructors (`courseInstructor.query.primary({ courseId })`, as `core-api/src/procedures/review.ts:216-236` does), the course title and the assignment lesson title, and append `submissionsReceivedNotificationWrites` to the transaction;
@@ -282,7 +282,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a marker race retries and succeeds;
   - instructors beyond the cap are not notified;
   - a resubmission also counts.
-- [ ] T026 [US4] Extend `assignment-grading.e2e.ts`: three students submit to one assignment on the same day. Each instructor has exactly one "New submissions" notification, and it opens the assignment's submissions. The list shows the three oldest first with a time waited. Add a concurrency case to `concurrent-writes.e2e.ts`: two students' first submissions of the day at the same moment both succeed, and instructors get one notification.
+- [x] T026 [US4] Extend `assignment-grading.e2e.ts`: three students submit to one assignment on the same day. Each instructor has exactly one "New submissions" notification, and it opens the assignment's submissions. The list shows the three oldest first with a time waited. Add a concurrency case to `concurrent-writes.e2e.ts`: two students' first submissions of the day at the same moment both succeed, and instructors get one notification.
 
 ---
 

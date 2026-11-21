@@ -148,14 +148,14 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
   - with fake timers, the video query refetches after 30 minutes while mounted, and a response with the same address does not remount `HlsVideo`;
   - a `NOT_FOUND` from `freePreview.videoUrl` shows "This video is not available";
   - the calls list never contains `contentItem.videoUrl`, `contentItem.fileUrl`, `contentItem.saveVideoPosition`, `contentItem.complete` or `quiz.view`.
-- [ ] T025 [P] [US1] Component tests in `-components/free-preview-page.test.tsx` (same folder), per the contract's "States":
+- [x] T025 [P] [US1] Component tests in `-components/free-preview-page.test.tsx` (same folder), per the contract's "States":
   - an open preview shows the course title linking to the landing page, the lesson's title and description and its items, with no "Mark as done", no progress and no discussion;
   - `course.publicView` `NOT_FOUND` shows "This preview is no longer available." with no link;
   - a lesson missing from the outline, or present with `freePreview: false`, shows the same message with "View the course", and `freePreview.lesson` is never called;
   - `freePreview.lesson` `NOT_FOUND` shows the same message;
   - a lesson with no items shows "This lesson has nothing to show yet.";
   - signed out, `course.myEnrolment` and `course.view` are never called.
-- [ ] T026 [P] [US1] Extend `-components/course-page.test.tsx`: in the outline a lesson with `freePreview: true` is a link to `/learn/$courseId/preview/$lessonId` with a "Free preview" badge; a lesson with `freePreview: false` is plain text as before; the existing assertions stay.
+- [x] T026 [P] [US1] Extend `-components/course-page.test.tsx`: in the outline a lesson with `freePreview: true` is a link to `/learn/$courseId/preview/$lessonId` with a "Free preview" badge; a lesson with `freePreview: false` is plain text as before; the existing assertions stay.
 
 ### Implementation for User Story 1
 
