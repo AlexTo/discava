@@ -141,9 +141,10 @@ test('a learner is asked a video question, answers it and carries on', async ({
     await question.getByRole('radio', { name: 'A cat' }).check();
     await question.getByRole('button', { name: 'Submit answer' }).click();
     await expect(question.getByRole('status')).toContainText('Not quite');
+    // The option marked as correct, whatever else its row says.
     await expect(
-      question.getByText('Colour bars', { exact: true }),
-    ).toBeVisible();
+      question.getByRole('listitem').filter({ hasText: '(correct answer)' }),
+    ).toContainText('Colour bars');
     await expect(
       question.getByText('The test video is a set of colour bars'),
     ).toBeVisible();
