@@ -7,6 +7,7 @@ import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Link } from '@tanstack/react-router';
 import { BookOpen, CircleCheck } from 'lucide-react';
 import { Announcements } from './announcements';
+import { CertificateRequirements } from './certificate-requirements';
 import { type CoursePlayer, CoursePlayerLayout } from './course-player';
 import { EnrolledNotice } from './enrolled-notice';
 
@@ -106,6 +107,13 @@ export function CourseHome({ courseId }: { courseId: string }) {
             <EnrolledNotice courseTitle={player.course.title} />
           ) : null}
           <NextUp courseId={courseId} player={player} />
+          {player.course && player.enrolment ? (
+            <CertificateRequirements
+              courseId={courseId}
+              courseTitle={player.course.title}
+              completedAt={player.enrolment.completedAt}
+            />
+          ) : null}
           <Announcements courseId={courseId} />
           {player.course?.description ? (
             <div>

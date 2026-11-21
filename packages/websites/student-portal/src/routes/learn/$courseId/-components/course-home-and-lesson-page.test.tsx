@@ -198,6 +198,12 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'course.myLessonProgress': () => ({ lessons: [] }),
   'course.myEnrolment': () => enrolment,
   'announcement.list': () => ({ items: [] }),
+  'certificate.requirements': () => ({
+    certificatesEnabled: false,
+    certificate: null,
+    allMet: false,
+    requirements: [],
+  }),
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
     withCredentials: false,
