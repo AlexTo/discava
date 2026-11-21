@@ -67,12 +67,13 @@ No violations, so Complexity Tracking is empty.
 
 **Impact check (constitution IV).** This feature writes no shared record and reads none in a new way. It makes no new request: `keepPreviousData` and "Try again" reuse queries the pages already make, with the same inputs. No invariant is added or extended, and `entity-writers.json` does not change.
 
-**Tests that change meaning (constitution IV, "tests are a specification").** Three existing expectations describe behaviour this spec changes, and each is named in a task:
+**Tests that change meaning (constitution IV, "tests are a specification").** Four existing expectations describe behaviour this spec changes, and each is named in a task:
 
 | Test | What it asserts today | Change, and the requirement behind it |
 |------|----------------------|---------------------------------------|
 | `packages/e2e/src/helpers/student-portal.ts` `takeQuiz` | clicks a button named "Submit" | the button is "Submit answers" (FR-019) |
 | `common-shadcn` `quiz-card.test.tsx` | question navigator buttons found by "Question N" label with no text | they keep that accessible name and gain a visible number (FR-017); assertions on class names, if any, are updated |
+| `student-portal` `routes/instructors/-instructor-profile.test.tsx` "sets the document title to the display name" | `document.title` is `'Gil Strang'` | it is `'Gil Strang · Discava'` (FR-011, T036) |
 | `student-portal` course-card and e2e helpers that find a course by `Preview <title>` | the link's accessible name is "Preview <title>" | the name contains the visible text (FR-020); `openCourse` already finds the course by its title |
 
 ## Project Structure

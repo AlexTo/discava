@@ -27,5 +27,5 @@ Rules:
 
 - A title is plain text: the course's or lesson's title as stored, not shortened. The browser shortens it.
 - A search query longer than 60 characters is cut to 60 with "…".
-- Between a navigation and the new page's first `usePageTitle` call, `RouteAnnouncer` sets "Discava", so a page never shows the previous page's title.
+- Every route calls `usePageTitle` from its first render, with the "while loading or on error" parts until its data arrives, so a page never shows the previous page's title. Nothing else writes `document.title`: `RouteAnnouncer` does not (research R-7).
 - The pages not audited by this feature (My Learning, certificates, settings, unsubscribe) get a fixed title only; nothing else on them changes.

@@ -41,8 +41,8 @@ interface RouteAnnouncerProps {
 }
 ```
 
-- Renders nothing.
-- When `pathname` changes after the first render: sets `document.title` to the application name, then focuses the first `h1` inside `#containerId`, adding `tabIndex={-1}` to it, as soon as one exists (waits up to 5 seconds, and stops waiting on the next change).
+- Renders nothing, and never writes `document.title` (it is the parent of every route, so its effects run after theirs; see research R-7).
+- When `pathname` changes after the first render: focuses the first `h1` inside `#containerId`, adding `tabIndex={-1}` to it, as soon as one exists (waits up to 5 seconds, and stops waiting on the next change).
 - Takes the pathname as a prop, so the shared package does not import a router.
 - Does nothing when only the search or hash changes, because the caller passes the pathname alone.
 - The focused heading shows no focus ring (it was not reached by Tab); every interactive element keeps its ring.

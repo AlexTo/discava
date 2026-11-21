@@ -29,7 +29,7 @@ Its existing state (phase, draft, markers, submitting, error, submitted result) 
 | Event | Effect |
 |-------|--------|
 | first load of the app | none |
-| the pathname changes | the title resets to the application name; once the new page has an `h1` in the main content area, it is focused |
+| the pathname changes | once the new page has an `h1` in the main content area, it is focused. The title is not touched: the new page's `usePageTitle` sets it |
 | only the search or the hash changes | none |
 
 ## Page titles
