@@ -827,6 +827,36 @@ describe('LessonPage', () => {
     });
   });
 
+  it('links each step to its item on this lesson, moving focus there', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const matchMedia = vi.fn().mockReturnValue({ matches: false });
+    vi.stubGlobal('matchMedia', matchMedia);
+    const { user } = openLesson('lesson-1');
+
+    const steps = within(
+      await screen.findByRole('navigation', { name: 'Lesson steps' }),
+    );
+    const step = steps.getAllByRole('link')[0];
+    expect(step.getAttribute('href')).toMatch(
+      /^\/learn\/course-1\/lesson\/lesson-1#./,
+    );
+
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    expect(await item('Notes')).toBe(document.activeElement);
+
+    matchMedia.mockReturnValue({ matches: true });
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'auto',
+      block: 'start',
+    });
+  });
+
   it('says a video is still processing, without asking for its URL', async () => {
     const { calls } = openLesson('lesson-1', {
       'course.view': () =>
