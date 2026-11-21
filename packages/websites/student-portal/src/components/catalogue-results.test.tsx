@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import { type CatalogueFilters, NO_FILTERS } from '../lib/catalogue-filters';
@@ -115,7 +115,13 @@ describe('CatalogueResults filters', () => {
       name: 'Beginner (2)',
     });
     expect(checkbox).not.toBeChecked();
-    await user.click(screen.getByText('(2)', { selector: 'span' }));
+    await user.click(
+      within(
+        screen
+          .getByText('Beginner', { exact: false })
+          .closest('label') as HTMLElement,
+      ).getByText('(2)'),
+    );
     await waitFor(() =>
       expect(
         screen.getByRole('checkbox', { name: 'Beginner (2)' }),
