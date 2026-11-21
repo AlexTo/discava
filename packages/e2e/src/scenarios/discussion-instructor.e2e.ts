@@ -100,4 +100,45 @@ test.describe('lesson questions in the instructor portal', () => {
     ).toBeVisible();
     await screenshot(page, 'a hidden reply in the thread');
   });
+
+  test('a prompt answer is listed by lesson, not as unanswered', async ({
+    page,
+  }) => {
+    const course = uniqueName('E2E prompt answers');
+    await page.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(page, newUser('Ivy', ['instructor']));
+    await createCourse(page, {
+      title: course,
+      summary:
+        'A course whose first-lesson prompt the end-to-end tests answer.',
+    });
+    await addModule(page, 'Module one');
+    await addLesson(page, 'Lesson one');
+    await addTextItem(page, { title: 'Reading', body: 'Text.' });
+    await publishCourse(page);
+    const courseId = page.url().split('/').pop()!;
+
+    const student = await apiUser('Sam', ['student']);
+    await student.core.course.enrol.mutate({ courseId });
+    const { modules } = await student.core.course.view.query({ courseId });
+    await student.core.discussion.answerPrompt.mutate({
+      courseId,
+      moduleId: modules[0].moduleId,
+      lessonId: modules[0].lessons[0].lessonId,
+      postId: newPostId(),
+      body: 'I want to teach others.',
+    });
+
+    await page.getByRole('link', { name: 'Questions', exact: true }).click();
+    await expect(page.getByText('All questions are answered.')).toBeVisible();
+    await expect(page.getByText('I want to teach others.')).toBeHidden();
+
+    await page.getByRole('tab', { name: 'By lesson' }).click();
+    await page
+      .getByLabel('Lesson', { exact: true })
+      .selectOption({ label: 'Lesson one' });
+    await expect(page.getByText('I want to teach others.')).toBeVisible();
+    await expect(page.getByText('Answer to the course prompt')).toBeVisible();
+    await screenshot(page, 'prompt-answer-by-lesson');
+  });
 });
