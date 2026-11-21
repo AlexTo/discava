@@ -109,6 +109,19 @@ describe('captions', () => {
       );
     });
 
+    it.each([
+      [
+        'captionTranslation',
+        { sourceTrackId: 'a', failures: [], updatedAt: T },
+      ],
+      ['captionTranslationRequestedAt', T],
+    ])('reports a text item holding %s', (attribute, value) => {
+      Object.assign(item('text'), { [attribute]: value });
+      expect(violationsOf('video-transcode-state')[0].message).toMatch(
+        /caption attributes are set on a text item/,
+      );
+    });
+
     it('reports a pending status on a pending video', () => {
       Object.assign(item('video'), {
         status: 'pending',
@@ -226,6 +239,62 @@ describe('captions', () => {
       expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
         /2 default/,
       );
+    });
+
+    describe('translated tracks', () => {
+      const source = track('en-US', {
+        trackId: 'src',
+        source: 'auto' as const,
+        isDefault: true,
+      });
+      const translated = (language: string, overrides = {}) =>
+        track(language, {
+          source: 'translated' as const,
+          sourceTrackId: 'src',
+          ...overrides,
+        });
+      const messages = () =>
+        violationsOf('caption-tracks-valid').map((v) => v.message);
+
+      it('accepts a translated track made from the default', () => {
+        withTracks(source, translated('es-ES'));
+        expect(messages()).toEqual([]);
+      });
+
+      it('reports a translated track that is the default', () => {
+        withTracks(translated('es-ES', { isDefault: true }));
+        expect(messages()).toContainEqual(
+          expect.stringMatching(/translated track t-es-ES is the default/),
+        );
+      });
+
+      it('reports a translated track with no sourceTrackId', () => {
+        withTracks(source, translated('es-ES', { sourceTrackId: undefined }));
+        expect(messages()).toContainEqual(
+          expect.stringMatching(/not made from the default track/),
+        );
+      });
+
+      it('reports a translated track made from another track', () => {
+        withTracks(source, translated('es-ES', { sourceTrackId: 'old' }));
+        expect(messages()).toContainEqual(
+          expect.stringMatching(/not made from the default track/),
+        );
+      });
+
+      it('reports a track that is not translated with a sourceTrackId', () => {
+        withTracks(source, track('es-ES', { sourceTrackId: 'src' }));
+        expect(messages()).toContainEqual(
+          expect.stringMatching(/not translated but has a sourceTrackId/),
+        );
+      });
+
+      it("reports a translated track in the default track's language", () => {
+        withTracks(source, translated('en-US', { trackId: 'dup' }));
+        expect(messages()).toContainEqual(
+          expect.stringMatching(/in the default track's language/),
+        );
+      });
     });
 
     it('reports a key outside the version’s captions folder', () => {
@@ -391,6 +460,44 @@ describe('course previews', () => {
       expect(violationsOf('caption-tracks-valid')).toEqual([]);
     });
 
+    it('accepts a preview with an automatic track and a translated one', () => {
+      table.coursePreviews = [
+        preview({
+          captionsStatus: 'ready',
+          captionTracks: [
+            track('en-US', {
+              trackId: 'src',
+              source: 'auto',
+              isDefault: true,
+            }),
+            track('es-ES', {
+              source: 'translated',
+              sourceTrackId: 'src',
+              isDefault: false,
+            }),
+          ],
+        }),
+      ];
+      expect(violationsOf('caption-tracks-valid')).toEqual([]);
+    });
+
+    it('reports a translated preview track that is the default', () => {
+      table.coursePreviews = [
+        preview({
+          captionTracks: [
+            track('es-ES', {
+              source: 'translated',
+              sourceTrackId: 'x',
+              isDefault: true,
+            }),
+          ],
+        }),
+      ];
+      expect(
+        violationsOf('caption-tracks-valid').map((v) => v.message),
+      ).toContainEqual(expect.stringMatching(/is the default/));
+    });
+
     it('reports ready captions with no track for the played version', () => {
       table.coursePreviews = [preview({ captionsStatus: 'ready' })];
       expect(violationsOf('caption-tracks-valid')[0].message).toMatch(
@@ -424,5 +531,48 @@ describe('course previews', () => {
         violationsOf('caption-tracks-valid').map((v) => v.message),
       ).toContainEqual(expect.stringMatching(/two caption tracks/));
     });
+  });
+});
+
+describe('course-caption-languages-valid', () => {
+  const set = (captionLanguages: string[]) => {
+    table.courses[0].captionLanguages = captionLanguages;
+  };
+
+  it('accepts a course without caption languages, and a valid list', () => {
+    expect(checkTableInvariants(table)).toEqual([]);
+    set(['es-ES', 'fr-FR']);
+    expect(checkTableInvariants(table)).toEqual([]);
+  });
+
+  it('reports an empty list', () => {
+    set([]);
+    expectOnly('course-caption-languages-valid', /is empty/);
+  });
+
+  it('reports a duplicate', () => {
+    set(['es-ES', 'es-ES']);
+    expectOnly('course-caption-languages-valid', /a duplicate/);
+  });
+
+  it('reports ten languages', () => {
+    set([
+      'en-US',
+      'es-ES',
+      'fr-FR',
+      'de-DE',
+      'pt-BR',
+      'ja-JP',
+      'zh-CN',
+      'hi-IN',
+      'ar-SA',
+      'vi-VN',
+    ]);
+    expectOnly('course-caption-languages-valid', /10 captionLanguages/);
+  });
+
+  it('reports an unlisted tag', () => {
+    set(['ko-KR']);
+    expectOnly('course-caption-languages-valid', /unknown ko-KR/);
   });
 });

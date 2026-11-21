@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { CAPTION_LANGUAGES } from '@discava/common-web-utils/caption-languages';
 import { PREVIEW_MAX_SECONDS } from '../../entities/course-preview.js';
 import { MAX_CAPTION_TRACKS } from '../caption-tracks.js';
 import { type Check, type Violation, violation } from './common.js';
@@ -94,7 +95,9 @@ export const checkVideoTranscodeState = (
       (item.captionTracks !== undefined ||
         item.captionTracksRev !== undefined ||
         item.captionsStatus !== undefined ||
-        item.captionsPendingSince !== undefined)
+        item.captionsPendingSince !== undefined ||
+        item.captionTranslation !== undefined ||
+        item.captionTranslationRequestedAt !== undefined)
     ) {
       problems.push(`caption attributes are set on a ${item.type} item`);
     }
@@ -163,9 +166,36 @@ const captionTrackProblems = (
       );
     }
   }
-  const defaults = tracks.filter((track) => track.isDefault).length;
-  if (defaults !== 1) {
-    problems.push(`${defaults} default caption tracks, expected 1`);
+  const defaults = tracks.filter((track) => track.isDefault);
+  if (defaults.length !== 1) {
+    problems.push(`${defaults.length} default caption tracks, expected 1`);
+  }
+  const source = defaults.length === 1 ? defaults[0] : undefined;
+  for (const track of tracks) {
+    if (track.source !== 'translated') {
+      if (track.sourceTrackId !== undefined) {
+        problems.push(
+          `track ${track.trackId} is not translated but has a sourceTrackId`,
+        );
+      }
+      continue;
+    }
+    if (track.isDefault) {
+      problems.push(`translated track ${track.trackId} is the default`);
+    }
+    if (
+      track.sourceTrackId === undefined ||
+      track.sourceTrackId !== source?.trackId
+    ) {
+      problems.push(
+        `translated track ${track.trackId} was not made from the default track`,
+      );
+    }
+    if (source && track.language === source.language) {
+      problems.push(
+        `translated track ${track.trackId} is in the default track's language`,
+      );
+    }
   }
   return problems;
 };
@@ -196,8 +226,9 @@ export const checkCaptionTracksValid = (
       preview.status === 'ready' ? preview.s3Key : preview.previousS3Key;
     const problems =
       tracks.length === 0 ? [] : captionTrackProblems(tracks, manifest);
-    // A coursePreview's captions are automatic only, so its captions being ready
-    // means the pipeline wrote the played version's track (the transcribe
+    // A coursePreview's captions are automatic or translated, so its captions
+    // being ready (a translated track can't exist without the default it was
+    // made from) means the pipeline wrote the played version's track (the transcribe
     // outcome writes the track and the status in one patch).
     const nonce = preview.s3Key?.split('/').at(-2);
     if (
@@ -304,9 +335,48 @@ export const checkCoursePreviewShape = (
   });
 };
 
+// A course's captionLanguages, when present, is non-empty, has no duplicate,
+// at most 9 entries, and only listed caption languages.
+export const checkCourseCaptionLanguagesValid = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.courses.flatMap((course) => {
+    const languages = course.captionLanguages;
+    if (languages === undefined) {
+      return [];
+    }
+    const problems: string[] = [];
+    if (languages.length === 0) {
+      problems.push('captionLanguages is empty');
+    }
+    if (new Set(languages).size !== languages.length) {
+      problems.push('captionLanguages has a duplicate');
+    }
+    if (languages.length > 9) {
+      problems.push(`${languages.length} captionLanguages, at most 9`);
+    }
+    const unknown = languages.filter(
+      (tag) => !CAPTION_LANGUAGES.some((language) => language.tag === tag),
+    );
+    if (unknown.length > 0) {
+      problems.push(`captionLanguages has unknown ${unknown.join(', ')}`);
+    }
+    return problems.map((message) =>
+      violation(
+        'course-caption-languages-valid',
+        { courseId: course.courseId },
+        message,
+      ),
+    );
+  });
+
 export const MEDIA_CHECKS = [
   { name: 'video-transcode-state', check: checkVideoTranscodeState },
   { name: 'file-item-shape', check: checkFileItemShape },
   { name: 'caption-tracks-valid', check: checkCaptionTracksValid },
   { name: 'course-preview-shape', check: checkCoursePreviewShape },
+  {
+    name: 'course-caption-languages-valid',
+    check: checkCourseCaptionLanguagesValid,
+  },
 ] as const satisfies readonly Check[];

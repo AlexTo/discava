@@ -369,7 +369,7 @@ export const CreateContentItemVideoUrlOutputSchema = z.object({
       language: z.string(),
       label: z.string(),
       isDefault: z.boolean(),
-      source: z.enum(['auto', 'uploaded']),
+      source: z.enum(['auto', 'uploaded', 'translated']),
       // Plain CloudFront URL under the version's folder, authorised by the
       // signed cookies set with this response.
       url: z.string(),
@@ -393,7 +393,7 @@ export const CaptionTrackOutputSchema = z.object({
   language: z.string(),
   label: z.string(),
   isDefault: z.boolean(),
-  source: z.enum(['auto', 'uploaded']),
+  source: z.enum(['auto', 'uploaded', 'translated']),
 });
 
 // A video's tracks, with no S3 keys.

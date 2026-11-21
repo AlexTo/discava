@@ -12,7 +12,8 @@ export const captionAttributes = {
   // which every writer of captionTracks goes through). Never exposed
   // whole in any API output: S3 keys and the revision stay server-side.
   // At most 10 tracks, each { trackId, nonce, language, label, source,
-  // key, isDefault }.
+  // key, isDefault, sourceTrackId? }. sourceTrackId is on a translated
+  // track only: the trackId of the default track it was made from.
   captionTracks: {
     type: 'list',
     items: {
@@ -22,9 +23,13 @@ export const captionAttributes = {
         nonce: { type: 'string', required: true },
         language: { type: 'string', required: true },
         label: { type: 'string', required: true },
-        source: { type: ['auto', 'uploaded'] as const, required: true },
+        source: {
+          type: ['auto', 'uploaded', 'translated'] as const,
+          required: true,
+        },
         key: { type: 'string', required: true },
         isDefault: { type: 'boolean', required: true },
+        sourceTrackId: { type: 'string' },
       },
     },
   },
@@ -40,6 +45,33 @@ export const captionAttributes = {
   },
   // When captionsStatus became pending (ISO timestamp); removed with it.
   captionsPendingSince: {
+    type: 'string',
+  },
+  // The outcome of translating the default track into the course's caption
+  // languages. Written only by the translation handler (through
+  // writeCaptionTranslationOutcome), cleared by requestCaptionTranslation, and
+  // ignored once the default track is not the sourceTrackId.
+  captionTranslation: {
+    type: 'map',
+    properties: {
+      sourceTrackId: { type: 'string', required: true },
+      failures: {
+        type: 'list',
+        required: true,
+        items: {
+          type: 'map',
+          properties: {
+            language: { type: 'string', required: true },
+            reason: { type: ['failed', 'too-long'] as const, required: true },
+          },
+        },
+      },
+      updatedAt: { type: 'string', required: true },
+    },
+  },
+  // Set (ISO timestamp) to ask for the record's translations to be worked out
+  // again; its value is never read, a change to it is what the stream passes.
+  captionTranslationRequestedAt: {
     type: 'string',
   },
 } as const;
