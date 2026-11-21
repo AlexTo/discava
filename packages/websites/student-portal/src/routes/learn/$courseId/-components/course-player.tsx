@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { ResponsivePanel } from '@discava/common-shadcn/components/responsive-panel';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import {
@@ -111,32 +112,25 @@ export function CompletedWithNew({ count: n }: { count: number }) {
 }
 
 // The course's modules and lessons, each lesson ticked once complete. Every
-// module starts open; the current lesson is highlighted.
+// module starts open (which are closed is the layout's state, so it survives
+// the panel remounting between lessons); the current lesson is highlighted.
 function CourseOutline({
   courseId,
   modules,
   activeLessonId,
   isLessonComplete,
   newItemCount,
+  closedModuleIds,
+  toggle,
 }: {
   courseId: string;
   modules: PlayerModule[];
   activeLessonId?: string;
+  closedModuleIds: Set<string>;
+  toggle: (moduleId: string) => void;
   isLessonComplete: CoursePlayer['isLessonComplete'];
   newItemCount: CoursePlayer['newItemCount'];
 }) {
-  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const toggle = (moduleId: string) =>
-    setClosedModuleIds((current) => {
-      const next = new Set(current);
-      if (!next.delete(moduleId)) {
-        next.add(moduleId);
-      }
-      return next;
-    });
-
   return (
     <nav aria-label="Course outline" className="space-y-3">
       {modules.map((module, moduleIndex) => {
@@ -271,6 +265,17 @@ export function CoursePlayerLayout({
 }) {
   const player = useCoursePlayer(courseId);
   const { course, enrolment } = player;
+  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggle = (moduleId: string) =>
+    setClosedModuleIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(moduleId)) {
+        next.add(moduleId);
+      }
+      return next;
+    });
 
   if (player.isPending) {
     return (
@@ -310,7 +315,7 @@ export function CoursePlayerLayout({
       </div>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-balance min-w-0 break-words text-2xl font-bold tracking-tight sm:text-3xl">
           {course.title}
         </h1>
         {enrolment ? (
@@ -338,15 +343,35 @@ export function CoursePlayerLayout({
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_2fr]">
-        <aside className="lg:sticky lg:top-20 lg:h-fit">
-          <CourseOutline
-            courseId={courseId}
-            modules={course.modules}
-            activeLessonId={activeLessonId}
-            isLessonComplete={player.isLessonComplete}
-            newItemCount={player.newItemCount}
-          />
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <aside className="min-w-0 lg:sticky lg:top-20 lg:h-fit">
+          <ResponsivePanel
+            // A new lesson closes the panel again on a phone.
+            key={activeLessonId}
+            label="Course outline"
+            summary={
+              activeLesson
+                ? activeLesson.title
+                : count(
+                    course.modules.reduce(
+                      (total, module) => total + module.lessons.length,
+                      0,
+                    ),
+                    'lesson',
+                    'lessons',
+                  )
+            }
+          >
+            <CourseOutline
+              courseId={courseId}
+              modules={course.modules}
+              activeLessonId={activeLessonId}
+              isLessonComplete={player.isLessonComplete}
+              newItemCount={player.newItemCount}
+              closedModuleIds={closedModuleIds}
+              toggle={toggle}
+            />
+          </ResponsivePanel>
         </aside>
         <section className="min-w-0">{children(player)}</section>
       </div>

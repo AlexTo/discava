@@ -153,10 +153,12 @@ function Lesson({
     <div className="space-y-8">
       {course ? <EnrolledNotice courseTitle={course.title} /> : null}
       <div className="space-y-3">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="min-w-0 break-words text-xs font-medium text-muted-foreground">
           Module {moduleIndex + 1}: {module.title}
         </p>
-        <h2 className="text-2xl font-semibold">{lesson.title}</h2>
+        <h2 className="min-w-0 break-words text-2xl font-semibold">
+          {lesson.title}
+        </h2>
         {isLessonComplete(lesson) && newItemCount(lesson) > 0 ? (
           <p className="text-sm text-muted-foreground">
             <CompletedWithNew count={newItemCount(lesson)} />
