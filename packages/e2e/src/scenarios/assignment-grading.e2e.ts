@@ -183,3 +183,55 @@ test('an instructor reviews, returns and amends submitted work', async ({
 
   await studentContext.close();
 });
+
+// The instructors are told of new work once per assignment per day (#102),
+// and the list leads with the work that has waited longest.
+test('instructors get one notice a day for an assignment, and its link opens the list', async ({
+  page,
+}) => {
+  const ASSIGNMENT = 'Report';
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const students = [
+    await apiUser('Ann', ['student']),
+    await apiUser('Ben', ['student']),
+    await apiUser('Cat', ['student']),
+  ];
+  const ref = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('E2E notice course'),
+    assignmentTitle: ASSIGNMENT,
+  });
+
+  for (const [index, student] of students.entries()) {
+    await student.core.course.enrol.mutate({ courseId: ref.courseId });
+    await student.core.assignment.submit.mutate(
+      await uploadSubmissionFile(
+        student,
+        ref,
+        `report-${index}.txt`,
+        Buffer.from(`report ${index}`),
+      ),
+    );
+  }
+
+  const noticeTitle = `New submissions to "${ASSIGNMENT}"`;
+  await test.step('the instructor has exactly one notification for the three submissions', async () => {
+    const { items } = await instructor.core.notification.list.query({});
+    expect(items.filter(({ title }) => title === noticeTitle)).toHaveLength(1);
+  });
+
+  await test.step('it opens the assignment’s submissions, oldest first with the time waited', async () => {
+    await page.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(page, ivy);
+    await page
+      .getByRole('button', { name: /^Notifications, \d+ unread/ })
+      .click();
+    await page.getByText(noticeTitle).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/assignments/${ref.contentItemId}/submissions`),
+    );
+    await expect(submissionRowNames(page)).toHaveText([/Ann/, /Ben/, /Cat/]);
+    await expect(page.getByText('Waiting 3')).toBeVisible();
+    await screenshot(page, 'three submissions, longest waiting first');
+  });
+});

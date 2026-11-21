@@ -39,6 +39,7 @@ import {
   isLateSubmission,
   isShown,
   studentActivityAt,
+  submissionsReceivedNotificationWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -114,7 +115,45 @@ const readAssignment = async (
       message: 'This assignment is not available',
     });
   }
-  return { course, item, enrolment: enrolment!, submission, completion };
+  return {
+    course,
+    lesson,
+    item,
+    enrolment: enrolment!,
+    submission,
+    completion,
+  };
+};
+
+// The day's first notice of new submissions to the assignment: the marker and
+// a notification per instructor, to add to the submission's transaction. None
+// when the day's marker exists already or the course has no instructors.
+const submissionNoticeWrites = async (
+  coreTable: CoreTable,
+  { course, lesson }: Read,
+  ref: IAssignmentRef,
+  at: string,
+) => {
+  const { courseId, contentItemId } = ref;
+  const day = at.slice(0, 10);
+  const [{ data: marker }, { data: memberships }] = await Promise.all([
+    coreTable.entities.submissionNotice
+      .get({ courseId, contentItemId, day })
+      .go(),
+    coreTable.entities.courseInstructor.query.primary({ courseId }).go(),
+  ]);
+  if (marker || memberships.length === 0) {
+    return [];
+  }
+  return submissionsReceivedNotificationWrites(coreTable, {
+    courseId,
+    contentItemId,
+    day,
+    occurredAt: at,
+    instructorIds: memberships.map(({ instructorId }) => instructorId),
+    assignmentTitle: lesson!.title,
+    courseTitle: course.title,
+  });
 };
 
 // A stored record as its student sees it: no storage key.
@@ -305,7 +344,10 @@ const validateUpload = async (
 // 4. runs the write (see assignmentSubmissionWrites), up to MAX_SUBMIT_TRIES
 //    times, each on a fresh read: a submission that appeared or moved on means
 //    another request won, which is a CONFLICT -- exactly one of two racing
-//    requests wins, and the other is told to retry;
+//    requests wins, and the other is told to retry. The day's first
+//    submission to the assignment also tells the instructors; a cancellation
+//    only that notice explains retries without it (the submission matters
+//    more than the notice) and is never a CONFLICT;
 // 5. deletes its folder whenever it ends without a committed record, and
 //    after a resubmit schedules the retirement of the replaced folder.
 export const submit = courseProcedure
@@ -360,13 +402,18 @@ export const submit = courseProcedure
       });
       const file = { key, fileName, fileSize, mimeType };
 
+      let withNotice = true;
       for (let tries = 0; tries < MAX_SUBMIT_TRIES; tries++) {
         const { item, enrolment, submission, completion } = read;
         const at = studentActivityAt(enrolment);
         const dueAt = item.dueAt as string | undefined;
+        const notice = withNotice
+          ? await submissionNoticeWrites(coreTable, read, ref, at)
+          : [];
+        let ownItems = 0;
         const { canceled, data } = await coreTable.transaction
-          .write((entities) =>
-            assignmentSubmissionWrites(entities, {
+          .write((entities) => {
+            const own = assignmentSubmissionWrites(entities, {
               userId,
               ...ref,
               at,
@@ -376,8 +423,10 @@ export const submit = courseProcedure
                 ? { version: submission.version }
                 : undefined,
               hasCompletion: !!completion,
-            }),
-          )
+            });
+            ownItems = own.length;
+            return [...own, ...notice];
+          })
           .go();
 
         if (!canceled) {
@@ -400,6 +449,18 @@ export const submit = courseProcedure
         }
 
         const reasons = cancellationReasons(data);
+        // Nothing of the submission itself failed: the day's marker was
+        // created by another request, or the notice's items were in the way.
+        const own = reasons.slice(0, ownItems);
+        if (
+          notice.length > 0 &&
+          !hasFailedCondition(own) &&
+          !hasTransactionConflict(own) &&
+          (hasFailedCondition(reasons) || hasTransactionConflict(reasons))
+        ) {
+          withNotice = false;
+          continue;
+        }
         if (!hasFailedCondition(reasons) && !hasTransactionConflict(reasons)) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
