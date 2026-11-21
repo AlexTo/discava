@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import {
   FREE_PREVIEW_COOKIE_LIFETIME_SECONDS,
   manifestNonce,
+  playableManifest,
+  playableVersion,
   previewManifestNonce,
   RETIRED_VERSION_DELAY_MINUTES,
   SIGNED_COOKIE_LIFETIME_SECONDS,
@@ -56,6 +58,70 @@ describe('previewManifestNonce', () => {
     ).toBeUndefined();
     expect(
       previewManifestNonce('courses/c1/preview/master.m3u8'),
+    ).toBeUndefined();
+  });
+});
+
+const NEW = 'item-1.mp4';
+const OLD = 'item-1/old/master.m3u8';
+const READY = 'item-1/new/master.m3u8';
+
+describe('playableManifest', () => {
+  it.each([
+    ['a ready video', { status: 'ready', s3Key: READY }, READY],
+    [
+      'a video being replaced',
+      { status: 'pending', s3Key: NEW, previousS3Key: OLD },
+      OLD,
+    ],
+    [
+      'a failed replacement',
+      { status: 'failed', s3Key: NEW, previousS3Key: OLD },
+      OLD,
+    ],
+    [
+      'a first upload still transcoding',
+      { status: 'pending', s3Key: NEW },
+      undefined,
+    ],
+  ])('for %s', (_, item, expected) => {
+    expect(playableManifest(item)).toBe(expected);
+  });
+});
+
+describe('playableVersion', () => {
+  const key = (nonce: string) =>
+    `courses/c/modules/m/lessons/l/content-items/item-1/${nonce}/master.m3u8`;
+
+  it('gives the own manifest and its nonce for a ready video', () => {
+    expect(playableVersion({ status: 'ready', s3Key: key('n2') })).toEqual({
+      manifest: key('n2'),
+      versionId: 'n2',
+    });
+  });
+
+  it('gives the previous version while a replacement transcodes or failed', () => {
+    for (const status of ['pending', 'failed']) {
+      expect(
+        playableVersion({
+          status,
+          s3Key: 'item-1.mp4',
+          previousS3Key: key('n1'),
+        }),
+      ).toEqual({ manifest: key('n1'), versionId: 'n1' });
+    }
+  });
+
+  it('is undefined with nothing to play', () => {
+    expect(
+      playableVersion({ status: 'pending', s3Key: 'item-1.mp4' }),
+    ).toBeUndefined();
+    expect(playableVersion({})).toBeUndefined();
+  });
+
+  it('is undefined when the manifest has no nonce folder', () => {
+    expect(
+      playableVersion({ status: 'ready', s3Key: 'item-1/new/master.m3u8' }),
     ).toBeUndefined();
   });
 });

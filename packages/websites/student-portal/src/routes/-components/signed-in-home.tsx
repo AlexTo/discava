@@ -95,8 +95,12 @@ export function SignedInHome() {
 
   if (enrolmentsQuery.isPending) {
     return (
-      <main className="mx-auto flex w-full max-w-7xl justify-center px-6 py-24 lg:px-8">
-        <Spinner />
+      <main
+        className="mx-auto flex w-full max-w-7xl items-center justify-center gap-3 px-6 py-24 text-sm text-muted-foreground lg:px-8"
+        role="status"
+      >
+        <Spinner role="presentation" aria-hidden="true" />
+        Loading…
       </main>
     );
   }
@@ -114,7 +118,11 @@ export function SignedInHome() {
   return (
     <main className="mx-auto w-full max-w-7xl space-y-8 px-6 pt-6 pb-10 lg:px-8">
       {enrolmentsQuery.isError ? (
-        <ErrorAlert type="error" header="Couldn't load your courses">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load your courses"
+          onRetry={() => enrolmentsQuery.refetch()}
+        >
           {apiErrorMessage(enrolmentsQuery.error)}
         </ErrorAlert>
       ) : null}
@@ -156,7 +164,11 @@ export function SignedInHome() {
             <Spinner />
           </div>
         ) : newCoursesQuery.isError ? (
-          <ErrorAlert type="error" header="Couldn't load courses">
+          <ErrorAlert
+            type="error"
+            header="Couldn't load courses"
+            onRetry={() => newCoursesQuery.refetch()}
+          >
             {apiErrorMessage(newCoursesQuery.error)}
           </ErrorAlert>
         ) : newCourses.length === 0 ? (

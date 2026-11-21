@@ -28,7 +28,9 @@ const SAMPLE = [
   record('INSERT', 'NewImage', 'itemCompletion'),
   record('MODIFY', 'NewImage', 'lesson'),
   record('MODIFY', 'NewImage', 'module'),
+  record('INSERT', 'NewImage', 'contentItem'),
   record('MODIFY', 'NewImage', 'contentItem'),
+  record('REMOVE', 'OldImage', 'contentItem'),
   record('INSERT', 'NewImage', 'course'),
   record('MODIFY', 'NewImage', 'course'),
   record('REMOVE', 'OldImage', 'course'),
@@ -117,6 +119,33 @@ describe('featuresFor', () => {
     ]);
   });
 
+  it('routes a contentItem MODIFY to transcript indexing and the feature it reached before', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'contentItem'))).toEqual([
+      'progress-recalculation',
+      'transcript-indexing',
+    ]);
+    expect(featuresFor(record('INSERT', 'NewImage', 'contentItem'))).toEqual([
+      'transcript-indexing',
+    ]);
+    expect(featuresFor(record('REMOVE', 'OldImage', 'contentItem'))).toEqual([
+      'progress-recalculation',
+      'transcript-indexing',
+    ]);
+  });
+
+  it('leaves the routing of a lesson, course and enrolment record unchanged', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'lesson'))).toEqual([
+      'progress-recalculation',
+    ]);
+    expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
+      'progress-recalculation',
+      'search-indexing',
+    ]);
+    expect(featuresFor(record('INSERT', 'NewImage', 'enrolment'))).toEqual([
+      'analytics-update',
+    ]);
+  });
+
   it('routes a course rating insert or modify to search indexing only', () => {
     for (const eventName of ['INSERT', 'MODIFY']) {
       expect(
@@ -168,6 +197,24 @@ describe('featuresFor', () => {
       ]);
     }
     expect(featuresFor(record('REMOVE', 'OldImage', 'order'))).toEqual([]);
+  });
+
+  it('routes a changed default caption track to caption translation', () => {
+    const video = (tracks: unknown[]) => ({
+      __edb_e__: { S: 'contentItem' },
+      captionTracks: { L: tracks },
+    });
+    expect(
+      featuresFor({
+        eventName: 'MODIFY',
+        dynamodb: {
+          OldImage: video([]),
+          NewImage: video([
+            { M: { trackId: { S: 't' }, language: { S: 'en-US' } } },
+          ]),
+        },
+      } as never),
+    ).toContain('caption-translation');
   });
 
   it('routes a lesson MODIFY that only sets freePreview to progress recalculation alone', () => {

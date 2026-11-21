@@ -5,6 +5,7 @@
 
 export * from './core-api-page-renderer.js';
 export * from './events-analytics-update.js';
+export * from './events-caption-translation.js';
 export * from './events-certificate-reminder.js';
 export * from './events-earnings-recording.js';
 export * from './events-notification-delivery.js';
@@ -21,3 +22,4 @@ export * from './events-transcode-cleanup.js';
 export * from './events-transcode-complete.js';
 export * from './events-transcode-reconciler.js';
 export * from './events-transcribe-complete.js';
+export * from './events-transcript-indexing.js';

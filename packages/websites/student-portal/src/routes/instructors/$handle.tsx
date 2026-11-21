@@ -10,12 +10,12 @@ import {
 } from '@discava/common-shadcn/components/ui/avatar';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
-import { useEffect } from 'react';
 import { useCoreApi } from '../../api';
 import { CourseCard } from '../../components/course-card';
 import type { DisplayCourse } from '../../lib/course-display';
@@ -69,11 +69,7 @@ function RouteComponent() {
   );
   const profile = profileQuery.data;
 
-  useEffect(() => {
-    if (profile) {
-      document.title = profile.displayName;
-    }
-  }, [profile]);
+  usePageTitle(profile?.displayName ?? 'Instructor');
 
   const notFound =
     (profileQuery.error as { data?: { code?: string } } | null)?.data?.code ===
@@ -88,17 +84,12 @@ function RouteComponent() {
       ) : notFound ? (
         <NotFound />
       ) : profileQuery.isError || !profile ? (
-        <ErrorAlert type="error" header="Couldn't load this profile">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load this profile"
+          onRetry={() => profileQuery.refetch()}
+        >
           <p>{apiErrorMessage(profileQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => profileQuery.refetch()}
-          >
-            Try again
-          </Button>
         </ErrorAlert>
       ) : (
         <>

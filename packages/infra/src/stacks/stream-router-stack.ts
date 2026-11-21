@@ -5,24 +5,28 @@
 import {
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsCaptionTranslation,
   EventsCertificateReminder,
   EventsEarningsRecording,
   EventsNotificationDelivery,
   EventsProgressRecalculation,
   EventsSearchIndexing,
   EventsStreamRouter,
+  EventsTranscriptIndexing,
+  LessonMediaBucket,
   RuntimeConfig,
   SearchCollection,
   StreamRouter,
   suppressRules,
 } from '@discava/common-constructs';
 import type {
+  CaptionTranslationSettings,
   NotificationsComponentConfig,
   PayoutSettings,
   StreamRouterComponentConfig,
 } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps, Stage } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import type { Function } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
@@ -37,6 +41,8 @@ export interface StreamRouterStackProps extends StackProps {
   readonly streamRouter?: StreamRouterComponentConfig;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** Holds the caption files the transcript indexer reads and the caption translation function reads and writes. */
+  readonly lessonMediaBucket: LessonMediaBucket;
   /** Sender and SES identity for notification emails. @default no sender, no SES access */
   readonly notifications?: NotificationsComponentConfig;
   /** Signs the unsubscribe links the delivery function puts in each email. */
@@ -47,14 +53,16 @@ export interface StreamRouterStackProps extends StackProps {
   readonly coreApiUrl: string;
   /** The stage's fee and hold, which earnings recording applies to each sale. */
   readonly payouts: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
+  /** The stage's caption translation settings. @default translation on, up to nine languages a course */
+  readonly captionTranslation?: CaptionTranslationSettings;
 }
 
 /**
  * The only reader of the core table's stream and everything it feeds: the
  * router Lambda, one queue (with a failure queue and an alarm) per registered
  * feature in core-table's `STREAM_FEATURES`, and the feature handlers those
- * queues invoke (progress recalculation, search indexing, analytics, earnings
- * recording and notification delivery). Kept apart from CoreApi so a feature's queues and
+ * queues invoke (progress recalculation, search indexing, transcript indexing,
+ * analytics, earnings recording and notification delivery). Kept apart from CoreApi so a feature's queues and
  * handler don't count against that stack's resource limit. Depends on Data,
  * and on Websites and CoreApi for the addresses notification emails link to.
  */
@@ -68,11 +76,13 @@ export class StreamRouterStack extends Stack {
       streamRouter: streamRouterConfig,
       coreTable,
       searchCollection,
+      lessonMediaBucket,
       notifications,
       notificationUnsubscribeSecret,
       portalUrls,
       coreApiUrl,
       payouts,
+      captionTranslation,
       ...props
     }: StreamRouterStackProps,
   ) {
@@ -89,6 +99,11 @@ export class StreamRouterStack extends Stack {
         coreTable,
         searchCollection,
       ),
+      'transcript-indexing': this.createTranscriptIndexingLambda(
+        coreTable,
+        searchCollection,
+        lessonMediaBucket,
+      ),
       'analytics-update': this.createAnalyticsUpdateLambda(coreTable),
       'notification-delivery': this.createNotificationDeliveryLambda(
         coreTable,
@@ -101,7 +116,18 @@ export class StreamRouterStack extends Stack {
         coreTable,
         payouts,
       ),
+      'caption-translation': this.createCaptionTranslationLambda(
+        coreTable,
+        lessonMediaBucket,
+      ),
     };
+
+    // One object under one key: the AppConfig reader treats a falsy value as
+    // missing, and \`enabled: false\` must be readable.
+    RuntimeConfig.ensure(this).set('captionTranslation', 'Settings', {
+      enabled: captionTranslation?.enabled ?? true,
+      maxLanguagesPerCourse: captionTranslation?.maxLanguagesPerCourse ?? 9,
+    });
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
       table: coreTable.table,
@@ -214,6 +240,24 @@ export class StreamRouterStack extends Stack {
     return indexing;
   }
 
+  // The single writer of the transcripts index, run from its feature's queue.
+  // The messages only say which video items changed: it reads each one, its
+  // lesson and its module from the table, and the caption files from the
+  // lesson media bucket, to see what to index. It reads the table and the
+  // caption files and writes only the search collection.
+  private createTranscriptIndexingLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+    lessonMediaBucket: LessonMediaBucket,
+  ) {
+    const indexing = new EventsTranscriptIndexing(this, 'TranscriptIndexing');
+    this.grantAppConfig(indexing);
+    coreTable.grantReadData(indexing);
+    searchCollection.grantWrite(indexing.role!);
+    lessonMediaBucket.grantRead(indexing);
+    return indexing;
+  }
+
   // The single writer of the instructor dashboard's analytics aggregates, run
   // from its feature's queue. It reads no other record: each change carries
   // what it adds, so it only writes the table.
@@ -240,6 +284,40 @@ export class StreamRouterStack extends Stack {
     );
     recording.addEnvironment('PAYOUT_HOLD_DAYS', String(payouts.holdDays));
     return recording;
+  }
+
+  // Translates each video's default caption track into its course's caption
+  // languages, run from its feature's queue. It reads and writes the table, and
+  // reads, puts and deletes caption files under the captions folders only: it
+  // never touches a video, a transcode or a transcription.
+  private createCaptionTranslationLambda(
+    coreTable: CoreTable,
+    lessonMediaBucket: LessonMediaBucket,
+  ) {
+    const translation = new EventsCaptionTranslation(
+      this,
+      'CaptionTranslation',
+    );
+    this.grantAppConfig(translation);
+    coreTable.grantReadWriteData(translation);
+    // A caption file's key is courses/<id>/.../<nonce>/captions/<track>.vtt;
+    // IAM's * spans slashes.
+    const captionFiles = 'courses/*/captions/*';
+    lessonMediaBucket.grantRead(translation, captionFiles);
+    lessonMediaBucket.grantPut(translation, captionFiles);
+    lessonMediaBucket.grantDelete(translation, captionFiles);
+    translation.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['translate:TranslateText'],
+        // TranslateText names no resource to scope to.
+        resources: ['*'],
+      }),
+    );
+    translation.addEnvironment(
+      'STAGE_NAME',
+      Stage.of(this)?.stageName ?? 'unknown',
+    );
+    return translation;
   }
 
   // Fans a broadcast out to its course's students and emails each
@@ -273,7 +351,11 @@ export class StreamRouterStack extends Stack {
         notifications.fromAddress,
       );
     }
-    if (notifications?.sesIdentity) {
+    if (notifications?.sesIdentity && notifications.fromAddress) {
+      // SES authorises a send against the sender's identity and, while the
+      // account is in the SES sandbox, against each recipient's verified
+      // identity too, so the grant covers every identity in the account and
+      // the condition pins the sender to the configured address.
       delivery.addToRolePolicy(
         new PolicyStatement({
           actions: ['ses:SendEmail'],
@@ -281,9 +363,12 @@ export class StreamRouterStack extends Stack {
             this.formatArn({
               service: 'ses',
               resource: 'identity',
-              resourceName: notifications.sesIdentity,
+              resourceName: '*',
             }),
           ],
+          conditions: {
+            StringEquals: { 'ses:FromAddress': notifications.fromAddress },
+          },
         }),
       );
     }

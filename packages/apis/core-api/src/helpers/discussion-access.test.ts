@@ -78,6 +78,16 @@ describe('requireDiscussionAccess', () => {
     });
   });
 
+  it('refuses a student with no enrolment for a lesson that is an open preview, as for any lesson', async () => {
+    records.enrolment = null;
+    records.course = { courseId: 'c1', status: 'published', priceAmount: 4900 };
+    records.lesson = { ...shown, kind: 'lesson', freePreview: true };
+    await expect(run()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Enrol in the course to view it',
+    });
+  });
+
   it('refuses a dropped student', async () => {
     records.enrolment = { status: 'dropped' };
     await expect(run()).rejects.toMatchObject({ code: 'FORBIDDEN' });

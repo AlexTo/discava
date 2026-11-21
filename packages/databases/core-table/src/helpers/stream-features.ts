@@ -7,6 +7,10 @@ import {
   matchesAnalyticsStreamFilters,
 } from './analytics-stream.js';
 import {
+  CAPTION_TRANSLATION_STREAM_FILTERS,
+  matchesCaptionTranslationStreamFilters,
+} from './caption-translation-stream.js';
+import {
   EARNINGS_STREAM_FILTERS,
   matchesEarningsStreamFilters,
 } from './earnings-stream.js';
@@ -22,6 +26,10 @@ import {
   matchesSearchStreamFilters,
   SEARCH_STREAM_FILTERS,
 } from './search-stream.js';
+import {
+  matchesTranscriptStreamFilters,
+  TRANSCRIPT_STREAM_FILTERS,
+} from './transcript-stream.js';
 
 /** Which records of the core table's stream a feature reacts to. */
 export interface StreamFilter {
@@ -106,6 +114,27 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     // mapping's minimum.
     maxConcurrency: 2,
   },
+  {
+    name: 'transcript-indexing',
+    filters: TRANSCRIPT_STREAM_FILTERS,
+    handler: 'transcript-indexing',
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // The event source mapping's minimum. Two batches can still sync the same
+    // item at once; syncItemTranscripts' re-check (step 5) makes the one that
+    // finishes last write the newest state.
+    maxConcurrency: 2,
+  },
+  {
+    name: 'caption-translation',
+    filters: CAPTION_TRANSLATION_STREAM_FILTERS,
+    handler: 'caption-translation',
+    // Small batches: a video's translation can take minutes.
+    batch: { maxRecords: 5, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // The event source mapping's minimum.
+    maxConcurrency: 2,
+  },
 ];
 
 // The features with their own filter module keep their own matchers, so they stay the one
@@ -117,6 +146,8 @@ const MATCHERS: Readonly<Record<string, Matcher>> = {
   'analytics-update': matchesAnalyticsStreamFilters,
   'notification-delivery': matchesNotificationStreamFilters,
   'earnings-recording': matchesEarningsStreamFilters,
+  'transcript-indexing': matchesTranscriptStreamFilters,
+  'caption-translation': matchesCaptionTranslationStreamFilters,
 };
 
 const matchesFilters = (

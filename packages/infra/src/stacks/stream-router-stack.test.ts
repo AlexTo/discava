@@ -43,6 +43,63 @@ describe('search indexing (#53)', () => {
   });
 });
 
+describe('transcript indexing', () => {
+  const template = synth({})('StreamRouter');
+  const statements = Object.values(
+    template.findResources('AWS::IAM::Policy', {
+      Properties: {
+        Roles: [
+          { Ref: Match.stringLikeRegexp('^TranscriptIndexingServiceRole') },
+        ],
+      },
+    }),
+  ).flatMap(
+    (policy) =>
+      (
+        policy as {
+          Properties: {
+            PolicyDocument: {
+              Statement: { Action: string | string[]; Resource: unknown }[];
+            };
+          };
+        }
+      ).Properties.PolicyDocument.Statement,
+  );
+  const actions = statements.flatMap((statement) => [statement.Action].flat());
+
+  // It reads the table (the item, its lesson and module) and the caption
+  // files, and writes only the search collection.
+  it('lets the function read the table and the lesson media bucket, write the search collection, and write no table item', () => {
+    expect(actions).toContain('dynamodb:GetItem');
+    expect(actions).toContain('s3:GetObject*');
+    expect(actions).toContain('aoss:APIAccessAll');
+    for (const action of [
+      'dynamodb:PutItem',
+      'dynamodb:UpdateItem',
+      'dynamodb:DeleteItem',
+      'dynamodb:BatchWriteItem',
+    ]) {
+      expect(actions).not.toContain(action);
+    }
+  });
+
+  it('does not let the function write or delete caption files', () => {
+    expect(
+      actions.filter((action) => /^s3:(Put|Delete|Abort)/.test(action)),
+    ).toEqual([]);
+  });
+
+  it('has a function, a queue, a failure queue and an alarm for the feature', () => {
+    expect(
+      Object.keys(template.findResources('AWS::Lambda::Function')).some((id) =>
+        id.startsWith('TranscriptIndexing'),
+      ),
+    ).toBe(true);
+    const queues = JSON.stringify(template.findResources('AWS::SQS::Queue'));
+    expect(queues).toContain('TranscriptIndexing');
+  });
+});
+
 describe('runtime config (#619)', () => {
   it('gives every function that uses the core table the AppConfig application id and read access', () => {
     expect(tableFunctionsMissingAppConfig(synth({})('StreamRouter'))).toEqual(
@@ -141,5 +198,102 @@ describe('certificate reminder', () => {
     );
     expect(actions).toContain('dynamodb:PutItem');
     expect(actions.some((action) => action.startsWith('ses:'))).toBe(false);
+  });
+});
+
+describe('caption translation', () => {
+  it('publishes the settings it was given, and the defaults without any', () => {
+    const published = (
+      components: Parameters<typeof synth>[0],
+    ): Record<string, unknown>[] =>
+      Object.values(
+        synth(components)('RuntimeConfig').findResources(
+          'AWS::AppConfig::HostedConfigurationVersion',
+        ),
+      ).map((resource) => resource as Record<string, unknown>);
+    const content = (components: Parameters<typeof synth>[0]) =>
+      JSON.stringify(published(components));
+    expect(
+      content({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
+    ).toMatch(/captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
+    expect(content({})).toMatch(
+      /captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*9/,
+    );
+  });
+
+  const stack = synth({});
+  const template = () => stack('StreamRouter');
+  const statements = () =>
+    Object.values(template().findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        (
+          policy as { Properties: { Roles: { Ref: string }[] } }
+        ).Properties.Roles.some(({ Ref }) =>
+          Ref.startsWith('CaptionTranslationServiceRole'),
+        ),
+      )
+      .flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                PolicyDocument: {
+                  Statement: { Action: string | string[]; Resource: unknown }[];
+                };
+              };
+            }
+          ).Properties.PolicyDocument.Statement,
+      );
+  const actions = () => statements().flatMap(({ Action }) => [Action].flat());
+
+  it('allows Amazon Translate and nothing of Comprehend, Transcribe or MediaConvert', () => {
+    expect(actions()).toContain('translate:TranslateText');
+    for (const prefix of ['comprehend:', 'transcribe:', 'mediaconvert:']) {
+      expect(actions().some((action) => action.startsWith(prefix))).toBe(false);
+    }
+  });
+
+  it('allows S3 object actions only on the captions pattern', () => {
+    const s3 = statements().filter(({ Action }) =>
+      [Action].flat().some((action) => action.startsWith('s3:')),
+    );
+    expect(s3.length).toBeGreaterThan(0);
+    const objectResources = s3
+      .flatMap(({ Resource }) => [Resource].flat())
+      .map((resource) => JSON.stringify(resource))
+      .filter((resource) => resource.includes('/'));
+    expect(objectResources.length).toBeGreaterThan(0);
+    for (const resource of objectResources) {
+      expect(resource).toContain('courses/*/captions/*');
+    }
+    const s3Actions = s3.flatMap(({ Action }) => [Action].flat());
+    expect(s3Actions).toEqual(
+      expect.arrayContaining(['s3:PutObject', 's3:DeleteObject*']),
+    );
+  });
+
+  it('has the feature queue, its failure queue and its alarm', () => {
+    const ids = (type: string) => Object.keys(template().findResources(type));
+    const queues = ids('AWS::SQS::Queue');
+    expect(queues.some((id) => id.includes('CaptionTranslationQueue'))).toBe(
+      true,
+    );
+    expect(queues.some((id) => id.includes('CaptionTranslationFailures'))).toBe(
+      true,
+    );
+    expect(
+      ids('AWS::CloudWatch::Alarm').some((id) =>
+        id.includes('CaptionTranslationFailuresAlarm'),
+      ),
+    ).toBe(true);
+  });
+
+  it('sets the stage name in the function environment', () => {
+    template().hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: { STAGE_NAME: 'discava-test' },
+      },
+      Timeout: 900,
+    });
   });
 });

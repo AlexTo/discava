@@ -41,7 +41,8 @@ type OidcSettings =
 // output; ACM_DESCRIBE_<certificate id with underscores> answers for that one
 // certificate), tab-separated like --output text. Like ACM, list-certificates only
 // returns RSA_1024/RSA_2048 certificates unless --includes keyTypes says
-// otherwise.
+// otherwise. SES reports the identity named by SES_VERIFIED_IDENTITY as
+// verified for sending, and every other identity as missing.
 const AWS_STUB = `#!/usr/bin/env bash
 echo "aws $*" >> "$OUT/calls.log"
 case "$1 $2" in
@@ -68,6 +69,15 @@ case "$1 $2" in
     describe="\${!per_certificate:-\${ACM_DESCRIBE:-}}"
     [[ -n "$describe" ]] || { echo "ResourceNotFoundException" >&2; exit 254; }
     printf '%b\\n' "$describe"; exit;;
+  "sesv2 get-email-identity")
+    for arg in "$@"; do
+      [[ "\${previous:-}" == --email-identity ]] && identity="$arg"
+      previous="$arg"
+    done
+    if [[ -n "\${SES_VERIFIED_IDENTITY:-}" && "$identity" == "$SES_VERIFIED_IDENTITY" ]]; then
+      echo True; exit
+    fi
+    echo "NotFoundException" >&2; exit 254;;
   "configure get") echo "ap-southeast-2"; exit;;
   "configure list-profiles") exit;;
   "ssm get-parameter") exit 0;;
@@ -673,6 +683,27 @@ describe.concurrent('setup-stage.sh permissions boundary', {
     );
   });
 
+  it('lets the notification delivery function send email through SES', async () => {
+    // Without it the role's own ses:SendEmail grant is capped to nothing and
+    // every notification email is refused.
+    const { status, policyDocument } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: 'ses:SendEmail',
+        Resource: 'arn:aws:ses:ap-southeast-2:111122223333:identity/*',
+      }),
+    );
+  });
+
   it("lets the stage's functions use the search collection's data plane", async () => {
     // Every function's role is capped by the boundary, so without this the
     // indexing Lambda, the search API and the index-sync handler are denied
@@ -691,6 +722,28 @@ describe.concurrent('setup-stage.sh permissions boundary', {
         Effect: 'Allow',
         Action: 'aoss:APIAccessAll',
         Resource: 'arn:aws:aoss:ap-southeast-2:111122223333:collection/*',
+      }),
+    );
+  });
+
+  it('lets the caption-translation function call Amazon Translate', async () => {
+    // TranslateText has no resource to scope to, and without it every
+    // translation fails with AccessDenied however the function's own policy
+    // reads.
+    const { status, policyDocument } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining(['translate:TranslateText']),
+        Resource: '*',
       }),
     );
   });
@@ -963,6 +1016,164 @@ describe.concurrent('setup-stage.sh custom domains', {
         ),
         expect.stringContaining(
           'gh variable delete DISCAVA_DEVELOPMENT_INFRA_LESSON_MEDIA_COOKIE_DOMAIN',
+        ),
+      ]),
+    );
+  });
+
+  it("sends notification emails from the root when it's a verified SES identity", async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: 'example.com',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toEqual(
+      expect.arrayContaining([
+        set('NOTIFICATIONS_FROM_ADDRESS', 'notifications@example.com'),
+        set('NOTIFICATIONS_SES_IDENTITY', 'example.com'),
+      ]),
+    );
+  });
+
+  it('warns and removes the notification variables when the root is no verified SES identity', async () => {
+    const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: 'other.example.org',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'notifications@example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'example.com',
+    });
+
+    expect(status).toBe(0);
+    expect(output).toContain(
+      "Notification email: example.com isn't a verified SES identity in ap-southeast-2",
+    );
+    expect(
+      ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+    ).toEqual([
+      expect.stringContaining(
+        'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS',
+      ),
+      expect.stringContaining(
+        'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY',
+      ),
+    ]);
+  });
+
+  it.each([
+    ['a verified root', 'example.com'],
+    ['a root that is no SES identity', 'mail.example.com'],
+  ])(
+    "keeps a hand-set sender in the script's own format, on another identity, with %s",
+    async (_, verified) => {
+      // A sending subdomain is a usual SES setup, and its pair has the same
+      // notifications@<identity> shape the script uses for the root.
+      const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
+        DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+        ...EXAMPLE_COM_CERTIFICATES,
+        SES_VERIFIED_IDENTITY: verified,
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+          'example.com,www.example.com',
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+          'notifications@mail.example.com',
+        GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+          'mail.example.com',
+      });
+
+      expect(status).toBe(0);
+      expect(output).toContain(
+        'Notification email: keeping the sender set by hand (notifications@mail.example.com, SES identity mail.example.com)',
+      );
+      expect(
+        ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+      ).toEqual([]);
+    },
+  );
+
+  it('moves its own sender to a new root', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: 'example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'old.example.net',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'notifications@old.example.net',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'old.example.net',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toEqual(
+      expect.arrayContaining([
+        set('NOTIFICATIONS_FROM_ADDRESS', 'notifications@example.com'),
+        set('NOTIFICATIONS_SES_IDENTITY', 'example.com'),
+      ]),
+    );
+  });
+
+  it.each([
+    ['a verified root', 'example.com'],
+    ['a root that is no SES identity', 'other.example.org'],
+  ])('keeps a sender set by hand on re-run, with %s', async (_, verified) => {
+    const { status, output, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: 'example.com',
+      ...EXAMPLE_COM_CERTIFICATES,
+      SES_VERIFIED_IDENTITY: verified,
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'ops@example.org',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'ops@example.org',
+    });
+
+    expect(status).toBe(0);
+    expect(output).toContain(
+      'Notification email: keeping the sender set by hand (ops@example.org, SES identity ops@example.org)',
+    );
+    expect(
+      ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+    ).toEqual([]);
+  });
+
+  it('keeps a sender set by hand when the root is left blank', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'alerts@example.org',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'example.org',
+    });
+
+    expect(status).toBe(0);
+    expect(
+      ghVariableCalls.filter((call) => call.includes('NOTIFICATIONS')),
+    ).toEqual([]);
+  });
+
+  it('removes the notification variables when the root is left blank', async () => {
+    const { status, ghVariableCalls } = await runSetup(GH_READY, {
+      DISCAVA_DEVELOPMENT_ROOT_DOMAIN: ' ',
+      // The root the previous run stored, whose sender the script set.
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_STUDENT_PORTAL_DOMAIN_NAMES:
+        'example.com,www.example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS:
+        'notifications@example.com',
+      GH_VARIABLE_DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY:
+        'example.com',
+    });
+
+    expect(status).toBe(0);
+    expect(ghVariableCalls).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_FROM_ADDRESS',
+        ),
+        expect.stringContaining(
+          'gh variable delete DISCAVA_DEVELOPMENT_INFRA_NOTIFICATIONS_SES_IDENTITY',
         ),
       ]),
     );

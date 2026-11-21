@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Route } from '@playwright/test';
+import {
+  apiUser,
+  createLongTitledCourseViaApi,
+  createPublishedQuizCourseViaApi,
+} from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -18,6 +24,7 @@ import {
   enrolAndLand,
   expectCourseCompleted,
   openCourse,
+  startFirstLesson,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -49,6 +56,14 @@ test('an instructor publishes a course, and a student completes it', async ({
 
   await test.step('a new student finds the course and enrols', async () => {
     await openCourse(student, course);
+    // Following the search result's link moved focus to the page's heading.
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
+    await screenshot(student, 'course page after following a link');
+    await student.goBack();
+    await expect(student).toHaveTitle(`Search: ${course} · Discava`);
+    await student.goForward();
+    await expect(student).toHaveTitle(`${course} · Discava`);
     await enrol(student, newUser('Sam', ['student']));
     await expect(
       student.getByText('0% complete', { exact: true }),
@@ -61,8 +76,13 @@ test('an instructor publishes a course, and a student completes it', async ({
       student.getByRole('heading', { name: 'Reading one' }),
     ).toBeVisible();
     await expect(student.getByText(reading)).toBeVisible();
+    await expect(student).toHaveTitle(`Lesson one · ${course} · Discava`);
+    await screenshot(student, 'lesson page with its own title');
     await student.getByRole('button', { name: 'Mark as done' }).click();
     await expect(student.getByText('1/1 lessons complete')).toBeVisible();
+    await student.goBack();
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await student.goForward();
   });
 
   await test.step('the course shows as completed', async () => {
@@ -150,4 +170,57 @@ test('enrolling in a course with no lessons lands on the course home', async ({
   await expect(student.getByText("You're enrolled in")).toBeVisible();
   await expect(student.getByText('No lessons yet')).toBeVisible();
   await screenshot(student, 'landed-on-course-home');
+});
+
+// The lesson is the wide column: at desktop width it is at least 1.8 times the
+// outline's width, however long the module and lesson titles are.
+test('the lesson column is wider than the outline', async ({ page }) => {
+  const title = uniqueName('E2E wide lesson course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { lessonTitles } = await createLongTitledCourseViaApi(
+    instructor,
+    title,
+  );
+
+  await openCourse(page, title);
+  await enrolAndLand(page, newUser('Wes', ['student']));
+  await expect(
+    page.getByRole('heading', { level: 2, name: lessonTitles[0] }),
+  ).toBeVisible();
+
+  const outline = await page.locator('aside').boundingBox();
+  const lesson = await page.locator('main section').first().boundingBox();
+  expect(outline).not.toBeNull();
+  expect(lesson).not.toBeNull();
+  expect(lesson?.width ?? 0).toBeGreaterThanOrEqual(
+    (outline?.width ?? Number.POSITIVE_INFINITY) * 1.8,
+  );
+  await screenshot(page, 'lesson columns at desktop width');
+});
+
+// A request that gets no answer says so in a sentence, and "Try again" asks
+// for it again without a reload.
+test('a quiz that fails to load offers to try again', async ({ page }) => {
+  const title = uniqueName('E2E quiz load error course');
+  await createPublishedQuizCourseViaApi(
+    await apiUser('Ivy', ['instructor']),
+    title,
+  );
+  await openCourse(page, title);
+  await enrol(page, newUser('Wes', ['student']));
+
+  const fail = async (route: Route) => route.abort('connectionfailed');
+  await page.route('**/quiz.view*', fail);
+  await startFirstLesson(page);
+
+  await expect(
+    page.getByText(
+      "Couldn't reach Discava. Check your connection and try again.",
+    ),
+  ).toBeVisible();
+  await screenshot(page, 'quiz load error with Try again');
+
+  await page.unroute('**/quiz.view*', fail);
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('button', { name: 'Start quiz' })).toBeVisible();
 });

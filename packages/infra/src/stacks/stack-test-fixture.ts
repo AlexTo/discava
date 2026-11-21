@@ -15,7 +15,8 @@ import {
 // Synthesizes the application with a stage's settings and returns each of
 // its stacks' templates.
 export const synth = (
-  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+  components: StageComponents &
+    Pick<ApplicationStageProps, 'payouts' | 'captionTranslation'>,
 ) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
@@ -75,7 +76,8 @@ export const actionsOf = (template: Template, rolePrefix: string) =>
 
 // Every stack in the stage, by name, with its synthesized template.
 export const stackTemplates = (
-  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+  components: StageComponents &
+    Pick<ApplicationStageProps, 'payouts' | 'captionTranslation'>,
 ) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },

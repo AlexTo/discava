@@ -20,6 +20,7 @@ import {
   writeCaptionsReady,
   writeCaptionTracks,
   writeCaptionTranslationOutcome,
+  writeTranslatedCaptionTracks,
 } from './caption-tracks';
 
 const NONCE = 'n1';
@@ -411,13 +412,25 @@ describe('target-aware writers', () => {
       rev: 2,
       nonce: 'n1',
     });
-    expect(calls.map((c) => c.entity)).toEqual([entity, entity, entity]);
+    await writeTranslatedCaptionTracks(entities as never, key, {
+      tracks: [],
+      rev: 2,
+      nonce: 'n1',
+    });
+    expect(calls.map((c) => c.entity)).toEqual([
+      entity,
+      entity,
+      entity,
+      entity,
+    ]);
     expect(calls.every((c) => c.ops[0][1] === key)).toBe(true);
     const sets = calls.map((c) => c.ops.find(([o]) => o === 'set')?.[1]);
     expect(sets).toEqual([
       { captionsStatus: 'failed' },
       { captionsStatus: 'ready' },
       { captionTracks: [], captionTracksRev: 3, captionsStatus: 'ready' },
+      // Translation never writes the captioning status.
+      { captionTracks: [], captionTracksRev: 3 },
     ]);
     expect(calls.every((c) => c.ops.some(([o]) => o === 'where'))).toBe(true);
     expect((await getCaptionRecord(entities as never, key))?.status).toBe(

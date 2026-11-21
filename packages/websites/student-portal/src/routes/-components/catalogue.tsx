@@ -86,9 +86,9 @@ export function Catalogue() {
       <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
               Browse courses for every goal.
-            </h2>
+            </h1>
             <p className="mt-4 text-muted-foreground">
               Choose a category, or search for a topic above, to find your next
               learning opportunity.
@@ -218,27 +218,22 @@ export function Catalogue() {
         </div>
       </section>
 
-      <footer id="terms" className="border-t px-6 py-8 lg:px-8">
+      <footer className="border-t px-6 py-8 lg:px-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 text-sm text-muted-foreground sm:flex-row">
           <p>© {new Date().getFullYear()} Discava. Learning, made clearer.</p>
           <nav aria-label="Footer navigation" className="flex gap-6">
-            <a
+            <Link
               className="transition-colors hover:text-foreground"
-              href="#features"
+              to="/"
+              hash="features"
             >
               About
-            </a>
+            </Link>
             <a
               className="transition-colors hover:text-foreground"
               href="mailto:support@discava.com"
             >
               Contact
-            </a>
-            <a
-              className="transition-colors hover:text-foreground"
-              href="#terms"
-            >
-              Terms
             </a>
           </nav>
         </div>

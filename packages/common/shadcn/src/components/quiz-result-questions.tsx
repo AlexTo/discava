@@ -65,24 +65,27 @@ export function ResultQuestions({
                       <li
                         key={option.optionId}
                         className={cn(
-                          'flex items-center gap-2',
+                          'flex items-start gap-2',
                           right && 'font-medium',
                         )}
                       >
                         {right ? (
                           <CircleCheck
-                            className="size-4 text-emerald-600"
+                            className="mt-0.5 size-4 shrink-0 text-emerald-600"
                             aria-hidden="true"
                           />
                         ) : (
-                          <span className="size-4" aria-hidden="true" />
+                          <span
+                            className="mt-0.5 size-4 shrink-0"
+                            aria-hidden="true"
+                          />
                         )}
                         {option.text}
                         {right ? (
                           <span className="sr-only">(correct answer)</span>
                         ) : null}
                         {chosen.has(option.optionId) ? (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                             (your answer)
                           </span>
                         ) : null}

@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { ResponsivePanel } from '@discava/common-shadcn/components/responsive-panel';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import {
@@ -13,7 +14,9 @@ import {
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { Link } from '@tanstack/react-router';
 import {
   ChevronDown,
@@ -32,6 +35,7 @@ import {
   type CoursePlayer,
   errorCode,
   lessonDueAt,
+  type PlayerCourse,
   type PlayerModule,
   useCoursePlayer,
 } from '../../../../hooks/use-course-player';
@@ -45,9 +49,11 @@ const count = (n: number, one: string, many: string) =>
 export function Unavailable({
   courseId,
   error,
+  onRetry,
 }: {
   courseId: string;
   error: unknown;
+  onRetry?: () => void;
 }) {
   const code = errorCode(error);
   if (code === 'FORBIDDEN') {
@@ -82,8 +88,12 @@ export function Unavailable({
         </>
       ) : (
         <div className="text-left">
-          <ErrorAlert type="error" header="Couldn't load this course">
-            {(error as Error | null)?.message ?? 'Something went wrong.'}
+          <ErrorAlert
+            type="error"
+            header="Couldn't load this course"
+            onRetry={onRetry}
+          >
+            {apiErrorMessage(error)}
           </ErrorAlert>
         </div>
       )}
@@ -111,32 +121,25 @@ export function CompletedWithNew({ count: n }: { count: number }) {
 }
 
 // The course's modules and lessons, each lesson ticked once complete. Every
-// module starts open; the current lesson is highlighted.
+// module starts open (which are closed is the layout's state, so it survives
+// the panel remounting between lessons); the current lesson is highlighted.
 function CourseOutline({
   courseId,
   modules,
   activeLessonId,
   isLessonComplete,
   newItemCount,
+  closedModuleIds,
+  toggle,
 }: {
   courseId: string;
   modules: PlayerModule[];
   activeLessonId?: string;
+  closedModuleIds: Set<string>;
+  toggle: (moduleId: string) => void;
   isLessonComplete: CoursePlayer['isLessonComplete'];
   newItemCount: CoursePlayer['newItemCount'];
 }) {
-  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
-    new Set(),
-  );
-  const toggle = (moduleId: string) =>
-    setClosedModuleIds((current) => {
-      const next = new Set(current);
-      if (!next.delete(moduleId)) {
-        next.add(moduleId);
-      }
-      return next;
-    });
-
   return (
     <nav aria-label="Course outline" className="space-y-3">
       {modules.map((module, moduleIndex) => {
@@ -263,24 +266,49 @@ function CourseOutline({
 export function CoursePlayerLayout({
   courseId,
   activeLessonId,
+  titleParts,
   children,
 }: {
   courseId: string;
   activeLessonId?: string;
+  /** The page's title parts once the course is known, else the fallback. */
+  titleParts: (course: PlayerCourse | undefined) => string[];
   children: (player: CoursePlayer) => ReactNode;
 }) {
   const player = useCoursePlayer(courseId);
   const { course, enrolment } = player;
+  usePageTitle(...titleParts(course));
+  const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const toggle = (moduleId: string) =>
+    setClosedModuleIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(moduleId)) {
+        next.add(moduleId);
+      }
+      return next;
+    });
 
   if (player.isPending) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl justify-center px-6 py-24 lg:px-8">
-        <Spinner />
+      <main
+        className="mx-auto flex w-full max-w-3xl items-center justify-center gap-3 px-6 py-24 text-sm text-muted-foreground lg:px-8"
+        role="status"
+      >
+        <Spinner role="presentation" aria-hidden="true" />
+        Loading…
       </main>
     );
   }
   if (!course) {
-    return <Unavailable courseId={courseId} error={player.error} />;
+    return (
+      <Unavailable
+        courseId={courseId}
+        error={player.error}
+        onRetry={player.retry}
+      />
+    );
   }
 
   // A lesson the course no longer lists ends the trail at the course.
@@ -310,7 +338,7 @@ export function CoursePlayerLayout({
       </div>
 
       <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="text-balance min-w-0 break-words text-2xl font-bold tracking-tight sm:text-3xl">
           {course.title}
         </h1>
         {enrolment ? (
@@ -338,15 +366,35 @@ export function CoursePlayerLayout({
         </div>
       ) : null}
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_2fr]">
-        <aside className="lg:sticky lg:top-20 lg:h-fit">
-          <CourseOutline
-            courseId={courseId}
-            modules={course.modules}
-            activeLessonId={activeLessonId}
-            isLessonComplete={player.isLessonComplete}
-            newItemCount={player.newItemCount}
-          />
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+        <aside className="min-w-0 lg:sticky lg:top-20 lg:h-fit">
+          <ResponsivePanel
+            // A new lesson closes the panel again on a phone.
+            key={activeLessonId}
+            label="Course outline"
+            summary={
+              activeLesson
+                ? activeLesson.title
+                : count(
+                    course.modules.reduce(
+                      (total, module) => total + module.lessons.length,
+                      0,
+                    ),
+                    'lesson',
+                    'lessons',
+                  )
+            }
+          >
+            <CourseOutline
+              courseId={courseId}
+              modules={course.modules}
+              activeLessonId={activeLessonId}
+              isLessonComplete={player.isLessonComplete}
+              newItemCount={player.newItemCount}
+              closedModuleIds={closedModuleIds}
+              toggle={toggle}
+            />
+          </ResponsivePanel>
         </aside>
         <section className="min-w-0">{children(player)}</section>
       </div>

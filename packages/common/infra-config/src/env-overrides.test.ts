@@ -37,6 +37,8 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_NOTIFICATIONS_SES_IDENTITY',
   'DISCAVA_TEST_STAGE_INFRA_PAYMENTS_DOMAIN_NAME',
   'DISCAVA_TEST_STAGE_INFRA_PAYMENTS_ENABLE_WAF',
+  'DISCAVA_TEST_STAGE_CAPTION_TRANSLATION_ENABLED',
+  'DISCAVA_TEST_STAGE_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE',
 ];
 
 afterEach(() => {
@@ -44,6 +46,21 @@ afterEach(() => {
 });
 
 describe('applyEnvOverrides', () => {
+  it('overrides the caption translation settings', () => {
+    process.env.DISCAVA_TEST_STAGE_CAPTION_TRANSLATION_ENABLED = 'false';
+    process.env.DISCAVA_TEST_STAGE_CAPTION_TRANSLATION_MAX_LANGUAGES_PER_COURSE =
+      '4';
+
+    expect(
+      applyEnvOverrides(STAGE, { captionTranslation: { enabled: true } })
+        .captionTranslation,
+    ).toEqual({ enabled: false, maxLanguagesPerCourse: 4 });
+  });
+
+  it('leaves captionTranslation unset without overrides', () => {
+    expect(applyEnvOverrides(STAGE, {}).captionTranslation).toBeUndefined();
+  });
+
   it('overrides the payments (Stripe webhook) component', () => {
     process.env.DISCAVA_TEST_STAGE_INFRA_PAYMENTS_DOMAIN_NAME =
       'payments.example.com';

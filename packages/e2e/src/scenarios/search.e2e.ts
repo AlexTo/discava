@@ -266,6 +266,26 @@ test('facets count the published courses under each filter', async ({
     await screenshot(page, 'level-beginner-selected');
   });
 
+  await test.step('toggling a filter by keyboard keeps the focus on it', async () => {
+    await open();
+    await expect(page.getByText('4 courses')).toBeVisible();
+    const beginner = count('Beginner (2)');
+    await beginner.focus();
+    await page.keyboard.press('Space');
+    await expect(page.getByText('2 courses')).toBeVisible();
+    await expect(count('Beginner (2)')).toBeChecked();
+    await expect(count('Beginner (2)')).toBeFocused();
+
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Space');
+    // The scope tag was checked from the start; with Beginner and the next
+    // checkbox that makes three, the last of them focused.
+    await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(3);
+    await expect(
+      page.getByRole('checkbox', { checked: true }).and(page.locator(':focus')),
+    ).toHaveCount(1);
+  });
+
   await test.step('two values of one facet are OR', async () => {
     await open({ levels: ['beginner', 'advanced'] });
     await expect(page.getByText('3 courses')).toBeVisible();

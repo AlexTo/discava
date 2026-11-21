@@ -4,6 +4,7 @@
  */
 
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -229,10 +230,108 @@ const breadcrumbs = async () =>
       crumb.querySelector('a')?.getAttribute('href'),
     ]);
 
-const outline = () =>
-  screen.findByRole('navigation', { name: 'Course outline' });
+// The outline sits in a closed panel below the lg breakpoint: open it first.
+const outline = async () => {
+  const trigger = await screen.findByRole('button', {
+    name: /^Course outline/,
+  });
+  if (trigger.getAttribute('aria-expanded') === 'false') {
+    await userEvent.click(trigger);
+  }
+  return screen.findByRole('navigation', { name: 'Course outline' });
+};
 const outlineLink = async (name: string) =>
   within(await outline()).getByRole('link', { name: new RegExp(name) });
+
+function Navigating() {
+  const [lessonId, setLessonId] = useState('lesson-1');
+  return (
+    <>
+      <button type="button" onClick={() => setLessonId('lesson-2')}>
+        Go to 2
+      </button>
+      <LessonPage courseId="course-1" lessonId={lessonId} />
+    </>
+  );
+}
+
+describe('the course outline panel', () => {
+  it('starts closed on a lesson, showing the lesson title', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers(),
+    });
+
+    const trigger = await screen.findByRole('button', {
+      name: /^Course outline/,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveTextContent('Lecture 2');
+    // Mounted but hidden below lg (jsdom has no layout, so check the class).
+    const panel = screen.getByRole('navigation', {
+      name: 'Course outline',
+      hidden: true,
+    }).parentElement;
+    expect(panel).toHaveClass('hidden');
+
+    await userEvent.click(trigger);
+    expect(await outlineLink('Lecture 2')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(await outlineLink('Lecture 1')).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes again when another lesson is chosen', async () => {
+    renderWithCoreApi(<Navigating />, { handlers: handlers() });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^Course outline/ }),
+    );
+    expect(
+      screen.getByRole('button', { name: /^Course outline/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to 2' }));
+    const trigger = await screen.findByRole('button', {
+      name: /^Course outline.*Lecture 2/,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('shows the lesson count on the course home', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+
+    expect(
+      await screen.findByRole('button', { name: /^Course outline/ }),
+    ).toHaveTextContent('2 lessons');
+  });
+
+  it('keeps long unbroken titles inside their columns', async () => {
+    const long = (word: string) => word.repeat(90).slice(0, 90);
+    const base = course();
+    base.title = long('c');
+    base.modules[0].title = long('m');
+    base.modules[0].lessons[0].title = long('l');
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-1" />, {
+      handlers: handlers({ 'course.view': () => base }),
+    });
+
+    const lesson = await screen.findByRole('heading', {
+      level: 2,
+      name: long('l'),
+    });
+    expect(lesson).toHaveClass('break-words');
+    expect(screen.getByText(`Module 1: ${long('m')}`)).toHaveClass(
+      'break-words',
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass(
+      'break-words',
+    );
+    expect(lesson.closest('section')).toHaveClass('min-w-0');
+  });
+});
 
 describe('CourseHome', () => {
   it('lists the outline and starts at the first lesson', async () => {
@@ -734,6 +833,36 @@ describe('LessonPage', () => {
     });
   });
 
+  it('links each step to its item on this lesson, moving focus there', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const matchMedia = vi.fn().mockReturnValue({ matches: false });
+    vi.stubGlobal('matchMedia', matchMedia);
+    const { user } = openLesson('lesson-1');
+
+    const steps = within(
+      await screen.findByRole('navigation', { name: 'Lesson steps' }),
+    );
+    const step = steps.getAllByRole('link')[0];
+    expect(step.getAttribute('href')).toMatch(
+      /^\/learn\/course-1\/lesson\/lesson-1#./,
+    );
+
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    expect(await item('Notes')).toBe(document.activeElement);
+
+    matchMedia.mockReturnValue({ matches: true });
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'auto',
+      block: 'start',
+    });
+  });
+
   it('says a video is still processing, without asking for its URL', async () => {
     const { calls } = openLesson('lesson-1', {
       'course.view': () =>
@@ -872,7 +1001,9 @@ describe('LessonPage', () => {
     await user.click(
       within(quiz).getByRole('button', { name: /Review answers/ }),
     );
-    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: 'Submit answers' }),
+    );
 
     expect(
       await within(quiz).findByText(/This attempt: 100%/),
@@ -924,7 +1055,9 @@ describe('LessonPage', () => {
     await user.click(
       within(quiz).getByRole('button', { name: /Review answers/ }),
     );
-    await user.click(within(quiz).getByRole('button', { name: 'Submit' }));
+    await user.click(
+      within(quiz).getByRole('button', { name: 'Submit answers' }),
+    );
 
     expect(
       await within(quiz).findByText('This quiz was updated'),
@@ -1189,5 +1322,67 @@ describe('the enrolled notice', () => {
     await act(() => router.navigate({ to: '/', state: { enrolled: true } }));
 
     expect(await screen.findByText(enrolledLine)).toBeInTheDocument();
+  });
+});
+
+describe('the page title and main heading', () => {
+  it('names the lesson and the course on a lesson, with one h1', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers(),
+    });
+
+    await screen.findByRole('heading', { name: 'Lecture 2', level: 2 });
+    expect(document.title).toBe('Lecture 2 · Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('says "Lesson" while the course loads and when it fails', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers({
+        'course.view': () => new Promise(() => {}),
+      }),
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+    expect(document.title).toBe('Lesson · Discava');
+    cleanup();
+
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers({
+        'course.view': () => {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+        },
+      }),
+    });
+    await screen.findByText(/Couldn't load this course/);
+    expect(document.title).toBe('Lesson · Discava');
+  });
+
+  it('has the course’s title alone for a lesson the course no longer lists', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="gone" />, {
+      handlers: handlers(),
+    });
+
+    await screen.findByRole('heading', {
+      name: 'This lesson has been removed by your instructor',
+      level: 2,
+    });
+    expect(document.title).toBe('Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('names the course on its home, "Course" while loading', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers({ 'course.view': () => new Promise(() => {}) }),
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading…');
+    expect(document.title).toBe('Course · Discava');
+    cleanup();
+
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+    await outlineLink('Lecture 1');
+    expect(document.title).toBe('Linear Algebra · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 });

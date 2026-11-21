@@ -245,6 +245,87 @@ export const createPublishedCourseViaApi = async (
   return { ...lesson, texts, quiz: { ...lesson, contentItemId: quizId } };
 };
 
+// A published course with one lesson holding a three-question quiz titled
+// "Keyboard quiz" (pass mark 50%, two attempts), built through instructor-api.
+export const createPublishedQuizCourseViaApi = async (
+  instructor: ApiUser,
+  title: string,
+) => {
+  const api = instructor.instructor;
+  const { courseId } = await api.course.create.mutate({ title });
+  const { moduleId } = await api.module.create.mutate({
+    courseId,
+    title: 'Module 1',
+  });
+  const { lessonId } = await api.lesson.create.mutate({
+    courseId,
+    moduleId,
+    title: 'Lesson 1',
+  });
+  const ids = ['q1', 'q2', 'q3'];
+  await api.contentItem.createQuiz.mutate({
+    courseId,
+    moduleId,
+    lessonId,
+    title: 'Keyboard quiz',
+    questions: ids.map((questionId, i) => ({
+      questionId,
+      kind: 'single' as const,
+      prompt: textBody(`Question text ${i + 1}?`),
+      options: [
+        { optionId: 'a', text: 'Right' },
+        { optionId: 'b', text: 'Wrong' },
+      ],
+    })),
+    answerKey: Object.fromEntries(
+      ids.map((id) => [id, { correctOptionIds: ['a'] }]),
+    ),
+    settings: {
+      passMarkPercent: 50,
+      attemptsAllowed: 2,
+      shuffleOptions: false,
+      revealAnswers: 'never',
+    },
+  });
+  await api.course.publish.mutate({ courseId });
+};
+
+// A published course whose module and two lessons have titles over 60
+// characters, each lesson holding one text item: the shape that pushes a
+// narrow or badly divided layout sideways. Returns the long titles.
+export const createLongTitledCourseViaApi = async (
+  instructor: ApiUser,
+  title: string,
+) => {
+  const api = instructor.instructor;
+  const moduleTitle = 'A module whose title runs on well past sixty characters';
+  const lessonTitles = [
+    'The first lesson, with a title that is also longer than sixty characters',
+    'The second lesson, with a title that is also longer than sixty characters',
+  ];
+  const { courseId } = await api.course.create.mutate({ title });
+  const { moduleId } = await api.module.create.mutate({
+    courseId,
+    title: moduleTitle,
+  });
+  for (const lessonTitle of lessonTitles) {
+    const { lessonId } = await api.lesson.create.mutate({
+      courseId,
+      moduleId,
+      title: lessonTitle,
+    });
+    await api.contentItem.createText.mutate({
+      courseId,
+      moduleId,
+      lessonId,
+      title: 'Reading',
+      body: textBody(lessonTitle),
+    });
+  }
+  await api.course.publish.mutate({ courseId });
+  return { courseId, moduleTitle, lessonTitles };
+};
+
 // A draft course with one lesson holding a video, uploaded and transcoded
 // (locally, by ffmpeg in the event runner) until it is ready to play, and its
 // automatic captions made. Returns the item's keys and its version's id.
