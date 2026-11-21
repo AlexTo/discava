@@ -50,6 +50,11 @@ import {
   enrol,
   myEnrolment,
 } from './procedures/enrolment.js';
+import {
+  freePreviewFileUrl,
+  freePreviewLesson,
+  freePreviewVideoUrl,
+} from './procedures/free-preview.js';
 import { instructorProfilePublicView } from './procedures/instructor-profile.js';
 import { myLessonProgress } from './procedures/lesson-progress.js';
 import { myEnrolments } from './procedures/my-enrolments.js';
@@ -112,6 +117,11 @@ export const appRouter = router({
     submit,
     mySubmission,
     submissionFileUrl,
+  }),
+  freePreview: router({
+    lesson: freePreviewLesson,
+    videoUrl: freePreviewVideoUrl,
+    fileUrl: freePreviewFileUrl,
   }),
   instructorProfile: router({
     publicView: instructorProfilePublicView,
@@ -179,13 +189,17 @@ export type AppRouter = typeof appRouter;
 // only (see CoreApi in @discava/common-constructs), so a new public procedure
 // must be added here or signed-out callers get a 401 before reaching it.
 // router.test.ts checks this list against how each procedure treats an
-// anonymous caller.
+// anonymous caller. The three freePreview operations are the only public ones
+// that return course content, each gated by loadOpenFreePreview.
 export const PUBLIC_OPERATIONS = [
   'course.publicList',
   'course.publicView',
   'course.publicSearch',
   'course.publicSuggest',
   'course.previewVideoUrl',
+  'freePreview.lesson',
+  'freePreview.videoUrl',
+  'freePreview.fileUrl',
   'review.summary',
   'review.list',
   'category.list',

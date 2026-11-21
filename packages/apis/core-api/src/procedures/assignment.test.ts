@@ -25,6 +25,7 @@ const {
   copyTo,
   deleteFolder,
   signedUrl,
+  noticeWrites,
 } = vi.hoisted(() => ({
   db: {} as Record<string, any>,
   transactionGo: vi.fn(),
@@ -35,6 +36,7 @@ const {
   copyTo: vi.fn(),
   deleteFolder: vi.fn(),
   signedUrl: vi.fn(),
+  noticeWrites: vi.fn(),
 }));
 
 // A transaction item as the code built it, with its condition rendered as a
@@ -96,6 +98,14 @@ const entities = {
   enrolment: stored('enrolment'),
   assignmentSubmission: stored('assignmentSubmission'),
   itemCompletion: stored('itemCompletion'),
+  submissionNotice: stored('submissionNotice'),
+  courseInstructor: {
+    query: {
+      primary: vi.fn(() => ({
+        go: vi.fn(async () => ({ data: db.courseInstructors ?? [] })),
+      })),
+    },
+  },
   // Rounds of feedback, newest first as the query is asked for.
   submissionFeedback: {
     query: {
@@ -110,6 +120,7 @@ const transactions: TransactionItem[][] = [];
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@discava/core-table')>()),
+  submissionsReceivedNotificationWrites: noticeWrites,
   createCoreTableService: vi.fn(async () => ({
     entities,
     transaction: {
@@ -213,7 +224,12 @@ beforeEach(() => {
   }
   db.course = { courseId: 'course-1', title: 'AWS', status: 'published' };
   db.module = { ...ref, visibility: 'visible' };
-  db.lesson = { ...ref, visibility: 'visible', kind: 'assignment' };
+  db.lesson = {
+    ...ref,
+    title: 'Essay',
+    visibility: 'visible',
+    kind: 'assignment',
+  };
   db.contentItem = {
     ...ref,
     type: 'assignment',
@@ -227,6 +243,18 @@ beforeEach(() => {
     status: 'active',
     progressPercent: 0,
   };
+  db.courseInstructors = [
+    { instructorId: 'teacher-1' },
+    { instructorId: 'teacher-2' },
+  ];
+  // The marker's create and two items per instructor, as the real helper.
+  noticeWrites.mockImplementation(async (_service, notice) => [
+    { entity: 'submissionNotice', op: 'create', data: { day: notice.day } },
+    ...notice.instructorIds.flatMap((id: string) => [
+      { entity: 'notification', op: 'create', data: { userId: id } },
+      { entity: 'user', op: 'update', key: { userId: id } },
+    ]),
+  ]);
   transactionGo.mockResolvedValue({ canceled: false, data: [] });
   scheduleOrThrow.mockResolvedValue(undefined);
   schedule.mockResolvedValue(undefined);
@@ -697,6 +725,111 @@ describe('submit (first submission)', () => {
   });
 });
 
+describe('submit (notice to the instructors)', () => {
+  const submitNow = () => callAs(USER_SUB).submit(submitInput());
+  const noticeItems = (transaction: TransactionItem[]) =>
+    transaction.filter((item) =>
+      ['submissionNotice', 'notification'].includes(item.entity),
+    );
+
+  it('writes the marker and one notification per instructor with the first submission of the day', async () => {
+    await submitNow();
+
+    expect(transactions).toHaveLength(1);
+    expect(noticeWrites).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        courseId: 'course-1',
+        contentItemId: 'item-1',
+        day: new Date().toISOString().slice(0, 10),
+        instructorIds: ['teacher-1', 'teacher-2'],
+        assignmentTitle: 'Essay',
+        courseTitle: 'AWS',
+      }),
+    );
+    expect(noticeItems(transactions[0]!).map((item) => item.entity)).toEqual([
+      'submissionNotice',
+      'notification',
+      'notification',
+    ]);
+  });
+
+  it('writes neither for a second submission that day', async () => {
+    db.submissionNotice = { courseId: 'course-1', contentItemId: 'item-1' };
+
+    await submitNow();
+
+    expect(noticeWrites).not.toHaveBeenCalled();
+    expect(noticeItems(transactions[0]!)).toHaveLength(0);
+  });
+
+  it('writes none when the course has no instructors', async () => {
+    db.courseInstructors = [];
+
+    await submitNow();
+
+    expect(noticeWrites).not.toHaveBeenCalled();
+  });
+
+  it('counts a resubmission too', async () => {
+    db.assignmentSubmission = {
+      status: 'submitted',
+      version: 1,
+      file: { key: 'k' },
+    };
+
+    await submitNow();
+
+    expect(noticeItems(transactions[0]!)).toHaveLength(3);
+  });
+
+  it('retries without the notice, and succeeds, when another request wrote the marker first', async () => {
+    // Own items 4 (activity 1, submission, completion create... counted by the
+    // real helper); the marker is the item after them.
+    transactionGo.mockImplementationOnce(async () => {
+      const own = transactions[0]!.length - 3;
+      return cancelledWith([
+        ...Array(own).fill('None'),
+        'ConditionalCheckFailed',
+        'None',
+        'None',
+        'None',
+        'None',
+      ]);
+    });
+
+    await expect(submitNow()).resolves.toMatchObject({ version: 1 });
+
+    expect(transactions).toHaveLength(2);
+    expect(noticeItems(transactions[1]!)).toHaveLength(0);
+    expect(copyTo).toHaveBeenCalledTimes(1);
+    expect(deleteFolder).not.toHaveBeenCalled();
+  });
+
+  it('is still a CONFLICT when the submission itself lost the race', async () => {
+    transactionGo.mockResolvedValue(
+      cancelledWith(['None', 'None', 'None', 'ConditionalCheckFailed']),
+    );
+    let reads = 0;
+    db.assignmentSubmission = () =>
+      reads++ < 1 ? undefined : { status: 'submitted', version: 1 };
+
+    await expect(submitNow()).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('notifies only the instructors the helper allows', async () => {
+    db.courseInstructors = Array.from({ length: 60 }, (_, i) => ({
+      instructorId: `teacher-${i}`,
+    }));
+    noticeWrites.mockResolvedValue([]);
+
+    await submitNow();
+
+    // The cap is the helper's: it is given them all and slices.
+    expect(noticeWrites.mock.calls[0]![1].instructorIds).toHaveLength(60);
+  });
+});
+
 describe('submit (resubmission)', () => {
   const submitNow = () => callAs(USER_SUB).submit(submitInput());
   const OLD_FOLDER = `submissions/${USER_SUB}/old-attempt`;
@@ -764,6 +897,8 @@ describe('submit (resubmission)', () => {
   });
 
   it('neither counts the student again nor writes a completion', async () => {
+    // The day's notice was written already; it is covered below.
+    db.submissionNotice = { courseId: 'course-1' };
     await submitNow();
 
     const [transaction] = transactions;

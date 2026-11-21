@@ -6,11 +6,13 @@
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
+import { listAnnouncements } from './announcement.js';
 import { submit } from './assignment.js';
 import { completeContentItem, myItemCompletions } from './completion.js';
-import { fileUrl, videoUrl } from './content-item.js';
+import { fileUrl, saveVideoPosition, videoUrl } from './content-item.js';
 import { viewCourse } from './course.js';
-import { submitQuizAttempt, viewQuiz } from './quiz.js';
+import { myLessonProgress } from './lesson-progress.js';
+import { myQuizAttempts, submitQuizAttempt, viewQuiz } from './quiz.js';
 
 // What the mocked table holds for this test; each entity's `get` reads it.
 const { db } = vi.hoisted(() => ({ db: {} as Record<string, any> }));
@@ -49,6 +51,10 @@ const router = t.router({
   completeContentItem,
   videoUrl,
   fileUrl,
+  saveVideoPosition,
+  myLessonProgress,
+  listAnnouncements,
+  myQuizAttempts,
   viewQuiz,
   submitQuizAttempt,
   submit,
@@ -70,6 +76,18 @@ const calls = {
   'contentItem.complete': () => caller.completeContentItem(ref),
   'contentItem.videoUrl': () => caller.videoUrl(ref),
   'contentItem.fileUrl': () => caller.fileUrl(ref),
+  'contentItem.saveVideoPosition': () =>
+    caller.saveVideoPosition({
+      ...ref,
+      versionId: 'v1',
+      positionSeconds: 5,
+      durationSeconds: 60,
+    }),
+  'course.myLessonProgress': () =>
+    caller.myLessonProgress({ courseId: ref.courseId }),
+  'announcement.list': () =>
+    caller.listAnnouncements({ courseId: ref.courseId }),
+  'quiz.myAttempts': () => caller.myQuizAttempts(ref),
   'quiz.view': () => caller.viewQuiz(ref),
   'quiz.submitAttempt': () =>
     caller.submitQuizAttempt({ ...ref, questionsHash: 'hash', answers: {} }),
@@ -124,4 +142,48 @@ describe('content of a priced published course', () => {
       courseId: ref.courseId,
     });
   });
+});
+
+// FR-006: marking a lesson as a free preview opens it only through the
+// freePreview router. Every enrolled procedure refuses exactly as above when
+// the lesson it names is an open preview of this priced course. These fail if
+// requireEnrolment is ever taught about previews.
+describe('content of an open preview lesson in a priced published course', () => {
+  beforeEach(() => {
+    db.module = {
+      courseId: ref.courseId,
+      moduleId: ref.moduleId,
+      visibility: 'visible',
+    };
+    db.lesson = {
+      courseId: ref.courseId,
+      moduleId: ref.moduleId,
+      lessonId: ref.lessonId,
+      kind: 'lesson',
+      visibility: 'visible',
+      freePreview: true,
+    };
+    db.contentItem = {
+      ...ref,
+      type: 'video',
+      status: 'ready',
+      visibility: 'visible',
+      s3Key: 'courses/course-1/video/n1/master.m3u8',
+    };
+  });
+
+  it.each(Object.entries(calls))(
+    '%s is FORBIDDEN for a student with no enrolment',
+    async (_name, call) => {
+      await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    },
+  );
+
+  it.each(Object.entries(calls))(
+    '%s is FORBIDDEN for a student whose enrolment was dropped',
+    async (_name, call) => {
+      db.enrolment = { ...enrolment, status: 'dropped' };
+      await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    },
+  );
 });

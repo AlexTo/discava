@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { isCaptionLanguage } from '@discava/common-web-utils/caption-languages';
 import type { createCoreTableService } from '../service.js';
 import {
   DURATION_HOURS_MAX,
@@ -33,6 +34,9 @@ export interface CourseCatalogue {
   language?: Language;
   durationHours?: number;
 }
+
+/** Most caption languages a course can have: ten less its source language. */
+export const MAX_CAPTION_LANGUAGES = 9;
 
 const FIELDS = [
   'categoryId',
@@ -146,5 +150,42 @@ export const courseCatalogueWrites = async (
       ? new InvalidRequestError('Choose an active category')
       : new NotFoundError('Course not found');
   }
+  await refreshInstructorCourseUpdatedAt(service, courseId);
+};
+
+/**
+ * Sets the languages a course's videos are translated into, in the given
+ * order (removing the attribute for an empty list). The only writer of
+ * `captionLanguages`; it leaves the catalogue fields alone. Throws
+ * InvalidRequestError for an unknown tag, a duplicate or more than
+ * min(9, maxLanguages) languages, NotFoundError for an unknown course.
+ */
+export const setCourseCaptionLanguages = async (
+  service: CoreTable,
+  {
+    courseId,
+    languages,
+    maxLanguages,
+  }: { courseId: string; languages: readonly string[]; maxLanguages: number },
+) => {
+  const limit = Math.min(MAX_CAPTION_LANGUAGES, maxLanguages);
+  if (!languages.every(isCaptionLanguage)) {
+    throw new InvalidRequestError('Unknown caption language');
+  }
+  if (new Set(languages).size !== languages.length) {
+    throw new InvalidRequestError('Each caption language can be chosen once');
+  }
+  if (languages.length > limit) {
+    throw new InvalidRequestError(`Choose at most ${limit} caption languages`);
+  }
+  const { data: course } = await service.entities.course.get({ courseId }).go();
+  if (!course) {
+    throw new NotFoundError('Course not found');
+  }
+  const patch = service.entities.course.patch({ courseId });
+  await (languages.length === 0
+    ? patch.remove(['captionLanguages'])
+    : patch.set({ captionLanguages: [...languages] })
+  ).go();
   await refreshInstructorCourseUpdatedAt(service, courseId);
 };

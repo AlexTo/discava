@@ -7,7 +7,7 @@ sidebar:
 
 **Spec:** [`specs/20261116-183449-stream-event-router/`](https://github.com/AlexTo/discava/tree/main/specs/20261116-183449-stream-event-router/)
 
-The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation, search indexing, analytics update, earnings recording and notification delivery today) adds a registration, a handler and the handler's wiring (below), and no queue, alarm or stream mapping of its own.
+The core table's DynamoDB stream has **one reader**: the stream router. It sends each change to the queue of every feature that wants it, and each feature's handler reads its own queue. A feature that reacts to table changes (progress recalculation, search indexing, transcript indexing, analytics update, earnings recording and notification delivery today) adds a registration, a handler and the handler's wiring (below), and no queue, alarm or stream mapping of its own.
 
 ```d2 title="One stream reader, one queue and failure queue per feature"
 table: "Core table"
@@ -94,6 +94,7 @@ Every SQS queue publishes depth and age metrics under the `AWS/SQS` namespace, w
 |---|---|---|
 | `progress-recalculation` | `ProgressRecalculationQueue` | `ProgressRecalculationFailures` |
 | `search-indexing` | `SearchIndexingQueue` | `SearchIndexingFailures` |
+| `transcript-indexing` | `TranscriptIndexingQueue` | `TranscriptIndexingFailures` |
 | `analytics-update` | `AnalyticsUpdateQueue` | `AnalyticsUpdateFailures` |
 | `earnings-recording` | `EarningsRecordingQueue` | `EarningsRecordingFailures` |
 | `notification-delivery` | `NotificationDeliveryQueue` | `NotificationDeliveryFailures` |

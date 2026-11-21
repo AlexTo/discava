@@ -11,6 +11,8 @@ import {
   EventsProgressRecalculation,
   EventsSearchIndexing,
   EventsStreamRouter,
+  EventsTranscriptIndexing,
+  LessonMediaBucket,
   RuntimeConfig,
   SearchCollection,
   StreamRouter,
@@ -37,6 +39,8 @@ export interface StreamRouterStackProps extends StackProps {
   readonly streamRouter?: StreamRouterComponentConfig;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
+  /** Holds the caption files the transcript indexer reads. */
+  readonly lessonMediaBucket: LessonMediaBucket;
   /** Sender and SES identity for notification emails. @default no sender, no SES access */
   readonly notifications?: NotificationsComponentConfig;
   /** Signs the unsubscribe links the delivery function puts in each email. */
@@ -53,8 +57,8 @@ export interface StreamRouterStackProps extends StackProps {
  * The only reader of the core table's stream and everything it feeds: the
  * router Lambda, one queue (with a failure queue and an alarm) per registered
  * feature in core-table's `STREAM_FEATURES`, and the feature handlers those
- * queues invoke (progress recalculation, search indexing, analytics, earnings
- * recording and notification delivery). Kept apart from CoreApi so a feature's queues and
+ * queues invoke (progress recalculation, search indexing, transcript indexing,
+ * analytics, earnings recording and notification delivery). Kept apart from CoreApi so a feature's queues and
  * handler don't count against that stack's resource limit. Depends on Data,
  * and on Websites and CoreApi for the addresses notification emails link to.
  */
@@ -68,6 +72,7 @@ export class StreamRouterStack extends Stack {
       streamRouter: streamRouterConfig,
       coreTable,
       searchCollection,
+      lessonMediaBucket,
       notifications,
       notificationUnsubscribeSecret,
       portalUrls,
@@ -88,6 +93,11 @@ export class StreamRouterStack extends Stack {
       'search-indexing': this.createSearchIndexingLambda(
         coreTable,
         searchCollection,
+      ),
+      'transcript-indexing': this.createTranscriptIndexingLambda(
+        coreTable,
+        searchCollection,
+        lessonMediaBucket,
       ),
       'analytics-update': this.createAnalyticsUpdateLambda(coreTable),
       'notification-delivery': this.createNotificationDeliveryLambda(
@@ -211,6 +221,24 @@ export class StreamRouterStack extends Stack {
     this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
     searchCollection.grantWrite(indexing.role!);
+    return indexing;
+  }
+
+  // The single writer of the transcripts index, run from its feature's queue.
+  // The messages only say which video items changed: it reads each one, its
+  // lesson and its module from the table, and the caption files from the
+  // lesson media bucket, to see what to index. It reads the table and the
+  // caption files and writes only the search collection.
+  private createTranscriptIndexingLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+    lessonMediaBucket: LessonMediaBucket,
+  ) {
+    const indexing = new EventsTranscriptIndexing(this, 'TranscriptIndexing');
+    this.grantAppConfig(indexing);
+    coreTable.grantReadData(indexing);
+    searchCollection.grantWrite(indexing.role!);
+    lessonMediaBucket.grantRead(indexing);
     return indexing;
   }
 

@@ -5,7 +5,10 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useCoreTable } from '../test-support/core-table.js';
-import { courseCatalogueWrites } from './course-catalogue.js';
+import {
+  courseCatalogueWrites,
+  setCourseCaptionLanguages,
+} from './course-catalogue.js';
 import { InvalidRequestError, NotFoundError } from './errors.js';
 
 const service = useCoreTable();
@@ -206,5 +209,116 @@ describe('courseCatalogueWrites', () => {
     });
 
     expect(goPatch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('setCourseCaptionLanguages', () => {
+  const save = (languages: string[], maxLanguages = 9, courseId = 'c1') =>
+    setCourseCaptionLanguages(service, { courseId, languages, maxLanguages });
+
+  // Records the patch the course gets: what it sets and removes.
+  const stubPatch = () => {
+    const calls: { set?: unknown; remove?: unknown }[] = [];
+    const patch = vi
+      .spyOn(service.entities.course, 'patch')
+      .mockImplementation((() => {
+        const call: { set?: unknown; remove?: unknown } = {};
+        calls.push(call);
+        const builder = {
+          set: (v: unknown) => ((call.set = v), builder),
+          remove: (v: unknown) => ((call.remove = v), builder),
+          go: async () => ({ data: {} }),
+        };
+        return builder;
+      }) as never);
+    return { calls, patch };
+  };
+
+  it.each([
+    ['an unknown tag', ['en-US', 'ko-KR']],
+    ['a duplicate', ['en-US', 'en-US']],
+    ['too many for the stage', ['en-US', 'es-ES', 'fr-FR']],
+  ])('refuses %s', async (_n, languages) => {
+    stubCourse({ courseId: 'c1' });
+    const { calls } = stubPatch();
+    await expect(save(languages, 2)).rejects.toBeInstanceOf(
+      InvalidRequestError,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('never allows more than nine, whatever the stage allows', async () => {
+    stubCourse({ courseId: 'c1' });
+    stubPatch();
+    const all = [
+      'en-US',
+      'es-ES',
+      'fr-FR',
+      'de-DE',
+      'pt-BR',
+      'ja-JP',
+      'zh-CN',
+      'hi-IN',
+      'ar-SA',
+      'vi-VN',
+    ];
+    await expect(save(all, 20)).rejects.toBeInstanceOf(InvalidRequestError);
+    await expect(save(all.slice(0, 9), 20)).resolves.toBeUndefined();
+  });
+
+  it('refuses an unknown course', async () => {
+    stubCourse(undefined);
+    const { calls } = stubPatch();
+    await expect(save(['es-ES'])).rejects.toBeInstanceOf(NotFoundError);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('keeps the order it is given and touches no catalogue field', async () => {
+    stubCourse({ courseId: 'c1' });
+    const { calls } = stubPatch();
+    await save(['fr-FR', 'es-ES']);
+    expect(calls).toEqual([{ set: { captionLanguages: ['fr-FR', 'es-ES'] } }]);
+  });
+
+  it('clears the attribute for an empty list', async () => {
+    stubCourse({ courseId: 'c1' });
+    const { calls } = stubPatch();
+    await save([]);
+    expect(calls).toEqual([{ remove: ['captionLanguages'] }]);
+  });
+
+  it('refreshes the instructors’ courseUpdatedAt', async () => {
+    stubCourse({ courseId: 'c1', updatedAt: '2026-11-18T02:00:00.000Z' });
+    stubPatch();
+    const set = vi.fn(() => ({ go: async () => ({ data: {} }) }));
+    const instructorPatch = vi
+      .spyOn(service.entities.courseInstructor, 'patch')
+      .mockReturnValue({ set } as never);
+    vi.spyOn(
+      service.entities.courseInstructor.query,
+      'primary',
+    ).mockReturnValue({
+      go: async () => ({ data: [{ instructorId: 'i1' }] }),
+    } as never);
+    await save(['es-ES']);
+    expect(instructorPatch).toHaveBeenCalledWith({
+      courseId: 'c1',
+      instructorId: 'i1',
+    });
+    expect(set).toHaveBeenCalledWith({
+      courseUpdatedAt: '2026-11-18T02:00:00.000Z',
+    });
+  });
+
+  it('is independent of a catalogue save, and the reverse', async () => {
+    stubCourse({ courseId: 'c1' });
+    const { calls } = stubPatch();
+    await courseCatalogueWrites(service, { courseId: 'c1' });
+    await save(['es-ES']);
+    const catalogue = calls[0];
+    expect(JSON.stringify(catalogue)).not.toContain('captionLanguages');
+    expect(JSON.stringify(calls[1])).not.toMatch(
+      /categoryId|tags|level|language"|durationHours/,
+    );
   });
 });

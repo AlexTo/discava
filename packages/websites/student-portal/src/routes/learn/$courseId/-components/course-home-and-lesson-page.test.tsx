@@ -4,6 +4,7 @@
  */
 
 import { act, cleanup, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -223,10 +224,108 @@ const breadcrumbs = async () =>
       crumb.querySelector('a')?.getAttribute('href'),
     ]);
 
-const outline = () =>
-  screen.findByRole('navigation', { name: 'Course outline' });
+// The outline sits in a closed panel below the lg breakpoint: open it first.
+const outline = async () => {
+  const trigger = await screen.findByRole('button', {
+    name: /^Course outline/,
+  });
+  if (trigger.getAttribute('aria-expanded') === 'false') {
+    await userEvent.click(trigger);
+  }
+  return screen.findByRole('navigation', { name: 'Course outline' });
+};
 const outlineLink = async (name: string) =>
   within(await outline()).getByRole('link', { name: new RegExp(name) });
+
+function Navigating() {
+  const [lessonId, setLessonId] = useState('lesson-1');
+  return (
+    <>
+      <button type="button" onClick={() => setLessonId('lesson-2')}>
+        Go to 2
+      </button>
+      <LessonPage courseId="course-1" lessonId={lessonId} />
+    </>
+  );
+}
+
+describe('the course outline panel', () => {
+  it('starts closed on a lesson, showing the lesson title', async () => {
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-2" />, {
+      handlers: handlers(),
+    });
+
+    const trigger = await screen.findByRole('button', {
+      name: /^Course outline/,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveTextContent('Lecture 2');
+    // Mounted but hidden below lg (jsdom has no layout, so check the class).
+    const panel = screen.getByRole('navigation', {
+      name: 'Course outline',
+      hidden: true,
+    }).parentElement;
+    expect(panel).toHaveClass('hidden');
+
+    await userEvent.click(trigger);
+    expect(await outlineLink('Lecture 2')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(await outlineLink('Lecture 1')).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes again when another lesson is chosen', async () => {
+    renderWithCoreApi(<Navigating />, { handlers: handlers() });
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^Course outline/ }),
+    );
+    expect(
+      screen.getByRole('button', { name: /^Course outline/ }),
+    ).toHaveAttribute('aria-expanded', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Go to 2' }));
+    const trigger = await screen.findByRole('button', {
+      name: /^Course outline.*Lecture 2/,
+    });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('shows the lesson count on the course home', async () => {
+    renderWithCoreApi(<CourseHome courseId="course-1" />, {
+      handlers: handlers(),
+    });
+
+    expect(
+      await screen.findByRole('button', { name: /^Course outline/ }),
+    ).toHaveTextContent('2 lessons');
+  });
+
+  it('keeps long unbroken titles inside their columns', async () => {
+    const long = (word: string) => word.repeat(90).slice(0, 90);
+    const base = course();
+    base.title = long('c');
+    base.modules[0].title = long('m');
+    base.modules[0].lessons[0].title = long('l');
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-1" />, {
+      handlers: handlers({ 'course.view': () => base }),
+    });
+
+    const lesson = await screen.findByRole('heading', {
+      level: 2,
+      name: long('l'),
+    });
+    expect(lesson).toHaveClass('break-words');
+    expect(screen.getByText(`Module 1: ${long('m')}`)).toHaveClass(
+      'break-words',
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass(
+      'break-words',
+    );
+    expect(lesson.closest('section')).toHaveClass('min-w-0');
+  });
+});
 
 describe('CourseHome', () => {
   it('lists the outline and starts at the first lesson', async () => {
@@ -725,6 +824,36 @@ describe('LessonPage', () => {
       });
 
       expect(again.currentTime).toBe(240);
+    });
+  });
+
+  it('links each step to its item on this lesson, moving focus there', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const matchMedia = vi.fn().mockReturnValue({ matches: false });
+    vi.stubGlobal('matchMedia', matchMedia);
+    const { user } = openLesson('lesson-1');
+
+    const steps = within(
+      await screen.findByRole('navigation', { name: 'Lesson steps' }),
+    );
+    const step = steps.getAllByRole('link')[0];
+    expect(step.getAttribute('href')).toMatch(
+      /^\/learn\/course-1\/lesson\/lesson-1#./,
+    );
+
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    expect(await item('Notes')).toBe(document.activeElement);
+
+    matchMedia.mockReturnValue({ matches: true });
+    await user.click(step);
+    expect(scrollIntoView).toHaveBeenLastCalledWith({
+      behavior: 'auto',
+      block: 'start',
     });
   });
 

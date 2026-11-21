@@ -184,10 +184,25 @@ describe('CoursePage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /2 modules/ })).toHaveAttribute(
       'href',
-      '#modules',
+      '/learn/course-1#modules',
     );
     expect(screen.getByText('4 lessons')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enrol now' })).toBeEnabled();
+  });
+
+  it('keeps every tab on the course page and lets a wide bar scroll', async () => {
+    renderPage(() => ({ ...course, ...landing }));
+
+    const tabs = within(
+      await screen.findByRole('navigation', { name: 'Course sections' }),
+    );
+    const links = tabs.getAllByRole('link');
+    expect(links).toHaveLength(6);
+    for (const link of links) {
+      expect(link.getAttribute('href')).toMatch(/^\/learn\/course-1#\w+$/);
+      expect(link).toHaveClass('shrink-0', 'whitespace-nowrap');
+    }
+    expect(links[0].parentElement).toHaveClass('overflow-x-auto');
   });
 
   it('places the course under Home', async () => {
@@ -214,11 +229,11 @@ describe('CoursePage', () => {
     );
     expect(tabs.getByRole('link', { name: 'About' })).toHaveAttribute(
       'href',
-      '#about',
+      '/learn/course-1#about',
     );
     expect(tabs.getByRole('link', { name: 'Modules' })).toHaveAttribute(
       'href',
-      '#modules',
+      '/learn/course-1#modules',
     );
     expect(
       screen.getByRole('region', { name: 'About this course' }),

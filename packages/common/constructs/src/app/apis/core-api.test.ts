@@ -6,11 +6,11 @@
 // (CDK resolves asset paths from import.meta.url, which jsdom doesn't provide.)
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { MockIntegration } from 'aws-cdk-lib/aws-apigateway';
+import { AuthorizationType, MockIntegration } from 'aws-cdk-lib/aws-apigateway';
 import { UserPool } from 'aws-cdk-lib/aws-cognito';
 import { describe, expect, it } from 'vitest';
 import type { RestApiIntegration } from '../../core/api/utils.js';
-import { CoreApi } from './core-api.js';
+import { CORE_API_DEDICATED_FUNCTIONS, CoreApi } from './core-api.js';
 
 const mock = (): RestApiIntegration => ({
   integration: new MockIntegration({
@@ -181,6 +181,71 @@ describe('CoreApi suggest throttle', () => {
         Match.objectLike({
           HttpMethod: 'GET',
           ResourcePath: '/~1course.publicSuggest',
+          ThrottlingRateLimit: 2,
+          ThrottlingBurstLimit: 4,
+        }),
+      ]),
+    });
+  });
+});
+
+describe('CoreApi free preview operations', () => {
+  const template = synth();
+  const FREE_PREVIEW = [
+    'freePreview.lesson',
+    'freePreview.videoUrl',
+    'freePreview.fileUrl',
+  ];
+
+  it('serves the signing ones from MediaUrl, and nothing else new', () => {
+    expect([...CORE_API_DEDICATED_FUNCTIONS.MediaUrl].sort()).toEqual(
+      [
+        'contentItem.videoUrl',
+        'course.previewVideoUrl',
+        'contentItem.fileUrl',
+        'assignment.submissionFileUrl',
+        'freePreview.videoUrl',
+        'freePreview.fileUrl',
+      ].sort(),
+    );
+  });
+
+  it('serves freePreview.lesson from the shared router', () => {
+    const dedicated: string[] = Object.values(
+      CORE_API_DEDICATED_FUNCTIONS,
+    ).flat();
+    expect(dedicated).not.toContain('freePreview.lesson');
+  });
+
+  it('integrates the three without the authorizer, and the signing two with the media function', () => {
+    const stack = new Stack(new App(), 'DefaultsStack', {
+      env: { account: '111122223333', region: 'ap-southeast-2' },
+    });
+    const integrations = CoreApi.defaultIntegrations(stack).build();
+    for (const operation of FREE_PREVIEW) {
+      expect(
+        integrations[operation as keyof typeof integrations].options
+          ?.authorizationType,
+      ).toBe(AuthorizationType.NONE);
+    }
+    expect(integrations['freePreview.videoUrl'].handler).toBe(
+      integrations['contentItem.videoUrl'].handler,
+    );
+    expect(integrations['freePreview.fileUrl'].handler).toBe(
+      integrations['contentItem.fileUrl'].handler,
+    );
+    expect(integrations['freePreview.lesson'].handler).toBe(
+      integrations['course.publicView'].handler,
+    );
+    // Synthesising the Lambda assets is slow on a busy CI runner.
+  }, 60_000);
+
+  it.each(FREE_PREVIEW)('%s carries the public throttle', (operation) => {
+    template.hasResourceProperties('AWS::ApiGateway::Stage', {
+      MethodSettings: Match.arrayWith([
+        Match.objectLike({
+          HttpMethod: 'GET',
+          ResourcePath: `/~1${operation}`,
           ThrottlingRateLimit: 2,
           ThrottlingBurstLimit: 4,
         }),
