@@ -726,6 +726,28 @@ describe.concurrent('setup-stage.sh permissions boundary', {
     );
   });
 
+  it('lets the caption-translation function call Amazon Translate', async () => {
+    // TranslateText has no resource to scope to, and without it every
+    // translation fails with AccessDenied however the function's own policy
+    // reads.
+    const { status, policyDocument } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: expect.arrayContaining(['translate:TranslateText']),
+        Resource: '*',
+      }),
+    );
+  });
+
   it("lets the stage's functions read table streams and send to or consume from its queues", async () => {
     const { status, policyDocument } = await runSetup({
       kind: 'response',

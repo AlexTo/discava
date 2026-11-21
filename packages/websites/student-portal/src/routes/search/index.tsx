@@ -52,7 +52,7 @@ function RouteComponent() {
         </div>
       ) : (
         <>
-          <h1 className="text-balance text-2xl font-bold tracking-tight">
+          <h1 className="text-balance break-words text-2xl font-bold tracking-tight">
             {query ? <>Results for &ldquo;{query}&rdquo;</> : 'Browse courses'}
           </h1>
           <CatalogueResults

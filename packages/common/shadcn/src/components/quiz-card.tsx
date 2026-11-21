@@ -18,7 +18,7 @@ import {
   shuffled,
   writeQuizDraft,
 } from '@discava/common-web-utils/quiz';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   OverviewPhase,
   type Phase,
@@ -100,6 +100,11 @@ export function QuizCard({
   const [updated, setUpdated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
+  // Bumped when the questions changed under a student already on the review.
+  const [refocus, setRefocus] = useState(0);
+  const content = useRef<HTMLDivElement>(null);
+  const focusKey = `${phase.name}:${phase.name === 'question' ? phase.index : ''}:${refocus}`;
+  const lastFocusKey = useRef(focusKey);
   // The latest submission's result, until the owner's props catch up.
   const [submitted, setSubmitted] =
     useState<Extract<QuizSubmitResult, { status: 'submitted' }>>();
@@ -134,8 +139,20 @@ export function QuizCard({
     });
     setMarkers((current) => ({ ...current, ...next.markers }));
     setUpdated(true);
+    setRefocus((n) => n + 1);
     setPhase({ name: 'review' });
   });
+
+  // The phases are different components, so the focused button is removed
+  // when the phase changes: move focus to the new phase's marked line. Not on
+  // the first render, so loading a lesson doesn't pull focus to its quiz.
+  useEffect(() => {
+    if (lastFocusKey.current === focusKey) {
+      return;
+    }
+    lastFocusKey.current = focusKey;
+    content.current?.querySelector<HTMLElement>('[data-quiz-focus]')?.focus();
+  }, [focusKey]);
 
   // Each question's options, in this attempt's order.
   const optionsFor = useMemo(() => {
@@ -230,6 +247,8 @@ export function QuizCard({
         markers={markers}
         updated={updated}
         submitting={submitting}
+        attemptNumber={draft?.attemptNumber ?? 1}
+        attemptsAllowed={settings.attemptsAllowed}
         onSubmit={submit}
         setPhase={setPhase}
       />
@@ -266,7 +285,7 @@ export function QuizCard({
 
   return (
     <Card data-slot="quiz-card" className="border-primary/20">
-      <CardContent className="space-y-4">
+      <CardContent ref={content} className="space-y-4">
         {error && phase.name !== 'overview' ? (
           <Alert variant="destructive">
             <AlertTitle>Couldn't submit your answers</AlertTitle>

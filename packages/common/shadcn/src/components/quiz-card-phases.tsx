@@ -55,22 +55,26 @@ export function QuestionPhase({
   const last = index === questions.length - 1;
   return (
     <div className="space-y-5">
-      <nav aria-label="Questions" className="flex flex-wrap gap-1.5">
-        {questions.map((q, i) => (
-          <button
-            key={q.questionId}
-            type="button"
-            onClick={() => setPhase({ name: 'question', index: i })}
-            aria-current={i === index ? 'step' : undefined}
-            aria-label={`Question ${i + 1}${isAnswered(answers, q.questionId) ? ', answered' : ''}${markers[q.questionId] ? `, ${markers[q.questionId]}` : ''}`}
-            className={cn(
-              'size-3 rounded-full border border-primary/40 transition-colors',
-              isAnswered(answers, q.questionId) && 'bg-primary/60',
-              i === index && 'ring-2 ring-primary ring-offset-2',
-            )}
-          />
-        ))}
-      </nav>
+      {questions.length > 1 ? (
+        <nav aria-label="Questions" className="flex flex-wrap gap-1.5">
+          {questions.map((q, i) => (
+            <button
+              key={q.questionId}
+              type="button"
+              onClick={() => setPhase({ name: 'question', index: i })}
+              aria-current={i === index ? 'step' : undefined}
+              aria-label={`Question ${i + 1}${isAnswered(answers, q.questionId) ? ', answered' : ''}${markers[q.questionId] ? `, ${markers[q.questionId]}` : ''}`}
+              className={cn(
+                'size-6 rounded-full border border-primary/40 text-xs font-medium tabular-nums transition-colors',
+                isAnswered(answers, q.questionId) && 'bg-primary/60',
+                i === index && 'ring-2 ring-primary ring-offset-2',
+              )}
+            >
+              {i + 1}
+            </button>
+          ))}
+        </nav>
+      ) : null}
       <QuestionScreen
         question={question}
         options={options}
@@ -108,6 +112,8 @@ export function ReviewPhase({
   markers,
   updated,
   submitting,
+  attemptNumber,
+  attemptsAllowed,
   onSubmit,
   setPhase,
 }: {
@@ -116,6 +122,8 @@ export function ReviewPhase({
   markers: Record<string, QuestionMarker>;
   updated: boolean;
   submitting: boolean;
+  attemptNumber: number;
+  attemptsAllowed: number | null;
   onSubmit: () => void;
   setPhase: (phase: Phase) => void;
 }) {
@@ -133,7 +141,11 @@ export function ReviewPhase({
           </AlertDescription>
         </Alert>
       ) : null}
-      <p className="text-sm text-muted-foreground">
+      <p
+        data-quiz-focus
+        tabIndex={-1}
+        className="text-sm text-muted-foreground outline-none"
+      >
         {answeredCount} of {count(questions.length, 'question', 'questions')}{' '}
         answered. Unanswered questions are marked incorrect.
       </p>
@@ -168,6 +180,11 @@ export function ReviewPhase({
           </li>
         ))}
       </ol>
+      {attemptsAllowed !== null ? (
+        <p className="text-sm text-muted-foreground">
+          This uses attempt {attemptNumber} of {attemptsAllowed}.
+        </p>
+      ) : null}
       <div className="flex justify-between gap-3">
         <Button
           variant="outline"
@@ -178,7 +195,7 @@ export function ReviewPhase({
           Back
         </Button>
         <Button disabled={submitting} onClick={onSubmit}>
-          {submitting ? 'Submitting…' : 'Submit'}
+          {submitting ? 'Submitting…' : 'Submit answers'}
         </Button>
       </div>
     </div>
@@ -208,16 +225,22 @@ export function ResultPhase({
   return (
     <div className="space-y-5">
       <div className="space-y-1">
-        <p className="text-lg font-semibold">
-          This attempt: {attempt.scorePercent}%{' '}
-          {attempt.passed ? (
-            <span className="text-emerald-700 dark:text-emerald-300">
-              · Passed
-            </span>
-          ) : (
-            <span className="text-muted-foreground">· Not passed</span>
-          )}
-        </p>
+        <div role="status">
+          <p
+            data-quiz-focus
+            tabIndex={-1}
+            className="text-lg font-semibold outline-none"
+          >
+            This attempt: {attempt.scorePercent}%{' '}
+            {attempt.passed ? (
+              <span className="text-emerald-700 dark:text-emerald-300">
+                · Passed
+              </span>
+            ) : (
+              <span className="text-muted-foreground">· Not passed</span>
+            )}
+          </p>
+        </div>
         <p className="text-sm text-muted-foreground">
           {lower
             ? `Your best score of ${summary.bestScore}% still counts.`
@@ -281,7 +304,11 @@ export function OverviewPhase({
       : `${summary?.attemptsUsed ?? 0} of ${count(settings.attemptsAllowed, 'attempt', 'attempts')} used`;
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
+      <p
+        data-quiz-focus
+        tabIndex={-1}
+        className="text-sm text-muted-foreground outline-none"
+      >
         {count(questions.length, 'question', 'questions')} · Pass{' '}
         {settings.passMarkPercent}% · {attemptsLabel}
       </p>

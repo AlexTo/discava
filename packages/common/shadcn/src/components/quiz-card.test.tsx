@@ -125,7 +125,7 @@ describe('QuizCard', () => {
 
     await answerAll(user);
     expect(screen.getByText(/2 of 2 questions answered/)).toBeInTheDocument();
-    await user.click(button('Submit'));
+    await user.click(button('Submit answers'));
 
     expect(p.onSubmit).toHaveBeenCalledWith(
       { q1: ['fargate'], q2: ['lambda'] },
@@ -148,7 +148,7 @@ describe('QuizCard', () => {
     const { user } = show();
 
     await answerAll(user);
-    await user.click(button('Submit'));
+    await user.click(button('Submit answers'));
 
     const [first, second] = await screen
       .findAllByRole('listitem', {
@@ -178,7 +178,7 @@ describe('QuizCard', () => {
     await user.click(button('Retake quiz'));
     await user.click(button('Next'));
     await user.click(button('Review answers'));
-    await user.click(button('Submit'));
+    await user.click(button('Submit answers'));
 
     expect(
       await screen.findByText('Your best score of 100% still counts.'),
@@ -215,7 +215,7 @@ describe('QuizCard', () => {
       onSubmit: vi.fn(async () => ({ status: 'updated' as const })),
     });
     await answerAll(user);
-    await user.click(button('Submit'));
+    await user.click(button('Submit answers'));
 
     const edited = quiz({
       questionsHash: 'hash-2',
@@ -249,7 +249,7 @@ describe('QuizCard', () => {
       })),
     });
     await answerAll(user);
-    await user.click(button('Submit'));
+    await user.click(button('Submit answers'));
 
     expect(
       await screen.findByText('This quiz is no longer available'),
@@ -280,5 +280,147 @@ describe('QuizCard', () => {
     const again = show({ quiz: shuffledQuiz });
     await again.user.click(button('Resume quiz'));
     expect(order()).toEqual(first);
+  });
+
+  describe('focus and announcements', () => {
+    const active = () => document.activeElement;
+    const marked = () =>
+      document.querySelector<HTMLElement>('[data-quiz-focus]');
+
+    it('moves focus nowhere when it renders', () => {
+      show();
+      expect(active()).toBe(document.body);
+    });
+
+    it('follows each phase to its marked line', async () => {
+      const { user } = show();
+
+      await user.click(button('Start quiz'));
+      expect(active()).toBe(marked());
+      expect(active()).toHaveTextContent('Question 1 of 2');
+
+      await user.click(button('Next'));
+      expect(active()).toHaveTextContent('Question 2 of 2');
+
+      await user.click(button('Back'));
+      expect(active()).toHaveTextContent('Question 1 of 2');
+
+      await user.click(button('Question 2'));
+      expect(active()).toHaveTextContent('Question 2 of 2');
+
+      await user.click(button('Review answers'));
+      expect(active()).toHaveTextContent('0 of 2 questions answered');
+
+      await user.click(button('Change your answer to question 1'));
+      expect(active()).toHaveTextContent('Question 1 of 2');
+
+      await user.click(button('Next'));
+      await user.click(button('Review answers'));
+      await user.click(button('Submit answers'));
+      await screen.findByText(/This attempt/);
+      expect(active()).toHaveTextContent('This attempt: 50%');
+
+      await user.click(button('Done'));
+      expect(active()).toHaveTextContent('2 questions · Pass 50%');
+
+      await user.click(button('See your last result'));
+      expect(active()).toHaveTextContent('This attempt: 50%');
+
+      await user.click(button('Retake quiz'));
+      expect(active()).toHaveTextContent('Question 1 of 2');
+    });
+
+    it('keeps the phase, answers and an alert when a submission fails', async () => {
+      const { user } = show({
+        onSubmit: vi.fn(async () => ({
+          status: 'error' as const,
+          message: 'Try again later',
+        })),
+      });
+      await answerAll(user);
+      await user.click(button('Submit answers'));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Try again later',
+      );
+      expect(screen.getByText(/2 of 2 questions answered/)).toBeInTheDocument();
+      expect(button('Submit answers')).toBeEnabled();
+    });
+
+    it('focuses the review when the questions change under it', async () => {
+      const {
+        user,
+        rerender,
+        props: p,
+      } = show({
+        onSubmit: vi.fn(async () => ({ status: 'updated' as const })),
+      });
+      await answerAll(user);
+      await user.click(button('Submit answers'));
+      expect(active()).toBe(button('Submit answers'));
+
+      rerender(
+        <QuizCard
+          {...p}
+          quiz={quiz({
+            questionsHash: 'hash-2',
+            questions: [
+              quiz().questions[0],
+              { ...quiz().questions[1], prompt: doc('Which are managed?') },
+            ],
+          })}
+        />,
+      );
+
+      await screen.findByText('This quiz was updated');
+      expect(active()).toHaveTextContent('2 of 2 questions answered');
+    });
+
+    it('announces the score as a status', async () => {
+      const { user } = show();
+      await answerAll(user);
+      await user.click(button('Submit answers'));
+
+      const score = await screen.findByText(/This attempt: 50%/);
+      expect(score.closest('[role="status"]')).not.toBeNull();
+    });
+  });
+
+  describe('navigator and review', () => {
+    it('numbers one button per question, and none for a single question', async () => {
+      const { user } = show();
+      await user.click(button('Start quiz'));
+      const nav = screen.getByRole('navigation', { name: 'Questions' });
+      expect(within(nav).getAllByRole('button')).toHaveLength(2);
+      expect(button('Question 1')).toHaveTextContent('1');
+      expect(button('Question 1')).toHaveClass('size-6');
+      expect(button('Question 1')).toHaveAttribute('aria-current', 'step');
+      cleanup();
+      localStorage.clear();
+
+      const one = show({ quiz: quiz({ questions: [quiz().questions[0]] }) });
+      await one.user.click(button('Start quiz'));
+      expect(
+        screen.queryByRole('navigation', { name: 'Questions' }),
+      ).toBeNull();
+    });
+
+    it('says which attempt submitting uses, when attempts are limited', async () => {
+      const { user } = show({ summary: summary({ attemptsUsed: 1 }) });
+      await user.click(button('Retake quiz'));
+      await user.click(button('Next'));
+      await user.click(button('Review answers'));
+      expect(screen.getByText('This uses attempt 2 of 3.')).toBeInTheDocument();
+      cleanup();
+      localStorage.clear();
+
+      const unlimited = show({
+        quiz: quiz({ settings: { ...quiz().settings, attemptsAllowed: null } }),
+      });
+      await unlimited.user.click(button('Start quiz'));
+      await unlimited.user.click(button('Next'));
+      await unlimited.user.click(button('Review answers'));
+      expect(screen.queryByText(/This uses attempt/)).toBeNull();
+    });
   });
 });

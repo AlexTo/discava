@@ -11,7 +11,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCoreApi } from '../../api';
 import { CatalogueResults } from '../../components/catalogue-results';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
@@ -56,6 +56,8 @@ function RouteComponent() {
   const filters = parseFilters(search);
   const navigate = useNavigate({ from: Route.fullPath });
   const [text, setText] = useState(query);
+  // Keep the box in step with the address (back, or a link without a query).
+  useEffect(() => setText(query), [query]);
 
   const trpc = useCoreApi();
   const categoryQuery = useQuery(
@@ -131,6 +133,8 @@ function RouteComponent() {
           >
             <Input
               type="search"
+              name="query"
+              autoComplete="off"
               aria-label={`Search ${category.name}`}
               placeholder={`Search ${category.name}`}
               value={text}
