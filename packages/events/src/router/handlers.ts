@@ -7,6 +7,7 @@ import { handler as earningsRecording } from '../earnings/earnings-recording.js'
 import { handler as notificationDelivery } from '../notifications/notification-delivery.js';
 import { handler as progressRecalculation } from '../progress/progress-recalculation.js';
 import { handler as searchIndexing } from '../search/search-indexing.js';
+import { handler as transcriptIndexing } from '../search/transcript-indexing.js';
 
 /**
  * The handler each registered feature invokes, by the registration's
@@ -20,4 +21,5 @@ export const HANDLERS = {
   'notification-delivery': notificationDelivery,
   'progress-recalculation': progressRecalculation,
   'search-indexing': searchIndexing,
+  'transcript-indexing': transcriptIndexing,
 } as const;

@@ -8,7 +8,11 @@ import {
   getSignedCloudFrontCookies,
   getSignedCloudFrontFileUrl,
 } from '@discava/common-server-utils/lesson-media';
-import { manifestNonce } from '@discava/common-server-utils/media-keys';
+import {
+  manifestNonce,
+  playableManifest,
+  playableVersion,
+} from '@discava/common-server-utils/media-keys';
 import {
   isShown,
   resumeAt,
@@ -16,7 +20,6 @@ import {
   videoPositionToStore,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { playableManifest } from '../helpers/playback.js';
 import { courseProcedure } from '../init.js';
 import {
   FileUrlInputSchema,
@@ -65,6 +68,7 @@ export const videoUrl = courseProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
     requireEnrolment(course, enrolment);
+    const playable = item && playableVersion(item);
     if (
       !module ||
       !lesson ||
@@ -73,7 +77,7 @@ export const videoUrl = courseProcedure
       !isShown(lesson) ||
       !isShown(item) ||
       item.type !== 'video' ||
-      !playableManifest(item)
+      !playable
     ) {
       throw new TRPCError({
         code: 'NOT_FOUND',
@@ -83,7 +87,7 @@ export const videoUrl = courseProcedure
 
     // Its own transcode once ready, else the version kept playable while it's
     // replaced (#209).
-    const manifest = playableManifest(item)!;
+    const { manifest, versionId } = playable;
     // The directory holding this transcode's manifest, renditions and
     // segments: everything up to the slash before master.m3u8.
     const prefixKey = manifest.slice(0, manifest.lastIndexOf('/') + 1);
@@ -92,9 +96,6 @@ export const videoUrl = courseProcedure
       getSignedCloudFrontCookies(prefixKey),
     ]);
     ctx.responseCookies?.push(...cookies);
-    // The folder name is the version's identity: a replaced video has a new
-    // one, and a position saved for another version no longer applies.
-    const versionId = manifestNonce(manifest) ?? '';
     // Only the played version's tracks: while a replacement transcodes, the
     // previous version plays with its own.
     const captions = await Promise.all(

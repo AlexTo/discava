@@ -13,6 +13,36 @@ export const manifestNonce = (manifestKey: string): string | undefined =>
   manifestKey.match(/\/content-items\/[^/]+\/([^/]+)\/[^/]+$/)?.[1];
 
 /**
+ * The manifest a student plays for a video item: its own once transcoded,
+ * otherwise the previous version kept while a replacement transcodes or
+ * after the replacement failed (#209). Undefined when there's nothing to
+ * play yet: a first upload still transcoding, or one that failed.
+ */
+export const playableManifest = (item: {
+  status?: string;
+  s3Key?: string;
+  previousS3Key?: string;
+}): string | undefined =>
+  item.status === 'ready' ? item.s3Key : item.previousS3Key;
+
+/**
+ * The version a student plays for a video item: its playable manifest and the
+ * nonce folder it lives under, which is the version's identity. Undefined when
+ * there's nothing to play or the manifest has no nonce. Both the playback
+ * procedures and the transcript indexer call it, so they can't disagree about
+ * which version a student plays.
+ */
+export const playableVersion = (item: {
+  status?: string;
+  s3Key?: string;
+  previousS3Key?: string;
+}): { manifest: string; versionId: string } | undefined => {
+  const manifest = playableManifest(item);
+  const versionId = manifest ? manifestNonce(manifest) : undefined;
+  return manifest && versionId ? { manifest, versionId } : undefined;
+};
+
+/**
  * The submission nonce a course preview's manifest lives under, from its key:
  * `courses/<courseId>/preview/<nonce>/master.m3u8`.
  */
