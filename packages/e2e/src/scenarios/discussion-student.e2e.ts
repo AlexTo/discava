@@ -71,7 +71,7 @@ test.describe('lesson questions in the student portal', () => {
     await screenshot(page, 'first-lesson-prompt');
 
     await answerFirstLessonPrompt(page, answer);
-    await expect(questions.getByText(answer)).toBeVisible();
+    await expect(questions.getByText(answer).first()).toBeVisible();
     await expect(
       questions.getByText('Answer to the course prompt'),
     ).toBeVisible();
@@ -90,7 +90,7 @@ test.describe('lesson questions in the student portal', () => {
     await second.goto(lessonUrl);
     await signIn(second, sam);
     const secondQuestions = second.getByRole('region', { name: 'Questions' });
-    await expect(secondQuestions.getByText(answer)).toBeVisible();
+    await expect(secondQuestions.getByText(answer).first()).toBeVisible();
     await expect(secondQuestions.getByText(prompt)).toBeHidden();
     await screenshot(second, 'first-lesson-prompt-stays-closed');
     await secondContext.close();
@@ -105,7 +105,7 @@ test.describe('lesson questions in the student portal', () => {
     await otherQuestions.getByRole('button', { name: 'Not now' }).click();
     await expect(otherQuestions.getByText(prompt)).toBeHidden();
     await other.reload();
-    await expect(otherQuestions.getByText(answer)).toBeVisible();
+    await expect(otherQuestions.getByText(answer).first()).toBeVisible();
     await expect(otherQuestions.getByText(prompt)).toBeHidden();
     await otherContext.close();
   });

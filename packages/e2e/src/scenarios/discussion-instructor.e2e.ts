@@ -137,8 +137,12 @@ test.describe('lesson questions in the instructor portal', () => {
     await page
       .getByLabel('Lesson', { exact: true })
       .selectOption({ label: 'Lesson one' });
-    await expect(page.getByText('I want to teach others.')).toBeVisible();
-    await expect(page.getByText('Answer to the course prompt')).toBeVisible();
+    await expect(
+      page.getByText('I want to teach others.').first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Answer to the course prompt').first(),
+    ).toBeVisible();
     await screenshot(page, 'prompt-answer-by-lesson');
   });
 });
