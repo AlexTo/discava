@@ -278,8 +278,9 @@ test('facets count the published courses under each filter', async ({
 
     await page.keyboard.press('Tab');
     await page.keyboard.press('Space');
-    // The next checkbox is the one now checked and focused.
-    await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(2);
+    // The scope tag was checked from the start; with Beginner and the next
+    // checkbox that makes three, the last of them focused.
+    await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(3);
     await expect(
       page.getByRole('checkbox', { checked: true }).and(page.locator(':focus')),
     ).toHaveCount(1);

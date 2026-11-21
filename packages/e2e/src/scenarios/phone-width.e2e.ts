@@ -12,7 +12,11 @@ import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
-import { enrolAndLand, openCourse } from '../helpers/student-portal.js';
+import {
+  enrolAndLand,
+  expectAfterReloads,
+  openCourse,
+} from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
@@ -192,14 +196,16 @@ test('search results come first on a phone, with the filters collapsed', async (
 
   await test.step('a search for the course shows it on the first screen', async () => {
     // The index follows the table's stream by up to a few seconds.
-    await expect(async () => {
-      await page.goto(
-        `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
-      );
-      await expect(page.getByText('1 course', { exact: true })).toBeVisible({
+    await page.goto(
+      `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
+    );
+    await expectAfterReloads(page, async () => {
+      await expect(
+        page.getByRole('link', { name: new RegExp(title) }),
+      ).toBeVisible({
         timeout: 2_000,
       });
-    }).toPass({ timeout: 30_000 });
+    });
     await expectResultsFirst();
     await screenshot(page, 'search results at phone width');
   });
