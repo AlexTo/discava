@@ -117,6 +117,27 @@ describe('discussion', () => {
   });
 });
 
+describe('freePreview', () => {
+  const paths = Object.keys(appRouter._def.procedures).filter((path) =>
+    path.startsWith('freePreview.'),
+  );
+
+  it('is exactly lesson, videoUrl and fileUrl, all public', () => {
+    expect(paths.sort()).toEqual([
+      'freePreview.fileUrl',
+      'freePreview.lesson',
+      'freePreview.videoUrl',
+    ]);
+    for (const path of paths) {
+      expect(PUBLIC_OPERATIONS as readonly string[]).toContain(path);
+    }
+  });
+
+  it.each(paths)('%s answers a caller with no user', async (path) => {
+    expect(await refusesAnonymousCallers(path)).toBe(false);
+  });
+});
+
 describe('course.dismissFirstLessonPrompt', () => {
   it('is mounted, refuses an anonymous caller and is not public', async () => {
     expect(Object.keys(appRouter._def.procedures)).toContain(

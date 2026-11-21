@@ -38,7 +38,8 @@ export const getEnrolment = async (
 // Only enrolled students read a course's content, including after it's
 // archived. Anyone else learns only that a published course exists, which
 // publicView shows them anyway; a draft or archived course is NOT_FOUND, so
-// its existence isn't leaked.
+// its existence isn't leaked. Open preview lessons are read through the
+// freePreview router and never through a procedure that calls this function.
 export const requireEnrolment = (
   course: { status: string },
   enrolment: IEnrolment | null,
