@@ -73,6 +73,10 @@ import {
   viewCourse,
 } from './procedures/course.js';
 import {
+  courseCaptionLanguages,
+  updateCourseCaptionLanguages,
+} from './procedures/course-caption-languages.js';
+import {
   listActiveCategories,
   updateCourseCatalogue,
 } from './procedures/course-catalogue.js';
@@ -178,6 +182,8 @@ export const appRouter = router({
     createImageUploadUrl: createCourseImageUploadUrl,
     updateImage: updateCourseImage,
     updateCatalogue: updateCourseCatalogue,
+    captionLanguages: courseCaptionLanguages,
+    updateCaptionLanguages: updateCourseCaptionLanguages,
     updateLanding: updateCourseLanding,
   }),
   coursePreview: router({

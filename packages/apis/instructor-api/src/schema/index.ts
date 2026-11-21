@@ -8,6 +8,7 @@ export * from './assignment.js';
 export * from './assignment-submission.js';
 export * from './content-item.js';
 export * from './course.js';
+export * from './course-caption-languages.js';
 export * from './course-catalogue.js';
 export * from './course-landing.js';
 export * from './course-preview.js';
