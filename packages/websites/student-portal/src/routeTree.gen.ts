@@ -24,7 +24,6 @@ import { Route as LearnCourseIdHomeRouteImport } from './routes/learn/$courseId/
 import { Route as LearnCourseIdSearchRouteImport } from './routes/learn/$courseId/search'
 import { Route as LearnCourseIdStartRouteImport } from './routes/learn/$courseId/start'
 import { Route as LearnCourseIdLessonLessonIdRouteImport } from './routes/learn/$courseId/lesson/$lessonId'
-import { Route as LearnCourseIdPreviewLessonIdRouteImport } from './routes/learn/$courseId/preview/$lessonId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -104,12 +103,6 @@ const LearnCourseIdLessonLessonIdRoute =
     path: '/learn/$courseId/lesson/$lessonId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LearnCourseIdPreviewLessonIdRoute =
-  LearnCourseIdPreviewLessonIdRouteImport.update({
-    id: '/learn/$courseId/preview/$lessonId',
-    path: '/learn/$courseId/preview/$lessonId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -127,7 +120,6 @@ export interface FileRoutesByFullPath {
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
-  '/learn/$courseId/preview/$lessonId': typeof LearnCourseIdPreviewLessonIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -145,7 +137,6 @@ export interface FileRoutesByTo {
   '/certificates/$certificateId': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
-  '/learn/$courseId/preview/$lessonId': typeof LearnCourseIdPreviewLessonIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -164,7 +155,6 @@ export interface FileRoutesById {
   '/certificates/$certificateId/': typeof CertificatesCertificateIdIndexRoute
   '/learn/$courseId/': typeof LearnCourseIdIndexRoute
   '/learn/$courseId/lesson/$lessonId': typeof LearnCourseIdLessonLessonIdRoute
-  '/learn/$courseId/preview/$lessonId': typeof LearnCourseIdPreviewLessonIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -184,7 +174,6 @@ export interface FileRouteTypes {
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
-    | '/learn/$courseId/preview/$lessonId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -202,7 +191,6 @@ export interface FileRouteTypes {
     | '/certificates/$certificateId'
     | '/learn/$courseId'
     | '/learn/$courseId/lesson/$lessonId'
-    | '/learn/$courseId/preview/$lessonId'
   id:
     | '__root__'
     | '/'
@@ -220,7 +208,6 @@ export interface FileRouteTypes {
     | '/certificates/$certificateId/'
     | '/learn/$courseId/'
     | '/learn/$courseId/lesson/$lessonId'
-    | '/learn/$courseId/preview/$lessonId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -239,7 +226,6 @@ export interface RootRouteChildren {
   CertificatesCertificateIdIndexRoute: typeof CertificatesCertificateIdIndexRoute
   LearnCourseIdIndexRoute: typeof LearnCourseIdIndexRoute
   LearnCourseIdLessonLessonIdRoute: typeof LearnCourseIdLessonLessonIdRoute
-  LearnCourseIdPreviewLessonIdRoute: typeof LearnCourseIdPreviewLessonIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -349,13 +335,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnCourseIdLessonLessonIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/learn/$courseId/preview/$lessonId': {
-      id: '/learn/$courseId/preview/$lessonId'
-      path: '/learn/$courseId/preview/$lessonId'
-      fullPath: '/learn/$courseId/preview/$lessonId'
-      preLoaderRoute: typeof LearnCourseIdPreviewLessonIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -376,7 +355,6 @@ const rootRouteChildren: RootRouteChildren = {
   CertificatesCertificateIdIndexRoute: CertificatesCertificateIdIndexRoute,
   LearnCourseIdIndexRoute: LearnCourseIdIndexRoute,
   LearnCourseIdLessonLessonIdRoute: LearnCourseIdLessonLessonIdRoute,
-  LearnCourseIdPreviewLessonIdRoute: LearnCourseIdPreviewLessonIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -149,6 +149,13 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
   await screenshot(page, 'transcript-panel-phone');
 });
 
+// Two words no other scenario's captions hold. `uniqueName` makes a word and a
+// suffix, so each is squeezed into one token: the phrase must be two words.
+const uniquePhrase = () =>
+  ['nebula', 'pulsar']
+    .map((word) => uniqueName(word).replace(/[^a-z0-9]/gi, ''))
+    .join(' ');
+
 // A course with one captioned video, published. The two words of `phrase`
 // are said in two neighbouring caption lines, the first starting at 2 s: the
 // test video is 3 s long and a player never opens on its last second.
@@ -187,7 +194,7 @@ const publishCourseWithPhrase = async (
 test('a learner searches a course’s transcripts and opens the moment', async ({
   page,
 }) => {
-  const phrase = `${uniqueName('nebula')} ${uniqueName('pulsar')}`;
+  const phrase = uniquePhrase();
   const title = uniqueName('E2E transcript search course');
   const instructor = await apiUser('Ivy', ['instructor']);
   await publishCourseWithPhrase(instructor, title, phrase);
@@ -197,7 +204,10 @@ test('a learner searches a course’s transcripts and opens the moment', async (
 
   // Indexing lags the upload by a few seconds.
   await searchTranscripts(page, phrase);
-  const result = page.getByRole('link', { name: /Lesson 1/ });
+  // The course outline also links to "Lesson 1": look only in the results.
+  const result = page
+    .getByRole('list', { name: 'Search results' })
+    .getByRole('link');
   await expectAfterReloads(page, async () => {
     await expect(result).toHaveCount(1, { timeout: 5_000 });
   });
@@ -223,7 +233,7 @@ test('a learner searches a course’s transcripts and opens the moment', async (
 });
 
 test('transcript search is refused to someone not enrolled, and hides a hidden lesson at once', async () => {
-  const phrase = `${uniqueName('nebula')} ${uniqueName('pulsar')}`;
+  const phrase = uniquePhrase();
   const instructor = await apiUser('Ivy', ['instructor']);
   const video = await publishCourseWithPhrase(
     instructor,

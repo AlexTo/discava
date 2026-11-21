@@ -79,7 +79,7 @@ export function TranscriptSearchResults({
     body = (
       <>
         <h2 className="text-lg font-semibold">Moments matching '{text}'</h2>
-        <ol className="mt-4 space-y-3">
+        <ol aria-label="Search results" className="mt-4 space-y-3">
           {items.map((moment) => (
             <li
               key={`${moment.contentItemId}-${moment.language}-${moment.startSeconds}`}

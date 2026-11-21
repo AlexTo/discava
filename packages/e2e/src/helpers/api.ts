@@ -84,12 +84,6 @@ export const accessTokenForClaims = async (
 export const apiUser = async (givenName: string, roles: Role[]) =>
   apiClients(await accessTokenFor(roles, givenName));
 
-// A core-api client with no token, as a signed-out visitor's browser has.
-export const anonymousCoreClient = () =>
-  createTRPCClient<CoreApi>({
-    links: [httpLink({ url: SERVICES.coreApi })],
-  });
-
 export const apiClients = (accessToken: string) => {
   const headers = { authorization: `Bearer ${accessToken}` };
   // The user's id, from the token's claims.
@@ -191,7 +185,7 @@ export const connectLocalStripe = async () => {
 
 export type ApiUser = Awaited<ReturnType<typeof apiUser>>;
 
-export const textBody = (text: string) =>
+const textBody = (text: string) =>
   JSON.stringify({
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
