@@ -87,6 +87,8 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await expect(page.locator('.react-pdf__Page canvas')).toBeVisible({
       timeout: 30_000,
     });
+    // The canvas only: no text layer printing the page's text again.
+    await expect(page.locator('.react-pdf__Page__textContent')).toHaveCount(0);
     await screenshot(page, 'pdf preview and grading form');
   });
 
@@ -154,6 +156,13 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await expect
       .poll(async () => (await emailsFor(sam.email, 'was returned')).length)
       .toBe(1);
+  });
+
+  await test.step('Edit grade starts from the grade just returned', async () => {
+    await page.getByRole('button', { name: 'Edit grade' }).click();
+    await expect(page.getByLabel('Points')).toHaveValue('17');
+    await screenshot(page, 'edit grade starts from the returned grade');
+    await page.getByRole('button', { name: 'Cancel' }).click();
   });
 
   await test.step('editing the grade notifies the student again', async () => {
