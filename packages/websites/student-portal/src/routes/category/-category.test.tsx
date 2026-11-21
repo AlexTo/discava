@@ -139,4 +139,21 @@ describe('/category/$slug', () => {
     });
     expect(await screen.findByText('Physics')).toBeInTheDocument();
   });
+
+  it('empties the search box when the query leaves the address', async () => {
+    const { router } = open('/category/science?query=abc');
+
+    const box = await screen.findByRole('searchbox', {
+      name: 'Search Science',
+    });
+    expect(box).toHaveValue('abc');
+    expect(box).toHaveAttribute('name', 'query');
+    expect(box).toHaveAttribute('autocomplete', 'off');
+
+    await router.navigate({
+      to: '/category/$slug',
+      params: { slug: 'science' },
+    });
+    await waitFor(() => expect(box).toHaveValue(''));
+  });
 });

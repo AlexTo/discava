@@ -446,4 +446,12 @@ describe('/search', () => {
       expect(screen.getByText('French')).toBeInTheDocument();
     });
   });
+
+  it('lets a long unbroken query wrap in the heading', async () => {
+    search('a'.repeat(70));
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveClass(
+      'break-words',
+    );
+  });
 });
