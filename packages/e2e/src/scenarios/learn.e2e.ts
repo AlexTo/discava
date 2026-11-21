@@ -56,6 +56,13 @@ test('an instructor publishes a course, and a student completes it', async ({
 
   await test.step('a new student finds the course and enrols', async () => {
     await openCourse(student, course);
+    // Following the search result's link moved focus to the page's heading.
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
+    await student.goBack();
+    await expect(student).toHaveTitle(`Search: ${course} · Discava`);
+    await student.goForward();
+    await expect(student).toHaveTitle(`${course} · Discava`);
     await enrol(student, newUser('Sam', ['student']));
     await expect(
       student.getByText('0% complete', { exact: true }),
@@ -68,8 +75,12 @@ test('an instructor publishes a course, and a student completes it', async ({
       student.getByRole('heading', { name: 'Reading one' }),
     ).toBeVisible();
     await expect(student.getByText(reading)).toBeVisible();
+    await expect(student).toHaveTitle(`Lesson one · ${course} · Discava`);
     await student.getByRole('button', { name: 'Mark as done' }).click();
     await expect(student.getByText('1/1 lessons complete')).toBeVisible();
+    await student.goBack();
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await student.goForward();
   });
 
   await test.step('the course shows as completed', async () => {

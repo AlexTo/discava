@@ -1,0 +1,122 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { usePageTitle } from '../hooks/use-page-title';
+import { RouteAnnouncer } from './route-announcer';
+
+function Child({ title }: { title: string }) {
+  usePageTitle(title);
+  return <h1>{title}</h1>;
+}
+
+function Shell({
+  pathname,
+  children,
+}: {
+  pathname: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <>
+      <RouteAnnouncer containerId="main" pathname={pathname} />
+      <div id="main">{children}</div>
+    </>
+  );
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('RouteAnnouncer', () => {
+  it('focuses nothing on first render', () => {
+    render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+      </Shell>,
+    );
+    expect(document.body).toHaveFocus();
+  });
+
+  it('focuses the heading after the pathname changes', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+      </Shell>,
+    );
+    rerender(
+      <Shell pathname="/b">
+        <h1>B</h1>
+      </Shell>,
+    );
+    const heading = screen.getByRole('heading', { name: 'B' });
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('waits for a heading that is added later', async () => {
+    const { rerender } = render(<Shell pathname="/a" />);
+    rerender(<Shell pathname="/b" />);
+    expect(document.body).toHaveFocus();
+    rerender(
+      <Shell pathname="/b">
+        <h1>Late</h1>
+      </Shell>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Late' })).toHaveFocus(),
+    );
+  });
+
+  it('focuses nothing when the pathname is unchanged', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+      </Shell>,
+    );
+    rerender(
+      <Shell pathname="/a">
+        <h1>A</h1>
+        <h1>More</h1>
+      </Shell>,
+    );
+    expect(document.body).toHaveFocus();
+  });
+
+  it('disconnects its observer on unmount', () => {
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      'MutationObserver',
+      class {
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    const { rerender, unmount } = render(<Shell pathname="/a" />);
+    rerender(<Shell pathname="/b" />);
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves the child-set title alone when the child remounts or keeps its parts', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <Child key="a" title="Child" />
+      </Shell>,
+    );
+    rerender(
+      <Shell pathname="/b">
+        <Child key="b" title="Child" />
+      </Shell>,
+    );
+    expect(document.title).toBe('Child · Discava');
+    rerender(
+      <Shell pathname="/c">
+        <Child key="b" title="Child" />
+      </Shell>,
+    );
+    expect(document.title).toBe('Child · Discava');
+  });
+});

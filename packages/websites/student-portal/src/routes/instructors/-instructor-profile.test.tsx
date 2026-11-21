@@ -72,7 +72,7 @@ describe('/instructors/$handle', () => {
   it('sets the document title to the display name', async () => {
     open();
     await screen.findByText('Gil Strang');
-    await waitFor(() => expect(document.title).toBe('Gil Strang'));
+    await waitFor(() => expect(document.title).toBe('Gil Strang · Discava'));
   });
 
   it('shows initials when there is no photo, and leaves out a missing headline and bio', async () => {
