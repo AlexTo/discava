@@ -176,7 +176,12 @@ export type IViewCourseOutput = z.output<typeof ViewCourseOutputSchema>;
 // Anonymous course preview (public landing page "Learn more"): titles/
 // descriptions/ordering only, no content items - those aren't meant to be
 // readable before enrolling, and aren't fetched for this procedure anyway.
-export const PublicLessonSchema = LessonSchema.omit({ contentItems: true });
+export const PublicLessonSchema = LessonSchema.omit({
+  contentItems: true,
+}).extend({
+  // Whether anyone may open this lesson without enrolling (an open preview).
+  freePreview: z.boolean(),
+});
 
 export type IPublicLesson = z.output<typeof PublicLessonSchema>;
 

@@ -62,12 +62,14 @@ const SUGGEST_OPERATION = 'course.publicSuggest' satisfies Operations;
  */
 export const CORE_API_DEDICATED_FUNCTIONS = {
   // Core-api's only holder of the CloudFront signing key: video playback and
-  // file download links
+  // file download links, for enrolled students and for free preview lessons
   MediaUrl: [
     'contentItem.videoUrl',
     'course.previewVideoUrl',
     'contentItem.fileUrl',
     'assignment.submissionFileUrl',
+    'freePreview.videoUrl',
+    'freePreview.fileUrl',
   ],
   // A student's submission to an upload assignment (#102): holds S3 and
   // Scheduler rights, to hand out upload links and copy the file into the

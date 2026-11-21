@@ -100,6 +100,40 @@ describe('viewCourse', () => {
     expect(result).toEqual({ ...course, modules: [] });
   });
 
+  it('returns lessons without a freePreview field, marked or not', async () => {
+    const stamp = {
+      courseId: course.courseId,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    };
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [course],
+          module: [
+            visible({ ...stamp, moduleId: 'module-1', title: 'M', order: 1 }),
+          ],
+          lesson: [
+            visible({
+              ...stamp,
+              moduleId: 'module-1',
+              lessonId: 'lesson-1',
+              title: 'Marked',
+              kind: 'lesson' as const,
+              order: 1,
+              freePreview: true,
+            }),
+          ],
+          contentItem: [],
+        },
+      }),
+    });
+
+    const result = await callAsUser().viewCourse({ courseId: course.courseId });
+
+    expect(result.modules[0]!.lessons[0]).not.toHaveProperty('freePreview');
+  });
+
   it('nests each lesson’s content items, sorted by order', async () => {
     const module1 = {
       moduleId: 'module-1',

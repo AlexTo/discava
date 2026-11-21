@@ -12,6 +12,7 @@ import { previewManifestNonce } from '@discava/common-server-utils/media-keys';
 import {
   type CoreTable,
   filterEffectivelyVisible,
+  isOpenFreePreview,
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -259,7 +260,11 @@ export const publicViewCourse = publicCourseProcedure
           ...module,
           lessons: (lessonsByModuleId.get(module.moduleId) ?? [])
             .slice()
-            .sort((a, b) => a.order - b.order),
+            .sort((a, b) => a.order - b.order)
+            .map((lesson) => ({
+              ...lesson,
+              freePreview: isOpenFreePreview({ course, module, lesson }),
+            })),
         })),
     };
   });
