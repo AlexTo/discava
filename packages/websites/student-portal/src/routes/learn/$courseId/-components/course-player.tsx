@@ -14,6 +14,7 @@ import {
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { Link } from '@tanstack/react-router';
@@ -34,6 +35,7 @@ import {
   type CoursePlayer,
   errorCode,
   lessonDueAt,
+  type PlayerCourse,
   type PlayerModule,
   useCoursePlayer,
 } from '../../../../hooks/use-course-player';
@@ -264,14 +266,18 @@ function CourseOutline({
 export function CoursePlayerLayout({
   courseId,
   activeLessonId,
+  titleParts,
   children,
 }: {
   courseId: string;
   activeLessonId?: string;
+  /** The page's title parts once the course is known, else the fallback. */
+  titleParts: (course: PlayerCourse | undefined) => string[];
   children: (player: CoursePlayer) => ReactNode;
 }) {
   const player = useCoursePlayer(courseId);
   const { course, enrolment } = player;
+  usePageTitle(...titleParts(course));
   const [closedModuleIds, setClosedModuleIds] = useState<Set<string>>(
     new Set(),
   );
@@ -286,8 +292,12 @@ export function CoursePlayerLayout({
 
   if (player.isPending) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl justify-center px-6 py-24 lg:px-8">
-        <Spinner />
+      <main
+        className="mx-auto flex w-full max-w-3xl items-center justify-center gap-3 px-6 py-24 text-sm text-muted-foreground lg:px-8"
+        role="status"
+      >
+        <Spinner role="presentation" aria-hidden="true" />
+        Loading…
       </main>
     );
   }
