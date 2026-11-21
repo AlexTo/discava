@@ -15,6 +15,7 @@ import {
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { Link } from '@tanstack/react-router';
 import {
   ChevronDown,
@@ -46,9 +47,11 @@ const count = (n: number, one: string, many: string) =>
 export function Unavailable({
   courseId,
   error,
+  onRetry,
 }: {
   courseId: string;
   error: unknown;
+  onRetry?: () => void;
 }) {
   const code = errorCode(error);
   if (code === 'FORBIDDEN') {
@@ -83,8 +86,12 @@ export function Unavailable({
         </>
       ) : (
         <div className="text-left">
-          <ErrorAlert type="error" header="Couldn't load this course">
-            {(error as Error | null)?.message ?? 'Something went wrong.'}
+          <ErrorAlert
+            type="error"
+            header="Couldn't load this course"
+            onRetry={onRetry}
+          >
+            {apiErrorMessage(error)}
           </ErrorAlert>
         </div>
       )}
@@ -285,7 +292,13 @@ export function CoursePlayerLayout({
     );
   }
   if (!course) {
-    return <Unavailable courseId={courseId} error={player.error} />;
+    return (
+      <Unavailable
+        courseId={courseId}
+        error={player.error}
+        onRetry={player.retry}
+      />
+    );
   }
 
   // A lesson the course no longer lists ends the trail at the course.

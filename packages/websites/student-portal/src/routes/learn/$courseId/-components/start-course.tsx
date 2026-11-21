@@ -14,7 +14,7 @@ import { Unavailable } from './course-player';
 // history, so Back from the lesson returns to where the learner came from.
 export function StartCourse({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
-  const { error, isPlaceReady, nextLesson } = useCoursePlayer(courseId);
+  const { error, isPlaceReady, nextLesson, retry } = useCoursePlayer(courseId);
   const lessonId = nextLesson?.lesson.lessonId;
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export function StartCourse({ courseId }: { courseId: string }) {
   }, [isPlaceReady, lessonId, courseId, navigate]);
 
   if (error) {
-    return <Unavailable courseId={courseId} error={error} />;
+    return <Unavailable courseId={courseId} error={error} onRetry={retry} />;
   }
   return (
     <main

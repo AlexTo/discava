@@ -167,7 +167,9 @@ describe('the Reviews screen', () => {
     });
     await pick(rendered);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Boom');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong on our side. Try again in a moment.',
+    );
     fail = false;
     await rendered.user.click(
       screen.getByRole('button', { name: 'Try again' }),
@@ -190,7 +192,7 @@ describe('the Reviews screen', () => {
     });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'No courses for you',
+      'Something went wrong on our side. Try again in a moment.',
     );
     fail = false;
     await rendered.user.click(

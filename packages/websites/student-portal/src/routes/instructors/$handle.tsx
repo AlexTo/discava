@@ -88,17 +88,12 @@ function RouteComponent() {
       ) : notFound ? (
         <NotFound />
       ) : profileQuery.isError || !profile ? (
-        <ErrorAlert type="error" header="Couldn't load this profile">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load this profile"
+          onRetry={() => profileQuery.refetch()}
+        >
           <p>{apiErrorMessage(profileQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => profileQuery.refetch()}
-          >
-            Try again
-          </Button>
         </ErrorAlert>
       ) : (
         <>

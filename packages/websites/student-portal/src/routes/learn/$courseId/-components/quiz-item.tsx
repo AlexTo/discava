@@ -9,6 +9,7 @@ import {
   type QuizSubmitResult,
 } from '@discava/common-shadcn/components/quiz-card';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { QuizAnswers } from '@discava/common-web-utils/quiz';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from 'react-oidc-context';
@@ -104,7 +105,6 @@ export function QuizItem({
       }
       return { status: 'submitted', ...result };
     } catch (error) {
-      const message = (error as Error).message;
       switch (errorCode(error)) {
         case 'CONFLICT':
           // The questions changed: nothing was recorded. The card carries
@@ -122,9 +122,13 @@ export function QuizItem({
           // No attempts left, or the course was archived meanwhile.
           void attemptsQuery.refetch();
           invalidate(trpc.course.view.queryKey({ courseId: item.courseId }));
-          return { status: 'error', message, closed: true };
+          return {
+            status: 'error',
+            message: apiErrorMessage(error),
+            closed: true,
+          };
         default:
-          return { status: 'error', message };
+          return { status: 'error', message: apiErrorMessage(error) };
       }
     }
   };
@@ -138,8 +142,16 @@ export function QuizItem({
   }
   if (quizQuery.isError || attemptsQuery.isError) {
     return (
-      <ErrorAlert type="error" header="Couldn't load this quiz">
-        {(quizQuery.error ?? attemptsQuery.error)?.message}
+      <ErrorAlert
+        type="error"
+        header="Couldn't load this quiz"
+        onRetry={() =>
+          void (quizQuery.isError
+            ? quizQuery.refetch()
+            : attemptsQuery.refetch())
+        }
+      >
+        {apiErrorMessage(quizQuery.error ?? attemptsQuery.error)}
       </ErrorAlert>
     );
   }
