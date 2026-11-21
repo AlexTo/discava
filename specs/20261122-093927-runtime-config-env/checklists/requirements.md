@@ -32,6 +32,6 @@
 ## Notes
 
 - This is an infrastructure change whose "users" are operators and contributors, so the spec names the things they see and pay for: the configuration service being removed, `runtime-config.json`, the stage's stacks, `scripts/setup-stage.sh` and the operator scripts. These are existing parts of the system, not choices made here.
-- The parameter store is named once, in Assumptions, as the default way round the page renderer's stack-order problem. The requirement itself (FR-007) only says "no cycle and no per-request or per-start charge", and planning confirms the choice.
+- The parameter store is named as the way round the page renderer's stack-order problem (Clarifications, FR-007), because the choice is what keeps the stage free of a per-start charge.
 - The 4 KB environment limit is a platform limit, stated so the stack test that guards it has a number.
-- No clarification markers were left. The open choices (page renderer approach, whether the final stack is renamed or removed) were given recommended defaults in Assumptions and are listed in the pull request for the owner to confirm.
+- No clarification markers were left. The open choices were resolved with recommended defaults in the Clarifications section (non-interactive run) and are listed in the pull request for the owner to confirm.

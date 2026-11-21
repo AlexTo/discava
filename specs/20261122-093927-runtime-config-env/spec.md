@@ -10,6 +10,18 @@
 
 **Parent issue**: #777
 
+## Clarifications
+
+### Session 2026-11-22
+
+Non-interactive run: each question was answered with the recommended option, for the owner to confirm on the pull request.
+
+- Q: How does the page renderer get the table name and public media address, given its stack deploys before the stack that creates them? → A: The stack that creates them also writes them to one free standard parameter in the parameter store, at a name derived from the stage (known when the renderer is deployed, as the configuration application's name is today). The renderer reads it once per function instance and keeps it. Moving the renderer to a later stack would make the student portal's distribution depend on a later stack, which is a cycle.
+- Q: Is the final stack removed or kept for the portals' configuration files? → A: Kept, holding only the portals' `runtime-config.json` deployments, and renamed `PortalConfig`. No existing stack deploys after every stack those files read from, so moving them would need a new dependency chain for no gain.
+- Q: How is the change rolled out to an existing stage, given the configuration application's stack is deployed before the stack that imports its identifier? → A: In two implementation pull requests, each deployed to `discava-development` after merge. The first switches every reader and removes the content, permissions and identifier variables, but leaves the configuration application, environment and deployment strategy in place, unused. The second removes those. No compatibility code is written, and production follows the same two deploys.
+- Q: How does an operator point `seed-categories` or `rebuild-analytics` at a deployed stage? → A: By setting the same table-name setting the functions use, read from a new output of the stack that holds the table. The first-deploy guide gives the one-line command to read the output, as it does today for the configuration application's identifier.
+- Q: Which settings fail loudly when absent and which keep a default? → A: Only the caption language and the caption translation settings keep today's defaults (the stage's transcription language; translation off). Every other setting is required and fails on first use naming the setting. The stack test makes sure the defaulted ones are always given on a deployed stage, so their defaults only apply to tests and hand-edited deploys.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The "users" of this feature are the people who run and pay for a deployed stage, and the contributors and agents who add backend functions. Learners, instructors and admins should see no change.
@@ -51,7 +63,7 @@ Every flow that depended on the old lookup behaves exactly as before on a deploy
 
 ### User Story 3 - The stage no longer carries a configuration service (Priority: P2)
 
-A contributor reading the stage's infrastructure finds no hosted configuration application, profiles, versions or deployments. The final stack, which today exists to hold that content and each portal's `runtime-config.json`, either goes away or keeps only the portals' file under a name that says so.
+A contributor reading the stage's infrastructure finds no hosted configuration application, profiles, versions or deployments. The final stack, which today holds that content and each portal's `runtime-config.json`, keeps only the portals' files and is renamed `PortalConfig` for that job.
 
 **Why this priority**: Removing the unused resources keeps the stage simpler and stops anyone adding a new runtime lookup by habit, but the cost saving doesn't depend on it.
 
@@ -61,7 +73,7 @@ A contributor reading the stage's infrastructure finds no hosted configuration a
 
 1. **Given** the synthesised stage, **When** its templates are inspected, **Then** none contains a configuration-service resource or a permission to read one.
 2. **Given** the synthesised stage, **When** each portal's `runtime-config.json` is compared with today's, **Then** its content is unchanged (sign-in settings, API addresses, portal and media addresses, site settings).
-3. **Given** the final stack, **When** its contents are listed, **Then** it holds only the portals' configuration files (renamed for that job), or it no longer exists because those files moved to a stack that already deploys after everything they read.
+3. **Given** the final stack, **When** its contents are listed, **Then** it is named `PortalConfig`, still deploys last, and holds only the portals' configuration file deployments.
 
 ---
 
@@ -76,7 +88,7 @@ An operator upgrades `discava-development` and `discava-production` with the nor
 **Acceptance Scenarios**:
 
 1. **Given** a stage deployed from `main` before this change, **When** the documented upgrade steps are followed, **Then** every stack updates without failing and no stack has to be destroyed.
-2. **Given** the upgrade needs more than one deploy, **When** the operator follows the documented steps, **Then** each step leaves the stage working, and the steps say which deploy removes what.
+2. **Given** the first of the two pull requests is deployed, **When** the flows are exercised, **Then** they work, the configuration application still exists but nothing reads it, and the second deploy removes it without failing.
 
 ---
 
@@ -90,8 +102,8 @@ An operator runs `seed-categories` or `rebuild-analytics` against a deployed sta
 
 **Acceptance Scenarios**:
 
-1. **Given** a deployed stage and its credentials, **When** the operator follows the documented command for `seed-categories` or `rebuild-analytics`, **Then** it writes to that stage's table.
-2. **Given** no stage is named, **When** either script runs, **Then** it uses the local table, as today.
+1. **Given** a deployed stage and its credentials, **When** the operator reads the table name from the stage's output and runs `seed-categories` or `rebuild-analytics` with it, **Then** it writes to that stage's table.
+2. **Given** no table name is given, **When** either script runs, **Then** it uses the local table, as today.
 
 ---
 
@@ -115,26 +127,26 @@ An operator runs `seed-categories` or `rebuild-analytics` against a deployed sta
 - **FR-001**: Every backend function on a deployed stage MUST receive the resource names and settings it reads when it is deployed, and MUST NOT fetch them from a configuration service at runtime. This covers the table name, bucket names and their media addresses, the search endpoint, the media pipeline and cleanup details, the certificate reminder details and the caption translation settings.
 - **FR-002**: Each function MUST receive only the settings it reads, not the whole stage's settings.
 - **FR-003**: A function that needs a required setting and wasn't given it MUST fail on first use with an error naming the setting. It MUST NOT fall back silently to an empty or default value.
-- **FR-004**: A setting that has a documented default today (the caption language, the caption translation settings) MUST keep that default and its current behaviour when absent.
+- **FR-004**: Only the caption language and the caption translation settings MAY be absent. They MUST keep today's defaults (the stage's transcription language; translation off) and behaviour when absent. Every other setting is required (FR-003).
 - **FR-005**: Secrets MUST stay in the secret store. Only their identifiers may be passed at deploy time.
 - **FR-006**: The shape of each setting a function reads (names, units, which values are optional) MUST stay the same, so the code that uses a setting changes only in where it reads it from.
 
 **Stack structure**
 
-- **FR-007**: The change MUST NOT introduce a dependency cycle between stacks, and MUST keep today's deploy order unless the plan records why it changes. Where a function cannot reference a value because the value's stack deploys later (the page renderer), the plan MUST choose a way that adds no cycle and no per-request or per-start charge, and record the choice.
+- **FR-007**: The change MUST NOT introduce a dependency cycle between stacks, and MUST keep today's deploy order unless the plan records why it changes. Where a function cannot reference a value because the value's stack deploys later (the page renderer), the value MUST be written by the stack that creates it to one free standard parameter at a stage-derived name, which the function reads once per instance and keeps. This adds no cycle and no per-request or per-start charge.
 - **FR-008**: The stage MUST have no configuration-service resources (application, environment, deployment strategy, profiles, hosted versions, deployments) and no function or role MUST have permission to read one.
 - **FR-009**: Each portal's `runtime-config.json` MUST keep its current content and stay uncached. It MUST still be deployed after every stack whose values it contains.
-- **FR-010**: The final stack MUST either be removed, with the portals' configuration files moved to a stack that already deploys after everything they read, or keep only those files and be renamed for that job. The plan MUST record which and why.
+- **FR-010**: The final stack MUST keep only the portals' configuration file deployments and MUST be renamed `PortalConfig`. It still deploys last.
 - **FR-011**: The stage's deploy role permissions (set up by `scripts/setup-stage.sh`) MUST drop the configuration-service permissions the deploy no longer needs.
 
 **Upgrading existing stages**
 
-- **FR-012**: The change MUST deploy over an existing stage without destroying any stack. If one deploy can't remove everything because one stack still imports a value another stack removes, the change MUST be split so each deploy succeeds, and the steps MUST be documented.
+- **FR-012**: The change MUST deploy over an existing stage without destroying any stack. It MUST land in two pull requests, each deployable on its own: the first switches every reader and removes the configuration content, the read permissions and the identifier variables, leaving the configuration application, environment and deployment strategy unused; the second removes those. The steps MUST be documented, and no compatibility code is written.
 - **FR-013**: `discava-production` MUST be upgradable in place by the same steps.
 
 **Operator scripts**
 
-- **FR-014**: `seed-categories` and `rebuild-analytics` MUST be able to target a deployed stage without the configuration service, by a documented command, and MUST keep using the local table when no stage is named.
+- **FR-014**: `seed-categories` and `rebuild-analytics` MUST target a deployed stage when given the same table-name setting the functions use, read from a new output of the stack that holds the table, and MUST keep using the local table when it isn't given.
 - **FR-015**: The first-deploy guide's seeding step MUST be updated to the new command.
 
 **Tests**
@@ -172,8 +184,7 @@ An operator runs `seed-categories` or `rebuild-analytics` against a deployed sta
 
 - Discava has not launched, so readers are switched outright with no fallback to the configuration service (constitution principle VII). Development data needs no migration: settings are not data.
 - Every value read at runtime today is fixed at deploy time. Nothing writes to the configuration service between deploys, so no runtime-changeable setting is lost.
-- The page renderer is the only reader that can't reference its values directly, because its stack deploys before the stack that creates them. The default plan is to have the stack that creates those values also write them to a free standard parameter in the parameter store, at a name the page renderer knows at deploy time (as it knows the configuration application's name today), and to read it once per function instance. Moving the renderer to a later stack would need the portal's distribution to point at a function in a stack that depends on it, which is a cycle. Planning confirms the choice (research) and records the alternatives.
-- The final stack keeps the portals' configuration files, renamed, unless planning finds an existing stack that already deploys after everything those files read. Today none does, so renaming is the default.
-- The operator scripts find a stage's table name through the stage's stack outputs, using the same approach the first-deploy guide uses today to find the configuration application's identifier.
+- The page renderer is the only reader that can't reference its values directly, because its stack deploys before the stack that creates them (Clarifications). Standard parameters in the parameter store have no storage charge and no charge for standard-throughput reads, and one read per renderer instance is far below the standard throughput limit. Planning confirms both against current documentation.
+- Removing the configuration application in a second pull request is what lets each deploy succeed: the stack that imports its identifier stops importing it in the first deploy, so the second can delete it.
 - A function's settings stay far below the 4 KB environment limit. The largest today is the media pipeline's, at a few hundred bytes.
 - Out of scope: changing what any setting means, the portals' configuration file's content or the web code that reads it, moving secrets, and any other cost on the stage.
