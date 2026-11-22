@@ -141,6 +141,7 @@ function Lesson({
     newItemCount,
     readOnly,
     course,
+    enrolment,
   } = player;
   const index = lessons.findIndex(({ lesson }) => lesson.lessonId === lessonId);
 
@@ -183,6 +184,17 @@ function Lesson({
     lesson.kind === 'assignment'
       ? lesson.contentItems.slice(0, 1)
       : lesson.contentItems;
+
+  // Asked once, in the first shown lesson, of a learner who has not yet
+  // answered or dismissed it.
+  const firstLessonPrompt =
+    course &&
+    index === 0 &&
+    !readOnly &&
+    (enrolment?.status === 'active' || enrolment?.status === 'completed') &&
+    !enrolment.firstLessonPromptState
+      ? course.firstLessonPrompt
+      : undefined;
 
   return (
     <div className="space-y-8">
@@ -235,6 +247,7 @@ function Lesson({
         moduleId={module.moduleId}
         lessonId={lesson.lessonId}
         readOnly={readOnly}
+        firstLessonPrompt={firstLessonPrompt}
       />
 
       <nav

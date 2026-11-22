@@ -292,7 +292,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Independent test**: `pnpm nx run @discava/instructor-api:test -- --run grading-queue` and `pnpm nx run @discava/instructor-portal:test -- --run index` pass; CI's E2E job passes `instructor-home.e2e.ts`.
 
-- [ ] T027 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/grading-queue.ts`, registered as `gradingQueue.list` (input `{ limit?: number }`, default 20, max 50) per the contract:
+- [x] T027 [US5] Tests first, then add `packages/apis/instructor-api/src/procedures/grading-queue.ts`, registered as `gradingQueue.list` (input `{ limit?: number }`, default 20, max 50) per the contract:
   1. `courseInstructor.byInstructor` for `ctx.user.sub`;
   2. `assignmentSubmission.query.byWaiting({ waitingCourseId })` per course, reading every page;
   3. batch-get the enrolments and drop `dropped` ones;
@@ -300,14 +300,14 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   5. resolve course titles, assignment lesson titles and display names.
 
   `total` counts every enrolled waiting entry. `grading-queue.test.ts` covers: two courses merged in order, dropped students excluded from items and total, the limit, and an instructor with no courses.
-- [ ] T028 [US5] Tests first, then add a "Waiting for grading" section to `packages/websites/instructor-portal/src/routes/_authenticated/index.tsx` per the contract (Home page):
+- [x] T028 [US5] Tests first, then add a "Waiting for grading" section to `packages/websites/instructor-portal/src/routes/_authenticated/index.tsx` per the contract (Home page):
   - the total;
   - up to 10 rows (student, assignment, course, waited via `relativeTime`), each linking to `/my-courses/$courseId/assignments/$contentItemId/submissions/$userId`;
   - empty text "Nothing is waiting for grading.";
   - loading and error states.
 
   None of the strings `instructor-home.e2e.ts:11-23` forbids may appear. Extend `-index.test.tsx` with a case for items and one for empty.
-- [ ] T029 [US5] Extend `packages/e2e/src/scenarios/instructor-home.e2e.ts`: with a waiting submission in each of two courses, the section lists both oldest first with the right total and opens the review page; after returning one, it leaves the queue. Keep the existing assertions that the forbidden strings never appear. Call `screenshot()` on the section.
+- [x] T029 [US5] Extend `packages/e2e/src/scenarios/instructor-home.e2e.ts`: with a waiting submission in each of two courses, the section lists both oldest first with the right total and opens the review page; after returning one, it leaves the queue. Keep the existing assertions that the forbidden strings never appear. Call `screenshot()` on the section.
 
 ---
 

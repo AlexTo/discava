@@ -8,6 +8,11 @@ import {
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import {
+  apiUserFor,
+  createUploadAssignmentCourse,
+  uploadSubmissionFile,
+} from '../helpers/assignment.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
@@ -280,4 +285,27 @@ test('a long description does not make a tall card on a phone', async ({
 
   await card(longTitle).getByRole('link', { name: longTitle }).click();
   await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
+});
+
+test('the grading queue on the instructor home page fits a phone with long names', async ({
+  page,
+}) => {
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const tess = await apiUser('Tess', ['student']);
+  const long = await createUploadAssignmentCourse(instructor, {
+    courseTitle: `${uniqueName('E2E phone queue course')} ${'x'.repeat(60)}`,
+    assignmentTitle: `Assignment ${'y'.repeat(60)}`,
+  });
+  await tess.core.course.enrol.mutate({ courseId: long.courseId });
+  await tess.core.assignment.submit.mutate(
+    await uploadSubmissionFile(tess, long, 'a.txt', Buffer.from('a')),
+  );
+
+  await page.goto(`${PORTALS.instructor}/`);
+  await signIn(page, ivy);
+  const queue = page.getByRole('region', { name: 'Waiting for grading' });
+  await expect(queue.getByRole('link')).toHaveCount(1);
+  await expectNoSidewaysScroll(page);
+  await screenshot(page, 'grading queue at phone width');
 });

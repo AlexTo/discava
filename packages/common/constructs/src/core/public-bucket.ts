@@ -31,7 +31,7 @@ import { CloudfrontWebAcl } from './static-website.js';
 
 export interface PublicBucketProps {
   /**
-   * RuntimeConfig key used under the `s3` namespace.
+   * Deploy-time setting key used under the `s3` namespace.
    */
   readonly runtimeConfigKey: string;
   /**
@@ -201,7 +201,6 @@ export class PublicBucket extends Construct {
       cloudFrontDomainName,
     };
     this.baseUrl = `https://${cloudFrontDomainName}/`;
-    rc.set('s3', runtimeConfigKey, this.settings);
     // The portals build image URLs themselves, from the object keys the APIs
     // return, so they get the base URL too: under `connection.media`, which
     // reaches their runtime-config.json, unlike `s3`.
