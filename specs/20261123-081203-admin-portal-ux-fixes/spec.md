@@ -59,7 +59,7 @@ An administrator gets a report of an abusive review, or a request to revoke a ce
 - **Certificates (D-01):** a found certificate makes the page 528px wide, with Revoke off-screen.
 - **Reviews (C-01):** a review or response holding a long word makes the page 455px wide.
 
-The Recent changes table on Payments runs its columns together (E-01), and long names spill over their cells (B-02).
+The Recent changes table on Payments runs its columns together (E-01), long names spill over their cells (B-02), and a certificate's history entries run together (D-08).
 
 **Independent Test**: With the audit's data (a 60-character category name with no spaces, a course with long reviews and responses, a certificate with a long learner name, course title and notes, a dozen payment changes), open Categories, Reviews with that course chosen, Certificates with that certificate looked up, and Payments, at both widths.
 
