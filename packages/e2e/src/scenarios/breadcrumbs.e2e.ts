@@ -121,6 +121,7 @@ test('the breadcrumb sits in the same place on the student pages that have one',
 // unknown address gets a page inside the shell; the checklist's links stay on
 // the course page.
 test('the instructor portal breadcrumbs and links lead somewhere real', async ({
+  browser,
   page,
 }) => {
   const ASSIGNMENT = 'Breadcrumb essay';
@@ -185,6 +186,28 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
       page.getByRole('navigation', { name: 'breadcrumb' }),
     ).toBeVisible();
     await screenshot(page, 'page not found');
+
+    // Below a course the miss is under the signed-in layout: one shell, not two.
+    await page.goto(`${PORTALS.instructor}/my-courses/${ref.courseId}/zzz`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Page not found' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('navigation', { name: 'breadcrumb' }),
+    ).toHaveCount(1);
+  });
+
+  await test.step('an unknown address draws no shell for someone signed out', async () => {
+    const context = await browser.newContext();
+    const signedOut = await context.newPage();
+    await signedOut.goto(`${PORTALS.instructor}/no-such-page`);
+    await expect(
+      signedOut.getByRole('heading', { level: 1, name: 'Page not found' }),
+    ).toBeVisible();
+    await expect(
+      signedOut.getByRole('navigation', { name: 'breadcrumb' }),
+    ).toHaveCount(0);
+    await context.close();
   });
 
   await test.step('the checklist links stay on the course page', async () => {
