@@ -9,13 +9,22 @@ import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  type BrandDocument,
+  BrandDocumentSchema,
+  resolveBrand,
+} from '@discava/common-branding/brand';
 import { getS3Client } from '@discava/common-server-utils/lesson-media-bucket';
 import {
   isLocalDev,
   LOCAL_PORTAL_URLS,
   localObjectUrl,
 } from '@discava/common-server-utils/local-dev';
-import { type CoreTable, createCoreTableService } from '@discava/core-table';
+import {
+  type CoreTable,
+  createCoreTableService,
+  getBrand,
+} from '@discava/core-table';
 import middy from '@middy/core';
 import { TRPCError } from '@trpc/server';
 import { sitemapEntries } from '../helpers/sitemap.js';
@@ -67,7 +76,7 @@ export interface PageRendererDeps {
     /** The host used when the request names none that is allowed. */
     fallbackHost: string;
   };
-  logger?: Pick<Logger, 'error'>;
+  logger?: Pick<Logger, 'error'> & Partial<Pick<Logger, 'warn'>>;
 }
 
 const HTML = 'text/html; charset=utf-8';
@@ -93,6 +102,32 @@ const isNotFound = (error: unknown): boolean =>
 
 const isBadRequest = (error: unknown): boolean =>
   error instanceof TRPCError && error.code === 'BAD_REQUEST';
+
+/**
+ * The saved brand as the published document (no one's name, no timestamps),
+ * or undefined when none is saved, it can't be read or isn't a valid brand.
+ */
+const readBrandDocument = async (
+  coreTable: CoreTable,
+  logger: PageRendererDeps['logger'],
+): Promise<BrandDocument | undefined> => {
+  try {
+    const stored = await getBrand(coreTable);
+    if (!stored) {
+      return undefined;
+    }
+    const parsed = BrandDocumentSchema.safeParse(stored);
+    if (!parsed.success) {
+      throw new Error('The saved brand is not valid');
+    }
+    return parsed.data;
+  } catch (error) {
+    logger?.warn?.('The brand could not be read; using the default brand', {
+      error,
+    });
+    return undefined;
+  }
+};
 
 const decode = (segment: string): string => {
   try {
@@ -181,15 +216,26 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         deps.logger?.error('Public media base URL unavailable', { error });
         return undefined;
       });
+      // The brand, read once per render. If it can't be read (or isn't a
+      // valid brand) the page still renders, with the default brand.
+      const brandDocument = await readBrandDocument(coreTable, deps.logger);
       const context: PageContext = {
         host,
         siteName: config.siteName,
+        brand: resolveBrand(brandDocument, mediaBase),
         allowIndexing: config.allowIndexing,
         mediaUrl: (key) =>
           key && mediaBase ? new URL(key, mediaBase).toString() : undefined,
         defaultImageUrl: `${originOf(host)}/og-default.png`,
       };
       const template = await deps.loadTemplate();
+      // Every page carries the brand's icon and the document the portal's
+      // brand provider starts from.
+      const inject = (parts: Parameters<typeof injectIntoTemplate>[1]) =>
+        injectIntoTemplate(template, {
+          ...parts,
+          brand: { iconUrl: context.brand.iconUrl, document: brandDocument },
+        });
       const html = (
         statusCode: number,
         page: string,
@@ -202,11 +248,11 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           body: page,
         });
       const render = (page: RenderedPage) =>
-        html(200, injectIntoTemplate(template, page), PAGE_CACHE);
+        html(200, inject(page), PAGE_CACHE);
       const notFound = () =>
         html(
           404,
-          injectIntoTemplate(template, {
+          inject({
             head: notFoundHead(context),
             root: '',
           }),
@@ -220,7 +266,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           // The learning routes: signed-in, never indexed.
           return html(
             200,
-            injectIntoTemplate(template, {
+            inject({
               head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
               root: '',
             }),
@@ -247,7 +293,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           // The signed-in routes under a certificate: never indexed.
           return html(
             200,
-            injectIntoTemplate(template, {
+            inject({
               head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
               root: '',
             }),
@@ -261,10 +307,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           });
           return html(
             200,
-            injectIntoTemplate(
-              template,
-              renderCertificatePage(context, certificate),
-            ),
+            inject(renderCertificatePage(context, certificate)),
             PAGE_CACHE,
             { 'X-Robots-Tag': 'noindex' },
           );

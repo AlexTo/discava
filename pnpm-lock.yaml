@@ -635,6 +635,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../../common/branding
       '@discava/common-server-utils':
         specifier: workspace:*
         version: link:../../common/server-utils
@@ -916,6 +919,9 @@ importers:
 
   packages/common/shadcn:
     dependencies:
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../branding
       '@discava/common-tiptap':
         specifier: workspace:*
         version: link:../tiptap
@@ -1358,6 +1364,9 @@ importers:
       '@discava/admin-api':
         specifier: workspace:*
         version: link:../../apis/admin-api
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../../common/branding
       '@discava/common-infra-config':
         specifier: workspace:*
         version: link:../../common/infra-config
@@ -1546,6 +1555,9 @@ importers:
 
   packages/websites/student-portal:
     dependencies:
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../../common/branding
       '@discava/common-infra-config':
         specifier: workspace:*
         version: link:../../common/infra-config

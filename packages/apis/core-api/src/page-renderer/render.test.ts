@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { resolveBrand } from '@discava/common-branding/brand';
 import { describe, expect, it } from 'vitest';
 import type { PageContext } from './page.js';
 import { renderCertificatePage } from './render-certificate.js';
@@ -16,6 +17,7 @@ const context = (allowIndexing: boolean): PageContext => ({
   allowIndexing,
   mediaUrl: (key) => (key ? `https://media.example.com/${key}` : undefined),
   defaultImageUrl: 'https://learn.example.com/og-default.png',
+  brand: resolveBrand(undefined, undefined),
 });
 
 const fullCourse = {

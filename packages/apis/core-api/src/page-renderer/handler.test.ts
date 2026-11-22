@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { BrandDocumentSchema } from '@discava/common-branding/brand';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -104,6 +105,112 @@ const get = (
   rawPath: path,
   headers,
   requestContext: { http: { method } },
+});
+
+const NONCE = '0193a5c8-7b1e-7a3c-9d2f-1e4b6c8a0f12';
+const storedBrand = {
+  name: 'Acme Academy',
+  showNameBesideLogo: true,
+  colour: '#1d4ed8',
+  logoKey: `brand/logo/${NONCE}.svg`,
+  iconKey: `brand/icon/${NONCE}.png`,
+  shareImageKey: null,
+  revision: 3,
+  changedBy: 'admin-1',
+  changedByName: 'Carol',
+  changedAt: '2026-11-22T00:00:00.000Z',
+};
+const tableWithBrand = (brand: unknown) => async () => ({
+  entities: {
+    platformBrand: { get: () => ({ go: async () => ({ data: brand }) }) },
+  },
+});
+const withIconTemplate =
+  '<html><head><title>Discava</title><link rel="icon" type="image/x-icon" href="/favicon.ico" /></head><body><div id="root"></div></body></html>';
+
+describe('page renderer: the brand', () => {
+  it('puts the brand’s icon on a page and replaces the template’s', async () => {
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: tableWithBrand(storedBrand),
+    }).render(get('/learn/c1'));
+    expect(response.body).not.toContain('favicon.ico');
+    expect(response.body).toContain(
+      `<link rel="icon" type="image/png" href="https://media.example.com/brand/icon/${NONCE}.png" />`,
+    );
+    expect(response.body).toContain('rel="apple-touch-icon"');
+  });
+
+  it('keeps the template’s icon when the brand has no icon', async () => {
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: tableWithBrand({ ...storedBrand, iconKey: undefined }),
+    }).render(get('/learn/c1'));
+    expect(response.body).toContain('href="/favicon.ico"');
+  });
+
+  it('embeds a brand document that parses, without who saved it', async () => {
+    const response = await build({
+      coreTable: tableWithBrand(storedBrand),
+    }).render(get('/learn/c1'));
+    const json = /id="discava-page-data">([^<]*)</.exec(response.body)?.[1];
+    const data = JSON.parse(json ?? '{}');
+    expect(BrandDocumentSchema.parse(data.brand)).toMatchObject({
+      name: 'Acme Academy',
+      revision: 3,
+    });
+    expect(data.brand).not.toHaveProperty('changedBy');
+    expect(data['course.publicView']).toBeDefined();
+  });
+
+  it('embeds the brand on a not-found page and a signed-in shell too', async () => {
+    const ctx = { coreTable: tableWithBrand(storedBrand) };
+    for (const path of ['/learn/missing', '/learn/c1/lessons/1']) {
+      const response = await build(ctx).render(get(path));
+      expect(response.body).toContain('"brand"');
+    }
+  });
+
+  it('still renders, with the default brand, when the brand cannot be read', async () => {
+    const warn = vi.fn();
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: async () => ({
+        entities: {
+          platformBrand: {
+            get: () => ({
+              go: async () => {
+                throw new Error('table down');
+              },
+            }),
+          },
+        },
+      }),
+      logger: { error: vi.fn(), warn },
+    }).render(get('/learn/c1'));
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('href="/favicon.ico"');
+    expect(response.body).not.toContain('"brand"');
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('renders with the default brand when none is saved', async () => {
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: tableWithBrand(undefined),
+    }).render(get('/learn/c1'));
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('href="/favicon.ico"');
+    expect(response.body).not.toContain('"brand"');
+  });
+
+  it('renders with the default brand when the saved one is not valid', async () => {
+    const response = await build({
+      coreTable: tableWithBrand({ ...storedBrand, colour: '#777777' }),
+    }).render(get('/learn/c1'));
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain('"brand"');
+  });
 });
 
 describe('page renderer', () => {
