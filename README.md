@@ -34,8 +34,8 @@
 
 - **AI at the core** *(coming soon)*: an assistant built into the learning experience, not bolted on as a plugin.
 - **Scales to zero**: fully serverless, so you pay for what you use and next to nothing when no one is learning.
-- **Hardened for production**: built on the proven [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws), so you start from battle-tested, secure-by-default infrastructure.
 - **Scales up too**: the same deployment grows from your first student to your ten-thousandth, with no servers to manage.
+- **Hardened for production**: built on the proven [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws), so you start from battle-tested, secure-by-default infrastructure.
 - **Sell or share**: publish free or paid courses, and get paid through Stripe.
 - **Teach your way**: video lessons with questions along the way, quizzes and graded assignments.
 - **Keep learners moving**: progress tracking, a searchable transcript for every video, and certificates they can share.
