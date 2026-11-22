@@ -170,8 +170,9 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
     await page.goto(`${PORTALS.instructor}/settings/notifications`);
     const trail = page.getByRole('navigation', { name: 'breadcrumb' });
     await expect(trail.getByText('Settings', { exact: true })).toBeVisible();
+    // An anchor: a text-only crumb has role "link" too, but no address.
     await expect(
-      trail.getByRole('link', { name: 'Settings', exact: true }),
+      trail.locator('a[href]').filter({ hasText: /^Settings$/ }),
     ).toHaveCount(0);
   });
 
