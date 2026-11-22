@@ -4,7 +4,7 @@
  */
 
 import { useBrand } from '@discava/common-web-utils/brand';
-import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
+import { Link, useLocation, useRouter } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
 import { BreadcrumbOverrideContext } from './breadcrumb-label';
@@ -34,16 +34,22 @@ import {
 } from './ui/sidebar';
 import { UserMenu, type UserMenuItem } from './user-menu';
 
+export interface Crumb {
+  /** Absent when no page exists at the crumb's path. */
+  href?: string;
+  text: string;
+}
+
 // A crumb links to its own path only: the current page's search params (a new
-// quiz's lesson, say) mean nothing to the pages above it.
+// quiz's lesson, say) mean nothing to the pages above it. A crumb whose path
+// has no page of its own is text, not a link.
 export const getBreadcrumbs = (
-  matchRoute: ReturnType<typeof useMatchRoute>,
+  routeExists: (href: string) => boolean,
   pathName: string,
   defaultBreadcrumb: string,
   overrides: Record<string, string>,
   segmentLabels: Record<string, string> = {},
-  availableRoutes?: string[],
-) => {
+): Crumb[] => {
   const segments = [
     defaultBreadcrumb,
     ...pathName.split('/').filter((segment) => segment !== ''),
@@ -58,11 +64,8 @@ export const getBreadcrumbs = (
             .join('/')
             .replace('//', '/')}`;
 
-    const matched =
-      !availableRoutes || availableRoutes.find((r) => matchRoute({ to: href }));
-
     return {
-      href: matched ? href : '#',
+      href: routeExists(href) ? href : undefined,
       text: overrides[href] ?? segmentLabels[segment] ?? segment,
     };
   });
@@ -105,11 +108,11 @@ export const PortalShell = ({
   userMenuItems,
   children,
 }: PortalShellProps) => {
-  const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
-    { href: string; text: string }[]
-  >([{ text: '/', href: '/' }]);
+  const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<Crumb[]>([
+    { text: 'Home', href: '/' },
+  ]);
   const brand = useBrand();
-  const matchRoute = useMatchRoute();
+  const router = useRouter();
   const { pathname } = useLocation();
   const [overrides, setOverrides] = React.useState<Record<string, string>>({});
 
@@ -136,15 +139,33 @@ export const PortalShell = ({
   );
 
   React.useEffect(() => {
+    // A page exists when the deepest match is a route of the href's own depth:
+    // a path below a layout route (".../assignments" under a course) matches
+    // the layout, but its page is not found.
+    const depth = (path: string) => path.split('/').filter(Boolean).length;
+    const routeExists = (href: string) => {
+      const matches = router.matchRoutes(href);
+      const deepest = matches[matches.length - 1];
+      if (!deepest || deepest.status === 'notFound') return false;
+      if (href === '/') return true;
+      const route = router.routesById[deepest.routeId as never] as
+        | { fullPath: string }
+        | undefined;
+      return (
+        deepest.routeId !== '__root__' &&
+        route !== undefined &&
+        depth(route.fullPath) === depth(href)
+      );
+    };
     const breadcrumbs = getBreadcrumbs(
-      matchRoute,
+      routeExists,
       pathname,
-      '/',
+      'Home',
       overrides,
       segmentLabels,
     );
     setActiveBreadcrumbs(breadcrumbs);
-  }, [matchRoute, pathname, overrides, segmentLabels]);
+  }, [router, pathname, overrides, segmentLabels]);
 
   return (
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
@@ -202,15 +223,20 @@ export const PortalShell = ({
             className="flex flex-1 flex-col gap-6 p-6 pt-4 focus-visible:outline-none"
           >
             <Breadcrumb>
-              <BreadcrumbList>
+              <BreadcrumbList className="break-words">
                 {activeBreadcrumbs.map((crumb, index) => (
-                  <React.Fragment key={crumb.href || index}>
+                  <React.Fragment key={crumb.href ?? `${index}-${crumb.text}`}>
                     <BreadcrumbItem>
-                      {index === activeBreadcrumbs.length - 1 ? (
+                      {index === activeBreadcrumbs.length - 1 || !crumb.href ? (
                         <BreadcrumbPage>{crumb.text}</BreadcrumbPage>
                       ) : (
                         <BreadcrumbLink asChild>
-                          <Link to={crumb.href}>{crumb.text}</Link>
+                          <Link
+                            to={crumb.href}
+                            className="inline-flex min-h-6 items-center"
+                          >
+                            {crumb.text}
+                          </Link>
                         </BreadcrumbLink>
                       )}
                     </BreadcrumbItem>

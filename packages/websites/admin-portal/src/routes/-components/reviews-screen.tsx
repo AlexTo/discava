@@ -175,9 +175,9 @@ function CourseReviews({ courseId }: { courseId: string }) {
       <ul className="divide-y rounded-xl border">
         {items.map((item) => (
           <li key={item.reviewerId} className="space-y-3 p-4">
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium">
+                <p className="min-w-0 break-words font-medium">
                   {item.reviewerName}{' '}
                   {item.status === 'removed' && (
                     <Badge variant="outline">Removed</Badge>
@@ -209,20 +209,26 @@ function CourseReviews({ courseId }: { courseId: string }) {
               )}
             </div>
             {item.text && (
-              <p className="whitespace-pre-line text-sm">{item.text}</p>
+              <p className="whitespace-pre-line break-words text-sm [overflow-wrap:anywhere]">
+                {item.text}
+              </p>
             )}
             {item.response && (
               <div className="rounded-lg bg-muted/40 p-3 text-sm">
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="min-w-0 break-words text-xs font-medium text-muted-foreground">
                   {`Response from ${item.response.byName} · ${date(item.response.at)}`}
                 </p>
-                <p className="mt-1 whitespace-pre-line">{item.response.text}</p>
+                <p className="mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere]">
+                  {item.response.text}
+                </p>
               </div>
             )}
             {item.status === 'removed' && (
               <p className="text-sm text-muted-foreground">
                 {`Removed${item.removedAt ? ` on ${date(item.removedAt)}` : ''}: `}
-                <span className="text-foreground">{item.removedReason}</span>
+                <span className="break-words text-foreground [overflow-wrap:anywhere]">
+                  {item.removedReason}
+                </span>
               </p>
             )}
           </li>

@@ -175,7 +175,11 @@ export function PreviewVideoArea({
   };
 
   return (
-    <section aria-labelledby="preview-video-heading" className="space-y-3">
+    <section
+      id="preview-video"
+      aria-labelledby="preview-video-heading"
+      className="space-y-3"
+    >
       <div>
         <h3 id="preview-video-heading" className="text-sm font-medium">
           Preview video

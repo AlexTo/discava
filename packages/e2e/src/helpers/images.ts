@@ -82,3 +82,9 @@ export const LOGO_SVG = Buffer.from(
 export const SCRIPTED_LOGO_SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><script>alert(1)</script><rect width="400" height="100"/></svg>',
 );
+
+// The brand image fixtures, made in memory: a 512 × 512 icon, a 1200 × 630
+// share image, and a non-square icon the server refuses.
+export const ICON_PNG = solidPng(512, 512);
+export const SHARE_IMAGE_PNG = solidPng(1200, 630);
+export const NON_SQUARE_ICON_PNG = solidPng(512, 256);

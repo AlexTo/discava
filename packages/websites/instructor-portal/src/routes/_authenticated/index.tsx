@@ -19,7 +19,7 @@ import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
+import { BookOpen, CirclePlus } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi, useInstructorApi } from '../../api';
 import { CreateCourseDialog } from '../../components/create-course-dialog';
@@ -275,27 +275,6 @@ function RouteComponent() {
           </Card>
         )}
       </section>
-
-      <Card className="gap-3 border-dashed bg-muted/30 py-4">
-        <CardContent className="flex flex-col gap-3 px-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="rounded-lg bg-primary/10 p-2 text-primary">
-              <Megaphone className="size-4" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">
-                Share feedback on this dashboard
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Which information would help you start your teaching day?
-              </p>
-            </div>
-          </div>
-          <Button variant="outline" size="sm" type="button">
-            Give feedback
-          </Button>
-        </CardContent>
-      </Card>
     </main>
   );
 }

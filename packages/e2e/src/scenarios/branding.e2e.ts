@@ -3,8 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
-import { type Brand, currentBrand, restoreBrand } from '../helpers/branding.js';
-import { LOGO_SVG, SCRIPTED_LOGO_SVG, solidPng } from '../helpers/images.js';
+import {
+  type Brand,
+  currentBrand,
+  restoreBrand,
+  uploadBrandImage,
+} from '../helpers/branding.js';
+import {
+  ICON_PNG,
+  LOGO_SVG,
+  SCRIPTED_LOGO_SVG,
+  SHARE_IMAGE_PNG,
+  solidPng,
+} from '../helpers/images.js';
 import { PAGE_RENDERER, PORTALS } from '../helpers/portals.js';
 import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
@@ -321,6 +332,117 @@ test('an administrator chooses a brand colour, and a hard-to-read one is refused
   });
 });
 
+test('the brand reaches every portal and public page, and the name can be hidden', async ({
+  browser,
+}) => {
+  const name = uniqueName('Acme Academy').slice(0, 50);
+  const colour = '#1d4ed8';
+  const instructor = await apiUser('Pam', ['instructor']);
+  const title = uniqueName('E2E brand course');
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  const profile = await instructor.instructor.profile.get.query();
+  const host = new URL(coursePageUrl('x')).host;
+  const render = async (path: string) =>
+    (
+      await fetch(`${PAGE_RENDERER}${path}`, {
+        headers: { 'x-discava-host': host },
+      })
+    ).text();
+
+  await test.step('the brand is set up through the API', async () => {
+    const [logoKey, iconKey, shareImageKey] = await Promise.all([
+      uploadBrandImage(admin, 'logo', 'image/svg+xml', LOGO_SVG),
+      uploadBrandImage(admin, 'icon', 'image/png', ICON_PNG),
+      uploadBrandImage(admin, 'share-image', 'image/png', SHARE_IMAGE_PNG),
+    ]);
+    const now = await currentBrand(admin);
+    await admin.admin.branding.save.mutate({
+      expectedRevision: now.revision,
+      name,
+      showNameBesideLogo: true,
+      colour,
+      logoKey,
+      iconKey,
+      shareImageKey,
+    });
+  });
+
+  await test.step('each portal shows the logo, name, icon and colour on a new page load', async () => {
+    for (const [portal, url, user] of [
+      ['student', PORTALS.student, undefined],
+      ['instructor', PORTALS.instructor, newUser('Ian', ['instructor'])],
+      ['admin', PORTALS.admin, newUser('Cara', ['admin'])],
+    ] as const) {
+      const visitor = await browser.newPage();
+      await visitor.goto(url);
+      if (user) await signIn(visitor, user);
+      await expect(async () => {
+        await visitor.reload();
+        const header = visitor.locator('header').first();
+        await expect(header.locator('img[alt$=" logo"]')).toHaveAttribute(
+          'src',
+          /brand\/logo\//,
+          { timeout: 5_000 },
+        );
+        await expect(header).toContainText(name, { timeout: 5_000 });
+      }).toPass({ timeout: PORTAL_WAIT_MS });
+      await expect(visitor.locator('link[rel="icon"]')).toHaveAttribute(
+        'href',
+        /brand\/icon\//,
+      );
+      // What a primary button is painted with, read from the computed style.
+      const primary = await visitor.evaluate(() => {
+        const probe = document.createElement('div');
+        probe.style.backgroundColor = 'var(--primary)';
+        document.body.append(probe);
+        const painted = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return painted;
+      });
+      expect(primary).toBe('rgb(29, 78, 216)');
+      await screenshot(visitor, `${portal} portal header with logo and name`);
+      await visitor.close();
+    }
+  });
+
+  await test.step('a course landing page carries the name, icon and colour', async () => {
+    await expect(async () => {
+      const html = await render(`/learn/${courseId}`);
+      expect(html).toMatch(/<title>[^<]*\| [^<]*<\/title>/);
+      expect(html).toContain(`<meta property="og:site_name" content="${name}"`);
+      expect(html).toMatch(/<link rel="icon"[^>]*brand\/icon\//);
+      expect(html).toContain(`--primary:${colour}`);
+    }).toPass({ timeout: 30_000 });
+  });
+
+  await test.step('an instructor profile without a photo has the share image as og:image', async () => {
+    await expect(async () => {
+      const html = await render(`/instructors/${profile.handle}`);
+      expect(html).toMatch(
+        /<meta property="og:image" content="[^"]*brand\/share-image\//,
+      );
+    }).toPass({ timeout: 30_000 });
+  });
+
+  await test.step('turning the name switch off hides the header text and keeps the title', async () => {
+    const page = await browser.newPage();
+    await page.goto(`${PORTALS.admin}/settings/branding`);
+    await signIn(page, newUser('Cara', ['admin']));
+    await page.getByLabel('Name', { exact: true }).fill(name);
+    await page.getByLabel('Show the name beside the logo').click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await expect(
+      page.locator('header').first().getByText(name, { exact: true }),
+    ).toHaveCount(0);
+    await expect(page).toHaveTitle(new RegExp(name));
+    await screenshot(page, 'name hidden beside the logo, title keeps it');
+    await page.close();
+  });
+});
+
 test('an administrator resets the brand to the default', async ({
   browser,
 }) => {
@@ -365,6 +487,9 @@ test('an administrator resets the brand to the default', async ({
     await expect(
       page.getByText('Branding saved. Visitors see it within 5 minutes.'),
     ).toBeVisible();
+    await expect(
+      page.locator('header img[alt$=" logo"]').first(),
+    ).not.toHaveAttribute('src', /brand\/logo\//);
     await screenshot(page, 'default brand saved');
   });
 });

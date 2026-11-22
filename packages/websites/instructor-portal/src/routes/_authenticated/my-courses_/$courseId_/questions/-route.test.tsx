@@ -12,6 +12,7 @@ import {
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const { mockRouter } = await import('@discava/common-web-utils/testing');
   return mockRouter(importOriginal, {
+    useLocation: () => ({ pathname: '/my-courses/c1/questions' }),
     // A real Link needs a router; render the target it would link to.
     Link: ({
       to,

@@ -166,7 +166,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US2.
 
-- [ ] T016 [US2] Test first in `SH/components/portal-shell.test.ts`, then change `getBreadcrumbs` and `PortalShell` in `SH/components/portal-shell.tsx` (research R-3; A-04, A-05):
+- [x] T016 [US2] Test first in `SH/components/portal-shell.test.ts`, then change `getBreadcrumbs` and `PortalShell` in `SH/components/portal-shell.tsx` (research R-3; A-04, A-05):
   - **Root crumb:** its text is "Home".
   - **`routeExists`:** `getBreadcrumbs` takes `routeExists: (href: string) => boolean` in place of `availableRoutes`. `PortalShell` builds it with `useRouter()` and `router.matchRoutes(href)`: true when the deepest match is neither the root route nor a not-found match.
   - **Unmatched crumbs:** a crumb without a route has no `href`, and is rendered with `BreadcrumbPage` as text, never `href="#"`.
@@ -176,14 +176,14 @@ At 1440px nothing changes, apart from long-content fixes.
     - `/settings/notifications` gives "Settings" as text and "Notification settings" as the page;
     - an override label replaces an id segment;
     - no crumb has `href="#"`.
-- [ ] T017 [P] [US2] Label the instructor portal's crumbs (A-05, A-06, E-04):
+- [x] T017 [P] [US2] Label the instructor portal's crumbs (A-05, A-06, E-04):
   - In `packages/websites/instructor-portal/src/components/app-layout.tsx`, add `earnings: 'Earnings'`, `settings: 'Settings'`, `notifications: 'Notification settings'`, `questions: 'Questions'`, `reviews: 'Reviews'`, `submissions: 'Submissions'` and `assignments: 'Assignments'` to `segmentLabels`.
   - In `IP/my-courses_/$courseId_/questions/route.tsx`, `IP/my-courses_/$courseId_/reviews.tsx`, `IP/my-courses_/$courseId_/assignments/$contentItemId/submissions/index.tsx` and `.../submissions/$userId.tsx`, call `useBreadcrumbLabel` for the course path with the course's title, from the query each page already makes.
   - The two submissions pages also label the `$contentItemId` path with the assignment's title, and the review page labels its own path with the student's name.
 
   **Tests** in each route's existing test file: the crumb texts.
-- [ ] T018 [P] [US2] Test first, then add a `notFoundComponent` to `IP/route.tsx` (A-05). It renders, inside `AppLayout`, an `h1` "Page not found", a sentence, and a `Link to="/"` "Go to the home page". Also set `defaultNotFoundComponent` in `createRouter` in `packages/websites/instructor-portal/src/router.ts` to the same component, so an unmatched path under the shell uses it. **Test:** an unknown path renders the heading inside the shell.
-- [ ] T019 [P] [US2] Test first in `IPC/course/landing-page-checklist.test.tsx`, then change `IPC/course/landing-page-checklist.tsx` (C-02):
+- [x] T018 [P] [US2] Test first, then add a `notFoundComponent` to `IP/route.tsx` (A-05). It renders, inside `AppLayout`, an `h1` "Page not found", a sentence, and a `Link to="/"` "Go to the home page". Also set `defaultNotFoundComponent` in `createRouter` in `packages/websites/instructor-portal/src/router.ts` to the same component, so an unmatched path under the shell uses it. **Test:** an unknown path renders the heading inside the shell.
+- [x] T019 [P] [US2] Test first in `IPC/course/landing-page-checklist.test.tsx`, then change `IPC/course/landing-page-checklist.tsx` (C-02):
   - each "Add it" link becomes `<Link to="." hash="<section id>">` with `aria-label="Add it: <item name>"`;
   - the profile line becomes `<Link to="/profile">`.
   - make sure the targets have the matching ids (`landing-page`, `course-image`, `preview-video`) in `IPC/course/landing-page-card.tsx`, `IPC/course/course-image.tsx` and `IPC/course/preview-video-area.tsx`.
@@ -192,8 +192,8 @@ At 1440px nothing changes, apart from long-content fixes.
   - no `a[href^="#"]` remains;
   - the links' `href`s include the course path and the hash;
   - the names differ.
-- [ ] T020 [P] [US2] Remove the "Give feedback" card from `IP/index.tsx` (A-08, clarification). In `IP/-index.test.tsx`, remove or invert any assertion on it, and say so in the pull request.
-- [ ] T021 [US2] Extend `packages/e2e/src/scenarios/breadcrumbs.e2e.ts`. As a new instructor with an upload assignment and one submission (`helpers/assignment.ts`), open the submission page and assert:
+- [x] T020 [P] [US2] Remove the "Give feedback" card from `IP/index.tsx` (A-08, clarification). In `IP/-index.test.tsx`, remove or invert any assertion on it, and say so in the pull request.
+- [x] T021 [US2] Extend `packages/e2e/src/scenarios/breadcrumbs.e2e.ts`. As a new instructor with an upload assignment and one submission (`helpers/assignment.ts`), open the submission page and assert:
   - the trail is Home › My Courses › <course title> › … › <assignment title> › <student name>;
   - no crumb shows a UUID;
   - every crumb link, opened, gives a page whose `h1` is not "Page not found".
@@ -204,7 +204,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - on a draft course, click each checklist "Add it" link and assert the URL path is still the course's and the hash names the section.
 
   Screenshots: `'breadcrumbs on a submission'`, `'page not found'`.
-- [ ] T022 [US2] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T022 [US2] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

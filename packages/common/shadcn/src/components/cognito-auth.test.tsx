@@ -21,10 +21,15 @@ const { default: CognitoAuth } = await import('./cognito-auth');
 const renderAuth = (
   runtimeConfig: Record<string, unknown>,
   autoSignIn?: boolean,
+  fallback?: React.ReactNode,
 ) =>
   render(
     <RuntimeConfigContext.Provider value={runtimeConfig}>
-      <CognitoAuth autoSignIn={autoSignIn} onReturn={() => {}}>
+      <CognitoAuth
+        autoSignIn={autoSignIn}
+        onReturn={() => {}}
+        fallback={fallback}
+      >
         <p>Protected content</p>
       </CognitoAuth>
     </RuntimeConfigContext.Provider>,
@@ -49,6 +54,38 @@ describe('CognitoAuth', () => {
       await screen.findByRole('status', { name: 'Loading' }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
+  });
+
+  it('shows the fallback instead of the spinner while signing in', async () => {
+    authState.value = { isLoading: true, error: undefined };
+
+    renderAuth(
+      { localOidc: { authority: 'http://local', clientId: 'x' } },
+      false,
+      <p>Signing you in…</p>,
+    );
+
+    expect(await screen.findByText('Signing you in…')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('status', { name: 'Loading' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows the fallback while autoSignIn redirects', async () => {
+    authState.value = {
+      isLoading: false,
+      isAuthenticated: false,
+      error: undefined,
+      signinRedirect: vi.fn(),
+    };
+
+    renderAuth(
+      { localOidc: { authority: 'http://local', clientId: 'x' } },
+      true,
+      <p>Signing you in…</p>,
+    );
+
+    expect(await screen.findByText('Signing you in…')).toBeInTheDocument();
   });
 
   it('keeps the page shown while it redirects to sign in', async () => {

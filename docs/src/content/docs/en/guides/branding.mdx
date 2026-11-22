@@ -1,0 +1,53 @@
+---
+title: Branding
+description: Setting the platform's logo, icon, name, share image and colour as an administrator, the rules for each file, how long a change takes to reach visitors, and what is not branded.
+sidebar:
+  order: 7
+---
+
+An administrator can give the platform its own look without a deploy: **Settings → Branding** in the admin portal. The brand applies to the student, instructor and admin portals and to public course and profile pages.
+
+## What you can set
+
+| Part | Where visitors see it |
+|---|---|
+| **Logo** | The header of every portal and the public pages |
+| **Name** | The header (beside the logo, if you leave that on), the browser tab title, link previews and the texts that name the platform |
+| **Icon** | The browser tab, and the home-screen icon on phones |
+| **Share image** | The picture in link previews of a course or profile that has no image of its own |
+| **Colour** | Buttons, focus rings and links across the portals and public pages |
+
+Every part is optional. A part you leave empty keeps the default Discava brand, and the page's footer says "Using the default Discava brand" when nothing is customised. The preview on the page shows your changes before you save, and nothing is applied until you press **Save**.
+
+## File rules
+
+The page checks each file as you choose it and says which rule it broke. The server checks it again on save.
+
+| Part | Types | Largest | Shape |
+|---|---|---|---|
+| Logo | PNG, JPEG, WebP or SVG | 1 MB | Width at most 4 times the height, and no taller than wide |
+| Icon | PNG | 1 MB | Square, at least 192 × 192 pixels. We suggest 512 × 512 |
+| Share image | PNG, JPEG or WebP | 2 MB | At least 1200 × 630 pixels, about twice as wide as tall |
+
+An SVG logo can't contain scripts, embedded pages, event handlers or links to other files. A file that does is refused, and your file is never rewritten.
+
+The name must be 1 to 50 characters. Turn off **Show the name beside the logo** if the logo already spells it out: the name stays in tab titles and link previews.
+
+## The colour and readability
+
+Pick the colour as a hex value, such as `#1d4ed8`. Text on buttons is chosen for you, light or dark, whichever reads better. A colour that neither would read well on is refused with a note to choose a darker or lighter shade. Links use your colour only where it is readable on a white page, and the default text colour otherwise, so a pale brand colour never makes links hard to read. Error and status colours are not changed.
+
+## How long changes take
+
+The admin portal shows your change as soon as you save. Everyone else sees it within 5 minutes: a browser keeps the published brand for up to a minute, and the content delivery network for up to four. On a first visit the default brand may show for about a second; later visits show the brand at once.
+
+If two administrators edit at the same time, the second to save is told someone else changed the branding and should reload to see their changes.
+
+## Resetting
+
+Each part has **Reset to default**, and **Reset all to default** (which asks first) resets everything. A reset takes effect when you save. Replaced images stop being served from their old address within 5 minutes and are deleted a day later.
+
+## What is not branded
+
+- The sign-in pages hosted by Amazon Cognito keep their default look.
+- This documentation site.

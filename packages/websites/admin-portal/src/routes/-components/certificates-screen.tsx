@@ -237,8 +237,8 @@ function Certificate({ certificateId }: { certificateId: string }) {
 
   return (
     <div className="space-y-4 rounded-xl border p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1 basis-full break-words sm:basis-0">
           <p className="font-medium">
             {cert.learnerName}{' '}
             {cert.status === 'revoked' ? (
@@ -248,7 +248,8 @@ function Certificate({ certificateId }: { certificateId: string }) {
             )}
           </p>
           <p className="text-sm text-muted-foreground">
-            {cert.courseTitle} · {cert.certificateId}
+            {cert.courseTitle} ·{' '}
+            <span className="break-all">{cert.certificateId}</span>
           </p>
           <p className="text-xs text-muted-foreground">
             {`Completed ${date(cert.completedAt)} · Issued ${date(cert.issuedAt)}`}
@@ -292,12 +293,18 @@ function Certificate({ certificateId }: { certificateId: string }) {
         {cert.history.length === 0 ? (
           <p className="text-sm text-muted-foreground">No history.</p>
         ) : (
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-2 text-sm">
             {cert.history.map((event) => (
-              <li key={`${event.type}-${event.occurredAt}`}>
+              <li
+                key={`${event.type}-${event.occurredAt}`}
+                className="break-words"
+              >
                 {`${event.type === 'revoked' ? 'Revoked' : 'Restored'} on ${date(event.occurredAt)} by ${event.actorName}`}
                 {event.reason ? `. Reason: ${reasonLabel(event.reason)}` : ''}
-                {event.note ? `. Note: ${event.note}` : ''}
+                {event.note ? '.' : ''}
+                {event.note && (
+                  <span className="block break-words">{`Note: ${event.note}`}</span>
+                )}
               </li>
             ))}
           </ul>

@@ -14,7 +14,7 @@ import { safeReturnTo } from '@discava/common-web-utils/return-to';
 - `quiz.ts`: quiz types, and the logic both portals share for showing and answering a quiz.
 - `return-to.ts`: the page to return to after signing in, kept to the portal's own paths.
 - `video-player.ts`: the shared video player's speeds, keyboard shortcut mapping and saved player preferences.
-- The portals' shared bootstrap: `runtime-config.ts` (context, provider and hook), `trpc-provider.ts` (`createTrpcProvider<AppRouter>()`, which each portal calls in its `src/api.ts`), `query-client.ts`, `public-media-url.ts` and `app-config.ts`.
+- The portals' shared bootstrap: `runtime-config.ts` (context, provider and hook), `trpc-provider.ts` (`createTrpcProvider<AppRouter>()`, which each portal calls in its `src/api.ts`), `query-client.ts`, `public-media-url.ts` and `brand.ts` (`BrandProvider` and `useBrand`, the admin-set platform brand).
 - Smaller shared helpers: `api-errors.ts`, `caption-languages.ts`, `discussion.ts`, `file-size.ts`, `groups.ts`, `price.ts`, `sign-out.ts` and `user-profile.ts`.
 - `testing.ts`: test-only helpers the portals' tests and test setup share (`fakeTrpcFetch`, `createRenderWithApi`, `installJsdomStubs`, `mockRouter`). Never import it from portal source.
 

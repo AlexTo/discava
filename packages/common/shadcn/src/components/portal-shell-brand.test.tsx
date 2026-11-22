@@ -9,7 +9,10 @@ import { Home } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 
 // Stable, as the router's are: PortalShell's effects depend on their identity.
-const matchRoute = () => true;
+const router = {
+  matchRoutes: () => [{ routeId: '/', status: 'success' }],
+  routesById: { '/': { fullPath: '/' } },
+};
 const location = { pathname: '/' };
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -19,7 +22,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       <a href={to}>{children}</a>
     ),
     useLocation: () => location,
-    useMatchRoute: () => matchRoute,
+    useRouter: () => router,
   });
 });
 vi.mock('./notification-bell-container', () => ({
