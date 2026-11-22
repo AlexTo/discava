@@ -308,3 +308,51 @@ test('an administrator chooses a brand colour, and a hard-to-read one is refused
     await screenshot(page, 'brand colour saved');
   });
 });
+
+test('an administrator resets the brand to the default', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('a custom name and colour are saved', async () => {
+    await page
+      .getByLabel('Name', { exact: true })
+      .fill(uniqueName('Acme').slice(0, 50));
+    await page.getByLabel('Hex colour').fill('#1d4ed8');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+  });
+
+  await test.step('resetting the colour alone keeps the name', async () => {
+    await page.getByRole('button', { name: 'Reset colour to default' }).click();
+    await expect(page.getByLabel('Hex colour')).toHaveValue('');
+    await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue(
+      'Discava',
+    );
+    await screenshot(page, 'colour reset, name kept');
+  });
+
+  await test.step('reset all asks first, then puts every part back', async () => {
+    await page.getByRole('button', { name: 'Reset all to default' }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await screenshot(page, 'reset all confirmation');
+    await page.getByRole('button', { name: 'Reset all' }).click();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+      'Discava',
+    );
+    await expect(page.getByLabel('Hex colour')).toHaveValue('');
+    await screenshot(page, 'brand reset to default in the form');
+  });
+
+  await test.step('saving makes the reset take effect', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await screenshot(page, 'default brand saved');
+  });
+});
