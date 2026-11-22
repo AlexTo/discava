@@ -32,6 +32,7 @@ import { useState } from 'react';
 import { useCoreApi } from '../../../../api';
 import { CourseThumbnail } from '../../../../components/course-thumbnail';
 import { PageBreadcrumbs } from '../../../../components/page-breadcrumbs';
+import { PAGE_CONTAINER_CLASS } from '../../../../components/page-container';
 import { formatDuration } from '../../../../lib/catalogue-filters';
 import { CoursePreview } from './course-preview';
 import { EnrolmentActions } from './enrolment-actions';
@@ -113,7 +114,9 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </div>
         )}
         <Button className="mt-6" asChild>
-          <Link to="/">Browse courses</Link>
+          <Link to="/courses" search={{}}>
+            Browse courses
+          </Link>
         </Button>
       </main>
     );
@@ -152,7 +155,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
   return (
     <main className="w-full">
       <section className="border-b bg-muted/40">
-        <div className="mx-auto max-w-5xl px-6 py-10 lg:px-8">
+        <div className={PAGE_CONTAINER_CLASS}>
           <PageBreadcrumbs
             crumbs={[{ label: course.title }]}
             className="mb-6"
@@ -221,7 +224,7 @@ export function CoursePage({ courseId }: { courseId: string }) {
         aria-label="Course sections"
         className="sticky top-16 z-40 border-b bg-background/95 backdrop-blur"
       >
-        <div className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6 lg:px-8">
           {sections.map(({ id, label }) => (
             <Link
               key={id}
@@ -236,173 +239,183 @@ export function CoursePage({ courseId }: { courseId: string }) {
         </div>
       </nav>
 
-      <div className="mx-auto max-w-5xl space-y-12 px-6 py-10 lg:px-8">
-        {learningOutcomes.length > 0 ? (
-          <section
-            id="outcomes"
-            aria-labelledby="outcomes-heading"
-            className="scroll-mt-32"
-          >
-            <h2 id="outcomes-heading" className="text-xl font-semibold">
-              What you'll learn
-            </h2>
-            <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
-              {learningOutcomes.map((outcome, index) => (
-                <li
-                  // biome-ignore lint/suspicious/noArrayIndexKey: an outcome has no id, and the list never reorders on this page
-                  key={index}
-                  className="flex items-start gap-3 text-sm"
-                >
-                  <Check
-                    className="mt-0.5 size-4 shrink-0 text-primary"
-                    aria-hidden="true"
-                  />
-                  <span>{outcome}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <section
-          id="about"
-          aria-labelledby="about-heading"
-          className="scroll-mt-32"
-        >
-          <h2 id="about-heading" className="text-xl font-semibold">
-            About this course
-          </h2>
-          <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
-            {course.description ||
-              "The instructor hasn't described this course yet."}
-          </p>
-        </section>
-
-        {requirements.length > 0 ? (
-          <section
-            id="requirements"
-            aria-labelledby="requirements-heading"
-            className="scroll-mt-32"
-          >
-            <h2 id="requirements-heading" className="text-xl font-semibold">
-              Requirements
-            </h2>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
-              {requirements.map((requirement, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: a requirement has no id, and the list never reorders on this page
-                <li key={index}>{requirement}</li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        <section
-          id="modules"
-          aria-labelledby="modules-heading"
-          className="scroll-mt-32 space-y-4"
-        >
-          <h2 id="modules-heading" className="text-xl font-semibold">
-            {modules.length === 1
-              ? 'There is 1 module in this course'
-              : `There are ${modules.length} modules in this course`}
-          </h2>
-          <div className="space-y-3">
-            {modules.map((module, moduleIndex) => {
-              const isExpanded = expandedModuleId
-                ? expandedModuleId === module.moduleId
-                : moduleIndex === 0;
-              return (
-                <Collapsible
-                  key={module.moduleId}
-                  asChild
-                  open={isExpanded}
-                  onOpenChange={(open) =>
-                    setExpandedModuleId(open ? module.moduleId : undefined)
-                  }
-                >
-                  <Card className="gap-0 overflow-hidden py-0">
-                    <CollapsibleTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 sm:px-5"
-                      >
-                        <span className="flex flex-col">
-                          <span className="font-semibold">{module.title}</span>
-                          <span className="text-sm text-muted-foreground">
-                            Module {moduleIndex + 1} &middot;{' '}
-                            {count(module.lessons.length, 'lesson', 'lessons')}
-                          </span>
-                        </span>
-                        <ChevronDown
-                          className={`ml-auto size-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent asChild>
-                      <CardContent className="border-t p-0">
-                        {module.lessons.length === 0 ? (
-                          <p className="px-4 py-3 text-sm text-muted-foreground sm:px-5">
-                            No lessons yet.
-                          </p>
-                        ) : (
-                          <ol>
-                            {module.lessons.map((lesson) => (
-                              <li
-                                key={lesson.lessonId}
-                                className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0 sm:px-5"
-                              >
-                                {lesson.kind === 'assignment' ? (
-                                  <ClipboardList
-                                    className="size-4 shrink-0 text-muted-foreground"
-                                    aria-hidden="true"
-                                  />
-                                ) : (
-                                  <FileText className="size-4 shrink-0 text-muted-foreground" />
-                                )}
-                                <span className="text-sm">{lesson.title}</span>
-                                {lesson.kind === 'assignment' ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    Assignment
-                                  </span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ol>
-                        )}
-                      </CardContent>
-                    </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-              );
-            })}
-          </div>
-          {modules.length === 0 ? (
-            <Badge variant="secondary">Content is on its way</Badge>
+      <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+        <div className="max-w-4xl space-y-12">
+          {learningOutcomes.length > 0 ? (
+            <section
+              id="outcomes"
+              aria-labelledby="outcomes-heading"
+              className="scroll-mt-32"
+            >
+              <h2 id="outcomes-heading" className="text-xl font-semibold">
+                What you'll learn
+              </h2>
+              <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {learningOutcomes.map((outcome, index) => (
+                  <li
+                    // biome-ignore lint/suspicious/noArrayIndexKey: an outcome has no id, and the list never reorders on this page
+                    key={index}
+                    className="flex items-start gap-3 text-sm"
+                  >
+                    <Check
+                      className="mt-0.5 size-4 shrink-0 text-primary"
+                      aria-hidden="true"
+                    />
+                    <span>{outcome}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ) : null}
-        </section>
 
-        {instructors.length > 0 ? (
           <section
-            id="instructors"
-            aria-labelledby="instructors-heading"
+            id="about"
+            aria-labelledby="about-heading"
+            className="scroll-mt-32"
+          >
+            <h2 id="about-heading" className="text-xl font-semibold">
+              About this course
+            </h2>
+            <p className="mt-3 max-w-3xl leading-7 text-muted-foreground">
+              {course.description ||
+                "The instructor hasn't described this course yet."}
+            </p>
+          </section>
+
+          {requirements.length > 0 ? (
+            <section
+              id="requirements"
+              aria-labelledby="requirements-heading"
+              className="scroll-mt-32"
+            >
+              <h2 id="requirements-heading" className="text-xl font-semibold">
+                Requirements
+              </h2>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
+                {requirements.map((requirement, index) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: a requirement has no id, and the list never reorders on this page
+                  <li key={index}>{requirement}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section
+            id="modules"
+            aria-labelledby="modules-heading"
             className="scroll-mt-32 space-y-4"
           >
-            <h2 id="instructors-heading" className="text-xl font-semibold">
-              Instructors
+            <h2 id="modules-heading" className="text-xl font-semibold">
+              {modules.length === 1
+                ? 'There is 1 module in this course'
+                : `There are ${modules.length} modules in this course`}
             </h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {instructors.map((instructor) => (
-                <InstructorCard
-                  key={instructor.handle}
-                  instructor={instructor}
-                />
-              ))}
+            <div className="space-y-3">
+              {modules.map((module, moduleIndex) => {
+                const isExpanded = expandedModuleId
+                  ? expandedModuleId === module.moduleId
+                  : moduleIndex === 0;
+                return (
+                  <Collapsible
+                    key={module.moduleId}
+                    asChild
+                    open={isExpanded}
+                    onOpenChange={(open) =>
+                      setExpandedModuleId(open ? module.moduleId : undefined)
+                    }
+                  >
+                    <Card className="gap-0 overflow-hidden py-0">
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted/40 sm:px-5"
+                        >
+                          <span className="flex flex-col">
+                            <span className="font-semibold">
+                              {module.title}
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              Module {moduleIndex + 1} &middot;{' '}
+                              {count(
+                                module.lessons.length,
+                                'lesson',
+                                'lessons',
+                              )}
+                            </span>
+                          </span>
+                          <ChevronDown
+                            className={`ml-auto size-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent asChild>
+                        <CardContent className="border-t p-0">
+                          {module.lessons.length === 0 ? (
+                            <p className="px-4 py-3 text-sm text-muted-foreground sm:px-5">
+                              No lessons yet.
+                            </p>
+                          ) : (
+                            <ol>
+                              {module.lessons.map((lesson) => (
+                                <li
+                                  key={lesson.lessonId}
+                                  className="flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0 sm:px-5"
+                                >
+                                  {lesson.kind === 'assignment' ? (
+                                    <ClipboardList
+                                      className="size-4 shrink-0 text-muted-foreground"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    <FileText className="size-4 shrink-0 text-muted-foreground" />
+                                  )}
+                                  <span className="text-sm">
+                                    {lesson.title}
+                                  </span>
+                                  {lesson.kind === 'assignment' ? (
+                                    <span className="text-xs text-muted-foreground">
+                                      Assignment
+                                    </span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ol>
+                          )}
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
+                );
+              })}
             </div>
+            {modules.length === 0 ? (
+              <Badge variant="secondary">Content is on its way</Badge>
+            ) : null}
           </section>
-        ) : null}
 
-        <CourseReviews courseId={courseId} />
+          {instructors.length > 0 ? (
+            <section
+              id="instructors"
+              aria-labelledby="instructors-heading"
+              className="scroll-mt-32 space-y-4"
+            >
+              <h2 id="instructors-heading" className="text-xl font-semibold">
+                Instructors
+              </h2>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {instructors.map((instructor) => (
+                  <InstructorCard
+                    key={instructor.handle}
+                    instructor={instructor}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <CourseReviews courseId={courseId} />
+        </div>
       </div>
     </main>
   );

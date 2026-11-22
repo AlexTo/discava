@@ -23,6 +23,7 @@ import {
   UpNext,
 } from '../../components/course-progress-card';
 import { CourseThumbnail } from '../../components/course-thumbnail';
+import { PageContainer } from '../../components/page-container';
 import { toDisplayCourse } from '../../lib/course-display';
 
 // How many of the student's other courses the home shows; My Learning has
@@ -68,7 +69,7 @@ function ResumeHero({
           </div>
         ) : (
           <Button variant="secondary" size="lg" asChild>
-            <Link to="/search" search={{}}>
+            <Link to="/courses" search={{}}>
               Browse courses
             </Link>
           </Button>
@@ -116,7 +117,7 @@ export function SignedInHome() {
     .map(toDisplayCourse);
 
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-8 px-6 pt-6 pb-10 lg:px-8">
+    <PageContainer className="space-y-8">
       {enrolmentsQuery.isError ? (
         <ErrorAlert
           type="error"
@@ -225,6 +226,6 @@ export function SignedInHome() {
           in My Learning.
         </p>
       ) : null}
-    </main>
+    </PageContainer>
   );
 }

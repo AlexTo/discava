@@ -11,22 +11,19 @@ import {
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
 import { useQuery } from '@tanstack/react-query';
-import { getRouteApi, Link } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import {
   CalendarCheck,
   GraduationCap,
   LayoutDashboard,
   MessageCircleMore,
+  Sparkles,
 } from 'lucide-react';
 import { useCoreApi } from '../../api';
-import { CatalogueResults } from '../../components/catalogue-results';
-import {
-  type CatalogueFilters,
-  catalogueFiltersToSearch,
-  parseCatalogueFilters,
-} from '../../lib/catalogue-filters';
+import { CourseCard } from '../../components/course-card';
+import { toDisplayCourse } from '../../lib/course-display';
 
-const homeRoute = getRouteApi('/');
+const FEATURED_COURSES = 6;
 
 const features = [
   {
@@ -67,80 +64,100 @@ const steps = [
   },
 ];
 
-// What `/` shows signed-out visitors: the course catalogue and what
-// Discava is. Signed-in students see SignedInHome instead.
-export function Catalogue() {
-  const filters = parseCatalogueFilters(homeRoute.useSearch());
-  const navigate = homeRoute.useNavigate();
-  const setFilters = (next: CatalogueFilters) =>
-    navigate({ search: catalogueFiltersToSearch(next) });
-
+// What `/` shows signed-out visitors: what Discava is, a few courses and a
+// way into the full catalogue (/courses). Signed-in students see SignedInHome
+// instead.
+export function MarketingHome() {
   const trpc = useCoreApi();
   const categoriesQuery = useQuery(trpc.category.list.queryOptions());
-  const categories = categoriesQuery.data ?? [];
+  const categories = (categoriesQuery.data ?? []).filter(
+    ({ courseCount }) => courseCount > 0,
+  );
+  const coursesQuery = useQuery(
+    trpc.course.publicList.queryOptions({ limit: FEATURED_COURSES }),
+  );
+  const courses = (coursesQuery.data?.items ?? [])
+    .slice(0, FEATURED_COURSES)
+    .map(toDisplayCourse);
 
-  // Searching is the top bar's job (/search); this narrows by category and
-  // the filters beside the courses.
   return (
     <main className="w-full overflow-hidden text-left">
-      <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
-        <div className="mx-auto max-w-6xl">
-          <div className="max-w-2xl">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Browse courses for every goal.
-            </h1>
-            <p className="mt-4 text-muted-foreground">
-              Choose a category, or search for a topic above, to find your next
-              learning opportunity.
-            </p>
+      <section className="relative border-b bg-gradient-to-b from-primary/10 via-primary/5 to-background">
+        <div className="mx-auto flex max-w-7xl flex-col items-center px-6 py-20 text-center sm:py-28 lg:px-8">
+          <p className="inline-flex items-center gap-2 rounded-full border bg-background/80 px-4 py-1.5 text-sm font-medium text-primary shadow-sm">
+            <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+            Learn at your own pace
+          </p>
+          <h1 className="mt-6 max-w-3xl text-balance text-4xl font-bold tracking-tight sm:text-6xl">
+            Learn something new, from people who know it.
+          </h1>
+          <p className="mt-6 max-w-2xl text-balance text-lg text-muted-foreground">
+            Short lessons, clear progress and certificates you can share.
+            Discava brings your courses together in one welcoming place.
+          </p>
+          <div className="mt-9 flex flex-wrap justify-center gap-3">
+            <Button size="lg" asChild>
+              <Link to="/courses" search={{}}>
+                Browse all courses
+              </Link>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <Link to="/" hash="features">
+                See how it works
+              </Link>
+            </Button>
           </div>
-
-          {categories.length > 0 && (
-            <div className="mt-8 flex flex-col gap-4 rounded-2xl border bg-muted/30 p-4 sm:p-5">
-              <div
-                className="flex flex-wrap gap-2"
-                role="group"
-                aria-label="Course categories"
-              >
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={filters.category ? 'outline' : 'default'}
-                  onClick={() =>
-                    setFilters({ ...filters, category: undefined })
-                  }
-                >
-                  All
-                </Button>
-                {categories.map(({ id, name, slug, courseCount }) => (
-                  <Button
-                    key={id}
-                    size="sm"
-                    variant={filters.category === slug ? 'default' : 'outline'}
-                    asChild
-                  >
-                    <Link to="/category/$slug" params={{ slug }}>
-                      {name} ({courseCount})
-                    </Link>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <CatalogueResults
-            filters={filters}
-            onFiltersChange={setFilters}
-            emptyMessage="Try other filters, or clear them to see every course."
-          />
         </div>
       </section>
+
+      {courses.length > 0 && (
+        <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="max-w-2xl">
+                <p className="text-sm font-semibold uppercase tracking-widest text-primary">
+                  Popular right now
+                </p>
+                <h2 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
+                  Start with a course.
+                </h2>
+              </div>
+              <Button variant="outline" asChild>
+                <Link to="/courses" search={{}}>
+                  Browse all courses
+                </Link>
+              </Button>
+            </div>
+            {categories.length > 0 && (
+              <ul
+                aria-label="Course categories"
+                className="mt-6 flex gap-2 overflow-x-auto pb-1"
+              >
+                {categories.map(({ id, name, slug }) => (
+                  <li key={id} className="shrink-0">
+                    <Button size="sm" variant="outline" asChild>
+                      <Link to="/category/$slug" params={{ slug }}>
+                        {name}
+                      </Link>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {courses.map((course) => (
+                <CourseCard key={course.courseId} course={course} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <section
         id="features"
         className="scroll-mt-20 border-t bg-muted/20 px-6 py-20 lg:px-8"
       >
-        <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-7xl">
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
               Built for focus
@@ -174,7 +191,7 @@ export function Catalogue() {
       </section>
 
       <section className="border-y bg-muted/40 px-6 py-20 lg:px-8">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
+        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[0.7fr_1.3fr] lg:items-start">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">
               Start simply
@@ -219,7 +236,7 @@ export function Catalogue() {
       </section>
 
       <footer className="border-t px-6 py-8 lg:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 text-sm text-muted-foreground sm:flex-row">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 text-sm text-muted-foreground sm:flex-row">
           <p>© {new Date().getFullYear()} Discava. Learning, made clearer.</p>
           <nav aria-label="Footer navigation" className="flex gap-6">
             <Link

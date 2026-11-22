@@ -19,6 +19,7 @@ import { useCoreApi } from '../../api';
 import { CertificateActions } from '../../components/certificate-actions';
 import { CourseProgressCard } from '../../components/course-progress-card';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
+import { PageContainer } from '../../components/page-container';
 import { requireSignIn } from '../../lib/require-sign-in';
 
 // The student's courses, in progress and completed, as on Coursera's
@@ -53,7 +54,7 @@ function MyLearning() {
   );
 
   return (
-    <main className="mx-auto w-full max-w-7xl space-y-6 px-6 pt-8 pb-10 lg:px-8">
+    <PageContainer className="space-y-6">
       <PageBreadcrumbs crumbs={[{ label: 'My Learning' }]} />
       <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
         My Learning
@@ -80,7 +81,11 @@ function MyLearning() {
             {inProgress.length === 0 ? (
               <Empty>
                 No courses in progress.{' '}
-                <Link to="/" className="font-medium text-foreground underline">
+                <Link
+                  to="/courses"
+                  search={{}}
+                  className="font-medium text-foreground underline"
+                >
                   Find one to start
                 </Link>
                 .
@@ -119,6 +124,6 @@ function MyLearning() {
           </TabsContent>
         </Tabs>
       )}
-    </main>
+    </PageContainer>
   );
 }

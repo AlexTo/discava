@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { useCoreApi } from '../../api';
 import { CatalogueResults } from '../../components/catalogue-results';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
+import { PageContainer } from '../../components/page-container';
 import {
   type CatalogueFilters,
   catalogueFiltersToSearch,
@@ -44,7 +45,9 @@ function Unavailable({ title, message }: { title: string; message: string }) {
       <h1 className="text-balance mt-4 text-xl font-semibold">{title}</h1>
       <p className="mt-2 text-sm text-muted-foreground">{message}</p>
       <Button className="mt-5" variant="outline" asChild>
-        <Link to="/">Browse all courses</Link>
+        <Link to="/courses" search={{}}>
+          Browse all courses
+        </Link>
       </Button>
     </div>
   );
@@ -88,7 +91,7 @@ function RouteComponent() {
     'NOT_FOUND';
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
+    <PageContainer>
       <PageBreadcrumbs
         crumbs={[{ label: category?.name ?? 'Category' }]}
         className="mb-6"
@@ -148,6 +151,6 @@ function RouteComponent() {
           />
         </>
       )}
-    </main>
+    </PageContainer>
   );
 }

@@ -6,24 +6,17 @@
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { createFileRoute } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
-import {
-  catalogueFiltersToSearch,
-  parseCatalogueFilters,
-} from '../lib/catalogue-filters';
-import { Catalogue } from './-components/catalogue';
+import { MarketingHome } from './-components/marketing-home';
 import { SignedInHome } from './-components/signed-in-home';
 
-// One home for everyone, as on Coursera: the catalogue when signed out, the
-// student's own home when signed in.
+// One home for everyone: a welcome and a few courses when signed out, the
+// student's own home when signed in. The full catalogue is /courses.
 export const Route = createFileRoute('/')({
-  // The catalogue's filters live in the address.
-  validateSearch: (search: Record<string, unknown>) =>
-    catalogueFiltersToSearch(parseCatalogueFilters(search)),
   component: RouteComponent,
 });
 
 function RouteComponent() {
   const { isAuthenticated } = useAuth();
-  usePageTitle(isAuthenticated ? 'Home' : 'Browse courses');
-  return isAuthenticated ? <SignedInHome /> : <Catalogue />;
+  usePageTitle('Home');
+  return isAuthenticated ? <SignedInHome /> : <MarketingHome />;
 }
