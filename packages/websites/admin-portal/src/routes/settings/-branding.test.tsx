@@ -438,6 +438,33 @@ describe('the Branding page', () => {
       );
     });
 
+    it('previews the default, not the saved colour, after a reset or a refused colour', async () => {
+      open({
+        'branding.get': () => ({
+          ...none,
+          brand: { ...none.brand, colour: '#1d4ed8' },
+          revision: 1,
+        }),
+      });
+      await screen.findByLabelText('Hex colour');
+      // What the portal has applied to the page for the saved brand.
+      document.documentElement.style.setProperty('--primary', '#1d4ed8');
+      const preview = screen.getByTestId('brand-preview');
+      expect(preview.style.getPropertyValue('--primary')).toBe('#1d4ed8');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reset colour to default' }),
+      );
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      fireEvent.change(hex(), { target: { value: '#777777' } });
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      document.documentElement.style.removeProperty('--primary');
+    });
+
     it('sends the colour on Save, and null after a reset', async () => {
       const { calls } = open({
         'branding.save': (input) => ({

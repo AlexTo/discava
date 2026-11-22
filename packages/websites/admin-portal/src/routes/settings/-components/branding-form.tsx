@@ -7,7 +7,11 @@ import {
   DEFAULT_BRAND_NAME,
   resolveBrand,
 } from '@discava/common-branding/brand';
-import { brandPalette, parseHex } from '@discava/common-branding/colour';
+import {
+  brandPalette,
+  DEFAULT_PALETTE_VARIABLES,
+  parseHex,
+} from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
@@ -341,7 +345,9 @@ export function BrandingForm({
         </Button>
       </section>
       <BrandPreview
-        colourVariables={palette?.ok ? palette.variables : undefined}
+        colourVariables={
+          palette?.ok ? palette.variables : DEFAULT_PALETTE_VARIABLES
+        }
         logoUrl={logoUrl}
         name={name}
         showName={form.showNameBesideLogo}
