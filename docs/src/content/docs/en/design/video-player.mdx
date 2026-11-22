@@ -11,6 +11,8 @@ import Link from '@components/link.astro';
 
 **Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
 
+**Spec:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (translated captions)
+
 Both portals play lesson videos with the same player, with its own control bar in place of the browser's.
 
 ## Resume
@@ -48,6 +50,62 @@ When a video has caption tracks, the player shows a captions menu: **Off**, then
 ### Caption status
 
 A video's `captionsStatus` is `pending` while Transcribe runs, then `ready` or `failed`. A job still pending after 2 hours is reported as `failed`. A failure only affects captions; the video itself stays playable. The instructor's lesson row shows the status and the track count.
+
+## Translated captions
+
+An instructor chooses **caption languages** for a course (up to 9, from the ten languages a caption can be uploaded in). Every video of the course, and its preview, gets a caption track in each of those languages, made by Amazon Translate from the video's **source track**: its default track, whether that was made by Transcribe or uploaded. A translated track is never the default, and the captions menu shows it as "*language* (auto-translated)".
+
+The [transcript panel](#transcript) (#590), a related feature, shows whichever track the menu has chosen, so a translated track also gives a translated transcript.
+
+### Timings
+
+Timings are never sent to the service. The source WebVTT is parsed into cues, only each cue's words are translated, and the new file copies every identifier and timing line from the source unchanged, in the same order. Cue tags are removed before translation and the text is escaped again after it, so translated text can't form a tag or the `-->` arrow. Before writing, the handler checks that the cue count and every timing line match, and records a failure for that language if not. Each cue is translated on its own, so a sentence spread over several cues can read less smoothly than a sentence-level translation.
+
+### What starts a translation
+
+The `caption-translation` feature of the core table's stream router runs when a translation input changes, and for nothing else (a title edit, student activity and the handler's own writes route nothing):
+
+| Trigger | Change that reaches the handler |
+|---------|---------------------------------|
+| New or replaced video | the video's non-translated tracks change |
+| Source captions replaced or removed, or an uploaded track removed | the same |
+| Caption languages, or the course's teaching language, changed | the course record; the handler marks each video of the course (and its preview) for translation, one queue message each |
+| **Translate again** | `captionTranslationRequestedAt` is set on the video, or on every video of the course |
+
+Transcribe's completion and the instructor API never call Amazon Translate and can't be failed by it.
+
+### Precedence
+
+All the rules are in `applyCaptionChange` and `planCaptionTranslations`, in the core table's `caption-tracks` helpers. An uploaded track always wins: the handler writes through the same revision check as every other caption writer, so whichever order an upload and a translation land in, the upload is what remains.
+
+| Situation | Result |
+|-----------|--------|
+| A translated track arrives for a language that holds an auto or uploaded track | Dropped |
+| A translated track arrives and its source isn't the version's current default track | Dropped |
+| An auto or uploaded track arrives for a language that holds a translated track | Replaces it |
+| An upload at the 10-track limit | Evicts one translated track: the one whose language is last in the course's list |
+| The default track is replaced or removed | Every translated track of that version is dropped in the same write, and remade from the new source |
+| The default track is removed | The oldest track that isn't translated becomes the default |
+| The automatic source track isn't in the course's teaching language | Not translated (`language-mismatch`); an uploaded source is always translated |
+
+### Failure and "Translate again"
+
+A failure is recorded on the video (`captionTranslation`), never on `status`, `captionsStatus` or any track, and playback never waits for translation. The reason is `failed` or `too-long` (a source over 300,000 characters). Errors a retry can't fix are recorded without failing the queue message, so they don't fill the failure queue. Messages that do fail retry up to five times and then reach the feature's failure queue and alarm.
+
+The Captions dialog shows each language's state: translated, uploaded, translating, failed, too long, no room, or not translated with the reason. **Translate again** clears the recorded outcome and asks for the video again; **Translate missing captions again** in the course's settings does it for every video. A message lost before the handler runs leaves "Translating" showing, and **Translate again** is the remedy.
+
+### Local development
+
+With `LOCAL_DEV=true`, the Translate client calls `translateLocally` instead of the SDK. Each text comes back as `[<target tag>] <text>`, for example `[es-ES] Hello`, so it is clear which track is showing. A source containing `[[fail-translation]]`, or `[[fail-translation:es-ES]]` for one language, makes that request fail as a refused language pair, which is recorded as failed without a retry. Everything else (stream router, queue, handler, track rules, S3Mock) is the real code. Amazon Translate's real output, its line-break behaviour, throttling and metrics only run on a deployed stage.
+
+### Cost
+
+Amazon Translate charges per character sent, white space included. A video's cost is its source characters times the number of languages translated; nothing is charged for a language that already has a fresh translated track or an upload, or when the feature is off. This page quotes no price: see the <a href="https://aws.amazon.com/translate/pricing/">Amazon Translate pricing page</a> and confirm it for the stage's region.
+
+- **Metrics:** the handler emits `CaptionTranslation` metrics with the dimensions `Stage` and `TargetLanguage`: `TranslatedCharacters`, `TranslatedTracks`, `TranslationFailures` and `ChunkFallbacks` (chunks whose line count didn't match and were sent again one cue per request). `Stage` separates stages that share an account. Translate's own metrics are per account and region, so the feature doesn't rely on them.
+- **Log line:** one per translated track, with the course, video, language, characters and number of requests. Logs Insights can answer "which course cost the most".
+- **Stage settings:** `captionTranslation.enabled` (when `false`, instructors can't choose languages, nothing is translated and existing translated tracks stay) and `maxLanguagesPerCourse` (default 9; 3 on `discava-development`).
+- **Bounds:** the same source is not translated into the same language twice, a stage can lower the languages per course or turn the feature off, and a source over 300,000 characters is not translated. There is no spending quota per course or instructor, and no dashboard or alarm on characters per day yet.
 
 ## Transcript
 
