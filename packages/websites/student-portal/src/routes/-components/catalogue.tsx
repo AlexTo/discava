@@ -86,9 +86,9 @@ export function Catalogue() {
       <section id="courses" className="scroll-mt-20 px-6 py-20 lg:px-8">
         <div className="mx-auto max-w-6xl">
           <div className="max-w-2xl">
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
               Browse courses for every goal.
-            </h2>
+            </h1>
             <p className="mt-4 text-muted-foreground">
               Choose a category, or search for a topic above, to find your next
               learning opportunity.

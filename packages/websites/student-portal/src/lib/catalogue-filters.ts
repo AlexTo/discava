@@ -82,6 +82,16 @@ export const catalogueFiltersToSearch = (filters: CatalogueFilters) => ({
 export const hasCatalogueFilters = (filters: CatalogueFilters) =>
   Object.keys(catalogueFiltersToSearch(filters)).length > 0;
 
+/** How many filters are set: each chosen value, a rating and a non-default sort. */
+export const countCatalogueFilters = (filters: CatalogueFilters) =>
+  (filters.category ? 1 : 0) +
+  filters.tags.length +
+  filters.levels.length +
+  filters.languages.length +
+  filters.durations.length +
+  (filters.sort ? 1 : 0) +
+  (filters.minRating !== undefined ? 1 : 0);
+
 /** The course.publicSearch input for some filters. */
 export const catalogueFiltersToInput = (
   filters: CatalogueFilters,

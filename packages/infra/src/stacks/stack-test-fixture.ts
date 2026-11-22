@@ -15,7 +15,8 @@ import {
 // Synthesizes the application with a stage's settings and returns each of
 // its stacks' templates.
 export const synth = (
-  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+  components: StageComponents &
+    Pick<ApplicationStageProps, 'payouts' | 'captionTranslation'>,
 ) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
@@ -75,7 +76,8 @@ export const actionsOf = (template: Template, rolePrefix: string) =>
 
 // Every stack in the stage, by name, with its synthesized template.
 export const stackTemplates = (
-  components: StageComponents & Pick<ApplicationStageProps, 'payouts'>,
+  components: StageComponents &
+    Pick<ApplicationStageProps, 'payouts' | 'captionTranslation'>,
 ) => {
   const stage = new ApplicationStage(new App(), 'discava-test', {
     env: { account: '111122223333', region: 'ap-southeast-2' },
@@ -87,32 +89,69 @@ export const stackTemplates = (
 };
 
 // The logical ids of the stack's functions whose role can touch the core
-// table but which lack RUNTIME_CONFIG_APP_ID or the AppConfig read actions:
-// the core-table client resolves the table name through AppConfig, so such a
-// function fails on every invocation once deployed.
-export const tableFunctionsMissingAppConfig = (template: Template) => {
+// table or the search collection but which lack the matching deploy-time
+// setting: the core-table and search clients read these from the environment,
+// so such a function fails on every invocation once deployed.
+export const functionsMissingSettings = (template: Template) => {
   const byRole = actionsByRole(template);
   return Object.entries(template.findResources('AWS::Lambda::Function'))
     .filter(([, fn]) => {
       const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
         'Fn::GetAtt'
       ][0];
+      const actions = byRole[role] ?? [];
+      const variables = fn.Properties.Environment?.Variables ?? {};
       // The stream router only reads the table's stream, not its items.
-      return (byRole[role] ?? []).some((a) =>
+      const usesTable = actions.some((a) =>
         /^dynamodb:(Get|BatchGet|Query|Put|Update)Item$|^dynamodb:Query$/.test(
           a,
         ),
       );
+      const usesSearch = actions.includes('aoss:APIAccessAll');
+      return (
+        (usesTable && !variables.DISCAVA_DYNAMODB_CORE_TABLE) ||
+        (usesSearch && !variables.DISCAVA_OPENSEARCH_SEARCH)
+      );
     })
+    .map(([id]) => id);
+};
+
+// What each function of a stack needs beyond the table: a table of function
+// logical-ID prefix to the `DISCAVA_*` settings it must have. Returns one
+// line for every function without a setting it needs, and for a prefix that
+// matches no function, so a rename can't hollow the table out.
+export const functionsMissingNamedSettings = (
+  template: Template,
+  required: Record<string, readonly string[]>,
+) => {
+  const functions = Object.entries(
+    template.findResources('AWS::Lambda::Function'),
+  );
+  return Object.entries(required).flatMap(([prefix, names]) => {
+    const matching = functions.filter(([id]) => id.startsWith(prefix));
+    if (matching.length === 0) return [`${prefix}: no such function`];
+    return matching.flatMap(([id, fn]) => {
+      const variables = fn.Properties.Environment?.Variables ?? {};
+      return names
+        .filter((name) => !variables[name])
+        .map((name) => `${id}: ${name}`);
+    });
+  });
+};
+
+// The logical ids of the stack's functions that can still read AppConfig:
+// they have `RUNTIME_CONFIG_APP_ID` or a role with an `appconfig:` action.
+export const functionsReadingAppConfig = (template: Template) => {
+  const byRole = actionsByRole(template);
+  return Object.entries(template.findResources('AWS::Lambda::Function'))
     .filter(([, fn]) => {
       const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
         'Fn::GetAtt'
       ][0];
-      const actions = byRole[role] ?? [];
-      return !(
-        fn.Properties.Environment?.Variables?.RUNTIME_CONFIG_APP_ID &&
-        actions.includes('appconfig:StartConfigurationSession') &&
-        actions.includes('appconfig:GetLatestConfiguration')
+      return (
+        'RUNTIME_CONFIG_APP_ID' in
+          (fn.Properties.Environment?.Variables ?? {}) ||
+        (byRole[role] ?? []).some((action) => action.startsWith('appconfig:'))
       );
     })
     .map(([id]) => id);

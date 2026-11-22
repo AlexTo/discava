@@ -18,7 +18,10 @@
       "!{projectRoot}/tests/**/*"
     ],
     "sharedGlobals": [],
-    "biome": ["default", "{workspaceRoot}/biome.json"]
+    "biome": [
+      "default",
+      "{workspaceRoot}/biome.json"
+    ]
   },
   "plugins": [
     {
@@ -60,31 +63,57 @@
   "targetDefaults": {
     "compile": {
       "cache": true,
-      "syncGenerators": ["@nx/js:typescript-sync", "@aws/nx-plugin:ts#sync"],
-      "inputs": ["default"]
+      "syncGenerators": [
+        "@nx/js:typescript-sync",
+        "@aws/nx-plugin:ts#sync"
+      ],
+      "inputs": [
+        "default"
+      ]
     },
-    "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["default"]
-    },
-    "@nx/vitest:test": {
-      "cache": true,
-      "inputs": ["default", "^production"],
-      "configurations": {
-        "update-snapshot": {
-          "args": "--update"
+    "test": [
+      {
+        "dependsOn": [
+          "^build"
+        ],
+        "inputs": [
+          "default"
+        ]
+      },
+      {
+        "filter": {
+          "plugin": "@nx/vitest"
+        },
+        "cache": true,
+        "inputs": [
+          "default",
+          "^production"
+        ],
+        "configurations": {
+          "update-snapshot": {
+            "args": "--update"
+          }
         }
       }
-    },
+    ],
     "build": {
       "cache": true,
-      "inputs": ["default"],
+      "inputs": [
+        "default"
+      ],
       "dependsOn": [
-        { "projects": ["@discava/source"], "target": "graphify-update" }
+        {
+          "projects": [
+            "@discava/source"
+          ],
+          "target": "graphify-update"
+        }
       ]
     },
     "lint": {
-      "syncGenerators": ["@aws/nx-plugin:license#sync"]
+      "syncGenerators": [
+        "@aws/nx-plugin:license#sync"
+      ]
     }
   },
   "generators": {
@@ -104,5 +133,8 @@
       }
     }
   },
-  "parallel": 8
+  "parallel": 8,
+  "affected": {
+    "legacy": true
+  }
 }

@@ -10,12 +10,12 @@ import {
 } from '@discava/common-shadcn/components/ui/avatar';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
-import { useEffect } from 'react';
 import { useCoreApi } from '../../api';
 import { CourseCard } from '../../components/course-card';
 import type { DisplayCourse } from '../../lib/course-display';
@@ -69,11 +69,7 @@ function RouteComponent() {
   );
   const profile = profileQuery.data;
 
-  useEffect(() => {
-    if (profile) {
-      document.title = profile.displayName;
-    }
-  }, [profile]);
+  usePageTitle(profile?.displayName ?? 'Instructor');
 
   const notFound =
     (profileQuery.error as { data?: { code?: string } } | null)?.data?.code ===
@@ -88,22 +84,17 @@ function RouteComponent() {
       ) : notFound ? (
         <NotFound />
       ) : profileQuery.isError || !profile ? (
-        <ErrorAlert type="error" header="Couldn't load this profile">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load this profile"
+          onRetry={() => profileQuery.refetch()}
+        >
           <p>{apiErrorMessage(profileQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => profileQuery.refetch()}
-          >
-            Try again
-          </Button>
         </ErrorAlert>
       ) : (
         <>
           <header className="flex flex-col items-start gap-6 sm:flex-row">
-            <Avatar size="lg" className="size-28">
+            <Avatar className="size-28">
               {photoUrlFor(profile.photoKey) ? (
                 <AvatarImage src={photoUrlFor(profile.photoKey)} alt="" />
               ) : null}
@@ -139,16 +130,22 @@ function RouteComponent() {
             >
               Courses by {profile.displayName}
             </h2>
-            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {profile.courses.map((course) => {
-                const display: DisplayCourse = {
-                  ...toDisplayCourse(course),
-                  // The profile does not carry descriptions.
-                  description: '',
-                };
-                return <CourseCard key={course.courseId} course={display} />;
-              })}
-            </div>
+            {profile.courses.length === 0 ? (
+              <p className="mt-6 text-sm text-muted-foreground">
+                No published courses yet.
+              </p>
+            ) : (
+              <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {profile.courses.map((course) => {
+                  const display: DisplayCourse = {
+                    ...toDisplayCourse(course),
+                    // The profile does not carry descriptions.
+                    description: '',
+                  };
+                  return <CourseCard key={course.courseId} course={display} />;
+                })}
+              </div>
+            )}
           </section>
         </>
       )}

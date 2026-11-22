@@ -2,7 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { AuthContextProps } from 'react-oidc-context';
 import { describe, expect, it } from 'vitest';
 import { renderWithCoreApi } from '../test/render-with-core-api';
@@ -84,5 +85,57 @@ describe('SiteLayout', () => {
       await screen.findByRole('link', { name: 'Sign in' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Notifications/ })).toBeNull();
+  });
+
+  describe('on a phone', () => {
+    const openUserMenu = async () => {
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Open user menu' }),
+      );
+      return screen.findAllByRole('menuitem');
+    };
+
+    it("hides the top bar's links below sm", async () => {
+      renderLayout(signedInAs(['instructor', 'student']));
+
+      for (const name of ['Instructor', 'My Learning']) {
+        const group = (await screen.findByRole('link', { name })).closest(
+          'div',
+        );
+        expect(group).toHaveClass('hidden', 'sm:flex');
+      }
+    });
+
+    it('lists My Learning then Instructor first in the user menu for an instructor', async () => {
+      renderLayout(signedInAs(['instructor', 'student']));
+
+      const items = await openUserMenu();
+
+      expect(items.slice(0, 2).map((item) => item.textContent)).toEqual([
+        'My Learning',
+        'Instructor',
+      ]);
+      expect(items[0]).toHaveAttribute('href', '/my-learning');
+      expect(items[1]).toHaveAttribute(
+        'href',
+        'https://teach.example/my-courses',
+      );
+      expect(items[0]).toHaveClass('sm:hidden');
+      expect(items[1]).toHaveClass('sm:hidden');
+    });
+
+    it('lists only My Learning for a student who is not an instructor', async () => {
+      renderLayout(signedInAs(['student']));
+
+      await openUserMenu();
+
+      const menu = screen.getByRole('menu');
+      expect(
+        within(menu).getByRole('menuitem', { name: 'My Learning' }),
+      ).toBeInTheDocument();
+      expect(
+        within(menu).queryByRole('menuitem', { name: 'Instructor' }),
+      ).toBeNull();
+    });
   });
 });

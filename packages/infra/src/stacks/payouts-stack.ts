@@ -44,6 +44,7 @@ export class PayoutsStack extends Stack {
 
     this.payoutRun = new EventsPayoutRun(this, 'PayoutRun');
     coreTable.grantReadWriteData(this.payoutRun);
+    coreTable.bindSettings(this.payoutRun);
 
     // The secrets are imported, so the grant lands on the function's role and
     // not on the Data stack's key policy (a cycle otherwise). Only the API

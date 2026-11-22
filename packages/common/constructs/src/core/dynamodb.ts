@@ -12,8 +12,10 @@ import {
 } from 'aws-cdk-lib/aws-dynamodb';
 import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import { RuntimeConfig } from './runtime-config.js';
+import { addSetting } from './settings.js';
 
 type _DynamoDBTableProps = Omit<
   TableProps,
@@ -55,6 +57,7 @@ export interface DynamoDBTableProps extends _DynamoDBTableProps {
 
 export abstract class DynamoDBTable extends Construct {
   public readonly table: Table;
+  private readonly runtimeConfigKey: string;
 
   constructor(
     scope: Construct,
@@ -73,6 +76,7 @@ export abstract class DynamoDBTable extends Construct {
     }: DynamoDBTableProps,
   ) {
     super(scope, id);
+    this.runtimeConfigKey = runtimeConfigKey;
 
     const key: IKey | undefined =
       encryption === TableEncryption.CUSTOMER_MANAGED
@@ -95,6 +99,13 @@ export abstract class DynamoDBTable extends Construct {
 
     const rc = RuntimeConfig.ensure(this);
     rc.set('dynamodb', runtimeConfigKey, { tableName: this.table.tableName });
+  }
+
+  /** Gives `fn` the table's name as its deploy-time `dynamodb` setting. */
+  public bindSettings(fn: LambdaFunction): void {
+    addSetting(fn, 'dynamodb', this.runtimeConfigKey, {
+      tableName: this.table.tableName,
+    });
   }
 
   public grantReadData(grantee: IGrantable): Grant {

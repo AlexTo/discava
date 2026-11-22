@@ -6,6 +6,7 @@
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
@@ -22,6 +23,7 @@ const isNotFound = (error: unknown) =>
   (error as { data?: { code?: string } } | null)?.data?.code === 'NOT_FOUND';
 
 function RouteComponent() {
+  usePageTitle('Certificate');
   const { certificateId } = Route.useParams();
   const trpc = useCoreApi();
   const query = useQuery(

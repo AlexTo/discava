@@ -295,7 +295,11 @@ describe('ReviewForm', () => {
       }),
     );
 
-    expect(await screen.findByText('Delete is down')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByText('Good course.')).toBeInTheDocument();
   });

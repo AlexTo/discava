@@ -63,6 +63,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/media/caption-translation.ts",
+        "name": "caption-translation",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/media/transcode-reconciler.ts",
         "name": "transcode-reconciler",
         "iac": "cdk"

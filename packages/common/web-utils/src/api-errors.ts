@@ -15,6 +15,26 @@ const MESSAGES: Record<string, string> = {
   CONFLICT: 'This changed while you were working on it. Reload and try again.',
   PRECONDITION_FAILED: "This can't be done right now. Reload and try again.",
   TOO_MANY_REQUESTS: 'Too many requests. Wait a moment and try again.',
+  INTERNAL_SERVER_ERROR:
+    'Something went wrong on our side. Try again in a moment.',
+};
+
+const NETWORK_MESSAGE =
+  "Couldn't reach Discava. Check your connection and try again.";
+
+// A request that got no answer: browsers report it as a TypeError, or with
+// one of these messages.
+const isNetworkError = (error: unknown): boolean => {
+  const isNoAnswer = (e: unknown): boolean =>
+    e instanceof TypeError ||
+    (e instanceof Error &&
+      (e.message === 'Failed to fetch' ||
+        e.message === 'Load failed' ||
+        e.message.startsWith('NetworkError')));
+  return (
+    isNoAnswer(error) ||
+    isNoAnswer((error as { cause?: unknown } | null)?.cause)
+  );
 };
 
 const DEFAULT_MESSAGE = 'Something went wrong. Try again in a moment.';
@@ -27,8 +47,14 @@ export const apiErrorMessage = (
   error: unknown,
   fallback: string = DEFAULT_MESSAGE,
 ): string => {
-  const message = error instanceof Error ? error.message.trim() : '';
   const code = (error as { data?: { code?: unknown } } | null)?.data?.code;
+  if (code === undefined && isNetworkError(error)) {
+    return NETWORK_MESSAGE;
+  }
+  if (code === 'INTERNAL_SERVER_ERROR') {
+    return MESSAGES.INTERNAL_SERVER_ERROR;
+  }
+  const message = error instanceof Error ? error.message.trim() : '';
   const written =
     message !== '' &&
     message !== code &&

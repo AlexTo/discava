@@ -538,7 +538,9 @@ describe('Preview as student', () => {
     await user.click(
       within(dialog).getByRole('button', { name: /Review answers/ }),
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Submit' }));
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Submit answers' }),
+    );
 
     // q1 right, q2 wrong: 50%, under the 70% pass mark.
     expect(

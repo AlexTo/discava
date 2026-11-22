@@ -61,7 +61,7 @@ describe('/search', () => {
 
     expect(await screen.findByText('Vectors and matrices')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Preview Linear Algebra' }),
+      screen.getByRole('link', { name: 'Linear Algebra' }),
     ).toHaveAttribute('href', '/learn/linalg');
     expect(screen.getByText('Learn more')).toBeInTheDocument();
   });
@@ -445,5 +445,13 @@ describe('/search', () => {
       expect(screen.getByText('Advanced')).toBeInTheDocument();
       expect(screen.getByText('French')).toBeInTheDocument();
     });
+  });
+
+  it('lets a long unbroken query wrap in the heading', async () => {
+    search('a'.repeat(70));
+
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveClass(
+      'break-words',
+    );
   });
 });

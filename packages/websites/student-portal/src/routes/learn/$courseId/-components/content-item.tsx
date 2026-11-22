@@ -117,7 +117,11 @@ function VideoPlayer({ item }: { item: PlayerItem }) {
   }
   if (videoQuery.isError) {
     return (
-      <ErrorAlert type="error" header="Couldn't load this video">
+      <ErrorAlert
+        type="error"
+        header="Couldn't load this video"
+        onRetry={() => videoQuery.refetch()}
+      >
         {apiErrorMessage(videoQuery.error)}
       </ErrorAlert>
     );

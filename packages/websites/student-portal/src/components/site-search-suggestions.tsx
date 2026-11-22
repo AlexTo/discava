@@ -48,7 +48,7 @@ export function SiteSearchSuggestions({
   return (
     <div
       data-testid="site-search-suggestions"
-      className="absolute top-full right-0 left-0 z-50 mt-2 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-md"
+      className="fixed inset-x-4 top-16 z-50 mt-2 overflow-hidden sm:absolute sm:inset-x-0 sm:top-full rounded-xl border bg-popover text-popover-foreground shadow-md"
     >
       {items.length === 0 && loading ? (
         <p className="px-4 py-3 text-sm text-muted-foreground">Searching…</p>
@@ -95,7 +95,7 @@ export function SiteSearchSuggestions({
                       className="aspect-video w-16 shrink-0 rounded bg-muted"
                     />
                   )}
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 line-clamp-2 break-words">
                     {titleParts(item.title, typed).map(
                       ({ key, text, match }) =>
                         match ? (
@@ -121,7 +121,7 @@ export function SiteSearchSuggestions({
               onMouseDown={(event) => event.preventDefault()}
               onClick={onSeeAll}
             >
-              {`See all results for '${typed}'`}
+              {`See all results for ‘${typed}’`}
             </li>
           </ul>
         </>

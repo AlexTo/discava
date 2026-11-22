@@ -130,7 +130,11 @@ describe('UnansweredView', () => {
       },
     });
 
-    expect(await screen.findByText('Boom')).toBeVisible();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeVisible();
     fail = false;
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('Question 1')).toBeVisible();
