@@ -13,6 +13,7 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
+import { enrolAndLand, openCourse } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 
@@ -144,5 +145,60 @@ test.describe('lesson questions in the instructor portal', () => {
       page.getByText('Answer to the course prompt').first(),
     ).toBeVisible();
     await screenshot(page, 'prompt-answer-by-lesson');
+  });
+
+  test("an instructor's prompt reaches a new learner", async ({
+    page,
+    browser,
+  }) => {
+    const course = uniqueName('E2E custom prompt');
+    const custom = `Which part of ${course} will you try first?`;
+    const defaultPrompt =
+      /What do you want to be able to do with what this course teaches/;
+
+    await page.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(page, newUser('Ivy', ['instructor']));
+    await createCourse(page, {
+      title: course,
+      summary: 'A course whose first-lesson prompt the instructor words.',
+    });
+    await addModule(page, 'Module one');
+    await addLesson(page, 'Lesson one');
+    await addTextItem(page, { title: 'Reading', body: 'Text.' });
+    await publishCourse(page);
+
+    await expect(page.getByText('Using the default prompt.')).toBeVisible();
+    await page.getByLabel('Prompt', { exact: true }).fill(custom);
+    await page.getByRole('button', { name: 'Save prompt' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Saved' }),
+    ).toBeVisible();
+    await expect(page.getByText('Using the default prompt.')).toBeHidden();
+    await screenshot(page, 'first-lesson-prompt-form');
+
+    // A fresh learner is asked the instructor's words.
+    const firstContext = await browser.newContext();
+    const first = await firstContext.newPage();
+    await openCourse(first, course);
+    await enrolAndLand(first, newUser('Sam', ['student']));
+    const firstQuestions = first.getByRole('region', { name: 'Questions' });
+    await expect(firstQuestions.getByText(custom)).toBeVisible();
+    await expect(firstQuestions.getByText(defaultPrompt)).toBeHidden();
+    await screenshot(first, 'first-lesson-prompt-custom');
+    await firstContext.close();
+
+    // Back to the default: the next fresh learner is asked that instead.
+    await page.getByRole('button', { name: 'Use default' }).click();
+    await expect(page.getByText('Using the default prompt.')).toBeVisible();
+    await expect(page.getByLabel('Prompt', { exact: true })).toHaveValue('');
+
+    const secondContext = await browser.newContext();
+    const second = await secondContext.newPage();
+    await openCourse(second, course);
+    await enrolAndLand(second, newUser('Kim', ['student']));
+    const secondQuestions = second.getByRole('region', { name: 'Questions' });
+    await expect(secondQuestions.getByText(defaultPrompt)).toBeVisible();
+    await expect(secondQuestions.getByText(custom)).toBeHidden();
+    await secondContext.close();
   });
 });

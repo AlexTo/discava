@@ -127,6 +127,8 @@ test('an instructor requires every quiz to be passed for a certificate', async (
       first.getByRole('link', { name: 'View', exact: true }),
     ).toBeVisible();
     await screenshot(first, 'certificate-requirements-met');
+    // The card caught up on its own, without a reload, once progress was recalculated.
+    await screenshot(first, 'certificate-requirements-recalculated');
     await first.goto(`${PORTALS.student}/my-learning`);
     await expectInCompleted(first, async () => {
       await expect(
