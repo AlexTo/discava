@@ -52,6 +52,7 @@ const fullCourse = {
           courseId: 'c1',
           title: 'Ownership',
           kind: 'lesson' as const,
+          freePreview: false,
           order: 1,
           createdAt: '',
           updatedAt: '',
@@ -115,6 +116,66 @@ describe('renderCoursePage', () => {
     expect(JSON.parse(page.pageData)).toHaveProperty('course.publicView');
     expect(JSON.parse(page.pageData)).toHaveProperty('review.summary');
     expect(JSON.parse(page.pageData)).toHaveProperty('review.list');
+  });
+
+  it('links and labels a free preview lesson, and only that lesson', () => {
+    const [lesson] = fullCourse.modules[0]!.lessons;
+    const page = renderCoursePage(context(true), {
+      course: {
+        ...fullCourse,
+        modules: [
+          {
+            ...fullCourse.modules[0]!,
+            lessons: [
+              { ...lesson!, lessonId: 'l1', title: 'Ownership' },
+              {
+                ...lesson!,
+                lessonId: 'l2',
+                title: 'Borrowing',
+                freePreview: true,
+              },
+            ],
+          },
+        ],
+      },
+      summary: { count: 0, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+      reviews: { items: [], cursor: null },
+    });
+    expect(page.root).toContain(
+      '<li class="text-sm"><a href="/learn/c1/preview/l2">Borrowing</a> <span>Free preview</span></li>',
+    );
+    expect(page.root).toContain('<li class="text-sm">Ownership</li>');
+    expect(page.root.match(/Free preview/g)).toHaveLength(1);
+    expect(page.root.match(/\/preview\//g)).toHaveLength(1);
+  });
+
+  it('escapes a hostile title and hostile IDs inside the preview link', () => {
+    const [lesson] = fullCourse.modules[0]!.lessons;
+    const page = renderCoursePage(context(true), {
+      course: {
+        ...fullCourse,
+        courseId: HOSTILE,
+        modules: [
+          {
+            ...fullCourse.modules[0]!,
+            lessons: [
+              {
+                ...lesson!,
+                lessonId: HOSTILE,
+                title: HOSTILE,
+                freePreview: true,
+              },
+            ],
+          },
+        ],
+      },
+      summary: { count: 0, stars: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
+      reviews: { items: [], cursor: null },
+    });
+    expect(page.root).not.toContain('<script>alert');
+    expect(page.root).not.toContain('alert(1)</script><');
+    expect(page.root).toContain('&lt;/script&gt;');
+    expect(page.root).toMatch(/href="\/learn\/[^"<>]*\/preview\/[^"<>]*"/);
   });
 
   it('renders a bare course without rating, image or sections', () => {
@@ -227,6 +288,8 @@ describe('renderProfilePage', () => {
 
 describe('renderCertificatePage', () => {
   const certificate = {
+    status: 'valid' as const,
+    statement: ['Completed all items.'],
     certificateId: 'ABCD-EFGH-JKMN-PQRS',
     learnerName: 'Sam <b> "Q" & Co',
     courseTitle: 'Rust <i> & "Go"',
@@ -251,6 +314,19 @@ describe('renderCertificatePage', () => {
     expect(page.head).toContain(
       '<meta property="og:type" content="website" />',
     );
+  });
+
+  it('previews a revoked certificate with its ID alone', () => {
+    const { head } = renderCertificatePage(context(true), {
+      status: 'revoked',
+      certificateId: 'ABCD-EFGH-JKMN-PQRS',
+      revokedAt: '2026-11-20T00:00:00.000Z',
+      revokedOn: '20 November 2026',
+    });
+    expect(head).toContain('Certificate revoked');
+    expect(head).toContain('Certificate ID ABCD-EFGH-JKMN-PQRS');
+    expect(head).toContain('<meta name="robots" content="noindex" />');
+    expect(head).not.toContain('completed');
   });
 
   it('escapes the learner name and the course title', () => {

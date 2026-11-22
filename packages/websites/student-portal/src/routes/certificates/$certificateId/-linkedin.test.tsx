@@ -70,6 +70,25 @@ describe('/certificates/<ID>/linkedin', () => {
     });
   });
 
+  it('does not redirect for a revoked certificate', async () => {
+    const { calls } = open('/certificates/ABCD-EFGH-JKLM-NPQR/linkedin', {
+      'certificate.verify': () => ({
+        status: 'revoked',
+        certificateId: 'ABCD-EFGH-JKLM-NPQR',
+        revokedAt: '2026-11-12T08:00:00.000Z',
+        revokedOn: '12 November 2026',
+      }),
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Certificate revoked' }),
+    ).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+    expect(
+      calls.some((c) => c.path === 'certificate.recordLinkedInClick'),
+    ).toBe(false);
+  });
+
   it('reads any other source as issued-email', async () => {
     const { calls } = open(
       '/certificates/ABCD-EFGH-JKLM-NPQR/linkedin?source=whatever',

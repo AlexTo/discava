@@ -132,9 +132,10 @@ export const renderCoursePage = (
       .map(
         (module) =>
           `<li><span class="font-semibold">${escapeHtml(module.title)}</span><ol>${module.lessons
-            .map(
-              (lesson) =>
-                `<li class="text-sm">${escapeHtml(lesson.title)}</li>`,
+            .map((lesson) =>
+              lesson.freePreview
+                ? `<li class="text-sm"><a href="/learn/${escapeHtml(course.courseId)}/preview/${escapeHtml(lesson.lessonId)}">${escapeHtml(lesson.title)}</a> <span>Free preview</span></li>`
+                : `<li class="text-sm">${escapeHtml(lesson.title)}</li>`,
             )
             .join('')}</ol></li>`,
       )

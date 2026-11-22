@@ -10,6 +10,34 @@ import { useState } from 'react';
 import { useCoreApiClient } from '../api';
 import { AddToLinkedInButton } from './add-to-linkedin-button';
 
+// How a learner is told why a certificate was revoked.
+const REVOCATION_REASON_LABEL = {
+  'academic-integrity': 'Academic integrity',
+  'issued-in-error': 'Issued in error',
+  refunded: 'Order refunded',
+  other: 'Other',
+} as const;
+
+export type RevocationReason = keyof typeof REVOCATION_REASON_LABEL;
+
+// A date as the PDF and the public page print it: UTC, e.g. `19 November 2026`.
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+
+/** "Certificate revoked on <date>. Reason: <category>." */
+export const revokedText = (
+  revokedAt: string,
+  reason: RevocationReason | undefined,
+) =>
+  `Certificate revoked on ${formatDate(revokedAt)}.${
+    reason ? ` Reason: ${REVOCATION_REASON_LABEL[reason]}.` : ''
+  }`;
+
 const certificatePath = (certificateId: string) =>
   `/certificates/${certificateId}`;
 
@@ -31,17 +59,22 @@ const saveBase64 = (fileName: string, contentBase64: string, type: string) => {
 /**
  * What a student can do with the certificate for a course they completed:
  * view its public page, download it as a PDF, or copy its link, or add it to their LinkedIn profile.
+ * A revoked certificate offers none of these, only what happened.
  */
 export function CertificateActions({
   courseId,
   certificateId,
   courseTitle,
   completedAt,
+  revokedAt,
+  revocationReason,
 }: {
   courseId: string;
   certificateId: string;
   courseTitle: string;
   completedAt: string;
+  revokedAt?: string;
+  revocationReason?: RevocationReason;
 }) {
   const client = useCoreApiClient();
   const [preparing, setPreparing] = useState(false);
@@ -69,6 +102,14 @@ export function CertificateActions({
     );
     setCopied(true);
   };
+
+  if (revokedAt) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {revokedText(revokedAt, revocationReason)}
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-2" role="group" aria-label="Certificate">

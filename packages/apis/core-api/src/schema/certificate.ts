@@ -27,6 +27,14 @@ export const VerifyCertificateOutputSchema = z.discriminatedUnion('status', [
     // What the certificate confirms, one line each; the PDF draws the same.
     statement: z.array(z.string()).min(1),
   }),
+  // Nothing identifies the learner or the course, and no reason is given.
+  z.object({
+    status: z.literal('revoked'),
+    certificateId: z.string(),
+    revokedAt: z.string(),
+    // `revokedAt` formatted like `completedOn`.
+    revokedOn: z.string(),
+  }),
 ]);
 
 export type IVerifyCertificateOutput = z.output<
@@ -51,6 +59,18 @@ export type IRecordLinkedInClickInput = z.output<
 // Nothing from the certificate comes back.
 export const RecordLinkedInClickOutputSchema = z.object({});
 
+export const CertificateStatusSchema = z.enum(['valid', 'revoked']);
+
+// Why a certificate was revoked, as stored. The learner sees its label.
+export const RevocationReasonSchema = z.enum([
+  'academic-integrity',
+  'issued-in-error',
+  'other',
+  'refunded',
+]);
+
+export type IRevocationReason = z.output<typeof RevocationReasonSchema>;
+
 export const MyCertificatesInputSchema = z.void();
 
 export const MyCertificateSchema = z.object({
@@ -59,6 +79,9 @@ export const MyCertificateSchema = z.object({
   courseTitle: z.string(),
   learnerName: z.string(),
   completedAt: z.string(),
+  status: CertificateStatusSchema,
+  revokedAt: z.string().optional(),
+  revocationReason: RevocationReasonSchema.optional(),
 });
 
 export type IMyCertificate = z.output<typeof MyCertificateSchema>;
@@ -102,7 +125,9 @@ export const CertificateRequirementsOutputSchema = z.object({
   certificate: z
     .object({
       certificateId: z.string(),
-      status: z.enum(['valid']),
+      status: CertificateStatusSchema,
+      revokedAt: z.string().optional(),
+      revocationReason: RevocationReasonSchema.optional(),
     })
     .nullable(),
   allMet: z.boolean(),
