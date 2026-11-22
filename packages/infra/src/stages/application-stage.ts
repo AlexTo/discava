@@ -169,6 +169,7 @@ export class ApplicationStage extends Stage {
       mediaPipeline,
       stripeSecrets: data.stripeSecrets,
       instructorPortal: websites.instructorPortal,
+      captionTranslation,
     });
 
     new AdminApiStack(this, 'AdminApi', {
