@@ -109,6 +109,14 @@ pnpm i
 pnpm dev
 ```
 
+Then open a portal:
+
+| Portal | URL |
+| --- | --- |
+| Student | http://localhost:4201 |
+| Instructor | http://localhost:4200 |
+| Admin | http://localhost:4202 |
+
 Sign in as Alice (instructor and student), Bob or Dan (students) or Carol (admin). Payments work locally too, with a stand-in for Stripe.
 
 See the docs and [DEVELOPMENT.md](DEVELOPMENT.md) for everything else.
