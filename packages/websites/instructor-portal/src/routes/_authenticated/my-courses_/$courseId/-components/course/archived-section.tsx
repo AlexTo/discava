@@ -231,8 +231,8 @@ function ArchivedRow({
   return (
     <li className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
+        <div className="min-w-0 basis-full break-words sm:basis-0 sm:flex-1">
+          <p className="text-sm font-medium">
             {entry.title}{' '}
             <span className="font-normal text-muted-foreground">
               ({entry.noun})

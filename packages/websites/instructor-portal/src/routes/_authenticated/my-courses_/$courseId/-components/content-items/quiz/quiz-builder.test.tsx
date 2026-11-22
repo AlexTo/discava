@@ -577,4 +577,20 @@ describe('Preview as student', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByText('Give the quiz a title.')).toBeInTheDocument();
   });
+
+  it('wraps the save bar and keeps the question cards shrinkable on a phone', () => {
+    renderExisting();
+
+    const saveBar = save().closest('.sticky') as HTMLElement;
+    const buttons = save().parentElement as HTMLElement;
+    expect(buttons).toHaveClass('flex-wrap');
+    expect(saveBar.querySelector('[role="status"]')).toHaveClass('basis-full');
+    expect(
+      screen.getByRole('button', { name: /preview as student/i }),
+    ).toBeInTheDocument();
+    const card = screen
+      .getByRole('button', { name: 'Remove Question 1' })
+      .closest('div.gap-0');
+    expect(card).toHaveClass('min-w-0');
+  });
 });

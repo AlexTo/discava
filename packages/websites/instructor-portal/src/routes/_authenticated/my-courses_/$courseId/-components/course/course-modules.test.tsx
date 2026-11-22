@@ -415,3 +415,50 @@ describe('CourseModules', () => {
     });
   });
 });
+
+describe('CourseModules at phone width', () => {
+  const longTitle = `${'Words that go on '.repeat(5)}end`.slice(0, 90);
+  const longWord = 'x'.repeat(70);
+  const longModules = [
+    module('m1', longTitle, [lesson('l1', longWord)]),
+    module('m2', 'Short'),
+  ];
+
+  it('lets a long module or lesson title wrap instead of pushing the controls off screen', () => {
+    renderModules({ modules: longModules });
+
+    for (const title of [longTitle, longWord]) {
+      const element = screen.getByText(title);
+      expect(element).toHaveClass('break-words');
+      expect(element).toHaveClass('min-w-0');
+    }
+  });
+
+  it('wraps the controls of a module and of a lesson', () => {
+    renderModules({ modules: longModules });
+
+    const moduleGroup = screen
+      .getByRole('button', { name: 'Edit module 1' })
+      .closest('div.flex-wrap');
+    expect(moduleGroup).toHaveClass('flex', 'flex-wrap', 'gap-1');
+    const lessonRow = screen.getByText(longWord).closest('article');
+    const lessonGroup = within(lessonRow as HTMLElement)
+      .getByRole('button', { name: `Edit lesson ${longWord}` })
+      .closest('div.flex-wrap');
+    expect(lessonGroup).toHaveClass('flex', 'flex-wrap', 'gap-1');
+  });
+
+  it('still names every control', () => {
+    renderModules({ modules: longModules });
+
+    expect(
+      screen.getByRole('button', { name: 'Remove module 1' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Remove lesson ${longWord}` }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: `Edit lesson ${longWord}` }),
+    ).toBeInTheDocument();
+  });
+});
