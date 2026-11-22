@@ -592,6 +592,19 @@ test('the course editor fits a phone', async ({ page }) => {
     for (const title of [textTitle, quizTitle, longTitle(1)]) {
       await expect(content.getByText(title, { exact: true })).toBeVisible();
     }
+    // Every long title, a module's included, wraps inside the screen: the
+    // card clips overflow, so a sideways-scroll check alone would miss it.
+    for (const title of [longWord, longTitle(12)]) {
+      const titles = await content.getByText(title, { exact: true }).all();
+      expect(titles.length).toBeGreaterThan(0);
+      for (const element of titles) {
+        await expect(element).toBeVisible();
+        const box = await element.boundingBox();
+        expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+          PHONE.width,
+        );
+      }
+    }
     await content.scrollIntoViewIfNeeded();
     await screenshot(page, 'course editor at phone width', { fullPage: true });
   });

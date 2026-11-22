@@ -461,4 +461,13 @@ describe('CourseModules at phone width', () => {
       screen.getByRole('button', { name: `Edit lesson ${longWord}` }),
     ).toBeInTheDocument();
   });
+
+  it('lets the module header row shrink inside the card header grid, so a long word wraps', () => {
+    renderModules({ modules: longModules });
+
+    const row = screen
+      .getByRole('button', { name: 'Edit module 1' })
+      .closest('div.flex-wrap')?.parentElement;
+    expect(row).toHaveClass('min-w-0');
+  });
 });

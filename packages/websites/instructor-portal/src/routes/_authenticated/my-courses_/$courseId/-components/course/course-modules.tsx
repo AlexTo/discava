@@ -363,7 +363,7 @@ export function CourseModules({
             )}
           >
             <CardHeader className="border-b bg-muted/30 px-4 py-3 sm:px-5">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {row && (
                   <DragHandle
                     row={row}
