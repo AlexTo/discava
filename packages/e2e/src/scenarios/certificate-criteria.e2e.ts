@@ -93,6 +93,16 @@ test('an instructor requires every quiz to be passed for a certificate', async (
 
   await test.step('a student who fails the quiz completes the course without a certificate', async () => {
     await attempt(first, ['3']);
+    // The course home says what is still needed, and where.
+    await expect(first.getByText('Pass every quiz: 0 of 1')).toBeVisible();
+    await expect(
+      first.getByText(
+        'Not passed, no attempts left. Ask your instructor for another attempt.',
+      ),
+    ).toBeVisible();
+    await screenshot(first, 'certificate-requirements-unmet');
+    await first.getByRole('link', { name: 'Quiz one' }).click();
+    await expect(first).toHaveURL(lessonUrl);
     await first.goto(`${PORTALS.student}/my-learning`);
     await expectInCompleted(first, async () => {
       await expect(
@@ -106,6 +116,14 @@ test('an instructor requires every quiz to be passed for a certificate', async (
     await setQuizAttempts(instructor, 'Quiz one', 2);
     await first.goto(lessonUrl);
     await takeQuiz(first, 'Quiz one', '4');
+    await first.getByRole('link', { name: title }).click();
+    await expect(first.getByText('You earned a certificate')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      first.getByRole('link', { name: 'View', exact: true }),
+    ).toBeVisible();
+    await screenshot(first, 'certificate-requirements-met');
     await first.goto(`${PORTALS.student}/my-learning`);
     await expectInCompleted(first, async () => {
       await expect(

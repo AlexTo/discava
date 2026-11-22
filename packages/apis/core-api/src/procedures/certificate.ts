@@ -4,6 +4,8 @@
  */
 import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
+  evaluateCertificateCriteria,
+  filterEffectivelyVisible,
   formatCertificateId,
   normaliseCertificateId,
   recordLinkedInClick as recordCertificateLinkedInClick,
@@ -14,6 +16,8 @@ import { courseProcedure, publicCourseProcedure } from '../init.js';
 import {
   CertificatePdfInputSchema,
   CertificatePdfOutputSchema,
+  CertificateRequirementsInputSchema,
+  CertificateRequirementsOutputSchema,
   MyCertificatesInputSchema,
   MyCertificatesOutputSchema,
   RecordLinkedInClickInputSchema,
@@ -21,6 +25,7 @@ import {
   VerifyCertificateInputSchema,
   VerifyCertificateOutputSchema,
 } from '../schema/index.js';
+import { getEnrolment, requireEnrolment } from './enrolment.js';
 
 // One message for a malformed and an unknown ID, so a caller can't tell them
 // apart.
@@ -138,5 +143,107 @@ export const certificatePdf = courseProcedure
     return {
       fileName: `certificate-${displayId}.pdf`,
       contentBase64: Buffer.from(bytes).toString('base64'),
+    };
+  });
+
+/**
+ * What the caller still needs for a course's certificate. The requirements
+ * are `evaluateCertificateCriteria`'s; this only adds completion of every
+ * item and the quizzes' titles and lessons. Reads the caller's own records
+ * and writes nothing.
+ */
+export const certificateRequirements = courseProcedure
+  .input(CertificateRequirementsInputSchema)
+  .output(CertificateRequirementsOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const { coreTable } = ctx;
+    const userId = ctx.user.sub;
+    const { courseId } = input;
+
+    const [
+      { data: curriculum },
+      enrolment,
+      { data: certificate },
+      { data: completions },
+      { data: summaries },
+    ] = await Promise.all([
+      coreTable.collections.curriculum({ courseId }).go({ pages: 'all' }),
+      getEnrolment(coreTable, courseId, userId),
+      coreTable.entities.certificate.get({ userId, courseId }).go(),
+      coreTable.entities.itemCompletion.query
+        .primary({ userId, courseId })
+        .go({ pages: 'all' }),
+      coreTable.entities.quizSummary.query
+        .primary({ userId })
+        .where(({ courseId: id }, { eq }) => eq(id, courseId))
+        .go({ pages: 'all' }),
+    ]);
+    const [course] = curriculum.course;
+    if (!course) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+    requireEnrolment(course, enrolment);
+
+    const issued = certificate
+      ? {
+          certificateId: formatCertificateId(certificate.certificateId),
+          status: 'valid' as const,
+        }
+      : null;
+    if (!course.certificatesEnabled) {
+      return {
+        certificatesEnabled: false,
+        certificate: issued,
+        allMet: false,
+        requirements: [],
+      };
+    }
+
+    const content = {
+      modules: curriculum.module,
+      lessons: curriculum.lesson,
+      contentItems: curriculum.contentItem,
+    };
+    const visibleItems = filterEffectivelyVisible(content).contentItems;
+    const completed = new Set(completions.map((c) => c.contentItemId));
+    const complete = {
+      kind: 'complete-items' as const,
+      met: enrolment!.status === 'completed',
+      done: visibleItems.filter((i) => completed.has(i.contentItemId)).length,
+      total: visibleItems.length,
+    };
+
+    const evaluation = evaluateCertificateCriteria({
+      criteria: course.certificateCriteria,
+      curriculum: content,
+      quizSummaries: summaries,
+    });
+    const itemsById = new Map(
+      visibleItems.map((item) => [item.contentItemId, item]),
+    );
+    const requirements = [
+      complete,
+      ...evaluation.requirements.map(({ quizzes }) => {
+        const items = quizzes.map(({ contentItemId, state }) => ({
+          contentItemId,
+          lessonId: itemsById.get(contentItemId)?.lessonId ?? '',
+          title: itemsById.get(contentItemId)?.title ?? '',
+          state,
+        }));
+        const done = items.filter((i) => i.state === 'passed').length;
+        return {
+          kind: 'pass-quizzes' as const,
+          met: done === items.length,
+          done,
+          total: items.length,
+          items,
+        };
+      }),
+    ];
+    return {
+      certificatesEnabled: true,
+      certificate: issued,
+      allMet: requirements.every((r) => r.met),
+      requirements,
     };
   });

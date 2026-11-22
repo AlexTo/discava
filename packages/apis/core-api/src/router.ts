@@ -13,6 +13,7 @@ import {
 import { categoryBySlug, listCategories } from './procedures/category.js';
 import {
   certificatePdf,
+  certificateRequirements,
   myCertificates,
   recordLinkedInClick,
   verifyCertificate,
@@ -138,6 +139,7 @@ export const appRouter = router({
     verify: verifyCertificate,
     myCertificates,
     pdf: certificatePdf,
+    requirements: certificateRequirements,
     recordLinkedInClick,
   }),
   contentItem: router({
