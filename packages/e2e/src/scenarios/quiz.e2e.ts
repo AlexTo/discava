@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { apiUser, createPublishedQuizCourseViaApi } from '../helpers/api.js';
 import {
   addLesson,
   addModule,
@@ -11,9 +12,11 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
   expectCourseCompleted,
+  lessonItem,
   openCourse,
   startFirstLesson,
   takeQuiz,
@@ -66,4 +69,56 @@ test('a student fails a quiz, retakes it and passes', async ({ browser }) => {
     await student.getByRole('link', { name: course }).click();
     await expectCourseCompleted(student);
   });
+});
+
+// Focus follows the quiz's phases, so a keyboard or screen reader user is
+// never left on a button that was removed.
+test('a student takes a quiz with the keyboard', async ({ page }) => {
+  const course = uniqueName('E2E keyboard quiz course');
+  await createPublishedQuizCourseViaApi(
+    await apiUser('Ivy', ['instructor']),
+    course,
+  );
+  await openCourse(page, course);
+  await enrol(page, newUser('Kay', ['student']));
+  await startFirstLesson(page);
+
+  const quiz = lessonItem(page, 'Keyboard quiz');
+  const focusIsInQuiz = () =>
+    page.evaluate(() => {
+      const active = document.activeElement;
+      return active !== document.body && Boolean(active?.closest('article'));
+    });
+
+  await quiz.getByRole('button', { name: 'Start quiz' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(quiz.getByText('Question 1 of 3')).toBeFocused();
+  expect(await focusIsInQuiz()).toBe(true);
+
+  const navigator = quiz.getByRole('navigation', { name: 'Questions' });
+  for (const name of ['Question 1', 'Question 2', 'Question 3']) {
+    const box = await navigator.getByRole('button', { name }).boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(24);
+    expect(box?.height).toBeGreaterThanOrEqual(24);
+  }
+  await screenshot(page, 'quiz question with numbered navigator');
+
+  for (let i = 0; i < 3; i++) {
+    await quiz.getByRole('radio', { name: 'Right' }).check();
+    await quiz
+      .getByRole('button', { name: i < 2 ? 'Next' : 'Review answers' })
+      .click();
+  }
+  await expect(quiz.getByText(/3 of 3 questions answered/)).toBeFocused();
+  expect(await focusIsInQuiz()).toBe(true);
+  await expect(quiz.getByText('This uses attempt 1 of 2.')).toBeVisible();
+  await screenshot(page, 'quiz review with attempt line');
+
+  await quiz.getByRole('button', { name: 'Submit answers' }).click();
+  await expect(quiz.getByText(/This attempt: 100%/)).toBeFocused();
+  expect(await focusIsInQuiz()).toBe(true);
+
+  await quiz.getByRole('button', { name: 'Done' }).click();
+  await expect(quiz.getByText(/3 questions · Pass 50%/)).toBeFocused();
+  expect(await focusIsInQuiz()).toBe(true);
 });

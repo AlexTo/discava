@@ -13,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from '@discava/common-shadcn/components/ui/collapsible';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import {
   LANGUAGE_LABELS,
@@ -69,11 +70,16 @@ export function CoursePage({ courseId }: { courseId: string }) {
     trpc.course.publicView.queryOptions({ courseId }),
   );
   const [expandedModuleId, setExpandedModuleId] = useState<string>();
+  usePageTitle(courseQuery.data?.title ?? 'Course');
 
   if (courseQuery.isLoading) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl justify-center px-6 py-24 lg:px-8">
-        <Spinner />
+      <main
+        className="mx-auto flex w-full max-w-3xl items-center justify-center gap-3 px-6 py-24 text-sm text-muted-foreground lg:px-8"
+        role="status"
+      >
+        <Spinner role="presentation" aria-hidden="true" />
+        Loading…
       </main>
     );
   }
@@ -97,7 +103,11 @@ export function CoursePage({ courseId }: { courseId: string }) {
           </>
         ) : (
           <div className="text-left">
-            <ErrorAlert type="error" header="Couldn't load this course">
+            <ErrorAlert
+              type="error"
+              header="Couldn't load this course"
+              onRetry={() => courseQuery.refetch()}
+            >
               {apiErrorMessage(courseQuery.error)}
             </ErrorAlert>
           </div>

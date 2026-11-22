@@ -274,7 +274,9 @@ describe('the Payments page', () => {
       },
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Boom');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong on our side. Try again in a moment.',
+    );
     fail = false;
     await rendered.user.click(
       screen.getByRole('button', { name: 'Try again' }),

@@ -583,6 +583,26 @@ export const writeCaptionTracks = async (
 };
 
 /**
+ * Writes the version's new track list as translation changes it: conditioned
+ * on the revision read (captionWriteCondition) and moving it on, and touching
+ * nothing else, so the automatic captioning status stays as it is.
+ */
+export const writeTranslatedCaptionTracks = async (
+  entities: CaptionEntities,
+  key: CaptionTargetKey,
+  {
+    tracks,
+    rev,
+    nonce,
+  }: { tracks: CaptionTrack[]; rev: number; nonce: string },
+): Promise<void> => {
+  await patchOf(entities, key)
+    .set({ captionTracks: tracks, captionTracksRev: rev + 1 })
+    .where(captionWriteCondition(rev, nonce))
+    .go();
+};
+
+/**
  * Asks for the record's translations to be worked out again: clears the
  * recorded outcome and touches captionTranslationRequestedAt, which is what the
  * stream matcher passes. A missing record is left missing.

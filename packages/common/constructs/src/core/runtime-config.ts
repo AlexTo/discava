@@ -101,6 +101,9 @@ export class RuntimeConfig extends Construct {
 
   /** Sets a key in the given namespace. Creates the namespace if it doesn't exist. */
   set(namespace: string, key: string, value: any): void {
+    // No function reads AppConfig any more, so nothing else asks for its
+    // resources. Publishing keeps them deployed until Phase 4 removes them.
+    this.ensureAspect();
     let data = this._namespaces.get(namespace);
     if (!data) {
       data = {};

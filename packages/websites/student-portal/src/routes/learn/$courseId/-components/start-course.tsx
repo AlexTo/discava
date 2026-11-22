@@ -4,6 +4,7 @@
  */
 
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useCoursePlayer } from '../../../../hooks/use-course-player';
@@ -14,7 +15,9 @@ import { Unavailable } from './course-player';
 // history, so Back from the lesson returns to where the learner came from.
 export function StartCourse({ courseId }: { courseId: string }) {
   const navigate = useNavigate();
-  const { error, isPlaceReady, nextLesson } = useCoursePlayer(courseId);
+  const { course, error, isPlaceReady, nextLesson, retry } =
+    useCoursePlayer(courseId);
+  usePageTitle(course?.title ?? 'Course');
   const lessonId = nextLesson?.lesson.lessonId;
 
   useEffect(() => {
@@ -35,7 +38,7 @@ export function StartCourse({ courseId }: { courseId: string }) {
   }, [isPlaceReady, lessonId, courseId, navigate]);
 
   if (error) {
-    return <Unavailable courseId={courseId} error={error} />;
+    return <Unavailable courseId={courseId} error={error} onRetry={retry} />;
   }
   return (
     <main

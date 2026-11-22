@@ -83,21 +83,23 @@ describe('StripeWebhookApi', () => {
     expect(actions).toContain('secretsmanager:GetSecretValue');
     expect(actions).not.toContain('secretsmanager:PutSecretValue');
     expect(
-      actions.filter(
-        (a) => !/^(dynamodb|secretsmanager|kms|xray|appconfig):/.test(a),
-      ),
+      actions.filter((a) => !/^(dynamodb|secretsmanager|kms|xray):/.test(a)),
     ).toEqual([]);
   });
 
-  it('gives the function the AppConfig application id and read access to resolve the table (#619)', () => {
+  it('gives the function its table setting, and nothing in AppConfig (#619)', () => {
     const { template } = build();
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: Match.objectLike({
-          RUNTIME_CONFIG_APP_ID: Match.anyValue(),
+          DISCAVA_DYNAMODB_CORE_TABLE: Match.anyValue(),
         }),
       },
     });
+    const [fn] = Object.values(template.findResources('AWS::Lambda::Function'));
+    expect(fn.Properties.Environment.Variables).not.toHaveProperty(
+      'RUNTIME_CONFIG_APP_ID',
+    );
   });
 
   it('gives the function enough memory to start within its timeout (#654)', () => {

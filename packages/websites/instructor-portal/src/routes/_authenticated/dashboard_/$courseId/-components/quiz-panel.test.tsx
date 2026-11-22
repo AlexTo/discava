@@ -157,7 +157,11 @@ describe('QuizPanel', () => {
     });
     await open(user);
 
-    expect(await screen.findByText(/Something broke/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(
       await screen.findByRole('table', {

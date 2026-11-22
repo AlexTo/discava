@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  addSetting,
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsCaptionTranslation,
   EventsCertificateReminder,
   EventsEarningsRecording,
   EventsNotificationDelivery,
@@ -19,19 +21,20 @@ import {
   suppressRules,
 } from '@discava/common-constructs';
 import type {
+  CaptionTranslationSettings,
   NotificationsComponentConfig,
   PayoutSettings,
   StreamRouterComponentConfig,
 } from '@discava/common-infra-config';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps, Stage } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import type { Function } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import { captionTranslationSetting } from './caption-translation-settings.js';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
 export interface StreamRouterStackProps extends StackProps {
@@ -39,7 +42,7 @@ export interface StreamRouterStackProps extends StackProps {
   readonly streamRouter?: StreamRouterComponentConfig;
   readonly coreTable: CoreTable;
   readonly searchCollection: SearchCollection;
-  /** Holds the caption files the transcript indexer reads. */
+  /** Holds the caption files the transcript indexer reads and the caption translation function reads and writes. */
   readonly lessonMediaBucket: LessonMediaBucket;
   /** Sender and SES identity for notification emails. @default no sender, no SES access */
   readonly notifications?: NotificationsComponentConfig;
@@ -51,6 +54,8 @@ export interface StreamRouterStackProps extends StackProps {
   readonly coreApiUrl: string;
   /** The stage's fee and hold, which earnings recording applies to each sale. */
   readonly payouts: Pick<PayoutSettings, 'platformFeeBasisPoints' | 'holdDays'>;
+  /** The stage's caption translation settings. @default translation on, up to nine languages a course */
+  readonly captionTranslation?: CaptionTranslationSettings;
 }
 
 /**
@@ -78,6 +83,7 @@ export class StreamRouterStack extends Stack {
       portalUrls,
       coreApiUrl,
       payouts,
+      captionTranslation,
       ...props
     }: StreamRouterStackProps,
   ) {
@@ -111,7 +117,19 @@ export class StreamRouterStack extends Stack {
         coreTable,
         payouts,
       ),
+      'caption-translation': this.createCaptionTranslationLambda(
+        coreTable,
+        lessonMediaBucket,
+        captionTranslation,
+      ),
     };
+
+    // One object under one key, so `enabled: false` is a value like any other.
+    RuntimeConfig.ensure(this).set(
+      'captionTranslation',
+      'Settings',
+      captionTranslationSetting(captionTranslation),
+    );
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
       table: coreTable.table,
@@ -123,19 +141,6 @@ export class StreamRouterStack extends Stack {
     });
   }
 
-  // How a handler reads AppConfig: the application lives in Data, which this
-  // stack depends on, so the id is a plain cross-stack reference. The
-  // configuration's content is in RuntimeConfig, which deploys last and
-  // depends on every stack that grants here, so no cycle appears.
-  private grantAppConfig(handler: Function) {
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    handler.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(handler);
-  }
-
   // The single writer of lesson progress and of the enrolment's
   // progressPercent, status and completedAt, run from its feature's queue.
   //
@@ -144,14 +149,19 @@ export class StreamRouterStack extends Stack {
   // EventBridge Scheduler.
   private createProgressRecalculationLambda(
     coreTable: CoreTable,
-    reminder: { scheduleGroup: ScheduleGroup; schedulerRole: Role },
+    reminder: {
+      scheduleGroup: ScheduleGroup;
+      schedulerRole: Role;
+      settings: object;
+    },
   ) {
     const recalculation = new EventsProgressRecalculation(
       this,
       'ProgressRecalculation',
     );
-    this.grantAppConfig(recalculation);
     coreTable.grantReadWriteData(recalculation);
+    coreTable.bindSettings(recalculation);
+    addSetting(recalculation, 'certificates', 'Reminder', reminder.settings);
     reminder.scheduleGroup.grantWriteSchedules(recalculation);
     recalculation.addToRolePolicy(
       new PolicyStatement({
@@ -172,8 +182,8 @@ export class StreamRouterStack extends Stack {
   // through the runtime config.
   private createCertificateReminderLambda(coreTable: CoreTable) {
     const reminder = new EventsCertificateReminder(this, 'CertificateReminder');
-    this.grantAppConfig(reminder);
     coreTable.grantReadWriteData(reminder);
+    coreTable.bindSettings(reminder);
 
     const scheduleGroup = new ScheduleGroup(this, 'CertificateReminderGroup', {
       removalPolicy: RemovalPolicy.DESTROY,
@@ -201,12 +211,15 @@ export class StreamRouterStack extends Stack {
       onFailure: new SqsDestination(failures),
     });
 
-    RuntimeConfig.ensure(this).set('certificates', 'Reminder', {
+    // Not bound to the reminder itself: it never schedules a reminder, and
+    // its own ARN in its environment would be a self-reference.
+    const settings = {
       lambdaArn: reminder.functionArn,
       schedulerRoleArn: schedulerRole.roleArn,
       scheduleGroupName: scheduleGroup.scheduleGroupName,
-    });
-    return { reminder, scheduleGroup, schedulerRole };
+    };
+    RuntimeConfig.ensure(this).set('certificates', 'Reminder', settings);
+    return { reminder, scheduleGroup, schedulerRole, settings };
   }
 
   // The single writer of the search collection's documents, run from its
@@ -218,9 +231,10 @@ export class StreamRouterStack extends Stack {
     searchCollection: SearchCollection,
   ) {
     const indexing = new EventsSearchIndexing(this, 'SearchIndexing');
-    this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
+    coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
+    searchCollection.bindSettings(indexing);
     return indexing;
   }
 
@@ -235,9 +249,11 @@ export class StreamRouterStack extends Stack {
     lessonMediaBucket: LessonMediaBucket,
   ) {
     const indexing = new EventsTranscriptIndexing(this, 'TranscriptIndexing');
-    this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
+    coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
+    searchCollection.bindSettings(indexing);
+    lessonMediaBucket.bindSettings(indexing);
     lessonMediaBucket.grantRead(indexing);
     return indexing;
   }
@@ -247,8 +263,8 @@ export class StreamRouterStack extends Stack {
   // what it adds, so it only writes the table.
   private createAnalyticsUpdateLambda(coreTable: CoreTable) {
     const analytics = new EventsAnalyticsUpdate(this, 'AnalyticsUpdate');
-    this.grantAppConfig(analytics);
     coreTable.grantReadWriteData(analytics);
+    coreTable.bindSettings(analytics);
     return analytics;
   }
 
@@ -260,14 +276,56 @@ export class StreamRouterStack extends Stack {
     payouts: StreamRouterStackProps['payouts'],
   ) {
     const recording = new EventsEarningsRecording(this, 'EarningsRecording');
-    this.grantAppConfig(recording);
     coreTable.grantReadWriteData(recording);
+    coreTable.bindSettings(recording);
     recording.addEnvironment(
       'PLATFORM_FEE_BASIS_POINTS',
       String(payouts.platformFeeBasisPoints),
     );
     recording.addEnvironment('PAYOUT_HOLD_DAYS', String(payouts.holdDays));
     return recording;
+  }
+
+  // Translates each video's default caption track into its course's caption
+  // languages, run from its feature's queue. It reads and writes the table, and
+  // reads, puts and deletes caption files under the captions folders only: it
+  // never touches a video, a transcode or a transcription.
+  private createCaptionTranslationLambda(
+    coreTable: CoreTable,
+    lessonMediaBucket: LessonMediaBucket,
+    captionTranslation: CaptionTranslationSettings | undefined,
+  ) {
+    const translation = new EventsCaptionTranslation(
+      this,
+      'CaptionTranslation',
+    );
+    coreTable.grantReadWriteData(translation);
+    coreTable.bindSettings(translation);
+    lessonMediaBucket.bindSettings(translation);
+    addSetting(
+      translation,
+      'captionTranslation',
+      'Settings',
+      captionTranslationSetting(captionTranslation),
+    );
+    // A caption file's key is courses/<id>/.../<nonce>/captions/<track>.vtt;
+    // IAM's * spans slashes.
+    const captionFiles = 'courses/*/captions/*';
+    lessonMediaBucket.grantRead(translation, captionFiles);
+    lessonMediaBucket.grantPut(translation, captionFiles);
+    lessonMediaBucket.grantDelete(translation, captionFiles);
+    translation.addToRolePolicy(
+      new PolicyStatement({
+        actions: ['translate:TranslateText'],
+        // TranslateText names no resource to scope to.
+        resources: ['*'],
+      }),
+    );
+    translation.addEnvironment(
+      'STAGE_NAME',
+      Stage.of(this)?.stageName ?? 'unknown',
+    );
+    return translation;
   }
 
   // Fans a broadcast out to its course's students and emails each
@@ -287,7 +345,7 @@ export class StreamRouterStack extends Stack {
       'NotificationDelivery',
     );
     coreTable.grantReadWriteData(delivery);
-    this.grantAppConfig(delivery);
+    coreTable.bindSettings(delivery);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(delivery);
     delivery.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);
@@ -301,7 +359,11 @@ export class StreamRouterStack extends Stack {
         notifications.fromAddress,
       );
     }
-    if (notifications?.sesIdentity) {
+    if (notifications?.sesIdentity && notifications.fromAddress) {
+      // SES authorises a send against the sender's identity and, while the
+      // account is in the SES sandbox, against each recipient's verified
+      // identity too, so the grant covers every identity in the account and
+      // the condition pins the sender to the configured address.
       delivery.addToRolePolicy(
         new PolicyStatement({
           actions: ['ses:SendEmail'],
@@ -309,9 +371,12 @@ export class StreamRouterStack extends Stack {
             this.formatArn({
               service: 'ses',
               resource: 'identity',
-              resourceName: notifications.sesIdentity,
+              resourceName: '*',
             }),
           ],
+          conditions: {
+            StringEquals: { 'ses:FromAddress': notifications.fromAddress },
+          },
         }),
       );
     }

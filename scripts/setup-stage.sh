@@ -38,7 +38,9 @@ lower() {
 #   authenticated `gh` CLI)
 # - optionally serves every component from a subdomain of one root domain,
 #   using the issued ACM certificate it finds for each (stopping if one is
-#   missing), with the root as HLS playback's signed-cookie domain; stored as
+#   missing), with the root as HLS playback's signed-cookie domain, and
+#   notification emails sent as notifications@<root> when the root is a
+#   verified SES domain identity in the stage's region; stored as
 #   <STAGE>_INFRA_<COMPONENT>_* variables on that GitHub environment (see
 #   packages/common/infra-config/src/env-overrides.ts), which the deploy
 #   workflow forwards to synth
@@ -332,6 +334,15 @@ find_certificate() {
     --output text 2>/dev/null || true)
 }
 
+# Prints True when the identity is verified for sending in the stage's region.
+ses_identity_verified() {
+  aws sesv2 get-email-identity \
+    --region "$AWS_REGION" \
+    --email-identity "$1" \
+    --query VerifiedForSendingStatus \
+    --output text 2>/dev/null || true
+}
+
 # GitHub sets a job's OIDC token subject to `<prefix>:environment:<name>` when
 # it runs in an environment. The prefix is `repo:<owner>/<repo>` by default,
 # but repositories using immutable subject claims embed the owner and repo IDs
@@ -578,7 +589,10 @@ readonly DOMAIN_SPECS=(
   "publicMedia|PUBLIC_MEDIA|Public media|cloudfront|media"
 )
 readonly COOKIE_DOMAIN_VARIABLE="${STAGE_INFRA_ENV_PREFIX}LESSON_MEDIA_COOKIE_DOMAIN"
-paragraph "Give a root domain and every component is served from a subdomain of it (core-api.<root>, instructor-api.<root>, <root> and www.<root> for the student portal, instructor.<root>, admin.<root>, lesson-media.<root>, media.<root>), each with the issued ACM certificate found for it: in $AWS_REGION for the APIs, in $GLOBAL_REGION for the CloudFront components. Leave it blank for the generated *.execute-api.amazonaws.com / *.cloudfront.net hostnames. DNS records aren't created for you."
+readonly NOTIFICATIONS_FROM_VARIABLE="${STAGE_INFRA_ENV_PREFIX}NOTIFICATIONS_FROM_ADDRESS"
+readonly NOTIFICATIONS_IDENTITY_VARIABLE="${STAGE_INFRA_ENV_PREFIX}NOTIFICATIONS_SES_IDENTITY"
+readonly NOTIFICATIONS_FROM_LOCAL_PART="notifications"
+paragraph "Give a root domain and every component is served from a subdomain of it (core-api.<root>, instructor-api.<root>, <root> and www.<root> for the student portal, instructor.<root>, admin.<root>, lesson-media.<root>, media.<root>), each with the issued ACM certificate found for it: in $AWS_REGION for the APIs, in $GLOBAL_REGION for the CloudFront components. Notification emails are sent as $NOTIFICATIONS_FROM_LOCAL_PART@<root> when <root> is a verified SES identity in $AWS_REGION. Leave it blank for the generated *.execute-api.amazonaws.com / *.cloudfront.net hostnames and no notification email. DNS records and SES identities aren't created for you."
 # The default is the root the student portal is already served from.
 root_domain_variable="${STAGE_ENV_PREFIX}ROOT_DOMAIN"
 root_domain_default="${!root_domain_variable:-}"
@@ -654,6 +668,43 @@ else
   # HLS playback's signed cookies are issued by Instructor API and sent to
   # Lesson media, so they're set for the root both are subdomains of.
   DOMAIN_VARIABLES+=("$COOKIE_DOMAIN_VARIABLE=$ROOT_DOMAIN")
+fi
+
+# Notification emails are sent as notifications@<root>, through the root's SES
+# domain identity. The script only manages that pair while it's unset or still
+# its own: notifications@<identity> with <identity>, where <identity> is the
+# root given now or the one a previous run stored (the student portal's first
+# domain). Any other sender was set by hand, as the deploy docs allow, and is
+# kept on every re-run. Without a sender, emails are recorded as skipped, so a
+# missing identity is a warning, not a stop.
+notifications_from=""
+notifications_identity=""
+previous_root_domain=""
+if [[ "$READ_GITHUB_VARIABLES" == true ]]; then
+  notifications_from="$(github_environment_variable "$NOTIFICATIONS_FROM_VARIABLE")"
+  notifications_identity="$(github_environment_variable "$NOTIFICATIONS_IDENTITY_VARIABLE")"
+  previous_root_domain="$(github_environment_variable "${STAGE_INFRA_ENV_PREFIX}STUDENT_PORTAL_DOMAIN_NAMES")"
+  previous_root_domain="${previous_root_domain%%,*}"
+fi
+notifications_sender_is_own() {
+  [[ -n "$notifications_identity" &&
+    "$notifications_from" == "$NOTIFICATIONS_FROM_LOCAL_PART@$notifications_identity" &&
+    ("$notifications_identity" == "$ROOT_DOMAIN" || "$notifications_identity" == "$previous_root_domain") ]]
+}
+if [[ -n "$notifications_from$notifications_identity" ]] && ! notifications_sender_is_own; then
+  echo "Notification email: keeping the sender set by hand (${notifications_from:-no address}, SES identity ${notifications_identity:-none})"
+elif [[ -n "$ROOT_DOMAIN" && "$(ses_identity_verified "$ROOT_DOMAIN")" == True ]]; then
+  echo "Notification email: $NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN (SES identity $ROOT_DOMAIN)"
+  DOMAIN_VARIABLES+=(
+    "$NOTIFICATIONS_FROM_VARIABLE=$NOTIFICATIONS_FROM_LOCAL_PART@$ROOT_DOMAIN"
+    "$NOTIFICATIONS_IDENTITY_VARIABLE=$ROOT_DOMAIN"
+  )
+else
+  if [[ -n "$ROOT_DOMAIN" ]]; then
+    paragraph "Notification email: $ROOT_DOMAIN isn't a verified SES identity in $AWS_REGION, so notification emails will be recorded as skipped. To send them, create the domain identity in SES ($AWS_REGION), add the DKIM CNAME records it lists to $ROOT_DOMAIN's DNS, wait until SES shows it verified, and re-run. While the account is in the SES sandbox, each recipient address must be verified too." >&2
+  fi
+  [[ -z "$notifications_from" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$NOTIFICATIONS_FROM_VARIABLE")
+  [[ -z "$notifications_identity" ]] || DOMAIN_VARIABLES_TO_DELETE+=("$NOTIFICATIONS_IDENTITY_VARIABLE")
 fi
 
 # Policy documents are written to fixed names in one private directory:
@@ -990,7 +1041,7 @@ upsert_managed_policy() {
 # - <role>-data: S3, DynamoDB, KMS, OpenSearch Serverless and CloudWatch Logs
 # - <role>-edge: CloudFront, WAF, API Gateway and Cognito
 # - <role>-compute: Lambda and its event sources, SQS, EventBridge, Scheduler,
-#   MediaConvert and AppConfig
+#   MediaConvert, AppConfig and the stage's settings parameters
 # A new permission goes in the group it belongs to; the tests check each
 # policy still fits.
 create_execution_policy_files() {
@@ -1614,6 +1665,19 @@ EOF
         "appconfig:ListTagsForResource"
       ],
       "Resource": "arn:$AWS_PARTITION:appconfig:$AWS_REGION:$ACCOUNT_ID:*"
+    },
+    {
+      "Sid": "StageSettingsParameters",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:PutParameter",
+        "ssm:DeleteParameter",
+        "ssm:GetParameters",
+        "ssm:AddTagsToResource",
+        "ssm:RemoveTagsFromResource",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "arn:$AWS_PARTITION:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$TARGET_STAGE/*"
     }
   ]
 }
@@ -1701,6 +1765,12 @@ upsert_boundary_policy() {
       "Effect": "Allow",
       "Action": "dynamodb:ListStreams",
       "Resource": "*"
+    },
+    {
+      "Sid": "StageSettingsParameterRead",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:$AWS_PARTITION:ssm:$AWS_REGION:$ACCOUNT_ID:parameter/$TARGET_STAGE/*"
     },
     {
       "Sid": "StageQueues",
@@ -1845,9 +1915,16 @@ upsert_boundary_policy() {
         "sns:Publish",
         "transcribe:GetTranscriptionJob",
         "transcribe:StartTranscriptionJob",
-        "transcribe:TagResource"
+        "transcribe:TagResource",
+        "translate:TranslateText"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "NotificationEmail",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": "arn:$AWS_PARTITION:ses:$AWS_REGION:$ACCOUNT_ID:identity/*"
     }
   ]
 }

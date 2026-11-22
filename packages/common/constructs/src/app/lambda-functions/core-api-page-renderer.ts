@@ -29,7 +29,7 @@ export class CoreApiPageRenderer extends Function {
     super(scope, id, {
       timeout: Duration.seconds(10),
       memorySize: 512,
-      runtime: Runtime.NODEJS_22_X,
+      runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       handler: 'index.handler',
       code: Code.fromAsset(

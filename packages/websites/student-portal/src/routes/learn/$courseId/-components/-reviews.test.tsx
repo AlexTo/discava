@@ -162,7 +162,11 @@ describe('CourseReviews', () => {
       },
     });
 
-    expect(await screen.findByText('Reviews are down')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('Ada L.')).toBeInTheDocument();

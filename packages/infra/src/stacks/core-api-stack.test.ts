@@ -8,9 +8,11 @@ import { type StageComponents } from '@discava/common-infra-config';
 import { describe, expect, it } from 'vitest';
 import {
   actionsOf,
+  functionsMissingNamedSettings,
+  functionsMissingSettings,
+  functionsReadingAppConfig,
   resources,
   synth,
-  tableFunctionsMissingAppConfig,
 } from './stack-test-fixture.js';
 
 describe("core-api's functions", () => {
@@ -80,14 +82,12 @@ describe('submitting to an assignment (#102)', () => {
     }
   });
 
-  it('reads AppConfig and the table like every core-api function, with no signing key', () => {
+  it('reads the table like every core-api function, with no AppConfig and no signing key', () => {
     const submit = actionsOf(
       coreApi,
       'CoreApiAssignmentSubmitHandlerServiceRole',
     );
-    expect(submit).toEqual(
-      expect.arrayContaining(['appconfig:GetLatestConfiguration']),
-    );
+    expect(submit).not.toContain('appconfig:GetLatestConfiguration');
     expect(submit).toEqual(expect.arrayContaining(['dynamodb:GetItem']));
     expect(submit).not.toContain('secretsmanager:GetSecretValue');
   });
@@ -193,8 +193,40 @@ describe('the unsubscribe route', () => {
   });
 });
 
-describe('runtime config (#619)', () => {
-  it('gives every function that uses the core table the AppConfig application id and read access', () => {
-    expect(tableFunctionsMissingAppConfig(synth({})('CoreApi'))).toEqual([]);
+describe('deploy-time settings', () => {
+  it('gives every function that uses the core table or search its setting', () => {
+    expect(functionsMissingSettings(synth({})('CoreApi'))).toEqual([]);
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('CoreApi');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    CoreApiRouterHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+    ],
+    CoreApiMediaUrlHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    CoreApiAssignmentSubmitHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    ],
+    CoreApiPaymentsCheckoutHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    NotificationUnsubscribe: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    SearchReindex: ['DISCAVA_DYNAMODB_CORE_TABLE', 'DISCAVA_OPENSEARCH_SEARCH'],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

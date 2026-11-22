@@ -75,6 +75,26 @@ describe('SiteSearchSuggestions', () => {
     expect(onChoose).toHaveBeenCalledWith('c1');
   });
 
+  it('is fixed to the screen on a phone and anchored to the box from sm up', async () => {
+    render({ items: [{ courseId: 'c1', title: 'Python Basics' }] });
+    await screen.findAllByRole('option');
+
+    expect(screen.getByTestId('site-search-suggestions')).toHaveClass(
+      'fixed',
+      'sm:absolute',
+    );
+  });
+
+  it('lets a long title wrap to two lines rather than cut it off', async () => {
+    render({
+      items: [{ courseId: 'c1', title: 'A very long course title '.repeat(5) }],
+      typed: 'a ve',
+    });
+    const [option] = await screen.findAllByRole('option');
+
+    expect(option?.querySelector('span.line-clamp-2')).not.toBeNull();
+  });
+
   it('says it is searching while it has nothing to show', async () => {
     render({ loading: true });
 
@@ -91,7 +111,7 @@ describe('SiteSearchSuggestions', () => {
     const options = await screen.findAllByRole('option');
 
     expect(options).toHaveLength(2);
-    expect(options[1]).toHaveTextContent("See all results for 'python'");
+    expect(options[1]).toHaveTextContent('See all results for ‘python’');
     expect(screen.queryByText('No courses match')).not.toBeInTheDocument();
     fireEvent.click(options[1]);
     expect(onSeeAll).toHaveBeenCalled();
@@ -102,7 +122,7 @@ describe('SiteSearchSuggestions', () => {
 
     expect(await screen.findByText('No courses match')).toBeInTheDocument();
     expect(screen.getByRole('option')).toHaveTextContent(
-      "See all results for 'zzzzz'",
+      'See all results for ‘zzzzz’',
     );
   });
 });

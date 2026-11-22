@@ -15,6 +15,9 @@ export default defineConfig(() => ({
     passWithNoTests: true,
     name: '@discava/common-constructs',
     watch: false,
+    // Most tests synthesise a whole CDK stack, which can take longer than the
+    // 5s default on a loaded CI runner.
+    testTimeout: 30_000,
     globals: true,
     environment: 'jsdom',
     include: ['{src,tests}/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],

@@ -8,18 +8,33 @@ import { resolveEndpoint, resolveIndexName } from './client.js';
 describe('resolveEndpoint', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('uses OPENSEARCH_ENDPOINT without asking AppConfig', async () => {
-    // The index-sync handler runs before AppConfig has anything in it, so
-    // with no RUNTIME_CONFIG_APP_ID this must not touch it at all.
+  it('reads the endpoint from DISCAVA_OPENSEARCH_SEARCH', async () => {
     vi.stubEnv('LOCAL_DEV', '');
-    vi.stubEnv('RUNTIME_CONFIG_APP_ID', '');
     vi.stubEnv(
-      'OPENSEARCH_ENDPOINT',
-      'https://abc.ap-southeast-2.aoss.amazonaws.com',
+      'DISCAVA_OPENSEARCH_SEARCH',
+      '{"endpoint":"https://abc.ap-southeast-2.aoss.amazonaws.com"}',
     );
 
     await expect(resolveEndpoint()).resolves.toBe(
       'https://abc.ap-southeast-2.aoss.amazonaws.com',
+    );
+  });
+
+  it('names the setting when it is absent', async () => {
+    vi.stubEnv('LOCAL_DEV', '');
+    vi.stubEnv('DISCAVA_OPENSEARCH_SEARCH', '');
+
+    await expect(resolveEndpoint()).rejects.toThrow(
+      'Missing deploy-time setting DISCAVA_OPENSEARCH_SEARCH',
+    );
+  });
+
+  it('names the setting when it has no endpoint', async () => {
+    vi.stubEnv('LOCAL_DEV', '');
+    vi.stubEnv('DISCAVA_OPENSEARCH_SEARCH', '{}');
+
+    await expect(resolveEndpoint()).rejects.toThrow(
+      'Could not resolve the OpenSearch collection endpoint from DISCAVA_OPENSEARCH_SEARCH',
     );
   });
 });

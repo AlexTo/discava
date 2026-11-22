@@ -47,6 +47,8 @@ export interface CoursePlayer {
   // Whether course.view is still loading, and why it failed if it did.
   isPending: boolean;
   error: unknown;
+  // Asks for the course again after it failed to load.
+  retry: () => void;
   course: PlayerCourse | undefined;
   enrolment: IEnrolment | null | undefined;
   readOnly: boolean;
@@ -244,6 +246,7 @@ export function useCoursePlayer(courseId: string): CoursePlayer {
   return {
     isPending: courseQuery.isPending,
     error: courseQuery.error,
+    retry: () => void courseQuery.refetch(),
     course,
     enrolment: enrolmentQuery.data,
     // An archived course is read-only: its items can't be completed.

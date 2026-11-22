@@ -5,14 +5,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIGNED_COOKIE_LIFETIME_SECONDS } from './media-keys.js';
 
-const { getAppConfig, getSecret, getSignedCookies } = vi.hoisted(() => ({
-  getAppConfig: vi.fn(),
+const { getSecret, getSignedCookies } = vi.hoisted(() => ({
   getSecret: vi.fn(),
   getSignedCookies: vi.fn(),
-}));
-
-vi.mock('@aws-lambda-powertools/parameters/appconfig', () => ({
-  getAppConfig,
 }));
 
 vi.mock('@aws-lambda-powertools/parameters/secrets', () => ({
@@ -41,6 +36,21 @@ const importFreshModule = async () => {
   return import('./lesson-media.js');
 };
 
+const LESSON_MEDIA_BUCKET = {
+  bucketName: 'lesson-media-bucket',
+  cloudFrontDomainName: DOMAIN_NAME,
+  cloudFrontKeyPairId: KEY_PAIR_ID,
+  cloudFrontPrivateKeySecretArn: SECRET_ARN,
+  cookieDomain: COOKIE_DOMAIN,
+};
+
+const stubBucketSetting = (value: unknown) =>
+  vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_BUCKET', JSON.stringify(value));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 const PREFIX_KEY =
   'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/nonce-1/';
 const MANIFEST_KEY = `${PREFIX_KEY}master.m3u8`;
@@ -54,16 +64,7 @@ const SIGNED_COOKIES = {
 describe('getSignedCloudFrontCookies', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RUNTIME_CONFIG_APP_ID = 'app-1';
-    getAppConfig.mockResolvedValue({
-      LessonMediaBucket: {
-        bucketName: 'lesson-media-bucket',
-        cloudFrontDomainName: DOMAIN_NAME,
-        cloudFrontKeyPairId: KEY_PAIR_ID,
-        cloudFrontPrivateKeySecretArn: SECRET_ARN,
-        cookieDomain: COOKIE_DOMAIN,
-      },
-    });
+    stubBucketSetting(LESSON_MEDIA_BUCKET);
     getSecret.mockResolvedValue({ privateKeyPem: PRIVATE_KEY_PEM });
     getSignedCookies.mockReturnValue(SIGNED_COOKIES);
   });
@@ -147,7 +148,7 @@ describe('getSignedCloudFrontCookies', () => {
     }
   });
 
-  it('resolves the private key from the secret named in runtime config', async () => {
+  it('resolves the private key from the secret named in the setting', async () => {
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await getSignedCloudFrontCookies(PREFIX_KEY);
@@ -164,23 +165,20 @@ describe('getSignedCloudFrontCookies', () => {
     await getSignedCloudFrontCookies(PREFIX_KEY);
     await getSignedCloudFrontCookies(PREFIX_KEY);
 
-    expect(getAppConfig).toHaveBeenCalledTimes(1);
     expect(getSecret).toHaveBeenCalledTimes(1);
   });
 
-  it('throws when RUNTIME_CONFIG_APP_ID is not set', async () => {
-    delete process.env.RUNTIME_CONFIG_APP_ID;
+  it('throws when the bucket setting is not set', async () => {
+    vi.stubEnv('DISCAVA_S3_LESSON_MEDIA_BUCKET', '');
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await expect(getSignedCloudFrontCookies(PREFIX_KEY)).rejects.toThrow(
-      'RUNTIME_CONFIG_APP_ID',
+      'Missing deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET',
     );
   });
 
-  it('throws when runtime config is missing CloudFront signing fields', async () => {
-    getAppConfig.mockResolvedValue({
-      LessonMediaBucket: { bucketName: 'lesson-media-bucket' },
-    });
+  it('throws when the setting is missing CloudFront signing fields', async () => {
+    stubBucketSetting({ bucketName: 'lesson-media-bucket' });
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
     await expect(getSignedCloudFrontCookies(PREFIX_KEY)).rejects.toThrow(
@@ -188,14 +186,12 @@ describe('getSignedCloudFrontCookies', () => {
     );
   });
 
-  it('throws when runtime config is missing the cookie domain', async () => {
-    getAppConfig.mockResolvedValue({
-      LessonMediaBucket: {
-        bucketName: 'lesson-media-bucket',
-        cloudFrontDomainName: DOMAIN_NAME,
-        cloudFrontKeyPairId: KEY_PAIR_ID,
-        cloudFrontPrivateKeySecretArn: SECRET_ARN,
-      },
+  it('throws when the setting is missing the cookie domain', async () => {
+    stubBucketSetting({
+      bucketName: 'lesson-media-bucket',
+      cloudFrontDomainName: DOMAIN_NAME,
+      cloudFrontKeyPairId: KEY_PAIR_ID,
+      cloudFrontPrivateKeySecretArn: SECRET_ARN,
     });
     const { getSignedCloudFrontCookies } = await importFreshModule();
 
@@ -217,16 +213,7 @@ describe('getSignedCloudFrontCookies', () => {
 describe('getCloudFrontVideoUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RUNTIME_CONFIG_APP_ID = 'app-1';
-    getAppConfig.mockResolvedValue({
-      LessonMediaBucket: {
-        bucketName: 'lesson-media-bucket',
-        cloudFrontDomainName: DOMAIN_NAME,
-        cloudFrontKeyPairId: KEY_PAIR_ID,
-        cloudFrontPrivateKeySecretArn: SECRET_ARN,
-        cookieDomain: COOKIE_DOMAIN,
-      },
-    });
+    stubBucketSetting(LESSON_MEDIA_BUCKET);
   });
 
   it('builds a plain (unsigned) URL for the object key', async () => {

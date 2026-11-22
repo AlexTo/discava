@@ -54,6 +54,9 @@ export default {
             holdDays: 1,
             minimumPayoutMinor: 1000,
           },
+          // A tester's course can pick three caption languages, which keeps
+          // the Amazon Translate bill of a trial small.
+          captionTranslation: { maxLanguagesPerCourse: 3 },
           // With WAF off, these limits are what bound the cost of a flood of
           // requests. Sized for a handful of testers:
           // - API Gateway throttles each method (one per procedure)
@@ -168,6 +171,8 @@ export default {
             holdDays: 14,
             minimumPayoutMinor: 1000,
           },
+          // The defaults: translation on, up to nine languages a course.
+          captionTranslation: { enabled: true, maxLanguagesPerCourse: 9 },
           // Limits with room for real traffic, still well short of AWS's
           // defaults (10,000 requests/s, unbounded concurrency and
           // throughput). Throttles apply to each method separately, so an

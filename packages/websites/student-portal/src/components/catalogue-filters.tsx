@@ -50,12 +50,15 @@ function Group({
     return null;
   }
   return (
-    <fieldset className="space-y-2">
+    <fieldset className="space-y-1">
       <legend className="mb-2 text-sm font-semibold">{name}</legend>
       {options.map(({ value, label, count }) => {
         const id = `filter-${name}-${value}`;
         return (
-          <div key={value} className="flex items-center gap-2">
+          <Label
+            key={value}
+            className="flex min-h-6 cursor-pointer items-center gap-2 py-1 font-normal"
+          >
             <Checkbox
               id={id}
               checked={selected.includes(value)}
@@ -63,11 +66,10 @@ function Group({
                 onChange(toggle(selected, value, checked === true))
               }
             />
-            <Label htmlFor={id} className="flex-1 font-normal">
-              {label}{' '}
-              <span className="ml-auto text-muted-foreground">({count})</span>
-            </Label>
-          </div>
+            <span>
+              {label} <span className="text-muted-foreground">({count})</span>
+            </span>
+          </Label>
         );
       })}
     </fieldset>

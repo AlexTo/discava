@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { NotificationPreferences } from '@discava/common-shadcn/components/notification-preferences';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useCoreApi } from '../../api';
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/settings/notifications')({
 });
 
 function NotificationSettings() {
+  usePageTitle('Notification settings');
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
   const preferencesOptions = trpc.notification.preferences.queryOptions();

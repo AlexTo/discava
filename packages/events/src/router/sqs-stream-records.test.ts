@@ -7,9 +7,6 @@ import { DynamoDBStreamSchema } from '@aws-lambda-powertools/parser/schemas';
 import type { DynamoDBRecord } from 'aws-lambda';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@aws-lambda-powertools/parameters/appconfig', () => ({
-  getAppConfig: vi.fn(),
-}));
 vi.mock('@discava/search', () => ({
   getOpenSearchClient: vi.fn(),
   resolveIndexName: (name: string) => name,

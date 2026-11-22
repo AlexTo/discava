@@ -3,18 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { scheduleCertificateReminder } from './reminder-schedule.js';
 
 const {
   schedulerSend,
-  resolveAppConfigValue,
   callLocalEventRunner,
   isLocalDev,
   FakeConflictException,
 } = vi.hoisted(() => ({
   schedulerSend: vi.fn(),
-  resolveAppConfigValue: vi.fn(),
   callLocalEventRunner: vi.fn(),
   isLocalDev: vi.fn(),
   FakeConflictException: class extends Error {
@@ -31,9 +29,6 @@ vi.mock('@aws-sdk/client-scheduler', () => ({
   }),
   ConflictException: FakeConflictException,
 }));
-vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
-  resolveAppConfigValue,
-}));
 vi.mock('@discava/common-server-utils/local-dev', () => ({
   callLocalEventRunner,
   isLocalDev,
@@ -49,22 +44,25 @@ const params = {
 beforeEach(() => {
   vi.clearAllMocks();
   isLocalDev.mockReturnValue(false);
-  resolveAppConfigValue.mockResolvedValue({
-    lambdaArn: 'arn:aws:lambda:ap-southeast-2:1:function:reminder',
-    schedulerRoleArn: 'arn:aws:iam::1:role/scheduler',
-    scheduleGroupName: 'reminders',
-  });
+  vi.stubEnv(
+    'DISCAVA_CERTIFICATES_REMINDER',
+    JSON.stringify({
+      lambdaArn: 'arn:aws:lambda:ap-southeast-2:1:function:reminder',
+      schedulerRoleArn: 'arn:aws:iam::1:role/scheduler',
+      scheduleGroupName: 'reminders',
+    }),
+  );
   schedulerSend.mockResolvedValue({});
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('scheduleCertificateReminder', () => {
   it('creates a one-time schedule named for the certificate, due at the second', async () => {
     await scheduleCertificateReminder(params);
 
-    expect(resolveAppConfigValue).toHaveBeenCalledWith(
-      'certificates',
-      'Reminder',
-    );
     expect(schedulerSend).toHaveBeenCalledWith(
       expect.objectContaining({
         __command: 'CreateSchedule',
@@ -81,6 +79,15 @@ describe('scheduleCertificateReminder', () => {
       }),
     );
     expect(callLocalEventRunner).not.toHaveBeenCalled();
+  });
+
+  it('throws naming the setting when it is not set', async () => {
+    vi.stubEnv('DISCAVA_CERTIFICATES_REMINDER', '');
+
+    await expect(scheduleCertificateReminder(params)).rejects.toThrow(
+      'Missing deploy-time setting DISCAVA_CERTIFICATES_REMINDER',
+    );
+    expect(schedulerSend).not.toHaveBeenCalled();
   });
 
   it('treats an existing schedule as success', async () => {

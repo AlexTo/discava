@@ -52,10 +52,12 @@ test('a student keeps track of their courses, then signs out', async ({
   });
 
   await test.step('My Learning sorts them into in progress and completed', async () => {
-    await student
+    const myLearningButton = student
       .getByRole('banner')
-      .getByRole('link', { name: 'My Learning' })
-      .click();
+      .getByRole('link', { name: 'My Learning' });
+    // Still a button in the top bar at desktop width.
+    await expect(myLearningButton).toBeVisible();
+    await myLearningButton.click();
     // Both tabs, and "Continue" once the unfinished course's progress is
     // above 0%: each comes from the progress recalculation, a few seconds
     // after the item was marked done.

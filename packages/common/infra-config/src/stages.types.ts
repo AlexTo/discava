@@ -542,6 +542,25 @@ export type PayoutSettings = {
   minimumPayoutMinor: number;
 };
 
+/** Machine translation of video captions, which Amazon Translate bills per character. */
+export type CaptionTranslationSettings = {
+  /**
+   * Whether the stage translates captions at all. When false, no course's
+   * caption languages are translated and no translated track is removed.
+   *
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * The most caption languages one course can choose, from 0 to 9. Each
+   * language multiplies the characters translated per video, so it bounds
+   * the translation cost.
+   *
+   * @default 9
+   */
+  maxLanguagesPerCourse?: number;
+};
+
 /**
  * Configuration for a single CDK stage.
  * Credentials/region/account are optional — omit them to fall back to the
@@ -558,6 +577,8 @@ export type StageConfig = {
   infra?: StageComponents;
   /** Instructor payout settings for this stage */
   payouts?: PayoutSettings;
+  /** Caption translation settings for this stage */
+  captionTranslation?: CaptionTranslationSettings;
 };
 
 /**

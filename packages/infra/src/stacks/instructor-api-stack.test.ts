@@ -5,7 +5,11 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsReadingAppConfig,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('course images (#76)', () => {
   const stack = synth({});
@@ -108,5 +112,37 @@ describe('course images (#76)', () => {
     expect(
       JSON.stringify(distributions[0][1]).includes('TrustedKeyGroups'),
     ).toBe(false);
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('InstructorApi');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    InstructorApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    InstructorApiMediaUrlHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    InstructorApiCourseImageHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+    ],
+    InstructorApiMediaHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    ],
+    InstructorApiPayoutsHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

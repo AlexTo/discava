@@ -8,7 +8,6 @@
     "@aws-lambda-powertools/metrics": "catalog:",
     "@aws-lambda-powertools/parameters": "catalog:",
     "@aws-lambda-powertools/tracer": "catalog:",
-    "@aws-sdk/client-appconfigdata": "catalog:",
     "@aws-sdk/client-dynamodb": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",

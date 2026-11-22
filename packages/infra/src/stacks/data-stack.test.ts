@@ -11,7 +11,12 @@ import {
 } from '@discava/common-infra-config';
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { resources, synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsReadingAppConfig,
+  resources,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('lesson media CORS', () => {
   const data = synth({})('Data');
@@ -100,7 +105,7 @@ describe('the user record trigger (#230)', () => {
       data.findResources('AWS::Lambda::Function', {
         Properties: {
           Environment: {
-            Variables: { RUNTIME_CONFIG_APP_ID: Match.anyValue() },
+            Variables: { DISCAVA_DYNAMODB_CORE_TABLE: Match.anyValue() },
           },
         },
       }),
@@ -146,9 +151,8 @@ describe('search collection (#53)', () => {
   );
 
   // The index-sync custom resource runs while the Data stack deploys, before
-  // the RuntimeConfig stack has published anything to AppConfig, so a first
-  // deploy failed with "ConfigurationProfile not found" when it looked the
-  // endpoint up there. It must be handed the endpoint directly.
+  // the RuntimeConfig stack has published anything to AppConfig, so it's
+  // handed the endpoint as its setting, like every other function.
   it("hands the index-sync handler the collection's endpoint, not AppConfig", () => {
     const [handler] = resources(
       stack('Data'),
@@ -156,7 +160,9 @@ describe('search collection (#53)', () => {
       'SearchCollectionIndexSyncHandler',
     ) as { Environment: { Variables: Record<string, unknown> } }[];
 
-    expect(handler.Environment.Variables).toHaveProperty('OPENSEARCH_ENDPOINT');
+    expect(handler.Environment.Variables).toHaveProperty(
+      'DISCAVA_OPENSEARCH_SEARCH',
+    );
     expect(handler.Environment.Variables).not.toHaveProperty(
       'RUNTIME_CONFIG_APP_ID',
     );
@@ -173,6 +179,54 @@ describe('search collection (#53)', () => {
         Name: 'discava-test-encryption',
       },
     );
+  });
+});
+
+describe('the page renderer settings parameter', () => {
+  const data = synth({})('Data');
+
+  it('holds the table name and public media base URL under the stage', () => {
+    data.hasResourceProperties('AWS::SSM::Parameter', {
+      Name: '/discava-test/page-renderer',
+      Type: 'String',
+      Value: Match.objectLike({
+        'Fn::Join': Match.arrayWith([
+          Match.arrayWith([
+            Match.stringLikeRegexp('tableName'),
+            Match.stringLikeRegexp('publicMediaBaseUrl'),
+          ]),
+        ]),
+      }),
+    });
+  });
+
+  it('lets the renderer read that parameter and nothing in AppConfig', () => {
+    const policies = resources(
+      data,
+      'AWS::IAM::Policy',
+      'PageRendererRole',
+    ) as {
+      PolicyDocument: {
+        Statement: { Action: string | string[]; Resource: unknown }[];
+      };
+    }[];
+    const statements = policies.flatMap((p) => p.PolicyDocument.Statement);
+    const ssm = statements.filter((s) =>
+      [s.Action].flat().some((a) => a.startsWith('ssm:')),
+    );
+    expect(ssm).toHaveLength(1);
+    expect([ssm[0]!.Action].flat()).toContain('ssm:GetParameter');
+    // The one parameter's ARN, built from its own name.
+    expect(JSON.stringify(ssm[0]!.Resource)).toContain('PageRendererSettings');
+    expect(
+      statements.some((s) =>
+        [s.Action].flat().some((a) => a.startsWith('appconfig:')),
+      ),
+    ).toBe(false);
+  });
+
+  it('outputs the core table name for the operator scripts', () => {
+    data.hasOutput('CoreTableName', { Value: Match.anyValue() });
   });
 });
 
@@ -224,5 +278,22 @@ describe('the notification unsubscribe secret', () => {
 
   it('is the only notification secret in Data', () => {
     expect(unsubscribeSecrets({})).toHaveLength(1);
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('Data');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    PreTokenGeneration: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    SearchCollectionIndexSyncHandler: ['DISCAVA_OPENSEARCH_SEARCH'],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

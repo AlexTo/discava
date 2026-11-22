@@ -6,10 +6,8 @@
   "dependencies": {
     "@aws-lambda-powertools/logger": "catalog:",
     "@aws-lambda-powertools/metrics": "catalog:",
-    "@aws-lambda-powertools/parameters": "catalog:",
     "@aws-lambda-powertools/parser": "catalog:",
     "@aws-lambda-powertools/tracer": "catalog:",
-    "@aws-sdk/client-appconfigdata": "catalog:",
     "@aws-sdk/client-cognito-identity-provider": "catalog:",
     "@aws-sdk/client-dynamodb": "catalog:",
     "@aws-sdk/client-dynamodb-streams": "catalog:",
@@ -19,6 +17,7 @@
     "@aws-sdk/client-scheduler": "catalog:",
     "@aws-sdk/client-sqs": "catalog:",
     "@aws-sdk/client-transcribe": "catalog:",
+    "@aws-sdk/client-translate": "catalog:",
     "@discava/common-server-utils": "workspace:*",
     "@discava/common-web-utils": "workspace:*",
     "@discava/core-table": "workspace:*",
