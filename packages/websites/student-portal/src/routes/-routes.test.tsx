@@ -19,6 +19,8 @@ const course = {
 
 const handlers = {
   'certificate.verify': () => ({
+    status: 'valid',
+    statement: ['Completed all 3 items of the course.'],
     certificateId: 'ABCD-EFGH-JKLM',
     learnerName: 'Ada Lovelace',
     courseTitle: 'Linear Algebra',

@@ -13,6 +13,12 @@ const base = {
   completedAt: '2026-11-10T00:00:00.000Z',
   certificateId: '0123-4567-89AB-CDEF',
   verifyUrl: 'https://discava.example.com/certificates/0123-4567-89AB-CDEF',
+  statement: [
+    'Completed all 14 items of the course.',
+    'Passed 3 assessed quizzes. Pass mark: 70%.',
+    'Overall score: 80–89%.',
+    'Course length: 12 hours.',
+  ],
 };
 
 describe('drawCertificatePdf', () => {
@@ -36,6 +42,39 @@ describe('drawCertificatePdf', () => {
     ['an unparseable date', { completedAt: 'not a date' }],
   ])('draws one page for %s', async (_, overrides) => {
     const bytes = await drawCertificatePdf({ ...base, ...overrides });
+    expect((await PDF.load(bytes)).getPageCount()).toBe(1);
+  });
+});
+
+describe('the statement', () => {
+  const textOf = async (bytes: Uint8Array) =>
+    (await PDF.load(bytes))
+      .extractText()
+      .map((page) => page.text)
+      .join(' ')
+      .replace(/\s+/g, ' ');
+
+  it('draws every line', async () => {
+    const text = await textOf(await drawCertificatePdf(base));
+    expect(text).toContain('Completed all 14 items of the course.');
+    expect(text).toContain('Passed 3 assessed quizzes. Pass mark: 70%.');
+    expect(text).toContain('Overall score: 80?89%.');
+    expect(text).toContain('Course length: 12 hours.');
+  });
+
+  it('stays on one page in the longest case', async () => {
+    const bytes = await drawCertificatePdf({
+      ...base,
+      learnerName: 'W'.repeat(300),
+      courseTitle: 'A'.repeat(300),
+      statement: [
+        'Completed all 140 items of the course.',
+        `Passed 30 assessed quizzes. Pass marks: 60% to 80%. ${'More words. '.repeat(20)}`,
+        'Graded assignments returned with at least 60%: 2.',
+        'Overall score: 90–100%.',
+        'Course length: 120 hours.',
+      ],
+    });
     expect((await PDF.load(bytes)).getPageCount()).toBe(1);
   });
 });

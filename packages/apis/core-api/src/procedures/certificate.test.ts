@@ -108,6 +108,13 @@ const record = (overrides: Record<string, unknown> = {}) => ({
   courseTitle: 'Intro',
   completedAt: '2026-11-10T00:00:00.000Z',
   issuedAt: '2026-11-10T00:00:01.000Z',
+  assessment: {
+    criteriaVersion: 1,
+    requireQuizPass: false,
+    itemCount: 3,
+    assessedItemCount: 0,
+    assessedItems: [],
+  },
   ...overrides,
 });
 
@@ -138,11 +145,16 @@ describe('certificate.verify', () => {
     expect(
       await caller(verifyCertificate)({ certificateId: '0123-4567-89AB-CDEF' }),
     ).toEqual({
+      status: 'valid',
       certificateId: '0123-4567-89AB-CDEF',
       learnerName: 'Erin Nguyen',
       courseTitle: 'Intro',
       completedAt: '2026-11-10T00:00:00.000Z',
       completedOn: '10 November 2026',
+      statement: [
+        'Completed all 3 items of the course.',
+        'No graded assessment was required for this certificate.',
+      ],
     });
   });
 
@@ -190,7 +202,7 @@ describe('certificate.verify', () => {
     expect(errors[1].message).toBe(errors[0].message);
   });
 
-  it('returns exactly five keys even when the record holds more', async () => {
+  it('returns exactly its seven keys even when the record holds more', async () => {
     db.certificates = [record()];
     const result = await caller(verifyCertificate)({
       certificateId: '0123456789ABCDEF',
@@ -201,7 +213,17 @@ describe('certificate.verify', () => {
       'completedOn',
       'courseTitle',
       'learnerName',
+      'statement',
+      'status',
     ]);
+    for (const hidden of [
+      'assessedItems',
+      'criteriaVersion',
+      'userId',
+      'courseId',
+    ]) {
+      expect(JSON.stringify(result)).not.toContain(hidden);
+    }
   });
 });
 
@@ -255,6 +277,10 @@ describe('certificate.pdf', () => {
       expect.objectContaining({
         verifyUrl:
           'https://portal.example.com/certificates/0123-4567-89AB-CDEF',
+        statement: [
+          'Completed all 3 items of the course.',
+          'No graded assessment was required for this certificate.',
+        ],
       }),
     );
     expect(calls.get).toEqual([{ userId: 'u1', courseId: 'c1' }]);
@@ -337,7 +363,7 @@ describe('certificate.recordLinkedInClick', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
-  it('leaves verify with exactly its five keys', async () => {
+  it('leaves verify with exactly its seven keys', async () => {
     db.certificates = [record()];
     await click({ certificateId: '0123456789ABCDEF', source: 'my-learning' });
     expect(
@@ -350,6 +376,8 @@ describe('certificate.recordLinkedInClick', () => {
       'completedOn',
       'courseTitle',
       'learnerName',
+      'statement',
+      'status',
     ]);
   });
 });

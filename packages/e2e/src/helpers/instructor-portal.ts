@@ -218,6 +218,22 @@ export const setQuizAttempts = async (
   await expect(dialog).toBeHidden();
 };
 
+// Changes the pass mark (a percentage) of the quiz `title`, from the course
+// editor.
+export const setQuizPassMark = async (
+  page: Page,
+  title: string,
+  percent: number,
+) => {
+  await page.getByRole('button', { name: `Edit ${title}` }).click();
+  const dialog = page.getByRole('dialog', { name: `Edit ${title}` });
+  await dialog.getByLabel('Pass mark (%)').fill(String(percent));
+  await dialog.getByRole('button', { name: 'Save quiz' }).click();
+  await expect(dialog.getByText('Saved', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close' }).first().click();
+  await expect(dialog).toBeHidden();
+};
+
 // What the course editor calls each kind of content item in its controls'
 // names, e.g. "Hide text Reading one".
 export type ItemKind =

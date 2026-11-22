@@ -16,6 +16,7 @@ import {
   createCourse,
   publishCourse,
   setQuizAttempts,
+  setQuizPassMark,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
@@ -43,6 +44,8 @@ test('an instructor requires every quiz to be passed for a certificate', async (
   const second = await browser.newPage();
   let courseUrl = '';
   let lessonUrl = '';
+  // Each student's verification page, found from their My Learning.
+  const links: string[] = [];
 
   // Takes the text item and the quiz, answering `answer`, as a new student.
   const attempt = async (
@@ -143,9 +146,43 @@ test('an instructor requires every quiz to be passed for a certificate', async (
       const href = await certificateControl(page)
         .getByRole('link', { name: 'View' })
         .getAttribute('href');
-      await page.goto(`${PORTALS.student}${href}`);
+      links.push(`${PORTALS.student}${href}`);
+      await page.goto(links.at(-1)!);
       await expect(page.getByText('Certificate not found')).toHaveCount(0);
       await expect(page.getByText(title).first()).toBeVisible();
     }
+  });
+
+  await test.step('the certificates state what was assessed', async () => {
+    const visitor = await browser.newPage();
+    await visitor.goto(links[0]);
+    await expect(
+      visitor.getByRole('heading', { name: 'What this certificate confirms' }),
+    ).toBeVisible();
+    await expect(
+      visitor.getByText('Passed 1 assessed quiz. Pass mark: 70%.'),
+    ).toBeVisible();
+    await expect(visitor.getByText(/^Overall score:/)).toBeVisible();
+    await screenshot(visitor, 'certificate-statement-assessed');
+
+    // Issued after the criterion was unticked.
+    await visitor.goto(links[1]);
+    await expect(
+      visitor.getByText(
+        'No graded assessment was required for this certificate.',
+      ),
+    ).toBeVisible();
+    await expect(visitor.getByText(/Overall score/)).toHaveCount(0);
+    await screenshot(visitor, 'certificate-statement-completion-only');
+  });
+
+  await test.step('changing the quiz later does not change what a certificate says', async () => {
+    await setQuizPassMark(instructor, 'Quiz one', 50);
+    const visitor = await browser.newPage();
+    await visitor.goto(links[0]);
+    await expect(
+      visitor.getByText('Passed 1 assessed quiz. Pass mark: 70%.'),
+    ).toBeVisible();
+    await expect(visitor.getByText(/^Overall score:/)).toBeVisible();
   });
 });
