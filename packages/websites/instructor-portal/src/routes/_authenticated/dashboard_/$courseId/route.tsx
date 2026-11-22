@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BarChart3, Users } from 'lucide-react';
 import { useInstructorApi } from '../../../../api';
+import { ActivationCard } from './-components/activation-card';
 import { DailyChart } from './-components/daily-chart';
 import { LessonDropOff } from './-components/lesson-drop-off';
 import { QuizPanel } from './-components/quiz-panel';
@@ -161,8 +162,16 @@ function RouteComponent() {
             </section>
           )}
           {analytics.totals.enrolments > 0 && (
-            <section aria-label="Lesson drop-off">
+            <section
+              aria-label="Lesson drop-off and activation"
+              className="grid gap-4 xl:grid-cols-2"
+            >
               <LessonDropOff lessons={analytics.lessons} />
+              <ActivationCard
+                totals={analytics.totals}
+                daily={analytics.daily}
+                days={days}
+              />
             </section>
           )}
           {analytics.totals.enrolments > 0 && analytics.quizzes.length > 0 && (
