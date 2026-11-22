@@ -213,13 +213,13 @@ US6 has no phase of its own: its rules are part of the save (Phase 1), the edito
 
 **Goal**: The design pages describe the feature, and reviewers confirm by hand what tests can't.
 
-- [ ] T045 [P] Update the English design pages, and note in the PR that translations of the other locales are pending:
+- [x] T045 [P] Update the English design pages, and note in the PR that translations of the other locales are pending:
   - `docs/src/content/docs/en/design/quizzes.mdx`: a "Questions in videos" section (where they are stored, the versioned save, the per-question hash, the answer sheet, first answer only, the rules after edits as a table like "Quiz edited mid-attempt") and a "Spec" link to `specs/20261120-002940-in-video-questions/` in the style of `video-player.mdx`;
   - `video-player.mdx`: a "Questions" section (when a question is asked, seeking, markers, the end check, resuming before an open question, what is and isn't recorded);
   - `course-analytics.mdx`: "Active learner" gains "or answered a video question", a row for video question results, and the drop-off note;
   - `live-course-editing.mdx`: `studentActivityCount` for a video counts an answer sheet as well as a completion, and an "Edit content item: video questions" row;
   - `progress-and-completion.mdx`: answering a video question isn't a completion and changes no progress.
-- [ ] T046 [P] Add a line under "Features" in `packages/databases/core-table/CLAUDE.md`: video questions (#591), `videoAnswerWrites` as the only writer of `videoAnswerSheet`, and the first-record check it shares with `contentItem.complete`. Add `videoQuestion` to the feature notes in `packages/apis/CLAUDE.md`.
+- [x] T046 [P] Add a line under "Features" in `packages/databases/core-table/CLAUDE.md`: video questions (#591), `videoAnswerWrites` as the only writer of `videoAnswerSheet`, and the first-record check it shares with `contentItem.complete`. Add `videoQuestion` to the feature notes in `packages/apis/CLAUDE.md`.
 - [ ] T047 (human) Run [quickstart.md](./quickstart.md) steps 1 to 23 against `pnpm dev` in Chrome and Safari, saving screenshots to `tmp/screenshots/pr-<number>/`. Confirm in particular: a question shows within a second of its moment (SC-001), fullscreen is kept, nothing scrolls sideways at 375 px, and a video without questions makes no `videoQuestion.view` request.
 - [ ] T048 (human) Run quickstart steps 24 and 25 with VoiceOver or NVDA: the question is announced when the video pauses, the result when it arrives, focus returns to Play, and each marker says its time and state (spec FR-039, SC-008).
 - [ ] T049 (human) On `discava-development` after the last PR deploys, play a video with questions on a phone (iOS Safari and Android Chrome): the question shows over the inline player, answering works with signed cookies in place, and the analytics figures follow within 30 seconds.
