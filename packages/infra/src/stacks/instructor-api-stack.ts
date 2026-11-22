@@ -118,12 +118,19 @@ export class InstructorApiStack extends Stack {
     // course.captionLanguages and course.updateCaptionLanguages report and
     // enforce the stage's caption translation settings. They're on the shared
     // router function, which needs no extra permission to read a setting.
-    addSetting(
+    // contentItem.createVideoUrl and coursePreview.createVideoUrl report each
+    // video's translation status from the same settings, on MediaUrl.
+    for (const handler of [
       this.integrations['course.captionLanguages'].handler,
-      'captionTranslation',
-      'Settings',
-      captionTranslationSetting(captionTranslation),
-    );
+      this.privilegedHandler('contentItem.createVideoUrl'),
+    ]) {
+      addSetting(
+        handler,
+        'captionTranslation',
+        'Settings',
+        captionTranslationSetting(captionTranslation),
+      );
+    }
 
     this.bindMediaSettings(
       lessonMediaBucket,

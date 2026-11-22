@@ -126,6 +126,7 @@ describe('deploy-time settings per function', () => {
     InstructorApiMediaUrlHandler: [
       'DISCAVA_DYNAMODB_CORE_TABLE',
       'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
     ],
     InstructorApiCourseImageHandler: [
       'DISCAVA_DYNAMODB_CORE_TABLE',
@@ -151,27 +152,32 @@ describe('deploy-time settings per function', () => {
 });
 
 describe('caption languages (#755)', () => {
-  it('hands the router function the stage settings it was given, and the defaults without any', () => {
-    const setting = (components: Parameters<typeof synth>[0]) =>
-      JSON.stringify(
-        Object.entries(
-          synth(components)('InstructorApi').findResources(
-            'AWS::Lambda::Function',
-          ),
-        )
-          .filter(([id]) => id.startsWith('InstructorApiRouterHandler'))
-          .map(
-            ([, fn]) =>
-              fn.Properties.Environment.Variables
-                .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
-          ),
+  // The router reports and enforces the languages; the media URL function
+  // reports each video's translation status (#914).
+  it.each(['InstructorApiRouterHandler', 'InstructorApiMediaUrlHandler'])(
+    'hands %s the stage settings it was given, and the defaults without any',
+    (handler) => {
+      const setting = (components: Parameters<typeof synth>[0]) =>
+        JSON.stringify(
+          Object.entries(
+            synth(components)('InstructorApi').findResources(
+              'AWS::Lambda::Function',
+            ),
+          )
+            .filter(([id]) => id.startsWith(handler))
+            .map(
+              ([, fn]) =>
+                fn.Properties.Environment.Variables
+                  .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
+            ),
+        );
+      expect(
+        setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
+      ).toMatch(/enabled[\s\S]*true[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
+      expect(setting({ captionTranslation: { enabled: false } })).toMatch(
+        /enabled[\s\S]*false/,
       );
-    expect(
-      setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
-    ).toMatch(/enabled[\s\S]*true[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
-    expect(setting({ captionTranslation: { enabled: false } })).toMatch(
-      /enabled[\s\S]*false/,
-    );
-    expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
-  });
+      expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
+    },
+  );
 });
