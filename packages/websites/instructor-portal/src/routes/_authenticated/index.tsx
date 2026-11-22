@@ -116,19 +116,13 @@ function RouteComponent() {
             Loading the grading queue…
           </p>
         ) : queueQuery.isError ? (
-          <div className="space-y-3">
-            <ErrorAlert type="error" header="Couldn't load the grading queue">
-              {apiErrorMessage(queueQuery.error)}
-            </ErrorAlert>
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={() => queueQuery.refetch()}
-            >
-              Try again
-            </Button>
-          </div>
+          <ErrorAlert
+            type="error"
+            header="Couldn't load the grading queue"
+            onRetry={() => void queueQuery.refetch()}
+          >
+            {apiErrorMessage(queueQuery.error)}
+          </ErrorAlert>
         ) : queueQuery.data.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing is waiting for grading.
@@ -149,7 +143,7 @@ function RouteComponent() {
                     }}
                     className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3 text-sm hover:bg-muted/50"
                   >
-                    <span>
+                    <span className="min-w-0 break-words">
                       <span className="font-medium">{entry.displayName}</span>
                       <span className="text-muted-foreground">
                         {' · '}
@@ -158,7 +152,7 @@ function RouteComponent() {
                         {entry.courseTitle}
                       </span>
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="shrink-0 text-xs text-muted-foreground">
                       Waited {relativeTime(entry.submittedAt)}
                     </span>
                   </Link>
