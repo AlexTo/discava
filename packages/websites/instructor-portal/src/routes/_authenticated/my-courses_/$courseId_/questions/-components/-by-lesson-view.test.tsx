@@ -104,6 +104,33 @@ describe('ByLessonView', () => {
     ).toMatchObject(lessonRef);
   });
 
+  it('labels a prompt answer and does not mark it Answered', async () => {
+    const rendered = render({
+      core: {
+        'discussion.listQuestions': () => ({
+          items: [
+            question({
+              postId: 'q2',
+              threadId: 'q2',
+              title: 'Plain question',
+              answered: true,
+            }),
+            question({ promptAnswer: true, answered: true }),
+          ],
+        }),
+      },
+    });
+    await rendered.user.selectOptions(
+      await screen.findByLabelText('Lesson'),
+      'l1',
+    );
+    expect(
+      await screen.findByText('Answer to the course prompt'),
+    ).toBeVisible();
+    // Only the ordinary answered question says Answered.
+    expect(screen.getAllByText(/· Answered/)).toHaveLength(1);
+  });
+
   it('replies with the lesson ref, and the same id after a failure', async () => {
     let fail = true;
     const rendered = render({
