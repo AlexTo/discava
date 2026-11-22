@@ -99,4 +99,12 @@ describe('MathPopover', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('never grows wider than the screen', () => {
+    renderPopover();
+
+    expect(field().closest('[data-slot="popover-content"]')).toHaveClass(
+      'w-[min(24rem,calc(100vw-2rem))]',
+    );
+  });
 });

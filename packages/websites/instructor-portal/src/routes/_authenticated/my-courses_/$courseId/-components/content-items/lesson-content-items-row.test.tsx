@@ -523,4 +523,33 @@ describe('LessonContentItemsRow', () => {
       ).toBeNull();
     });
   });
+
+  it("shows each kind of item's whole title, wrapping rather than truncating", () => {
+    const long = 'A very long item title '.repeat(4).trim();
+    renderRow({
+      contentItems: [
+        item('t', `${long} text`),
+        { ...item('v', `${long} video`), type: 'video' },
+        { ...item('f', `${long} file`), type: 'file' },
+        { ...item('q', `${long} quiz`), type: 'quiz', questions: [] },
+      ] as never,
+    });
+
+    for (const kind of ['text', 'video', 'file', 'quiz']) {
+      const title = screen.getByText(`${long} ${kind}`);
+      expect(title).toBeVisible();
+      expect(title).toHaveClass('min-w-0', 'flex-1', 'break-words');
+      expect(title).not.toHaveClass('truncate');
+    }
+  });
+
+  it("lets the row's controls wrap, and keeps the add buttons together", () => {
+    renderRow();
+
+    const row = screen.getByText('Item A').parentElement;
+    expect(row).toHaveClass('flex-wrap');
+    expect(
+      screen.getByRole('button', { name: 'Video' }).parentElement,
+    ).toHaveClass('flex-wrap');
+  });
 });

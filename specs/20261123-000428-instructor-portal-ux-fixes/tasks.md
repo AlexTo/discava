@@ -64,7 +64,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: `pnpm nx run @discava/common-shadcn:test -- --run` passes with the new tests.
 
-- [ ] T001 [P] Test first, then add `PendingButton` in `SH/components/pending-button.tsx` as [contracts/shared-components.md](./contracts/shared-components.md) describes (research R-5).
+- [x] T001 [P] Test first, then add `PendingButton` in `SH/components/pending-button.tsx` as [contracts/shared-components.md](./contracts/shared-components.md) describes (research R-5).
   - **Props:** `Button`'s, plus `pending: boolean` and `pendingLabel: string`.
   - **While pending:** `aria-disabled="true"`, the same dimmed classes `disabled` gives, `onClick` ignored, and a submit button's form submission prevented (`onClickCapture` with `preventDefault` for `type="submit"`). It shows `pendingLabel`, and never sets `disabled`.
   - **Tests** in `pending-button.test.tsx:**
@@ -72,26 +72,26 @@ The feature writes no shared record, so there is no invariant work. Write each t
     - clicks while pending don't call `onClick`;
     - a form whose submit button is pending doesn't submit;
     - the label switches back when pending ends.
-- [ ] T002 [P] Test first, then add `useReturnFocus(open)` in `SH/hooks/use-return-focus.ts` (research R-6).
+- [x] T002 [P] Test first, then add `useReturnFocus(open)` in `SH/hooks/use-return-focus.ts` (research R-6).
   - **Behaviour:** it records `document.activeElement` when `open` becomes true. It returns `onCloseAutoFocus(event)`, which, if the recorded element is still connected, focuses it and calls `event.preventDefault()`.
   - **Tests** with a Radix `Dialog` opened from state, with no trigger:
     - focus returns to the button focused before opening;
     - if that button was removed, the default runs and nothing throws.
-- [ ] T003 [P] Test first, then add `StatusMessage` in `SH/components/status-message.tsx` (research R-14).
+- [x] T003 [P] Test first, then add `StatusMessage` in `SH/components/status-message.tsx` (research R-14).
   - **Props:** `message: string | null`, `visuallyHidden?: boolean`, `clearAfter?: number` (default 5000).
   - **Behaviour:** the `role="status"` element is always rendered. Setting the same message twice clears it for one frame, then sets it again.
   - **Tests (fake timers):**
     - the region exists while empty;
     - the text appears, then clears after `clearAfter`;
     - a repeated message is set again.
-- [ ] T004 [P] Test first, then add `LoadingState` in `SH/components/loading-state.tsx` (research R-4).
+- [x] T004 [P] Test first, then add `LoadingState` in `SH/components/loading-state.tsx` (research R-4).
   - **Props:** `label: string` and `size?: 'page' | 'section'`.
   - **Behaviour:** it renders the existing `Spinner` beside `label` in a `role="status"` region. `page` centres it with `min-h-[50vh]`.
   - **Tests:** the label is the region's text, and the role is `status`.
-- [ ] T005 [P] In `packages/e2e/src/helpers/viewport.ts`, add two helpers beside `expectNoSidewaysScroll` (research R-15). Neither is used yet.
+- [x] T005 [P] In `packages/e2e/src/helpers/viewport.ts`, add two helpers beside `expectNoSidewaysScroll` (research R-15). Neither is used yet.
   - **`expectOnScreen(locator)`:** with `expect.poll`, asserts that every match is visible and its bounding box lies within `0 ≤ x` and `x + width ≤ innerWidth`. On failure it names the first five that don't, with their accessible names (`aria-label` or text).
   - **`expectDialogFits(dialog)`:** asserts the dialog's `scrollWidth` is not greater than its `clientWidth`, and its right edge is within the viewport.
-- [ ] T006 Run `pnpm nx run @discava/common-shadcn:test` (once), lint and typecheck for `common-shadcn` and `e2e`, and fix failures in the code, not the tests.
+- [x] T006 Run `pnpm nx run @discava/common-shadcn:test` (once), lint and typecheck for `common-shadcn` and `e2e`, and fix failures in the code, not the tests.
 
 ---
 
@@ -107,11 +107,11 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US1.
 
-- [ ] T007 [US1] Test first in `SH/components/ui/dialog.test.tsx` (new), then change `DialogContent` in `SH/components/ui/dialog.tsx`: add `grid-cols-[minmax(0,1fr)]` to its classes (research R-1; D-01, D-03, E-01).
+- [x] T007 [US1] Test first in `SH/components/ui/dialog.test.tsx` (new), then change `DialogContent` in `SH/components/ui/dialog.tsx`: add `grid-cols-[minmax(0,1fr)]` to its classes (research R-1; D-01, D-03, E-01).
   - **Test:** assert the class is present; jsdom has no layout.
   - **Pull request:** name the shadcn-file change and the no-sideways-scroll rule.
   - **Other portals:** run the tests of the student, instructor and admin portals.
-- [ ] T008 [P] [US1] Test first in `IPC/course/course-modules.test.tsx`, then change the module header and the lesson row in `IPC/course/course-modules.tsx` to the wrapping layout of research R-2 (C-01):
+- [x] T008 [P] [US1] Test first in `IPC/course/course-modules.test.tsx`, then change the module header and the lesson row in `IPC/course/course-modules.tsx` to the wrapping layout of research R-2 (C-01):
   - the row becomes `flex flex-wrap items-center gap-2`;
   - the title block is `min-w-0 basis-full break-words sm:basis-0 sm:flex-1`;
   - the controls sit in a `flex flex-wrap items-center gap-1` group, with nothing `shrink-0` that could push past the edge.
@@ -120,30 +120,30 @@ At 1440px nothing changes, apart from long-content fixes.
   - with a 90-character title and a 70-character word, the title element has `break-words` and `min-w-0`;
   - the controls group wraps (`flex-wrap`);
   - every control is still present by name.
-- [ ] T009 [P] [US1] Test first in `IPC/content-items/lesson-content-items-row.test.tsx`, then apply the same layout to the item row in `IPC/content-items/lesson-content-items-row.tsx` (D-04):
+- [x] T009 [P] [US1] Test first in `IPC/content-items/lesson-content-items-row.test.tsx`, then apply the same layout to the item row in `IPC/content-items/lesson-content-items-row.tsx` (D-04):
   - the kind icon and title share the first line, the title being `min-w-0 flex-1 break-words`;
   - the controls (Questions, Captions, Hide or Publish, Edit, Remove, Preview) wrap below `sm`;
   - the four add-item buttons wrap.
 
   **Test:** every row's title text is rendered and not hidden, for each item kind.
-- [ ] T010 [P] [US1] Test first, then wrap the save bar in `IPC/content-items/quiz/quiz-save-bar.tsx` (D-02):
+- [x] T010 [P] [US1] Test first, then wrap the save bar in `IPC/content-items/quiz/quiz-save-bar.tsx` (D-02):
   - the outer row becomes `flex flex-wrap`;
   - the status text takes `basis-full sm:basis-auto`;
   - the button group wraps.
 
   Add `min-w-0` to the question card's root and summary in `IPC/content-items/quiz/question-card.tsx`, and to the question card in `IPC/content-items/video-questions/video-questions-editor.tsx` (D-01). **Tests** in `quiz-builder.test.tsx`: the classes are present, and Save quiz, Preview as student and Close are still rendered.
-- [ ] T011 [P] [US1] Test first, then make long words wrap in the lesson-item dialogs (D-03):
+- [x] T011 [P] [US1] Test first, then make long words wrap in the lesson-item dialogs (D-03):
   - add `break-words [overflow-wrap:anywhere]` to the editor content in `IPC/rich-text-editor.tsx` (the `EditorContent` class and the ProseMirror paragraph styles);
   - add `break-words` and `min-w-0` to the file name in `IPC/content-items/attach-lesson-file-dialog.tsx`.
 
   **Tests** in the existing test files.
-- [ ] T012 [P] [US1] Test first in `IPC/course/archived-section.test.tsx`, then lay out each archived row as in T008 (C-14):
+- [x] T012 [P] [US1] Test first in `IPC/course/archived-section.test.tsx`, then lay out each archived row as in T008 (C-14):
   - the text block takes `min-w-0 basis-full break-words sm:basis-0 sm:flex-1`;
   - Restore and Delete wrap below it.
-- [ ] T013 [P] [US1] Test first, then fix two long-content defects:
+- [x] T013 [P] [US1] Test first, then fix two long-content defects:
   - add `break-words` to the announcement title in `IPC/announcements/announcements-section.tsx` (C-13);
   - make the maths popover `w-[min(24rem,calc(100vw-2rem))]` in `IPC/math-popover.tsx` (C-18).
-- [ ] T014 [US1] Add instructor cases to `packages/e2e/src/scenarios/phone-width.e2e.ts`, at `PHONE`, with a new instructor (`newUser('Iris', ['instructor', 'student'])`). Build the course through the instructor API (`apiUserFor` in `helpers/assignment.ts`, `helpers/api.ts`):
+- [x] T014 [US1] Add instructor cases to `packages/e2e/src/scenarios/phone-width.e2e.ts`, at `PHONE`, with a new instructor (`newUser('Iris', ['instructor', 'student'])`). Build the course through the instructor API (`apiUserFor` in `helpers/assignment.ts`, `helpers/api.ts`):
   - three modules of three lessons, with titles of 60 to 90 characters, one a 70-character word;
   - a lesson with a text item, a video item (`helpers/video.ts`), a file item and a quiz of 12 questions, the first 500 characters long;
   - two archived lessons.
@@ -156,7 +156,7 @@ At 1440px nothing changes, apart from long-content fixes.
   Then open the quiz builder and collapse the first question; open the video questions with the long question; open Edit text with a 70-character word in the body. For each: `expectDialogFits`, and `expectOnScreen` on its Save.
 
   Screenshots: `'course editor at phone width'`, `'quiz builder at phone width'`, `'video questions with a long question'`.
-- [ ] T015 [US1] Run `pnpm nx run @discava/instructor-portal:test` (once), the student and admin portals' tests (for T007), lint, typecheck and `pnpm nx run @discava/instructor-portal:build`. Fix failures in the code.
+- [x] T015 [US1] Run `pnpm nx run @discava/instructor-portal:test` (once), the student and admin portals' tests (for T007), lint, typecheck and `pnpm nx run @discava/instructor-portal:build`. Fix failures in the code.
 
 ---
 

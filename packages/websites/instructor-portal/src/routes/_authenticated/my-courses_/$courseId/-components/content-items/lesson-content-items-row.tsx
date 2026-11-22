@@ -78,7 +78,7 @@ const captionsLabel = (item: ContentItem) => {
 };
 
 const ROW_CLASS =
-  'group/resource flex items-center gap-2 border-l px-3 py-2 transition-colors hover:bg-muted/50';
+  'group/resource flex flex-wrap items-center gap-2 border-l px-3 py-2 transition-colors hover:bg-muted/50';
 
 export function LessonContentItemsRow({
   courseId,
@@ -117,7 +117,7 @@ export function LessonContentItemsRow({
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
           <ListChecks className="size-3.5" />
         </div>
-        <span className="flex-1 truncate text-xs font-medium">
+        <span className="min-w-0 flex-1 basis-32 break-words text-xs font-medium">
           {item.title}
         </span>
         <span className="text-[11px] text-muted-foreground">
@@ -174,7 +174,7 @@ export function LessonContentItemsRow({
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
           <Paperclip className="size-3.5" />
         </div>
-        <span className="flex-1 truncate text-xs font-medium">
+        <span className="min-w-0 flex-1 basis-32 break-words text-xs font-medium">
           {item.title}
         </span>
         {item.fileName && (
@@ -238,7 +238,7 @@ export function LessonContentItemsRow({
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
           <Video className="size-3.5" />
         </div>
-        <span className="flex-1 truncate text-xs font-medium">
+        <span className="min-w-0 flex-1 basis-32 break-words text-xs font-medium">
           {item.title}
         </span>
         {item.visibility === 'hidden' && <HiddenBadge />}
@@ -353,7 +353,7 @@ export function LessonContentItemsRow({
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
           <FileText className="size-3.5" />
         </div>
-        <span className="flex-1 truncate text-xs font-medium">
+        <span className="min-w-0 flex-1 basis-32 break-words text-xs font-medium">
           {item.title}
         </span>
         {item.visibility === 'hidden' && <HiddenBadge />}

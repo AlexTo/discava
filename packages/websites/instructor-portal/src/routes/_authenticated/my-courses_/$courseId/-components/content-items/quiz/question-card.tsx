@@ -216,11 +216,11 @@ export function QuestionCard({
     <Collapsible open={expanded} onOpenChange={onToggle} asChild>
       <Card
         className={cn(
-          'gap-0 py-0',
+          'min-w-0 gap-0 py-0',
           problems.length > 0 && 'border-destructive/60',
         )}
       >
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2 px-3 py-2">
           {handle}
           <span className="text-sm font-semibold">{label}</span>
           <Badge variant="outline" className="text-[10px]">

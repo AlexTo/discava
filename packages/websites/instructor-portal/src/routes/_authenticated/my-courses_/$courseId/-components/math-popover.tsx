@@ -108,7 +108,7 @@ export function MathPopover({
       />
       <PopoverContent
         align="start"
-        className="w-96 space-y-3"
+        className="w-[min(24rem,calc(100vw-2rem))] space-y-3"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           textareaRef.current?.focus();
