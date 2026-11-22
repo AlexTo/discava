@@ -56,6 +56,12 @@ export const CourseTotalsSchema = z.object({
   dropped: CountSchema,
   completionRate: z.number().int().min(0).max(100).nullable(),
   activeThisWeek: CountSchema,
+  /** Enrolments that have done a first thing. */
+  activated: CountSchema,
+  /** `activated / enrolments` as a whole percent, rounded down; null with no enrolments. */
+  activationRate: z.number().int().min(0).max(100).nullable(),
+  promptAnswered: CountSchema,
+  promptDismissed: CountSchema,
   updatedAt: z.string().nullable(),
 });
 
@@ -64,6 +70,8 @@ export const CourseDaySchema = z.object({
   date: z.string(),
   enrolments: CountSchema,
   activeLearners: CountSchema,
+  /** Of the enrolments made that day, how many are activated so far. */
+  activated: CountSchema,
 });
 
 export const LessonDropOffSchema = z.object({

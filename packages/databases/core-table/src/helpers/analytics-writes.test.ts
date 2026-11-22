@@ -6,6 +6,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import type { Delta, Member } from './analytics-contributions.js';
+import { contributionsOfChange } from './analytics-contributions.js';
 import { applyAnalyticsChange } from './analytics-writes.js';
 
 // ElectroDB builds the requests for real; a small in-memory table applies
@@ -178,6 +179,32 @@ describe('applyAnalyticsChange', () => {
     );
     expect(table.items.get('analytics#c1|summary')).toMatchObject({
       enrolments: 1,
+    });
+  });
+
+  it('leaves the activation and prompt counters as after once when an enrolment change is applied twice', async () => {
+    const table = memoryTable();
+    const { counts } = contributionsOfChange(
+      'enrolment',
+      { courseId: 'c1', status: 'active', createdAt: '2026-11-17T08:00:00Z' },
+      {
+        courseId: 'c1',
+        status: 'active',
+        createdAt: '2026-11-17T08:00:00Z',
+        lastActivityAt: '2026-11-17T09:00:00Z',
+        firstLessonPromptState: 'answered',
+      },
+    );
+    await applyAnalyticsChange(coreTable, change({ counts }));
+    await expect(
+      applyAnalyticsChange(coreTable, change({ counts })),
+    ).resolves.toBe('already-applied');
+    expect(table.items.get('analytics#c1|summary')).toMatchObject({
+      activated: 1,
+      promptAnswered: 1,
+    });
+    expect(table.items.get('analytics#c1|day#2026-11-17')).toMatchObject({
+      activated: 1,
     });
   });
 

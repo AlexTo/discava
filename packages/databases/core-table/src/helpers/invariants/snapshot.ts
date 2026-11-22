@@ -280,11 +280,17 @@ export interface TableSnapshot {
   // double counting).
   courseStats: Pick<
     Item<typeof createCourseStatsEntity>,
-    'courseId' | 'enrolments' | 'completed' | 'dropped'
+    | 'courseId'
+    | 'enrolments'
+    | 'completed'
+    | 'dropped'
+    | 'activated'
+    | 'promptAnswered'
+    | 'promptDismissed'
   >[];
   periodStats: Pick<
     Item<typeof createPeriodStatsEntity>,
-    'courseId' | 'periodKey' | 'enrolments' | 'activeLearners'
+    'courseId' | 'periodKey' | 'enrolments' | 'activeLearners' | 'activated'
   >[];
   lessonStats: Pick<
     Item<typeof createLessonStatsEntity>,

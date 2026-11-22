@@ -37,6 +37,11 @@ export const createPeriodStatsEntity = async () =>
           type: 'number',
           default: 0,
         },
+        // Days only: enrolments created that day that have `lastActivityAt`.
+        activated: {
+          type: 'number',
+          default: 0,
+        },
       },
       indexes: {
         // Every aggregate of a course shares this pk, so one range query
