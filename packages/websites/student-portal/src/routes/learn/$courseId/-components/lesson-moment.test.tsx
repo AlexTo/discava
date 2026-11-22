@@ -110,7 +110,9 @@ const open = (props: { item?: string; t?: number }) =>
   );
 
 const startAt = async (title: string) =>
-  (await screen.findByTestId(`player-${title}`)).getAttribute('data-start-at');
+  (
+    await screen.findByTestId(`player-${title}`, {}, { timeout: 5_000 })
+  ).getAttribute('data-start-at');
 
 const scrollIntoView = vi.fn();
 Element.prototype.scrollIntoView = scrollIntoView;

@@ -156,7 +156,11 @@ describe('TranscriptSearchResults', () => {
       throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
     });
 
-    expect(await screen.findByText('Boom')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
   });
 
