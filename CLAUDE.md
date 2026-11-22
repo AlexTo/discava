@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR; it covers the PR process, commit conventions, and when to prefer an Nx generator over hand-scaffolding.
+Read [DEVELOPMENT.md](./DEVELOPMENT.md) before opening a PR; it covers the PR process, commit conventions, and when to prefer an Nx generator over hand-scaffolding. [CONTRIBUTING.md](./CONTRIBUTING.md) is the public policy: no outside pull requests or issues, ideas and bug reports go to GitHub Discussions.
 
 ## What this is
 
@@ -44,7 +44,7 @@ Update vitest snapshots for one project:
 pnpm nx run @discava/core-api:test -u
 ```
 
-Local dev needs Docker running and no AWS account or deployed stage. Ports, the sign-in users (Alice, Bob, Dan, Carol), which AWS service each local service stands in for, and what only runs on a deployed stage are in CONTRIBUTING.md's [Running Discava Locally](./CONTRIBUTING.md#running-discava-locally):
+Local dev needs Docker running and no AWS account or deployed stage. Ports, the sign-in users (Alice, Bob, Dan, Carol), which AWS service each local service stands in for, and what only runs on a deployed stage are in DEVELOPMENT.md's [Running Discava Locally](./DEVELOPMENT.md#running-discava-locally):
 
 ```sh
 pnpm dev                                              # portals, APIs and local stand-ins for the AWS services they use
@@ -81,6 +81,7 @@ Nested `CLAUDE.md` files hold the detail for the packages below that name one; C
 - `packages/websites`: UI rules for every portal screen and shared component: the two widths and states to check, layout, links, focus, errors; see `packages/websites/CLAUDE.md`
 - `packages/common/shadcn` (see `packages/websites/CLAUDE.md`): shared shadcn/ui components used by all three portals, plus `ErrorAlert` and the portals' shared shell: `CognitoAuth` (`autoSignIn`, `onReturn(path)`), `NotificationBell` (`notification-bell-container`, takes `portal`), `UserMenu`, `PortalShell` (sidebar, header and breadcrumbs from `navItems`, `label` and `segmentLabels`; routes set a crumb with `useBreadcrumbLabel`), and the core API's context and hooks (`lib/core-api`), which each portal's `api.ts` builds its provider over
 - `packages/common/web-utils`: non-UI code shared by two or more portals (types, pure logic, browser helpers, e.g. `quiz`, `return-to`, `video-player`: speeds, keyboard shortcut mapping and saved player preferences for the shared `HlsVideo` controls), imported per module (`@discava/common-web-utils/return-to`); `testing` holds the test-only helpers the portals and `common-shadcn` share (`fakeTrpcFetch`, `createRenderWithApi`, `installJsdomStubs`, `mockRouter`), imported by tests and test setup only, never by portal source; the portals' shared bootstrap: `runtime-config` (context, provider and hook; each portal passes its local-dev config in), `trpc-provider` (`createTrpcProvider<AppRouter>({ apiKey, credentials })`, which each portal calls once in its `src/api.ts`; the router type is a generic, so web-utils never imports an API package), `query-client`, `public-media-url`, `app-config` and `user-profile` (the signed-in user's display name and initials); the frontend counterpart of `common-server-utils`. UI goes in `common-shadcn`, and code only one portal uses stays in it
+- `packages/common/branding`: shared branding rules for the portals and the backend (`@discava/common-branding`): the brand document, colour palette and contrast rules, and brand image rules, imported per module
 - `packages/common/server-utils`: runtime code shared by two or more backend Lambdas (CORS, lesson media signing), imported per module (`@discava/common-server-utils/cors`); server-only, and a Biome rule stops the portals importing it. Code only one Lambda uses stays next to it
 - `packages/e2e`: Playwright end-to-end tests (#3), one `src/scenarios/*.e2e.ts` per user flow, built from `src/helpers/`, against the local stack; each scenario makes its own users (the local OIDC page's "Someone else" form) and uniquely named data, and never resets local data. `src/concurrency/` fires API requests at the same moment (#71). After every test, the core table must still keep core-table's `helpers/invariants/` rules
 - `docs`: Astro/Starlight docs site, deployed to GitHub Pages on push to `main`

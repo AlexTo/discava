@@ -22,6 +22,11 @@ export const LOCAL_DEV_CONFIG = {
     InstructorPortal: LOCAL_PORTAL_ORIGINS.instructor,
     AdminPortal: LOCAL_PORTAL_ORIGINS.admin,
   },
+  // Where S3Mock serves the public media bucket, which holds the published
+  // brand and the brand's images.
+  media: {
+    PublicMediaBucket: 'http://localhost:9090/discava-public-media/',
+  },
   apis: {
     CoreApi: 'http://localhost:2022/',
     AdminApi: 'http://localhost:2025/',

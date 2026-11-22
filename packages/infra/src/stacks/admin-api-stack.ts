@@ -7,6 +7,7 @@ import {
   type AdminPortal,
   CoreTable,
   ImportedStripeSecrets,
+  type PublicMediaBucket,
   type StripeSecrets,
   UserIdentity,
 } from '@discava/common-constructs';
@@ -25,6 +26,8 @@ export interface AdminApiStackProps extends StackProps {
   readonly adminApi?: AdminApiComponentConfig;
   readonly identity: UserIdentity;
   readonly coreTable: CoreTable;
+  /** Where the brand's images are uploaded and saved. */
+  readonly publicMediaBucket: PublicMediaBucket;
   /** The Stripe secrets an administrator's save writes. */
   readonly stripeSecrets: StripeSecrets;
   /** The address Stripe is told to post to (the Payments stack's output). */
@@ -35,10 +38,11 @@ export interface AdminApiStackProps extends StackProps {
 
 /**
  * The tRPC API only administrators can call. It reads and writes the core
- * table (the category taxonomy, reviews, the Stripe connection's record) and
- * needs nothing else, except the `PaymentsConnect` function: the one function
- * that may write the two Stripe secrets, because it connects and disconnects
- * Stripe with a key sent in its request. No function here, nor the API's
+ * table (the category taxonomy, reviews, the Stripe connection's record, the
+ * platform brand) and needs nothing else, except two dedicated functions:
+ * `PaymentsConnect`, the one function that may write the two Stripe secrets,
+ * because it connects and disconnects Stripe with a key sent in its request,
+ * and `Branding`, the one that may write the brand's images. No function here, nor the API's
  * stage, logs request or response bodies (API Gateway's data trace is off and
  * its access log format has no body), and WAF logs never hold one.
  */
@@ -52,6 +56,7 @@ export class AdminApiStack extends Stack {
       adminApi: adminApiConfig,
       identity,
       coreTable,
+      publicMediaBucket,
       stripeSecrets,
       webhookUrl,
       adminPortal,
@@ -116,6 +121,22 @@ export class AdminApiStack extends Stack {
       'STRIPE_ENDPOINT_STAGE',
       Stage.of(this)?.stageName ?? 'unknown',
     );
+
+    // The brand's images: `Branding` presigns uploads and attaches them, and
+    // may touch only the brand's own prefixes, never a course's media or the
+    // published brand.json.
+    const branding = privilegedHandler(
+      AdminApi,
+      'admin-api',
+      integrations,
+      'branding.save',
+    );
+    publicMediaBucket.grantManageObjects(branding, [
+      'brand/logo/*',
+      'brand/icon/*',
+      'brand/share-image/*',
+    ]);
+    publicMediaBucket.bindSettings(branding);
 
     this.adminApi.restrictCorsTo(adminPortal, ...localPortalOrigins('admin'));
   }

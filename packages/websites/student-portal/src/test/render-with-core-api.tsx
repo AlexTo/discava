@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import {
+  type ResolvedBrand,
+  resolveBrand,
+} from '@discava/common-branding/brand';
+import { BrandContextProvider } from '@discava/common-web-utils/brand';
 import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
 import {
   type ApiCall,
@@ -70,6 +75,7 @@ export const renderWithCoreApi = (
     path = '/',
     runtimeConfig = {},
     queryClient: sharedQueryClient,
+    brand,
   }: {
     handlers?: Record<string, Handler>;
     signedIn?: boolean;
@@ -80,6 +86,8 @@ export const renderWithCoreApi = (
     runtimeConfig?: Record<string, unknown>;
     // Reuse another render's cache, as navigating back within one session does.
     queryClient?: QueryClient;
+    // The brand the components see. @default the default Discava brand
+    brand?: ResolvedBrand;
   } = {},
 ) => {
   const calls: ApiCall[] = [];
@@ -117,7 +125,11 @@ export const renderWithCoreApi = (
       <AuthContext.Provider value={authContext}>
         <QueryClientProvider client={queryClient}>
           <CoreApiTRPCContext.Provider value={{ client, optionsProxy }}>
-            <RouterProvider router={router} />
+            <BrandContextProvider
+              value={brand ?? resolveBrand(undefined, PUBLIC_MEDIA_URL)}
+            >
+              <RouterProvider router={router} />
+            </BrandContextProvider>
           </CoreApiTRPCContext.Provider>
         </QueryClientProvider>
       </AuthContext.Provider>

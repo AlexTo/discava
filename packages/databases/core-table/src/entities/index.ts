@@ -38,6 +38,7 @@ export { createPaymentConnectionEntity } from './payment-connection.js';
 export { createPayoutEntity } from './payout.js';
 export { createPayoutAccountEntity } from './payout-account.js';
 export { createPeriodStatsEntity } from './period-stats.js';
+export { createPlatformBrandEntity } from './platform-brand.js';
 export { createProfileHandleClaimEntity } from './profile-handle-claim.js';
 export { createProgressEntity } from './progress.js';
 export { createQuizAttemptEntity } from './quiz-attempt.js';

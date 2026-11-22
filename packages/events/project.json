@@ -39,6 +39,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/branding/brand-publishing.ts",
+        "name": "brand-publishing",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/earnings/earnings-recording.ts",
         "name": "earnings-recording",
         "iac": "cdk"

@@ -1,0 +1,17 @@
+{
+  "name": "@discava/common-branding",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "tslib": "^2.3.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:"
+  },
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "license": "Apache-2.0"
+}

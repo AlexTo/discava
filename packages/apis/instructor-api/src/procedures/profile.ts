@@ -4,8 +4,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import {
+  attachPublicMediaObject,
+  bestEffortDetachPublicMediaObject,
+  headPublicMediaObject,
   instructorPhotoKey,
   isInstructorPhotoKey,
+  presignJpegUpload,
 } from '@discava/common-server-utils/public-media';
 import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
@@ -17,12 +21,6 @@ import {
   instructorProfileWrites,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import {
-  attachPublicMediaObject,
-  bestEffortDetachPublicMediaObject,
-  headPublicMediaObject,
-  presignJpegUpload,
-} from '../helpers/public-media-client.js';
 import { courseProcedure } from '../init.js';
 import {
   CreateProfilePhotoUploadUrlInputSchema,

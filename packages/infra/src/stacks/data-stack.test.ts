@@ -224,6 +224,35 @@ describe('the page renderer settings parameter', () => {
     ).toBe(false);
   });
 
+  // The renderer reads the platform brand with the rest of the table, so it
+  // needs no grant of its own for it, and no write.
+  it('lets the renderer read the core table, and never write it', () => {
+    const policies = resources(
+      data,
+      'AWS::IAM::Policy',
+      'PageRendererRole',
+    ) as {
+      PolicyDocument: {
+        Statement: { Action: string | string[]; Resource: unknown }[];
+      };
+    }[];
+    const dynamo = policies
+      .flatMap((p) => p.PolicyDocument.Statement)
+      .filter((s) => [s.Action].flat().some((a) => a.startsWith('dynamodb:')));
+    const actions = dynamo.flatMap((s) => [s.Action].flat());
+    expect(actions).toEqual(
+      expect.arrayContaining(['dynamodb:GetItem', 'dynamodb:Query']),
+    );
+    for (const action of actions) {
+      expect(action).not.toMatch(
+        /^dynamodb:(Put|Update|Delete|BatchWrite|Transact)/,
+      );
+    }
+    expect(JSON.stringify(dynamo.map((s) => s.Resource))).toContain(
+      'CoreTable',
+    );
+  });
+
   it('outputs the core table name for the operator scripts', () => {
     data.hasOutput('CoreTableName', { Value: Match.anyValue() });
   });

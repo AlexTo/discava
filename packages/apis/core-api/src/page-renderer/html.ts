@@ -47,17 +47,45 @@ export const metaDescription = (text: string): string => {
 const ROOT_MARKER = '<div id="root"></div>';
 const HEAD_END = '</head>';
 const TITLE = /<title>[\s\S]*?<\/title>\s*/;
+const ICON_LINK = /<link\b[^>]*\brel=["']icon["'][^>]*>\s*/gi;
+
+/** The brand a page carries: its icon, and the document the portal starts from. */
+export interface PageBrand {
+  /** The brand's icon URL, or null for the template's own. */
+  iconUrl: string | null;
+  /** The published brand document, embedded in the page data; none before a first save. */
+  document?: unknown;
+}
+
+// The page data with the brand added under `brand`, which BrandProvider reads
+// at start-up. Page data is JSON text already safe for a script tag.
+const withBrand = (pageData: string | undefined, document: unknown): string => {
+  if (document === undefined) {
+    return pageData ?? '';
+  }
+  const data = pageData
+    ? (JSON.parse(pageData) as Record<string, unknown>)
+    : {};
+  return jsonForScript({ ...data, brand: document });
+};
 
 /**
  * Puts a page into the portal's `index.html`: `head` before `</head>` (the
  * template's own title is dropped, since `head` carries the page's), `root`
  * inside the empty root element, and `pageData` (JSON text) in a script right
- * after it. Throws when either marker is missing, so a changed template fails
- * loudly instead of serving a broken page.
+ * after it. A brand with an icon replaces the template's `<link rel="icon">`
+ * and adds the touch icon; a brand document is embedded in the page data.
+ * Throws when either marker is missing, so a changed template fails loudly
+ * instead of serving a broken page.
  */
 export const injectIntoTemplate = (
   template: string,
-  parts: { head: string; root: string; pageData?: string },
+  parts: {
+    head: string;
+    root: string;
+    pageData?: string;
+    brand?: PageBrand;
+  },
 ): string => {
   if (!template.includes(HEAD_END)) {
     throw new Error('The page template has no </head>');
@@ -65,13 +93,18 @@ export const injectIntoTemplate = (
   if (!template.includes(ROOT_MARKER)) {
     throw new Error('The page template has no <div id="root"></div>');
   }
-  const pageData = parts.pageData
-    ? `<script type="application/json" id="discava-page-data">${parts.pageData}</script>`
+  const pageDataText = withBrand(parts.pageData, parts.brand?.document);
+  const pageData = pageDataText
+    ? `<script type="application/json" id="discava-page-data">${pageDataText}</script>`
+    : '';
+  const iconUrl = parts.brand?.iconUrl;
+  const icons = iconUrl
+    ? `\n<link rel="icon" type="image/png" href="${escapeHtml(iconUrl)}" />\n<link rel="apple-touch-icon" href="${escapeHtml(iconUrl)}" />`
     : '';
   // Replacers are functions: `$` in the content must not be read as a pattern.
-  return template
+  return (iconUrl ? template.replace(ICON_LINK, () => '') : template)
     .replace(TITLE, () => '')
-    .replace(HEAD_END, () => `${parts.head}${HEAD_END}`)
+    .replace(HEAD_END, () => `${parts.head}${icons}${HEAD_END}`)
     .replace(
       ROOT_MARKER,
       () => `<div id="root">${parts.root}</div>${pageData}`,
