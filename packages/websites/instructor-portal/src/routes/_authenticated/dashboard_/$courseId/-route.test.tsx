@@ -68,6 +68,7 @@ const analytics = ({
   days = 90,
   lessons = [] as unknown[],
   quizzes = [] as unknown[],
+  videoQuestions = [] as unknown[],
   ...totals
 }: Record<string, unknown> = {}) => ({
   totals: {
@@ -83,6 +84,7 @@ const analytics = ({
   daily: dayList(days as number),
   lessons,
   quizzes,
+  videoQuestions,
 });
 
 const renderPage = (course: (input: unknown) => unknown = () => analytics()) =>

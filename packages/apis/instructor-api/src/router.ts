@@ -7,6 +7,7 @@ import { t } from './init.js';
 import {
   course as analyticsCourse,
   quiz as analyticsQuiz,
+  videoQuestions as analyticsVideoQuestions,
   courseSummaries,
 } from './procedures/analytics.js';
 import {
@@ -152,6 +153,7 @@ export const appRouter = router({
     courseSummaries,
     course: analyticsCourse,
     quiz: analyticsQuiz,
+    videoQuestions: analyticsVideoQuestions,
   }),
   assignmentSubmission: router({
     list: listAssignmentSubmissions,
