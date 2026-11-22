@@ -93,6 +93,9 @@ const clamp = (value: number, min: number, max: number) =>
  * doesn't rest on colour. The cues at the end share one marker at the right
  * edge, which goes to the last second.
  *
+ * The player is its own stacking context (`isolate`), so the markers and the
+ * overlay stay under what the page puts over it, such as a sticky footer.
+ *
  * The container takes focus and handles the shortcuts, so they work while
  * focus is anywhere in the player. Keys the focused control already uses
  * (Space on a button, arrows on a slider) are left to it.
@@ -479,7 +482,7 @@ export function VideoControls({
         }
       }}
       className={cn(
-        'group/video relative overflow-hidden bg-black outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'group/video relative isolate overflow-hidden bg-black outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         className,
       )}
     >

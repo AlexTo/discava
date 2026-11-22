@@ -90,7 +90,9 @@ describe('preTokenGeneration', () => {
   it('tries the table again on the next sign-in when it couldn’t be found', async () => {
     const { preTokenGeneration } = await load();
     createUserEntity
-      .mockRejectedValueOnce(new Error('No table name in AppConfig yet'))
+      .mockRejectedValueOnce(
+        new Error('Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE'),
+      )
       .mockResolvedValue(USER_ENTITY);
 
     await preTokenGeneration(structuredClone(ERIN));

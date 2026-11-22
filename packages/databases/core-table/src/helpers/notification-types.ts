@@ -137,6 +137,30 @@ export const NOTIFICATION_TYPES: Record<string, NotificationType> = {
       },
     }),
   }),
+  'certificate.revoked': defineType({
+    id: 'certificate.revoked',
+    name: 'Certificate revoked',
+    description: 'A certificate you earned is revoked.',
+    params: ['courseId', 'courseTitle', 'reason'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `Your certificate for ${p.courseTitle} was revoked`,
+      body: `Your certificate for ${p.courseTitle} is no longer valid. Reason: ${p.reason}.`,
+      link: { portal: 'student', path: '/my-learning' },
+    }),
+  }),
+  'certificate.restored': defineType({
+    id: 'certificate.restored',
+    name: 'Certificate restored',
+    description: 'A certificate that was revoked is valid again.',
+    params: ['courseId', 'courseTitle'],
+    emailPolicy: 'default-on',
+    build: (p) => ({
+      title: `Your certificate for ${p.courseTitle} was restored`,
+      body: `Your certificate for ${p.courseTitle} is valid again.`,
+      link: { portal: 'student', path: '/my-learning' },
+    }),
+  }),
   'certificate.reminder': defineType({
     id: 'certificate.reminder',
     name: 'Certificate reminder',

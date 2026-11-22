@@ -171,13 +171,18 @@ describe('the transcript-indexing feature locally', () => {
     });
   });
 
-  it('routes a lesson MODIFY to no transcript queue in this phase', async () => {
+  it('routes a lesson MODIFY to the transcript queue, and a course MODIFY to none', async () => {
     const { queue, route } = setup();
 
-    await route({ Records: [record('lesson', 'MODIFY')] });
-
+    await route({ Records: [record('course', 'MODIFY')] });
     expect(await queue.depth('q-transcript-indexing')).toEqual({
       waiting: 0,
+      inFlight: 0,
+    });
+
+    await route({ Records: [record('lesson', 'MODIFY')] });
+    expect(await queue.depth('q-transcript-indexing')).toEqual({
+      waiting: 1,
       inFlight: 0,
     });
   });

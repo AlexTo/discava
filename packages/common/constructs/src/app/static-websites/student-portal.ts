@@ -61,7 +61,7 @@ export class StudentPortal extends StaticWebsite {
   /**
    * The renderer's role ARN, as a plain string. Not an `IGrantable`: a grant
    * made on this stack's role would put the policy here, referencing the
-   * table and AppConfig of the Data stack, which depends on this one. The
+   * table and settings parameter of the Data stack, which depends on this one. The
    * Data stack imports the role by this ARN and grants on the import.
    */
   public readonly pageRendererRoleArn?: string;

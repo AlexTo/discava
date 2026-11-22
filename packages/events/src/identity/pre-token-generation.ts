@@ -26,12 +26,11 @@ const logger = new Logger();
 const metrics = new Metrics();
 
 // Cognito fails the sign-in when a trigger throws or takes more than 5
-// seconds, so the sync gives up well before that, AppConfig lookup included.
+// seconds, so the sync gives up well before that.
 export const SYNC_BUDGET_MS = 3000;
 
 // Memoized across invocations on a warm Lambda; forgotten if it failed (e.g.
-// the table name isn't in AppConfig yet on a new stage), so the next sign-in
-// tries again.
+// a missing or invalid table setting), so the next sign-in tries again.
 let userEntity: ReturnType<typeof createUserEntity> | undefined;
 
 const getUserEntity = () => {
