@@ -1,19 +1,45 @@
 ---
 title: Certificates
-description: How a certificate of completion is issued, switched on or off per course, shared, added to LinkedIn and verified.
+description: How a certificate of completion is issued under a course's criteria, revoked and restored, shared, added to LinkedIn and verified.
 sidebar:
   order: 3
 ---
 
 import Link from '@components/link.astro';
 
-**Spec:** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/)
+**Spec:** [`specs/_archive/20261115-204447-certificates/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204447-certificates/) (issuing) and [`specs/20261120-154550-certificate-criteria-revocation/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154550-certificate-criteria-revocation/) (criteria, what was assessed, revocation)
 
 **Spec:** [`specs/20261120-003448-linkedin-certificate-sharing/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-003448-linkedin-certificate-sharing/) (adding a certificate to LinkedIn)
 
 ## The rule
 
-**A certificate is only ever written server-side, by the progress recalculation, and a student has at most one per course.** Completing a course (see <Link path="design/progress-and-completion">Progress and completion</Link>) is what issues it. Nothing a student or an instructor does in a browser can create one.
+**A certificate is only ever written server-side, by the progress recalculation, and a student has at most one per course.** It is issued when the student has completed the course (see <Link path="design/progress-and-completion">Progress and completion</Link>) **and** met the criteria in force for the course at that moment. Nothing a student or an instructor does in a browser can create one.
+
+Completion itself is unchanged by the criteria: an enrolment still becomes `completed` when every visible item is complete. "Completed, with no certificate yet" is a normal, lasting state, and the course home explains what is still required.
+
+## The criteria
+
+- **Where they live**: a `certificateCriteria` map on the course, beside the per-course switch: `{ version, requireQuizPass }`. A new course has `{ version: 1, requireQuizPass: false }`. `setCertificateCriteria` is its only writer after creation and adds one to `version` only when something changed.
+- **The rule**: `evaluateCertificateCriteria` in `core-table` is a pure function used by both the issuer and the reader (`certificate.requirements`, which the course home shows), so the page and the issuer can't disagree. With `requireQuizPass` on, every assessed quiz must be passed: its `passedAt` is set (and `passedAt` is permanent) **and** the student's best score reaches the quiz's *current* pass mark. So raising a pass mark can hold back a certificate that hasn't been issued yet, and lowering one can release it. An assessed quiz is an effectively visible quiz with a pass mark above 0; a quiz with a 0% pass mark is practice and is not assessed.
+- **Changing criteria on a live course**: the criteria read when a student is evaluated apply. A certificate already issued is never re-examined. Loosening issues certificates to everyone it makes qualify; tightening only affects students who haven't qualified yet. The instructor's control says this before saving.
+
+## What the certificate records
+The certificate copies the criteria it was issued under, with their `version`, into a read-only `assessment`, so what it describes never drifts when the course changes:
+
+- the two settings, the number of visible items, the number of assessed items, the lowest and highest pass mark, the course length in hours and a **score band** (the ten-point band of the mean of the best scores, from 0–9% up to 90–100%). Each is shown on the public page and in the PDF as the same lines of text (`assessmentStatement`).
+- the **list of assessed items** with each score. It exists so an invariant can check the rule, and it is never returned by any API or shown.
+- When nothing was required, there is no band and the statement says "No graded assessment was required for this certificate." An exact score is never shown.
+
+## What makes a waiting certificate arrive
+
+The recalculation (see <Link path="design/progress-and-completion">Progress and completion</Link>) runs for more than a completed item. A student who qualifies is issued a certificate within seconds of:
+
+- passing a quiz after its item was already complete (attempts used up, limit raised, a later attempt passing), or a better best score on a quiz already passed: that student;
+- the criteria changing, or certificates being turned on: every enrolled student who hasn't dropped;
+- a quiz's pass mark changing (including to or from 0, which changes whether it is assessed): every enrolled student who hasn't dropped;
+- the item completions and visibility changes that already triggered it.
+
+This replaces the "no backfill" limitation: turning certificates on now issues to everyone who already qualifies.
 
 ## How it is issued
 
@@ -27,12 +53,29 @@ import Link from '@components/link.astro';
 
 An instructor turns **Issue a certificate on completion** on or off in the course's settings, in any course status. It is on for every new course.
 
-- It applies from then on. Turning it off never removes or invalidates a certificate already issued, and turning it on gives a certificate to a student who completed the course while it was off the next time their progress is recalculated.
+- It applies from then on. Turning it off never removes or invalidates a certificate already issued, and turning it on gives a certificate to every student who has already qualified, within seconds.
 - Existing certificates keep verifying while the switch is off.
 
 ## What the public page shows
 
-`/certificates/<ID>` in the student portal needs no sign-in. It shows the learner's name, the course title, the completion date and the certificate ID, and nothing else: no email, no user ID and no link to the learner's account. An ID that is malformed or unknown gets the same "Certificate not found".
+`/certificates/<ID>` in the student portal needs no sign-in. It shows the learner's name, the course title, the completion date, the certificate ID and the assessment statement, and nothing else: no email, no user ID, no scores per item and no link to the learner's account. An ID that is malformed or unknown gets the same "Certificate not found".
+
+A **revoked** certificate shows "This certificate has been revoked and is no longer valid", with the ID and the date, and nothing about the learner, the course, the reason or who acted. It is distinct from "not found" so an ID that used to verify doesn't look like a platform fault. The change shows on the next load of the page, and the link preview and the PDF check follow it. `certificate.pdf` refuses a revoked certificate ("This certificate has been revoked"); a PDF already downloaded can't be recalled and the page is the truth.
+
+## Revoking and restoring
+
+- **Who**: an instructor of the course lists its certificates (Certificates section of the course) and revokes one with the reason `academic-integrity`, `issued-in-error` or `other` (with a note). An administrator looks up any certificate by ID and may also use `refunded`.
+- **Restore**: an administrator always; an instructor only a revocation made by an instructor. An instructor sees "Revoked by an administrator" and no Restore on the other kind.
+- **The record**: the certificate carries its current state (`revokedAt`, `revocationReason`, `revokedByRole`), and every change also appends a `certificateEvent` (`revoked` or `restored`, actor, role, reason, note, time) in the same transaction. `revokeCertificate` and `restoreCertificate` in `core-table` are the only writers of both. The history is kept for an audit; a revoke, restore and second revoke leave three events.
+- **Races**: the write is conditioned on the state it expects, so two simultaneous revokes leave one revocation and one event, and both requests are answered.
+- **Never replaced**: a revoked certificate keeps its ID and is never re-issued; the recalculation stops at an existing certificate whatever its status. Restoring makes the same ID valid again.
+- **Telling the learner**: `certificate.revoked` and `certificate.restored` notifications go out after the change, with the reason category and a dedupe key of the certificate ID and the event time.
+- **Nothing revokes automatically.** In particular a refund does not: certificates survive refunds, and an administrator revokes with the reason `refunded` when that is warranted. This is the decision taken by default (research R-8 in the spec lists what revoking on every refund would change), pending the maintainer's confirmation.
+- **A revoked certificate hides its actions**: the LinkedIn action is hidden, `recordLinkedInClick` refuses it, and the share reminder is never sent for it.
+
+## Invariants
+
+The invariant checks (see the spec's research R-10) hold that: a certificate's `assessment` is well formed and its counts, pass marks and band follow from the listed items; every listed quiz was passed by the student no later than the issue time, at or above its pass mark (`certificate-met-criteria`); a certificate is revoked exactly when its latest event is `revoked` (`certificate-status-matches-history`); every course has well-formed criteria; and a certificate still needs a completed (or dropped-after-completion) enrolment, revoked or not. Not violations: a completed enrolment with no certificate, a certificate that differs from the course's current criteria, and a listed quiz since hidden or given a higher pass mark.
 
 ## Sharing and verifying
 
@@ -69,8 +112,9 @@ Link-preview crawlers run no scripts, so the page renderer (see <Link path="desi
 
 ## Limitations
 
-- There is no backfill: a student who completed a course before certificates existed gets a certificate only when their progress is recalculated for some other reason.
-- There is no revocation yet (#594). A certificate can't be withdrawn once issued.
+- Criteria have no history: only the version and settings a certificate was issued under are kept, on the certificate.
+- A quiz is assessed by its own pass mark; there is no course-wide pass mark and no per-quiz choice of what counts.
+- A revoked PDF that was already downloaded still exists; only the page says it is no longer valid.
 - LinkedIn sends nothing back, so Discava can't tell whether a certificate was saved to a profile, only that the form was opened.
 - Anyone holding the certificate ID can record a first use. Its only effect is one reminder fewer.
 - The PDF uses standard fonts, so characters outside Latin-1 (for example Chinese, Japanese or emoji) print as `?`. The public page shows them correctly.
