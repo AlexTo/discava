@@ -162,6 +162,11 @@ test('a learner is asked a video question, answers it and carries on', async ({
       question.getByText('The test video is a set of colour bars'),
     ).toBeVisible();
     await screenshot(page, 'video question answered');
+    // The dialog's footer, with the player's markers and overlay under it.
+    await expect(
+      question.getByRole('button', { name: 'Continue' }),
+    ).toBeVisible();
+    await screenshot(page, 'video question footer over the player');
   });
 
   await test.step('Continue resumes the video to the end', async () => {
