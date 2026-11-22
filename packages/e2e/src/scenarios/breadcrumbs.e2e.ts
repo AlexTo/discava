@@ -151,11 +151,13 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
     await expect(trail).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
     await screenshot(page, 'breadcrumbs on a submission');
 
+    // Anchors only: the current page's crumb has role "link" but no address.
     const hrefs = await trail
-      .getByRole('link')
+      .locator('a[href]')
       .evaluateAll((links) =>
         links.map((link) => (link as HTMLAnchorElement).href),
       );
+    expect(hrefs.length).toBeGreaterThan(0);
     for (const href of hrefs) {
       await page.goto(href);
       await expect(
