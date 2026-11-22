@@ -103,6 +103,8 @@ export function useVideoQuestions({
     total: number;
     end: boolean;
     chosen: boolean;
+    // What was asked, for the end summary.
+    ids: string[];
   }>();
   const [summary, setSummary] = useState(false);
   const [pending, setPending] = useState(false);
@@ -156,7 +158,7 @@ export function useVideoQuestions({
       return;
     }
     const known = new Set(questions.map((q) => q.questionId));
-    const ids = cueIds.filter(
+    let ids = cueIds.filter(
       (id) =>
         known.has(id) &&
         (reason === 'chosen' || (!held[id] && !skipped.current.has(id))),
@@ -164,12 +166,21 @@ export function useVideoQuestions({
     if (ids.length === 0) {
       return;
     }
+    // The end marker opens the whole end check: answered questions as a
+    // review, the others to answer.
+    const endMarker =
+      reason === 'chosen' &&
+      questions.find((q) => q.questionId === ids[0])?.atSeconds === null;
+    if (endMarker) {
+      ids = cues.filter((cue) => cue.atSeconds === null).map((cue) => cue.id);
+    }
     reset();
     setQueue(ids);
     setRun({
       total: ids.length,
-      end: reason === 'ended',
+      end: reason === 'ended' || endMarker,
       chosen: reason === 'chosen',
+      ids,
     });
   };
 
@@ -221,8 +232,12 @@ export function useVideoQuestions({
 
   let overlay: ReactNode;
   if (summary && run) {
-    const endAnswers = Object.keys(held).filter((id) =>
-      questions.some((q) => q.questionId === id && q.atSeconds === null),
+    // The questions at the end, and any timed ones past the duration that
+    // were asked with them.
+    const endAnswers = Object.keys(held).filter(
+      (id) =>
+        run.ids.includes(id) ||
+        questions.some((q) => q.questionId === id && q.atSeconds === null),
     );
     overlay = (
       <EndSummary
@@ -245,7 +260,7 @@ export function useVideoQuestions({
         pending={pending}
         error={error}
         updated={updated}
-        review={run.chosen}
+        review={run.chosen && !run.end}
         onSubmit={(optionIds) => record(question, optionIds)}
         onSkip={skip}
         onContinue={advance}
@@ -254,7 +269,7 @@ export function useVideoQuestions({
   }
 
   const onOverlayDismiss = () => {
-    if (summary) {
+    if (summary || run?.end) {
       clear();
     } else if (question && held[question.questionId]) {
       advance();

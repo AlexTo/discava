@@ -248,6 +248,79 @@ describe('useVideoQuestions', () => {
     expect(screen.queryByTestId('overlay')).toBeEmptyDOMElement();
   });
 
+  it('counts a timed question asked at the end in the summary', async () => {
+    const { user, cue } = setup({
+      questions: [question('late', 500), question('e1', null)],
+    });
+    cue(['late', 'e1'], 'ended');
+
+    await user.click(screen.getByRole('radio', { name: 'Right' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answer' }));
+    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+
+    expect(
+      screen.getByRole('heading', { name: '1 of 1 correct' }),
+    ).toBeVisible();
+  });
+
+  it('can skip every question in an end check', async () => {
+    const { user, cue, submit } = setup({
+      questions: [question('e1', null), question('e2', null)],
+    });
+    cue(['e1', 'e2'], 'ended');
+
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+
+    expect(
+      screen.getByRole('heading', { name: '0 of 0 correct' }),
+    ).toBeVisible();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('closes the whole end check on Escape', async () => {
+    const { cue, hook } = setup({
+      questions: [question('e1', null), question('e2', null)],
+    });
+    cue(['e1', 'e2'], 'ended');
+    expect(screen.getByText('Prompt e1')).toBeVisible();
+
+    act(() => hook().onOverlayDismiss());
+
+    expect(screen.queryByTestId('overlay')).toBeEmptyDOMElement();
+  });
+
+  it('opens nothing at the end when every end question is answered', () => {
+    const { cue } = setup({
+      questions: [question('e1', null)],
+      answers: { e1: right },
+    });
+    cue(['e1'], 'ended');
+    expect(screen.queryByTestId('overlay')).toBeEmptyDOMElement();
+  });
+
+  it('opens a review of the end questions from the end marker', async () => {
+    const { user, cue } = setup({
+      questions: [question('e1', null), question('e2', null)],
+      answers: { e1: right, e2: right },
+    });
+    cue(['e1'], 'chosen');
+
+    expect(
+      screen.getByRole('heading', { name: 'Question 1 of 2' }),
+    ).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Correct');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(
+      screen.getByRole('heading', { name: 'Question 2 of 2' }),
+    ).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(
+      screen.getByRole('heading', { name: '2 of 2 correct' }),
+    ).toBeVisible();
+  });
+
   it('ignores cues while a question is open', () => {
     const { cue } = setup();
     cue(['q1']);

@@ -920,7 +920,7 @@ describe('VideoControls markers', () => {
     return { ...result, onCue };
   };
 
-  it('puts a labelled marker at each timed cue, none for an end cue', () => {
+  it('puts a labelled marker at each timed cue, and one for the end cues', () => {
     setupCues([cue('a', 25), cue('b', 50, 'answered'), cue('end', null)]);
 
     const first = screen.getByRole('button', {
@@ -933,7 +933,47 @@ describe('VideoControls markers', () => {
     expect(second.style.left).toBe('50%');
     expect(
       document.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(3);
+  });
+
+  it('puts one marker at the right edge for the end cues', () => {
+    setupCues([
+      cue('a', 25),
+      cue('e1', null, 'answered'),
+      cue('e2', null),
+      cue('late', media.duration + 5),
+    ]);
+
+    const end = screen.getByRole('button', {
+      name: 'Questions at the end, 1 of 3 answered',
+    });
+    expect(end.style.left).toBe('');
+    expect(end).toHaveClass('left-full');
+    expect(end).toHaveAttribute('data-state', 'unanswered');
+    expect(
+      document.querySelectorAll('[data-slot="video-cue-marker"]'),
     ).toHaveLength(2);
+  });
+
+  it('shows a tick on the end marker once every end cue is answered', () => {
+    setupCues([cue('e1', null, 'answered')]);
+    const end = screen.getByRole('button', {
+      name: 'Questions at the end, 1 of 1 answered',
+    });
+    expect(end).toHaveAttribute('data-state', 'answered');
+    expect(end.querySelector('svg')).not.toBeNull();
+  });
+
+  it('seeks the end marker to the last second and chooses the first end cue', async () => {
+    const { onCue } = setupCues([cue('e1', null), cue('e2', null)]);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /Questions at the end/ }),
+    );
+
+    expect(media.currentTime).toBe(media.duration - 1);
+    expect(pause).toHaveBeenCalled();
+    expect(onCue).toHaveBeenCalledWith(['e1'], 'chosen');
   });
 
   it('shows a tick for an answered cue and a dot for an unanswered one', () => {

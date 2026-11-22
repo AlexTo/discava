@@ -14,6 +14,7 @@ import {
   stepSpeed,
 } from '@discava/common-web-utils/video-player';
 import {
+  cuesAtEnd,
   cueTime,
   type PlayerCue,
 } from '@discava/common-web-utils/video-questions';
@@ -89,7 +90,8 @@ const clamp = (value: number, min: number, max: number) =>
  *
  * With `cues`, each timed one has a marker button on the seek bar, after the
  * slider in the tab order: a tick when answered, a dot when not, so the state
- * doesn't rest on colour.
+ * doesn't rest on colour. The cues at the end share one marker at the right
+ * edge, which goes to the last second.
  *
  * The container takes focus and handles the shortcuts, so they work while
  * focus is anywhere in the player. Keys the focused control already uses
@@ -335,6 +337,11 @@ export function VideoControls({
     onCue?.([id], 'chosen');
   };
 
+  // The cues at the end share one marker at the right edge. It goes to the
+  // last second, so the video doesn't end again, and asks for the first.
+  const endCues = duration > 0 ? cuesAtEnd(cues ?? [], duration) : [];
+  const endAnswered = endCues.filter((cue) => cue.state === 'answered').length;
+
   const setVideoVolume = (next: number) => {
     const video = getVideo();
     if (!video) {
@@ -529,6 +536,32 @@ export function VideoControls({
                 </button>
               );
             })}
+          {endCues.length > 0 && (
+            <button
+              type="button"
+              aria-label={`Questions at the end, ${endAnswered} of ${endCues.length} answered`}
+              data-slot="video-cue-marker"
+              data-state={
+                endAnswered === endCues.length ? 'answered' : 'unanswered'
+              }
+              onClick={() =>
+                chooseCue(endCues[0].id, Math.max(0, duration - 1))
+              }
+              className="-translate-x-full -translate-y-1/2 absolute top-1/2 left-full z-10 flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {endAnswered === endCues.length ? (
+                <CheckIcon
+                  aria-hidden="true"
+                  className="size-3.5 rounded-full bg-emerald-500 p-0.5 text-white"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="size-2.5 rounded-full border border-black/60 bg-amber-300"
+                />
+              )}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Button
