@@ -955,6 +955,15 @@ describe('VideoControls markers', () => {
     );
   });
 
+  it('stays under what the page puts over the player, such as a sticky footer', () => {
+    // The markers and the overlay are z-10: the player is its own stacking
+    // context, so they don't paint over (and block) controls outside it.
+    setupCues([cue('a', 25)]);
+    expect(screen.getByRole('group', { name: 'Video player' })).toHaveClass(
+      'isolate',
+    );
+  });
+
   it('comes after the seek slider in the tab order', () => {
     setupCues([cue('a', 25)]);
     const slider = screen.getByRole('slider', { name: 'Seek' });
