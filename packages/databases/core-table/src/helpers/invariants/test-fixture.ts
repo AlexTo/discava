@@ -314,6 +314,7 @@ export const consistentTable = (): TableSnapshot => ({
   couponRedemptions: [],
   orders: [],
   paymentConnections: [],
+  platformBrands: [],
   paymentChanges: [],
   payoutAccounts: [],
   earningEntries: [],

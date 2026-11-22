@@ -211,6 +211,11 @@
       "packages/databases/core-table/src/helpers/analytics-writes.ts"
     ]
   },
+  "platformBrand": {
+    "core-table": [
+      "packages/databases/core-table/src/helpers/platform-brand.ts"
+    ]
+  },
   "profileHandleClaim": {
     "core-table": [
       "packages/databases/core-table/src/helpers/instructor-profile.ts"

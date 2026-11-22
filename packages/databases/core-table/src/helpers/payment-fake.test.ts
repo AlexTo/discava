@@ -22,6 +22,7 @@ const KEYS: Record<string, (key: Row) => string> = {
   course: (k) => k.courseId,
   enrolment: (k) => `${k.courseId}|${k.userId}`,
   paymentConnection: () => 'singleton',
+  platformBrand: () => 'singleton',
   paymentChange: (k) => k.changeId,
   certificate: (k) => `${k.userId}|${k.courseId}`,
   earningOrder: (k) => k.orderId,

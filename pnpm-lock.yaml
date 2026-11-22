@@ -1078,6 +1078,9 @@ importers:
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1169.0
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../../common/branding
       '@discava/common-web-utils':
         specifier: workspace:*
         version: link:../../common/web-utils

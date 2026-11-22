@@ -37,6 +37,7 @@ import type { createPaymentConnectionEntity } from '../../entities/payment-conne
 import type { createPayoutEntity } from '../../entities/payout.js';
 import type { createPayoutAccountEntity } from '../../entities/payout-account.js';
 import type { createPeriodStatsEntity } from '../../entities/period-stats.js';
+import type { createPlatformBrandEntity } from '../../entities/platform-brand.js';
 import type { createProfileHandleClaimEntity } from '../../entities/profile-handle-claim.js';
 import type { createProgressEntity } from '../../entities/progress.js';
 import type { createQuizAttemptEntity } from '../../entities/quiz-attempt.js';
@@ -458,6 +459,19 @@ export interface TableSnapshot {
     | 'createdAt'
   >[];
   // At most one (a singleton); a list so a stray second one is seen.
+  platformBrands: Pick<
+    Item<typeof createPlatformBrandEntity>,
+    | 'name'
+    | 'showNameBesideLogo'
+    | 'colour'
+    | 'logoKey'
+    | 'iconKey'
+    | 'shareImageKey'
+    | 'revision'
+    | 'changedBy'
+    | 'changedAt'
+  >[];
+  // At most one (a singleton); a list so a stray second one is seen.
   paymentConnections: Pick<
     Item<typeof createPaymentConnectionEntity>,
     | 'status'
@@ -597,6 +611,7 @@ export const SNAPSHOT_ENTITIES = {
   orders: 'order',
   paymentConnections: 'paymentConnection',
   paymentChanges: 'paymentChange',
+  platformBrands: 'platformBrand',
   payoutAccounts: 'payoutAccount',
   earningEntries: 'earningEntry',
   earningDays: 'earningDay',

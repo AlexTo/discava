@@ -437,6 +437,13 @@ export {
   saveAccountStatus,
 } from './helpers/payout.js';
 export {
+  BrandConflictError,
+  BrandValidationError,
+  getBrand,
+  type PlatformBrandRecord,
+  saveBrand,
+} from './helpers/platform-brand.js';
+export {
   type Curriculum,
   computeProgress,
   type LessonStatus,

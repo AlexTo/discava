@@ -7,6 +7,7 @@ import {
   checkAnalyticsMatchesRecords as analyticsMatchesRecords,
 } from './analytics.js';
 import { ASSIGNMENT_GRADING_CHECKS } from './assignment-grading.js';
+import { BRANDING_CHECKS } from './branding.js';
 import { CATALOGUE_CHECKS } from './catalogue.js';
 import { CERTIFICATES_CHECKS } from './certificates.js';
 import type { Violation } from './common.js';
@@ -39,6 +40,7 @@ const CHECKS = [
   ...COUPONS_CHECKS,
   ...PAYMENTS_CHECKS,
   ...EARNINGS_CHECKS,
+  ...BRANDING_CHECKS,
 ] as const;
 
 export type InvariantName = (typeof CHECKS)[number]['name'];
