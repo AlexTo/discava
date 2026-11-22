@@ -14,9 +14,13 @@ import {
   learnerName,
   markCertificateReminderScheduled,
   normaliseCertificateId,
+  RestoreForbiddenError,
   recordLinkedInClick,
+  restoreCertificate,
+  revocationReasonLabel,
+  revokeCertificate,
 } from './certificate.js';
-import { VersionConflictError } from './errors.js';
+import { InvalidRequestError, VersionConflictError } from './errors.js';
 import { notificationId, publishNotification } from './notification.js';
 import { createFakeNotificationTable } from './notification-fake.test.js';
 
@@ -676,5 +680,351 @@ describe('claimCertificateReminder', () => {
       throw new Error('boom');
     });
     await expect(claim(coreTable)).rejects.toThrow('boom');
+  });
+});
+
+describe('revocationReasonLabel', () => {
+  it('names each reason for a learner', () => {
+    expect(revocationReasonLabel('academic-integrity')).toBe(
+      'Academic integrity',
+    );
+    expect(revocationReasonLabel('issued-in-error')).toBe('Issued in error');
+    expect(revocationReasonLabel('refunded')).toBe('Order refunded');
+    expect(revocationReasonLabel('other')).toBe('Other');
+  });
+});
+
+describe('revokeCertificate and restoreCertificate', () => {
+  const instructor = { id: 'ins-1', role: 'instructor' } as const;
+  const admin = { id: 'adm-1', role: 'admin' } as const;
+  const T1 = new Date('2026-11-16T00:00:00.000Z');
+  const T2 = new Date('2026-11-17T00:00:00.000Z');
+  const T3 = new Date('2026-11-18T00:00:00.000Z');
+
+  const issued = async () => {
+    const fake = table();
+    const certificate = (await issue(fake.service))!;
+    return { ...fake, certificate };
+  };
+  const stored = (rows: ReturnType<typeof table>['rows']) =>
+    [...rows.certificate!.values()][0]!;
+  const events = (rows: ReturnType<typeof table>['rows']) =>
+    [...rows.certificateEvent!.values()].sort((a, b) =>
+      a.occurredAt < b.occurredAt ? -1 : 1,
+    );
+  const notifications = (rows: ReturnType<typeof table>['rows']) => [
+    ...rows.notification!.values(),
+  ];
+
+  describe('refusals write nothing', () => {
+    it.each([
+      ['refunded from an instructor', 'refunded', instructor, undefined],
+      [
+        'a note over 500 characters',
+        'issued-in-error',
+        instructor,
+        'x'.repeat(501),
+      ],
+      ['other without a note', 'other', instructor, undefined],
+      ['other with a blank note', 'other', admin, '   '],
+    ] as const)('%s', async (_name, reason, actor, note) => {
+      const { service, rows, certificate } = await issued();
+      await expect(
+        revokeCertificate({
+          coreTable: service,
+          certificate,
+          actor,
+          reason,
+          note,
+          now: T1,
+        }),
+      ).rejects.toBeInstanceOf(InvalidRequestError);
+      expect(stored(rows).revokedAt).toBeUndefined();
+      expect(rows.certificateEvent!.size).toBe(0);
+      expect(rows.notification!.size).toBe(1);
+    });
+  });
+
+  it('sets the three attributes and one event with the same time', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoked = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    expect(revoked).toMatchObject({
+      revokedAt: T1.toISOString(),
+      revocationReason: 'issued-in-error',
+      revokedByRole: 'instructor',
+    });
+    expect(events(rows)).toMatchObject([
+      {
+        userId: 'u1',
+        courseId: 'c1',
+        occurredAt: T1.toISOString(),
+        certificateId: certificate.certificateId,
+        type: 'revoked',
+        reason: 'issued-in-error',
+        actorId: 'ins-1',
+        actorRole: 'instructor',
+      },
+    ]);
+  });
+
+  it('keeps a trimmed note on the event, and lets an administrator refund', async () => {
+    const { service, rows, certificate } = await issued();
+    await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: admin,
+      reason: 'refunded',
+      note: ' Chargeback ',
+      now: T1,
+    });
+    expect(stored(rows)).toMatchObject({
+      revocationReason: 'refunded',
+      revokedByRole: 'admin',
+    });
+    expect(events(rows)[0]).toMatchObject({
+      reason: 'refunded',
+      note: 'Chargeback',
+      actorRole: 'admin',
+    });
+  });
+
+  it('leaves one event when two revokes run at once', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoke = (actor: typeof instructor | typeof admin, now: Date) =>
+      revokeCertificate({
+        coreTable: service,
+        certificate,
+        actor,
+        reason: 'issued-in-error',
+        now,
+      });
+    const [a, b] = await Promise.all([
+      revoke(instructor, T1),
+      revoke(admin, T2),
+    ]);
+    expect(rows.certificateEvent!.size).toBe(1);
+    expect(a.revokedAt).toBe(b.revokedAt);
+    expect(
+      notifications(rows).filter((n) => n.type === 'certificate.revoked'),
+    ).toHaveLength(1);
+  });
+
+  it('returns the stored certificate, with no event, when already revoked', async () => {
+    const { service, rows, certificate } = await issued();
+    await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    const again = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: admin,
+      reason: 'academic-integrity',
+      now: T2,
+    });
+    expect(again).toMatchObject({
+      revokedAt: T1.toISOString(),
+      revocationReason: 'issued-in-error',
+      revokedByRole: 'instructor',
+    });
+    expect(rows.certificateEvent!.size).toBe(1);
+  });
+
+  it('leaves three events in order after revoke, restore, revoke', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoked = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    const restored = await restoreCertificate({
+      coreTable: service,
+      certificate: revoked,
+      actor: instructor,
+      now: T2,
+    });
+    expect(restored.revokedAt).toBeUndefined();
+    expect(restored.revocationReason).toBeUndefined();
+    expect(restored.revokedByRole).toBeUndefined();
+    await revokeCertificate({
+      coreTable: service,
+      certificate: restored,
+      actor: admin,
+      reason: 'academic-integrity',
+      now: T3,
+    });
+    expect(events(rows).map((e) => [e.type, e.occurredAt])).toEqual([
+      ['revoked', T1.toISOString()],
+      ['restored', T2.toISOString()],
+      ['revoked', T3.toISOString()],
+    ]);
+    expect(stored(rows).revokedAt).toBe(T3.toISOString());
+  });
+
+  it('puts a restore after the revocation it undoes, whatever the clock says', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoked = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: admin,
+      reason: 'issued-in-error',
+      now: T2,
+    });
+    await restoreCertificate({
+      coreTable: service,
+      certificate: revoked,
+      actor: admin,
+      now: T1,
+    });
+    const [first, second] = events(rows);
+    expect(second!.occurredAt > first!.occurredAt).toBe(true);
+  });
+
+  it('lets an administrator restore an instructor’s revocation, but not the reverse', async () => {
+    const { service, rows, certificate } = await issued();
+    const byInstructor = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    await restoreCertificate({
+      coreTable: service,
+      certificate: byInstructor,
+      actor: admin,
+      note: 'Checked',
+      now: T2,
+    });
+    expect(stored(rows).revokedAt).toBeUndefined();
+    expect(events(rows)[1]).toMatchObject({
+      type: 'restored',
+      note: 'Checked',
+      actorRole: 'admin',
+    });
+
+    const byAdmin = await revokeCertificate({
+      coreTable: service,
+      certificate: stored(rows),
+      actor: admin,
+      reason: 'refunded',
+      now: T3,
+    });
+    await expect(
+      restoreCertificate({
+        coreTable: service,
+        certificate: byAdmin,
+        actor: instructor,
+        now: new Date('2026-11-19T00:00:00.000Z'),
+      }),
+    ).rejects.toBeInstanceOf(RestoreForbiddenError);
+    expect(stored(rows).revokedByRole).toBe('admin');
+    expect(rows.certificateEvent!.size).toBe(3);
+  });
+
+  it('writes nothing and returns the certificate when restoring a valid one', async () => {
+    const { service, rows, certificate } = await issued();
+    const result = await restoreCertificate({
+      coreTable: service,
+      certificate,
+      actor: admin,
+      now: T1,
+    });
+    expect(result).toEqual(certificate);
+    expect(rows.certificateEvent!.size).toBe(0);
+    expect(rows.notification!.size).toBe(1);
+  });
+
+  it('writes nothing when the restore’s read of revokedAt is stale', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoked = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: admin,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    await restoreCertificate({
+      coreTable: service,
+      certificate: revoked,
+      actor: admin,
+      now: T2,
+    });
+    // A second restore from the same stale read.
+    const again = await restoreCertificate({
+      coreTable: service,
+      certificate: revoked,
+      actor: admin,
+      now: T3,
+    });
+    expect(again.revokedAt).toBeUndefined();
+    expect(rows.certificateEvent!.size).toBe(2);
+  });
+
+  it('sends one notification per event, none for a no-op, and never the note', async () => {
+    const { service, rows, certificate } = await issued();
+    const revoked = await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'other',
+      note: 'secret detail',
+      now: T1,
+    });
+    await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'other',
+      note: 'secret detail',
+      now: T2,
+    });
+    await restoreCertificate({
+      coreTable: service,
+      certificate: revoked,
+      actor: instructor,
+      note: 'private',
+      now: T3,
+    });
+    const sent = notifications(rows).filter((n) =>
+      n.type.startsWith('certificate.re'),
+    );
+    expect(sent.map((n) => n.type).sort()).toEqual([
+      'certificate.restored',
+      'certificate.revoked',
+    ]);
+    expect(JSON.stringify(sent)).not.toContain('secret detail');
+    expect(JSON.stringify(sent)).not.toContain('private');
+    const revokedNote = sent.find((n) => n.type === 'certificate.revoked')!;
+    expect(revokedNote.userId).toBe('u1');
+    expect(revokedNote.body).toContain('Other');
+  });
+
+  it('is still returned as existing by issueCertificate, writing nothing', async () => {
+    const { service, rows, log, certificate } = await issued();
+    await revokeCertificate({
+      coreTable: service,
+      certificate,
+      actor: instructor,
+      reason: 'issued-in-error',
+      now: T1,
+    });
+    const before = log.transactions;
+    const again = await issue(service);
+    expect(again?.revokedAt).toBe(T1.toISOString());
+    expect(again?.certificateId).toBe(certificate.certificateId);
+    expect(log.transactions).toBe(before);
+    expect(rows.certificate!.size).toBe(1);
   });
 });

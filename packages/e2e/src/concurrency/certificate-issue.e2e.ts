@@ -90,7 +90,10 @@ test('completing the last item while the curriculum changes issues one certifica
   const verified = await student.core.certificate.verify.query({
     certificateId: issued!.certificateId,
   });
-  expect(verified.courseTitle).toBe(issued?.courseTitle);
+  expect(verified).toMatchObject({
+    status: 'valid',
+    courseTitle: issued?.courseTitle,
+  });
 
   // The race left one notification for it as well.
   const { items } = await student.core.notification.list.query({ limit: 50 });

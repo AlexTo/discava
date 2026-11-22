@@ -42,9 +42,10 @@ function RouteComponent() {
       enabled: isAuthenticated,
     }),
   );
+  const valid = query.data?.status === 'valid' ? query.data : undefined;
   const isOwner =
-    query.data !== undefined &&
-    (mine.data ?? []).some((c) => c.certificateId === query.data.certificateId);
+    valid !== undefined &&
+    (mine.data ?? []).some((c) => c.certificateId === valid.certificateId);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -80,6 +81,22 @@ function RouteComponent() {
             </Button>
           </div>
         )
+      ) : query.data.status === 'revoked' ? (
+        <section
+          aria-label="Certificate revoked"
+          className="space-y-3 rounded-2xl border p-10 text-center"
+        >
+          <h1 className="text-balance text-3xl font-bold tracking-tight">
+            Certificate revoked
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            This certificate has been revoked and is no longer valid.
+          </p>
+          <p className="text-sm">Revoked on {query.data.revokedOn}</p>
+          <p className="pt-4 text-xs text-muted-foreground">
+            Certificate ID: {query.data.certificateId}
+          </p>
+        </section>
       ) : (
         <section
           aria-label="Certificate of completion"
@@ -114,7 +131,7 @@ function RouteComponent() {
           </p>
         </section>
       )}
-      {query.data && isOwner ? <OwnerShare certificate={query.data} /> : null}
+      {valid && isOwner ? <OwnerShare certificate={valid} /> : null}
     </main>
   );
 }

@@ -68,6 +68,31 @@ describe('/certificates/<ID>', () => {
     expect(items).toEqual(certificate.statement);
   });
 
+  it('shows only the ID and date for a revoked certificate', async () => {
+    open(() => ({
+      status: 'revoked',
+      certificateId: 'ABCD-EFGH-JKLM',
+      revokedAt: '2026-11-12T08:00:00.000Z',
+      revokedOn: '12 November 2026',
+    }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Certificate revoked' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'This certificate has been revoked and is no longer valid.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/ABCD-EFGH-JKLM/)).toBeInTheDocument();
+    expect(screen.getByText('Revoked on 12 November 2026')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('Ada Lovelace');
+    expect(document.body).not.toHaveTextContent('Linear Algebra');
+    expect(
+      screen.queryByRole('heading', { name: 'What this certificate confirms' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('shows the API’s date, not one formatted for the viewer', async () => {
     // 20 November in Sydney, still 19 November in UTC.
     open(() => ({
