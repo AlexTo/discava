@@ -19,13 +19,9 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
     Link: ({
       children,
       to,
-      className,
-    }: {
-      children: React.ReactNode;
-      to: string;
-      className?: string;
-    }) => (
-      <a href={to} className={className}>
+      ...props
+    }: { to: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a href={to} {...props}>
         {children}
       </a>
     ),
@@ -74,8 +70,22 @@ describe('the admin home page', () => {
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/categories',
       '/reviews',
+      '/certificates',
+      '/payments',
+      '/settings/branding',
       '/settings/notifications',
     ]);
+    expect(links).toHaveLength(6);
+    for (const name of [
+      'Categories',
+      'Reviews',
+      'Certificates',
+      'Payments',
+      'Branding',
+      'Notification settings',
+    ]) {
+      expect(screen.getByRole('link', { name })).toBeInTheDocument();
+    }
     expect(screen.getByText('Notification settings')).toBeInTheDocument();
     expect(
       screen.getByText(/Choose which notifications also reach you/),
