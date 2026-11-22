@@ -129,9 +129,79 @@ describe('transcriptActionOf', () => {
   it('has no action for other entities', () => {
     expect(
       transcriptActionOf(
-        record('MODIFY', { __edb_e__: 'lesson' }, { __edb_e__: 'lesson' }),
+        record('MODIFY', { __edb_e__: 'course' }, { __edb_e__: 'course' }),
       ),
     ).toBeUndefined();
+  });
+
+  describe.each([
+    ['lesson', { courseId: 'c1', moduleId: 'm1', lessonId: 'l1' }, 'lessonId'],
+    ['module', { courseId: 'c1', moduleId: 'm1' }, 'moduleId'],
+  ] as const)('a %s', (entity, entityKeys, field) => {
+    const parent = (overrides: Record<string, unknown> = {}) => ({
+      __edb_e__: entity,
+      ...entityKeys,
+      title: 'Title',
+      order: 1,
+      visibility: 'visible',
+      ...overrides,
+    });
+    const syncUnder = { type: 'sync-under', entity, key: entityKeys };
+
+    it('syncs everything under it when hidden, shown, archived or restored', () => {
+      const hidden = parent({ visibility: 'hidden' });
+      const archived = parent({ archivedAt: '2026-11-01T00:00:00.000Z' });
+      expect(transcriptActionOf(record('MODIFY', parent(), hidden))).toEqual(
+        syncUnder,
+      );
+      expect(transcriptActionOf(record('MODIFY', hidden, parent()))).toEqual(
+        syncUnder,
+      );
+      expect(transcriptActionOf(record('MODIFY', parent(), archived))).toEqual(
+        syncUnder,
+      );
+      expect(transcriptActionOf(record('MODIFY', archived, parent()))).toEqual(
+        syncUnder,
+      );
+    });
+
+    it('has no action for a title, order or free-preview change', () => {
+      expect(
+        transcriptActionOf(
+          record(
+            'MODIFY',
+            parent(),
+            parent({ title: 'New', order: 2, freePreview: true }),
+          ),
+        ),
+      ).toBeUndefined();
+    });
+
+    it('deletes by its id when removed', () => {
+      expect(transcriptActionOf(record('REMOVE', parent()))).toEqual({
+        type: 'delete-by',
+        field,
+        value: (entityKeys as Record<string, string>)[field],
+      });
+    });
+
+    it('has no action when inserted', () => {
+      expect(
+        transcriptActionOf(record('INSERT', undefined, parent())),
+      ).toBeUndefined();
+    });
+
+    it('throws for a record without its keys', () => {
+      expect(() =>
+        transcriptActionOf(
+          record(
+            'MODIFY',
+            parent(),
+            parent({ moduleId: undefined, visibility: 'hidden' }),
+          ),
+        ),
+      ).toThrow('moduleId');
+    });
   });
 
   it.each(['courseId', 'moduleId', 'lessonId', 'contentItemId'])(

@@ -26,13 +26,18 @@ const WIDTH = 841.89;
 const HEIGHT = 595.28;
 const MARGIN = 60;
 
-// The standard fonts draw WinAnsi only. Printable ASCII and Latin-1 are the
-// same in both; everything else (CJK, emoji, other scripts) becomes one `?`
-// per character.
+// The standard fonts draw WinAnsi only: printable ASCII, Latin-1 and the
+// punctuation WinAnsi keeps in 0x80 to 0x9F (dashes, curly quotes, the
+// ellipsis, the euro sign, ...). Everything else (CJK, emoji, other scripts)
+// becomes one `?` per character.
+const WIN_ANSI_EXTRAS = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+
 const sanitise = (text: string): string =>
   Array.from(text, (char) => {
     const code = char.codePointAt(0) ?? 0;
-    return (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)
+    return (code >= 0x20 && code <= 0x7e) ||
+      (code >= 0xa0 && code <= 0xff) ||
+      WIN_ANSI_EXTRAS.has(char)
       ? char
       : '?';
   }).join('');

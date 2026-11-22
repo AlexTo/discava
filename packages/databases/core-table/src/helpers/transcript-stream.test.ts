@@ -26,19 +26,32 @@ describe('matchesTranscriptStreamFilters', () => {
   });
 
   it.each([
+    ['MODIFY', 'NewImage'],
+    ['REMOVE', 'OldImage'],
+  ] as const)('matches a %s of a lesson or module', (eventName, image) => {
+    for (const entity of ['lesson', 'module']) {
+      expect(
+        matchesTranscriptStreamFilters(record(eventName, image, entity)),
+      ).toBe(true);
+    }
+  });
+
+  it('ignores a lesson or module INSERT: a new one has no videos yet', () => {
+    for (const entity of ['lesson', 'module']) {
+      expect(
+        matchesTranscriptStreamFilters(record('INSERT', 'NewImage', entity)),
+      ).toBe(false);
+    }
+  });
+
+  it.each([
     ['INSERT', 'NewImage'],
     ['MODIFY', 'NewImage'],
     ['REMOVE', 'OldImage'],
   ] as const)(
-    'ignores a %s of a lesson, module, course, enrolment or itemCompletion',
+    'ignores a %s of a course, enrolment or itemCompletion',
     (eventName, image) => {
-      for (const entity of [
-        'lesson',
-        'module',
-        'course',
-        'enrolment',
-        'itemCompletion',
-      ]) {
+      for (const entity of ['course', 'enrolment', 'itemCompletion']) {
         expect(
           matchesTranscriptStreamFilters(record(eventName, image, entity)),
         ).toBe(false);

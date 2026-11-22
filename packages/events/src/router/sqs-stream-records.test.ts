@@ -51,7 +51,8 @@ describe('sqsStreamRecords', () => {
   it('round-trips what the router sends, in the shape the handlers parse', () => {
     const records = [
       streamRecord('1', 'courseRating'),
-      streamRecord('2', 'lesson'),
+      // Reaches one queue only (a lesson reaches two).
+      streamRecord('2', 'enrolment'),
     ];
     const routed = routeRecords(records).messages;
     const body = [...routed.values()].flat().map((m) => ({ body: m.body }));
