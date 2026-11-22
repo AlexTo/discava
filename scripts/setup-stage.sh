@@ -1041,7 +1041,7 @@ upsert_managed_policy() {
 # - <role>-data: S3, DynamoDB, KMS, OpenSearch Serverless and CloudWatch Logs
 # - <role>-edge: CloudFront, WAF, API Gateway and Cognito
 # - <role>-compute: Lambda and its event sources, SQS, EventBridge, Scheduler,
-#   MediaConvert, AppConfig and the stage's settings parameters
+#   MediaConvert and the stage's settings parameters
 # A new permission goes in the group it belongs to; the tests check each
 # policy still fits.
 create_execution_policy_files() {
@@ -1635,38 +1635,6 @@ EOF
       ]
     },
     {
-      "Sid": "AppConfigForDiscava",
-      "Effect": "Allow",
-      "Action": [
-        "appconfig:CreateApplication",
-        "appconfig:GetApplication",
-        "appconfig:UpdateApplication",
-        "appconfig:DeleteApplication",
-        "appconfig:CreateEnvironment",
-        "appconfig:GetEnvironment",
-        "appconfig:UpdateEnvironment",
-        "appconfig:DeleteEnvironment",
-        "appconfig:CreateConfigurationProfile",
-        "appconfig:GetConfigurationProfile",
-        "appconfig:UpdateConfigurationProfile",
-        "appconfig:DeleteConfigurationProfile",
-        "appconfig:CreateHostedConfigurationVersion",
-        "appconfig:GetHostedConfigurationVersion",
-        "appconfig:DeleteHostedConfigurationVersion",
-        "appconfig:CreateDeploymentStrategy",
-        "appconfig:GetDeploymentStrategy",
-        "appconfig:UpdateDeploymentStrategy",
-        "appconfig:DeleteDeploymentStrategy",
-        "appconfig:StartDeployment",
-        "appconfig:GetDeployment",
-        "appconfig:StopDeployment",
-        "appconfig:TagResource",
-        "appconfig:UntagResource",
-        "appconfig:ListTagsForResource"
-      ],
-      "Resource": "arn:$AWS_PARTITION:appconfig:$AWS_REGION:$ACCOUNT_ID:*"
-    },
-    {
       "Sid": "StageSettingsParameters",
       "Effect": "Allow",
       "Action": [
@@ -1899,8 +1867,6 @@ upsert_boundary_policy() {
       "Sid": "ResourcesNamedById",
       "Effect": "Allow",
       "Action": [
-        "appconfig:GetLatestConfiguration",
-        "appconfig:StartConfigurationSession",
         "cloudfront:CreateInvalidation",
         "cloudfront:GetInvalidation",
         "cognito-idp:AdminAddUserToGroup",

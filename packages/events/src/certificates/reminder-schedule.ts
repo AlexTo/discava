@@ -7,12 +7,12 @@ import {
   CreateScheduleCommand,
   SchedulerClient,
 } from '@aws-sdk/client-scheduler';
-import { resolveAppConfigValue } from '@discava/common-server-utils/lesson-media-bucket';
 import {
   callLocalEventRunner,
   isLocalDev,
   type LocalScheduleRequest,
 } from '@discava/common-server-utils/local-dev';
+import { readSetting } from '@discava/common-server-utils/settings';
 
 let _schedulerClient: SchedulerClient | undefined;
 
@@ -23,7 +23,7 @@ const getSchedulerClient = (): SchedulerClient => {
   return _schedulerClient;
 };
 
-// Published by the stream router stack alongside the certificate-reminder
+// Set by the stream router stack alongside the certificate-reminder
 // Lambda itself.
 type CertificateReminderConfig = {
   lambdaArn: string;
@@ -62,10 +62,7 @@ export const scheduleCertificateReminder = async ({
     return;
   }
   const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
-    await resolveAppConfigValue<CertificateReminderConfig>(
-      'certificates',
-      'Reminder',
-    );
+    readSetting<CertificateReminderConfig>('certificates', 'Reminder');
   try {
     await getSchedulerClient().send(
       new CreateScheduleCommand({

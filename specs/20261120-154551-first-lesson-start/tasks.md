@@ -120,8 +120,8 @@ Paths are relative to the repository root. All buttons are text only: no arrow i
 
 **Independent test**: `pnpm nx run @discava/student-portal:test -- --run first-lesson-prompt questions-section` and `pnpm nx run @discava/common-shadcn:test -- --run post-card` pass. The e2e test "a new learner answers the first-lesson prompt once" and the concurrency test pass on PR CI, with screenshots.
 
-- [ ] T016 [P] [US2] Tests first, then show the label "Answer to the course prompt" in `packages/common/shadcn/src/discussion/post-card.tsx` for a post with `promptAnswer`, as a `Badge` beside the title. Add or extend the component's test: the label is present with the flag and absent without it.
-- [ ] T017 [US2] Tests first, then add `packages/websites/student-portal/src/routes/learn/$courseId/-components/discussion/first-lesson-prompt.tsx` per [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) "The prompt". Props: `lesson` (`LessonRef`) and `prompt` (the text).
+- [x] T016 [P] [US2] Tests first, then show the label "Answer to the course prompt" in `packages/common/shadcn/src/discussion/post-card.tsx` for a post with `promptAnswer`, as a `Badge` beside the title. Add or extend the component's test: the label is present with the flag and absent without it.
+- [x] T017 [US2] Tests first, then add `packages/websites/student-portal/src/routes/learn/$courseId/-components/discussion/first-lesson-prompt.tsx` per [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) "The prompt". Props: `lesson` (`LessonRef`) and `prompt` (the text).
   - a `fieldset` whose `legend` is the prompt text; a `Textarea` labelled "Your answer" with `maxLength={DISCUSSION_BODY_MAX}` and the count; the note "Everyone in this course can read your answer."; **Post** and **Not now** (`variant="outline"`), text only;
   - **Post** calls `discussion.answerPrompt` with `usePostId`'s id; on success set `firstLessonPromptState: 'answered'` on the `course.myEnrolment` cache entry and invalidate `discussion.listQuestions`;
   - **Not now** calls `course.dismissFirstLessonPrompt` and writes its result to the `course.myEnrolment` cache;
@@ -129,17 +129,17 @@ Paths are relative to the repository root. All buttons are text only: no arrow i
   - no `autoFocus`.
 
   Tests in `discussion/-first-lesson-prompt.test.tsx` with `renderWithCoreApi`: both buttons' calls and inputs; **Post** disabled while blank or pending; the cache updates; the two failure kinds; the note is present; the textarea is not focused on render; no arrow icons.
-- [ ] T018 [US2] Tests first, then wire the prompt (after T017):
+- [x] T018 [US2] Tests first, then wire the prompt (after T017):
   - `lesson-page.tsx` passes `QuestionsSection` two new props: `firstLessonPrompt`, the text from `player.course.firstLessonPrompt` when this lesson is `player.lessons[0]`, the course is not read-only, and `player.enrolment` is `active` or `completed` with no `firstLessonPromptState`; otherwise undefined;
   - `discussion/questions-section.tsx` renders `FirstLessonPrompt` under the heading, above the list, only when that prop is set, the list has loaded without error and no thread is open.
 
   Tests (extend `discussion/-questions-section.test.tsx` and `course-home-and-lesson-page.test.tsx`, weakening nothing): shown on the first lesson for a new learner; absent on the second lesson, with either state, in an archived course, with no enrolment (an instructor), while the list is loading or failed, and with a thread open; after **Post** the prompt is gone and the list is refetched.
-- [ ] T019 [US2] End to end, in `packages/e2e/src/helpers/discussion.ts` and `packages/e2e/src/scenarios/discussion-student.e2e.ts`:
+- [x] T019 [US2] End to end, in `packages/e2e/src/helpers/discussion.ts` and `packages/e2e/src/scenarios/discussion-student.e2e.ts`:
   - helper `answerFirstLessonPrompt(page, text)`: fills "Your answer" and presses **Post**;
   - test "a new learner answers the first-lesson prompt once": a fresh instructor's course with two shown lessons (`createDiscussionCourse` or its like); a fresh student uses `enrolAndLand`; expect the prompt's default text; `screenshot(page, 'first-lesson-prompt')`; answer; expect the answer listed with "Answer to the course prompt" and the prompt gone; `screenshot(page, 'first-lesson-prompt-answered')`; open the second lesson: no prompt; sign the same student in with a second browser context and open the first lesson: no prompt; `screenshot(second, 'first-lesson-prompt-stays-closed')`;
   - in the same test, a second fresh student presses **Not now**, reloads, and sees no prompt and only the first student's answer;
   - in `packages/e2e/src/scenarios/discussion-instructor.e2e.ts`, add a test that the instructor's Unanswered view does not list the prompt answer while By lesson does, with `screenshot(page, 'prompt-answer-by-lesson')`.
-- [ ] T020 [US2] Add `packages/e2e/src/concurrency/first-lesson-prompt.e2e.ts`, following `discussion-counters.e2e.ts`: one enrolled student sends five `discussion.answerPrompt` requests with different post ids and one `course.dismissFirstLessonPrompt` at the same moment. Expect at most one answer to succeed, the enrolment to end with exactly one state, the lesson's list to hold one prompt answer when the state is `answered` and none when it is `dismissed`, and the table's invariants to hold.
+- [x] T020 [US2] Add `packages/e2e/src/concurrency/first-lesson-prompt.e2e.ts`, following `discussion-counters.e2e.ts`: one enrolled student sends five `discussion.answerPrompt` requests with different post ids and one `course.dismissFirstLessonPrompt` at the same moment. Expect at most one answer to succeed, the enrolment to end with exactly one state, the lesson's list to hold one prompt answer when the state is `answered` and none when it is `dismissed`, and the table's invariants to hold.
 
 ---
 

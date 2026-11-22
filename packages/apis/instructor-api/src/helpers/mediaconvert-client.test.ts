@@ -12,13 +12,11 @@ import {
 const {
   mediaConvertSend,
   schedulerSend,
-  resolveAppConfigValue,
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
 } = vi.hoisted(() => ({
   mediaConvertSend: vi.fn(),
   schedulerSend: vi.fn(),
-  resolveAppConfigValue: vi.fn(),
   resolveLessonMediaBucketName: vi.fn(),
   resolveLessonMediaUploadBucketName: vi.fn(),
 }));
@@ -45,7 +43,6 @@ vi.mock('@aws-sdk/client-scheduler', () => ({
 }));
 
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
-  resolveAppConfigValue,
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
 }));
@@ -69,25 +66,26 @@ const SCHEDULE_GROUP_NAME = 'discava-transcode-cleanup';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resolveAppConfigValue.mockImplementation(
-    async (_namespace: string, key: string) => {
-      if (key === 'VideoTranscodePipeline') {
-        return { roleArn: ROLE_ARN, jobTemplateArn: JOB_TEMPLATE_ARN };
-      }
-      if (key === 'TranscodeCleanup') {
-        return {
-          lambdaArn: CLEANUP_LAMBDA_ARN,
-          schedulerRoleArn: SCHEDULER_ROLE_ARN,
-          scheduleGroupName: SCHEDULE_GROUP_NAME,
-        };
-      }
-      throw new Error(`Unexpected resolveAppConfigValue key: ${key}`);
-    },
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
+    JSON.stringify({ roleArn: ROLE_ARN, jobTemplateArn: JOB_TEMPLATE_ARN }),
+  );
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    JSON.stringify({
+      lambdaArn: CLEANUP_LAMBDA_ARN,
+      schedulerRoleArn: SCHEDULER_ROLE_ARN,
+      scheduleGroupName: SCHEDULE_GROUP_NAME,
+    }),
   );
   resolveLessonMediaUploadBucketName.mockResolvedValue(UPLOAD_BUCKET_NAME);
   resolveLessonMediaBucketName.mockResolvedValue(MEDIA_BUCKET_NAME);
   mediaConvertSend.mockResolvedValue({ Job: { Id: 'job-1' } });
   schedulerSend.mockResolvedValue({});
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('submitTranscodeJob', () => {
@@ -102,10 +100,6 @@ describe('submitTranscodeJob', () => {
     });
 
     expect(jobId).toBe('job-1');
-    expect(resolveAppConfigValue).toHaveBeenCalledWith(
-      'mediaConvert',
-      'VideoTranscodePipeline',
-    );
     expect(mediaConvertSend).toHaveBeenCalledWith(
       expect.objectContaining({
         Role: ROLE_ARN,
@@ -285,10 +279,8 @@ describe('submitTranscodeJob', () => {
     );
   });
 
-  it('propagates a failure to resolve the runtime config', async () => {
-    resolveAppConfigValue.mockRejectedValue(
-      new Error('RUNTIME_CONFIG_APP_ID environment variable is not set'),
-    );
+  it('propagates a missing pipeline setting', async () => {
+    vi.stubEnv('DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE', '');
 
     await expect(
       submitTranscodeJob({
@@ -299,7 +291,9 @@ describe('submitTranscodeJob', () => {
         objectKey: OBJECT_KEY,
         submissionNonce: SUBMISSION_NONCE,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow(
+      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE',
+    );
     expect(mediaConvertSend).not.toHaveBeenCalled();
   });
 

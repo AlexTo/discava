@@ -11,23 +11,27 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useCoreApi } from '../../../../../api';
+import { FirstLessonPrompt } from './first-lesson-prompt';
 import { QuestionForm } from './question-form';
 import { ThreadView } from './thread-view';
 
 // The lesson page's Questions card: the lesson's questions newest first, the
 // ask form, and a question's thread when one is opened. An archived course is
-// read-only. A failing list shows its own error and leaves the rest of the
+// read-only. The first-lesson prompt sits above the list. A failing list shows its own error and leaves the rest of the
 // page alone.
 export function QuestionsSection({
   courseId,
   moduleId,
   lessonId,
   readOnly,
+  firstLessonPrompt,
 }: {
   courseId: string;
   moduleId: string;
   lessonId: string;
   readOnly: boolean;
+  // The course's first-lesson prompt, when this learner is to be asked it here.
+  firstLessonPrompt?: string;
 }) {
   const trpc = useCoreApi();
   const lesson = { courseId, moduleId, lessonId };
@@ -74,6 +78,9 @@ export function QuestionsSection({
   } else {
     content = (
       <>
+        {firstLessonPrompt ? (
+          <FirstLessonPrompt lesson={lesson} prompt={firstLessonPrompt} />
+        ) : null}
         {questions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No questions yet.{readOnly ? '' : ' Ask the first one.'}

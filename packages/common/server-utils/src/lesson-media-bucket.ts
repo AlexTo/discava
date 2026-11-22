@@ -4,49 +4,13 @@
  */
 
 import type { Logger } from '@aws-lambda-powertools/logger';
-import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import {
   DeleteObjectsCommand,
   ListObjectsV2Command,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { isLocalDev, localBucketName, s3ClientConfig } from './local-dev.js';
-
-/**
- * Resolves and caches a single key within a RuntimeConfig/AppConfig
- * namespace (e.g. namespace `s3`, key `LessonMediaBucket`). Shared by every
- * Lambda that reads the stack's runtime config.
- */
-export const resolveAppConfigValue = (() => {
-  const cache = new Map<string, unknown>();
-  return async <T>(namespace: string, key: string): Promise<T> => {
-    const cacheKey = `${namespace}.${key}`;
-    const cached = cache.get(cacheKey);
-    if (cached !== undefined) {
-      return cached as T;
-    }
-    const appId = process.env.RUNTIME_CONFIG_APP_ID;
-    if (!appId) {
-      throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
-    }
-    const config = await getAppConfig<{ [k: string]: T | undefined }>(
-      namespace,
-      {
-        application: appId,
-        environment: 'default',
-        transform: 'json',
-      },
-    );
-    const value = config?.[key];
-    if (!value) {
-      throw new Error(
-        `Could not resolve ${namespace}.${key} from runtime config`,
-      );
-    }
-    cache.set(cacheKey, value);
-    return value;
-  };
-})();
+import { readSetting } from './settings.js';
 
 let _client: S3Client | undefined;
 
@@ -62,16 +26,15 @@ type S3Config = {
   bucketName: string;
 };
 
-// A bucket's name, from its runtime config key: the stack's bucket from
-// AppConfig when deployed, or the S3Mock bucket standing in for it in local
-// dev (#137).
+// A bucket's name, from its setting key: the stack's bucket from its
+// deploy-time setting when deployed, or the S3Mock bucket standing in for it
+// in local dev (#137).
 export const resolveBucketName = async (
   runtimeConfigKey: string,
 ): Promise<string> =>
   isLocalDev()
     ? localBucketName(runtimeConfigKey)
-    : (await resolveAppConfigValue<S3Config>('s3', runtimeConfigKey))
-        .bucketName;
+    : readSetting<S3Config>('s3', runtimeConfigKey).bucketName;
 
 export const resolveLessonMediaBucketName = (): Promise<string> =>
   resolveBucketName('LessonMediaBucket');

@@ -38,6 +38,9 @@ export const VideoUrlOutputSchema = z.object({
       url: z.string(),
     }),
   ),
+  // How many questions the video has for this caller: 0 when it has none, and
+  // 0 in a course that isn't published (an archived course is read-only).
+  questionCount: z.number().int().min(0),
 });
 
 export type IVideoUrlOutput = z.output<typeof VideoUrlOutputSchema>;
@@ -47,6 +50,7 @@ export const PreviewVideoUrlInputSchema = z.object({ courseId: z.string() });
 // As a lesson video's URL, without a saved position: a preview has none.
 export const PreviewVideoUrlOutputSchema = VideoUrlOutputSchema.omit({
   resumeAt: true,
+  questionCount: true,
 });
 
 export type IPreviewVideoUrlOutput = z.output<

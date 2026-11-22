@@ -115,3 +115,44 @@ export const functionsMissingSettings = (template: Template) => {
     })
     .map(([id]) => id);
 };
+
+// What each function of a stack needs beyond the table: a table of function
+// logical-ID prefix to the `DISCAVA_*` settings it must have. Returns one
+// line for every function without a setting it needs, and for a prefix that
+// matches no function, so a rename can't hollow the table out.
+export const functionsMissingNamedSettings = (
+  template: Template,
+  required: Record<string, readonly string[]>,
+) => {
+  const functions = Object.entries(
+    template.findResources('AWS::Lambda::Function'),
+  );
+  return Object.entries(required).flatMap(([prefix, names]) => {
+    const matching = functions.filter(([id]) => id.startsWith(prefix));
+    if (matching.length === 0) return [`${prefix}: no such function`];
+    return matching.flatMap(([id, fn]) => {
+      const variables = fn.Properties.Environment?.Variables ?? {};
+      return names
+        .filter((name) => !variables[name])
+        .map((name) => `${id}: ${name}`);
+    });
+  });
+};
+
+// The logical ids of the stack's functions that can still read AppConfig:
+// they have `RUNTIME_CONFIG_APP_ID` or a role with an `appconfig:` action.
+export const functionsReadingAppConfig = (template: Template) => {
+  const byRole = actionsByRole(template);
+  return Object.entries(template.findResources('AWS::Lambda::Function'))
+    .filter(([, fn]) => {
+      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
+        'Fn::GetAtt'
+      ][0];
+      return (
+        'RUNTIME_CONFIG_APP_ID' in
+          (fn.Properties.Environment?.Variables ?? {}) ||
+        (byRole[role] ?? []).some((action) => action.startsWith('appconfig:'))
+      );
+    })
+    .map(([id]) => id);
+};

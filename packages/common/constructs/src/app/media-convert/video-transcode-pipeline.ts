@@ -8,7 +8,6 @@ import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { CfnJobTemplate } from 'aws-cdk-lib/aws-mediaconvert';
 import { Construct } from 'constructs';
 import { MediaBucket } from '../../core/media-bucket.js';
-import { RuntimeConfig } from '../../core/runtime-config.js';
 import { addSetting } from '../../core/settings.js';
 import { UploadBucket } from '../../core/upload-bucket.js';
 
@@ -183,12 +182,6 @@ export class VideoTranscodePipeline extends Construct {
       name: Names.uniqueResourceName(this, { maxLength: 128 }),
       settingsJson: buildSettingsJson(),
     });
-
-    RuntimeConfig.ensure(this).set(
-      'mediaConvert',
-      'VideoTranscodePipeline',
-      this.settings,
-    );
   }
 
   /** Gives `fn` the pipeline's deploy-time `mediaConvert` setting. */

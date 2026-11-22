@@ -4,7 +4,11 @@
  */
 import { Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { functionsMissingSettings } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsMissingSettings,
+  functionsReadingAppConfig,
+} from './stack-test-fixture.js';
 
 const fn = (role: string, variables?: Record<string, string>) => ({
   Type: 'AWS::Lambda::Function',
@@ -45,6 +49,44 @@ describe('functionsMissingSettings', () => {
     expect(functionsMissingSettings(template).sort()).toEqual([
       'SearchMissingFn',
       'TableMissingFn',
+    ]);
+  });
+});
+
+describe('functionsMissingNamedSettings', () => {
+  const template = Template.fromJSON({
+    Resources: {
+      AlphaFn1: fn('R', { DISCAVA_S3_A: '{}', DISCAVA_S3_B: '{}' }),
+      BetaFn1: fn('R', { DISCAVA_S3_A: '{}' }),
+    },
+  });
+
+  it('names each function lacking a required setting, and prefixes matching nothing', () => {
+    expect(
+      functionsMissingNamedSettings(template, {
+        AlphaFn: ['DISCAVA_S3_A', 'DISCAVA_S3_B'],
+        BetaFn: ['DISCAVA_S3_A', 'DISCAVA_S3_B'],
+        GammaFn: ['DISCAVA_S3_A'],
+      }),
+    ).toEqual(['BetaFn1: DISCAVA_S3_B', 'GammaFn: no such function']);
+  });
+});
+
+describe('functionsReadingAppConfig', () => {
+  const template = Template.fromJSON({
+    Resources: {
+      ByVariableFn: fn('RoleA', { RUNTIME_CONFIG_APP_ID: 'app' }),
+      ByActionFn: fn('RoleB', {}),
+      ByActionPolicy: policy('RoleB', 'appconfig:GetLatestConfiguration'),
+      CleanFn: fn('RoleC', TABLE),
+      CleanPolicy: policy('RoleC', 'dynamodb:GetItem'),
+    },
+  });
+
+  it('names the functions with the application id or an appconfig action', () => {
+    expect(functionsReadingAppConfig(template).sort()).toEqual([
+      'ByActionFn',
+      'ByVariableFn',
     ]);
   });
 });

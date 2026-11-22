@@ -9,9 +9,8 @@ import {
   getVideoUploadETag,
 } from './s3-client.js';
 
-const { send, getAppConfig, scheduleTranscodeCleanup } = vi.hoisted(() => ({
+const { send, scheduleTranscodeCleanup } = vi.hoisted(() => ({
   send: vi.fn(),
-  getAppConfig: vi.fn(),
   scheduleTranscodeCleanup: vi.fn(),
 }));
 
@@ -31,10 +30,6 @@ vi.mock('@aws-sdk/client-s3', () => ({
   HeadObjectCommand: vi.fn(function (input) {
     return { __command: 'HeadObject', ...input };
   }),
-}));
-
-vi.mock('@aws-lambda-powertools/parameters/appconfig', () => ({
-  getAppConfig,
 }));
 
 vi.mock('@discava/common-server-utils/cleanup-scheduler', () => ({
@@ -83,16 +78,14 @@ const pendingItem = (contentItemId: string, ext = 'mp4') => ({
 describe('bestEffortDeleteContentItemVideos', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RUNTIME_CONFIG_APP_ID = 'app-1';
-    getAppConfig.mockImplementation((namespace: string) => {
-      if (namespace === 's3') {
-        return Promise.resolve({
-          LessonMediaBucket: { bucketName: MEDIA_BUCKET_NAME },
-          LessonMediaUploadBucket: { bucketName: UPLOAD_BUCKET_NAME },
-        });
-      }
-      return Promise.resolve({});
-    });
+    vi.stubEnv(
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      JSON.stringify({ bucketName: MEDIA_BUCKET_NAME }),
+    );
+    vi.stubEnv(
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      JSON.stringify({ bucketName: UPLOAD_BUCKET_NAME }),
+    );
     send.mockImplementation((command: any) => {
       if (command.__command === 'ListObjectsV2') {
         return Promise.resolve({
@@ -432,15 +425,10 @@ describe('bestEffortDeleteContentItemVideos', () => {
 describe('getVideoUploadETag', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.RUNTIME_CONFIG_APP_ID = 'app-1';
-    getAppConfig.mockImplementation((namespace: string) => {
-      if (namespace === 's3') {
-        return Promise.resolve({
-          LessonMediaUploadBucket: { bucketName: UPLOAD_BUCKET_NAME },
-        });
-      }
-      return Promise.resolve({});
-    });
+    vi.stubEnv(
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      JSON.stringify({ bucketName: UPLOAD_BUCKET_NAME }),
+    );
   });
 
   it('returns the ETag when the object exists', async () => {

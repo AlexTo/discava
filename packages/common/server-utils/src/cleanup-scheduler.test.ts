@@ -9,14 +9,12 @@ import {
   scheduleTranscodeCleanupOrThrow,
 } from './cleanup-scheduler.js';
 
-const { schedulerSend, resolveAppConfigValue, FakeConflictException } =
-  vi.hoisted(() => ({
-    schedulerSend: vi.fn(),
-    resolveAppConfigValue: vi.fn(),
-    FakeConflictException: class extends Error {
-      name = 'ConflictException';
-    },
-  }));
+const { schedulerSend, FakeConflictException } = vi.hoisted(() => ({
+  schedulerSend: vi.fn(),
+  FakeConflictException: class extends Error {
+    name = 'ConflictException';
+  },
+}));
 
 vi.mock('@aws-sdk/client-scheduler', () => ({
   SchedulerClient: vi.fn(function () {
@@ -26,10 +24,6 @@ vi.mock('@aws-sdk/client-scheduler', () => ({
     return { __command: 'CreateSchedule', ...input };
   }),
   ConflictException: FakeConflictException,
-}));
-
-vi.mock('./lesson-media-bucket.js', () => ({
-  resolveAppConfigValue,
 }));
 
 const COURSE_ID = 'course-1';
@@ -52,15 +46,31 @@ const params = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  resolveAppConfigValue.mockResolvedValue({
-    lambdaArn: LAMBDA_ARN,
-    schedulerRoleArn: SCHEDULER_ROLE_ARN,
-    scheduleGroupName: SCHEDULE_GROUP_NAME,
-  });
+  vi.stubEnv(
+    'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    JSON.stringify({
+      lambdaArn: LAMBDA_ARN,
+      schedulerRoleArn: SCHEDULER_ROLE_ARN,
+      scheduleGroupName: SCHEDULE_GROUP_NAME,
+    }),
+  );
   schedulerSend.mockResolvedValue({});
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe('scheduleTranscodeCleanupOrThrow', () => {
+  it('throws naming the setting when it is not set', async () => {
+    vi.stubEnv('DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP', '');
+
+    await expect(scheduleTranscodeCleanupOrThrow(params)).rejects.toThrow(
+      'Missing deploy-time setting DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    );
+    expect(schedulerSend).not.toHaveBeenCalled();
+  });
+
   it('creates a one-time schedule targeting the cleanup Lambda with this job own params', async () => {
     await scheduleTranscodeCleanupOrThrow(params);
 
