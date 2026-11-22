@@ -33,6 +33,8 @@ export const CourseSchema = z.object({
   learningOutcomes: z.array(z.string()).optional(),
   requirements: z.array(z.string()).optional(),
   certificatesEnabled: z.boolean(),
+  // The course's own first-lesson prompt; absent when it uses the default.
+  firstLessonPrompt: z.string().optional(),
   certificateCriteria: z.object({
     version: z.number(),
     requireQuizPass: z.boolean(),
@@ -137,6 +139,23 @@ export type ISetCourseCertificatesOutput = z.output<
   typeof SetCourseCertificatesOutputSchema
 >;
 
+// The limit is checked by normaliseFirstLessonPrompt, so that an over-long
+// text gets its own message. This one only bounds what the API will read.
+export const SetCourseFirstLessonPromptInputSchema = z.object({
+  courseId: z.string(),
+  prompt: z.string().max(800).nullable(),
+});
+
+export type ISetCourseFirstLessonPromptInput = z.output<
+  typeof SetCourseFirstLessonPromptInputSchema
+>;
+
+export const SetCourseFirstLessonPromptOutputSchema = CourseSchema;
+
+export type ISetCourseFirstLessonPromptOutput = z.output<
+  typeof SetCourseFirstLessonPromptOutputSchema
+>;
+
 export const SetCertificateCriteriaInputSchema = z
   .object({
     courseId: z.string(),
@@ -176,6 +195,8 @@ export type IViewCourseInput = z.output<typeof ViewCourseInputSchema>;
 // and archived records (with their visibility/archivedAt), which the
 // student-facing core-api course.view filters out.
 export const ViewCourseOutputSchema = CourseSchema.extend({
+  // The text new learners see when the course has no prompt of its own.
+  defaultFirstLessonPrompt: z.string(),
   // The course's category by name, archived or not, so the editor can show
   // one that is no longer in the active list.
   category: z

@@ -10,6 +10,7 @@ import {
   renderWithCoreApi,
 } from '../../../../test/render-with-core-api';
 import { CoursePage } from './course-page';
+import { EnrolmentActions } from './enrolment-actions';
 
 // There's no route tree in these renders; navigation is a spy.
 const navigate = vi.fn();
@@ -115,6 +116,31 @@ describe('EnrolmentActions', () => {
       screen.getByRole('link', { name: 'Start learning' }),
     ).toHaveAttribute('href', '/learn/course-1/home');
     expect(screen.queryByRole('button', { name: 'Enrol now' })).toBeNull();
+  });
+
+  it('with continueTo, offers to start that lesson after enrolling', async () => {
+    const { user } = renderWithCoreApi(
+      <EnrolmentActions
+        courseId="course-1"
+        courseTitle="Linear Algebra"
+        continueTo={{ lessonId: 'lesson-1' }}
+      />,
+      {
+        handlers: {
+          'course.myEnrolment': () => null,
+          'course.enrol': () => enrolment(),
+        },
+      },
+    );
+
+    await user.click(await enrolButton());
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('link', { name: 'Start this lesson' }),
+    ).toHaveAttribute('href', '/learn/course-1/lesson/lesson-1');
+    expect(navigate).not.toHaveBeenCalled();
+    expect(dialog.querySelector('button svg[class*="arrow"]')).toBeNull();
   });
 
   it('shows an enrolled student their progress and a way back in', async () => {

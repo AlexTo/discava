@@ -64,16 +64,22 @@ export function EnrolmentActions({
   courseTitle,
   priceAmount = 0,
   priceCurrency = 'USD',
+  continueTo,
 }: {
   courseId: string;
   courseTitle: string;
   priceAmount?: number;
   priceCurrency?: string;
+  // Where a student who has just enrolled goes on: a lesson they were
+  // looking at, such as a free preview. Without it they are sent to their
+  // next lesson.
+  continueTo?: { lessonId: string };
 }) {
   const trpc = useCoreApi();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [signInOpen, setSignInOpen] = useState(false);
+  const [enrolledOpen, setEnrolledOpen] = useState(false);
   // Signing in from here comes back to this course, to finish enrolling.
   const here = useLocation().href;
   const navigate = useNavigate();
@@ -103,7 +109,11 @@ export function EnrolmentActions({
           trpc.course.myEnrolment.queryKey({ courseId }),
           enrolment,
         );
-        startLearning(false);
+        if (continueTo) {
+          setEnrolledOpen(true);
+        } else {
+          startLearning(false);
+        }
       },
     }),
   );
@@ -324,6 +334,29 @@ export function EnrolmentActions({
         <ErrorAlert type="error" header="Couldn't start payment">
           {apiErrorMessage(checkout.error)}
         </ErrorAlert>
+      ) : null}
+
+      {continueTo ? (
+        <Dialog open={enrolledOpen} onOpenChange={setEnrolledOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-center">You're enrolled</DialogTitle>
+              <DialogDescription className="text-center">
+                You can now take all of {courseTitle}.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="sm:justify-center">
+              <Button asChild>
+                <Link
+                  to="/learn/$courseId/lesson/$lessonId"
+                  params={{ courseId, lessonId: continueTo.lessonId }}
+                >
+                  Start this lesson
+                </Link>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       ) : null}
 
       <Dialog open={signInOpen} onOpenChange={setSignInOpen}>

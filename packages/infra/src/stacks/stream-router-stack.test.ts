@@ -105,6 +105,55 @@ describe('transcript indexing', () => {
   });
 });
 
+describe('transcript rebuild', () => {
+  const template = synth({})('StreamRouter');
+  const actions = Object.values(
+    template.findResources('AWS::IAM::Policy', {
+      Properties: {
+        Roles: [
+          { Ref: Match.stringLikeRegexp('^TranscriptReindexServiceRole') },
+        ],
+      },
+    }),
+  ).flatMap((policy) =>
+    (
+      policy as {
+        Properties: {
+          PolicyDocument: { Statement: { Action: string | string[] }[] };
+        };
+      }
+    ).Properties.PolicyDocument.Statement.flatMap((statement) =>
+      [statement.Action].flat(),
+    ),
+  );
+
+  it('lets the function read the table and the lesson media bucket, write the search collection, and write no table item or caption file', () => {
+    expect(actions).toContain('dynamodb:GetItem');
+    expect(actions).toContain('dynamodb:Query');
+    expect(actions).toContain('s3:GetObject*');
+    expect(actions).toContain('aoss:APIAccessAll');
+    expect(
+      actions.filter((action) =>
+        /^(dynamodb:(Put|Update|Delete|BatchWrite)|s3:(Put|Delete|Abort))/.test(
+          action,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs for up to 15 minutes and has no event source', () => {
+    const functions = template.findResources('AWS::Lambda::Function', {
+      Properties: { Timeout: 900 },
+    });
+    expect(
+      Object.keys(functions).some((id) => id.startsWith('TranscriptReindex')),
+    ).toBe(true);
+    expect(
+      JSON.stringify(template.findResources('AWS::Lambda::EventSourceMapping')),
+    ).not.toContain('TranscriptReindex');
+  });
+});
+
 describe('deploy-time settings', () => {
   it('gives every function that uses the core table or search its setting', () => {
     expect(functionsMissingSettings(synth({})('StreamRouter'))).toEqual([]);
@@ -317,6 +366,11 @@ describe('deploy-time settings per function', () => {
       'DISCAVA_OPENSEARCH_SEARCH',
     ],
     TranscriptIndexing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    TranscriptReindex: [
       'DISCAVA_DYNAMODB_CORE_TABLE',
       'DISCAVA_OPENSEARCH_SEARCH',
       'DISCAVA_S3_LESSON_MEDIA_BUCKET',

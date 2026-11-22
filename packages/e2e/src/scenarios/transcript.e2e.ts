@@ -21,6 +21,7 @@ import {
   transcriptLines,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
+import { transcriptDocumentCount } from '../helpers/transcripts.js';
 import { newUser, uniqueName } from '../helpers/users.js';
 
 // The transcript panel beside a lesson video: every line of the caption
@@ -264,4 +265,123 @@ test('transcript search is refused to someone not enrolled, and hides a hidden l
   });
   // No waiting: the index still holds it, the access rule doesn't.
   expect((await search(enrolled)).items).toEqual([]);
+});
+
+// Uploads a WebVTT track in `tag`'s language through the API, replacing the
+// track the item has in that language. The phrase is said in one cue.
+const uploadTrack = async (
+  instructor: ApiUser,
+  video: Awaited<ReturnType<typeof createCaptionedVideoViaApi>>,
+  tag: string,
+  phrase: string,
+) => {
+  const target =
+    await instructor.instructor.contentItem.captionUploadUrl.mutate(video);
+  const response = await fetch(target.url, {
+    method: 'PUT',
+    headers: target.headers,
+    body: webVttOf([
+      { start: 0, end: 1, text: 'Welcome to this lesson' },
+      { start: 1, end: 3, text: `and now ${phrase}` },
+    ]),
+  });
+  expect(response.ok).toBe(true);
+  await instructor.instructor.contentItem.attachCaption.mutate({
+    ...video,
+    uploadId: target.uploadId,
+    language: tag,
+  });
+};
+
+// The index follows the instructor: a replaced or removed track, a hidden and
+// shown lesson and a deleted video each change what search finds, without a
+// rebuild.
+test('transcript search follows caption and lesson changes', async ({
+  page,
+}) => {
+  const [oldPhrase, newPhrase, spanishPhrase] = [
+    uniquePhrase(),
+    uniquePhrase(),
+    uniquePhrase(),
+  ];
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await publishCourseWithPhrase(
+    instructor,
+    uniqueName('E2E transcript changes course'),
+    oldPhrase,
+  );
+  const student = await apiUser('Sam', ['student']);
+  await student.core.course.enrol.mutate({ courseId: video.courseId });
+  const found = async (q: string, language?: string) =>
+    (
+      await student.core.transcript.search.query({
+        courseId: video.courseId,
+        q,
+        ...(language && { language }),
+      })
+    ).items.length;
+  const expectFound = (q: string, count: number, language?: string) =>
+    expect.poll(() => found(q, language), { timeout: 60_000 }).toBe(count);
+
+  await test.step('the first track is searchable', async () => {
+    await expectFound(oldPhrase, 1);
+  });
+
+  await test.step('replacing the English track swaps what is found', async () => {
+    await uploadTrack(instructor, video, 'en-US', newPhrase);
+    await expectFound(newPhrase, 1);
+    await expectFound(oldPhrase, 0);
+  });
+
+  // The signed-in student, in the browser, sees the new phrase as well.
+  await openCourse(page, 'E2E transcript changes course');
+  await enrol(page, newUser('Zed', ['student']));
+  await searchTranscripts(page, newPhrase);
+  const result = page
+    .getByRole('list', { name: 'Search results' })
+    .getByRole('link');
+  await expectAfterReloads(page, async () => {
+    await expect(result).toHaveCount(1, { timeout: 5_000 });
+  });
+  await screenshot(page, 'transcript-search-after-replace');
+
+  await test.step('a Spanish track is found by a learner who chose Spanish, and not once removed', async () => {
+    await uploadTrack(instructor, video, 'es-ES', spanishPhrase);
+    await expectFound(spanishPhrase, 1, 'es-ES');
+    const { captions } =
+      await instructor.instructor.contentItem.createVideoUrl.query(video);
+    const spanish = captions.find((track) => track.language === 'es-ES');
+    await instructor.instructor.contentItem.removeCaption.mutate({
+      ...video,
+      trackId: spanish!.trackId,
+    });
+    await expectFound(spanishPhrase, 0, 'es-ES');
+  });
+
+  await test.step('hiding the lesson removes its passages, and showing it brings them back', async () => {
+    const lesson = {
+      courseId: video.courseId,
+      moduleId: video.moduleId,
+      lessonId: video.lessonId,
+    };
+    await instructor.instructor.lesson.hide.mutate(lesson);
+    await expect
+      .poll(() => transcriptDocumentCount(video.contentItemId), {
+        timeout: 60_000,
+      })
+      .toBe(0);
+    await instructor.instructor.lesson.publish.mutate(lesson);
+    await expectFound(newPhrase, 1);
+  });
+
+  await test.step('deleting the video leaves nothing in the index', async () => {
+    await instructor.instructor.contentItem.delete.mutate(video);
+    await instructor.instructor.contentItem.deletePermanently.mutate(video);
+    await expectFound(newPhrase, 0);
+    await expect
+      .poll(() => transcriptDocumentCount(video.contentItemId), {
+        timeout: 60_000,
+      })
+      .toBe(0);
+  });
 });
