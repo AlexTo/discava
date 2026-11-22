@@ -2,7 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { getSecret } from '@aws-lambda-powertools/parameters/secrets';
 import { getSignedCookies, getSignedUrl } from '@aws-sdk/cloudfront-signer';
 import { isLocalDev, localObjectUrl } from './local-dev.js';
@@ -10,6 +9,7 @@ import {
   FILE_URL_LIFETIME_SECONDS,
   SIGNED_COOKIE_LIFETIME_SECONDS,
 } from './media-keys.js';
+import { readSetting } from './settings.js';
 
 const runtimeConfigKey = 'LessonMediaBucket';
 
@@ -34,26 +34,15 @@ let _privateKey: string | undefined;
 
 const resolveCloudFrontConfig = async (): Promise<CloudFrontConfig> => {
   if (_config === undefined) {
-    const appId = process.env.RUNTIME_CONFIG_APP_ID;
-    if (!appId) {
-      throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
-    }
-    const config = await getAppConfig<{
-      [key: string]: S3Config | undefined;
-    }>('s3', {
-      application: appId,
-      environment: 'default',
-      transform: 'json',
-    });
-    const entry = config?.[runtimeConfigKey];
+    const entry = readSetting<Partial<S3Config>>('s3', runtimeConfigKey);
     if (
-      !entry?.cloudFrontDomainName ||
-      !entry?.cloudFrontKeyPairId ||
-      !entry?.cloudFrontPrivateKeySecretArn ||
-      !entry?.cookieDomain
+      !entry.cloudFrontDomainName ||
+      !entry.cloudFrontKeyPairId ||
+      !entry.cloudFrontPrivateKeySecretArn ||
+      !entry.cookieDomain
     ) {
       throw new Error(
-        'Could not resolve CloudFront signing config from runtime config',
+        'Could not resolve CloudFront signing config from deploy-time setting DISCAVA_S3_LESSON_MEDIA_BUCKET',
       );
     }
     _config = {

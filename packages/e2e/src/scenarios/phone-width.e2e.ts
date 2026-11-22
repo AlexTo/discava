@@ -9,6 +9,11 @@ import {
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import {
+  apiUserFor,
+  createUploadAssignmentCourse,
+  uploadSubmissionFile,
+} from '../helpers/assignment.js';
 import { webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { PORTALS } from '../helpers/portals.js';
@@ -219,6 +224,17 @@ test('search results come first on a phone, with the filters collapsed', async (
     await expectResultsFirst();
   });
 
+  await test.step('the home page and the course catalogue fit a phone', async () => {
+    await page.goto(PORTALS.student);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'home page at phone width');
+    await page.goto(`${PORTALS.student}/courses`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course catalogue at phone width');
+  });
+
   await test.step('the filters open on request', async () => {
     await page.goto(
       `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
@@ -329,4 +345,27 @@ test('transcript search results fit a phone, even for a 70-character word', asyn
     await expectNoSidewaysScroll(page);
     await screenshot(page, 'transcript search empty at phone width');
   });
+});
+
+test('the grading queue on the instructor home page fits a phone with long names', async ({
+  page,
+}) => {
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const tess = await apiUser('Tess', ['student']);
+  const long = await createUploadAssignmentCourse(instructor, {
+    courseTitle: `${uniqueName('E2E phone queue course')} ${'x'.repeat(60)}`,
+    assignmentTitle: `Assignment ${'y'.repeat(60)}`,
+  });
+  await tess.core.course.enrol.mutate({ courseId: long.courseId });
+  await tess.core.assignment.submit.mutate(
+    await uploadSubmissionFile(tess, long, 'a.txt', Buffer.from('a')),
+  );
+
+  await page.goto(`${PORTALS.instructor}/`);
+  await signIn(page, ivy);
+  const queue = page.getByRole('region', { name: 'Waiting for grading' });
+  await expect(queue.getByRole('link')).toHaveCount(1);
+  await expectNoSidewaysScroll(page);
+  await screenshot(page, 'grading queue at phone width');
 });

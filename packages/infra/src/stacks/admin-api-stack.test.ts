@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 import {
   actionsByRole,
   actionsOf,
+  functionsMissingNamedSettings,
+  functionsReadingAppConfig,
   methodSettings,
   stackTemplates,
   synth,
@@ -170,5 +172,22 @@ describe('the Stripe secrets', () => {
         }
       }
     }
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('AdminApi');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    AdminApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    AdminApiPaymentsConnectHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

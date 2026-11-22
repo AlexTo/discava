@@ -56,7 +56,9 @@ const course = (
   imageKey?: string,
 ) => ({ courseId, title, description: '', imageKey, status });
 
-const renderPage = (coreHandlers = {}) => {
+const emptyQueue = { 'gradingQueue.list': () => ({ total: 0, items: [] }) };
+
+const renderPage = (coreHandlers = {}, instructorHandlers = emptyQueue) => {
   const calls: { path: string; input: unknown }[] = [];
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -69,11 +71,12 @@ const renderPage = (coreHandlers = {}) => {
       }),
     ],
   });
+  const instructorCalls: { path: string; input: unknown }[] = [];
   const instructorClient = createTRPCClient<InstructorApiRouter>({
     links: [
       httpLink({
         url: 'http://instructor-api.test/',
-        fetch: fakeTrpcFetch({}, []),
+        fetch: fakeTrpcFetch(instructorHandlers, instructorCalls),
       }),
     ],
   });
@@ -106,7 +109,7 @@ const renderPage = (coreHandlers = {}) => {
       </QueryClientProvider>
     </RuntimeConfigContext.Provider>,
   );
-  return { ...result, calls };
+  return { ...result, calls, instructorCalls };
 };
 
 const listing = (items: ReturnType<typeof course>[]) => ({
@@ -358,5 +361,68 @@ describe('Instructor home: loading and failure', () => {
     expect(await screen.findByText('Back again')).toBeVisible();
     expect(calls).toHaveLength(2);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+const queueItem = (userId: string, name: string, courseId = 'c1') => ({
+  courseId,
+  courseTitle: `Course ${courseId}`,
+  contentItemId: 'item-1',
+  assignmentTitle: 'Essay',
+  userId,
+  displayName: name,
+  submittedAt: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+  late: false,
+});
+
+describe('Instructor home: waiting for grading', () => {
+  it('shows the total and a row per entry linking to its review page', async () => {
+    const { instructorCalls } = renderPage(listing([]), {
+      'gradingQueue.list': () => ({
+        total: 12,
+        items: [queueItem('u1', 'Ada'), queueItem('u2', 'Grace', 'c2')],
+      }),
+    });
+
+    expect(await screen.findByText('Ada')).toBeVisible();
+    expect(screen.getByText('Grace')).toBeVisible();
+    expect(screen.getByText('12')).toBeVisible();
+    expect(screen.getAllByText(/Waited 3 days ago/)).toHaveLength(2);
+    expect(linkProps).toContainEqual({
+      to: '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId',
+      params: { courseId: 'c2', contentItemId: 'item-1', userId: 'u2' },
+    });
+    expect(instructorCalls).toEqual([
+      { path: 'gradingQueue.list', input: { limit: 10 } },
+    ]);
+  });
+
+  it('says so when nothing is waiting', async () => {
+    renderPage(listing([]));
+
+    expect(
+      await screen.findByText('Nothing is waiting for grading.'),
+    ).toBeVisible();
+  });
+
+  it('shows an error with a retry when the queue fails to load', async () => {
+    renderPage(listing([]), {
+      'gradingQueue.list': () => {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Queue broke');
+      },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't load the grading queue",
+    );
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeVisible();
+  });
+
+  it('shows a loading note while the queue loads', async () => {
+    renderPage(listing([]), {
+      'gradingQueue.list': () => new Promise(() => {}),
+    });
+
+    expect(await screen.findByText(/Loading the grading queue/)).toBeVisible();
   });
 });

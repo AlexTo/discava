@@ -14,13 +14,14 @@ import {
 } from '@discava/common-shadcn/components/ui/card';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
+import { relativeTime } from '@discava/common-web-utils/discussion';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Megaphone } from 'lucide-react';
 import { useAuth } from 'react-oidc-context';
-import { useCoreApi } from '../../api';
+import { useCoreApi, useInstructorApi } from '../../api';
 import { CreateCourseDialog } from '../../components/create-course-dialog';
 import { type CourseStatus, courseStatusStyles } from '../../lib/course-status';
 
@@ -29,6 +30,7 @@ export const Route = createFileRoute('/_authenticated/')({
 });
 
 const HOME_COURSE_LIMIT = 6;
+const HOME_QUEUE_LIMIT = 10;
 
 const courseStatusLabels: Record<string, CourseStatus> = {
   draft: 'Draft',
@@ -54,6 +56,11 @@ function RouteComponent() {
       { instructorId: instructorId ?? '', limit: 100 },
       { enabled: Boolean(instructorId) },
     ),
+  );
+
+  const instructorApi = useInstructorApi();
+  const queueQuery = useQuery(
+    instructorApi.gradingQueue.list.queryOptions({ limit: HOME_QUEUE_LIMIT }),
   );
 
   const activeCourses = (coursesQuery.data?.items ?? []).filter(
@@ -90,6 +97,70 @@ function RouteComponent() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="grading-queue-heading">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2
+            id="grading-queue-heading"
+            className="text-xl font-semibold tracking-tight"
+          >
+            Waiting for grading
+          </h2>
+          {queueQuery.data && queueQuery.data.total > 0 && (
+            <Badge variant="secondary">{queueQuery.data.total}</Badge>
+          )}
+        </div>
+        {queueQuery.isPending ? (
+          <p className="text-sm text-muted-foreground">
+            Loading the grading queue…
+          </p>
+        ) : queueQuery.isError ? (
+          <ErrorAlert
+            type="error"
+            header="Couldn't load the grading queue"
+            onRetry={() => void queueQuery.refetch()}
+          >
+            {apiErrorMessage(queueQuery.error)}
+          </ErrorAlert>
+        ) : queueQuery.data.items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing is waiting for grading.
+          </p>
+        ) : (
+          <Card className="py-0">
+            <ul className="divide-y">
+              {queueQuery.data.items.map((entry) => (
+                <li
+                  key={`${entry.courseId}#${entry.contentItemId}#${entry.userId}`}
+                >
+                  <Link
+                    to="/my-courses/$courseId/assignments/$contentItemId/submissions/$userId"
+                    params={{
+                      courseId: entry.courseId,
+                      contentItemId: entry.contentItemId,
+                      userId: entry.userId,
+                    }}
+                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3 text-sm hover:bg-muted/50"
+                  >
+                    <span className="min-w-0 break-words">
+                      <span className="font-medium">{entry.displayName}</span>
+                      <span className="text-muted-foreground">
+                        {' · '}
+                        {entry.assignmentTitle}
+                        {' · '}
+                        {entry.courseTitle}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      Waited {relativeTime(entry.submittedAt)}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </section>
 
       <section className="space-y-4" aria-labelledby="courses-heading">

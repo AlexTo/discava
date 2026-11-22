@@ -39,11 +39,14 @@ export function PdfPreview({
           onSourceError={onError}
           loading={<p className="p-4 text-sm">Loading the preview…</p>}
         >
+          {/* The canvas only: the text and annotation layers need react-pdf's
+              CSS, and without it print the page's text again below it. */}
           <Page
             pageNumber={page}
             width={560}
+            renderTextLayer={false}
+            renderAnnotationLayer={false}
             onRenderError={onError}
-            onGetTextError={onError}
           />
         </Document>
       </div>

@@ -70,7 +70,7 @@ export const trpcApiProps = (
 
 /**
  * The handler of one operation of an API, for a grant beyond the baseline
- * (table + AppConfig). A procedure missing from the API's
+ * (table). A procedure missing from the API's
  * `<NAME>_DEDICATED_FUNCTIONS` fails synth instead of silently handing its
  * permissions to the shared router function that serves every other
  * procedure.

@@ -107,6 +107,11 @@ export class InstructorApiStack extends Stack {
       coreTable.bindSettings(handler);
     });
 
+    this.bindMediaSettings(
+      lessonMediaBucket,
+      lessonMediaUploadBucket,
+      publicMediaBucket,
+    );
     this.grantLessonMediaAccess(lessonMediaBucket);
     this.grantLessonMediaUploadAccess(lessonMediaUploadBucket);
     for (const op of [
@@ -152,7 +157,30 @@ export class InstructorApiStack extends Stack {
     );
   }
 
-  // Every grant beyond the baseline (table + AppConfig) goes through this,
+  // The deploy-time settings of the dedicated functions that read a bucket by
+  // name, by group (see INSTRUCTOR_API_DEDICATED_FUNCTIONS): the functions of
+  // a group are one function, so naming one operation of it names them all.
+  private bindMediaSettings(
+    lessonMediaBucket: LessonMediaBucket,
+    lessonMediaUploadBucket: LessonMediaUploadBucket,
+    publicMediaBucket: PublicMediaBucket,
+  ) {
+    // MediaUrl: only the CloudFront signing config.
+    lessonMediaBucket.bindSettings(
+      this.privilegedHandler('contentItem.createVideoUrl'),
+    );
+    // Media: both buckets, to read and write uploads, and (through the
+    // mediaPipeline grants) the pipeline and the cleanup schedule.
+    const media = this.privilegedHandler('contentItem.createVideo');
+    lessonMediaBucket.bindSettings(media);
+    lessonMediaUploadBucket.bindSettings(media);
+    // CourseImage
+    publicMediaBucket.bindSettings(
+      this.privilegedHandler('course.updateImage'),
+    );
+  }
+
+  // Every grant beyond the baseline (table) goes through this,
   // so a procedure missing from INSTRUCTOR_API_DEDICATED_FUNCTIONS fails
   // synth instead of silently handing its permissions to the shared router
   // function that serves every other instructor procedure.

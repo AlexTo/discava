@@ -11,18 +11,22 @@ import {
 } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { STREAM_FEATURES } from '@discava/core-table';
-import { App, type Stack } from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import {
   actionsByRole,
   actionsOf,
+  functionsReadingAppConfig,
   methodSettings,
   resources,
   stackTemplates,
   synth,
 } from '../stacks/stack-test-fixture.js';
 import { ApplicationStage } from './application-stage.js';
+import portalRuntimeConfigOnMain from './portal-runtime-config.main.json' with {
+  type: 'json',
+};
 
 const API_FUNCTIONS = {
   CoreApi: [
@@ -201,7 +205,7 @@ describe('Lambda functions', () => {
     'CoreApi',
     'InstructorApi',
     'AdminApi',
-    'RuntimeConfig',
+    'PortalConfig',
   ])('all run on ARM in %s', (name) => {
     const functions = Object.entries(
       stack(name).findResources('AWS::Lambda::Function'),
@@ -450,7 +454,7 @@ describe('notification delivery', () => {
     expect(queues[0].VisibilityTimeout).toBe(Timeout * 6);
   });
 
-  it('is told where the portals and the API are, where its secret is, and the runtime config app id', () => {
+  it('is told where the portals and the API are, and where its secret is', () => {
     const { Environment } = deliveryFunction(configured);
     expect(Object.keys(Environment.Variables).sort()).toEqual(
       [
@@ -459,7 +463,6 @@ describe('notification delivery', () => {
         'INSTRUCTOR_PORTAL_URL',
         'DISCAVA_DYNAMODB_CORE_TABLE',
         'NOTIFICATIONS_FROM_ADDRESS',
-        'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
         'UNSUBSCRIBE_SECRET_ARN',
       ].sort(),
@@ -873,5 +876,97 @@ describe('payout run', () => {
         stack('Payouts').findResources('AWS::Lambda::EventSourceMapping'),
       ),
     ).toEqual([]);
+  });
+});
+
+describe('AppConfig readers', () => {
+  it('leaves no function in any stack able to read AppConfig', () => {
+    const readers = stackTemplates({}).flatMap(([name, template]) =>
+      functionsReadingAppConfig(template).map((id) => `${name}/${id}`),
+    );
+    expect(readers).toEqual([]);
+  });
+});
+
+describe('the final stack (portal configuration only)', () => {
+  const stage = new ApplicationStage(new App(), 'discava-test', {
+    env: { account: '111122223333', region: 'ap-southeast-2' },
+  });
+  const stacks = stage.node.children.filter(
+    (child): child is Stack => child instanceof Stack,
+  );
+  const templates = stackTemplates({});
+
+  it('has no AppConfig resource in any stack', () => {
+    const found = templates.flatMap(([name, template]) =>
+      Object.entries(template.toJSON().Resources ?? {})
+        .filter(([, r]) =>
+          (r as { Type: string }).Type.startsWith('AWS::AppConfig::'),
+        )
+        .map(([id]) => `${name}/${id}`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('grants no appconfig: action in any stack', () => {
+    const found = templates.flatMap(([name, template]) =>
+      Object.values(template.findResources('AWS::IAM::Policy')).flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                PolicyDocument: { Statement: { Action: string | string[] }[] };
+              };
+            }
+          ).Properties.PolicyDocument.Statement.flatMap(({ Action }) =>
+            [Action].flat(),
+          )
+            .filter((action) => action.startsWith('appconfig:'))
+            .map((action) => `${name}: ${action}`),
+      ),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('keeps every function environment within the 4,096 byte limit', () => {
+    const tooBig = templates.flatMap(([name, template]) =>
+      Object.entries(template.findResources('AWS::Lambda::Function'))
+        .map(([id, fn]) => [
+          `${name}/${id}`,
+          JSON.stringify(fn.Properties.Environment?.Variables ?? {}).length,
+        ])
+        .filter(([, size]) => (size as number) > 4096),
+    );
+    expect(tooBig).toEqual([]);
+  });
+
+  it('ends with PortalConfig, which depends on every other application stack', () => {
+    const ids = stacks.map((s) => s.node.id);
+    expect(ids).toContain('PortalConfig');
+    expect(ids).not.toContain('RuntimeConfig');
+    const portalConfig = stacks.find((s) => s.node.id === 'PortalConfig')!;
+    const dependencies = portalConfig.dependencies.map((s) => s.node.id);
+    expect(dependencies.sort()).toEqual(
+      ids.filter((id) => id !== 'PortalConfig').sort(),
+    );
+  });
+
+  it("keeps each portal's runtime-config.json source as main synthesised it", () => {
+    const deployments = Object.fromEntries(
+      Object.entries(
+        synth({})('PortalConfig').findResources('Custom::CDKBucketDeployment'),
+      ).map(([id, resource]) => [id, resource.Properties.SourceMarkers]),
+    );
+    expect(deployments).toEqual(portalRuntimeConfigOnMain);
+  });
+
+  it("retains each portal's runtime-config.json when the stack is deleted", () => {
+    const deployments = Object.values(
+      synth({})('PortalConfig').findResources('Custom::CDKBucketDeployment'),
+    );
+    expect(deployments.length).toBe(3);
+    for (const deployment of deployments) {
+      expect(deployment.Properties.RetainOnDelete).toBe(true);
+    }
   });
 });

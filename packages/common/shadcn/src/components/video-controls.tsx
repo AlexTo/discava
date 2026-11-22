@@ -76,6 +76,12 @@ const clamp = (value: number, min: number, max: number) =>
  * `captionNotice`, about a track that failed to load, which it shows in the
  * menu).
  *
+ * With `overlay`, the video is paused and stays paused, the control bar is
+ * inert and the shortcuts do nothing (Escape calls `onOverlayDismiss`), and
+ * the overlay shows over the video inside the container, so it stays visible
+ * in fullscreen. If the video was playing it plays again when the overlay
+ * clears (unless it ended), and focus returns to Play.
+ *
  * The container takes focus and handles the shortcuts, so they work while
  * focus is anywhere in the player. Keys the focused control already uses
  * (Space on a button, arrows on a slider) are left to it.
@@ -86,6 +92,8 @@ export function VideoControls({
   captions = [],
   captionNotice,
   transcript,
+  overlay,
+  onOverlayDismiss,
 }: {
   // The `<video>` element to control.
   children: React.ReactNode;
@@ -101,6 +109,10 @@ export function VideoControls({
     onToggle: () => void;
     onTrackChange: (track: LoadedCaption | undefined) => void;
   };
+  // Shown over the video while set; the video is paused meanwhile.
+  overlay?: React.ReactNode;
+  // The viewer pressed Escape while the overlay was open.
+  onOverlayDismiss?: () => void;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [paused, setPaused] = React.useState(true);
@@ -115,6 +127,9 @@ export function VideoControls({
   const [focusWithin, setFocusWithin] = React.useState(false);
   const [active, setActive] = React.useState(false);
   const hideTimer = React.useRef<ReturnType<typeof setTimeout>>(undefined);
+  const playButtonRef = React.useRef<HTMLButtonElement>(null);
+  const overlayRef = React.useRef<HTMLElement>(null);
+  const hasOverlay = overlay !== undefined && overlay !== null;
   // What the viewer chose before this video: read once. Until they choose
   // here, it decides whether captions show and which track.
   const [rememberedCaptions] = React.useState(() => {
@@ -201,6 +216,32 @@ export function VideoControls({
   }, []);
 
   React.useEffect(() => () => clearTimeout(hideTimer.current), []);
+
+  // While an overlay is open the video is paused, and plays again when it
+  // clears if it was playing. Picture-in-picture is left first, because the
+  // overlay can't show over it.
+  React.useEffect(() => {
+    const video = getVideo();
+    if (!hasOverlay || !video) {
+      return;
+    }
+    const wasPlaying = !video.paused && !video.ended;
+    if (document.pictureInPictureElement === video) {
+      document.exitPictureInPicture?.()?.catch(() => {});
+    }
+    video.pause();
+    const keepPaused = () => video.pause();
+    video.addEventListener('play', keepPaused);
+    overlayRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    return () => {
+      video.removeEventListener('play', keepPaused);
+      if (wasPlaying && !video.ended) {
+        // Rejects when the browser blocks or interrupts playback.
+        video.play()?.catch(() => {});
+      }
+      playButtonRef.current?.focus();
+    };
+  }, [hasOverlay]);
 
   // The track a toggle brings back: the last one chosen, else the remembered
   // language, else the default, else the first.
@@ -362,6 +403,13 @@ export function VideoControls({
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     showBriefly();
+    if (hasOverlay) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onOverlayDismiss?.();
+      }
+      return;
+    }
     // Menus render in a portal but their events still bubble through React.
     if (!event.currentTarget.contains(event.target as Node)) {
       return;
@@ -409,6 +457,7 @@ export function VideoControls({
       <div
         role="group"
         aria-label="Video controls"
+        inert={hasOverlay}
         data-visible={visible}
         className={cn(
           'absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/80 to-transparent p-2 text-white transition-opacity motion-reduce:transition-none',
@@ -430,6 +479,7 @@ export function VideoControls({
             type="button"
             variant="ghost"
             size="icon-sm"
+            ref={playButtonRef}
             aria-label="Play"
             aria-pressed={!paused}
             onClick={togglePlay}
@@ -573,6 +623,17 @@ export function VideoControls({
           </div>
         </div>
       </div>
+      {hasOverlay && (
+        <section
+          ref={overlayRef}
+          role="group"
+          aria-label="Video question"
+          data-slot="video-overlay"
+          className="absolute inset-0 z-10 overflow-y-auto overflow-x-hidden bg-black/85 text-white motion-reduce:transition-none motion-reduce:animate-none"
+        >
+          {overlay}
+        </section>
+      )}
     </div>
   );
 }

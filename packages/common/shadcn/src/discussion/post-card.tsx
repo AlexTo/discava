@@ -15,6 +15,8 @@ export interface PostCardPost {
   body?: string;
   createdAt?: string;
   voteCount?: number;
+  // An answer to the course's first-lesson prompt.
+  promptAnswer?: boolean;
 }
 
 // One post: who wrote it and when, its text and upvotes, with the controls
@@ -43,8 +45,15 @@ export function PostCard({
   }
   return (
     <div className="space-y-2">
-      {showTitle && post.title ? (
-        <h4 className="break-words font-medium">{post.title}</h4>
+      {(showTitle && post.title) || post.promptAnswer ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {showTitle && post.title ? (
+            <h4 className="break-words font-medium">{post.title}</h4>
+          ) : null}
+          {post.promptAnswer ? (
+            <Badge variant="secondary">Answer to the course prompt</Badge>
+          ) : null}
+        </div>
       ) : null}
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">{post.authorName}</span>

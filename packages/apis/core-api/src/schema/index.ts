@@ -21,3 +21,4 @@ export * from './quiz.js';
 export * from './review.js';
 export * from './search.js';
 export * from './transcript.js';
+export * from './video-question.js';

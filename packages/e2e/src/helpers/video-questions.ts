@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { expect, type Locator, type Page } from '@playwright/test';
+import type { ApiUser } from './api.js';
 
 /**
  * Opens a video row's Questions dialog. The button is disabled until the
@@ -90,3 +91,64 @@ export const saveVideoQuestions = async (dialog: Locator) => {
   await dialog.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(dialog.getByText('Saved', { exact: true })).toBeVisible();
 };
+
+const textBody = (text: string) =>
+  JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  });
+
+/** A video question as the API takes it, with the answer key's part inline. */
+export interface ApiVideoQuestion {
+  questionId: string;
+  prompt: string;
+  options: [string, string];
+  /** Index (0 or 1) of the correct option. */
+  correct: 0 | 1;
+  /** Whole seconds into the video; null asks it after the video ends. */
+  atSeconds: number | null;
+  explanation?: string;
+}
+
+/**
+ * Saves a video's questions through instructor-api, as the editor would.
+ * `quizVersion` is the version the video is at: 0 before it has any.
+ */
+export const setVideoQuestionsViaApi = (
+  instructor: ApiUser,
+  item: {
+    courseId: string;
+    moduleId: string;
+    lessonId: string;
+    contentItemId: string;
+  },
+  questions: ApiVideoQuestion[],
+  quizVersion = 0,
+) =>
+  instructor.instructor.contentItem.updateVideoQuestions.mutate({
+    ...item,
+    quizVersion,
+    questions: questions.map((q) => ({
+      questionId: q.questionId,
+      kind: 'single' as const,
+      prompt: textBody(q.prompt),
+      options: q.options.map((text, index) => ({
+        optionId: `${q.questionId}-${index}`,
+        text,
+      })),
+      atSeconds: q.atSeconds,
+    })),
+    answerKey: Object.fromEntries(
+      questions.map((q) => [
+        q.questionId,
+        {
+          correctOptionIds: [`${q.questionId}-${q.correct}`],
+          ...(q.explanation && { explanation: textBody(q.explanation) }),
+        },
+      ]),
+    ),
+  });
+
+/** The question the player has open over the video. */
+export const openVideoQuestion = (page: Page) =>
+  page.getByRole('group', { name: 'Video question' });

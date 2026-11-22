@@ -118,7 +118,7 @@ export interface StaticWebsiteProps {
    *
    * @default this construct
    */
-  readonly runtimeConfigScope?: Construct;
+  readonly portalConfigScope?: Construct;
   /**
    * Headers the distribution adds to every response, besides the security
    * headers: e.g. `X-Robots-Tag: noindex` for a stage closed to search
@@ -154,7 +154,7 @@ export class StaticWebsite extends Construct {
       encryption = BucketEncryption.KMS,
       encryptionKey,
       enableKeyRotation = true,
-      runtimeConfigScope,
+      portalConfigScope,
       extraResponseHeaders,
     }: StaticWebsiteProps,
   ) {
@@ -339,10 +339,10 @@ export class StaticWebsite extends Construct {
 
     // Deploy runtime-config.json separately so it is never cached - clients
     // must always fetch the latest configuration.
-    const runtimeConfigDeploymentScope = runtimeConfigScope ?? this;
+    const portalConfigDeploymentScope = portalConfigScope ?? this;
     new BucketDeployment(
-      runtimeConfigDeploymentScope,
-      runtimeConfigScope
+      portalConfigDeploymentScope,
+      portalConfigScope
         ? `${websiteName}RuntimeConfigDeployment`
         : 'RuntimeConfigDeployment',
       {
@@ -351,7 +351,7 @@ export class StaticWebsite extends Construct {
             DEFAULT_RUNTIME_CONFIG_FILENAME,
             Lazy.string({
               produce: () =>
-                Stack.of(runtimeConfigDeploymentScope).toJsonString(
+                Stack.of(portalConfigDeploymentScope).toJsonString(
                   RuntimeConfig.ensure(this).get('connection'),
                 ),
             }),
@@ -361,6 +361,9 @@ export class StaticWebsite extends Construct {
         distribution: this.cloudFrontDistribution,
         cacheControl: [CacheControl.noCache()],
         prune: false,
+        // Deleting the stack that holds this deployment must leave the file in
+        // the bucket.
+        retainOnDelete: true,
         memoryLimit: 1024,
       },
     );
@@ -369,7 +372,7 @@ export class StaticWebsite extends Construct {
     // every stack that ends up with one.
     for (const stack of new Set([
       Stack.of(this),
-      Stack.of(runtimeConfigDeploymentScope),
+      Stack.of(portalConfigDeploymentScope),
     ])) {
       suppressRules(
         stack,

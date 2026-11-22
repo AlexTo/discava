@@ -72,3 +72,54 @@ export const CertificatePdfOutputSchema = z.object({
 });
 
 export type ICertificatePdfOutput = z.output<typeof CertificatePdfOutputSchema>;
+
+export const CertificateRequirementsInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export type ICertificateRequirementsInput = z.output<
+  typeof CertificateRequirementsInputSchema
+>;
+
+export const QuizRequirementItemSchema = z.object({
+  contentItemId: z.string(),
+  lessonId: z.string(),
+  title: z.string(),
+  state: z.enum(['passed', 'not-attempted', 'not-passed', 'no-attempts-left']),
+});
+
+export type IQuizRequirementItem = z.output<typeof QuizRequirementItemSchema>;
+
+// What the caller still needs for the certificate of one course. Their own
+// data only.
+export const CertificateRequirementsOutputSchema = z.object({
+  certificatesEnabled: z.boolean(),
+  certificate: z
+    .object({
+      certificateId: z.string(),
+      status: z.enum(['valid']),
+    })
+    .nullable(),
+  allMet: z.boolean(),
+  requirements: z.array(
+    z.discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('complete-items'),
+        met: z.boolean(),
+        done: z.number(),
+        total: z.number(),
+      }),
+      z.object({
+        kind: z.literal('pass-quizzes'),
+        met: z.boolean(),
+        done: z.number(),
+        total: z.number(),
+        items: z.array(QuizRequirementItemSchema),
+      }),
+    ]),
+  ),
+});
+
+export type ICertificateRequirementsOutput = z.output<
+  typeof CertificateRequirementsOutputSchema
+>;

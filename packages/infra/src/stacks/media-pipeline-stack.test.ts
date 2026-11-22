@@ -6,7 +6,11 @@
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsReadingAppConfig,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('the media pipeline’s safety nets (#125, #185)', () => {
   const media = synth({})('MediaPipeline');
@@ -163,4 +167,51 @@ describe('automatic captions (US4)', () => {
       expect(allows(role, 's3:PutObject', '/courses/*/captions/*')).toBe(false);
     },
   );
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('MediaPipeline');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    TranscodeCleanup: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    TranscodeComplete: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    ],
+    TranscodeReconciler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET',
+      'DISCAVA_MEDIA_CONVERT_TRANSCODE_CLEANUP',
+    ],
+    TranscribeComplete: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
+  });
+});
+
+describe('the cleanup scheduler targets (R-6)', () => {
+  it('gives the cleanup function no reference to its own ARN', () => {
+    const media = synth({})('MediaPipeline');
+    const [[, cleanup]] = Object.entries(
+      media.findResources('AWS::Lambda::Function'),
+    ).filter(([id]) => id.startsWith('TranscodeCleanup'));
+    expect(
+      JSON.stringify(cleanup.Properties.Environment.Variables),
+    ).not.toContain('TranscodeCleanup');
+  });
 });

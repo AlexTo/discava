@@ -13,6 +13,7 @@ import {
 import { categoryBySlug, listCategories } from './procedures/category.js';
 import {
   certificatePdf,
+  certificateRequirements,
   myCertificates,
   recordLinkedInClick,
   verifyCertificate,
@@ -90,6 +91,10 @@ import {
   publicSuggestCourses,
 } from './procedures/search.js';
 import { searchTranscripts } from './procedures/transcript.js';
+import {
+  answerVideoQuestion,
+  viewVideoQuestions,
+} from './procedures/video-question.js';
 
 export const router = t.router;
 
@@ -138,6 +143,7 @@ export const appRouter = router({
     verify: verifyCertificate,
     myCertificates,
     pdf: certificatePdf,
+    requirements: certificateRequirements,
     recordLinkedInClick,
   }),
   contentItem: router({
@@ -178,6 +184,10 @@ export const appRouter = router({
     delete: deleteReview,
     summary: reviewSummary,
     list: listReviews,
+  }),
+  videoQuestion: router({
+    view: viewVideoQuestions,
+    answer: answerVideoQuestion,
   }),
   quiz: router({
     view: viewQuiz,

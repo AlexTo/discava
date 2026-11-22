@@ -12,7 +12,6 @@ import {
 import { transcribeInputKey } from '@discava/common-server-utils/captions';
 import { scheduleTranscodeCleanup } from '@discava/common-server-utils/cleanup-scheduler';
 import {
-  resolveAppConfigValue,
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
 } from '@discava/common-server-utils/lesson-media-bucket';
@@ -21,6 +20,7 @@ import {
   isLocalDev,
   type LocalTranscodeJobRequest,
 } from '@discava/common-server-utils/local-dev';
+import { readSetting } from '@discava/common-server-utils/settings';
 
 // MediaConvert accepts requests at the regional endpoint, so no
 // DescribeEndpoints lookup is needed.
@@ -38,12 +38,11 @@ type VideoTranscodePipelineConfig = {
   jobTemplateArn: string;
 };
 
-const resolveVideoTranscodePipelineConfig =
-  (): Promise<VideoTranscodePipelineConfig> =>
-    resolveAppConfigValue<VideoTranscodePipelineConfig>(
-      'mediaConvert',
-      'VideoTranscodePipeline',
-    );
+const resolveVideoTranscodePipelineConfig = (): VideoTranscodePipelineConfig =>
+  readSetting<VideoTranscodePipelineConfig>(
+    'mediaConvert',
+    'VideoTranscodePipeline',
+  );
 
 /**
  * What to transcode: a lesson's content item (`target` omitted) or a course's

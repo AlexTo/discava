@@ -59,7 +59,7 @@ function LessonQuestions({
               {row.replyCount === 1
                 ? '1 reply'
                 : `${row.replyCount ?? 0} replies`}
-              {row.answered ? ' · Answered' : ''}
+              {row.answered && !row.promptAnswer ? ' · Answered' : ''}
             </p>
             <Button
               type="button"

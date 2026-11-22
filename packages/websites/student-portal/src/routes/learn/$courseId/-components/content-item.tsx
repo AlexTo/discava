@@ -19,6 +19,7 @@ import {
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
+import type { PlayerPosition } from '@discava/common-web-utils/video-player';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CircleCheck,
@@ -37,6 +38,7 @@ import {
 } from '../../../../hooks/use-course-player';
 import { AssignmentItem } from './assignment-item';
 import { QuizItem } from './quiz-item';
+import { VideoWithQuestions } from './video-questions';
 
 export const ITEM_TYPES = {
   text: { label: 'Reading', icon: FileText },
@@ -133,27 +135,30 @@ function VideoPlayer({
       </ErrorAlert>
     );
   }
-  return (
-    <HlsVideo
-      url={videoQuery.data.url}
-      withCredentials={videoQuery.data.withCredentials}
-      title={item.title}
-      captions={videoQuery.data.captions}
-      transcript
-      resumeAt={videoQuery.data.resumeAt}
-      startAt={startAt}
-      onPositionChange={(position) =>
-        savePosition.mutate({
-          courseId,
-          moduleId,
-          lessonId,
-          contentItemId,
-          versionId: videoQuery.data.versionId,
-          ...position,
-        })
-      }
-      className="aspect-video w-full rounded-xl bg-black"
-    />
+  const video = {
+    url: videoQuery.data.url,
+    withCredentials: videoQuery.data.withCredentials,
+    title: item.title,
+    captions: videoQuery.data.captions,
+    transcript: true,
+    resumeAt: videoQuery.data.resumeAt,
+    startAt,
+    onPositionChange: (position: PlayerPosition) =>
+      savePosition.mutate({
+        courseId,
+        moduleId,
+        lessonId,
+        contentItemId,
+        versionId: videoQuery.data.versionId,
+        ...position,
+      }),
+    className: 'aspect-video w-full rounded-xl bg-black',
+  };
+  // A video without questions is requested and rendered as it always was.
+  return videoQuery.data.questionCount > 0 ? (
+    <VideoWithQuestions item={item} {...video} />
+  ) : (
+    <HlsVideo {...video} />
   );
 }
 

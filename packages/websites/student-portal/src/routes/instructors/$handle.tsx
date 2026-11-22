@@ -18,6 +18,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useCoreApi } from '../../api';
 import { CourseCard } from '../../components/course-card';
+import { PageContainer } from '../../components/page-container';
 import type { DisplayCourse } from '../../lib/course-display';
 import { toDisplayCourse } from '../../lib/course-display';
 import { initialsOf } from '../../lib/initials';
@@ -46,7 +47,9 @@ function NotFound() {
         There is no instructor at this address.
       </p>
       <Button className="mt-5" variant="outline" asChild>
-        <Link to="/">Browse courses</Link>
+        <Link to="/courses" search={{}}>
+          Browse courses
+        </Link>
       </Button>
     </div>
   );
@@ -76,7 +79,7 @@ function RouteComponent() {
     'NOT_FOUND';
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
+    <PageContainer>
       {profileQuery.isPending ? (
         <div className="flex justify-center py-16">
           <Spinner />
@@ -149,6 +152,6 @@ function RouteComponent() {
           </section>
         </>
       )}
-    </main>
+    </PageContainer>
   );
 }

@@ -154,30 +154,30 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - `grep -rnE "getAppConfig|resolveAppConfigValue|RUNTIME_CONFIG_APP_ID|grantReadAppConfig\(" packages --include=*.ts --exclude-dir=node_modules` finds only `runtime-config.ts`'s definitions and tests asserting absence;
 - `pnpm build` passes.
 
-- [ ] T021 [P] [US1] Tests first, in `packages/common/server-utils/src/`:
+- [x] T021 [P] [US1] Tests first, in `packages/common/server-utils/src/`:
   - `lesson-media-bucket.ts`: `resolveBucketName(key)` returns `readSetting<{ bucketName: string }>('s3', key).bucketName`, keeping its local branch. Delete `resolveAppConfigValue`.
   - `lesson-media.ts`: the CloudFront config is `readSetting('s3', 'LessonMediaBucket')`, with the same field checks and messages.
   - `cleanup-scheduler.ts`: `readSetting('mediaConvert', 'TranscodeCleanup')`.
   - `caption-translation-settings.ts`: `readOptionalSetting('captionTranslation', 'Settings')`. When absent, or when the JSON is invalid, return `OFF` exactly as today. The clamp to `0..MAX_CAPTION_LANGUAGES` is unchanged.
-- [ ] T022 [US1] Update those modules' tests: `lesson-media-bucket.test.ts`, `lesson-media.test.ts`, `cleanup-scheduler.test.ts` and `caption-translation-settings.test.ts`. They stub the `DISCAVA_*` variables instead of mocking `@aws-lambda-powertools/parameters/appconfig`, with the same fixture objects. Tests asserting `RUNTIME_CONFIG_APP_ID environment variable is not set` assert `Missing deploy-time setting DISCAVA_…` instead. This is a named test change.
-- [ ] T023 [P] [US1] Tests first, then switch the remaining readers:
+- [x] T022 [US1] Update those modules' tests: `lesson-media-bucket.test.ts`, `lesson-media.test.ts`, `cleanup-scheduler.test.ts` and `caption-translation-settings.test.ts`. They stub the `DISCAVA_*` variables instead of mocking `@aws-lambda-powertools/parameters/appconfig`, with the same fixture objects. Tests asserting `RUNTIME_CONFIG_APP_ID environment variable is not set` assert `Missing deploy-time setting DISCAVA_…` instead. This is a named test change.
+- [x] T023 [P] [US1] Tests first, then switch the remaining readers:
   - `packages/apis/instructor-api/src/helpers/mediaconvert-client.ts`: `readSetting('mediaConvert', 'VideoTranscodePipeline')`. Update `mediaconvert-client.test.ts`'s line asserting the `RUNTIME_CONFIG_APP_ID` error; this is a named test change.
   - `packages/events/src/media/transcribe-client.ts`: `readOptionalSetting<string>('mediaConvert', 'CaptionLanguageCode') ?? DEFAULT_CAPTION_LANGUAGE`.
   - `packages/events/src/certificates/reminder-schedule.ts`: `readSetting('certificates', 'Reminder')`.
 
   Each keeps its local branch and gets present and absent tests.
-- [ ] T024 [US1] Give each function the settings its code reads, next to its grants, with `bindSettings` for the bucket and pipeline constructs and `addSetting` for the stack-level objects. Then remove `RUNTIME_CONFIG_APP_ID` and `grantReadAppConfig` from every function.
+- [x] T024 [US1] Give each function the settings its code reads, next to its grants, with `bindSettings` for the bucket and pipeline constructs and `addSetting` for the stack-level objects. Then remove `RUNTIME_CONFIG_APP_ID` and `grantReadAppConfig` from every function.
   - `packages/infra/src/stacks/media-pipeline-stack.ts`: `mediaConvert.TranscodeCleanup` (`{ lambdaArn, schedulerRoleArn, scheduleGroupName }`) on every function that calls `cleanup-scheduler`. That includes instructor-api's and core-api's handlers, passed through their stack props as the pipeline's other values are.
   - `packages/infra/src/stacks/stream-router-stack.ts`: `certificates.Reminder` on progress recalculation; `captionTranslation.Settings` on the caption translation handler. Delete `grantAppConfig`.
   - The stack holding instructor-api: `captionTranslation.Settings` on its handler, from the stage's `captionTranslation` config with the same defaults as `stream-router-stack.ts` (`enabled ?? true`, `maxLanguagesPerCourse ?? 9`). Move those defaults into one exported helper both stacks call.
   - The bucket settings (`DISCAVA_S3_LESSON_MEDIA_BUCKET`, `DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET`, `DISCAVA_S3_PUBLIC_MEDIA_BUCKET`) and `DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE` on each function whose code calls the matching reader. Find them by following each reader's importers (`resolveLessonMediaBucketName`, `resolveBucketName`, `lesson-media`, `mediaconvert-client`).
 
   Keep every `RuntimeConfig.set` call, which Phase 4 removes.
-- [ ] T025 [US1] Tests first: in each stack test (`core-api-stack.test.ts`, `instructor-api-stack.test.ts`, `admin-api-stack.test.ts`, `media-pipeline-stack.test.ts`, `stream-router-stack.test.ts`, `payments-stack.test.ts`, `data-stack.test.ts`), add a table of function logical-ID prefix → required `DISCAVA_*` names, built from T024's list, and assert every function in it has them.
+- [x] T025 [US1] Tests first: in each stack test (`core-api-stack.test.ts`, `instructor-api-stack.test.ts`, `admin-api-stack.test.ts`, `media-pipeline-stack.test.ts`, `stream-router-stack.test.ts`, `payments-stack.test.ts`, `data-stack.test.ts`), add a table of function logical-ID prefix → required `DISCAVA_*` names, built from T024's list, and assert every function in it has them.
   - Assert that no function in any application stack has `RUNTIME_CONFIG_APP_ID` or an `appconfig:` action.
   - Update any existing assertion on those, and on `grantAppConfig`'s output, to match. This is a named test change.
-- [ ] T026 [US1] Remove `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` from the `package.json` of every package that no longer imports them (`common-server-utils`, `instructor-api`, `core-api`, `events`, and any other the grep finds). Run `pnpm i`. In any test that throws the old `RUNTIME_CONFIG_APP_ID` error from a mock, use the new message; this is a named test change.
-- [ ] T027 [US1] Check the scheduler targets for self-references (research R-6): synthesise and confirm no function's environment references its own ARN. If one does, build that ARN from a fixed function name instead and note it in the PR.
+- [x] T026 [US1] Remove `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` from the `package.json` of every package that no longer imports them (`common-server-utils`, `instructor-api`, `core-api`, `events`, and any other the grep finds). Run `pnpm i`. In any test that throws the old `RUNTIME_CONFIG_APP_ID` error from a mock, use the new message; this is a named test change.
+- [x] T027 [US1] Check the scheduler targets for self-references (research R-6): synthesise and confirm no function's environment references its own ARN. If one does, build that ARN from a fixed function name instead and note it in the PR.
 - [ ] T028 [US1] (human) After this PR deploys, walk the media, certificate, caption translation, payment and stream rows of [quickstart.md](./quickstart.md) step 7 on `discava-development`. Then confirm [contracts/rollout.md](./contracts/rollout.md) step 3: no function in the stage has `RUNTIME_CONFIG_APP_ID`, and no role but the deploy role has an `appconfig:` action.
 
 ---
@@ -192,25 +192,25 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - `grep -rn "aws-appconfig\|appconfig" packages scripts --include=*.ts --include=*.sh --exclude-dir=node_modules` finds only the tests asserting absence;
 - `pnpm build` passes.
 
-- [ ] T029 [US3] Tests first, then in `packages/infra/src/stages/application-stage.test.ts`, before changing the code, snapshot each portal's `runtime-config.json` source (the `Source.data` content of its `BucketDeployment`) as synthesised from `main`. Then add these assertions:
+- [x] T029 [US3] Tests first, then in `packages/infra/src/stages/application-stage.test.ts`, before changing the code, snapshot each portal's `runtime-config.json` source (the `Source.data` content of its `BucketDeployment`) as synthesised from `main`. Then add these assertions:
   - no stack contains an `AWS::AppConfig::*` resource;
   - no IAM statement in any stack has an `appconfig:` action;
   - no function's serialised `Environment.Variables` exceeds 4,096 bytes;
   - the stage has a stack with id `PortalConfig` that depends on every other application stack, and none with id `RuntimeConfig`;
   - each portal's `runtime-config.json` source equals the snapshot.
-- [ ] T030 [US3] In `packages/common/constructs/src/core/runtime-config.ts`:
+- [x] T030 [US3] In `packages/common/constructs/src/core/runtime-config.ts`:
   - Delete `placeIn`, `appConfigApplicationId`, `grantReadAppConfig`, `ensureAspect` and its aspect, `runtimeConfigApplicationName`, `RuntimeConfigPlacement`, and every `aws-appconfig` import.
   - Keep `ensure`, `of`, `set` and `get` for `connection`. Make `set` throw for any other namespace, so no one adds a runtime-config namespace by habit, and test it in `runtime-config.test.ts`.
   - Update the class comment to say it holds the portals' `connection` settings only.
-- [ ] T031 [US3] Delete every `RuntimeConfig.set` call for `dynamodb`, `s3`, `opensearch`, `mediaConvert`, `certificates` and `captionTranslation`. That covers `dynamodb.ts`, `media-bucket.ts`, `upload-bucket.ts`, `public-bucket.ts` (keep its `connection.media` call), `opensearch.ts`, `video-transcode-pipeline.ts`, `media-pipeline-stack.ts` and `stream-router-stack.ts`. Update the constructs' tests that asserted those namespaces; this is a named test change, since the values now live in `bindSettings`, tested in T003.
-- [ ] T032 [US3] In `packages/infra/src/stages/application-stage.ts`:
+- [x] T031 [US3] Delete every `RuntimeConfig.set` call for `dynamodb`, `s3`, `opensearch`, `mediaConvert`, `certificates` and `captionTranslation`. That covers `dynamodb.ts`, `media-bucket.ts`, `upload-bucket.ts`, `public-bucket.ts` (keep its `connection.media` call), `opensearch.ts`, `video-transcode-pipeline.ts`, `media-pipeline-stack.ts` and `stream-router-stack.ts`. Update the constructs' tests that asserted those namespaces; this is a named test change, since the values now live in `bindSettings`, tested in T003.
+- [x] T032 [US3] In `packages/infra/src/stages/application-stage.ts`:
   - Create the last stack as `new Stack(this, 'PortalConfig', stackProps)`, and rename `runtimeConfigScope` to `portalConfigScope` through `websites-stack.ts`, `static-website.ts` and the portal constructs.
   - Delete `RuntimeConfig.ensure(data).placeIn(...)` and its comment.
   - Update the class comment's deploy order (`… -> AdminApi -> PortalConfig`) and the paragraph describing `RuntimeConfig`.
-- [ ] T033 [US3] Confirm the portal `BucketDeployment`s in `packages/common/constructs/src/core/static-website.ts` keep CDK's default `retainOnDelete: true`, so deleting the old stack leaves each `runtime-config.json` in place (research R-8). If the code sets it, set `retainOnDelete: true` explicitly, and add a construct test asserting `RetainOnDelete` is true.
-- [ ] T034 [P] [US3] Tests first, then in `scripts/setup-stage.sh`, delete the execution role's `AppConfigForDiscava` statement and the two `appconfig:` actions from the boundary's `ResourcesNamedById`. In `setup-stage.test.ts`, assert neither policy has any `appconfig:` action. Update the comment block that lists "MediaConvert and AppConfig".
-- [ ] T035 [P] [US3] Remove any remaining `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` dependency, and their entries from `pnpm-workspace.yaml`'s catalog if nothing uses them. Run `pnpm i`.
-- [ ] T036 [US4] Write the upgrade steps into the PR description, copied from [contracts/rollout.md](./contracts/rollout.md) steps 3 to 6 with the real stack names (`discava-development-RuntimeConfig`, `discava-development-Data`), and the two failure messages and what to do about them.
+- [x] T033 [US3] Confirm the portal `BucketDeployment`s in `packages/common/constructs/src/core/static-website.ts` keep CDK's default `retainOnDelete: true`, so deleting the old stack leaves each `runtime-config.json` in place (research R-8). If the code sets it, set `retainOnDelete: true` explicitly, and add a construct test asserting `RetainOnDelete` is true.
+- [x] T034 [P] [US3] Tests first, then in `scripts/setup-stage.sh`, delete the execution role's `AppConfigForDiscava` statement and the two `appconfig:` actions from the boundary's `ResourcesNamedById`. In `setup-stage.test.ts`, assert neither policy has any `appconfig:` action. Update the comment block that lists "MediaConvert and AppConfig".
+- [x] T035 [P] [US3] Remove any remaining `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` dependency, and their entries from `pnpm-workspace.yaml`'s catalog if nothing uses them. Run `pnpm i`.
+- [x] T036 [US4] Write the upgrade steps into the PR description, copied from [contracts/rollout.md](./contracts/rollout.md) steps 3 to 6 with the real stack names (`discava-development-RuntimeConfig`, `discava-development-Data`), and the two failure messages and what to do about them.
 - [ ] T037 [US4] (human, before merge) Confirm [contracts/rollout.md](./contracts/rollout.md) step 3 still holds on `discava-development`. Then do step 4: `aws cloudformation delete-stack --stack-name discava-development-RuntimeConfig` and `aws cloudformation wait stack-delete-complete --stack-name discava-development-RuntimeConfig`. Check each portal still loads its `runtime-config.json`, then merge.
 - [ ] T038 [US4] (human) After the deploy: `aws appconfig list-applications` lists no Discava application, `discava-development-PortalConfig` exists, each portal signs in, and each portal's `runtime-config.json` has the same content as before. Then optionally re-run `scripts/setup-stage.sh discava-development` to drop the AppConfig rights (rollout step 6).
 
