@@ -19,6 +19,7 @@ import {
   publishCourse,
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
+import { coursePageUrl } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
@@ -29,7 +30,7 @@ import {
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
-import { THREE_SECOND_VIDEO } from '../helpers/video.js';
+import { expectToPlay, THREE_SECOND_VIDEO } from '../helpers/video.js';
 
 test('an instructor chooses caption languages and every video gets them', async ({
   browser,
@@ -37,6 +38,8 @@ test('an instructor chooses caption languages and every video gets them', async 
   const course = uniqueName('E2E caption languages course');
   const instructor = await browser.newPage();
   const student = await browser.newPage();
+  const visitor = await browser.newPage();
+  let courseId = '';
 
   await test.step('the instructor chooses Spanish and French', async () => {
     await instructor.goto(`${PORTALS.instructor}/my-courses`);
@@ -45,6 +48,7 @@ test('an instructor chooses caption languages and every video gets them', async 
       title: course,
       summary: 'A course translated by the end-to-end tests.',
     });
+    courseId = instructor.url().split('/').pop() as string;
     await addModule(instructor, 'Module one');
     await addLesson(instructor, 'Lesson one');
     await addVideoItem(instructor, {
@@ -94,7 +98,7 @@ test('an instructor chooses caption languages and every video gets them', async 
     await publishCourse(instructor);
   });
 
-  await test.step('a student picks the Spanish captions', async () => {
+  await test.step('a student sees the translated captions marked and picks Spanish', async () => {
     await openCourse(student, course);
     await enrol(student, newUser('Sol', ['student']));
     await startFirstLesson(student);
@@ -107,10 +111,70 @@ test('an instructor chooses caption languages and every video gets them', async 
       .getByRole('group', { name: 'Video player' })
       .scrollIntoViewIfNeeded();
     await captions.click();
-    await student.getByRole('menuitemradio', { name: /^Español/ }).click();
+    const tracks = student.getByRole('menuitemradio');
+    await expect(tracks).toHaveText([
+      'Off',
+      'English (default)',
+      'Español (auto-translated)',
+      'Français (auto-translated)',
+    ]);
+    await screenshot(student, 'captions-menu-auto-translated');
+    await student
+      .getByRole('menuitemradio', { name: 'Español (auto-translated)' })
+      .click();
+    await expect(captions).toHaveAccessibleName(
+      'Captions: Español (auto-translated)',
+    );
     await expect
       .poll(() => shownCue(video))
       .toBe(LOCAL_TRANSLATION('es-ES', AUTO_CAPTION_CUE));
-    await screenshot(student, 'student-translated-captions');
+  });
+
+  await test.step('the remembered language shows on the next video', async () => {
+    await student.reload();
+    const item = lessonItem(student, 'Video two');
+    const captions = item.getByRole('button', { name: /^Captions/ });
+    await expect(captions).toBeVisible({ timeout: 30_000 });
+    await expect(captions).toHaveAccessibleName(
+      'Captions: Español (auto-translated)',
+    );
+    await expect
+      .poll(() => shownCue(lessonVideo(student, 'Video two')))
+      .toBe(LOCAL_TRANSLATION('es-ES', AUTO_CAPTION_CUE));
+  });
+
+  await test.step('a signed-out visitor sees the preview video’s translated languages', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+    const previewArea = instructor.locator(
+      'section[aria-labelledby="preview-video-heading"]',
+    );
+    await previewArea
+      .getByLabel('Preview video file')
+      .setInputFiles(THREE_SECOND_VIDEO);
+    await expect(previewArea.locator('video')).toBeAttached({
+      timeout: 90_000,
+    });
+
+    const captions = visitor.getByRole('button', { name: /^Captions/ });
+    // The player reads the preview's tracks once, when it opens, and the
+    // translations arrive after the automatic captions do: open the page
+    // afresh until they are there.
+    await expect(async () => {
+      await visitor.goto(coursePageUrl(courseId));
+      await visitor.getByRole('button', { name: 'Play preview' }).click();
+      await expectToPlay(visitor.locator('video[data-slot="hls-video"]'));
+      await captions.click();
+      await expect(
+        visitor.getByRole('menuitemradio', {
+          name: 'Español (auto-translated)',
+        }),
+      ).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 120_000 });
+    await expect(
+      visitor.getByRole('menuitemradio', {
+        name: 'Français (auto-translated)',
+      }),
+    ).toBeVisible();
+    await screenshot(visitor, 'preview-captions-menu-auto-translated');
   });
 });

@@ -11,7 +11,12 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type LoadedCaption, VideoControls } from './video-controls';
+import {
+  AUTO_TRANSLATED_SUFFIX,
+  captionMenuLabel,
+  type LoadedCaption,
+  VideoControls,
+} from './video-controls';
 
 const STORAGE_KEY = 'discava-video-preferences';
 
@@ -563,6 +568,51 @@ describe('VideoControls captions', () => {
     cleanup();
     setupCaptions([]);
     expect(screen.queryByRole('button', { name: /^Captions/ })).toBeNull();
+  });
+
+  describe('machine-translated tracks', () => {
+    const TRANSLATED: LoadedCaption[] = [
+      CAPTIONS[1],
+      { ...CAPTIONS[0], label: 'Español', machineTranslated: true },
+    ];
+
+    it('labels a translated track with the suffix and no other', () => {
+      expect(AUTO_TRANSLATED_SUFFIX).toBe('(auto-translated)');
+      expect(captionMenuLabel(TRANSLATED[1])).toBe('Español (auto-translated)');
+      expect(captionMenuLabel(TRANSLATED[0])).toBe('English');
+    });
+
+    it('shows the suffix in the menu and the button name, and saves the language', async () => {
+      setupCaptions(TRANSLATED);
+      await userEvent.click(captionsButton());
+      expect(
+        screen.getByRole('menuitemradio', { name: 'English (default)' }),
+      ).toBeVisible();
+      await userEvent.click(
+        screen.getByRole('menuitemradio', {
+          name: 'Español (auto-translated)',
+        }),
+      );
+      expect(captionsButton()).toHaveAccessibleName(
+        'Captions: Español (auto-translated)',
+      );
+      expect(savedPreferences()).toMatchObject({
+        captionsOn: true,
+        captionLanguage: 'es-ES',
+      });
+    });
+
+    it('selects a translated track for a remembered language', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ captionsOn: true, captionLanguage: 'es-ES' }),
+      );
+      const { modeOf } = setupCaptions(TRANSLATED);
+      expect(modeOf('a')).toBe('showing');
+      expect(captionsButton()).toHaveAccessibleName(
+        'Captions: Español (auto-translated)',
+      );
+    });
   });
 
   it('starts with captions off, and lists Off plus each track with the default marked', async () => {

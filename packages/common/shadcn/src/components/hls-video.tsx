@@ -25,6 +25,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { TranscriptPanel } from './transcript-panel';
 import { Button } from './ui/button';
 import {
+  captionMenuLabel,
   formatTime,
   type LoadedCaption,
   VideoControls,
@@ -62,7 +63,7 @@ const CaptionTrack = ({ caption }: { caption: LoadedCaption }) => {
       data-track-id={caption.trackId}
       kind="captions"
       srcLang={caption.language}
-      label={caption.label}
+      label={captionMenuLabel(caption)}
       src={caption.src}
     />
   );
@@ -77,6 +78,7 @@ export interface PlayerCaption {
   language: string;
   label: string;
   isDefault: boolean;
+  machineTranslated?: boolean;
   // Plain CloudFront URL, authorised by the signed cookies.
   url: string;
 }
@@ -154,7 +156,7 @@ function useCaptionFiles(
     if (file) {
       loaded.push({ ...caption, ...file });
     } else if (file === null) {
-      failed.push(caption.label);
+      failed.push(captionMenuLabel(caption));
     }
   }
   return {

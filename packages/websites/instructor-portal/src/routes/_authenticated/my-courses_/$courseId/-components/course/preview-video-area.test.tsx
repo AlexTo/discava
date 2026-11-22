@@ -16,9 +16,29 @@ const { readVideoDuration } = vi.hoisted(() => ({
 }));
 vi.mock('./read-video-duration', () => ({ readVideoDuration }));
 // The player itself is covered in common-shadcn; here it only shows what it got.
-vi.mock('@discava/common-shadcn/components/hls-video', () => ({
-  HlsVideo: ({ url }: { url: string }) => <div data-testid="player">{url}</div>,
-}));
+vi.mock('@discava/common-shadcn/components/hls-video', async () => {
+  const { captionMenuLabel } = await import(
+    '@discava/common-shadcn/components/video-controls'
+  );
+  return {
+    HlsVideo: ({
+      url,
+      captions = [],
+    }: {
+      url: string;
+      captions?: { label: string; machineTranslated?: boolean }[];
+    }) => (
+      <div data-testid="player">
+        {url}
+        <ul>
+          {captions.map((c) => (
+            <li key={c.label}>{captionMenuLabel(c)}</li>
+          ))}
+        </ul>
+      </div>
+    ),
+  };
+});
 
 // The PUT straight to S3 goes through XMLHttpRequest, for its progress.
 let uploads: FakeUpload[] = [];
@@ -186,6 +206,35 @@ describe('PreviewVideoArea', () => {
     );
     expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Remove' })).toBeVisible();
+  });
+
+  it('passes a translated track to the player as auto-translated', async () => {
+    renderWithInstructorApi(
+      <PreviewVideoArea courseId={COURSE_ID} preview={summary()} />,
+      {
+        handlers: {
+          ...handlers,
+          'coursePreview.createVideoUrl': () => ({
+            url: 'https://media.test/preview/master.m3u8',
+            withCredentials: false,
+            versionId: 'nonce-1',
+            captions: [
+              {
+                trackId: 't2',
+                language: 'es-ES',
+                label: 'Español',
+                isDefault: false,
+                source: 'translated',
+                machineTranslated: true,
+                url: 'https://media.test/preview/t2.vtt',
+              },
+            ],
+          }),
+        },
+      },
+    );
+
+    expect(await screen.findByText('Español (auto-translated)')).toBeVisible();
   });
 
   it('replaces a preview, sending the nonce it read', async () => {
