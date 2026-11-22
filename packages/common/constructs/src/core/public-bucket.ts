@@ -245,15 +245,24 @@ export class PublicBucket extends Construct {
   /**
    * Lets `grantee` presign uploads, which arrive tagged UNATTACHED_TAG, and
    * attach, detach or check an object: read its size and type, and set or
-   * clear its tags.
+   * clear its tags. Limited to objects whose key matches one of
+   * `keyPatterns` (S3 key patterns such as `brand/logo/*`); every object by
+   * default.
    */
-  public grantManageObjects(grantee: IGrantable): Grant {
-    this.bucket.grantRead(grantee);
-    this.bucket.grantPut(grantee);
+  public grantManageObjects(
+    grantee: IGrantable,
+    keyPatterns: string[] = ['*'],
+  ): Grant {
+    for (const pattern of keyPatterns) {
+      this.bucket.grantRead(grantee, pattern);
+      this.bucket.grantPut(grantee, pattern);
+    }
     return Grant.addToPrincipalOrResource({
       grantee,
       actions: ['s3:PutObjectTagging', 's3:DeleteObjectTagging'],
-      resourceArns: [this.bucket.arnForObjects('*')],
+      resourceArns: keyPatterns.map((pattern) =>
+        this.bucket.arnForObjects(pattern),
+      ),
       resource: this.bucket,
     });
   }

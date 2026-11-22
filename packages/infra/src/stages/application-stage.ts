@@ -176,6 +176,7 @@ export class ApplicationStage extends Stage {
       adminApi,
       identity: data.identity,
       coreTable: data.coreTable,
+      publicMediaBucket: data.publicMediaBucket,
       stripeSecrets: data.stripeSecrets,
       webhookUrl: paymentsStack.webhookUrl,
       adminPortal: websites.adminPortal,
