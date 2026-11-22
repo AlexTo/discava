@@ -272,3 +272,39 @@ test('an administrator sets the platform name and share image, and visitors see 
     await visitor.close();
   });
 });
+
+test('an administrator chooses a brand colour, and a hard-to-read one is refused', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('a colour that is hard to read is refused and Save stays disabled', async () => {
+    await page.getByLabel('Hex colour').fill('#777777');
+    await expect(page.getByRole('alert')).toContainText(
+      'Text on this colour would be hard to read. Choose a darker or lighter shade.',
+    );
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await screenshot(page, 'brand colour refused');
+  });
+
+  await test.step('a readable colour previews with light text, and only in the preview', async () => {
+    await page.getByLabel('Hex colour').fill('#1d4ed8');
+    await expect(page.getByText(/Text colour: light/)).toBeVisible();
+    await expect(page.getByTestId('brand-preview')).toHaveCSS(
+      '--primary',
+      '#1d4ed8',
+    );
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await screenshot(page, 'brand colour previewed');
+  });
+
+  await test.step('saving confirms', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await screenshot(page, 'brand colour saved');
+  });
+});

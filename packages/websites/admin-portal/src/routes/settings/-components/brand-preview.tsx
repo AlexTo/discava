@@ -9,6 +9,8 @@ export interface BrandPreviewProps {
   name: string;
   showName: boolean;
   shareImageUrl: string | null;
+  /** The unsaved brand colour's variables; set on the preview only, never the page. */
+  colourVariables?: Record<string, string>;
 }
 
 // What visitors will see, drawn from the unsaved form: a portal header, a
@@ -18,13 +20,18 @@ export function BrandPreview({
   name,
   showName,
   shareImageUrl,
+  colourVariables,
 }: BrandPreviewProps) {
   return (
     <section className="space-y-3" aria-labelledby="brand-preview-title">
       <h2 id="brand-preview-title" className="text-lg font-semibold">
         Preview
       </h2>
-      <div className="overflow-hidden rounded-lg border">
+      <div
+        className="overflow-hidden rounded-lg border"
+        data-testid="brand-preview"
+        style={colourVariables as CSSProperties | undefined}
+      >
         <div className="flex h-16 items-center gap-2 border-b bg-background px-4">
           <img
             src={logoUrl}
@@ -45,7 +52,9 @@ export function BrandPreview({
           <Button type="button" variant="secondary" tabIndex={-1}>
             Secondary button
           </Button>
-          <span className="text-sm underline underline-offset-4">A link</span>
+          <span className="text-sm text-(--brand-link) underline underline-offset-4">
+            A link
+          </span>
           <span className="rounded-md bg-sidebar-accent px-3 py-1 text-sm font-medium text-sidebar-accent-foreground">
             Active menu item
           </span>
