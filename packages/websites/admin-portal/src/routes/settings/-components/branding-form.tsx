@@ -7,6 +7,11 @@ import {
   DEFAULT_BRAND_NAME,
   resolveBrand,
 } from '@discava/common-branding/brand';
+import {
+  brandPalette,
+  DEFAULT_PALETTE_VARIABLES,
+  parseHex,
+} from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
@@ -97,12 +102,25 @@ export function BrandingForm({
     icon?: string;
     shareImage?: string;
   }>({});
+  // What is typed in the hex field, which may not be a colour yet.
+  const [colourText, setColourText] = useState(saved.brand.colour ?? '');
+  const colourId = useId();
+  const colourPickerId = useId();
+  const colourMessageId = useId();
   const nameId = useId();
   const nameMessageId = useId();
   const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
 
+  const typedColour = colourText.trim();
+  const palette = typedColour ? brandPalette(typedColour) : undefined;
+  const colourMessage = palette && !palette.ok ? palette.reason : undefined;
+  const colour = typedColour ? parseHex(typedColour) : null;
+  const colourInvalid = colourMessage !== undefined;
+
   const dirty =
+    colour !== saved.brand.colour ||
+    colourInvalid ||
     form.name !== saved.brand.name ||
     form.showNameBesideLogo !== saved.brand.showNameBesideLogo ||
     form.logoKey !== saved.brand.logoKey ||
@@ -142,12 +160,14 @@ export function BrandingForm({
       const result = await save.mutateAsync({
         expectedRevision: saved.revision,
         ...form,
+        colour,
       });
       queryClient.setQueryData(
         trpc.branding.get.queryOptions().queryKey,
         result,
       );
       setBrand(result.brand);
+      setColourText(result.brand.colour ?? '');
       onSaved();
     } catch (error) {
       if (
@@ -268,7 +288,66 @@ export function BrandingForm({
           setPreviews((current) => ({ ...current, shareImage: undefined }));
         }}
       />
+      <section className="space-y-3" aria-labelledby={`${colourId}-title`}>
+        <h2 id={`${colourId}-title`} className="text-lg font-semibold">
+          Brand colour
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Used for primary buttons and highlights in every portal and on public
+          pages. Text on it is chosen for readability.
+        </p>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <Label htmlFor={colourPickerId}>Colour picker</Label>
+            <input
+              id={colourPickerId}
+              type="color"
+              className="block h-9 w-14 cursor-pointer rounded-md border bg-background p-1"
+              value={colour ?? '#000000'}
+              onChange={(event) => setColourText(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={colourId}>Hex colour</Label>
+            <Input
+              id={colourId}
+              className="w-36"
+              placeholder="#1d4ed8"
+              value={colourText}
+              aria-invalid={colourMessage ? true : undefined}
+              aria-describedby={colourMessage ? colourMessageId : undefined}
+              onChange={(event) => setColourText(event.target.value)}
+            />
+          </div>
+          {palette?.ok && (
+            <p className="text-sm text-muted-foreground">
+              Text colour: {palette.textColour === 'light' ? 'light' : 'dark'} ·
+              contrast {palette.contrast.toFixed(1)}:1
+            </p>
+          )}
+        </div>
+        {colourMessage && (
+          <p
+            id={colourMessageId}
+            role="alert"
+            className="break-words text-sm text-destructive"
+          >
+            {colourMessage}
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setColourText('')}
+        >
+          Reset colour to default
+        </Button>
+      </section>
       <BrandPreview
+        colourVariables={
+          palette?.ok ? palette.variables : DEFAULT_PALETTE_VARIABLES
+        }
         logoUrl={logoUrl}
         name={name}
         showName={form.showNameBesideLogo}
@@ -303,7 +382,7 @@ export function BrandingForm({
         </p>
         <Button
           type="submit"
-          disabled={!dirty || nameInvalid || save.isPending}
+          disabled={!dirty || nameInvalid || colourInvalid || save.isPending}
         >
           {save.isPending ? (
             <>

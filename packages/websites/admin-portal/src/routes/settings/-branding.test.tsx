@@ -403,4 +403,96 @@ describe('the Branding page', () => {
       await screen.findByRole('button', { name: 'Try again' }),
     ).toBeInTheDocument();
   });
+
+  describe('the brand colour', () => {
+    const hex = () => screen.getByLabelText('Hex colour');
+
+    it('refuses #777777 with the message, and disables Save', async () => {
+      open();
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#777777' } });
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Text on this colour would be hard to read. Choose a darker or lighter shade.',
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('previews #1d4ed8 with light text and its contrast ratio, in the preview only', async () => {
+      open();
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      expect(screen.getByText(/Text colour: light/)).toHaveTextContent(
+        /contrast 6\.\d:1/,
+      );
+      const preview = screen.getByTestId('brand-preview');
+      expect(preview.style.getPropertyValue('--primary')).toBe('#1d4ed8');
+      expect(preview.style.getPropertyValue('--primary-foreground')).toBe(
+        '#fafafa',
+      );
+      // The page outside the preview keeps its colours until Save.
+      expect(document.documentElement.style.getPropertyValue('--primary')).toBe(
+        '',
+      );
+    });
+
+    it('previews the default, not the saved colour, after a reset or a refused colour', async () => {
+      open({
+        'branding.get': () => ({
+          ...none,
+          brand: { ...none.brand, colour: '#1d4ed8' },
+          revision: 1,
+        }),
+      });
+      await screen.findByLabelText('Hex colour');
+      // What the portal has applied to the page for the saved brand.
+      document.documentElement.style.setProperty('--primary', '#1d4ed8');
+      const preview = screen.getByTestId('brand-preview');
+      expect(preview.style.getPropertyValue('--primary')).toBe('#1d4ed8');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reset colour to default' }),
+      );
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      fireEvent.change(hex(), { target: { value: '#777777' } });
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      document.documentElement.style.removeProperty('--primary');
+    });
+
+    it('sends the colour on Save, and null after a reset', async () => {
+      const { calls } = open({
+        'branding.save': (input) => ({
+          ...none,
+          brand: input,
+          revision: 1,
+        }),
+      });
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#1D4ED8' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(
+          (
+            calls.find((c) => c.path === 'branding.save')?.input as {
+              colour: string;
+            }
+          ).colour,
+        ).toBe('#1d4ed8'),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reset colour to default' }),
+      );
+      expect(hex()).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+  });
 });

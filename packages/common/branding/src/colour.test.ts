@@ -7,6 +7,7 @@ import {
   BRAND_VARIABLES,
   brandPalette,
   contrastRatio,
+  DEFAULT_PALETTE_VARIABLES,
   parseHex,
   relativeLuminance,
 } from './colour.js';
@@ -89,6 +90,18 @@ describe('brandPalette', () => {
     const palette = brandPalette('#1d4ed8');
     expect(palette.ok && Object.keys(palette.variables).sort()).toEqual(
       [...BRAND_VARIABLES].sort(),
+    );
+  });
+});
+
+describe('DEFAULT_PALETTE_VARIABLES', () => {
+  it('sets exactly the variables a brand palette can set', () => {
+    expect(Object.keys(DEFAULT_PALETTE_VARIABLES).sort()).toEqual(
+      [...BRAND_VARIABLES].sort(),
+    );
+    const palette = brandPalette('#1d4ed8');
+    expect(palette.ok && Object.keys(palette.variables).sort()).toEqual(
+      Object.keys(DEFAULT_PALETTE_VARIABLES).sort(),
     );
   });
 });
