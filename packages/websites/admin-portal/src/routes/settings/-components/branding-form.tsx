@@ -137,6 +137,13 @@ export function BrandingForm({
     form.logoKey !== saved.brand.logoKey ||
     form.iconKey !== saved.brand.iconKey ||
     form.shareImageKey !== saved.brand.shareImageKey;
+  const savedIsDefault =
+    saved.brand.name === null &&
+    saved.brand.showNameBesideLogo &&
+    saved.brand.colour === null &&
+    saved.brand.logoKey === null &&
+    saved.brand.iconKey === null &&
+    saved.brand.shareImageKey === null;
   const nameText = form.name ?? DEFAULT_BRAND_NAME;
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
@@ -410,9 +417,14 @@ export function BrandingForm({
       )}
       <footer className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="min-w-0 break-words text-sm text-muted-foreground">
-          {saved.changed
-            ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
-            : 'Using the default Discava brand'}
+          {[
+            savedIsDefault ? 'Using the default Discava brand' : undefined,
+            saved.changed
+              ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Using the default Discava brand'}
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <Button

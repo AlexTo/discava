@@ -91,6 +91,7 @@ describe('the Branding page', () => {
     open({
       'branding.get': () => ({
         ...none,
+        brand: { ...none.brand, name: 'Acme' },
         revision: 2,
         changed: {
           by: 'a',
@@ -101,6 +102,28 @@ describe('the Branding page', () => {
     });
     expect(
       await screen.findByText(/Last changed by Carol Admin, /),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Using the default Discava brand/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says both that the brand is the default and who last changed it, once reset and saved', async () => {
+    open({
+      'branding.get': () => ({
+        ...none,
+        revision: 6,
+        changed: {
+          by: 'a',
+          byName: 'Carol Admin',
+          at: new Date().toISOString(),
+        },
+      }),
+    });
+    expect(
+      await screen.findByText(
+        /^Using the default Discava brand · Last changed by Carol Admin, /,
+      ),
     ).toBeInTheDocument();
   });
 
