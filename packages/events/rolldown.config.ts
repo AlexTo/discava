@@ -18,6 +18,7 @@ const LAMBDAS: [name: string, input: string][] = [
   ['pre-token-generation', 'src/identity/pre-token-generation.ts'],
   ['search-reindex', 'src/search/search-reindex.ts'],
   ['transcript-indexing', 'src/search/transcript-indexing.ts'],
+  ['transcript-reindex', 'src/search/transcript-reindex.ts'],
   ['stream-router', 'src/router/stream-router.ts'],
   ['notification-delivery', 'src/notifications/notification-delivery.ts'],
   ['notification-unsubscribe', 'src/notifications/notification-unsubscribe.ts'],

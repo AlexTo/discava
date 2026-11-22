@@ -184,7 +184,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ### Tests for User Story 4 (write first, see them fail)
 
-- [ ] T032 [P] [US4] Extend `-components/free-preview-page.test.tsx` and `-components/enrolment-actions.test.tsx` in `packages/websites/student-portal/src/routes/learn/$courseId/`, per [contracts/portal-ui.md](./contracts/portal-ui.md):
+- [x] T032 [P] [US4] Extend `-components/free-preview-page.test.tsx` and `-components/enrolment-actions.test.tsx` in `packages/websites/student-portal/src/routes/learn/$courseId/`, per [contracts/portal-ui.md](./contracts/portal-ui.md):
   - the page shows `EnrolmentActions` for the course with its price, and the line "Your progress is saved once you enrol.";
   - "More free previews" lists the outline's other lessons with `freePreview: true`, in order, and is absent when there are none;
   - signed in with an `active` or a `completed` enrolment: the page navigates to `/learn/$courseId/lesson/$lessonId` (use `mockRouter`); with a `dropped` enrolment it stays on the preview; an enrolled student is navigated to the lesson even when `course.publicView` is `NOT_FOUND` (an archived course they still study), because the enrolment is checked before the "no longer available" states;
@@ -193,10 +193,10 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ### Implementation for User Story 4
 
-- [ ] T033 [US4] Add the optional `continueTo?: { lessonId: string }` prop to `EnrolmentActions` in `-components/enrolment-actions.tsx`: when set, the enrolled dialog's link goes to `/learn/$courseId/lesson/$lessonId` with the text "Start this lesson". Change nothing else in the component: the checkout call, its return address and the confirming state stay as the checkout spec defines them.
-- [ ] T034 [US4] In `-components/free-preview-page.tsx`: mount `EnrolmentActions` (course ID, title, price and `continueTo`) in a "Like what you see?" panel with the progress line; add "More free previews" from the outline; when signed in, read `course.myEnrolment` and, for an `active` or `completed` enrolment, navigate to the lesson route with `replace`.
-- [ ] T035 [US4] Extend `packages/e2e/src/scenarios/free-preview.e2e.ts`: a new student signs in, opens a preview of a free course, plays the video to its end, and (checked through the API as that student, and by the table invariants after the test) has no completion, progress or saved position; chooses **Enrol now** then **Start this lesson** and is on the lesson page with nothing marked done; opens the preview address again and lands on the lesson page. On a priced course the preview page shows **Buy now** with the price. `screenshot(page, …)` at the enrol panel and at the enrolled dialog.
-- [ ] T036 [US4] Run `pnpm nx run @discava/student-portal:test` (run once), lint and typecheck, and fix failures.
+- [x] T033 [US4] Add the optional `continueTo?: { lessonId: string }` prop to `EnrolmentActions` in `-components/enrolment-actions.tsx`: when set, the enrolled dialog's link goes to `/learn/$courseId/lesson/$lessonId` with the text "Start this lesson". Change nothing else in the component: the checkout call, its return address and the confirming state stay as the checkout spec defines them.
+- [x] T034 [US4] In `-components/free-preview-page.tsx`: mount `EnrolmentActions` (course ID, title, price and `continueTo`) in a "Like what you see?" panel with the progress line; add "More free previews" from the outline; when signed in, read `course.myEnrolment` and, for an `active` or `completed` enrolment, navigate to the lesson route with `replace`.
+- [x] T035 [US4] Extend `packages/e2e/src/scenarios/free-preview.e2e.ts`: a new student signs in, opens a preview of a free course, plays the video to its end, and (checked through the API as that student, and by the table invariants after the test) has no completion, progress or saved position; chooses **Enrol now** then **Start this lesson** and is on the lesson page with nothing marked done; opens the preview address again and lands on the lesson page. On a priced course the preview page shows **Buy now** with the price. `screenshot(page, …)` at the enrol panel and at the enrolled dialog.
+- [x] T036 [US4] Run `pnpm nx run @discava/student-portal:test` (run once), lint and typecheck, and fix failures.
 
 **Checkpoint**: a preview leads to enrolment and records nothing.
 
@@ -208,8 +208,8 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 **Independent test**: `pnpm nx run @discava/core-api:test -- --run render handler robots sitemap` passes.
 
-- [ ] T037 [P] [US5] Tests first, per [contracts/page-renderer.md](./contracts/page-renderer.md) "Tests", in `packages/apis/core-api/src/page-renderer/render.test.ts`, `handler.test.ts`, `robots.test.ts` and `packages/apis/core-api/src/helpers/sitemap.test.ts`: the outline renders the link and "Free preview" for a marked lesson only; a hostile title and hostile IDs are escaped inside the link; `/learn/<courseId>/preview/<lessonId>` returns the plain template with `noindex`, no lesson title and no page data script, and reads nothing from the table; the robots file disallows that address and the site map does not list it.
-- [ ] T038 [US5] In `packages/apis/core-api/src/page-renderer/render-course.ts`, render an outline lesson with `freePreview: true` as `<li class="text-sm"><a href="/learn/<courseId>/preview/<lessonId>">title</a> <span>Free preview</span></li>`, escaping the title and both IDs with the file's existing helpers; leave other lessons and every other part of the renderer unchanged. Run the tests of T037 and fix failures in the code.
+- [x] T037 [P] [US5] Tests first, per [contracts/page-renderer.md](./contracts/page-renderer.md) "Tests", in `packages/apis/core-api/src/page-renderer/render.test.ts`, `handler.test.ts`, `robots.test.ts` and `packages/apis/core-api/src/helpers/sitemap.test.ts`: the outline renders the link and "Free preview" for a marked lesson only; a hostile title and hostile IDs are escaped inside the link; `/learn/<courseId>/preview/<lessonId>` returns the plain template with `noindex`, no lesson title and no page data script, and reads nothing from the table; the robots file disallows that address and the site map does not list it.
+- [x] T038 [US5] In `packages/apis/core-api/src/page-renderer/render-course.ts`, render an outline lesson with `freePreview: true` as `<li class="text-sm"><a href="/learn/<courseId>/preview/<lessonId>">title</a> <span>Free preview</span></li>`, escaping the title and both IDs with the file's existing helpers; leave other lessons and every other part of the renderer unchanged. Run the tests of T037 and fix failures in the code.
 
 **Checkpoint**: all five stories work locally.
 
@@ -217,7 +217,7 @@ US1's backend sits in Phase 3 beside US2's, because the preview route cannot shi
 
 ## Phase 7: Polish - docs and manual checks
 
-- [ ] T039 [P] Docs, English only, under `docs/src/content/docs/en/`:
+- [x] T039 [P] Docs, English only, under `docs/src/content/docs/en/`:
   - a "Free preview lessons" section in `design/public-pages.mdx`: the mark and `isOpenFreePreview`; why the preview is three public operations of its own and the enrolled procedures are untouched (research R-2); what a response contains (R-4); signing scope and the one-hour life (R-5); what unmarking does and does not do (R-6); that nothing is recorded (R-7); the paid-content rule with open preview lessons as its one named exception and where it is tested (R-9); what crawlers get (R-10); and an operator's note that preview video delivery is paid by the platform and where to watch it (plan risk R7). Add the page's "Spec" link to `specs/20261120-154626-free-preview-lessons/spec.md` in its existing link style;
   - in `guides/instructor-guide.mdx`: how to mark and unmark a lesson, that assignment lessons can't be marked, that quizzes stay locked, and that removing the mark stops new access at once while a video already playing can run for up to an hour.
 

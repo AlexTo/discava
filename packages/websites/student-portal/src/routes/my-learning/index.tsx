@@ -114,6 +114,8 @@ function MyLearning() {
                           certificateId={certificate.certificateId}
                           courseTitle={certificate.courseTitle}
                           completedAt={certificate.completedAt}
+                          revokedAt={certificate.revokedAt}
+                          revocationReason={certificate.revocationReason}
                         />
                       ) : null}
                     </div>

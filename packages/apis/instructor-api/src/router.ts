@@ -29,6 +29,12 @@ import {
   returnAssignmentSubmission,
 } from './procedures/assignment-submission.js';
 import {
+  certificateHistory,
+  listCertificates,
+  restoreCertificate,
+  revokeCertificate,
+} from './procedures/certificate.js';
+import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
@@ -69,6 +75,7 @@ import {
   restoreCourse,
   setCourseCertificateCriteria,
   setCourseCertificates,
+  setCourseFirstLessonPrompt,
   setCoursePrice,
   viewCourse,
 } from './procedures/course.js';
@@ -156,6 +163,12 @@ export const appRouter = router({
     update: updateAnnouncement,
     delete: deleteAnnouncement,
   }),
+  certificate: router({
+    list: listCertificates,
+    history: certificateHistory,
+    revoke: revokeCertificate,
+    restore: restoreCertificate,
+  }),
   profile: router({
     get: getProfile,
     update: updateProfile,
@@ -174,6 +187,7 @@ export const appRouter = router({
     restore: restoreCourse,
     setCertificates: setCourseCertificates,
     setCertificateCriteria: setCourseCertificateCriteria,
+    setFirstLessonPrompt: setCourseFirstLessonPrompt,
     setPrice: setCoursePrice,
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,

@@ -15,6 +15,7 @@ import {
   EventsSearchIndexing,
   EventsStreamRouter,
   EventsTranscriptIndexing,
+  EventsTranscriptReindex,
   LessonMediaBucket,
   type PublicMediaBucket,
   SearchCollection,
@@ -95,6 +96,11 @@ export class StreamRouterStack extends Stack {
 
     const router = new EventsStreamRouter(this, 'StreamRouterFunction');
     const reminder = this.createCertificateReminderLambda(coreTable);
+    this.createTranscriptReindexLambda(
+      coreTable,
+      searchCollection,
+      lessonMediaBucket,
+    );
     const handlers = {
       'progress-recalculation': this.createProgressRecalculationLambda(
         coreTable,
@@ -256,6 +262,26 @@ export class StreamRouterStack extends Stack {
     lessonMediaBucket.bindSettings(indexing);
     lessonMediaBucket.grantRead(indexing);
     return indexing;
+  }
+
+  // Rebuilds the transcripts index on demand, invoked by hand
+  // (`reindex-transcripts`), with no event source. The indexer's grants: it
+  // reads the table and the caption files and writes only the search
+  // collection, under its own role because the collection's data access
+  // policy names Lambda roles only.
+  private createTranscriptReindexLambda(
+    coreTable: CoreTable,
+    searchCollection: SearchCollection,
+    lessonMediaBucket: LessonMediaBucket,
+  ) {
+    const reindex = new EventsTranscriptReindex(this, 'TranscriptReindex');
+    coreTable.grantReadData(reindex);
+    coreTable.bindSettings(reindex);
+    searchCollection.grantWrite(reindex.role!);
+    searchCollection.bindSettings(reindex);
+    lessonMediaBucket.bindSettings(reindex);
+    lessonMediaBucket.grantRead(reindex);
+    return reindex;
   }
 
   // The single writer of the instructor dashboard's analytics aggregates, run

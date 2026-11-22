@@ -8,6 +8,7 @@ import type { createAssignmentSubmissionEntity } from '../../entities/assignment
 import type { createCategoryEntity } from '../../entities/category.js';
 import type { createCategoryClaimEntity } from '../../entities/category-claim.js';
 import type { createCertificateEntity } from '../../entities/certificate.js';
+import type { createCertificateEventEntity } from '../../entities/certificate-event.js';
 import type { createContentItemEntity } from '../../entities/content-item.js';
 import type { createCouponEntity } from '../../entities/coupon.js';
 import type { createCouponRedemptionEntity } from '../../entities/coupon-redemption.js';
@@ -256,6 +257,21 @@ export interface TableSnapshot {
     | 'assessment'
     | 'reminderScheduledAt'
     | 'reminderSentAt'
+    | 'revokedAt'
+    | 'revocationReason'
+    | 'revokedByRole'
+  >[];
+  certificateEvents: Pick<
+    Item<typeof createCertificateEventEntity>,
+    | 'userId'
+    | 'courseId'
+    | 'occurredAt'
+    | 'certificateId'
+    | 'type'
+    | 'reason'
+    | 'note'
+    | 'actorId'
+    | 'actorRole'
   >[];
   videoAnswerSheets: Pick<
     Item<typeof createVideoAnswerSheetEntity>,
@@ -585,6 +601,7 @@ export const SNAPSHOT_ENTITIES = {
   submissionFeedback: 'submissionFeedback',
   submissionNotices: 'submissionNotice',
   certificates: 'certificate',
+  certificateEvents: 'certificateEvent',
   videoAnswerSheets: 'videoAnswerSheet',
   videoPositions: 'videoPosition',
   users: 'user',

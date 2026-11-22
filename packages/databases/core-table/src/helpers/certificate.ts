@@ -15,10 +15,15 @@ import {
   failedAt,
   hasFailedCondition,
   hasTransactionConflict,
+  InvalidRequestError,
   isConditionalCheckFailed,
   VersionConflictError,
 } from './errors.js';
-import { notificationWrites, transactionEntities } from './notification.js';
+import {
+  notificationWrites,
+  publishNotification,
+  transactionEntities,
+} from './notification.js';
 
 // Crockford's base32: no I, L, O or U, so an ID read aloud or copied by hand
 // can't be mistaken.
@@ -332,4 +337,206 @@ export const claimCertificateReminder = async ({
   return current?.reminderSentAt
     ? { certificate: current, reminderSentAt: current.reminderSentAt }
     : undefined;
+};
+
+export const REVOCATION_REASONS = [
+  'academic-integrity',
+  'issued-in-error',
+  'other',
+  'refunded',
+] as const;
+export type RevocationReason = (typeof REVOCATION_REASONS)[number];
+
+export const REVOCATION_NOTE_MAX_LENGTH = 500;
+
+const REVOCATION_REASON_LABELS: Record<RevocationReason, string> = {
+  'academic-integrity': 'Academic integrity',
+  'issued-in-error': 'Issued in error',
+  refunded: 'Order refunded',
+  other: 'Other',
+};
+
+// The reason as a learner is shown it.
+export const revocationReasonLabel = (reason: RevocationReason): string =>
+  REVOCATION_REASON_LABELS[reason];
+
+export type CertificateActor = { id: string; role: 'instructor' | 'admin' };
+
+// An instructor tried to restore a certificate an administrator revoked.
+export class RestoreForbiddenError extends Error {
+  constructor(message = 'An administrator revoked this certificate') {
+    super(message);
+    this.name = 'RestoreForbiddenError';
+  }
+}
+
+export interface RevokeCertificateInput {
+  coreTable: CoreTable;
+  certificate: Certificate;
+  actor: CertificateActor;
+  reason: RevocationReason;
+  note?: string;
+  now: Date;
+}
+
+const checkNote = (note: string | undefined) => {
+  if (note && note.length > REVOCATION_NOTE_MAX_LENGTH) {
+    throw new InvalidRequestError(
+      `A note is at most ${REVOCATION_NOTE_MAX_LENGTH} characters`,
+    );
+  }
+};
+
+// The certificate as stored now.
+const readStored = async (
+  coreTable: CoreTable,
+  certificate: Certificate,
+): Promise<Certificate> => {
+  const { data } = await coreTable.entities.certificate
+    .get({ userId: certificate.userId, courseId: certificate.courseId })
+    .go();
+  return data ?? certificate;
+};
+
+// Revokes a certificate. The certificate's patch (conditioned on it not being
+// revoked) and the `certificateEvent` are one transaction, so of two
+// simultaneous revokes one is cancelled and returns the stored certificate,
+// and only one event is written. The student is told after the transaction,
+// with a dedupe key naming the event. This and restoreCertificate are the
+// only writers of both records.
+export const revokeCertificate = async ({
+  coreTable,
+  certificate,
+  actor,
+  reason,
+  note,
+  now,
+}: RevokeCertificateInput): Promise<Certificate> => {
+  const trimmed = note?.trim() || undefined;
+  if (reason === 'refunded' && actor.role !== 'admin') {
+    throw new InvalidRequestError(
+      'Only an administrator can revoke a certificate for a refund',
+    );
+  }
+  checkNote(trimmed);
+  if (reason === 'other' && !trimmed) {
+    throw new InvalidRequestError('Say why in a note');
+  }
+
+  const { userId, courseId } = certificate;
+  const occurredAt = now.toISOString();
+  const entities = transactionEntities(coreTable);
+  const { canceled } = await coreTable.transaction
+    .write(() => [
+      entities.certificate
+        .patch({ userId, courseId })
+        .set({
+          revokedAt: occurredAt,
+          revocationReason: reason,
+          revokedByRole: actor.role,
+        })
+        .where((attr, op) => op.notExists(attr.revokedAt))
+        .commit(),
+      entities.certificateEvent
+        .create({
+          userId,
+          courseId,
+          occurredAt,
+          certificateId: certificate.certificateId,
+          type: 'revoked',
+          reason,
+          ...(trimmed && { note: trimmed }),
+          actorId: actor.id,
+          actorRole: actor.role,
+        })
+        .commit(),
+    ])
+    .go();
+  if (canceled) {
+    return readStored(coreTable, certificate);
+  }
+
+  await publishNotification(coreTable, {
+    type: 'certificate.revoked',
+    userId,
+    params: {
+      courseId,
+      courseTitle: certificate.courseTitle,
+      reason: revocationReasonLabel(reason),
+    },
+    dedupeKey: `${certificate.certificateId}:${occurredAt}`,
+    occurredAt,
+  });
+  return readStored(coreTable, certificate);
+};
+
+export interface RestoreCertificateInput {
+  coreTable: CoreTable;
+  certificate: Certificate;
+  actor: CertificateActor;
+  note?: string;
+  now: Date;
+}
+
+// Makes a revoked certificate valid again: one transaction removes the three
+// revocation attributes, on the condition that `revokedAt` is still what the
+// caller read, and creates the event. An instructor cannot undo an
+// administrator's revocation. A certificate that is not revoked is returned
+// as it is. The student is told after the transaction.
+export const restoreCertificate = async ({
+  coreTable,
+  certificate,
+  actor,
+  note,
+  now,
+}: RestoreCertificateInput): Promise<Certificate> => {
+  const { revokedAt } = certificate;
+  if (!revokedAt) {
+    return certificate;
+  }
+  const trimmed = note?.trim() || undefined;
+  if (actor.role === 'instructor' && certificate.revokedByRole === 'admin') {
+    throw new RestoreForbiddenError();
+  }
+  checkNote(trimmed);
+
+  const { userId, courseId } = certificate;
+  // Never before the revocation it undoes, so the history stays in order.
+  const occurredAt = new Date(
+    Math.max(now.getTime(), Date.parse(revokedAt) + 1),
+  ).toISOString();
+  const entities = transactionEntities(coreTable);
+  const { canceled } = await coreTable.transaction
+    .write(() => [
+      entities.certificate
+        .patch({ userId, courseId })
+        .remove(['revokedAt', 'revocationReason', 'revokedByRole'])
+        .where((attr, op) => op.eq(attr.revokedAt, revokedAt))
+        .commit(),
+      entities.certificateEvent
+        .create({
+          userId,
+          courseId,
+          occurredAt,
+          certificateId: certificate.certificateId,
+          type: 'restored',
+          ...(trimmed && { note: trimmed }),
+          actorId: actor.id,
+          actorRole: actor.role,
+        })
+        .commit(),
+    ])
+    .go();
+  if (canceled) {
+    return readStored(coreTable, certificate);
+  }
+
+  await publishNotification(coreTable, {
+    type: 'certificate.restored',
+    userId,
+    params: { courseId, courseTitle: certificate.courseTitle },
+    dedupeKey: `${certificate.certificateId}:${occurredAt}`,
+    occurredAt,
+  });
+  return readStored(coreTable, certificate);
 };

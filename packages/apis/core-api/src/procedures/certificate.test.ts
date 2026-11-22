@@ -227,6 +227,71 @@ describe('certificate.verify', () => {
   });
 });
 
+describe('certificate.verify for a revoked certificate', () => {
+  const revoked = {
+    revokedAt: '2026-11-12T08:00:00.000Z',
+    revocationReason: 'academic-integrity',
+    revokedByRole: 'instructor',
+  };
+
+  it('returns exactly the ID and the date, in display form', async () => {
+    db.certificates = [record(revoked)];
+    const result = await caller(verifyCertificate)({
+      certificateId: '0123456789abcdef',
+    });
+    expect(result).toEqual({
+      status: 'revoked',
+      certificateId: '0123-4567-89AB-CDEF',
+      revokedAt: '2026-11-12T08:00:00.000Z',
+      revokedOn: '12 November 2026',
+    });
+    expect(Object.keys(result).sort()).toEqual([
+      'certificateId',
+      'revokedAt',
+      'revokedOn',
+      'status',
+    ]);
+  });
+
+  it('says nothing of the learner, the course, the reason or the role', async () => {
+    db.certificates = [record(revoked)];
+    const text = JSON.stringify(
+      await caller(verifyCertificate)({ certificateId: '0123456789ABCDEF' }),
+    );
+    for (const hidden of [
+      'Erin',
+      'Intro',
+      'academic',
+      'instructor',
+      'u1',
+      'c1',
+    ]) {
+      expect(text).not.toContain(hidden);
+    }
+  });
+
+  it('verifies a restored certificate with the same ID and statement as before', async () => {
+    db.certificates = [record()];
+    const before = await caller(verifyCertificate)({
+      certificateId: '0123456789ABCDEF',
+    });
+    Object.assign(db.certificates[0], revoked);
+    expect(
+      (
+        await caller(verifyCertificate)({
+          certificateId: '0123456789ABCDEF',
+        })
+      ).status,
+    ).toBe('revoked');
+    for (const key of Object.keys(revoked)) {
+      delete db.certificates[0][key];
+    }
+    expect(
+      await caller(verifyCertificate)({ certificateId: '0123456789ABCDEF' }),
+    ).toEqual(before);
+  });
+});
+
 describe('certificate.myCertificates', () => {
   it("lists only the caller's certificates, most recent first", async () => {
     db.certificates = [
@@ -250,8 +315,32 @@ describe('certificate.myCertificates', () => {
       courseTitle: 'Intro',
       learnerName: 'Erin Nguyen',
       completedAt: '2026-06-01T00:00:00.000Z',
+      status: 'valid',
     });
     expect(calls.primary).toEqual([{ userId: 'u1' }]);
+  });
+
+  it('keeps a revoked certificate in the list, with its status, time and reason', async () => {
+    db.certificates = [
+      record({
+        revokedAt: '2026-11-12T08:00:00.000Z',
+        revocationReason: 'refunded',
+        revokedByRole: 'admin',
+      }),
+    ];
+    const result = await caller(myCertificates, { sub: 'u1' })();
+    expect(result).toEqual([
+      {
+        certificateId: '0123-4567-89AB-CDEF',
+        courseId: 'c1',
+        courseTitle: 'Intro',
+        learnerName: 'Erin Nguyen',
+        completedAt: '2026-11-10T00:00:00.000Z',
+        status: 'revoked',
+        revokedAt: '2026-11-12T08:00:00.000Z',
+        revocationReason: 'refunded',
+      },
+    ]);
   });
 
   it('refuses an anonymous caller', async () => {
@@ -295,6 +384,24 @@ describe('certificate.pdf', () => {
       } as never),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(calls.get).toEqual([{ userId: 'u1', courseId: 'c1' }]);
+  });
+
+  it('refuses a revoked certificate before drawing anything', async () => {
+    db.certificates = [
+      record({
+        revokedAt: '2026-11-12T08:00:00.000Z',
+        revocationReason: 'issued-in-error',
+        revokedByRole: 'instructor',
+      }),
+    ];
+    vi.mocked(drawCertificatePdf).mockClear();
+    await expect(
+      caller(certificatePdf, { sub: 'u1' })({ courseId: 'c1' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This certificate has been revoked',
+    });
+    expect(drawCertificatePdf).not.toHaveBeenCalled();
   });
 
   it('works without reading the course record', async () => {

@@ -7,6 +7,8 @@ sidebar:
 
 import Link from '@components/link.astro';
 
+**Spec:** [`specs/20261120-154626-free-preview-lessons/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154626-free-preview-lessons/)
+
 A course's landing page (`/learn/<courseId>`) and an instructor's profile (`/instructors/<handle>`) are public: anyone can open them signed out. The student portal is a single-page app, so a crawler or a link preview that doesn't run scripts would see an empty shell. The **page renderer** fixes that by answering those addresses with real HTML.
 
 ## The page renderer
@@ -71,6 +73,28 @@ Anyone can play it, signed in or not, but only under these rules:
 - The signed cookies it sets cover **that version's folder only** (its renditions and caption tracks), with the same lifetime as an enrolled student's. No lesson video, file or other content of the course becomes reachable without enrolment.
 - An archived course stops serving its preview at once, and plays it again if restored. A replaced or removed version issues no new addresses, and its files are deleted later, as for lesson videos.
 - The procedure is in `PUBLIC_OPERATIONS`, so it gets the public request limits, and the stage's web firewall where enabled.
+
+## Free preview lessons
+
+An instructor can mark an ordinary lesson as a free preview. Anyone, signed in or not, enrolled or not, can then open it at `/learn/<courseId>/preview/<lessonId>`. This is the one deliberate exception to "unpaid users cannot get paid content".
+
+**The mark.** A lesson carries an optional `freePreview` attribute, stored only as `true` and removed when the lesson is unmarked. Only a lesson of kind `lesson` can carry it: an assignment lesson can't be marked, and the `free-preview-on-ordinary-lesson` table invariant flags one that is. A lesson is an **open** preview when `isOpenFreePreview` (in `@discava/core-table`) holds: the course is published, the module and the lesson are shown (visible and not archived), the lesson is an ordinary lesson and it is marked. That function is the only definition of "open".
+
+**Three public operations of its own.** `freePreview.lesson`, `freePreview.videoUrl` and `freePreview.fileUrl` are public queries on core-api, listed in `PUBLIC_OPERATIONS`. They never read the caller, so a signed-out visitor, an unenrolled user and an enrolled student get the same answer. The enrolled procedures (`course.view`, `contentItem.videoUrl`, `contentItem.fileUrl`, `quiz.view`, the progress, completion, assignment and discussion procedures and the rest) are untouched and still need an enrolment, for marked lessons as for any other. A public operation has no claims, so one operation could not serve both a visitor and an enrolled student.
+
+**What a response contains.** Each item is built field by field, so nothing leaves unless it is named. A video gives its title, description, duration and whether it can be played now. Text gives its body. A file gives its name, size and type. A quiz gives only its title and question count, shown as a locked card: no questions, answer key or settings. Assignment items are dropped. No storage key, status or job attribute is returned. A caller who names a lesson that isn't an open preview, or an item that isn't shown under it, gets the same `NOT_FOUND` whatever the reason, and nothing is signed.
+
+**Signing.** A video's cookies cover that version's folder only, are set with that `Path`, and last **one hour** (`FREE_PREVIEW_COOKIE_LIFETIME_SECONDS`), against the four hours an enrolled student gets. The page asks for the address when the visitor presses play and again every 30 minutes while a video plays, which renews the cookies. A file link covers one object for five minutes. Text needs no signature. The one hour never exceeds the cookie lifetime that `RETIRED_VERSION_DELAY_MINUTES` already covers, so a replaced version's files outlive every preview cookie, and a unit test pins that.
+
+**What unmarking does and does not do.** The operations read the lesson on every request and nothing caches them, so from the first request after the write (or after the lesson, its module or its course is hidden or archived) all three answer `NOT_FOUND`: no new access. A shared preview address then shows "This preview is no longer available". It does not recall what was already handed out: video cookies keep working until they expire, at most an hour after they were issued and never renewed; a file link works for at most five minutes; text on a screen, a downloaded file or a recording can't be recalled. The landing page may show the "Free preview" label for up to five minutes, because the page renderer caches it.
+
+**Nothing is recorded.** A preview performs no write and reads nothing about the caller. There are no completions, progress, saved video position, quiz attempts or student activity counts, and no discussion. The video starts from the beginning every visit. This keeps every student record tied to an enrolment, which `student-records-enrolled` checks after every e2e test.
+
+**The paid-content rule.** The data form of the rule, `paid-course-enrolment-paid`, is unchanged: a preview creates no enrolment. Its API form is tested in `paid-access.test.ts`, which runs every content procedure as an unenrolled signed-in user against a priced course, and again against an open preview lesson, with the same `FORBIDDEN` refusals. Open preview lessons are the one named exception, and their own tests are in `procedures/free-preview.test.ts` (a refusal matrix of every way a target isn't an open preview).
+
+**Crawlers.** The renderer marks each open preview lesson in a landing page's outline: its title links to the preview address, followed by "Free preview". The lesson's content isn't rendered for crawlers. The preview address itself is served the plain page with `noindex`, is disallowed by `robots.txt` (`/learn/*/`) and is not in the site map. Rendering the text would leave an unmarked lesson readable in search engines' caches.
+
+**Operator's note: bandwidth.** The platform pays for delivering preview videos, and one signature can stream for an hour. The public throttle bounds how often a signature is issued, not how many bytes one streams, and anyone can stream a preview video, as with the promo video. Watch the media distribution's CloudFront data-transfer metrics (the distribution fronting the media bucket, in the CloudFront console or CloudWatch) and the 429 counts on the `freePreview.*` methods of the core API's gateway stage. A per-visitor rate rule or a cap on marked lessons per course is a possible follow-up.
 
 ## Profiles and handles
 

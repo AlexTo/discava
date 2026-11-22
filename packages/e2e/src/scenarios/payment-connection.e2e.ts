@@ -121,10 +121,14 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     if (await confirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await confirm.click();
     }
-    await expect(admin.getByText('Test mode')).toBeVisible();
-    await expect(
-      admin.getByText('Connected', { exact: true }).first(),
-    ).toBeVisible();
+    // The status card's title, not a "Connected" row in Recent changes: when
+    // another scenario connected first and left a checkout open, this step
+    // only replaces the key and the history has no such row.
+    const cardTitle = admin.locator('[data-slot="card-title"]', {
+      hasText: /^Connected/,
+    });
+    await expect(cardTitle).toBeVisible();
+    await expect(cardTitle.getByText('Test mode')).toBeVisible();
     await expect(keyField).toHaveCount(0);
     await screenshot(admin, 'payments-connected');
   });

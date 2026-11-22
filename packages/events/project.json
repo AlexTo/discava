@@ -93,6 +93,12 @@
       },
       {
         "generator": "ts#lambda-function",
+        "path": "src/search/transcript-reindex.ts",
+        "name": "transcript-reindex",
+        "iac": "cdk"
+      },
+      {
+        "generator": "ts#lambda-function",
         "path": "src/router/stream-router.ts",
         "name": "stream-router",
         "iac": "cdk"

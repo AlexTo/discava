@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { assessmentStatement } from '@discava/common-server-utils/certificate-statement';
 import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   evaluateCertificateCriteria,
@@ -12,13 +14,13 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { drawCertificatePdf, formatDate } from '../helpers/certificate-pdf.js';
-import { assessmentStatement } from '../helpers/certificate-statement.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import {
   CertificatePdfInputSchema,
   CertificatePdfOutputSchema,
   CertificateRequirementsInputSchema,
   CertificateRequirementsOutputSchema,
+  type IRevocationReason,
   MyCertificatesInputSchema,
   MyCertificatesOutputSchema,
   RecordLinkedInClickInputSchema,
@@ -33,11 +35,27 @@ import { getEnrolment, requireEnrolment } from './enrolment.js';
 const notFound = () =>
   new TRPCError({ code: 'NOT_FOUND', message: 'Certificate not found' });
 
+// What a learner is told of a certificate's state. The role that revoked it
+// and any note stay private.
+const certificateStatus = (certificate: {
+  revokedAt?: string;
+  revocationReason?: IRevocationReason;
+}) =>
+  certificate.revokedAt
+    ? {
+        status: 'revoked' as const,
+        revokedAt: certificate.revokedAt,
+        ...(certificate.revocationReason && {
+          revocationReason: certificate.revocationReason,
+        }),
+      }
+    : { status: 'valid' as const };
+
 /**
  * Public: the details printed on a certificate, looked up by its ID. Returns
  * only those fields and the statement of what was assessed, never the
  * student's id, the course's id, the assessed items or anything else on the
- * record.
+ * record. A revoked certificate returns only its ID and the date.
  */
 export const verifyCertificate = publicCourseProcedure
   .input(VerifyCertificateInputSchema)
@@ -54,6 +72,15 @@ export const verifyCertificate = publicCourseProcedure
     const [certificate] = data;
     if (!certificate) {
       throw notFound();
+    }
+
+    if (certificate.revokedAt) {
+      return {
+        status: 'revoked' as const,
+        certificateId: formatCertificateId(certificate.certificateId),
+        revokedAt: certificate.revokedAt,
+        revokedOn: formatDate(certificate.revokedAt),
+      };
     }
 
     return {
@@ -104,6 +131,7 @@ export const myCertificates = courseProcedure
         courseTitle: certificate.courseTitle,
         learnerName: certificate.learnerName,
         completedAt: certificate.completedAt,
+        ...certificateStatus(certificate),
       }))
       .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   });
@@ -126,6 +154,13 @@ export const certificatePdf = courseProcedure
       .go();
     if (!certificate) {
       throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    if (certificate.revokedAt) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message: 'This certificate has been revoked',
+      });
     }
 
     const displayId = formatCertificateId(certificate.certificateId);
@@ -192,7 +227,7 @@ export const certificateRequirements = courseProcedure
     const issued = certificate
       ? {
           certificateId: formatCertificateId(certificate.certificateId),
-          status: 'valid' as const,
+          ...certificateStatus(certificate),
         }
       : null;
     if (!course.certificatesEnabled) {

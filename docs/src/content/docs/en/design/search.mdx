@@ -9,11 +9,16 @@ import Link from '@components/link.astro';
 
 Discava has no full-text or cross-entity search inside the core table (`packages/databases/core-table`): it's fine for key-based access, but not for "find a course whose title or description matches this text". [Amazon OpenSearch Serverless](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html) is the search layer for that, kept outside the core table rather than added as more GSIs.
 
-## Scope (v1)
+## Scope
 
-Courses only: one index, **courses**, holding every currently **published** course. An unpublished course has its document deleted rather than kept with a flag.
+Two indices in the one collection:
 
-More content types (lessons, instructors, announcements) come later, each as its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index) and its own procedure, such as `lesson.search`, rather than one query mixing them. Each type has its own visibility rule (a lesson's depends on its module, its course, and the caller's enrolment), which stays simplest to read and test kept apart.
+| Index | Holds | Who can search it |
+|---|---|---|
+| `courses` | Every currently **published** course. An unpublished course has its document deleted rather than kept with a flag | Anyone, signed in or not (`course.publicSearch`, `course.publicSuggest`) |
+| `transcripts` | Passages of the caption tracks of videos an enrolled learner can watch | Enrolled learners, within one course (`transcript.search`) |
+
+More content types (instructors, announcements) come later, each as its own index (mapping types were removed in OpenSearch 2.0, so one index per type rather than one mixed index) and its own procedure, such as `lesson.search`, rather than one query mixing them. Each type has its own visibility rule (a lesson's depends on its module, its course, and the caller's enrolment), which stays simplest to read and test kept apart.
 
 ## Cost: NextGen, not zero-ETL
 
@@ -30,8 +35,9 @@ NextGen is only available in a subset of regions (as of writing: US East N. Virg
 |---|---|
 | `packages/databases/search` | The collection's client (`getOpenSearchClient`, `resolveIndexName`), each index's zod schema + mapping (`src/indices`), the indices manifest generator, and index-sync (creates missing indices / updates mappings, never deletes one; runs on every deploy, so an index deleted by hand comes back) |
 | `packages/common/constructs` | `OpenSearchCollection` (generic: a NextGen collection group, the collection, its security policies, `grantRead`/`grantWrite`, the index-sync custom resource) and `SearchCollection` (Discava's instance of it) |
-| `packages/events` | `src/search/search-indexing.ts`: the DynamoDB-stream Lambda that keeps the index in sync |
-| `packages/apis/core-api` | `course.publicSearch` and `course.publicSuggest`: the tRPC procedures |
+| `packages/events` | `src/search/search-indexing.ts`: the DynamoDB-stream Lambda that keeps the `courses` index in sync. `src/search/transcript-indexing.ts` and `transcript-reindex.ts`: the same for `transcripts` (see "Transcript search") |
+| `packages/apis/core-api` | `course.publicSearch` and `course.publicSuggest`: the tRPC procedures. `transcript.search`, with its helpers `transcript-access.ts`, `transcript-query.ts` and `transcript-snippet.ts` |
+| `packages/common/web-utils` | `webvtt`: the WebVTT parser shared by the transcript panel and the transcript indexer |
 
 This mirrors `packages/databases/core-table`'s shape closely on purpose: it's hand-built to match [awslabs/nx-plugin-for-aws#1267](https://github.com/awslabs/nx-plugin-for-aws/issues/1267)'s proposed `ts#opensearch` generator (not yet in `@aws/nx-plugin`), so it can be contributed upstream and later swapped back in with minimal diff.
 
@@ -130,6 +136,78 @@ The request has a **3 s timeout** (`SUGGEST_REQUEST_TIMEOUT_MS`), shorter than `
 | Default (stage sets neither key) | 100 / 200 | 20 / 40 |
 
 One person typing steadily costs about 1 request/s. Development's 5 / 10 covers about five testers at once and keeps what an anonymous flood can reach small (WAF is off there, and core-api's reserved concurrency of 10 still caps concurrent requests). Production's 100 / 200 covers about 100 people typing at the same moment; a request is a 10-hit query with no core-table read, so it holds a Lambda for tens of milliseconds. Raise it with real traffic, like the stage's other limits. There is no per-IP rate rule on either stage, so one heavy caller can still use the whole limit, as for the other public operations.
+
+## Transcript search
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
+
+An enrolled learner can search what is said in a course's videos and open the video at that moment. The panel that shows one video's transcript is described on the <Link path="design/video-player">video player</Link> page.
+
+### Why a separate index
+
+The `transcripts` index sits beside `courses`, not inside it. The units differ (a course, a passage), so do the lifecycles (a course document exists while the course is published; a passage exists while its video can be watched, even in a draft or archived course), and the visibility is opposite: `courses` is public, transcripts are for enrolled learners. Keeping paid course content out of the index anonymous callers query means a mistake in a public query can't return it. Transcripts are also megabytes: on the course document every course edit would rewrite them and every catalogue search would score against them. The index is created by index-sync on deploy with no change to any existing mapping.
+
+### A passage, and how a hit becomes a time
+
+A document is one **passage** of one caption track: consecutive cues joined with single spaces, closed when the next cue would take it past 30 seconds from its first cue's start or past 600 characters. Each passage after the first begins with the previous one's last cue, so a phrase straddling two cues is found inside one passage, and a phrase straddling two passages lies wholly inside the next. A document stores the text, its start and end time, and for each cue its start time and character offset in the text (stored, not indexed). About 130 documents an hour of video per track.
+
+The query asks for highlighting of the whole passage with two private-use characters (U+E000, U+E001) as tags. The procedure finds the first tagged match, takes its offset, and looks up the cue it falls in. That cue's start is the moment's time. The snippet is cut from the same text and returned as `{ text, match }` parts, never HTML. The overlap means a match in a shared cue is found twice, so the procedure asks for 40 hits and drops repeats by video, track and cue start to return up to 20.
+
+### The `transcript-indexing` feature
+
+A stream feature of its own (see the <Link path="design/stream-event-router">stream router</Link>), with its own queue and failure queue, because it reads the lesson media bucket, which the course indexer shouldn't, and a bad caption file must not hold up course indexing. Like `search-indexing`, it uses a change only to learn which item changed, then reads the item as the table holds it now.
+
+| Record | Effect |
+|---|---|
+| `contentItem` INSERT or MODIFY | A video whose `captionTracks`, `captionTracksRev`, `status`, `s3Key`, `previousS3Key`, `visibility` or `archivedAt` changed is synced. Any other change (such as a student counter) does nothing and reads nothing |
+| `contentItem` REMOVE | Every document of that `contentItemId` is deleted |
+| `lesson` or `module` MODIFY | If whether it is shown changed, every video item under it is synced |
+| `lesson` or `module` REMOVE | Every document of that `lessonId` or `moduleId` is deleted |
+
+**Syncing an item** reads the item, its lesson and its module consistently. If all three are shown and the item is a video with a playable version, the wanted documents are the passages of every track of that version, built from the WebVTT files in the lesson media bucket. Otherwise none are wanted. It then lists the ids the index holds for the item, writes the wanted ones with `_bulk` and deletes the rest. A document's id is `<contentItemId>.<trackId>.<seq>`, so a duplicate, late or reordered delivery writes the same documents, and a replaced track (which gets a new `trackId`) can't be mistaken for the old one. Finally it reads the three records again and, if what the documents depend on changed, syncs once more (up to 3 rounds before failing for a retry), so two overlapping syncs of one item still end on the current state.
+
+**Known leftover case.** OpenSearch Serverless shows a write to searches a few seconds later and has no `refresh=wait_for`. If a track is added and replaced within seconds, the second sync may not see the first one's documents when it lists ids, and leaves them behind. They are never shown, because search only returns hits whose track and version the table lists now (below). The rebuild removes them. Nothing relies on `_delete_by_query`.
+
+The writers (Transcribe's completion, instructor-api's caption procedures, the version swap) are unchanged and can't fail because of search.
+
+### Rebuilding
+
+The index starts empty on every stage and only learns of later changes, so videos captioned before the deploy need one run. The rebuild is also the repair for the leftovers above, for a recreated index, and for a future analyzer change.
+
+```sh
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development
+pnpm nx run @discava/tooling-deploy:reindex-transcripts --stage=discava-development --course=<courseId>
+```
+
+`transcript-reindex.ts` is a private Lambda with no event source, like `search-reindex.ts`. For each course (one, or every course by `course.query.byStatus` for each status) it reads the curriculum, syncs every video item, then deletes that course's documents whose item isn't in the curriculum. When its time is nearly up it returns a cursor, and the script calls it again until there is none, then prints the totals. With no `--stage` it runs in-process against the local stack. Running it twice leaves the same documents.
+
+### The search procedure
+
+`transcript.search` is signed-in only and takes `{ courseId, q, language? }`. On every call it:
+
+1. reads the course's curriculum and the caller's enrolment and calls `requireEnrolment`, the function `contentItem.videoUrl` uses;
+2. builds the **watchable set** from the table (`watchableVideos`): effectively visible video items with a playable version, each with its version and track ids;
+3. queries the index with filters it builds itself: `courseId` from the checked input, `contentItemId` in the watchable set, and the language rule below. With an empty set it returns nothing without querying;
+4. drops any hit whose version or track isn't in the watchable set;
+5. takes titles from the curriculum it read, not from the index.
+
+The index is a few seconds behind the table and can hold leftovers, so a filter that trusted an indexed flag would return a just-hidden video's text for those seconds. Building the filter from the table closes that gap, and nothing the browser sends can add a video to it. This is the "enforced twice" rule again: the indexer keeps only watchable items' passages, and the query admits only watchable items. The cost is one curriculum query per search, which `course.view` already pays on every page of the course player. A request that takes over 8 seconds becomes `TIMEOUT`, as in course search.
+
+### Which track is searched
+
+Passages are built for every track of the version students play (up to 10), each carrying its `language`, `isDefault` and `trackLanguages`. A search looks, per video, in the track for the language the browser sends (the learner's remembered caption language) when the video has one, otherwise in the default track. A moment is then never listed twice in two languages, and the result matches the transcript the learner opens. Changing the caption language needs no re-index. `text` is analysed with `standard` and has an `english` sub-field; every query matches both, so English tracks get the stemming course search has and other languages match on whole words. Chinese, Japanese and Thai are split per character, which still finds phrases with weaker ranking. Per-language sub-fields would be an additive change.
+
+### Cost
+
+No stage configuration changes: the second index adds no capacity floor to the collection group. Indexing happens in short bursts when a video is captioned or a track changes (one `_bulk` of about 130 small documents per hour of video per track), and a search is submitted, not per keystroke, filtered to one course, with no aggregations. Storage is about 150 KB of source per hour of video per track, so a 20-hour course with two tracks is about 5,000 documents and 6 MB. Around it are one SQS message per routed `contentItem`, `lesson` or `module` change, one S3 GET per track per sync, and one curriculum query per search. On a stage with a capacity floor of 0, the first search after a quiet spell can hit the cold start and time out; the failure queue's five receives should outlast a cold start on the indexing side.
+
+### How it fits #270
+
+Adding the index is the case index-sync already handles, so nothing here conflicts with #270 (changing an existing index's mapping). Every caller uses `resolveIndexName('transcripts')`, so when logical names become aliases over versioned indices the callers don't change. Later additive changes go through `putMapping`. A breaking change (the analyzer of `text`, a field's type) is #270's case, and the rebuild above is the "rebuild job" it needs. Its stale-write guard should use the item's `captionTracksRev` with the version; documents carry `versionId`, and `captionTracksRev` can be added as a field then. Before launch, a breaking change is "delete the index, deploy, run the rebuild".
+
+### What the AI tutor (#289) can rely on
+
+A document is a passage of about 30 seconds with its course, module, lesson, video, version, track, language and time span, so retrieval can be scoped to a lesson, a video or a course and can cite "lesson X at 12:40". `watchableVideos` and `buildTranscriptSearchRequest` take the scope and the text and return the filtered request, so the tutor calls the same two and can't retrieve what the learner can't watch. Retrieval is lexical (BM25). Whether the tutor wants vector retrieval is open for #289: it needs an embedding per passage and a `knn_vector` field, and whether a NextGen search collection accepts one must be verified first. If it needs a setting at creation, the index is recreated and rebuilt, which costs nothing before launch.
 
 ## Local dev
 

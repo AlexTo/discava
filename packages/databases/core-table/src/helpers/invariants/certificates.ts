@@ -101,6 +101,16 @@ export const checkCertificateShape = (snapshot: TableSnapshot): Violation[] => {
       problems.push('issuedAt is before completedAt');
     }
     problems.push(...assessmentProblems(certificate.assessment));
+    const { revokedAt, revocationReason, revokedByRole } = certificate;
+    const set = [revokedAt, revocationReason, revokedByRole].filter(Boolean);
+    if (set.length !== 0 && set.length !== 3) {
+      problems.push(
+        'revokedAt, revocationReason and revokedByRole are not all set or all absent',
+      );
+    }
+    if (revokedAt && certificate.issuedAt && revokedAt < certificate.issuedAt) {
+      problems.push('revokedAt is before issuedAt');
+    }
     return problems.map((message) =>
       violation('certificate-shape', record, message),
     );
@@ -340,8 +350,108 @@ export const checkCourseCertificateCriteriaShape = (
     );
   });
 
+const byTime = (a: { occurredAt: string }, b: { occurredAt: string }) =>
+  a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : 0;
+
+// A certificate is revoked exactly when its latest event is a revocation, with
+// the same time, reason and role. Every event names an existing certificate
+// of the same ID, a certificate's events alternate from a revocation, every
+// event has an actor, only an administrator revokes for a refund, and the
+// reason `other` has a note.
+export const checkCertificateStatusMatchesHistory = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const certificates = new Map(
+    snapshot.certificates.map((c) => [`${c.userId} ${c.courseId}`, c]),
+  );
+  const history = new Map<string, TableSnapshot['certificateEvents']>();
+  for (const event of snapshot.certificateEvents) {
+    const key = `${event.userId} ${event.courseId}`;
+    history.set(key, [...(history.get(key) ?? []), event]);
+  }
+  const events = [...history].flatMap(([key, list]) => {
+    const certificate = certificates.get(key);
+    const sorted = [...list].sort(byTime);
+    return sorted.flatMap((event, i) => {
+      const problems: string[] = [];
+      if (!certificate) {
+        problems.push('event for a certificate that does not exist');
+      } else if (certificate.certificateId !== event.certificateId) {
+        problems.push(
+          `event names certificate ${event.certificateId}, not ${certificate.certificateId}`,
+        );
+      }
+      if (event.type !== (i % 2 === 0 ? 'revoked' : 'restored')) {
+        problems.push(
+          `event ${i + 1} is ${event.type}; events alternate, starting with revoked`,
+        );
+      }
+      if (!event.actorId || !event.actorRole) {
+        problems.push('event has no actor');
+      }
+      if (event.type === 'revoked') {
+        if (!event.reason) {
+          problems.push('revoked event has no reason');
+        }
+        if (event.reason === 'refunded' && event.actorRole !== 'admin') {
+          problems.push('refunded is used by a role other than admin');
+        }
+        if (event.reason === 'other' && !event.note) {
+          problems.push('reason other has no note');
+        }
+      }
+      return problems.map((message) =>
+        violation(
+          'certificate-status-matches-history',
+          {
+            userId: event.userId,
+            courseId: event.courseId,
+            occurredAt: event.occurredAt,
+          },
+          message,
+        ),
+      );
+    });
+  });
+  const statuses = snapshot.certificates.flatMap((certificate) => {
+    const { userId, courseId } = certificate;
+    const list = [...(history.get(`${userId} ${courseId}`) ?? [])].sort(byTime);
+    const latest = list.at(-1);
+    const problems: string[] = [];
+    if (latest?.type === 'revoked') {
+      if (
+        certificate.revokedAt !== latest.occurredAt ||
+        certificate.revocationReason !== latest.reason ||
+        certificate.revokedByRole !== latest.actorRole
+      ) {
+        problems.push(
+          'revoked, but its time, reason or role differs from the latest event',
+        );
+      }
+    } else if (certificate.revokedAt) {
+      problems.push(
+        latest
+          ? 'revoked, but its latest event is a restoration'
+          : 'revoked, but it has no events',
+      );
+    }
+    return problems.map((message) =>
+      violation(
+        'certificate-status-matches-history',
+        { userId, courseId },
+        message,
+      ),
+    );
+  });
+  return [...events, ...statuses];
+};
+
 export const CERTIFICATES_CHECKS = [
   { name: 'certificate-shape', check: checkCertificateShape },
+  {
+    name: 'certificate-status-matches-history',
+    check: checkCertificateStatusMatchesHistory,
+  },
   { name: 'certificate-met-criteria', check: checkCertificateMetCriteria },
   {
     name: 'course-certificate-criteria-shape',

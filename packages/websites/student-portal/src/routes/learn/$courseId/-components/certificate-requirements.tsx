@@ -14,9 +14,12 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Check, Circle } from 'lucide-react';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCoreApi } from '../../../../api';
-import { CertificateActions } from '../../../../components/certificate-actions';
+import {
+  CertificateActions,
+  revokedText,
+} from '../../../../components/certificate-actions';
 
 // How often, and for how long, to look again for a certificate that is
 // being issued.
@@ -64,6 +67,21 @@ export function CertificateRequirements({
     ),
   );
 
+  // The course home catches up on progress recalculation, which runs a few
+  // seconds after the last completion and is what can meet "Complete every
+  // item". When it lands with the course completed, look again, and give the
+  // certificate its full time to be issued from then.
+  const { refetch } = query;
+  const seenCompletedAt = useRef(completedAt);
+  useEffect(() => {
+    if (completedAt === seenCompletedAt.current) {
+      return;
+    }
+    seenCompletedAt.current = completedAt;
+    startedAt.current = Date.now();
+    void refetch();
+  }, [completedAt, refetch]);
+
   if (query.data && !query.data.certificatesEnabled) {
     return null;
   }
@@ -99,6 +117,14 @@ export function CertificateRequirements({
               Try again
             </Button>
           </div>
+        ) : data.certificate?.status === 'revoked' &&
+          data.certificate.revokedAt ? (
+          <p className="text-sm text-muted-foreground">
+            {revokedText(
+              data.certificate.revokedAt,
+              data.certificate.revocationReason,
+            )}
+          </p>
         ) : data.certificate ? (
           <div className="space-y-3">
             <p className="text-sm font-medium">You earned a certificate</p>

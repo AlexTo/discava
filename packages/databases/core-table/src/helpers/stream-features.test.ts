@@ -140,6 +140,15 @@ describe('featuresFor', () => {
     );
   });
 
+  it('routes a certificate MODIFY (a revocation) and a certificateEvent INSERT to no feature', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'certificate'))).toEqual(
+      [],
+    );
+    expect(
+      featuresFor(record('INSERT', 'NewImage', 'certificateEvent')),
+    ).toEqual([]);
+  });
+
   it('routes a record to exactly the matching feature', () => {
     expect(featuresFor(record('INSERT', 'NewImage', 'course'))).toEqual([
       'search-indexing',
@@ -174,10 +183,22 @@ describe('featuresFor', () => {
     ]);
   });
 
-  it('leaves the routing of a lesson, course and enrolment record unchanged', () => {
-    expect(featuresFor(record('MODIFY', 'NewImage', 'lesson'))).toEqual([
-      'progress-recalculation',
-    ]);
+  it('routes a lesson or module MODIFY and REMOVE to transcript indexing and the feature they reached before', () => {
+    for (const entity of ['lesson', 'module']) {
+      expect(featuresFor(record('MODIFY', 'NewImage', entity))).toEqual([
+        'progress-recalculation',
+        'transcript-indexing',
+      ]);
+      expect(featuresFor(record('REMOVE', 'OldImage', entity))).toEqual([
+        'progress-recalculation',
+        'transcript-indexing',
+      ]);
+      // A new lesson or module has no videos yet.
+      expect(featuresFor(record('INSERT', 'NewImage', entity))).toEqual([]);
+    }
+  });
+
+  it('leaves the routing of a course and enrolment record unchanged', () => {
     expect(featuresFor(record('MODIFY', 'NewImage', 'course'))).toEqual([
       'progress-recalculation',
       'search-indexing',
@@ -258,11 +279,13 @@ describe('featuresFor', () => {
     ).toContain('caption-translation');
   });
 
-  it('routes a lesson MODIFY that only sets freePreview to progress recalculation alone', () => {
-    // Whether a lesson is marked doesn't change what a search document,
-    // analytics, a notification or an earning is built from.
+  it('routes a lesson MODIFY that only sets freePreview to progress recalculation and transcript indexing', () => {
+    // Filters work on the entity name: transcript indexing receives every
+    // lesson MODIFY and its handler skips one that leaves `isShown` as it was.
+    // Search, analytics, notifications and earnings don't see it.
     expect(featuresFor(record('MODIFY', 'NewImage', 'lesson'))).toEqual([
       'progress-recalculation',
+      'transcript-indexing',
     ]);
   });
 

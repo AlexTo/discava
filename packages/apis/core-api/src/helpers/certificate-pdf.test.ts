@@ -58,8 +58,29 @@ describe('the statement', () => {
     const text = await textOf(await drawCertificatePdf(base));
     expect(text).toContain('Completed all 14 items of the course.');
     expect(text).toContain('Passed 3 assessed quizzes. Pass mark: 70%.');
-    expect(text).toContain('Overall score: 80?89%.');
+    expect(text).toContain('Overall score: 80–89%.');
     expect(text).toContain('Course length: 12 hours.');
+  });
+
+  // FR-013: the same words as the verification page, which prints the en dash.
+  it('keeps the punctuation the standard fonts can draw', async () => {
+    const text = await textOf(
+      await drawCertificatePdf({
+        ...base,
+        learnerName: 'Seán O’Brien',
+        statement: ['Overall score: 90–100%.', '“Quoted” — and so on…'],
+      }),
+    );
+    expect(text).toContain('Seán O’Brien');
+    expect(text).toContain('Overall score: 90–100%.');
+    expect(text).toContain('“Quoted” — and so on…');
+  });
+
+  it('still prints a ? for each character the standard fonts cannot draw', async () => {
+    const text = await textOf(
+      await drawCertificatePdf({ ...base, learnerName: '山田 🎉' }),
+    );
+    expect(text).toContain('?? ?');
   });
 
   it('stays on one page in the longest case', async () => {

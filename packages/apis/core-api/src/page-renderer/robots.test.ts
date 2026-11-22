@@ -12,6 +12,12 @@ describe('robotsTxt', () => {
     );
   });
 
+  it('disallows the free preview address', () => {
+    const lines = robotsTxt('learn.example.com', true).split('\n');
+    expect(lines).toContain('Disallow: /learn/*/');
+    expect(lines).not.toContain('Allow: /learn/');
+  });
+
   it('disallows everything when indexing is off', () => {
     expect(robotsTxt('learn.example.com', false)).toBe(
       'User-agent: *\nDisallow: /\n',

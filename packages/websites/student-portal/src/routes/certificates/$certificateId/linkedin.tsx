@@ -81,9 +81,23 @@ function RouteComponent() {
     );
   }
 
+  // A revoked certificate is not for LinkedIn.
+  if (query.data?.status === 'revoked') {
+    return (
+      <Message>
+        <h1 className="text-balance text-2xl font-bold tracking-tight">
+          Certificate revoked
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          This certificate has been revoked and can't be added to LinkedIn.
+        </p>
+      </Message>
+    );
+  }
+
   return (
     <Redirect
-      certificate={query.data}
+      certificate={query.data?.status === 'valid' ? query.data : undefined}
       source={source}
       record={(id, from) =>
         client.certificate.recordLinkedInClick.mutate({

@@ -16,6 +16,11 @@ import {
   renameCategory,
 } from './procedures/category.js';
 import {
+  getCertificate,
+  restoreCertificate,
+  revokeCertificate,
+} from './procedures/certificate.js';
+import {
   connectPayment,
   disconnectPayment,
   paymentStatus,
@@ -39,6 +44,11 @@ export const appRouter = router({
     create: createCategory,
     rename: renameCategory,
     archive: archiveCategory,
+  }),
+  certificate: router({
+    get: getCertificate,
+    revoke: revokeCertificate,
+    restore: restoreCertificate,
   }),
   payment: router({
     status: paymentStatus,

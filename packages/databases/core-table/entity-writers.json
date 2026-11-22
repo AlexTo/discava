@@ -23,6 +23,9 @@
   "certificate": {
     "core-table": ["packages/databases/core-table/src/helpers/certificate.ts"]
   },
+  "certificateEvent": {
+    "core-table": ["packages/databases/core-table/src/helpers/certificate.ts"]
+  },
   "contentItem": {
     "core-table": [
       "packages/databases/core-table/src/helpers/caption-tracks.ts",
