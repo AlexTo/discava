@@ -107,6 +107,17 @@ const bulk = async (client: Client, actions: BulkAction[]) => {
   }
 };
 
+/** Removes the documents with these ids. */
+export const deleteTranscriptIds = async (
+  client: Client,
+  ids: string[],
+): Promise<void> => {
+  await bulk(
+    client,
+    ids.map((id) => ({ type: 'delete', id })),
+  );
+};
+
 /** Removes every document whose `field` is `value`. Returns how many. */
 export const deleteTranscriptsBy = async (
   client: Client,
@@ -114,10 +125,7 @@ export const deleteTranscriptsBy = async (
   value: string,
 ): Promise<number> => {
   const ids = await indexedTranscriptIds(client, field, value);
-  await bulk(
-    client,
-    ids.map((id) => ({ type: 'delete', id })),
-  );
+  await deleteTranscriptIds(client, ids);
   return ids.length;
 };
 

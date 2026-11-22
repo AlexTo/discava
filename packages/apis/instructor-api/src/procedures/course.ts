@@ -8,12 +8,14 @@ import { validatePrice } from '@discava/common-web-utils/price';
 import {
   cancellationReasons,
   DEFAULT_CERTIFICATE_CRITERIA,
+  DEFAULT_FIRST_LESSON_PROMPT,
   ensureInstructorProfile,
   failedAt,
   filterEffectivelyVisible,
   getConnection,
   hasTransactionConflict,
   isConditionalCheckFailed,
+  normaliseFirstLessonPrompt,
   setCertificateCriteria,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -38,6 +40,8 @@ import {
   SetCertificateCriteriaOutputSchema,
   SetCourseCertificatesInputSchema,
   SetCourseCertificatesOutputSchema,
+  SetCourseFirstLessonPromptInputSchema,
+  SetCourseFirstLessonPromptOutputSchema,
   SetCoursePriceInputSchema,
   SetCoursePriceOutputSchema,
   ViewCourseInputSchema,
@@ -330,6 +334,44 @@ export const setCourseCertificates = courseInstructorProcedure(
     return course;
   });
 
+// The text new learners are asked about in the first lesson. Blank or null
+// removes the course's own text, so it uses the default. No enrolment is read
+// or written: learners who closed the prompt are not asked again. Allowed in
+// any course status.
+export const setCourseFirstLessonPrompt = courseInstructorProcedure(
+  SetCourseFirstLessonPromptInputSchema,
+)
+  .output(SetCourseFirstLessonPromptOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { courseId, prompt } = input;
+
+    const normalised =
+      prompt === null
+        ? { reason: 'empty' as const }
+        : normaliseFirstLessonPrompt(prompt);
+    if ('reason' in normalised && normalised.reason === 'too-long') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'The prompt must be at most 200 characters',
+      });
+    }
+
+    const patch = coreTable.entities.course.patch({ courseId });
+    const { data: course } = await ('text' in normalised
+      ? patch.set({ firstLessonPrompt: normalised.text })
+      : patch.remove(['firstLessonPrompt'])
+    ).go({ response: 'all_new' });
+
+    await refreshInstructorCourseUpdatedAt(
+      coreTable,
+      courseId,
+      course.updatedAt,
+    );
+
+    return course;
+  });
+
 // What a student needs besides completing the course to get a certificate.
 // Like the switch above it only decides what happens from now on: the
 // recalculation reacts to the new version and issues certificates to students
@@ -469,6 +511,7 @@ export const viewCourse = courseInstructorProcedure(ViewCourseInputSchema)
     // output type, and the zod output schema validates the shape at runtime.
     return {
       ...course,
+      defaultFirstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
       ...(category && {
         category: {
           id: category.categoryId,
