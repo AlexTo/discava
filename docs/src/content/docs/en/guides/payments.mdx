@@ -67,8 +67,10 @@ The price shows on the course's public page and on its catalogue card, or "Free"
 A priced course shows its price and **Buy now** in place of the enrol button. If you aren't signed in, it asks you to sign in first.
 
 1. **Buy now** takes you to Stripe's payment page, which shows the course and the amount.
-2. After you pay, you return to the course. It says "Confirming your payment", then you are enrolled, usually within seconds.
+2. After you pay, you return to the course. It says "Confirming your payment", then you are enrolled, usually within seconds, and the first lesson you haven't completed opens with the line "You're enrolled in <course>." If the course has no lessons shown to students yet, the course page opens instead.
 3. If you cancel, you return to the course with "Payment cancelled" and nothing is charged. Choosing Buy now again within the hour reopens the same payment.
+
+Enrolling in a free course opens the same lesson, with no payment step.
 
 You are charged once however many times you click.
 
