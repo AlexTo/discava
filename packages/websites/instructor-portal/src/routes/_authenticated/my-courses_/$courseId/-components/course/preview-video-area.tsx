@@ -26,6 +26,7 @@ import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
 import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 import { ACCEPTED_VIDEO_TYPES } from '../content-items/attach-lesson-video-dialog';
+import { CaptionTranslationsList } from '../content-items/caption-translations-list';
 import { readVideoDuration } from './read-video-duration';
 
 // The cap the API enforces (core-table's PREVIEW_MAX_SECONDS).
@@ -227,6 +228,9 @@ export function PreviewVideoArea({
           captions={video.captions}
           className="w-full rounded-lg border"
         />
+      )}
+      {preview?.hasPlayableVersion && video && (
+        <CaptionTranslationsList translations={video.translations ?? []} />
       )}
 
       {!readOnly && (

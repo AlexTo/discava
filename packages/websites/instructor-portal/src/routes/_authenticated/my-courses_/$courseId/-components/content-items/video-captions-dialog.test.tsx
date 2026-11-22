@@ -43,12 +43,37 @@ const translated = {
   url: 'https://media.test/fr.vtt',
 };
 
-const videoUrl = (captions = [auto, uploaded], captionsStatus = 'ready') => ({
+type Translation = {
+  language: string;
+  label: string;
+  nativeLabel: string;
+  state: string;
+  reason?: string;
+};
+
+const videoUrl = (
+  captions = [auto, uploaded],
+  captionsStatus = 'ready',
+  translations: Translation[] = [],
+) => ({
   url: 'https://media.test/master.m3u8',
   withCredentials: false,
   versionId: 'v1',
   captionsStatus,
   captions,
+  translations,
+});
+
+const row = (
+  state: string,
+  reason?: string,
+  language = 'de-DE',
+): Translation => ({
+  language,
+  label: 'German',
+  nativeLabel: 'Deutsch',
+  state,
+  reason,
 });
 
 const vttFile = (name = 'spanish.vtt') =>
@@ -377,5 +402,108 @@ describe('VideoCaptionsDialog', () => {
     );
 
     expect(await screen.findByText('Try again')).toBeVisible();
+  });
+
+  describe('translations', () => {
+    const open_ = async (translations: Translation[], handlers = {}) => {
+      const rendered = renderDialog({
+        'contentItem.createVideoUrl': () =>
+          videoUrl([auto, uploaded], 'ready', translations),
+        ...handlers,
+      });
+      return { rendered, dialog: await open(rendered) };
+    };
+
+    it.each([
+      [row('translating'), 'German: Translating…'],
+      [row('failed'), 'German: Translation failed'],
+      [row('too-long'), 'German: Captions are too long to translate'],
+      [row('no-room'), 'German: No room (10 tracks at most)'],
+      [row('not-translated', 'no-captions'), 'German: Needs captions first'],
+      [
+        row('not-translated', 'language-mismatch'),
+        "German: The automatic captions aren't in the course's language. Upload captions in the video's language to translate them.",
+      ],
+      [
+        row('not-translated', 'disabled'),
+        "German: Translation isn't available on this site",
+      ],
+    ])('shows the row for %j', async (translation, text) => {
+      const { dialog } = await open_([translation]);
+
+      expect(await within(dialog).findByText(text)).toBeVisible();
+      expect(within(dialog).getByText('Translations')).toBeVisible();
+    });
+
+    it('lists no row for a language that has its own track', async () => {
+      const { dialog } = await open_([
+        row('translated', undefined, 'fr-FR'),
+        row('uploaded', undefined, 'es-ES'),
+      ]);
+
+      await within(dialog).findByText('Spanish');
+      expect(within(dialog).queryByText('Translations')).toBeNull();
+    });
+
+    it.each(['failed', 'translating'])(
+      'offers Translate again for a %s row and calls the retry',
+      async (state) => {
+        const retry = vi.fn(() => []);
+        const { rendered, dialog } = await open_([row(state)], {
+          'contentItem.retryCaptionTranslation': retry,
+        });
+
+        await rendered.user.click(
+          await within(dialog).findByRole('button', {
+            name: 'Translate again',
+          }),
+        );
+
+        await waitFor(() => expect(retry).toHaveBeenCalledWith(keys));
+      },
+    );
+
+    it.each(['too-long', 'no-room'])(
+      'offers no Translate again for a %s row',
+      async (state) => {
+        const { dialog } = await open_([row(state)]);
+
+        await within(dialog).findByText('Translations');
+        expect(
+          within(dialog).queryByRole('button', { name: 'Translate again' }),
+        ).toBeNull();
+      },
+    );
+
+    describe('polling', () => {
+      beforeEach(() => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+      });
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('refetches every 5 seconds while a row is translating, then stops', async () => {
+        let state = 'translating';
+        const { rendered, dialog } = await open_([], {
+          'contentItem.createVideoUrl': () =>
+            videoUrl([auto], 'ready', [row(state)]),
+        });
+        const fetches = () =>
+          rendered.calls.filter(
+            ({ path }) => path === 'contentItem.createVideoUrl',
+          ).length;
+        await within(dialog).findByText('German: Translating…');
+        const first = fetches();
+
+        state = 'failed';
+        await vi.advanceTimersByTimeAsync(5100);
+        await within(dialog).findByText('German: Translation failed');
+        expect(fetches()).toBe(first + 1);
+
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(fetches()).toBe(first + 1);
+      });
+    });
   });
 });

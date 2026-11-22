@@ -237,6 +237,36 @@ describe('PreviewVideoArea', () => {
     expect(await screen.findByText('Español (auto-translated)')).toBeVisible();
   });
 
+  it('lists a language whose translation failed, read-only', async () => {
+    renderWithInstructorApi(
+      <PreviewVideoArea courseId={COURSE_ID} preview={summary()} />,
+      {
+        handlers: {
+          ...handlers,
+          'coursePreview.createVideoUrl': () => ({
+            url: 'https://media.test/preview/master.m3u8',
+            withCredentials: false,
+            versionId: 'nonce-1',
+            captions: [],
+            translations: [
+              {
+                language: 'fr-FR',
+                label: 'French',
+                nativeLabel: 'Français',
+                state: 'failed',
+              },
+            ],
+          }),
+        },
+      },
+    );
+
+    expect(await screen.findByText('French: Translation failed')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Translate again' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('replaces a preview, sending the nonce it read', async () => {
     const { user, calls } = render({ preview: summary() });
 

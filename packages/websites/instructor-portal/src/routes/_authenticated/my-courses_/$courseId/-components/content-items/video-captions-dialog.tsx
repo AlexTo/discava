@@ -31,6 +31,11 @@ import { CAPTION_LANGUAGES } from '@discava/common-web-utils/caption-languages';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import {
+  CaptionTranslationsList,
+  isTranslating,
+  needsRetry,
+} from './caption-translations-list';
 
 // Native select styled like Input, as the language list is short and fixed.
 const SELECT_CLASS =
@@ -92,8 +97,12 @@ export function VideoCaptionsDialog({
   const videoUrlQuery = useQuery({
     ...contentItem.createVideoUrl.queryOptions(keys),
     enabled: open,
+    // Translating happens in the background: look again until it settles.
+    refetchInterval: (query) =>
+      isTranslating(query.state.data?.translations ?? []) ? 5000 : false,
   });
   const tracks: Track[] = videoUrlQuery.data?.captions ?? [];
+  const translations = videoUrlQuery.data?.translations ?? [];
   const replacing = tracks.find((track) => track.language === language);
 
   const { mutateAsync: createUploadUrl } = useMutation(
@@ -107,6 +116,9 @@ export function VideoCaptionsDialog({
     isPending: isRemoving,
     reset: resetRemove,
   } = useMutation(contentItem.removeCaption.mutationOptions());
+  const { mutateAsync: retryTranslation, isPending: isRetrying } = useMutation(
+    contentItem.retryCaptionTranslation.mutationOptions(),
+  );
 
   // The track list comes from the preview query; the row's badge from the
   // course view.
@@ -140,6 +152,16 @@ export function VideoCaptionsDialog({
       setError(apiErrorMessage(failure, "Couldn't upload the caption file"));
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    setError(undefined);
+    try {
+      await retryTranslation(keys);
+      await refresh();
+    } catch (failure) {
+      setError(apiErrorMessage(failure, "Couldn't ask for the translations"));
     }
   };
 
@@ -255,6 +277,21 @@ export function VideoCaptionsDialog({
               </li>
             ))}
           </ul>
+        )}
+
+        <CaptionTranslationsList translations={translations} />
+        {needsRetry(translations) && (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isRetrying}
+              onClick={() => void handleRetry()}
+            >
+              {isRetrying ? 'Asking…' : 'Translate again'}
+            </Button>
+          </div>
         )}
 
         <div className="space-y-3">

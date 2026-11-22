@@ -36,6 +36,9 @@ export function CourseCaptionLanguagesForm({
   // is saved.
   const [draft, setDraft] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
+  const retry = useMutation(
+    trpc.course.retryCaptionTranslations.mutationOptions(),
+  );
 
   if (current.isError) {
     return (
@@ -136,6 +139,11 @@ export function CourseCaptionLanguagesForm({
           captions will be removed from every video. Captions you uploaded stay.
         </p>
       )}
+      {retry.isError && (
+        <ErrorAlert type="error" header="Couldn't ask for the translations">
+          {apiErrorMessage(retry.error)}
+        </ErrorAlert>
+      )}
       {!locked && (
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={save.isPending || draft === null}>
@@ -144,6 +152,24 @@ export function CourseCaptionLanguagesForm({
           {saved && (
             <span role="status" className="text-sm text-muted-foreground">
               Saved
+            </span>
+          )}
+        </div>
+      )}
+      {!readOnly && enabled && savedLanguages.length > 0 && (
+        <div className="flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate({ courseId })}
+          >
+            {retry.isPending ? 'Asking…' : 'Translate missing captions again'}
+          </Button>
+          {retry.data && (
+            <span role="status" className="text-sm text-muted-foreground">
+              Asked {retry.data.requested}{' '}
+              {retry.data.requested === 1 ? 'video' : 'videos'}
             </span>
           )}
         </div>

@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
   courseCaptionLanguages,
+  retryCourseCaptionTranslations,
   updateCourseCaptionLanguages,
 } from './course-caption-languages.js';
 
@@ -15,20 +16,37 @@ const {
   courseGet,
   courseInstructorGet,
   setCourseCaptionLanguages,
+  requestCaptionTranslation,
+  curriculum,
+  coursePreviewGet,
   resolveCaptionTranslationSettings,
   mockModule,
 } = await vi.hoisted(async () => ({
   setCourseCaptionLanguages: vi.fn(),
+  requestCaptionTranslation: vi.fn(),
+  curriculum: vi.fn(),
   resolveCaptionTranslationSettings: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     course: ['get'],
     courseInstructor: ['get'],
+    coursePreview: ['get'],
   }),
 }));
 
-vi.mock('@discava/core-table', async (importActual) =>
-  mockModule(await importActual(), { setCourseCaptionLanguages }),
-);
+vi.mock('@discava/core-table', async (importActual) => {
+  const mocked = mockModule(await importActual(), {
+    setCourseCaptionLanguages,
+    requestCaptionTranslation,
+  });
+  const service = mocked.createCoreTableService as () => Promise<object>;
+  return {
+    ...mocked,
+    createCoreTableService: vi.fn(async () => ({
+      ...(await service()),
+      collections: { curriculum },
+    })),
+  };
+});
 
 vi.mock(
   '@discava/common-server-utils/caption-translation-settings',
@@ -41,6 +59,7 @@ vi.mock(
 const router = t.router({
   courseCaptionLanguages,
   updateCourseCaptionLanguages,
+  retryCourseCaptionTranslations,
 });
 
 const callAs = (groups: string[] = ['instructor']) =>
@@ -64,6 +83,7 @@ beforeEach(() => {
     maxLanguagesPerCourse: 5,
   });
   setCourseCaptionLanguages.mockResolvedValue(undefined);
+  requestCaptionTranslation.mockResolvedValue(undefined);
 });
 
 describe('course.captionLanguages', () => {
@@ -229,5 +249,104 @@ describe('course.updateCaptionLanguages', () => {
     await expect(update(['es-ES'])).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('course.retryCaptionTranslations', () => {
+  const video = (contentItemId: string, withTracks = true) => ({
+    type: 'video',
+    moduleId: 'm1',
+    lessonId: 'l1',
+    contentItemId,
+    captionTracks: withTracks ? [{ trackId: 't' }] : undefined,
+  });
+  const hasCurriculum = (items: object[]) =>
+    curriculum.mockReturnValue({
+      go: async () => ({ data: { contentItem: items } }),
+    });
+
+  beforeEach(() => {
+    hasCurriculum([
+      video('v1'),
+      video('v2', false),
+      { ...video('d1'), type: 'text' },
+      video('v3'),
+    ]);
+    coursePreviewGet.mockReturnValue({
+      go: async () => ({ data: { captionTracks: [{ trackId: 'p' }] } }),
+    });
+  });
+
+  it('refuses a caller who does not teach the course', async () => {
+    courseInstructorGet.mockReturnValue({ go: async () => ({ data: null }) });
+    await expect(
+      callAs().retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller outside the instructor group', async () => {
+    await expect(
+      callAs([]).retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('asks each video with tracks and the preview, and counts them', async () => {
+    const result = await callAs().retryCourseCaptionTranslations({
+      courseId: 'course-1',
+    });
+
+    expect(result).toEqual({ requested: 3 });
+    expect(requestCaptionTranslation.mock.calls.map(([, key]) => key)).toEqual([
+      {
+        courseId: 'course-1',
+        moduleId: 'm1',
+        lessonId: 'l1',
+        contentItemId: 'v1',
+      },
+      {
+        courseId: 'course-1',
+        moduleId: 'm1',
+        lessonId: 'l1',
+        contentItemId: 'v3',
+      },
+      { courseId: 'course-1' },
+    ]);
+  });
+
+  it('skips a preview without tracks', async () => {
+    coursePreviewGet.mockReturnValue({ go: async () => ({ data: null }) });
+    await expect(
+      callAs().retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).resolves.toEqual({ requested: 2 });
+  });
+
+  it('is refused when translation is off', async () => {
+    resolveCaptionTranslationSettings.mockResolvedValue({
+      enabled: false,
+      maxLanguagesPerCourse: 0,
+    });
+    await expect(
+      callAs().retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('is refused when the course has no caption languages', async () => {
+    courseGet.mockReturnValue({
+      go: async () => ({ data: { ...course, captionLanguages: undefined } }),
+    });
+    await expect(
+      callAs().retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+  });
+
+  it('is refused on an archived course', async () => {
+    courseGet.mockReturnValue({
+      go: async () => ({ data: { ...course, status: 'archived' } }),
+    });
+    await expect(
+      callAs().retryCourseCaptionTranslations({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 });
