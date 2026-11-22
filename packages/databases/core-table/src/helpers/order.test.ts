@@ -529,6 +529,27 @@ describe('refundOrder', () => {
     });
   });
 
+  it('leaves a completed student’s certificate valid, with no event', async () => {
+    const { fake } = setup();
+    fake.put('order', paid());
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'completed',
+      completedAt: 'x',
+      orderId: 'order-1',
+    });
+    const stored = {
+      userId: 'user-1',
+      courseId: 'course-1',
+      certificateId: '0123456789ABCDEF',
+    };
+    fake.put('certificate', stored);
+    await refund(fake, 1999);
+    expect(fake.row('certificate', stored)).toEqual(stored);
+    expect(fake.rows('certificateEvent')).toEqual([]);
+  });
+
   it('raises refundedAmount for a partial refund and never lowers it', async () => {
     const { fake } = setup();
     fake.put('order', paid());

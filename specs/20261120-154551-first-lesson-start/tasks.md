@@ -176,7 +176,7 @@ Paths are relative to the repository root. All buttons are text only: no arrow i
 
 **Goal**: The docs describe the landing, the prompt and activation. Existing courses' figures are rebuilt, and a reviewer checks the flows by hand.
 
-- [ ] T030 [P] Docs, English only, under `docs/src/content/docs/en/`:
+- [x] T030 [P] Docs, English only, under `docs/src/content/docs/en/`:
   - `design/course-analytics.mdx`: add **Activated**, **Activation rate** and **Prompt answers and dismissals** to the Definitions table, with the rules in research R-7 and R-8 (every enrolment counts, ended ones included; "so far"; counted from the enrolment's last-activity time, so no new marker), and add this spec to the page's "Spec" links in the existing style;
   - `guides/lesson-discussions.mdx`: a short section on the first-lesson prompt for learners (one answer, **Not now**, who can read it) and for instructors (where to set the text, that answers appear under By lesson and not Unanswered);
   - `guides/getting-started.mdx` or the student-facing guide that describes enrolling, if one does: enrolling now opens the first lesson.

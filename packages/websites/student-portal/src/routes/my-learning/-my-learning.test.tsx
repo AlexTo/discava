@@ -207,6 +207,37 @@ describe('/my-learning certificates', () => {
     vi.unstubAllGlobals();
   });
 
+  it('says a certificate was revoked, with no actions', async () => {
+    await openCompleted({
+      'certificate.myCertificates': () => [
+        {
+          ...certificates[0],
+          status: 'revoked',
+          revokedAt: '2026-11-12T08:00:00.000Z',
+          revocationReason: 'academic-integrity',
+        },
+      ],
+    });
+
+    expect(
+      await screen.findByText(
+        'Certificate revoked on 12 November 2026. Reason: Academic integrity.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('group', { name: 'Certificate' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'View' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Download PDF' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Copy link' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('appears only for courses with a certificate', async () => {
     const { user } = await openCompleted();
 

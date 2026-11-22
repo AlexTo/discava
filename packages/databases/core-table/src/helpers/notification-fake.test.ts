@@ -20,12 +20,14 @@ const KEYS: Record<string, (r: Row) => string> = {
   notificationState: (r) => r.userId,
   notificationBroadcast: (r) => r.id,
   certificate: (r) => `${r.userId}|${r.courseId}`,
+  certificateEvent: (r) => `${r.userId}|${r.courseId}|${r.occurredAt}`,
 };
 const DEFAULTS: Record<string, () => Row> = {
   notification: () => ({ email: { state: 'pending' } }),
   notificationState: () => ({}),
   notificationBroadcast: () => ({ status: 'pending' }),
   certificate: () => ({}),
+  certificateEvent: () => ({}),
 };
 
 const path = (row: Row, name: string) =>
@@ -66,6 +68,7 @@ export type FakeItem = {
   set: Row;
   add: Row;
   subtract: Row;
+  remove: string[];
   conditions: string[];
 };
 
@@ -75,6 +78,7 @@ export const createFakeNotificationTable = () => {
     notificationState: new Map(),
     notificationBroadcast: new Map(),
     certificate: new Map(),
+    certificateEvent: new Map(),
   };
   const log = { transactions: 0, cancelled: 0 };
   // Run before each transaction applies: lets a test change the table at the
@@ -99,6 +103,7 @@ export const createFakeNotificationTable = () => {
           set: {},
           add: {},
           subtract: {},
+          remove: [],
           conditions: [],
         }),
       }),
@@ -110,6 +115,7 @@ export const createFakeNotificationTable = () => {
           set: {},
           add: {},
           subtract: {},
+          remove: [],
           conditions: [],
         };
         const chain = {
@@ -117,6 +123,9 @@ export const createFakeNotificationTable = () => {
           add: (v: Row) => ((built.add = { ...built.add, ...v }), chain),
           subtract: (v: Row) => (
             (built.subtract = { ...built.subtract, ...v }), chain
+          ),
+          remove: (names: string[]) => (
+            (built.remove = [...built.remove, ...names]), chain
           ),
           where: (cb: (a: unknown, o: unknown) => string) => (
             built.conditions.push(cb(attrs, ops)), chain
@@ -181,6 +190,7 @@ export const createFakeNotificationTable = () => {
     Object.assign(row, structuredClone(it.set));
     for (const [n, v] of Object.entries(it.add)) row[n] = (row[n] ?? 0) + v;
     for (const [n, v] of Object.entries(it.subtract)) row[n] = row[n] - v;
+    for (const n of it.remove) delete row[n];
   };
 
   const service = {
@@ -189,6 +199,7 @@ export const createFakeNotificationTable = () => {
       notificationState: entity('notificationState'),
       notificationBroadcast: entity('notificationBroadcast'),
       certificate: entity('certificate'),
+      certificateEvent: entity('certificateEvent'),
     },
     transaction: {
       write: (cb: (entities: unknown) => FakeItem[]) => ({

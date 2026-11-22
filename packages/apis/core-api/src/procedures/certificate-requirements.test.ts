@@ -208,6 +208,34 @@ describe('certificate.requirements', () => {
     });
   });
 
+  it('returns a revoked certificate’s status, time and reason', async () => {
+    db.certificate = {
+      certificateId: '0123456789ABCDEF',
+      revokedAt: '2026-11-12T08:00:00.000Z',
+      revocationReason: 'academic-integrity',
+      revokedByRole: 'instructor',
+    };
+    const result = await call();
+    expect(result.certificate).toEqual({
+      certificateId: '0123-4567-89AB-CDEF',
+      status: 'revoked',
+      revokedAt: '2026-11-12T08:00:00.000Z',
+      revocationReason: 'academic-integrity',
+    });
+    expect(JSON.stringify(result)).not.toContain('instructor');
+  });
+
+  it('returns a revoked certificate even with certificates turned off', async () => {
+    db.course.certificatesEnabled = false;
+    db.certificate = {
+      certificateId: '0123456789ABCDEF',
+      revokedAt: '2026-11-12T08:00:00.000Z',
+      revocationReason: 'other',
+      revokedByRole: 'admin',
+    };
+    expect((await call()).certificate).toMatchObject({ status: 'revoked' });
+  });
+
   it('is NOT_FOUND for an unknown course', async () => {
     db.course = undefined;
     await expect(call()).rejects.toMatchObject({ code: 'NOT_FOUND' });

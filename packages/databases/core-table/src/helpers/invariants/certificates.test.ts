@@ -624,3 +624,218 @@ describe('certificate-notifications-match for reminders', () => {
     expect(violationsOf()[0]?.message).toMatch(/more than one/);
   });
 });
+
+describe('certificate revocation invariants', () => {
+  const COMPLETED = '2026-01-03T00:00:00.000Z';
+  const REVOKED = '2026-01-04T00:00:00.000Z';
+  const RESTORED = '2026-01-05T00:00:00.000Z';
+  const issued = () => {
+    table.enrolments[0].status = 'completed';
+    table.enrolments[0].completedAt = COMPLETED;
+    table.certificates.push({
+      userId: 'student',
+      courseId: 'c1',
+      certificateId: '0123456789ABCDEF',
+      learnerName: 'Erin Nguyen',
+      courseTitle: 'Intro',
+      completedAt: COMPLETED,
+      issuedAt: COMPLETED,
+      assessment: {
+        criteriaVersion: 1,
+        requireQuizPass: false,
+        itemCount: 4,
+        assessedItemCount: 0,
+        assessedItems: [],
+      },
+    });
+    return table.certificates[0];
+  };
+  const event = (
+    over: Partial<TableSnapshot['certificateEvents'][number]> = {},
+  ): TableSnapshot['certificateEvents'][number] => ({
+    userId: 'student',
+    courseId: 'c1',
+    occurredAt: REVOKED,
+    certificateId: '0123456789ABCDEF',
+    type: 'revoked',
+    reason: 'issued-in-error',
+    actorId: 'instructor',
+    actorRole: 'instructor',
+    ...over,
+  });
+  const revoked = () => {
+    const certificate = issued();
+    certificate.revokedAt = REVOKED;
+    certificate.revocationReason = 'issued-in-error';
+    certificate.revokedByRole = 'instructor';
+    table.certificateEvents.push(event());
+    return certificate;
+  };
+  const violationsOf = (invariant: InvariantName) =>
+    checkTableInvariants(table).filter((v) => v.invariant === invariant);
+
+  it('accepts a valid certificate, a revoked one and a restored one', () => {
+    const certificate = issued();
+    expect(violationsOf('certificate-status-matches-history')).toEqual([]);
+
+    certificate.revokedAt = REVOKED;
+    certificate.revocationReason = 'issued-in-error';
+    certificate.revokedByRole = 'instructor';
+    table.certificateEvents.push(event());
+    expect(violationsOf('certificate-shape')).toEqual([]);
+    expect(violationsOf('certificate-status-matches-history')).toEqual([]);
+
+    table.certificateEvents.push(
+      event({ type: 'restored', occurredAt: RESTORED, reason: undefined }),
+    );
+    delete certificate.revokedAt;
+    delete certificate.revocationReason;
+    delete certificate.revokedByRole;
+    expect(violationsOf('certificate-status-matches-history')).toEqual([]);
+  });
+
+  it('shape: reports only some of the three attributes set', () => {
+    delete revoked().revokedByRole;
+    expect(violationsOf('certificate-shape')[0]?.message).toMatch(
+      /all set or all absent/,
+    );
+  });
+
+  it('shape: reports revokedAt before issuedAt', () => {
+    revoked().revokedAt = '2026-01-02T00:00:00.000Z';
+    expect(
+      violationsOf('certificate-shape').some((v) =>
+        /revokedAt is before issuedAt/.test(v.message),
+      ),
+    ).toBe(true);
+  });
+
+  it('history: reports a revoked certificate with no events', () => {
+    revoked();
+    table.certificateEvents.length = 0;
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/no events/);
+  });
+
+  it('history: reports a revoked certificate whose latest event is a restoration', () => {
+    revoked();
+    table.certificateEvents.push(
+      event({ type: 'restored', occurredAt: RESTORED, reason: undefined }),
+    );
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/latest event is a restoration/);
+  });
+
+  it('history: reports a valid certificate whose latest event is a revocation', () => {
+    const certificate = revoked();
+    delete certificate.revokedAt;
+    delete certificate.revocationReason;
+    delete certificate.revokedByRole;
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/differs from the latest event/);
+  });
+
+  it.each([
+    ['time', { revokedAt: '2026-01-04T00:00:01.000Z' }],
+    ['reason', { revocationReason: 'other' as const }],
+    ['role', { revokedByRole: 'admin' as const }],
+  ])('history: reports a different %s', (_name, change) => {
+    Object.assign(revoked(), change);
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/differs from the latest event/);
+  });
+
+  it('history: reports an event for a missing certificate', () => {
+    table.certificateEvents.push(event({ userId: 'nobody' }));
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/does not exist/);
+  });
+
+  it('history: reports an event naming another certificate ID', () => {
+    revoked();
+    table.certificateEvents[0].certificateId = 'FEDCBA9876543210';
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/names certificate/);
+  });
+
+  it('history: reports events that do not alternate from a revocation', () => {
+    revoked();
+    table.certificateEvents.push(event({ occurredAt: RESTORED }));
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/alternate/);
+  });
+
+  it('history: reports a first event that is a restoration', () => {
+    issued();
+    table.certificateEvents.push(
+      event({ type: 'restored', reason: undefined }),
+    );
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/alternate/);
+  });
+
+  it('history: reports an event without an actor', () => {
+    revoked();
+    table.certificateEvents[0].actorId = '';
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/no actor/);
+  });
+
+  it('history: reports refunded by an instructor', () => {
+    const certificate = revoked();
+    certificate.revocationReason = 'refunded';
+    table.certificateEvents[0].reason = 'refunded';
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/refunded/);
+  });
+
+  it('history: accepts refunded by an administrator, and reports other without a note', () => {
+    const certificate = revoked();
+    certificate.revocationReason = 'refunded';
+    certificate.revokedByRole = 'admin';
+    Object.assign(table.certificateEvents[0], {
+      reason: 'refunded',
+      actorRole: 'admin',
+    });
+    expect(violationsOf('certificate-status-matches-history')).toEqual([]);
+
+    certificate.revocationReason = 'other';
+    table.certificateEvents[0].reason = 'other';
+    expect(
+      violationsOf('certificate-status-matches-history')[0]?.message,
+    ).toMatch(/no note/);
+    table.certificateEvents[0].note = 'Copied work';
+    expect(violationsOf('certificate-status-matches-history')).toEqual([]);
+  });
+
+  describe('certificate-has-completed-enrolment is unchanged', () => {
+    it('accepts a revoked certificate with a completed enrolment', () => {
+      revoked();
+      expect(violationsOf('certificate-has-completed-enrolment')).toEqual([]);
+    });
+
+    it('accepts a revoked certificate with a dropped enrolment keeping completedAt', () => {
+      revoked();
+      table.enrolments[0].status = 'dropped';
+      expect(violationsOf('certificate-has-completed-enrolment')).toEqual([]);
+    });
+
+    it('reports a revoked certificate with an active enrolment', () => {
+      revoked();
+      table.enrolments[0].status = 'active';
+      expect(
+        violationsOf('certificate-has-completed-enrolment')[0]?.message,
+      ).toMatch(/not completed/);
+    });
+  });
+});
