@@ -20,7 +20,6 @@ import {
   parseWebVtt,
   type TranscriptCue,
 } from '@discava/common-web-utils/webvtt';
-import { cn } from 'cn';
 import Hls from 'hls.js';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { TranscriptPanel } from './transcript-panel';
@@ -561,13 +560,7 @@ export function HlsVideo({
   const hasTranscript = captionFiles.loaded.length > 0 || captionFiles.notice;
   const showPanel = transcriptOpen && hasTranscript && !fullscreen;
   return (
-    <div
-      data-slot="hls-video-layout"
-      className={cn(
-        'grid grid-cols-1 gap-3',
-        showPanel && 'lg:grid-cols-[minmax(0,1fr)_20rem]',
-      )}
-    >
+    <div data-slot="hls-video-layout" className="grid grid-cols-1 gap-3">
       {player}
       {showPanel && (
         <TranscriptPanel
@@ -577,7 +570,7 @@ export function HlsVideo({
           languageLabel={transcriptTrack?.label ?? ''}
           status={!transcriptTrack && captionFiles.notice ? 'failed' : 'ready'}
           onChoose={chooseCue}
-          className="max-h-[min(20rem,50vh)] lg:h-0 lg:max-h-none lg:min-h-full"
+          className="max-h-[min(20rem,50vh)]"
         />
       )}
     </div>

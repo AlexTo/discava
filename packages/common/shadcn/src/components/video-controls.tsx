@@ -533,7 +533,7 @@ export function VideoControls({
               );
             })}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Button
             type="button"
             variant="ghost"
@@ -567,7 +567,10 @@ export function VideoControls({
             value={[Math.round((muted ? 0 : volume) * 100)]}
             onValueChange={([value]) => setVideoVolume(value / 100)}
           />
-          <span className="ml-2 text-xs tabular-nums">
+          <span
+            data-slot="video-time"
+            className="ml-2 shrink-0 text-xs whitespace-nowrap tabular-nums"
+          >
             {formatTime(currentTime)} / {total}
           </span>
           <div className="ml-auto flex items-center gap-1">

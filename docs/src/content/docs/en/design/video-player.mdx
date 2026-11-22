@@ -51,7 +51,7 @@ A video's `captionsStatus` is `pending` while Transcribe runs, then `ready` or `
 
 ## Transcript
 
-A **Transcript** button in the control bar opens a panel with every line of the video's captions, each with its time. It is only in the student lesson player, and only when the video has at least one caption track. The preview and the instructor portal don't show it. On wide screens the panel sits beside the player at the player's height; on narrow ones it sits below, at most 20rem or half the viewport high. Nothing scrolls sideways at phone width.
+A **Transcript** button in the control bar opens a panel with every line of the video's captions, each with its time. It is only in the student lesson player, and only when the video has at least one caption track. The preview and the instructor portal don't show it. The panel sits below the player at every width, at most 20rem or half the viewport high: beside it, the panel would leave the video too narrow for its control bar. Nothing scrolls sideways at phone width.
 
 - **Which track:** the one the captions menu has chosen. Choosing another language changes the lines and the panel's name, "Transcript (language)". With captions **Off**, the panel still shows the remembered track, or the default. If no track's file loads, the panel says "This transcript couldn't be loaded." and the video keeps playing.
 - **Choosing a line:** clicking or tapping a line seeks to its start and plays.

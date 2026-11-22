@@ -24,7 +24,7 @@ import { expect, test } from '../helpers/table-invariants.js';
 import { transcriptDocumentCount } from '../helpers/transcripts.js';
 import { newUser, uniqueName } from '../helpers/users.js';
 
-// The transcript panel beside a lesson video: every line of the caption
+// The transcript panel below a lesson video: every line of the caption
 // track, and a chosen line seeks the video there.
 test('a learner reads a video’s transcript and jumps to a line', async ({
   page,
@@ -129,16 +129,35 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
     ).toBe(true);
   });
 
-  await page.setViewportSize({ width: 375, height: 800 });
+  // At both widths the panel is below the player, the time label stays on
+  // one line, and every control is inside the player.
   const player = page.getByRole('group', { name: 'Video player' });
-  await expect(panel).toBeVisible();
-  const [playerBox, panelBox] = await Promise.all([
-    player.boundingBox(),
-    panel.boundingBox(),
-  ]);
-  expect(panelBox!.y).toBeGreaterThanOrEqual(
-    playerBox!.y + playerBox!.height - 1,
-  );
+  const expectLayoutFits = async () => {
+    await expect(panel).toBeVisible();
+    await player.hover();
+    const [playerBox, panelBox, timeBox] = await Promise.all([
+      player.boundingBox(),
+      panel.boundingBox(),
+      player.locator('[data-slot="video-time"]').boundingBox(),
+    ]);
+    expect(panelBox!.y).toBeGreaterThanOrEqual(
+      playerBox!.y + playerBox!.height - 1,
+    );
+    expect(timeBox!.height).toBeLessThan(20);
+    for (const button of await player
+      .getByRole('group', { name: 'Video controls' })
+      .getByRole('button')
+      .all()) {
+      const box = await button.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(playerBox!.x);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(
+        playerBox!.x + playerBox!.width,
+      );
+    }
+  };
+  await expectLayoutFits();
+  await page.setViewportSize({ width: 375, height: 800 });
+  await expectLayoutFits();
   expect(
     await page.evaluate(
       () =>
