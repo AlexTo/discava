@@ -39,13 +39,17 @@ export function CourseCaptionLanguagesForm({
 
   if (current.isError) {
     return (
-      <ErrorAlert type="error" header="Couldn't load the caption languages">
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the caption languages"
+        onRetry={() => void current.refetch()}
+      >
         {apiErrorMessage(current.error)}
       </ErrorAlert>
     );
   }
   if (!current.data) {
-    return <p className="text-sm text-muted-foreground">Loading</p>;
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
   const {
@@ -106,14 +110,17 @@ export function CourseCaptionLanguagesForm({
         {supported.map(({ tag, label, nativeLabel }) => {
           const checked = selected.includes(tag);
           return (
-            <li key={tag} className="flex items-center gap-2">
+            <li key={tag} className="flex items-center">
               <Checkbox
                 id={`caption-language-${tag}`}
                 checked={checked}
                 disabled={locked || (!checked && atLimit)}
                 onCheckedChange={(value) => toggle(tag, value === true)}
               />
-              <Label htmlFor={`caption-language-${tag}`}>
+              <Label
+                htmlFor={`caption-language-${tag}`}
+                className="min-w-0 flex-1 break-words py-1 pl-2"
+              >
                 {label} ({nativeLabel})
               </Label>
             </li>
@@ -132,7 +139,7 @@ export function CourseCaptionLanguagesForm({
       {!locked && (
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={save.isPending || draft === null}>
-            {save.isPending ? 'Saving' : 'Save'}
+            {save.isPending ? 'Saving…' : 'Save'}
           </Button>
           {saved && (
             <span role="status" className="text-sm text-muted-foreground">
