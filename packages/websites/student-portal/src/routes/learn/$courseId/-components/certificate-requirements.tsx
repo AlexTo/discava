@@ -120,12 +120,12 @@ export function CertificateRequirements({
                 <p className="flex items-center gap-2">
                   {requirement.met ? (
                     <Check
-                      className="size-4 text-emerald-600"
+                      className="size-4 shrink-0 text-emerald-600"
                       aria-label="Met"
                     />
                   ) : (
                     <Circle
-                      className="size-4 text-muted-foreground"
+                      className="size-4 shrink-0 text-muted-foreground"
                       aria-label="Not met"
                     />
                   )}
