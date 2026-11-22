@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a PR; it covers the PR process, commit conventions, and when to prefer an Nx generator over hand-scaffolding.
+Read [DEVELOPMENT.md](./DEVELOPMENT.md) before opening a PR; it covers the PR process, commit conventions, and when to prefer an Nx generator over hand-scaffolding. [CONTRIBUTING.md](./CONTRIBUTING.md) is the public policy: no outside pull requests or issues, ideas and bug reports go to GitHub Discussions.
 
 ## What this is
 
@@ -44,7 +44,7 @@ Update vitest snapshots for one project:
 pnpm nx run @discava/core-api:test -u
 ```
 
-Local dev needs Docker running and no AWS account or deployed stage. Ports, the sign-in users (Alice, Bob, Dan, Carol), which AWS service each local service stands in for, and what only runs on a deployed stage are in CONTRIBUTING.md's [Running Discava Locally](./CONTRIBUTING.md#running-discava-locally):
+Local dev needs Docker running and no AWS account or deployed stage. Ports, the sign-in users (Alice, Bob, Dan, Carol), which AWS service each local service stands in for, and what only runs on a deployed stage are in DEVELOPMENT.md's [Running Discava Locally](./DEVELOPMENT.md#running-discava-locally):
 
 ```sh
 pnpm dev                                              # portals, APIs and local stand-ins for the AWS services they use
