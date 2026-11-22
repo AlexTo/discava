@@ -20,7 +20,7 @@ const router = t.router({ ping: t.procedure.query(() => 'pong') });
 type TestRouter = typeof router;
 
 const renderCaller = async (
-  options: Parameters<typeof createTrpcProvider>[0],
+  options: Parameters<typeof createTrpcProvider<TestRouter>>[0],
 ) => {
   const fetchMock = vi.fn(
     (_url: URL | RequestInfo, _init?: RequestInit) =>
