@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import type { CSSProperties } from 'react';
 
 export interface BrandPreviewProps {
   logoUrl: string;
