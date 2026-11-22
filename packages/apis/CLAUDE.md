@@ -21,6 +21,7 @@ Any project newly wiring up `@discava/core-table` also needs `electrodb`/`@aws-s
 ## Features that span APIs
 
 - Lesson discussions (#280): core-api's `discussion` procedures serve students and instructors, and instructor-api's `discussion` router the staff queues and moderation. Every write goes through core-table's `discussionWrites` (see `packages/databases/core-table/CLAUDE.md`).
+- Assignment grading (#102): instructor-api's `assignmentSubmission` router lists, reads, returns, requests resubmission of and amends submissions, and its `gradingQueue` serves the home page; core-api's `assignment` procedures serve the student's side. Every grade write goes through core-table's `assignment-grading.ts` helpers (see `packages/databases/core-table/CLAUDE.md`).
 - Adding or restoring a module, lesson or content item goes through instructor-api's `writeAtEnd` (`helpers/order.ts`), which claims its `order` from the parent's `lastChildOrder`.
 
 ## Tests

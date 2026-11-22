@@ -13,4 +13,5 @@ Single-table DynamoDB access via ElectroDB; `client.ts` resolves table/client so
 ## Features
 
 - Course reviews: `reviewWrites` is the only writer of `review` and `courseRating`; ratings are indexed with the course for search, which sorts by a weighted rating.
+- Assignment grading (#102): `assignment-grading.ts` is the only writer of the grade fields, the waiting keys (`waitingCourseId`, `waitingSince`) and `submissionFeedback`; `waitingKeys` is the one place those keys are set or removed.
 - Lesson discussions (#280): every write goes through `discussionWrites`, which keeps the counts, accepted answer and queue flags in step. core-api's `discussion` procedures serve students and instructors, instructor-api's `discussion` router the staff queues and moderation.

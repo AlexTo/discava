@@ -315,7 +315,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
 
 **Goal**: The design pages describe the feature, and reviewers confirm by hand what tests can't.
 
-- [ ] T030 [P] Add `docs/src/content/docs/en/design/assignments.mdx`, a design page for upload assignments covering:
+- [x] T030 [P] Add `docs/src/content/docs/en/design/assignments.mdx`, a design page for upload assignments covering:
   - submissions and grading: the status machine as a table from data-model;
   - feedback rounds;
   - the waiting index and why enrolment is applied at read time;
@@ -324,7 +324,7 @@ US1 and US3 share the instructor API (Phase 3) and the review page (Phase 5), so
   - a "Spec" link to `specs/20261120-230057-assignment-grading/`, in the style of `video-player.mdx`.
 
   Add its row to `docs/src/content/docs/en/design/index.mdx`, and add a "**Design page**" line to this feature's `spec.md`. Note in the PR that translations of the other locales are pending.
-- [ ] T031 [P] Add a line under "Features" in `packages/databases/core-table/CLAUDE.md`: grading (#102), with `assignment-grading.ts` as the only writer of grade fields, waiting keys and `submissionFeedback`. Add `assignmentSubmission` and `gradingQueue` to the feature notes in `packages/apis/CLAUDE.md`.
+- [x] T031 [P] Add a line under "Features" in `packages/databases/core-table/CLAUDE.md`: grading (#102), with `assignment-grading.ts` as the only writer of grade fields, waiting keys and `submissionFeedback`. Add `assignmentSubmission` and `gradingQueue` to the feature notes in `packages/apis/CLAUDE.md`.
 - [ ] T032 **(human)** Run [quickstart.md](./quickstart.md) steps 1 to 11 against `pnpm dev` in Chrome and Firefox, saving screenshots to `tmp/screenshots/pr-<number>/`. Confirm SC-001: returning one piece of work takes under 2 minutes, not counting reading time.
 - [ ] T033 **(human)** Run quickstart step 12 after Phase 7 merges: the home queue's count matches the waiting submissions across two courses (SC-008).
 - [ ] T034 **(human)** On `discava-development` after the last PR deploys:
