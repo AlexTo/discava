@@ -7,6 +7,10 @@
 // setup files import this (`@discava/common-web-utils/testing`), portal source
 // never does.
 
+import {
+  type ResolvedBrand,
+  resolveBrand,
+} from '@discava/common-branding/brand';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type RenderResult, render } from '@testing-library/react';
 import userEvent, { type UserEvent } from '@testing-library/user-event';
@@ -17,6 +21,7 @@ import {
   type TRPCOptionsProxy,
 } from '@trpc/tanstack-react-query';
 import { type Context, createElement, type ReactElement } from 'react';
+import { BrandContextProvider } from './brand';
 import { RuntimeConfigContext } from './runtime-config';
 import type { TrpcContextValue } from './trpc-provider';
 
@@ -125,6 +130,8 @@ export type RenderWithApi<TRouter extends AnyTRPCRouter> = (
     handlers?: Record<string, Handler>;
     // Merged into the runtime config the portal sees.
     runtimeConfig?: Record<string, unknown>;
+    // The brand the components see. @default the default Discava brand
+    brand?: ResolvedBrand;
   },
 ) => RenderedWithApi<TRouter>;
 
@@ -141,10 +148,13 @@ export const createRenderWithApi =
     {
       handlers = {},
       runtimeConfig = {},
+      brand = resolveBrand(undefined, PUBLIC_MEDIA_URL),
     }: {
       handlers?: Record<string, Handler>;
       // Merged into the runtime config the portal sees.
       runtimeConfig?: Record<string, unknown>;
+      // The brand the components see.
+      brand?: ResolvedBrand;
     } = {},
   ): RenderedWithApi<TRouter> => {
     const calls: ApiCall[] = [];
@@ -182,9 +192,13 @@ export const createRenderWithApi =
           QueryClientProvider,
           { client: queryClient },
           createElement(
-            Context.Provider,
-            { value: { client, optionsProxy } },
-            ui,
+            BrandContextProvider,
+            { value: brand },
+            createElement(
+              Context.Provider,
+              { value: { client, optionsProxy } },
+              ui,
+            ),
           ),
         ),
       ),

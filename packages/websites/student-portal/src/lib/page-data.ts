@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { readEmbeddedBrand } from '@discava/common-web-utils/brand';
 import type { AppRouter } from '@discava/core-api';
 import type { QueryClient } from '@tanstack/react-query';
 import type { TRPCOptionsProxy } from '@trpc/tanstack-react-query';
@@ -24,6 +25,9 @@ const readPageData = (): PageData | undefined => {
   if (!element) {
     return undefined;
   }
+  // The brand provider starts from the brand embedded here; it can't read it
+  // once the element is gone.
+  readEmbeddedBrand();
   element.remove();
   try {
     const parsed: unknown = JSON.parse(element.textContent ?? '');

@@ -14,6 +14,7 @@ import { Route as CertificatesRouteImport } from './routes/certificates'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as ReviewsRouteImport } from './routes/reviews'
 import { Route as CategoriesIndexRouteImport } from './routes/categories/index'
+import { Route as SettingsBrandingRouteImport } from './routes/settings/branding'
 import { Route as SettingsNotificationsRouteImport } from './routes/settings/notifications'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const CategoriesIndexRoute = CategoriesIndexRouteImport.update({
   path: '/categories/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsBrandingRoute = SettingsBrandingRouteImport.update({
+  id: '/settings/branding',
+  path: '/settings/branding',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsNotificationsRoute = SettingsNotificationsRouteImport.update({
   id: '/settings/notifications',
   path: '/settings/notifications',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/certificates': typeof CertificatesRoute
   '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
+  '/settings/branding': typeof SettingsBrandingRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/certificates': typeof CertificatesRoute
   '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
+  '/settings/branding': typeof SettingsBrandingRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories': typeof CategoriesIndexRoute
 }
@@ -69,6 +77,7 @@ export interface FileRoutesById {
   '/certificates': typeof CertificatesRoute
   '/payments': typeof PaymentsRoute
   '/reviews': typeof ReviewsRoute
+  '/settings/branding': typeof SettingsBrandingRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
   '/categories/': typeof CategoriesIndexRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/certificates'
     | '/payments'
     | '/reviews'
+    | '/settings/branding'
     | '/settings/notifications'
     | '/categories/'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/certificates'
     | '/payments'
     | '/reviews'
+    | '/settings/branding'
     | '/settings/notifications'
     | '/categories'
   id:
@@ -95,6 +106,7 @@ export interface FileRouteTypes {
     | '/certificates'
     | '/payments'
     | '/reviews'
+    | '/settings/branding'
     | '/settings/notifications'
     | '/categories/'
   fileRoutesById: FileRoutesById
@@ -104,6 +116,7 @@ export interface RootRouteChildren {
   CertificatesRoute: typeof CertificatesRoute
   PaymentsRoute: typeof PaymentsRoute
   ReviewsRoute: typeof ReviewsRoute
+  SettingsBrandingRoute: typeof SettingsBrandingRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
   CategoriesIndexRoute: typeof CategoriesIndexRoute
 }
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CategoriesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/branding': {
+      id: '/settings/branding'
+      path: '/settings/branding'
+      fullPath: '/settings/branding'
+      preLoaderRoute: typeof SettingsBrandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/notifications': {
       id: '/settings/notifications'
       path: '/settings/notifications'
@@ -160,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   CertificatesRoute: CertificatesRoute,
   PaymentsRoute: PaymentsRoute,
   ReviewsRoute: ReviewsRoute,
+  SettingsBrandingRoute: SettingsBrandingRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
   CategoriesIndexRoute: CategoriesIndexRoute,
 }

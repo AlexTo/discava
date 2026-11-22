@@ -5,6 +5,7 @@
 import { UNATTACHED_TAG } from '@discava/common-server-utils/public-media';
 import { CfnOutput, Duration, Lazy, RemovalPolicy } from 'aws-cdk-lib';
 import { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
+import type { IOrigin } from 'aws-cdk-lib/aws-cloudfront';
 import {
   Distribution,
   SecurityPolicyProtocol,
@@ -94,6 +95,8 @@ export class PublicBucket extends Construct {
   public readonly cloudFrontDistribution: Distribution;
   /** `https://<cloudFrontDomainName>/`, the base of every object's public URL. */
   public readonly baseUrl: string;
+  /** The bucket's origin, which every behavior of the distribution shares. */
+  protected readonly origin: IOrigin;
   private readonly runtimeConfigKey: string;
   private readonly settings: Record<string, unknown>;
   private allowedOrigins: string[] = ['*'];
@@ -157,6 +160,8 @@ export class PublicBucket extends Construct {
 
     const wafStack = enableWaf ? new CloudfrontWebAcl(this, 'waf') : undefined;
 
+    this.origin = S3BucketOrigin.withOriginAccessControl(this.bucket);
+
     this.cloudFrontDistribution = new Distribution(this, 'Distribution', {
       webAclId: wafStack?.wafArn,
       ...(certificate
@@ -167,7 +172,7 @@ export class PublicBucket extends Construct {
           }
         : {}),
       defaultBehavior: {
-        origin: S3BucketOrigin.withOriginAccessControl(this.bucket),
+        origin: this.origin,
         viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       },
     });
@@ -245,15 +250,24 @@ export class PublicBucket extends Construct {
   /**
    * Lets `grantee` presign uploads, which arrive tagged UNATTACHED_TAG, and
    * attach, detach or check an object: read its size and type, and set or
-   * clear its tags.
+   * clear its tags. Limited to objects whose key matches one of
+   * `keyPatterns` (S3 key patterns such as `brand/logo/*`); every object by
+   * default.
    */
-  public grantManageObjects(grantee: IGrantable): Grant {
-    this.bucket.grantRead(grantee);
-    this.bucket.grantPut(grantee);
+  public grantManageObjects(
+    grantee: IGrantable,
+    keyPatterns: string[] = ['*'],
+  ): Grant {
+    for (const pattern of keyPatterns) {
+      this.bucket.grantRead(grantee, pattern);
+      this.bucket.grantPut(grantee, pattern);
+    }
     return Grant.addToPrincipalOrResource({
       grantee,
       actions: ['s3:PutObjectTagging', 's3:DeleteObjectTagging'],
-      resourceArns: [this.bucket.arnForObjects('*')],
+      resourceArns: keyPatterns.map((pattern) =>
+        this.bucket.arnForObjects(pattern),
+      ),
       resource: this.bucket,
     });
   }

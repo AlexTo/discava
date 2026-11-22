@@ -7,6 +7,10 @@ import {
   matchesAnalyticsStreamFilters,
 } from './analytics-stream.js';
 import {
+  BRAND_STREAM_FILTERS,
+  matchesBrandStreamFilters,
+} from './brand-stream.js';
+import {
   CAPTION_TRANSLATION_STREAM_FILTERS,
   matchesCaptionTranslationStreamFilters,
 } from './caption-translation-stream.js';
@@ -135,6 +139,18 @@ export const STREAM_FEATURES: readonly StreamFeature[] = [
     // The event source mapping's minimum.
     maxConcurrency: 2,
   },
+  {
+    name: 'brand-publishing',
+    filters: BRAND_STREAM_FILTERS,
+    handler: 'brand-publishing',
+    // Each batch publishes the current record once, however many saves it holds.
+    batch: { maxRecords: 100, windowSeconds: 5 },
+    maxReceiveCount: 5,
+    // The event source mapping's minimum. The handler reads the current
+    // record, so two batches at once still leave the latest brand.json: the
+    // one that reads last writes last.
+    maxConcurrency: 2,
+  },
 ];
 
 // The features with their own filter module keep their own matchers, so they stay the one
@@ -148,6 +164,7 @@ const MATCHERS: Readonly<Record<string, Matcher>> = {
   'earnings-recording': matchesEarningsStreamFilters,
   'transcript-indexing': matchesTranscriptStreamFilters,
   'caption-translation': matchesCaptionTranslationStreamFilters,
+  'brand-publishing': matchesBrandStreamFilters,
 };
 
 const matchesFilters = (

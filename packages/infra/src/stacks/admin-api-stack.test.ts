@@ -117,6 +117,123 @@ describe('the Stripe connect function (admin-api)', () => {
   });
 });
 
+// The brand's images are uploaded and saved by `branding.createUploadUrl` and
+// `branding.save`, on one dedicated function that may touch only the brand's
+// own object prefixes in the public media bucket.
+describe('the branding function (admin-api)', () => {
+  const admin = synth({})('AdminApi');
+  const functions = admin.findResources('AWS::Lambda::Function') as Record<
+    string,
+    {
+      Properties: {
+        Role: { 'Fn::GetAtt': [string, string] };
+        Environment?: { Variables?: Record<string, unknown> };
+      };
+    }
+  >;
+  const roleOf = (prefix: string) =>
+    Object.entries(functions).find(([id]) => id.startsWith(prefix))?.[1]
+      .Properties.Role['Fn::GetAtt'][0] as string;
+  const environmentOf = (prefix: string) =>
+    Object.entries(functions).find(([id]) => id.startsWith(prefix))?.[1]
+      .Properties.Environment?.Variables ?? {};
+
+  // The statements of a role that name an S3 object action.
+  const objectStatements = (rolePrefix: string) =>
+    (
+      Object.values(admin.findResources('AWS::IAM::Policy')) as {
+        Properties: {
+          Roles: { Ref: string }[];
+          PolicyDocument: {
+            Statement: { Action: string | string[]; Resource: unknown }[];
+          };
+        };
+      }[]
+    )
+      .filter(({ Properties }) =>
+        Properties.Roles.some(({ Ref }) => Ref === roleOf(rolePrefix)),
+      )
+      .flatMap(({ Properties }) => Properties.PolicyDocument.Statement)
+      .filter(({ Action }) =>
+        [Action].flat().some((action) => action.startsWith('s3:')),
+      );
+
+  it('can write brand images and tags under brand/logo, icon and share-image', () => {
+    const statements = objectStatements('AdminApiBrandingHandler');
+    const actions = statements.flatMap(({ Action }) => [Action].flat());
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        's3:PutObject',
+        's3:PutObjectTagging',
+        's3:DeleteObjectTagging',
+      ]),
+    );
+    expect(actions.some((action) => action.startsWith('s3:GetObject'))).toBe(
+      true,
+    );
+    const resources = JSON.stringify(statements.map((s) => s.Resource));
+    for (const prefix of [
+      'brand/logo/*',
+      'brand/icon/*',
+      'brand/share-image/*',
+    ]) {
+      expect(resources).toContain(prefix);
+    }
+  });
+
+  it('cannot write a course image or the published brand.json', () => {
+    const statements = objectStatements('AdminApiBrandingHandler');
+    const writes = statements.filter(({ Action }) =>
+      [Action].flat().some((action) => action.startsWith('s3:Put')),
+    );
+    expect(writes.length).toBeGreaterThan(0);
+    for (const { Resource } of writes) {
+      const resource = JSON.stringify(Resource);
+      expect(resource).not.toContain('courses');
+      expect(resource).not.toContain('brand.json');
+      expect(resource).toMatch(/brand\/(logo|icon|share-image)\/\*/);
+    }
+  });
+
+  it('has the table and the public media bucket settings', () => {
+    const variables = environmentOf('AdminApiBrandingHandler');
+    expect(variables).toHaveProperty('DISCAVA_DYNAMODB_CORE_TABLE');
+    expect(variables).toHaveProperty('DISCAVA_S3_PUBLIC_MEDIA_BUCKET');
+  });
+
+  it('is not the shared router, which has neither the grant nor the setting', () => {
+    expect(objectStatements('AdminApiRouterHandler')).toEqual([]);
+    expect(environmentOf('AdminApiRouterHandler')).not.toHaveProperty(
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+    );
+  });
+
+  it('serves branding.createUploadUrl and branding.save, and branding.get on the router', () => {
+    const methods = Object.values(
+      admin.findResources('AWS::ApiGateway::Method'),
+    );
+    const resources = admin.findResources('AWS::ApiGateway::Resource');
+    const integrationOf = (path: string) => {
+      const id = Object.entries(resources).find(
+        ([, r]) =>
+          (r as { Properties: { PathPart: string } }).Properties.PathPart ===
+          path,
+      )?.[0];
+      const method = methods.find((m) =>
+        JSON.stringify(
+          (m as { Properties: { ResourceId: unknown } }).Properties.ResourceId,
+        ).includes(id as string),
+      ) as { Properties: { Integration: { Uri: unknown } } };
+      return JSON.stringify(method.Properties.Integration.Uri);
+    };
+    expect(integrationOf('branding.save')).toContain('BrandingHandler');
+    expect(integrationOf('branding.createUploadUrl')).toContain(
+      'BrandingHandler',
+    );
+    expect(integrationOf('branding.get')).toContain('RouterHandler');
+  });
+});
+
 describe('no logging of the request that carries the key', () => {
   const admin = synth({})('AdminApi');
 
@@ -181,6 +298,10 @@ describe('deploy-time settings per function', () => {
   const required = {
     AdminApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
     AdminApiPaymentsConnectHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    AdminApiBrandingHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+    ],
   };
 
   it('gives each function the settings its code reads', () => {
