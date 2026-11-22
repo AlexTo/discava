@@ -197,7 +197,9 @@ function useCaptionFiles(
  *
  * With `resumeAt` above 0 the video seeks there once it loads, stays paused,
  * and says "Resumed at m:ss" with a "Start over" button until it plays or
- * 8 seconds pass. With `onPositionChange` the player reports where the viewer
+ * 8 seconds pass. `startAt` (a moment the viewer chose, such as a transcript
+ * search result) takes its place for this mount and says "Starting at m:ss"
+ * with no "Start over". With `onPositionChange` the player reports where the viewer
  * is (every 10 seconds while playing, and on pause, seek end and leaving the
  * page) so it can be saved; without it, as in the instructor's preview,
  * nothing is reported. With `onTimeChange` it also reports the current time
@@ -217,6 +219,7 @@ export function HlsVideo({
   className,
   captions,
   resumeAt = 0,
+  startAt,
   autoPlay = false,
   transcript = false,
   onPositionChange,
@@ -236,6 +239,9 @@ export function HlsVideo({
   captions?: PlayerCaption[];
   // Seconds to start from; 0 starts at the beginning.
   resumeAt?: number;
+  // Seconds to start from, in place of `resumeAt`, for a moment the viewer
+  // chose.
+  startAt?: number;
   // Starts playing as soon as it can, for a video the viewer just asked to
   // play (the browser allows it after their click).
   autoPlay?: boolean;
@@ -281,7 +287,8 @@ export function HlsVideo({
   // Read when the video loads, not a reason to resume again: the saved
   // position the caller holds moves on while the viewer watches.
   const resumeAtRef = useRef(resumeAt);
-  resumeAtRef.current = resumeAt;
+  resumeAtRef.current = startAt ?? resumeAt;
+  const startedAtChosenMoment = startAt !== undefined;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -525,16 +532,21 @@ export function HlsVideo({
           role="status"
           className="absolute top-2 left-2 flex items-center gap-2 rounded-md bg-black/80 px-3 py-1.5 text-sm text-white"
         >
-          <span>Resumed at {formatTime(resumedAt)}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={startOver}
-            className="hover:bg-white/20 hover:text-white"
-          >
-            Start over
-          </Button>
+          <span>
+            {startedAtChosenMoment ? 'Starting at' : 'Resumed at'}{' '}
+            {formatTime(resumedAt)}
+          </span>
+          {!startedAtChosenMoment && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={startOver}
+              className="hover:bg-white/20 hover:text-white"
+            >
+              Start over
+            </Button>
+          )}
         </div>
       )}
     </VideoControls>
