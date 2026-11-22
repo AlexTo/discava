@@ -6,7 +6,7 @@
 // Holds a pull request that changes who writes the core table until it also
 // changes the invariant checks (core-table's helpers/invariants/), since a
 // rule spanning records written by more than one package is what those
-// checks are for (CONTRIBUTING.md, "Rules That Span Records"). It can't tell
+// checks are for (DEVELOPMENT.md, "Rules That Span Records"). It can't tell
 // whether a rule is really at stake, so a maintainer waives it with a label
 // when none is.
 
@@ -171,7 +171,7 @@ export const failureMessage = (
   [
     'This pull request changes who writes the core table:',
     ...triggers.map(({ entity, reason }) => `  - ${entity} ${reason}`),
-    `If a rule now spans these writers, keep it in a core-table helper every writer calls and add a check for it to ${INVARIANTS_PATH} (CONTRIBUTING.md, "Rules That Span Records"). The lines it adds must name each entity above, or its snapshot key (${triggers
+    `If a rule now spans these writers, keep it in a core-table helper every writer calls and add a check for it to ${INVARIANTS_PATH} (DEVELOPMENT.md, "Rules That Span Records"). The lines it adds must name each entity above, or its snapshot key (${triggers
       .map(({ entity }) => `${entity}: \`snapshot.${keys[entity] ?? '?'}\``)
       .join(', ')}).`,
     `If no such rule is at stake, a maintainer adds the \`${WAIVER_LABEL}\` label and re-runs this job.`,

@@ -14,4 +14,4 @@ Local stand-ins (one folder each under `src/`, with `start-container.ts` and `pu
 
 Each has a `pull-*-image` target the start target depends on. Local data: `reset-local-data`, `notify-local`.
 
-The local endpoints and bucket names the APIs read at runtime are in `common-server-utils/local-dev`. What only runs on a deployed stage is listed in CONTRIBUTING.md's "Running Discava Locally".
+The local endpoints and bucket names the APIs read at runtime are in `common-server-utils/local-dev`. What only runs on a deployed stage is listed in DEVELOPMENT.md's "Running Discava Locally".

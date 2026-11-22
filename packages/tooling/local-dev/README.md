@@ -11,7 +11,7 @@ The Docker services local dev runs instead of AWS, and the scripts that work on 
 | `local-oidc` | Starts the local OIDC server that stands in for Cognito |
 | `pull-*-image` | Pulls each service's image; the start targets depend on them |
 | `reset-local-data` | Wipes local data (stop `pnpm dev` first) |
-| `notify-local` | Publishes a notification to a local user; see CONTRIBUTING.md |
+| `notify-local` | Publishes a notification to a local user; see DEVELOPMENT.md |
 
 `pnpm dev` starts the services through the projects that need them, so you rarely run these by hand:
 
