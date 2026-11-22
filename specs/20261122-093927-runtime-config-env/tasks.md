@@ -137,8 +137,8 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
   - `packages/events/src/notifications/notification-unsubscribe.test.ts`.
 - [x] T017 [US1] Synthesise (`pnpm nx run @discava/infra:synth`) and confirm no stack-dependency cycle and no change to the deploy order in `application-stage.ts`'s comment. Fix by moving a call, never by adding a dependency.
 - [x] T018 [US1] In the PR description, state that this PR needs T019 first, and quote [contracts/rollout.md](./contracts/rollout.md) step 1 and its failure message.
-- [ ] T019 [US4] (human, before merge) Re-run `scripts/setup-stage.sh discava-development` with admin credentials (and for any other deployed stage), using the version merged in Phase 1, so this PR's deploy can create `/discava-development/page-renderer` ([contracts/rollout.md](./contracts/rollout.md) step 1).
-- [ ] T020 [US1] (human) After this PR deploys, on `discava-development`:
+- [x] T019 [US4] (human, before merge) Re-run `scripts/setup-stage.sh discava-development` with admin credentials (and for any other deployed stage), using the version merged in Phase 1, so this PR's deploy can create `/discava-development/page-renderer` ([contracts/rollout.md](./contracts/rollout.md) step 1).
+- [x] T020 [US1] (human) After this PR deploys, on `discava-development`:
   - sign in to each portal, browse and search the catalogue;
   - open a public course page and `/sitemap.xml` signed out, and check the renderer's logs show one parameter read per cold start and no error;
   - run `seed-categories` with the documented command ([quickstart.md](./quickstart.md) step 7).

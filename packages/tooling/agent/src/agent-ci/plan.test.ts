@@ -97,13 +97,23 @@ describe('planCi', () => {
     },
   );
 
-  it('ignores branches that are not an agent issue branch', () => {
+  it('answers any branch directly under openhands/', () => {
+    for (const headBranch of [
+      'openhands/issue-308',
+      'openhands/issue-308-2',
+      'openhands/test-fix-782',
+    ]) {
+      expect(planCi(run({ headBranch }), pr(), []).action).toBe('send-back');
+    }
+  });
+
+  it('ignores branches that are not an agent branch', () => {
     for (const headBranch of [
       'feature/x',
-      'openhands/issue-308-2',
-      'openhands/issue-',
+      'openhands/',
       'xopenhands/issue-1',
       'openhands/issue-1/../x',
+      'openhands/a/b',
     ]) {
       expect(planCi(run({ headBranch }), pr(), []).action).toBe('ignore');
     }
