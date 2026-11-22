@@ -48,7 +48,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 - **Text-only buttons:** buttons carry text only, with no arrow icons.
 - **Shared fixes stay shared (FR-030):** a fix to a shared component is made in `packages/common/shadcn`, never overridden in the admin portal. This feature changes only `SH/components/cognito-auth.tsx` there (T001).
 - **The Stripe key:** never kept in state, the DOM or a message, and emptied on every submit, as today.
-- **Screenshots:** every e2e task that changes what a user sees calls `screenshot()` on the changed screen.
+- **Screenshots:** every phase that changes what a user sees adds an e2e case with `screenshot()` on the changed screen (constitution VIII; the `UI Screenshots` PR check fails without one). Phases whose other e2e work waits on IP have a screenshot task that doesn't.
 - **Finding IDs:** these are from [audit.md](./audit.md). Each task names the ones it fixes.
 
 ## Format: `[ID] [P?] [Story] Description`
@@ -67,7 +67,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - **Default:** with no `fallback`, the output is today's `<Spinner />`, so no portal changes.
   - **Tests:** with `fallback`, it renders the fallback while signing in; without it, the spinner, as today.
   - **If IP T037 has already added a prop for this,** use that prop and tick this task with a note.
-- [ ] T002 [P] Add `createRevokableCertificateViaApi(label)` to `packages/e2e/src/helpers/certificate.ts`: a fresh instructor publishes a one-reading course whose title is 80 characters holding a 70-character word; a fresh student named "Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel" completes it through core-api (as `completeCourse` does through the portal); the helper waits for the certificate (`certificateCourseIdOf`, `courseCertificates`) and returns `{ certificateId, courseTitle, learnerName }`. Use the API rather than the portal so the phone case stays fast. Not used yet.
+- [ ] T002 [P] Add `createRevokableCertificateViaApi(label)` to `packages/e2e/src/helpers/certificate.ts`: a fresh instructor publishes a one-reading course whose title is 80 characters holding a 70-character word; a fresh student named "Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel" completes it through core-api (as `completeCourse` does through the portal); the helper waits for the certificate (`certificateCourseIdOf`, `courseCertificates`), revokes and restores it twice through admin-api with 500-character notes ending in a 70-character word (so the history shows D-08), and returns `{ certificateId, courseTitle, learnerName }`. Use the API rather than the portal so the phone case stays fast. Not used yet.
 - [ ] T003 Run `pnpm nx run @discava/common-shadcn:test` (once), and lint and typecheck for `common-shadcn` and `e2e`. Fix failures in the code, not the tests.
 
 ---
@@ -79,9 +79,10 @@ The feature writes no shared record, so there is no invariant work. Write each t
 **Independent test**: quickstart, US1.
 
 - [ ] T004 [P] [US1] Test first in `R/categories/-components/categories-screen.test.tsx`, then stack the categories table below `sm` in `R/categories/-components/categories-screen.tsx`, as research R-1 describes (B-01, B-02):
-  - `table`, `tbody`, `tr`, `td` get `max-sm:block`; `thead` gets `max-sm:sr-only`; each `tr` is `max-sm:grid max-sm:grid-cols-[minmax(0,1fr)] max-sm:gap-1 max-sm:py-3`;
+  - `table`, `tbody`, `td` get `max-sm:block`; `thead` gets `max-sm:sr-only`;
+  - each `tr` is a grid below `sm` with areas in the columns' DOM order: `max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-x-3 max-sm:gap-y-1 max-sm:py-3 max-sm:[grid-template-areas:'name_name'_'slug_slug'_'status_count'_'actions_actions']`, and each `td` takes its area. Do not reorder the cells: a screen reader reads them in DOM order;
   - the name cell is `min-w-0 break-words [overflow-wrap:anywhere]`; the slug `break-all`;
-  - status, course count and slug share one wrapping line below `sm`, each with a label shown only there ("Courses: 20", "Slug: science", in `<span className="sm:sr-only">`);
+  - the slug and the course count are each preceded by a label shown only below `sm` (`<span className="sm:sr-only">Slug: </span>`, "Courses: ");
   - the actions group is `flex flex-wrap gap-2 max-sm:justify-start`;
   - the rename form is `flex flex-wrap gap-2`, its field `min-w-0 flex-1 basis-40`.
 
@@ -117,8 +118,9 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 - [ ] T010 [P] [US2] Test first in `AP/components/not-found-page.test.tsx`, then add `AP/components/not-found-page.tsx` and use it as the root route's `notFoundComponent` in `R/__root.tsx` and as `defaultNotFoundComponent` in `AP/router.ts` (A-06, research R-5). It calls `usePageTitle('Page not found')` and `useBreadcrumbLabel('Page not found')`, and renders an `h1` "Page not found", "There's no page at this address.", and a `Link to="/"` "Go to the home page". **Tests:** rendered for an unknown path, inside `AppLayout` (the sidebar's Home link is present), with one `h1` and the link.
 - [ ] T011 [P] [US2] Test first in `R/-index.test.tsx`, then add Certificates, Payments and Branding cards to `areas` in `R/index.tsx`, in sidebar order, with Notification settings last and the descriptions in research R-14, and no figure (A-08). **Test (changes meaning, plan.md):** six cards, each linking to its route.
-- [ ] T012 [US2] **Needs IP T016.** Test first in `AP/components/app-layout.test.tsx` (new): render `AppLayout` at `/settings/branding` and `/settings/notifications` with the admin route tree, and assert the trail is "Home", "Settings" as text (no link), then the page; and that every crumb link's `href` matches an admin route (A-04, A-05). No source change is expected; if one is needed, it belongs in `SH/components/portal-shell.tsx` under IP T016, not here.
+- [ ] T012 [US2] **Needs IP T016.** Extend the existing `AP/components/app-layout.test.ts` (rename it `.tsx` if it needs JSX). Its root-crumb `'/'` and `availableRoutes` assertions change meaning with IP T016 (plan.md); update them if IP T016 didn't. Then render `AppLayout` at `/settings/branding` and `/settings/notifications` with the admin route tree, and assert the trail is "Home", "Settings" as text (no link), then "Branding" or "Notification settings"; and that every crumb link's `href` matches an admin route (A-04, A-05). No source change is expected; if one is needed, it belongs in `SH/components/portal-shell.tsx` under IP T016, not here.
 - [ ] T013 [US2] **Needs IP T016 and IP T021.** Extend `packages/e2e/src/scenarios/breadcrumbs.e2e.ts` with an admin case: as a new administrator, open Branding and check the trail ("Home", "Settings" not a link, "Branding"); follow "Home"; open `/no-such-page` and check the "Page not found" heading and its link home. `screenshot()` the not-found page.
+- [ ] T050 [US2] Add `packages/e2e/src/scenarios/admin-portal.e2e.ts`: as a new administrator, open the home page and check its six cards each open their page; open `/no-such-page` and check the "Page not found" heading and its link home. `screenshot()` both. This doesn't wait on IP.
 - [ ] T014 [US2] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
@@ -129,19 +131,21 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US3.
 
-- [ ] T015 [P] [US3] Call `usePageTitle` in every admin route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
+- [ ] T015 [US3] Call `usePageTitle` in every admin route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
   - `R/index.tsx`, `R/categories/-components/categories-screen.tsx`, `R/-components/reviews-screen.tsx`, `R/-components/certificates-screen.tsx`, `R/-components/payments-screen.tsx`, `R/settings/notifications.tsx`;
   - `R/settings/branding.tsx` changes to `usePageTitle('Branding', 'Settings')`;
-  - `R/__root.tsx`'s restricted branch: `usePageTitle('Administrators only')`, called unconditionally at the top of `AdminsOnly`'s non-admin path (hooks before the early return).
+  - `R/__root.tsx`'s restricted branch: a small `RestrictedPage` component, rendered only in that branch, calls `usePageTitle('Administrators only')` and renders `RestrictedPortal`. Never call it above `AdminsOnly`'s early return: a parent's effect runs after its children's, so it would overwrite every admin page's title on first load ([contracts/page-titles.md](./contracts/page-titles.md));
+  - `AP/components/app-layout.tsx`: `segmentLabels.notifications` becomes "Notification settings", matching the title and `h1`.
 
-  **Tests:** one per route's test file, asserting `document.title`.
-- [ ] T016 [P] [US3] Use `LoadingState` (`@discava/common-shadcn/components/loading-state`) for every wait for a page or section (A-07, A-10, research R-6):
+  **Tests:** one per route's test file, asserting `document.title`; and in `R/-root.test.tsx`, an admin's page keeps its own title after first load, while a non-admin's is "Administrators only · Discava".
+- [ ] T016 [US3] Use `LoadingState` (`@discava/common-shadcn/components/loading-state`) for every wait for a page or section (A-07, A-10, research R-6):
   - `AP/main.tsx`: the `RuntimeConfigProvider` and `BrandProvider` fallbacks become `<LoadingState size="page" label="Loading Discava…" />`; `CognitoAuth` gets `fallback={<LoadingState size="page" label="Signing you in…" />}` (T001);
   - categories: "Loading the categories…"; reviews: "Loading the courses…" and "Loading the reviews…"; certificates: "Looking up the certificate…"; payments: "Loading the payment settings…"; branding's hand-built "Loading…" becomes `LoadingState` "Loading the branding…".
   - The courses list and the reviews list get `aria-busy` while `isFetchingNextPage`.
 
   **Tests:** each screen's loading state shows its sentence in a `status` region, under the page's `h1`.
-- [ ] T017 [US3] **Needs IP T032.** Test first in `AP/components/app-layout.test.tsx`: after navigating from `/` to `/payments`, the "Payments" `h1` has focus (A-02). No source change is expected.
+- [ ] T017 [US3] **Needs IP T032.** Test first in `AP/components/app-layout.test.ts(x)`: after navigating from `/` to `/payments`, the "Payments" `h1` has focus (A-02). No source change is expected.
+- [ ] T051 [US3] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: visit each admin page and assert its tab title ([contracts/page-titles.md](./contracts/page-titles.md)); `screenshot()` Categories while its list request is held (`page.route` delaying `localhost:2025`), showing "Loading the categories…".
 - [ ] T018 [US3] Run the admin portal's and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
@@ -154,28 +158,29 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 - [ ] T019 [P] [US4] Replace `disabled={…isPending}` with `PendingButton` and the labels in research R-7's table (B-06, C-02, E-02, F-03):
   - categories: Add category, Rename's Save, the confirmation's Archive;
-  - reviews: Remove review, and the two Try again buttons until T031 replaces them;
-  - certificates: Look up, Revoke certificate, Restore certificate;
-  - payments: Connect Stripe and Save key (in `R/-components/payments/connect-form.tsx`, through a new `pending` prop), Disconnect Stripe; Replace key and Disconnect on `status-card.tsx` stay `disabled` while `changing` and use `aria-disabled` while the admin's own request runs;
-  - branding: Save (its spinner goes; the label says "Saving…").
+  - reviews: Remove review, Load more and More courses ("Loading more…"), and the two Try again buttons until T031 replaces them;
+  - certificates: Revoke certificate, Restore certificate (Look up starts no mutation; research R-7);
+  - payments: Connect Stripe and Save key (in `R/-components/payments/connect-form.tsx`, through a new `pending` prop); Disconnect on `status-card.tsx` shows "Disconnecting…" while the disconnect runs (the confirmation closes before it starts). Replace key and Disconnect stay `disabled` while `changing` and use `aria-disabled` while the admin's own request runs;
+  - branding: Save (its spinner goes; the label says "Saving…"), and each image's Reset to default while its upload runs (F-09, in `R/settings/-components/image-field.tsx`).
 
-  **Tests (change meaning, plan.md):** in each screen's test, a pending button has `aria-disabled="true"`, keeps focus, and a second press sends nothing. Replace `toBeDisabled()` assertions about pending buttons with these; keep `payments-screen.test.tsx`'s `toBeDisabled()` for the `changing` state, which is still `disabled`.
-- [ ] T020 [P] [US4] Test first in `categories-screen.test.tsx`, then in `categories-screen.tsx` (B-07, B-08, research R-8):
+  **Tests (change meaning, plan.md):** in each screen's test, a pending button has `aria-disabled="true"`, keeps focus, and a second press sends nothing. Replace `toBeDisabled()` assertions about pending buttons with these; keep `payments-screen.test.tsx`'s `toBeDisabled()` for the `changing` state, which is still `disabled`. In `packages/e2e/src/scenarios/branding.e2e.ts`, a Save that is pending is no longer `toBeDisabled()`; leave its unchanged/invalid assertions to T033.
+- [ ] T020 [US4] Test first in `categories-screen.test.tsx`, then in `categories-screen.tsx` (B-07, B-08, research R-8):
   - Rename focuses its field; Escape in the field cancels the rename;
   - after Save or Cancel, focus moves to that row's Rename (a `Map` of Rename buttons by id, filled by ref callbacks, focused after the list has refetched);
   - the Archive confirmation gets `useReturnFocus(open)`'s `onCloseAutoFocus`; after archiving, focus moves to the row's Rename.
-- [ ] T021 [P] [US4] Test first in `reviews-screen.test.tsx`, then in `reviews-screen.tsx` (C-05, C-06):
+- [ ] T021 [US4] Test first in `reviews-screen.test.tsx`, then in `reviews-screen.tsx` (C-05, C-06):
   - the Remove dialog gets `useReturnFocus`; after a removal, focus moves to the review's `li` (`tabIndex={-1}`, `aria-label` "Review by <name>"), which now says "Removed";
-  - after Load more or More courses, focus moves to the first item it added, or to the list when it added none.
-- [ ] T022 [P] [US4] Test first in `certificates-screen.test.tsx`, then in `certificates-screen.tsx` (D-03): both dialogs get `useReturnFocus`; after a revoke, focus moves to Restore, and after a restore, to Revoke.
-- [ ] T023 [P] [US4] Test first in `payments-screen.test.tsx`, then in `payments-screen.tsx` and `payments/connect-form.tsx` (E-03): both dialogs get `useReturnFocus`; Replace key's Cancel focuses Replace key; Go back ("Keep the current key" after T042) and a failed save focus the key field.
-- [ ] T024 [P] [US4] Test first in `R/settings/-branding.test.tsx`, then in `R/settings/-components/branding-form.tsx` (F-07): the Reset-all confirmation gets `useReturnFocus`.
+  - after Load more or More courses, focus moves to the first item it added, or, when it added none, to the list itself (`tabIndex={-1}`, named "Reviews", or the picker).
+- [ ] T022 [US4] Test first in `certificates-screen.test.tsx`, then in `certificates-screen.tsx` (D-03): both dialogs get `useReturnFocus`; after a revoke, focus moves to Restore, and after a restore, to Revoke.
+- [ ] T023 [US4] Test first in `payments-screen.test.tsx`, then in `payments-screen.tsx` and `payments/connect-form.tsx` (E-03): both dialogs get `useReturnFocus`; Replace key's Cancel focuses Replace key; Go back ("Keep the current key" after T042) and a failed save focus the key field, and a failed save's alert adds "Enter the key again to retry."; a successful connect or replace focuses the status card's Replace key; a successful disconnect focuses the key field (research R-8).
+- [ ] T024 [US4] Test first in `R/settings/-branding.test.tsx`, then in `R/settings/-components/branding-form.tsx` (F-07): the Reset-all confirmation gets `useReturnFocus`.
 - [ ] T025 [US4] Test first, then announce each result with one `StatusMessage` (`@discava/common-shadcn/components/status-message`) per screen, with the sentences in research R-9 (B-09, C-05, D-03, E-04, F-05):
   - categories, reviews, certificates, payments, and branding (whose visible "Branding saved" alert stays, and is no longer the announcement);
   - the reason and note counters lose `aria-live`; each field gets `aria-describedby` with its counter's id (C-08, D-09).
 
   **Tests:** after each action the `status` region holds its sentence; the counters have no `aria-live`.
-- [ ] T026 [US4] **Needs IP T040.** Test first in `AP/components/app-layout.test.tsx`: at a phone width (mock `useIsMobile`), choosing a page in the sidebar closes it; Escape returns focus to the sidebar button (A-03). No source change is expected.
+- [ ] T052 [US4] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: with the keyboard alone, rename a category (Rename, type, Enter) and archive another; after each, assert focus is on that row's Rename. `screenshot()` the list after the archive.
+- [ ] T026 [US4] **Needs IP T040.** Test first in `AP/components/app-layout.test.ts(x)`: at a phone width (mock `useIsMobile`), choosing a page in the sidebar closes it; Escape returns focus to the sidebar button (A-03). No source change is expected.
 - [ ] T027 [US4] (human) With a screen reader (NVDA or VoiceOver), do the actions in [quickstart.md](./quickstart.md) US4. Confirm each result is announced once, focus is where the table says, and the counters are quiet. Note anything else in the pull request.
 - [ ] T028 [US4] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
@@ -192,6 +197,8 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - in `branding-form.tsx`, replace the `useBlocker` call with `useUnsavedChangesGuard(dirty)` and render its `confirmation` once.
 
   **Tests (change meaning for branding, plan.md):** Escape with a reason typed opens "Discard unsaved changes?"; Keep editing returns to the field with the text; with nothing typed Escape closes; Cancel then reopen shows an empty field; branding with a change asks "Leave without saving?" on a link, and doesn't call `window.confirm`.
+
+  Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: type a reason in Remove review, press Escape, and `screenshot()` the question.
 - [ ] T030 [US5] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
@@ -202,14 +209,14 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US6.
 
-- [ ] T031 [P] [US6] Use `ErrorAlert type="error"` with a `header` and `onRetry={() => query.refetch()}` for every failed load (B-03, C-02, D-02, E-05, research R-11):
+- [ ] T031 [US6] Use `ErrorAlert type="error"` with a `header` and `onRetry={() => query.refetch()}` for every failed load (B-03, C-02, D-02, E-05, research R-11):
   - categories: "Couldn't load the categories";
   - reviews: "Couldn't load the courses" and "Couldn't load the reviews", replacing both hand-built blocks;
   - payments: move the hand-built Try again from the alert's text to `onRetry`;
   - certificates: a failed lookup (not "not found") is "Couldn't look up the certificate", with Try again.
 
   **Tests (change meaning, plan.md):** each failed load shows one alert with its header and one Try again, which refetches.
-- [ ] T032 [P] [US6] Test first, then split the categories screen's single alert by action (B-04, research R-11):
+- [ ] T032 [US6] Test first, then split the categories screen's single alert by action (B-04, research R-11):
   - Add's error shows under the add form, headed "Couldn't add the category", tied to the field (`aria-describedby`, `aria-invalid`);
   - Rename's shows under the row's rename form, headed "Couldn't rename the category", tied to its field;
   - Archive's shows inside the confirmation: `onSettled` no longer closes it; `onSuccess` does.
@@ -219,9 +226,10 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - categories (Add, Rename), certificates (Look up, Revoke with "Other"), reviews (Remove review), payments (`KeyForm`), branding (invalid name or colour; nothing changed announces "Nothing to save: the branding is as saved.");
   - each problem is shown beside its field with an `id`, tied with `aria-describedby` and `aria-invalid`, and focus moves to the field. Nothing is sent.
 
-  **Tests (change meaning, plan.md):** each button is enabled; submitting empty shows the message, focuses the field, and the fake API records no call.
-- [ ] T034 [P] [US6] Test first, then show a certificate that isn't found as `ErrorAlert type="info"` headed "No certificate has this ID", with "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3." and no Try again (D-02). **Test (changes meaning):** replaces the "Certificate not found" assertion.
+  **Tests (change meaning, plan.md):** each button is enabled; submitting empty shows the message, focuses the field, and the fake API records no call. Update `packages/e2e/src/scenarios/branding.e2e.ts` (Save `toBeDisabled()` at lines 54, 63, 88, 210, 300) and `review.e2e.ts` (Remove review `toBeDisabled()` at lines 169-170) to submit and assert the message instead.
+- [ ] T034 [US6] Test first, then show a certificate that isn't found as `ErrorAlert type="info"` headed "No certificate has this ID", with "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3." and no Try again (D-02). **Test (changes meaning):** replaces the "Certificate not found" assertion.
 - [ ] T035 [US6] **Needs IP T059.** Test first in `R/settings/-route.test.tsx`: a failed toggle shows `apiErrorMessage`'s sentence, never "Failed to fetch", and a failed load has Try again (F-01). No admin source change is expected.
+- [ ] T053 [US6] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: add a category with an empty name, then one whose name exists; assert each message is under the add field, which has focus. `screenshot()` the duplicate-name message.
 - [ ] T036 [US6] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
@@ -232,8 +240,8 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US7.
 
-- [ ] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option.
-- [ ] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id.
+- [ ] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option; an empty or 101-character `course` is dropped from the address with `replace`.
+- [ ] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id; an empty or 101-character `id` is dropped from the address with `replace`.
 - [ ] T039 [US7] Add a case to `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, or a new `admin-views.e2e.ts` if it reads better: choose a course on Reviews and look up a certificate, reload each, and check the same view shows; press Back and check the previous one. Then change T008's admin cases to open `?course=` and `?id=` directly. `screenshot()` each restored view.
 - [ ] T040 [US7] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
@@ -252,7 +260,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - home: each card's `Link` is `aria-labelledby` its title and `aria-describedby` its description and figure.
 
   **Tests (change meaning, plan.md):** the new names; each contains its visible text.
-- [ ] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md).
+- [ ] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
 - [ ] T043 [US8] **Needs IP T073 and IP T074.** In `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, measure the Remove review dialog's close button and Branding's "Show the name beside the logo" switch: each at least 24×24px; clicking the switch's text toggles it (C-09, F-02, F-08). No admin source change is expected.
 - [ ] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
@@ -273,7 +281,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Goal**: Confirm on a running stack what tests cannot.
 
-- [ ] T047 (human) With all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px on the local stack, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` on Categories, Reviews, Certificates and Payments: the same requests, in the same order (FR-028). Check the stacked categories table with a screen reader in Safari and Chrome: each row reads its name, status, course count and slug in order.
+- [ ] T047 (human) With all phases merged, walk [quickstart.md](./quickstart.md) at 375px and 1440px on the local stack, saving screenshots to `tmp/screenshots/pr-<number>/`. Compare the network panel with `main` on Categories, Reviews, Certificates and Payments: the same requests, in the same order (FR-028). Check the stacked categories table with a screen reader in Safari and Chrome: each row reads its name, slug, status and course count, in that order.
 - [ ] T048 (human) On a real phone, or the browser's device mode with touch: rename and archive a category, remove a review, revoke a certificate (SC-003). At 1440px with text zoom at 200%, confirm no admin page scrolls sideways.
 - [ ] T049 Record in `spec.md`'s Assumptions, as a dated note, anything the walk found that this spec left out of scope, so that the next audit starts from it. Do not widen this feature.
 
@@ -300,6 +308,8 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - **US4 and US5:** T021, T022 and T029 edit the same two dialogs.
   - **US2 and US8:** T011 and T041 both edit `R/index.tsx`.
   - **US1 and US7:** T039 changes T008's cases.
+  - **US2, US3 and US7:** Phases 3 and 4 both edit `R/index.tsx` and `R/__root.tsx`; Phases 4 and 8 both edit the reviews and certificates screens.
+  - **The new `admin-portal.e2e.ts`:** T050 creates it; T051, T052, T029 and T053 extend it. Whichever phase merges first after Phase 3 rebases the others.
 - **Phase 10 (US9)** may merge any time after Phase 2.
 - **Within a phase,** tasks marked [P] touch different files.
 
@@ -311,13 +321,13 @@ The feature writes no shared record, so there is no invariant work. Write each t
 | FR-002 tables at phone width | T004, T007 |
 | FR-003 user-written text wraps | T004, T005, T006 |
 | FR-004 breadcrumbs | T012, T013 (IP T016) |
-| FR-005 not-found page | T010, T013 |
-| FR-006 home leads everywhere | T011 |
-| FR-007 titles, one h1, one main | T010, T015, T016 |
+| FR-005 not-found page | T010, T013, T050 |
+| FR-006 home leads everywhere | T011, T050 |
+| FR-007 titles, one h1, one main | T010, T015, T016, T051 |
 | FR-008 focus on navigation | T017 (IP T032) |
 | FR-009 waits in words | T001, T016, T019 |
 | FR-010 busy controls keep focus | T019 |
-| FR-011 focus after removal or swap | T020, T021, T022, T023 |
+| FR-011 focus after removal or swap | T020, T021, T022, T023, T052 |
 | FR-012 focus after closing; sidebar | T020, T021, T022, T023, T024, T026 (IP T040) |
 | FR-013 results announced once; quiet counters | T025 |
 | FR-014 Rename focus and Escape | T020 |
@@ -328,7 +338,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 | FR-019 error sentences | T031, T035 (IP T059) |
 | FR-020 one Try again | T031 |
 | FR-021 errors where you look | T032 |
-| FR-022 problems by fields; no disabled submit | T033 |
+| FR-022 problems by fields; no disabled submit | T033, T053 |
 | FR-023 lookup finds nothing | T034 |
 | FR-024 views in the address | T037, T038, T039 |
 | FR-025 24px targets | T043 (IP T073, T074) |
@@ -338,7 +348,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 | FR-029 text-only buttons | the rules for every task |
 | FR-030 shared fixes once, in shared code | T001; the IP-dependent tasks above |
 | FR-031 the table rule | T045 |
-| FR-032 e2e fails on the admin defects | T008, T013, T046 |
+| FR-032 e2e fails on the admin defects | T008, T013, T046, T050 |
 
 SC-003 (a phone task start to finish) and the 200% zoom edge case are checked by hand in T048.
 
@@ -346,9 +356,11 @@ SC-003 (a phone task start to finish) and the 200% zoom edge case are checked by
 
 After Phase 2 merges, three agents can work at once, touching different files:
 
-- **Phase 3 (US2):** the not-found page and the home cards.
-- **Phase 4 (US3):** titles and loading states.
-- **Phase 8 (US7):** the two routes' search params.
+- **Phase 3 (US2):** the not-found page, the router and the home cards.
+- **Phase 8 (US7):** the reviews and certificates routes' search params.
+- **Phase 10 (US9):** the rules.
+
+Phase 4 (US3) touches files of both Phase 3 and Phase 8 (`R/index.tsx`, `R/__root.tsx`, the screens), so it follows them.
 
 ## Implementation strategy
 

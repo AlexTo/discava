@@ -1,6 +1,6 @@
 # Contract: views kept in the address
 
-Two routes gain `validateSearch`. A parameter that is absent means the default. An invalid value is dropped, and the address is corrected with `replace`.
+Two routes gain `validateSearch`. A parameter that is absent means the default. An invalid value (empty, or over 100 characters) is dropped, and the address is corrected with `replace`; T037 and T038 test it.
 
 ## `/reviews`
 

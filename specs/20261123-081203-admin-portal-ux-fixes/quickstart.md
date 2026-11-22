@@ -22,7 +22,7 @@ Throughout:
 
 At 375px:
 
-1. Categories: no sideways scroll. Each row shows the name, then "Active · Courses: 20 · Slug: science", then Rename and Archive. Rename the long-named category: the field, Save and Cancel are on screen.
+1. Categories: no sideways scroll. Each row shows the name, then "Slug: science", then "Active · Courses: 20", then Rename and Archive. Rename the long-named category: the field, Save and Cancel are on screen.
 2. Reviews, with the course chosen: no sideways scroll; long words in reviews and responses wrap.
 3. Certificates, with the certificate looked up: no sideways scroll; Revoke is below the learner's details. History entries are visibly separate.
 4. Payments: Recent changes shows "Mode" and "Key" apart, dates on one line, and the table scrolls inside itself.
@@ -53,9 +53,11 @@ With the keyboard alone, do each action and check focus afterwards:
 | Archive, confirm | that row's Rename | "… archived." |
 | Remove review: Cancel, Escape | that review's Remove | none |
 | Remove review: submit | the review's row ("Removed") | "Review removed." |
-| Last Load more | the first review it loaded | none |
+| Load more | the first review it loaded | none |
 | Revoke: Cancel; submit | Revoke; Restore | none; "Certificate revoked." |
 | Replace key, Cancel | Replace key | none |
+| Connect Stripe or Save key, succeeding | Replace key on the status card | "Stripe connected." / "Key replaced." |
+| Disconnect, confirm | the key field | "Stripe disconnected." |
 | Replace key, Save key, Keep the current key | the empty key field | none |
 | Disconnect, Keep connected | Disconnect | none |
 | Branding Save | Save | "Branding saved…" |

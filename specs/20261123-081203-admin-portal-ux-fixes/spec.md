@@ -10,7 +10,7 @@
 
 **Parent issue**: none
 
-**Audit**: [audit.md](./audit.md) lists the 55 findings (3 P1) by ID. Every story below names the findings it fixes.
+**Audit**: [audit.md](./audit.md) lists the 56 findings (3 P1) by ID. Every story below names the findings it fixes.
 
 **Builds on**: the [instructor-portal UX fixes](../20261123-000428-instructor-portal-ux-fixes/spec.md), whose Phase 1 and US1 are merged (#892). Its later stories fix several shared components the admin portal uses. This feature names those findings, checks the fixes in the admin portal, and does not make them twice.
 
@@ -20,8 +20,8 @@
 
 These were resolved with the recommended defaults, for the maintainer to confirm in review.
 
-- Q: How does the categories table fit a phone (B-01), given that every row holds Rename and Archive? → A: Below 640px each row stacks: the name across the full width, then its status, course count and slug, then Rename and Archive on a line that wraps. At desktop width the table is unchanged. A table that scrolls sideways inside itself would keep the actions off-screen, one scroll away, on every row. The read-only Recent changes table on Payments is different: it scrolls within itself (E-01), as the instructor portal's earnings tables do (FR-001, FR-002).
-- Q: Should the home page list the areas it leaves out today (A-08)? → A: Yes. Home gains Certificates, Payments and Branding cards, in sidebar order, so that every area of the portal can be reached from it. They carry no figure: one would need a request the portal doesn't make today (FR-031). "Branding" stays in the user menu as well; the sidebar is unchanged (FR-009).
+- Q: How does the categories table fit a phone (B-01), given that every row holds Rename and Archive? → A: Below 640px each row stacks: the name across the full width, then its slug, then its status and course count, then Rename and Archive on a line that wraps. This is the order of the table's columns, so a screen reader reads a stacked row as it reads a row today. At desktop width the table is unchanged. A table that scrolls sideways inside itself would keep the actions off-screen, one scroll away, on every row. The read-only Recent changes table on Payments is different: it scrolls within itself (E-01), as the instructor portal's earnings tables do (FR-001, FR-002).
+- Q: Should the home page list the areas it leaves out today (A-08)? → A: Yes. Home gains Certificates, Payments and Branding cards, in sidebar order, so that every area of the portal can be reached from it. They carry no figure: one would need a request the portal doesn't make today (FR-028). "Branding" stays in the user menu as well; the sidebar is unchanged (FR-006).
 - Q: Which views go in the address (C-07, D-06)? → A: The chosen course on Reviews (`?course=`) and the looked-up certificate on Certificates (`?id=`). Opening either address makes the request the screen makes today when the course is chosen or the ID looked up. The categories list and payments have no view to keep (FR-024).
 - Q: Several findings (A-02 to A-05, C-09, F-01, F-02, F-04, F-08) are in shared code that the instructor-portal UX spec already fixes in later stories. Does this feature fix them? → A: No. The instructor tasks fix them once, for every portal. This feature's tasks that rely on them say which instructor task they wait for, and add the admin-portal checks (tests and e2e cases) once it has merged (FR-030).
 - Q: The Reviews and Certificates dialogs ask for a reason or a note. Does Cancel ask before discarding one? → A: No, as in the instructor portal. Cancel is a deliberate choice and always discards. Escape or a click outside asks first when something was typed (FR-017).
@@ -66,7 +66,7 @@ The Recent changes table on Payments runs its columns together (E-01), long name
 **Acceptance Scenarios**:
 
 1. **Given** any admin page at phone width with long content, **When** it loads, **Then** it has no sideways scroll, and every control on it is fully on screen.
-2. **Given** the categories list at phone width, **When** it shows, **Then** each category's name wraps in full on its own line, followed by its status, course count and slug, and its Rename and Archive buttons are on screen below them.
+2. **Given** the categories list at phone width, **When** it shows, **Then** each category's name wraps in full on its own line, followed by its slug, then its status and course count, and its Rename and Archive buttons are on screen below them.
 3. **Given** a category being renamed at phone width, **When** the name field shows, **Then** the field, Save and Cancel are on screen and the field is at least as wide as a short name.
 4. **Given** a review or response holding a 70-character word, **When** it shows at either width, **Then** the word wraps inside the review.
 5. **Given** a certificate with a long learner name and course title at phone width, **When** it is looked up, **Then** the name and title wrap, and Revoke or Restore is on screen below them.
@@ -132,7 +132,7 @@ An administrator moderates reviews, revokes certificates and manages categories 
 - Reviews: every way of closing the Remove dialog, and the last Load more (C-05, C-06);
 - Certificates: Cancel, revoke and restore (D-03);
 - Payments: every action and confirmation (E-02, E-03);
-- Branding: Save and the Reset-all confirmation (F-03, F-07);
+- Branding: Save, the Reset-all confirmation and each image's Reset while uploading (F-03, F-07, F-09);
 - the phone sidebar (A-03).
 
 Almost none of them announce what happened (B-09, C-05, D-03, E-04, F-05), and two counters announce every keystroke (C-08, D-09).
@@ -142,7 +142,7 @@ Almost none of them announce what happened (B-09, C-05, D-03, E-04, F-05), and t
 **Acceptance Scenarios**:
 
 1. **Given** a button whose action takes time (Add category, Save, Remove review, Revoke certificate, Restore certificate, Connect Stripe, Save key, Disconnect Stripe, Save branding), **When** it is pressed, **Then** it keeps focus, says what it is doing ("Saving…", "Removing…"), ignores further presses until done, and focus is still on it afterwards when it is still there, whether the action succeeded or failed.
-2. **Given** an action that removes or swaps its own control (archive a category, a review's Remove once it is removed, Revoke becoming Restore, the last Load more, Rename's Save and Cancel, Replace key's Cancel), **When** it completes, **Then** focus moves to the control that now stands in its place, or to the neighbouring item, or to the list's heading when none is left.
+2. **Given** an action that removes or swaps its own control (archive a category, a review's Remove once it is removed, Revoke becoming Restore, the last Load more, Rename's Save and Cancel, Replace key's Cancel), **When** it completes, **Then** focus moves to the control that now stands in its place, or to the neighbouring item, or to the list itself when none is left.
 3. **Given** Rename, **When** it is pressed, **Then** focus moves into the name field; **When** Escape is pressed in the field, **Then** the rename is cancelled.
 4. **Given** a dialog closed by any means (Cancel, Close, Escape, a successful action, Go back, Keep connected), **When** it closes, **Then** focus returns to the control that opened it, or to the control that replaced it.
 5. **Given** the phone sidebar, **When** a page is chosen in it, **Then** it closes and focus moves to the new page's main heading; **When** it is closed with Escape, **Then** focus returns to the button that opened it.
@@ -261,7 +261,7 @@ Whoever next changes an admin page finds the patterns these fixes follow in the 
 - **A Reviews address for a course with no reviews, or one that no longer exists:** "No reviews yet", or the failed load's message with Try again, as when the course is chosen today.
 - **A certificate address with an ID that matches nothing:** the not-found message of US6, with the ID in the field to correct.
 - **Payments while a change is in progress:** the page refreshes every few seconds, as today; focus is not moved by a refresh, and the buttons that are unavailable say why in the existing "A change is in progress" message.
-- **A failed save of the Stripe key:** the key field is emptied, as today, because the key must never stay in the page. Focus moves to the empty field, and the message says to enter the key again.
+- **A failed save of the Stripe key:** the key field is emptied, as today, because the key must never stay in the page. Focus moves to the empty field, and the alert adds "Enter the key again to retry."
 - **A signed-in user who isn't an administrator:** the restricted page is titled "Administrators only · Discava" and fits a phone, as today.
 - **Text zoomed to 200% at desktop width:** the rules about sideways scroll still hold.
 - **Unsaved branding when the session expires and the portal redirects to sign in:** the leave question is not asked, as in the instructor portal.
@@ -284,14 +284,14 @@ Whoever next changes an admin page finds the patterns these fixes follow in the 
 
 **Where you are**
 
-- **FR-007**: Every page MUST set the tab's title to its own name, then its parent's, then "Discava", separated by " · ", and MUST keep exactly one main heading, with no skipped levels, and one main landmark in every state.
+- **FR-007**: Every page MUST set the tab's title to its own name, then its parent's, then the platform's name ("Discava" unless the branding changes it), separated by " · ", and MUST keep exactly one main heading, with no skipped levels, and one main landmark in every state.
 - **FR-008**: Following a link MUST move focus to the new page's main heading.
 - **FR-009**: A page, section or the portal's first load waiting on a request MUST say in words what it is waiting for, and a busy button's label MUST say what it is doing.
 
 **Keeping the keyboard's place**
 
 - **FR-010**: A control whose action is running MUST keep focus, say that it is running, and ignore repeated presses. It MUST NOT leave the tab order while it runs.
-- **FR-011**: After an action that removes, swaps or hides its own control, focus MUST move to the control in its place, the neighbouring item, or the list's heading. It MUST never be left at the top of the document or a dialog.
+- **FR-011**: After an action that removes, swaps or hides its own control, focus MUST move to the control in its place, the neighbouring item, or the list itself. It MUST never be left at the top of the document or a dialog.
 - **FR-012**: Closing any dialog or the phone sidebar MUST return focus to the control that opened it, or to the control that replaced it. Choosing a page in the phone sidebar MUST close it.
 - **FR-013**: The result of an add, rename, archive, removal, revocation, restoration, Stripe change or branding save MUST be announced once. A character counter MUST NOT be announced on every keystroke.
 - **FR-014**: Rename MUST move focus into the name field, and Escape in the field MUST cancel the rename.
@@ -353,7 +353,7 @@ Whoever next changes an admin page finds the patterns these fixes follow in the 
 
 - **Audit data.** The measurements were taken on the local stack with data made for the audit, on `main` before #892. The layout defects depend on that data only in that long names and words make them visible.
 - **What "without changing behaviour" covers.** Stacking a table's rows, keeping a view in the address, asking before discarding a reason, moving errors beside their forms and adding home cards change what is shown and when, not what is requested. That is within "without changing behaviour", which concerns requests and data.
-- **Shared fixes come from the instructor-portal spec.** The breadcrumbs, the route announcer, the phone sidebar, the dialog close button, switch hit areas, notification settings' errors and the unsaved-changes guard are fixed there for every portal (its T016, T032, T040, T052, T059, T073, T074). This feature's tasks that check them wait for them. If that spec's plan changes, the affected tasks here change with it.
+- **Shared fixes come from the instructor-portal spec.** The breadcrumbs, the route announcer, the phone sidebar, the dialog close button, switch hit areas, notification settings' errors and the unsaved-changes guard are fixed there for every portal (its T016 and T021, T032, T040, T051, T052, T059, T073, T074). This feature's tasks that check them wait for them. If that spec's plan changes, the affected tasks here change with it.
 - **Out of scope: the improvements in [audit.md](./audit.md).** A searchable course picker, unarchiving categories, notification settings that list only an administrator's notifications, figures on the new home cards, and a list of revoked certificates are new features or need new requests. They are recorded for later.
 - **The Stripe key.** The key field is emptied on every submit, whatever the outcome, so that the key is never kept in the page. That stays; FR-015 excepts it.
 - **Not checked.** Screen-reader announcements are checked by a person with a screen reader before merge; automated tests check focus and the markup that causes the announcement. Dark mode, a real phone's touch and the deployed Cognito sign-in were not checked by the audit and are not changed here.

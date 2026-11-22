@@ -8,7 +8,7 @@
 
 This is nine independent slices of presentation work, almost all in `packages/websites/admin-portal`, plus one optional prop in `packages/common/shadcn`, new admin cases in `packages/e2e`, and one rule in `packages/websites/CLAUDE.md`. No API, schema, entity, event handler, construct or stage setting changes. The portal makes the same requests as today, with the same inputs.
 
-The admin portal is small (seven pages, about 2,700 lines), and its 55 findings come down to the causes the instructor-portal audit already found, on fewer screens:
+The admin portal is small (seven pages, about 2,700 lines), and its 56 findings come down to the causes the instructor-portal audit already found, on fewer screens:
 
 - **Tables that can't shrink** (B-01, E-01) and **text with nothing to break on** (B-02, C-01, D-01): no wrapping, no `min-w-0`, no `break-words` (R-1 to R-3).
 - **`disabled={isPending}`** on the focused button (R-7), and **dialogs opened from state** with no trigger to return focus to (R-8).
@@ -91,12 +91,15 @@ No invariant is added or extended, and `entity-writers.json` does not change.
 
 | Test | What it asserts today | Change, and the requirement behind it |
 |------|----------------------|---------------------------------------|
-| `admin-portal` `categories-screen.test.tsx` | Add category / Save is disabled when the name is empty; one "That didn't work" alert; buttons named "Rename" / "Archive" | the button is enabled and submitting shows the problem by the field (FR-022); errors are per action (FR-021); names are "Rename <name>" (FR-026) |
+| `admin-portal` `categories-screen.test.tsx` | buttons found by the names "Rename" / "Archive" (exact, within a row) | names are "Rename <name>" / "Archive <name>" (FR-026). It has no assertion on disabled buttons or the combined alert; the new behaviour gets new tests |
 | `admin-portal` `reviews-screen.test.tsx` | Remove review is disabled with no reason; Try again is a plain button | enabled with a check on submit (FR-022); `ErrorAlert`'s Try again (FR-020) |
 | `admin-portal` `certificates-screen.test.tsx` | Look up and Revoke certificate (Other) are disabled; "Certificate not found" | enabled with checks (FR-022); the not-found sentence (FR-023) |
-| `admin-portal` `payments-screen.test.tsx` | Connect / Save key disabled until typed; buttons `toBeDisabled()` while pending; "Continue" / "Go back" | enabled with a check (FR-022); `aria-disabled` while pending (FR-010); "Replace the key" / "Keep the current key" (FR-026) |
+| `admin-portal` `payments-screen.test.tsx` | the replace confirmation's buttons are "Continue" / "Go back"; Try again is found inside the alert | "Replace the key" / "Keep the current key" (FR-026); `ErrorAlert`'s Try again (FR-020). Its `toBeDisabled()` for Replace key and Disconnect while `changing` stays true |
 | `admin-portal` `settings/-branding.test.tsx` | Save disabled when unchanged or invalid; `window.confirm` on leaving | enabled, checks on submit (FR-022); the portal's leave dialog (FR-018) |
 | `admin-portal` `-index.test.tsx` | three area cards | six (FR-006) |
+| `admin-portal` `components/app-layout.test.ts` | the root crumb is `'/'`; `getBreadcrumbs` takes `availableRoutes` | "Home"; `routeExists`. IP T016 changes the signature and should update this test; if it hasn't, T012 does |
+| e2e `branding.e2e.ts` | Save is `toBeDisabled()` when unchanged or invalid (lines 54, 63, 88, 210, 300) | Save is enabled; an invalid form shows its problem on submit (FR-022) |
+| e2e `review.e2e.ts` | Remove review is `toBeDisabled()` with no reason (lines 169-170) | enabled; submitting empty shows the problem by the field (FR-022) |
 | e2e `payment-connection.e2e.ts` | the replace confirmation's button is "Continue" | "Replace the key" (FR-026). `category.e2e.ts`'s "Rename" and "Archive" still match "Rename <name>" and "Archive <name>", since Playwright matches names by substring; it needs no change |
 
 ## Project Structure
@@ -105,7 +108,7 @@ No invariant is added or extended, and `entity-writers.json` does not change.
 
 ```text
 specs/20261123-081203-admin-portal-ux-fixes/
-├── audit.md             # The 55 findings, by area and ID
+├── audit.md             # The 56 findings, by area and ID
 ├── plan.md              # This file
 ├── research.md          # Decisions R-1 to R-16
 ├── data-model.md        # Browser-side state per screen, and the address
@@ -143,6 +146,8 @@ packages/e2e/src/
 ├── scenarios/phone-width.e2e.ts       # admin section
 ├── scenarios/breadcrumbs.e2e.ts       # admin case
 ├── scenarios/payment-connection.e2e.ts   # "Replace the key"
+├── scenarios/{branding,review}.e2e.ts   # enabled Save and Remove review
+├── scenarios/admin-portal.e2e.ts       # new: a screenshot per changed screen
 └── helpers/certificate.ts             # a certificate with long names, through the API, for the phone case
 
 packages/websites/CLAUDE.md            # the table check (contracts/ui-rules.md)

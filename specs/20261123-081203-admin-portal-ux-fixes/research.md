@@ -9,9 +9,9 @@ Each decision names the files it was read from and the findings in [audit.md](./
 **Decision**: Keep one `<table>` in `routes/categories/-components/categories-screen.tsx`, and stack it below `sm` with CSS only:
 
 - `table`, `tbody`, `tr` and `td` get `max-sm:block`; `thead` gets `max-sm:sr-only`;
-- each `tr` becomes `max-sm:grid max-sm:grid-cols-[minmax(0,1fr)] max-sm:gap-1 max-sm:py-3`;
-- the name cell comes first, `min-w-0 break-words [overflow-wrap:anywhere]`, at full width;
-- status, course count and slug share one wrapping line (`max-sm:inline-…` inside a `flex flex-wrap gap-x-3` wrapper), each value preceded by a label that is shown only below `sm` ("Courses: 20", "Slug: science"), so the value keeps its meaning without the hidden header;
+- each `tr` becomes a grid below `sm` with named areas, in the columns' DOM order (Name, Slug, Status, Courses, actions): `max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-x-3 max-sm:gap-y-1 max-sm:py-3 max-sm:[grid-template-areas:'name_name'_'slug_slug'_'status_count'_'actions_actions']`, and each `td` takes its area (`max-sm:[grid-area:name]`, …). Status and the course count share one line; nothing is reordered, so a screen reader reads a stacked row in the same order as a table row;
+- the name cell is `min-w-0 break-words [overflow-wrap:anywhere]`, at full width;
+- the slug and the course count are each preceded by a label shown only below `sm` (`<span className="sm:sr-only">Slug: </span>`, "Courses: "), so the value keeps its meaning without the hidden header;
 - the slug is `break-all`, since it is a code with no spaces;
 - the actions cell is `max-sm:text-left`, and its button group `flex flex-wrap gap-2 max-sm:justify-start`.
 
@@ -95,7 +95,7 @@ The root route's component renders `AppLayout` around its `Outlet`, so the not-f
 
 ## R-7: Keeping focus while an action runs
 
-**Answers**: B-06, C-02 (Try again), E-02, F-03 (saving).
+**Answers**: B-06, C-02 (Try again), E-02, F-03 (saving), F-09.
 
 **Decision**: Replace every `disabled={…isPending}` on a button that starts the action with `PendingButton` (`@discava/common-shadcn/components/pending-button`), with a `pendingLabel`:
 
@@ -105,13 +105,18 @@ The root route's component renders `AppLayout` around its `Outlet`, so the not-f
 | Categories | Rename's Save | "Saving…" |
 | Categories | Archive (in the confirmation) | "Archiving…" |
 | Reviews | Remove review | "Removing…" (today's label, kept) |
-| Certificates | Look up | "Looking up…" |
 | Certificates | Revoke certificate, Restore certificate | "Revoking…", "Restoring…" (kept) |
 | Payments | Connect Stripe, Save key | "Connecting…", "Saving…" |
-| Payments | Disconnect Stripe (in the confirmation) | "Disconnecting…" |
+| Payments | Disconnect, on the status card (the confirmation closes before the request starts, and focus returns here) | "Disconnecting…" |
+| Reviews | Load more, More courses | "Loading more…" |
+| Branding | each image's Reset to default, while its upload runs | (no label change; `aria-disabled`) |
 | Branding | Save | "Saving…" (kept, without the spinner) |
 
 `KeyForm`'s field stays `disabled` while busy: it isn't the focused control, and its value must not change mid-request. Replace key and Disconnect on the status card stay `disabled` while a change is in progress (`changing`), because the reason is stated in the "A change is in progress" alert above them; while the admin's own request runs they use `aria-disabled` through `PendingButton`.
+
+Look up is not in the table: it starts no mutation, and the lookup's query lives in the child `Certificate`. While it runs, `LoadingState` says "Looking up the certificate…" (R-6); Look up's only `disabled` is for an empty field, which R-12 removes.
+
+The branding image field's file input keeps `disabled` while its upload runs (choosing another file mid-upload would race it); its Reset button becomes a `PendingButton` so focus on it survives. The file input loses focus only if it had it, and the upload's `role="status"` "Uploading…" says what is happening (F-09).
 
 **Rationale**: As IP R-5 found, a focused button set `disabled` sends focus to `<body>`. `PendingButton` keeps it focused and in the tab order, ignores presses, and says what it is doing.
 
@@ -129,7 +134,10 @@ The root route's component renders `AppLayout` around its `Outlet`, so the not-f
   - **Rename Save and Cancel:** to the row's Rename button.
   - **Replace key Cancel:** to Replace key.
   - **The confirmation's Go back:** to the key field, now empty, with the existing rule that a key is never kept (spec Assumptions).
-  - **Last Load more / More courses:** to the first item it loaded, or, when it loaded none, to the list's heading.
+  - **Connect Stripe and Save key succeeding:** the form gives way to the status card; focus moves to its Replace key.
+  - **Disconnect succeeding:** the status card gives way to the key form; focus moves to its key field.
+  - **A failed connect or save:** to the key field, now empty; the alert adds "Enter the key again to retry."
+  - **Load more / More courses:** to the first item it loaded, or, when it loaded none (the last page was empty), to the list itself (`tabIndex={-1}`, named "Reviews" or by the picker's label).
 - **Rename** focuses its field on open (`autoFocus` on the field, which is the single primary input of that moment) and cancels on Escape (`onKeyDown`).
 
 **Rationale**: Every one of these dialogs is controlled with `open` state and no `DialogTrigger`, so Radix has nothing to return focus to. Every swap unmounts the focused button. These are IP R-6's two causes, and IP R-6's two remedies.
@@ -237,7 +245,8 @@ The server's own checks are unchanged and still answer the same requests.
 
 **Decision**:
 
-- **E2e:** `packages/e2e/src/scenarios/phone-width.e2e.ts` gains an admin section: Categories with a 60-character one-word category, Reviews with a long review chosen through `?course=`, Certificates through `?id=` with a long learner name and notes, and Payments with changes, each checked with `expectNoSidewaysScroll` and `expectOnScreen` (from #892) on its buttons. The data comes from the existing helpers (`createCategory`, `createReviewedCourse`, `postReview`, `connectLocalPayments`) plus a certificate helper. Each case calls `screenshot()`.
+- **E2e:** `packages/e2e/src/scenarios/phone-width.e2e.ts` gains an admin section: Categories with a 60-character one-word category, Reviews with a long review (chosen in the picker until US7 adds `?course=`), Certificates (looked up until US7 adds `?id=`) with a long learner name and notes, and Payments with changes, each checked with `expectNoSidewaysScroll` and `expectOnScreen` (from #892) on its buttons. The data comes from the existing helpers (`createCategory`, `createReviewedCourse`, `postReview`, `connectLocalPayments`) plus a certificate helper. Each case calls `screenshot()`.
+- **Every phase that changes what users see** adds to a new `packages/e2e/src/scenarios/admin-portal.e2e.ts` with `screenshot()`, so the `UI Screenshots` PR check (constitution VIII) has a picture of each change: the home cards and not-found page (US2), titles (US3), keyboard focus after rename and archive (US4), a problem shown by its field (US6). Where a phase's only e2e work waits on IP, it still gets a case that doesn't.
 - **Breadcrumbs:** the e2e breadcrumbs scenario gains an admin case: Branding's trail and `/no-such-page`. It is added only after IP T016 and T021 have merged, since it asserts their behaviour.
 - **Rules:** one bullet is added to `packages/websites/CLAUDE.md` under "Layout" ([contracts/ui-rules.md](./contracts/ui-rules.md)). The other patterns this feature fixes are already covered by IP's additions.
 

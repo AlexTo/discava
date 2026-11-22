@@ -114,6 +114,7 @@ Paths are relative to `packages/websites/admin-portal/src/` unless they start wi
 | F-06 | P3 | `/settings/branding` | Three "Reset to default" buttons (logo, icon, share image) share a name | US8 | |
 | F-07 | P3 | `/settings/branding` Reset all | Cancel leaves focus on `<body>` (opened from state) | US4 | |
 | F-08 | P3 | `/settings/branding` | The "Show the name beside the logo" switch is 36×20px | US8 | IP T073 |
+| F-09 | P3 | `/settings/branding` image fields | Found in the code, not the walk: each image's Reset to default is `disabled` while its upload runs, so focus on it drops to `<body>` | US4 | |
 
 ## Area G: tests
 
