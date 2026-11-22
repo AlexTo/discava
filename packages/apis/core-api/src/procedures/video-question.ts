@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { playableManifest } from '@discava/common-server-utils/media-keys';
 import { transactionConflict } from '@discava/common-server-utils/trpc-api-base';
 import {
   type CoreTable,
@@ -18,7 +19,6 @@ import {
   videoQuestionsOf,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
-import { playableManifest } from '../helpers/playback.js';
 import { courseProcedure } from '../init.js';
 import {
   AnswerVideoQuestionInputSchema,
