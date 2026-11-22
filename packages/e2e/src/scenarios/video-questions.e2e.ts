@@ -106,6 +106,18 @@ test('an instructor adds questions to a video', async ({ browser }) => {
     await expect(question.getByRole('status')).toContainText('Correct');
     await screenshot(instructor, 'video questions preview');
   });
+
+  // The question overlay is over the player, the dialog's footer over it: the
+  // Close button must take the click, not the overlay under it.
+  await test.step('the dialog footer stays over the question overlay', async () => {
+    const dialog = instructor.getByRole('dialog', { name: 'Questions' });
+    const close = dialog.getByRole('button', { name: 'Close' });
+    await close.scrollIntoViewIfNeeded();
+    await expect(close).toBeVisible();
+    await screenshot(instructor, 'video questions footer over the preview');
+    await close.click();
+    await expect(dialog).toBeHidden();
+  });
 });
 
 // A learner is stopped by a question at 0:01, answers it wrongly, reads why
@@ -162,11 +174,6 @@ test('a learner is asked a video question, answers it and carries on', async ({
       question.getByText('The test video is a set of colour bars'),
     ).toBeVisible();
     await screenshot(page, 'video question answered');
-    // The dialog's footer, with the player's markers and overlay under it.
-    await expect(
-      question.getByRole('button', { name: 'Continue' }),
-    ).toBeVisible();
-    await screenshot(page, 'video question footer over the player');
   });
 
   await test.step('Continue resumes the video to the end', async () => {
