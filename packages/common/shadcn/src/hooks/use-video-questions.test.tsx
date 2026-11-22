@@ -305,7 +305,7 @@ describe('useVideoQuestions', () => {
       questions: [question('e1', null), question('e2', null)],
       answers: { e1: right, e2: right },
     });
-    cue(['e1'], 'chosen');
+    cue(['e1', 'e2'], 'chosen');
 
     expect(
       screen.getByRole('heading', { name: 'Question 1 of 2' }),
@@ -319,6 +319,20 @@ describe('useVideoQuestions', () => {
     expect(
       screen.getByRole('heading', { name: '2 of 2 correct' }),
     ).toBeVisible();
+  });
+
+  it('opens the whole end check from the end marker with a timed question past the duration', async () => {
+    const { user, cue } = setup({
+      questions: [question('late', 500), question('e1', null)],
+    });
+    cue(['late', 'e1'], 'chosen');
+
+    expect(
+      screen.getByRole('heading', { name: 'Question 1 of 2' }),
+    ).toBeVisible();
+    expect(screen.getByText('Prompt late')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.getByText('Prompt e1')).toBeVisible();
   });
 
   it('ignores cues while a question is open', () => {

@@ -158,7 +158,7 @@ export function useVideoQuestions({
       return;
     }
     const known = new Set(questions.map((q) => q.questionId));
-    let ids = cueIds.filter(
+    const ids = cueIds.filter(
       (id) =>
         known.has(id) &&
         (reason === 'chosen' || (!held[id] && !skipped.current.has(id))),
@@ -166,14 +166,13 @@ export function useVideoQuestions({
     if (ids.length === 0) {
       return;
     }
-    // The end marker opens the whole end check: answered questions as a
-    // review, the others to answer.
+    // The end marker sends every end cue (those with no time, and timed ones
+    // past the duration, which only the player can tell): it opens the whole
+    // end check, answered questions as a review, the others to answer.
     const endMarker =
       reason === 'chosen' &&
-      questions.find((q) => q.questionId === ids[0])?.atSeconds === null;
-    if (endMarker) {
-      ids = cues.filter((cue) => cue.atSeconds === null).map((cue) => cue.id);
-    }
+      (ids.length > 1 ||
+        questions.find((q) => q.questionId === ids[0])?.atSeconds === null);
     reset();
     setQueue(ids);
     setRun({

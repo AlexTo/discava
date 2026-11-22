@@ -964,8 +964,12 @@ describe('VideoControls markers', () => {
     expect(end.querySelector('svg')).not.toBeNull();
   });
 
-  it('seeks the end marker to the last second and chooses the first end cue', async () => {
-    const { onCue } = setupCues([cue('e1', null), cue('e2', null)]);
+  it('seeks the end marker to the last second and chooses every end cue', async () => {
+    const { onCue } = setupCues([
+      cue('late', media.duration + 5),
+      cue('e1', null),
+      cue('e2', null),
+    ]);
 
     await userEvent.click(
       screen.getByRole('button', { name: /Questions at the end/ }),
@@ -973,7 +977,7 @@ describe('VideoControls markers', () => {
 
     expect(media.currentTime).toBe(media.duration - 1);
     expect(pause).toHaveBeenCalled();
-    expect(onCue).toHaveBeenCalledWith(['e1'], 'chosen');
+    expect(onCue).toHaveBeenCalledWith(['late', 'e1', 'e2'], 'chosen');
   });
 
   it('shows a tick for an answered cue and a dot for an unanswered one', () => {

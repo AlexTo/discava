@@ -333,15 +333,15 @@ export function VideoControls({
   };
 
   // A marker moves to its cue's moment, pauses, and asks for the question.
-  const chooseCue = (id: string, at: number) => {
+  const chooseCue = (ids: string[], at: number) => {
     const video = getVideo();
     seekTo(at);
     video?.pause();
-    onCue?.([id], 'chosen');
+    onCue?.(ids, 'chosen');
   };
 
   // The cues at the end share one marker at the right edge. It goes to the
-  // last second, so the video doesn't end again, and asks for the first.
+  // last second, so the video doesn't end again, and asks for all of them.
   const endCues = duration > 0 ? cuesAtEnd(cues ?? [], duration) : [];
   const endAnswered = endCues.filter((cue) => cue.state === 'answered').length;
 
@@ -521,7 +521,7 @@ export function VideoControls({
                   aria-label={cue.label}
                   data-slot="video-cue-marker"
                   data-state={cue.state}
-                  onClick={() => chooseCue(cue.id, at)}
+                  onClick={() => chooseCue([cue.id], at)}
                   style={{ left: `${(at / duration) * 100}%` }}
                   className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 z-10 flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
@@ -548,7 +548,10 @@ export function VideoControls({
                 endAnswered === endCues.length ? 'answered' : 'unanswered'
               }
               onClick={() =>
-                chooseCue(endCues[0].id, Math.max(0, duration - 1))
+                chooseCue(
+                  endCues.map((cue) => cue.id),
+                  Math.max(0, duration - 1),
+                )
               }
               className="-translate-x-full -translate-y-1/2 absolute top-1/2 left-full z-10 flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
