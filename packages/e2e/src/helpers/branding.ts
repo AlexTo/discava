@@ -26,3 +26,34 @@ export const restoreBrand = async (admin: ApiUser, captured: Brand) => {
     ...captured.brand,
   });
 };
+
+type UploadInput = Parameters<
+  ApiUser['admin']['branding']['createUploadUrl']['mutate']
+>[0];
+
+/**
+ * Uploads a brand image through the API, as the Branding page does, and returns
+ * its key for a `branding.save`. For set-up that is not what a scenario checks.
+ */
+export const uploadBrandImage = async (
+  admin: ApiUser,
+  kind: UploadInput['kind'],
+  contentType: UploadInput['contentType'],
+  body: Buffer,
+): Promise<string> => {
+  const { key, uploadUrl, headers } =
+    await admin.admin.branding.createUploadUrl.mutate({
+      kind,
+      contentType,
+      contentLength: body.length,
+    });
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers,
+    body: new Uint8Array(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Uploading the ${kind} failed (${response.status})`);
+  }
+  return key;
+};
