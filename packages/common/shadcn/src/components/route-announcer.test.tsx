@@ -73,6 +73,54 @@ describe('RouteAnnouncer', () => {
     );
   });
 
+  it('leaves focus where the new page moved it', () => {
+    // As a lesson opened at a video: the page focuses its target from its
+    // own effect, which runs before the announcer's.
+    function FocusesTarget() {
+      const target = (node: HTMLElement | null) => node?.focus();
+      return (
+        <>
+          <h1>B</h1>
+          <article ref={target} tabIndex={-1} aria-label="Target" />
+        </>
+      );
+    }
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+        <a href="/b">To B</a>
+      </Shell>,
+    );
+    const link = screen.getByRole('link', { name: 'To B' });
+    fireEvent.pointerDown(link);
+    link.focus();
+    rerender(
+      <Shell pathname="/b">
+        <FocusesTarget />
+      </Shell>,
+    );
+    expect(screen.getByRole('article', { name: 'Target' })).toHaveFocus();
+  });
+
+  it('focuses the heading when only the link followed took focus', () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+        <a href="/b">To B</a>
+      </Shell>,
+    );
+    const link = screen.getByRole('link', { name: 'To B' });
+    fireEvent.pointerDown(link);
+    link.focus();
+    rerender(
+      <Shell pathname="/b">
+        <h1>B</h1>
+        <a href="/b">To B</a>
+      </Shell>,
+    );
+    expect(screen.getByRole('heading', { name: 'B' })).toHaveFocus();
+  });
+
   it('focuses nothing when the path changes before any key or click', () => {
     const { rerender } = render(
       <Shell pathname="/a">
