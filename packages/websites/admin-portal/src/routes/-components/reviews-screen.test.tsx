@@ -88,6 +88,50 @@ describe('the Reviews screen', () => {
     ).toBeInTheDocument();
   });
 
+  it('wraps long review text, responses and removal reasons', async () => {
+    const word = 'y'.repeat(70);
+    const rendered = render({
+      'review.list': () => ({
+        items: [
+          {
+            ...visible,
+            reviewerName: word,
+            text: `${'t'.repeat(400)} ${word}`,
+            response: {
+              byName: 'Ann',
+              at: '2026-11-18T10:00:00.000Z',
+              text: `Thanks ${word}`,
+            },
+          },
+          { ...removed, removedReason: word },
+        ],
+      }),
+    });
+    await pick(rendered);
+
+    const first = (await screen.findAllByRole('listitem'))[0];
+    const text = within(first).getByText(/^t{400}/);
+    expect(text).toHaveClass('break-words', '[overflow-wrap:anywhere]');
+    expect(within(first).getByText(`Thanks ${word}`)).toHaveClass(
+      'break-words',
+      '[overflow-wrap:anywhere]',
+    );
+    expect(within(first).getByText(/^Response from Ann/)).toHaveClass(
+      'min-w-0',
+      'break-words',
+    );
+    const name = within(first).getByText(/^y{70}\s*$/);
+    expect(name).toHaveClass('min-w-0', 'break-words');
+    expect(name.parentElement?.parentElement).toHaveClass('flex-wrap');
+    expect(screen.getAllByText(word, { selector: 'span' })[0]).toHaveClass(
+      'break-words',
+      '[overflow-wrap:anywhere]',
+    );
+    expect(
+      within(first).getByRole('button', { name: /^Remove/ }),
+    ).toBeInTheDocument();
+  });
+
   it('keeps Remove disabled until a reason is entered, then removes with it', async () => {
     const rendered = render({ 'review.remove': () => ({ ...visible }) });
     await pick(rendered);

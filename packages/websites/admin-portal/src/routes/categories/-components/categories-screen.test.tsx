@@ -51,6 +51,30 @@ describe('the Categories screen', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('stacks a row below sm and breaks a long name and slug', async () => {
+    const longName = 'W'.repeat(60);
+    const longSlug = 'w'.repeat(60);
+    render({
+      'category.list': () => [{ ...science, name: longName, slug: longSlug }],
+    });
+
+    const long = await screen.findByRole('row', { name: new RegExp(longName) });
+    expect(long).toHaveClass('max-sm:grid');
+    expect(within(long).getByText(longName).closest('td')).toHaveClass(
+      'break-words',
+    );
+    expect(within(long).getByText(longSlug).closest('td')).toHaveClass(
+      'break-all',
+    );
+    expect(within(long).getByText('Slug:')).toHaveClass('sm:sr-only');
+    expect(within(long).getByText('Courses:')).toHaveClass('sm:sr-only');
+    const rename = within(long).getByRole('button', { name: 'Rename' });
+    expect(rename.parentElement).toHaveClass('flex-wrap');
+    expect(
+      within(long).getByRole('button', { name: 'Archive' }),
+    ).toBeInTheDocument();
+  });
+
   it('adds a category and reloads the table', async () => {
     const { user, calls } = render({ 'category.create': () => science });
     await screen.findByRole('row', { name: /Science/ });

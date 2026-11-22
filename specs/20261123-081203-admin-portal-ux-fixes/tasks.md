@@ -63,12 +63,12 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: `pnpm nx run @discava/common-shadcn:test -- --run cognito-auth` passes with the new tests.
 
-- [ ] T001 [P] Test first in `SH/components/cognito-auth.test.tsx`, then give `CognitoAuth` in `SH/components/cognito-auth.tsx` an optional `fallback?: React.ReactNode`, returned in place of today's `<Spinner />` while `autoSignIn` redirects or `auth.isLoading` is true without a navigator ([contracts/shared-components.md](./contracts/shared-components.md), research R-6).
+- [x] T001 [P] Test first in `SH/components/cognito-auth.test.tsx`, then give `CognitoAuth` in `SH/components/cognito-auth.tsx` an optional `fallback?: React.ReactNode`, returned in place of today's `<Spinner />` while `autoSignIn` redirects or `auth.isLoading` is true without a navigator ([contracts/shared-components.md](./contracts/shared-components.md), research R-6).
   - **Default:** with no `fallback`, the output is today's `<Spinner />`, so no portal changes.
   - **Tests:** with `fallback`, it renders the fallback while signing in; without it, the spinner, as today.
   - **If IP T037 has already added a prop for this,** use that prop and tick this task with a note.
-- [ ] T002 [P] Add `createRevokableCertificateViaApi(label)` to `packages/e2e/src/helpers/certificate.ts`: a fresh instructor publishes a one-reading course whose title is 80 characters holding a 70-character word; a fresh student named "Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel" completes it through core-api (as `completeCourse` does through the portal); the helper waits for the certificate (`certificateCourseIdOf`, `courseCertificates`), revokes and restores it twice through admin-api with 500-character notes ending in a 70-character word (so the history shows D-08), and returns `{ certificateId, courseTitle, learnerName }`. Use the API rather than the portal so the phone case stays fast. Not used yet.
-- [ ] T003 Run `pnpm nx run @discava/common-shadcn:test` (once), and lint and typecheck for `common-shadcn` and `e2e`. Fix failures in the code, not the tests.
+- [x] T002 [P] Add `createRevokableCertificateViaApi(label)` to `packages/e2e/src/helpers/certificate.ts`: a fresh instructor publishes a one-reading course whose title is 80 characters holding a 70-character word; a fresh student named "Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel" completes it through core-api (as `completeCourse` does through the portal); the helper waits for the certificate (`certificateCourseIdOf`, `courseCertificates`), revokes and restores it twice through admin-api with 500-character notes ending in a 70-character word (so the history shows D-08), and returns `{ certificateId, courseTitle, learnerName }`. Use the API rather than the portal so the phone case stays fast. Not used yet.
+- [x] T003 Run `pnpm nx run @discava/common-shadcn:test` (once), and lint and typecheck for `common-shadcn` and `e2e`. Fix failures in the code, not the tests.
 
 ---
 
@@ -78,7 +78,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US1.
 
-- [ ] T004 [P] [US1] Test first in `R/categories/-components/categories-screen.test.tsx`, then stack the categories table below `sm` in `R/categories/-components/categories-screen.tsx`, as research R-1 describes (B-01, B-02):
+- [x] T004 [P] [US1] Test first in `R/categories/-components/categories-screen.test.tsx`, then stack the categories table below `sm` in `R/categories/-components/categories-screen.tsx`, as research R-1 describes (B-01, B-02):
   - `table`, `tbody`, `td` get `max-sm:block`; `thead` gets `max-sm:sr-only`;
   - each `tr` is a grid below `sm` with areas in the columns' DOM order: `max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-x-3 max-sm:gap-y-1 max-sm:py-3 max-sm:[grid-template-areas:'name_name'_'slug_slug'_'status_count'_'actions_actions']`, and each `td` takes its area. Do not reorder the cells: a screen reader reads them in DOM order;
   - the name cell is `min-w-0 break-words [overflow-wrap:anywhere]`; the slug `break-all`;
@@ -87,26 +87,26 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - the rename form is `flex flex-wrap gap-2`, its field `min-w-0 flex-1 basis-40`.
 
   **Tests:** with a 60-character one-word name, the name cell has `break-words`, the slug `break-all`, the row and actions carry the stacking and wrapping classes, and Rename and Archive are still found by name in the row. jsdom has no layout; T008 checks the widths.
-- [ ] T005 [P] [US1] Test first in `R/-components/reviews-screen.test.tsx`, then in `R/-components/reviews-screen.tsx` (C-01, research R-2):
+- [x] T005 [P] [US1] Test first in `R/-components/reviews-screen.test.tsx`, then in `R/-components/reviews-screen.tsx` (C-01, research R-2):
   - the review text, the response text and the removal reason get `break-words [overflow-wrap:anywhere]`;
   - the reviewer's name line and the response heading get `min-w-0 break-words`;
   - the review's header row becomes `flex flex-wrap items-start justify-between gap-3`.
 
   **Test:** a review and a response holding a 70-character word render with those classes.
-- [ ] T006 [P] [US1] Test first in `R/-components/certificates-screen.test.tsx`, then in `R/-components/certificates-screen.tsx` (D-01, D-08, research R-2):
+- [x] T006 [P] [US1] Test first in `R/-components/certificates-screen.test.tsx`, then in `R/-components/certificates-screen.tsx` (D-01, D-08, research R-2):
   - the card's header row becomes `flex flex-wrap items-start gap-3`; the details block `min-w-0 flex-1 basis-full break-words sm:basis-0`; the certificate ID `break-all`;
   - the history list is `space-y-2`, and each entry's note is its own `block break-words` line.
 
   **Test:** with a 54-character learner name and an 80-character course title with a 70-character word, the details block has those classes, and Revoke is still found by name.
-- [ ] T007 [P] [US1] Test first in `R/-components/payments-screen.test.tsx`, then in `R/-components/payments/changes-table.tsx` (E-01, research R-3): wrap the table in `<div role="region" aria-labelledby="recent-changes" tabIndex={0} className="overflow-x-auto">`; give the table `min-w-[36rem]` and its cells `px-2 first:pl-0 last:pr-0`; make the When cell `whitespace-nowrap tabular-nums` and the Key cell `whitespace-nowrap`. **Test:** the region is named "Recent changes" and focusable.
-- [ ] T008 [US1] Add an admin section to `packages/e2e/src/scenarios/phone-width.e2e.ts`, at 375px, as a new administrator (`newUser(…, ['admin'])`), using `expectNoSidewaysScroll` and `expectOnScreen` from `helpers/viewport.ts` (G-01, research R-16):
+- [x] T007 [P] [US1] Test first in `R/-components/payments-screen.test.tsx`, then in `R/-components/payments/changes-table.tsx` (E-01, research R-3): wrap the table in `<div role="region" aria-labelledby="recent-changes" tabIndex={0} className="overflow-x-auto">`; give the table `min-w-[36rem]` and its cells `px-2 first:pl-0 last:pr-0`; make the When cell `whitespace-nowrap tabular-nums` and the Key cell `whitespace-nowrap`. **Test:** the region is named "Recent changes" and focusable.
+- [x] T008 [US1] Add an admin section to `packages/e2e/src/scenarios/phone-width.e2e.ts`, at 375px, as a new administrator (`newUser(…, ['admin'])`), using `expectNoSidewaysScroll` and `expectOnScreen` from `helpers/viewport.ts` (G-01, research R-16):
   - **Categories:** create a category whose name is a unique 60-character word (`createCategory`); open `/categories`; check the page, then `expectOnScreen` on that row's Rename and Archive; press Rename and check the field, Save and Cancel.
   - **Reviews:** `createReviewedCourse`, then two `postReview`s, one 500 characters ending in a 70-character word; open `/reviews`, choose the course, check the page and its Remove buttons.
   - **Certificates:** `createRevokableCertificateViaApi` (T002); look it up; check the page and Revoke.
   - **Payments:** `connectLocalPayments`; open `/payments`; check the page.
 
   Call `screenshot()` on each. Until US7 merges, choose the course and look up the certificate through the controls, not the address.
-- [ ] T009 [US1] Run `pnpm nx run @discava/admin-portal:test` (once), lint, typecheck and `pnpm nx run @discava/admin-portal:build`. Fix failures in the code.
+- [x] T009 [US1] Run `pnpm nx run @discava/admin-portal:test` (once), lint, typecheck and `pnpm nx run @discava/admin-portal:build`. Fix failures in the code.
 
 ---
 

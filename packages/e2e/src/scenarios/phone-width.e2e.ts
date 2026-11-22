@@ -6,6 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import {
   apiUser,
+  connectLocalPayments,
   createCaptionedVideoViaApi,
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
@@ -18,11 +19,13 @@ import {
 } from '../helpers/assignment.js';
 import { chooseCaptionLanguages, webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
+import { createRevokableCertificateViaApi } from '../helpers/certificate.js';
 import { WORKSHEET_PDF } from '../helpers/files.js';
 import { createFreePreviewCourseViaApi } from '../helpers/free-preview.js';
 import { createCourse } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
+import { createReviewedCourse, postReview } from '../helpers/review.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
@@ -644,5 +647,72 @@ test('the course editor fits a phone', async ({ page }) => {
     await expect(dialog).toBeVisible();
     await expectDialogFits(dialog);
     await expectOnScreen(dialog.getByRole('button', { name: 'Save' }));
+  });
+});
+
+// The admin portal on a small phone: long names, notes and reviews wrap, the
+// categories table stacks, and every action is on screen.
+test('the admin pages fit a phone with long content', async ({ page }) => {
+  const word = (letter: string, length: number) => letter.repeat(length);
+  // One 60-character word, unique to this run.
+  const categoryName = `${uniqueName('').trim()}${'k'.repeat(60)}`.slice(0, 60);
+  await createCategory(categoryName);
+  const { courseId, title } = await createReviewedCourse('E2E phone reviews');
+  await postReview(courseId, 4, 'Clear and well paced.', 'Sam');
+  await postReview(
+    courseId,
+    2,
+    `${'A long review. '.repeat(30)}${word('r', 70)}`,
+    'Rae',
+  );
+  const { certificateId, courseTitle } = await createRevokableCertificateViaApi(
+    'E2E phone certificate',
+  );
+  await connectLocalPayments();
+
+  await page.goto(`${PORTALS.admin}/categories`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('categories stack, with Rename and Archive on screen', async () => {
+    const row = page.getByRole('row', { name: new RegExp(categoryName) });
+    await expect(row).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await expectOnScreen(row.getByRole('button'));
+    await screenshot(page, 'admin categories at phone width');
+    await row.getByRole('button', { name: 'Rename' }).click();
+    await expectNoSidewaysScroll(page);
+    await expectOnScreen(row.getByRole('button'));
+    await expectOnScreen(row.getByRole('textbox'));
+    await screenshot(page, 'admin category rename at phone width');
+  });
+
+  await test.step('reviews wrap, with every Remove on screen', async () => {
+    await page.goto(`${PORTALS.admin}/reviews`);
+    await page
+      .getByLabel('Course')
+      .selectOption({ label: `${title} · 2 ratings` });
+    await expect(page.getByText('Clear and well paced.')).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await expectOnScreen(page.getByRole('button', { name: /^Remove / }));
+    await screenshot(page, 'admin reviews at phone width');
+  });
+
+  await test.step('a certificate with long names and notes fits, with Revoke on screen', async () => {
+    await page.goto(`${PORTALS.admin}/certificates`);
+    await page.getByLabel('Certificate ID').fill(certificateId);
+    await page.getByRole('button', { name: 'Look up' }).click();
+    await expect(page.getByText(courseTitle, { exact: false })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await expectOnScreen(page.getByRole('button', { name: 'Revoke' }));
+    await screenshot(page, 'admin certificate at phone width', {
+      fullPage: true,
+    });
+  });
+
+  await test.step('payments fit, the recent changes scrolling inside themselves', async () => {
+    await page.goto(`${PORTALS.admin}/payments`);
+    await expect(page.getByRole('heading', { name: 'Payments' })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'admin payments at phone width');
   });
 });
