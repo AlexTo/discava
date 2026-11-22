@@ -7,8 +7,10 @@ import {
   readCourseAnalytics,
   readCourseQuizzes,
   readCourseSummaries,
+  readCourseVideoQuestions,
   readLessonFunnel,
   readQuizAnalytics,
+  readVideoQuestionAnalytics,
 } from './analytics-reads.js';
 
 type Keys = Record<string, string>[];
@@ -756,6 +758,277 @@ describe('quiz analytics', () => {
       expect(result.quizzes).toEqual([
         { contentItemId: 'a', lessonId: 'l1', title: 'Quiz a', students: 0 },
       ]);
+    });
+  });
+});
+
+describe('video question analytics', () => {
+  const module = (moduleId: string, order: number, extra = {}) => ({
+    moduleId,
+    order,
+    title: moduleId,
+    ...shown,
+    ...extra,
+  });
+  const lesson = (lessonId: string, moduleId: string, order: number) => ({
+    lessonId,
+    moduleId,
+    order,
+    title: lessonId,
+    ...shown,
+  });
+  const question = (
+    questionId: string,
+    atSeconds: number | null = 30,
+    words = `Question ${questionId}`,
+  ) => ({
+    questionId,
+    kind: 'single',
+    atSeconds,
+    prompt: JSON.stringify({
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: words }] },
+      ],
+    }),
+    options: [],
+  });
+  const video = (
+    contentItemId: string,
+    lessonId: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    contentItemId,
+    lessonId,
+    moduleId: 'm1',
+    type: 'video',
+    title: `Video ${contentItemId}`,
+    order: 1,
+    questions: [question('q1')],
+    ...shown,
+    ...extra,
+  });
+  const qStats = (
+    contentItemId: string,
+    questionId: string,
+    attempts: number,
+    misses: number,
+  ) => ({ contentItemId, questionId, attempts, misses });
+  const table = (
+    curriculum: Record<string, Record<string, unknown>[]>,
+    stats: Record<string, unknown>[] = [],
+  ) =>
+    ({
+      collections: collectionsOf(
+        [],
+        {
+          module: [module('m1', 1)],
+          lesson: [lesson('l1', 'm1', 1)],
+          ...curriculum,
+        },
+        { quizQuestionStats: stats },
+      ),
+    }) as never;
+
+  describe('readCourseVideoQuestions', () => {
+    it('lists shown videos with questions in course order', async () => {
+      const result = await readCourseVideoQuestions(
+        table({
+          module: [module('m1', 1), module('m2', 2)],
+          lesson: [lesson('l2', 'm2', 1), lesson('l1', 'm1', 1)],
+          contentItem: [
+            video('b', 'l2'),
+            video('a2', 'l1', {
+              order: 2,
+              questions: [question('q1'), question('q2')],
+            }),
+            video('a1', 'l1', { order: 1 }),
+          ],
+        }),
+        'c1',
+      );
+      expect(result).toEqual([
+        {
+          contentItemId: 'a1',
+          lessonId: 'l1',
+          title: 'Video a1',
+          questions: 1,
+        },
+        {
+          contentItemId: 'a2',
+          lessonId: 'l1',
+          title: 'Video a2',
+          questions: 2,
+        },
+        { contentItemId: 'b', lessonId: 'l2', title: 'Video b', questions: 1 },
+      ]);
+    });
+
+    it('leaves out hidden and archived videos, lessons and modules', async () => {
+      const result = await readCourseVideoQuestions(
+        table({
+          module: [
+            module('m1', 1),
+            module('m2', 2, { visibility: 'hidden' }),
+            module('m3', 3, { archivedAt: '2026-01-01T00:00:00.000Z' }),
+          ],
+          lesson: [
+            lesson('l1', 'm1', 1),
+            { ...lesson('l2', 'm1', 2), visibility: 'hidden' },
+            lesson('l3', 'm2', 1),
+            lesson('l4', 'm3', 1),
+          ],
+          contentItem: [
+            video('shown', 'l1'),
+            video('hiddenVideo', 'l1', { visibility: 'hidden' }),
+            video('archivedVideo', 'l1', {
+              archivedAt: '2026-01-01T00:00:00.000Z',
+            }),
+            video('inHiddenLesson', 'l2'),
+            video('inHiddenModule', 'l3'),
+            video('inArchivedModule', 'l4'),
+          ],
+        }),
+        'c1',
+      );
+      expect(result.map(({ contentItemId }) => contentItemId)).toEqual([
+        'shown',
+      ]);
+    });
+
+    it('leaves out videos without questions and items that are not videos', async () => {
+      const result = await readCourseVideoQuestions(
+        table({
+          contentItem: [
+            video('none', 'l1', { questions: undefined }),
+            video('empty', 'l1', { questions: [] }),
+            video('quiz', 'l1', { type: 'quiz' }),
+            video('ok', 'l1'),
+          ],
+        }),
+        'c1',
+      );
+      expect(result.map(({ contentItemId }) => contentItemId)).toEqual(['ok']);
+    });
+
+    it('is part of readCourseAnalytics', async () => {
+      const coreTable = {
+        ...(table({ contentItem: [video('a', 'l1')] }) as object),
+        entities: {
+          courseStats: {
+            get: () => ({ go: async () => ({ data: [], unprocessed: [] }) }),
+          },
+          periodStats: {
+            get: () => ({ go: async () => ({ data: [], unprocessed: [] }) }),
+            query: {
+              primary: () => ({
+                between: () => ({ go: async () => ({ data: [] }) }),
+              }),
+            },
+          },
+        },
+      } as never;
+      const result = await readCourseAnalytics(coreTable, 'c1', 30, NOW);
+      expect(result.videoQuestions).toEqual([
+        { contentItemId: 'a', lessonId: 'l1', title: 'Video a', questions: 1 },
+      ]);
+    });
+  });
+
+  describe('readVideoQuestionAnalytics', () => {
+    it('ranks questions with 5 or more answers, then the rest in asking order', async () => {
+      const result = await readVideoQuestionAnalytics(
+        table(
+          {
+            contentItem: [
+              video('v1', 'l1', {
+                questions: [
+                  question('q1', 10),
+                  question('q2', 20),
+                  question('q3', 30),
+                  question('q4', null),
+                  question('q5', null),
+                ],
+              }),
+            ],
+          },
+          [
+            qStats('v1', 'q1', 4, 4), // 4 answers: unranked
+            qStats('v1', 'q2', 5, 1), // exactly 5: ranked, 20%
+            qStats('v1', 'q3', 12, 6), // more than 5: ranked, 50%
+            qStats('v1', 'q4', 0, 0),
+            qStats('other', 'q5', 9, 9), // another item's stats
+          ],
+        ),
+        'c1',
+        'v1',
+      );
+      expect(result?.questions.map(({ questionId }) => questionId)).toEqual([
+        'q3',
+        'q2',
+        'q1',
+        'q4',
+        'q5',
+      ]);
+      expect(result?.questions[0]).toEqual({
+        questionId: 'q3',
+        text: 'Question q3',
+        atSeconds: 30,
+        attempts: 12,
+        misses: 6,
+        missRate: 50,
+        ranked: true,
+      });
+      expect(result?.questions[2]).toMatchObject({
+        questionId: 'q1',
+        atSeconds: 10,
+        missRate: 100,
+        ranked: false,
+      });
+      expect(result?.questions[3]).toMatchObject({
+        atSeconds: null,
+        attempts: 0,
+        missRate: null,
+      });
+    });
+
+    it('drops stats of a removed question and shows a new one at zero', async () => {
+      const result = await readVideoQuestionAnalytics(
+        table(
+          {
+            contentItem: [video('v1', 'l1', { questions: [question('new')] })],
+          },
+          [qStats('v1', 'removed', 8, 8)],
+        ),
+        'c1',
+        'v1',
+      );
+      expect(result?.questions).toEqual([
+        {
+          questionId: 'new',
+          text: 'Question new',
+          atSeconds: 30,
+          attempts: 0,
+          misses: 0,
+          missRate: null,
+          ranked: false,
+        },
+      ]);
+    });
+
+    it('is undefined for a hidden video, one without questions, a quiz and an unknown id', async () => {
+      const coreTable = table({
+        contentItem: [
+          video('hidden', 'l1', { visibility: 'hidden' }),
+          video('empty', 'l1', { questions: [] }),
+          video('quiz', 'l1', { type: 'quiz' }),
+        ],
+      });
+      for (const id of ['hidden', 'empty', 'quiz', 'missing']) {
+        expect(await readVideoQuestionAnalytics(coreTable, 'c1', id)).toBe(
+          undefined,
+        );
+      }
     });
   });
 });

@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { resolveBrand } from '@discava/common-branding/brand';
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { routeTree } from '../../../routeTree.gen';
@@ -31,12 +32,18 @@ const open = (
   {
     signedIn = false,
     handlers = {},
-  }: { signedIn?: boolean; handlers?: Record<string, Handler> } = {},
+    brand,
+  }: {
+    signedIn?: boolean;
+    handlers?: Record<string, Handler>;
+    brand?: ReturnType<typeof resolveBrand>;
+  } = {},
 ) =>
   renderWithCoreApi(null, {
     routeTree,
     path,
     signedIn,
+    brand,
     handlers: { 'certificate.verify': handler, ...handlers },
   });
 
@@ -213,6 +220,34 @@ describe('/certificates/<ID> for the owner', () => {
     // What the page showed before is still there.
     expect(screen.getByText('Certificate of completion')).toBeInTheDocument();
     expect(screen.getByText('5 October 2026')).toBeInTheDocument();
+  });
+
+  it('names the brand as the issuing organisation', async () => {
+    const brand = resolveBrand(
+      {
+        name: 'Acme Academy',
+        showNameBesideLogo: true,
+        colour: null,
+        logoKey: null,
+        iconKey: null,
+        shareImageKey: null,
+      },
+      undefined,
+    );
+    open(() => certificate, undefined, {
+      signedIn: true,
+      handlers: mine(),
+      brand,
+    });
+
+    const link = await screen.findByRole('link', {
+      name: 'Add to LinkedIn profile',
+    });
+    expect(link.getAttribute('href')).toContain(
+      'organizationName=Acme+Academy',
+    );
+    const issuer = screen.getByText('Issuing organisation');
+    expect(issuer.parentElement).toHaveTextContent('Acme Academy');
   });
 
   it('does not show it to another signed-in user', async () => {

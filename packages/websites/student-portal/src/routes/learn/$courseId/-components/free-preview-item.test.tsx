@@ -15,14 +15,30 @@ import { FreePreviewItem } from './free-preview-item';
 const mounted = vi.hoisted(() => ({ count: 0 }));
 vi.mock('@discava/common-shadcn/components/hls-video', async () => {
   const { useEffect } = await import('react');
+  const { captionMenuLabel } = await import(
+    '@discava/common-shadcn/components/video-controls'
+  );
   return {
-    HlsVideo: ({ url, autoPlay }: { url: string; autoPlay?: boolean }) => {
+    HlsVideo: ({
+      url,
+      autoPlay,
+      captions = [],
+    }: {
+      url: string;
+      autoPlay?: boolean;
+      captions?: { label: string; machineTranslated?: boolean }[];
+    }) => {
       useEffect(() => {
         mounted.count += 1;
       }, []);
       return (
         <div data-testid="player" data-autoplay={String(autoPlay)}>
           {url}
+          <ul>
+            {captions.map((c) => (
+              <li key={c.label}>{captionMenuLabel(c)}</li>
+            ))}
+          </ul>
         </div>
       );
     },
@@ -94,6 +110,37 @@ describe('FreePreviewItem', () => {
       ...lesson,
       contentItemId: 'i-video',
     });
+  });
+
+  it('hands the player a translated track marked as auto-translated', async () => {
+    const { user } = renderItem(video(true), {
+      'freePreview.videoUrl': () => ({
+        ...videoUrl,
+        captions: [
+          {
+            trackId: 't1',
+            language: 'en-US',
+            label: 'English',
+            isDefault: true,
+            machineTranslated: false,
+            url: 'https://media.test/v/t1.vtt',
+          },
+          {
+            trackId: 't2',
+            language: 'es-ES',
+            label: 'Español',
+            isDefault: false,
+            machineTranslated: true,
+            url: 'https://media.test/v/t2.vtt',
+          },
+        ],
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Play' }));
+
+    expect(await screen.findByText('Español (auto-translated)')).toBeVisible();
+    expect(screen.getByText('English')).toBeVisible();
   });
 
   it('says a video that is not playable is being prepared', async () => {

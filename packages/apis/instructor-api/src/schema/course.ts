@@ -160,6 +160,9 @@ export const SetCertificateCriteriaInputSchema = z
   .object({
     courseId: z.string(),
     requireQuizPass: z.boolean(),
+    // A whole percent from 1 to 100; null removes the requirement, and
+    // leaving it out keeps the stored value.
+    minUploadScorePercent: z.number().int().min(1).max(100).nullish(),
   })
   .strict();
 

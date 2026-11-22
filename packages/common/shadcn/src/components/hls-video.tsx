@@ -20,12 +20,12 @@ import {
   parseWebVtt,
   type TranscriptCue,
 } from '@discava/common-web-utils/webvtt';
-import { cn } from 'cn';
 import Hls from 'hls.js';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { TranscriptPanel } from './transcript-panel';
 import { Button } from './ui/button';
 import {
+  captionMenuLabel,
   formatTime,
   type LoadedCaption,
   VideoControls,
@@ -63,7 +63,7 @@ const CaptionTrack = ({ caption }: { caption: LoadedCaption }) => {
       data-track-id={caption.trackId}
       kind="captions"
       srcLang={caption.language}
-      label={caption.label}
+      label={captionMenuLabel(caption)}
       src={caption.src}
     />
   );
@@ -78,6 +78,7 @@ export interface PlayerCaption {
   language: string;
   label: string;
   isDefault: boolean;
+  machineTranslated?: boolean;
   // Plain CloudFront URL, authorised by the signed cookies.
   url: string;
 }
@@ -155,7 +156,7 @@ function useCaptionFiles(
     if (file) {
       loaded.push({ ...caption, ...file });
     } else if (file === null) {
-      failed.push(caption.label);
+      failed.push(captionMenuLabel(caption));
     }
   }
   return {
@@ -561,13 +562,7 @@ export function HlsVideo({
   const hasTranscript = captionFiles.loaded.length > 0 || captionFiles.notice;
   const showPanel = transcriptOpen && hasTranscript && !fullscreen;
   return (
-    <div
-      data-slot="hls-video-layout"
-      className={cn(
-        'grid grid-cols-1 gap-3',
-        showPanel && 'lg:grid-cols-[minmax(0,1fr)_20rem]',
-      )}
-    >
+    <div data-slot="hls-video-layout" className="grid grid-cols-1 gap-3">
       {player}
       {showPanel && (
         <TranscriptPanel
@@ -577,7 +572,7 @@ export function HlsVideo({
           languageLabel={transcriptTrack?.label ?? ''}
           status={!transcriptTrack && captionFiles.notice ? 'failed' : 'ready'}
           onChoose={chooseCue}
-          className="max-h-[min(20rem,50vh)] lg:h-0 lg:max-h-none lg:min-h-full"
+          className="max-h-[min(20rem,50vh)]"
         />
       )}
     </div>

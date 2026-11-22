@@ -444,6 +444,7 @@ export const createVideoUrl = courseInstructorProcedure(
           label: track.label,
           isDefault: track.isDefault,
           source: track.source,
+          machineTranslated: track.source === 'translated',
           url: await getCloudFrontVideoUrl(track.key),
         }),
       ),

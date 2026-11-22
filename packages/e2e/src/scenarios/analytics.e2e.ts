@@ -8,6 +8,7 @@ import {
   addLesson,
   addModule,
   addQuiz,
+  addVideoItem,
   createCourse,
   createPublishedCourse,
   hideItem,
@@ -27,6 +28,14 @@ import {
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { THREE_SECOND_VIDEO } from '../helpers/video.js';
+import {
+  addQuestionHere,
+  openVideoQuestion,
+  openVideoQuestions,
+  saveVideoQuestions,
+  seekTo,
+} from '../helpers/video-questions.js';
 import { waitForAnalytics } from '../helpers/wait-for-analytics.js';
 
 // The instructor dashboard (#278): each course's card shows the enrolments,
@@ -263,6 +272,91 @@ test('an instructor sees which quiz question a learner missed', async ({
     await expect(scores.getByRole('row', { name: /0-9/ })).toContainText('1');
     await expect(scores.getByRole('row')).toHaveCount(11);
     await screenshot(instructor, 'quiz analysis with a missed question');
+  });
+});
+
+// Video question results (in-video questions, story 5): a wrong answer to a
+// question on a video shows as one answer and one miss. One answer is under
+// the five a question needs to be ranked, so it says so.
+test('an instructor sees which video question a learner missed', async ({
+  browser,
+}) => {
+  const title = uniqueName('E2E video question analytics course');
+  const instructor = await browser.newPage();
+  const learner = await browser.newPage();
+  const other = await browser.newPage();
+  let courseId = '';
+
+  await test.step('the instructor publishes a course with a video question', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Vera', ['instructor']));
+    await createCourse(instructor, {
+      title,
+      summary: 'A video question analytics course made by the tests.',
+    });
+    courseId = instructor.url().split('/').pop() ?? '';
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addVideoItem(instructor, {
+      title: 'Video one',
+      file: THREE_SECOND_VIDEO,
+    });
+    const dialog = await openVideoQuestions(instructor, 'Video one');
+    await seekTo(dialog, 1);
+    await addQuestionHere(dialog, 1, {
+      question: 'What is on screen?',
+      options: ['Colour bars', 'A cat'],
+      correct: 'Colour bars',
+    });
+    await saveVideoQuestions(dialog);
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(dialog).toBeHidden();
+    await publishCourse(instructor);
+  });
+
+  await test.step('a student enrols and answers the question wrongly', async () => {
+    await openCourse(learner, title);
+    await enrol(learner, newUser('Sam', ['student']));
+    await startFirstLesson(learner);
+    await learner
+      .getByRole('group', { name: 'Video player' })
+      .getByRole('button', { name: 'Play', exact: true })
+      .click();
+    const question = openVideoQuestion(learner);
+    await expect(question).toBeVisible({ timeout: 15_000 });
+    await question.getByRole('radio', { name: 'A cat' }).check();
+    await question.getByRole('button', { name: 'Submit answer' }).click();
+    await expect(question.getByRole('status')).toContainText('Not quite');
+  });
+
+  await test.step('the video and the question show within 30 seconds', async () => {
+    expect(await waitForAnalytics()).toEqual([]);
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    const card = instructor.getByRole('article', { name: 'Video questions' });
+    await expectAfterReloads(instructor, async () => {
+      await expect(card).toContainText('Video one', { timeout: 2_000 });
+    });
+    await expect(card).toContainText('1 question');
+    await card
+      .getByRole('button', { name: 'Show results for Video one' })
+      .click();
+    const questions = card.getByRole('table', {
+      name: 'Question results for Video one',
+    });
+    const row = questions.getByRole('row', { name: /What is on screen\?/ });
+    await expect(row).toContainText('Not enough answers yet');
+    await expect(row.getByRole('cell').nth(1)).toHaveText('0:01');
+    await expect(row.getByRole('cell').nth(3)).toHaveText('1');
+    await expect(row.getByRole('cell').nth(4)).toHaveText('1');
+    await screenshot(instructor, 'video question results');
+  });
+
+  await test.step('a second instructor cannot open the results', async () => {
+    await other.goto(`${PORTALS.instructor}/dashboard`);
+    await signIn(other, newUser('Omar', ['instructor']));
+    await other.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expect(other.getByText(title)).toHaveCount(0);
+    await expect(other.getByText('Video questions')).toHaveCount(0);
   });
 });
 

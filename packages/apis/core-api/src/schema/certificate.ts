@@ -116,6 +116,19 @@ export const QuizRequirementItemSchema = z.object({
   state: z.enum(['passed', 'not-attempted', 'not-passed', 'no-attempts-left']),
 });
 
+export const UploadRequirementItemSchema = z.object({
+  contentItemId: z.string(),
+  lessonId: z.string(),
+  title: z.string(),
+  state: z.enum(['met', 'not-submitted', 'awaiting-grade', 'below-score']),
+  // The caller's returned score, once there is one.
+  scorePercent: z.number().optional(),
+});
+
+export type IUploadRequirementItem = z.output<
+  typeof UploadRequirementItemSchema
+>;
+
 export type IQuizRequirementItem = z.output<typeof QuizRequirementItemSchema>;
 
 // What the caller still needs for the certificate of one course. Their own
@@ -145,6 +158,14 @@ export const CertificateRequirementsOutputSchema = z.object({
         done: z.number(),
         total: z.number(),
         items: z.array(QuizRequirementItemSchema),
+      }),
+      z.object({
+        kind: z.literal('graded-uploads'),
+        met: z.boolean(),
+        done: z.number(),
+        total: z.number(),
+        minScorePercent: z.number(),
+        items: z.array(UploadRequirementItemSchema),
       }),
     ]),
   ),

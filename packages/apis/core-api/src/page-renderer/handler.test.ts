@@ -82,7 +82,6 @@ const build = (overrides: Partial<PageRendererDeps> = {}, config = {}) => {
     mediaBaseUrl: async () => 'https://media.example.com/',
     config: {
       allowIndexing: true,
-      siteName: 'Discava',
       allowedHosts: ['learn.example.com'],
       fallbackHost: 'localhost',
       ...config,
@@ -543,5 +542,55 @@ describe('page renderer', () => {
       expect(response.statusCode).toBe(503);
       expect(response.headers['Cache-Control']).toBe('no-store');
     });
+  });
+});
+
+describe('page renderer: the brand’s name and share image', () => {
+  const named = {
+    ...storedBrand,
+    name: 'Acme <&> "Academy"',
+    shareImageKey: `brand/share-image/${NONCE}.png`,
+  };
+  const ESCAPED = 'Acme &lt;&amp;&gt; &quot;Academy&quot;';
+  const SHARE = `https://media.example.com/brand/share-image/${NONCE}.png`;
+  const withBrand = () => ({ coreTable: tableWithBrand(named) });
+
+  it('uses the name in the title, og:site_name and the course texts, escaped', async () => {
+    const response = await build(withBrand()).render(get('/learn/c1'));
+    expect(response.body).toContain(
+      `<title>Intro to Rust | ${ESCAPED}</title>`,
+    );
+    expect(response.body).toContain(
+      `<meta property="og:site_name" content="${ESCAPED}" />`,
+    );
+    expect(response.body).not.toContain('| Discava');
+    expect(response.body).not.toContain('Acme <&>');
+  });
+
+  it('uses the name in the not-found title and leaves the signed-in shell untitled', async () => {
+    const missing = await build(withBrand()).render(get('/learn/missing'));
+    expect(missing.body).toContain(`<title>Not found | ${ESCAPED}</title>`);
+    const shell = await build(withBrand()).render(get('/learn/c1/lessons/1'));
+    expect(shell.body).toContain('<title></title>');
+  });
+
+  it('falls back to the default name when no brand is saved', async () => {
+    const response = await build({
+      coreTable: tableWithBrand(undefined),
+    }).render(get('/learn/c1'));
+    expect(response.body).toContain('<title>Intro to Rust | Discava</title>');
+    expect(response.body).toContain('/og-default.png');
+  });
+
+  it('gives an instructor without a photo the share image', async () => {
+    const response = await build(withBrand()).render(get('/instructors/ada'));
+    expect(response.body).toContain(
+      `<meta property="og:image" content="${SHARE}" />`,
+    );
+    expect(response.body).toContain(
+      `<meta name="twitter:image" content="${SHARE}" />`,
+    );
+    expect(response.body).not.toContain('/og-default.png');
+    expect(response.body).toContain(`on ${ESCAPED}.`);
   });
 });

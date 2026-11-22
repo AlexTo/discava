@@ -27,6 +27,7 @@ const db = {
   progress: [] as { lessonId: string; status: string }[],
   course: null as Record<string, unknown> | null,
   quizSummaries: [] as Record<string, unknown>[],
+  submissions: [] as Record<string, unknown>[],
   user: null as Record<string, unknown> | null,
   // Certificates by `userId#courseId`.
   certificates: new Map<string, Record<string, unknown>>(),
@@ -37,7 +38,12 @@ const db = {
 
 // Reads other than the enrolment, completions and progress, for the tests of
 // when the course and user are (not) read.
-const reads = { course: vi.fn(), user: vi.fn(), quizSummaries: vi.fn() };
+const reads = {
+  course: vi.fn(),
+  user: vi.fn(),
+  quizSummaries: vi.fn(),
+  submissions: vi.fn(),
+};
 // What the next certificate create does, if it isn't the default: throws
 // ConditionalCheckFailedException as a lost race does, or any other error.
 let createCertificate: (item: Record<string, unknown>) => Promise<void> =
@@ -154,6 +160,18 @@ const coreTable = {
         })),
       },
     },
+    assignmentSubmission: {
+      get: vi.fn((key: { contentItemId: string }) => ({
+        go: async (options?: { consistent?: boolean }) => {
+          reads.submissions(options);
+          return {
+            data: db.submissions.find(
+              (s) => s.contentItemId === key.contentItemId,
+            ),
+          };
+        },
+      })),
+    },
     course: {
       get: vi.fn(() => ({
         go: async () => {
@@ -262,6 +280,7 @@ beforeEach(() => {
     certificateCriteria: { version: 1, requireQuizPass: false },
   };
   db.quizSummaries = [];
+  db.submissions = [];
   db.user = { userId: 'student-1', givenName: 'Ada', familyName: 'Lovelace' };
   db.certificates = new Map();
   db.notifications = new Map();
@@ -598,6 +617,119 @@ describe('recalculateStudent', () => {
         expect(reads.quizSummaries).not.toHaveBeenCalled();
         expect(db.certificates.size).toBe(0);
       });
+    });
+
+    describe('when a score on graded uploads is required', () => {
+      beforeEach(() => {
+        db.course = {
+          ...db.course,
+          certificateCriteria: {
+            version: 2,
+            requireQuizPass: false,
+            minUploadScorePercent: 60,
+          },
+        };
+      });
+      const withAssignment = {
+        ...curriculum,
+        contentItems: [
+          ...curriculum.contentItems,
+          {
+            moduleId: 'm1',
+            lessonId: 'l2',
+            contentItemId: 'w',
+            type: 'assignment',
+            maxPoints: 10,
+            ...visible,
+          },
+        ],
+      } as Curriculum;
+      const run = () =>
+        recalculateStudent(
+          coreTable,
+          'course-1',
+          withAssignment,
+          'student-1',
+          NOW,
+        );
+      const submission = (status: string, points?: number) => ({
+        contentItemId: 'w',
+        status,
+        points,
+        pointsOutOf: 10,
+      });
+
+      it('issues one, listing the upload, when it is returned with enough points', async () => {
+        completed('a', 'b', 'c', 'w');
+        db.submissions = [submission('returned', 6)];
+
+        await run();
+
+        expect([...db.certificates.values()][0]).toMatchObject({
+          assessment: {
+            minUploadScorePercent: 60,
+            assessedItems: [
+              { contentItemId: 'w', kind: 'upload', scorePercent: 60 },
+            ],
+          },
+        });
+        // By key, one per assignment, and consistently.
+        expect(
+          coreTable.entities.assignmentSubmission.get,
+        ).toHaveBeenCalledWith({
+          courseId: 'course-1',
+          contentItemId: 'w',
+          userId: 'student-1',
+        });
+        expect(reads.submissions).toHaveBeenCalledWith({ consistent: true });
+      });
+
+      it.each([
+        ['returned below the score', submission('returned', 5)],
+        ['not returned', submission('submitted')],
+      ])('issues none when the work is %s', async (_, row) => {
+        completed('a', 'b', 'c', 'w');
+        db.submissions = [row];
+
+        await run();
+
+        expect(db.certificates.size).toBe(0);
+      });
+
+      it('issues one after a regrade upwards', async () => {
+        completed('a', 'b', 'c', 'w');
+        db.submissions = [submission('returned', 5)];
+        await run();
+        expect(db.certificates.size).toBe(0);
+
+        db.submissions = [submission('returned', 8)];
+        await run();
+
+        expect(db.certificates.size).toBe(1);
+      });
+
+      it('reads no submissions for a student who already has a certificate', async () => {
+        completed('a', 'b', 'c', 'w');
+        completedEnrolment();
+        db.certificates.set('student-1#course-1', {
+          certificateId: 'X',
+          issuedAt: NOW,
+          reminderScheduledAt: NOW,
+        });
+
+        await run();
+
+        expect(reads.submissions).not.toHaveBeenCalled();
+      });
+    });
+
+    it('reads no submissions without the upload criterion', async () => {
+      completed('a', 'b', 'c');
+
+      await recalculate();
+
+      expect(db.certificates.size).toBe(1);
+      expect(reads.submissions).not.toHaveBeenCalled();
     });
 
     it('issues one certificate.issued notification with the certificate', async () => {

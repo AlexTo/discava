@@ -22,8 +22,6 @@ export const LOCAL_DEV_CONFIG = {
     InstructorPortal: LOCAL_PORTAL_ORIGINS.instructor,
     AdminPortal: LOCAL_PORTAL_ORIGINS.admin,
   },
-  // The issuer a certificate names when it's added to LinkedIn.
-  site: { name: 'Discava' },
   apis: {
     CoreApi: 'http://localhost:2022/',
   },

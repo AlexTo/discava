@@ -97,6 +97,19 @@ const improvesQuizPass = (record: StreamRecord) => {
   );
 };
 
+// A submission's grade or status changed (a resubmission changes neither, so
+// it is no news to the certificate rules).
+const changesSubmissionGrade = (record: StreamRecord) => {
+  const before: Image = record.dynamodb.OldImage;
+  const after: Image = record.dynamodb.NewImage;
+  return (
+    record.eventName === 'MODIFY' &&
+    (before?.status !== after?.status ||
+      before?.points !== after?.points ||
+      before?.returnedAt !== after?.returnedAt)
+  );
+};
+
 // The certificate rules changed, or certificates were switched on or off.
 const changesCertificateRules = (record: StreamRecord) => {
   const before: Image = record.dynamodb.OldImage;
@@ -110,7 +123,7 @@ const changesCertificateRules = (record: StreamRecord) => {
 };
 
 // The students to recalculate, per course: the student of each completion
-// recorded or quiz pass improved, and everyone enrolled in a course whose
+// recorded, quiz pass improved or submission regraded, and everyone enrolled in a course whose
 // visible curriculum, certificate criteria or assessed quizzes changed. Each
 // is recalculated once per batch, however many records name them.
 export const studentsToRecalculate = async (
@@ -134,6 +147,10 @@ export const studentsToRecalculate = async (
       add(String(image?.courseId), [String(image?.userId)]);
     } else if (entity === 'quizSummary') {
       if (improvesQuizPass(record)) {
+        add(String(image?.courseId), [String(image?.userId)]);
+      }
+    } else if (entity === 'assignmentSubmission') {
+      if (changesSubmissionGrade(record)) {
         add(String(image?.courseId), [String(image?.userId)]);
       }
     } else if (entity === 'course') {

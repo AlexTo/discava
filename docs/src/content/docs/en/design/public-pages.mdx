@@ -20,7 +20,7 @@ The renderer is a second Lambda handler in `@discava/core-api` (`src/page-render
 | `/learn/<courseId>` | The landing page of a published course, otherwise a `404` |
 | `/learn/<courseId>/<anything>` | The plain `index.html` with `noindex` (the signed-in learning routes) |
 | `/instructors/<handle>` | The profile of an instructor who teaches a published course, otherwise a `404` |
-| `/certificates/<ID>` | A head for the link preview (the learner, the course, the date and the site name), always `noindex`; an unknown ID is a `404` |
+| `/certificates/<ID>` | A head for the link preview (the learner, the course, the date and the platform name), always `noindex`; an unknown ID is a `404` |
 | `/certificates/<ID>/<anything>` | The plain `index.html` (the LinkedIn route) |
 | `/sitemap.xml` | Every published course, public profile and active category, with `lastmod` |
 | `/robots.txt` | See [the indexing setting](#the-indexing-setting) |

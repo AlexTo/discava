@@ -20,7 +20,7 @@ export const renderProfilePage = (
   const photo = context.mediaUrl(profile.photoKey);
   const description =
     profile.headline ??
-    `${profile.displayName} teaches ${profile.courses.length} ${profile.courses.length === 1 ? 'course' : 'courses'} on ${context.siteName}.`;
+    `${profile.displayName} teaches ${profile.courses.length} ${profile.courses.length === 1 ? 'course' : 'courses'} on ${context.brand.name}.`;
 
   const root = `<main class="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8"><header class="flex flex-col items-start gap-6 sm:flex-row">${
     photo
