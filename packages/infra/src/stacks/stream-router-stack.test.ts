@@ -205,23 +205,25 @@ describe('certificate reminder', () => {
 });
 
 describe('caption translation', () => {
-  it('publishes the settings it was given, and the defaults without any', () => {
-    const published = (
-      components: Parameters<typeof synth>[0],
-    ): Record<string, unknown>[] =>
-      Object.values(
-        synth(components)('RuntimeConfig').findResources(
-          'AWS::AppConfig::HostedConfigurationVersion',
-        ),
-      ).map((resource) => resource as Record<string, unknown>);
-    const content = (components: Parameters<typeof synth>[0]) =>
-      JSON.stringify(published(components));
+  it('hands the function the settings it was given, and the defaults without any', () => {
+    const setting = (components: Parameters<typeof synth>[0]) =>
+      JSON.stringify(
+        Object.entries(
+          synth(components)('StreamRouter').findResources(
+            'AWS::Lambda::Function',
+          ),
+        )
+          .filter(([id]) => id.startsWith('CaptionTranslation'))
+          .map(
+            ([, fn]) =>
+              fn.Properties.Environment.Variables
+                .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
+          ),
+      );
     expect(
-      content({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
-    ).toMatch(/captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
-    expect(content({})).toMatch(
-      /captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*9/,
-    );
+      setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
+    ).toMatch(/maxLanguagesPerCourse[\s\S]*3/);
+    expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
   });
 
   const stack = synth({});

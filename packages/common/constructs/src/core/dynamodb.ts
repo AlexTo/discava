@@ -14,7 +14,6 @@ import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
 import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
-import { RuntimeConfig } from './runtime-config.js';
 import { addSetting } from './settings.js';
 
 type _DynamoDBTableProps = Omit<
@@ -30,7 +29,7 @@ export interface DynamoDBTableProps extends _DynamoDBTableProps {
   readonly tableName?: string;
 
   /**
-   * RuntimeConfig key used under the `dynamodb` namespace.
+   * Deploy-time setting key used under the `dynamodb` namespace.
    */
   readonly runtimeConfigKey: string;
 
@@ -96,9 +95,6 @@ export abstract class DynamoDBTable extends Construct {
       encryption,
       removalPolicy,
     });
-
-    const rc = RuntimeConfig.ensure(this);
-    rc.set('dynamodb', runtimeConfigKey, { tableName: this.table.tableName });
   }
 
   /** Gives `fn` the table's name as its deploy-time `dynamodb` setting. */

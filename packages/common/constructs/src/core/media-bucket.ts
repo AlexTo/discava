@@ -28,13 +28,12 @@ import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { findCloudFrontDomainNames } from './cloudfront.js';
 import { RsaKeyPairSecret } from './rsa-key-pair-secret/construct.js';
-import { RuntimeConfig } from './runtime-config.js';
 import { addSetting } from './settings.js';
 import { CloudfrontWebAcl } from './static-website.js';
 
 export interface MediaBucketProps {
   /**
-   * RuntimeConfig key used under the `s3` namespace.
+   * Deploy-time setting key used under the `s3` namespace.
    */
   readonly runtimeConfigKey: string;
   /**
@@ -248,7 +247,6 @@ export class MediaBucket extends Construct {
       cloudFrontPrivateKeySecretArn: this.signingKeyPairSecret.secretArn,
       cookieDomain,
     };
-    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, this.settings);
 
     // Always the generated *.cloudfront.net hostname, even with a custom
     // domain configured: it's the target a custom domain's DNS record points

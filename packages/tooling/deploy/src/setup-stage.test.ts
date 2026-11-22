@@ -367,6 +367,24 @@ describe.concurrent('setup-stage.sh execution policy', {
     );
   });
 
+  it('grants no AppConfig action to the execution role or the boundary', async () => {
+    const { status, executionStatements, policyDocument } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+    const actions = [...executionStatements, ...boundary.Statement].flatMap(
+      ({ Action }: { Action: string | string[] }) => [Action].flat(),
+    );
+
+    expect(status).toBe(0);
+    expect(actions.filter((action) => action.startsWith('appconfig:'))).toEqual(
+      [],
+    );
+  });
+
   it('allows tagging MediaConvert job templates as they are created', async () => {
     // Tag-on-create is authorized against jobTemplates/*, not the template's
     // own ARN, so the stage-prefixed job template statement doesn't cover it.

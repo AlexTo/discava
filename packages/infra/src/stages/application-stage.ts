@@ -2,7 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { RuntimeConfig } from '@discava/common-constructs';
 import type {
   CaptionTranslationSettings,
   PayoutSettings,
@@ -34,7 +33,7 @@ export type ApplicationStageProps = StageProps &
  * The application, split into stacks to stay well under CloudFormation's
  * 500-resource limit per stack. Deploy order follows the references:
  *
- *   Websites -> Data -> Payments -> MediaPipeline -> CoreApi -> StreamRouter -> Payouts -> InstructorApi -> AdminApi -> RuntimeConfig
+ *   Websites -> Data -> Payments -> MediaPipeline -> CoreApi -> StreamRouter -> Payouts -> InstructorApi -> AdminApi -> PortalConfig
  *
  * Data (users, the core table, media buckets, the search collection and the
  * secrets) depends on Websites for Cognito callback URLs and lesson media
@@ -48,8 +47,8 @@ export type ApplicationStageProps = StageProps &
  * of the core table's stream, the queues it feeds and the handlers behind
  * them; it depends on Data, and on Websites and CoreApi for the addresses
  * notification emails link to. Payouts holds the daily payout run, which only needs the table and the
- * API key from Data. RuntimeConfig (AppConfig content plus each
- * portal's runtime-config.json) collects values from all of them.
+ * API key from Data. PortalConfig (each portal's
+ * runtime-config.json) collects values from all of them.
  */
 export class ApplicationStage extends Stage {
   constructor(
@@ -84,14 +83,14 @@ export class ApplicationStage extends Stage {
     // Created first so the portals can put their runtime-config.json
     // deployments in it; it still deploys last, since it depends on
     // everything it reads from.
-    const runtimeConfig = new Stack(this, 'RuntimeConfig', stackProps);
+    const portalConfig = new Stack(this, 'PortalConfig', stackProps);
 
     const websites = new WebsitesStack(this, 'Websites', {
       ...stackProps,
       studentPortal,
       instructorPortal,
       adminPortal,
-      runtimeConfigScope: runtimeConfig,
+      portalConfigScope: portalConfig,
     });
 
     const data = new DataStack(this, 'Data', {
@@ -182,12 +181,12 @@ export class ApplicationStage extends Stage {
       adminPortal: websites.adminPortal,
     });
 
-    // Every consumer references the AppConfig application, so it lives in
-    // Data, which they all depend on; the content references values from
-    // every stack, so it lives in RuntimeConfig, which depends on them all.
-    RuntimeConfig.ensure(data).placeIn({
-      applicationStack: data,
-      configurationStack: runtimeConfig,
-    });
+    // Last to deploy, so every value a portal's runtime-config.json reads
+    // exists by then, whether or not the file reads from that stack.
+    for (const stack of this.node.children) {
+      if (stack instanceof Stack && stack !== portalConfig) {
+        portalConfig.addDependency(stack);
+      }
+    }
   }
 }

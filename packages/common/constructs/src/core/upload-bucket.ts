@@ -18,12 +18,11 @@ import {
 import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { findCloudFrontDomainNames } from './cloudfront.js';
-import { RuntimeConfig } from './runtime-config.js';
 import { addSetting } from './settings.js';
 
 export interface UploadBucketProps {
   /**
-   * RuntimeConfig key used under the `s3` namespace.
+   * Deploy-time setting key used under the `s3` namespace.
    */
   readonly runtimeConfigKey: string;
   /**
@@ -122,7 +121,6 @@ export class UploadBucket extends Construct {
     );
 
     this.settings = { bucketName: this.bucket.bucketName };
-    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, this.settings);
   }
 
   /** Gives `fn` the bucket's deploy-time `s3` setting. */

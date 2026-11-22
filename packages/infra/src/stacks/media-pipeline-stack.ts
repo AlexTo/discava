@@ -11,7 +11,6 @@ import {
   EventsTranscribeComplete,
   LessonMediaBucket,
   LessonMediaUploadBucket,
-  RuntimeConfig,
   suppressRules,
   VideoTranscodePipeline,
 } from '@discava/common-constructs';
@@ -405,7 +404,6 @@ export class MediaPipelineStack extends Stack {
       this,
       'TranscodeCleanup',
     );
-    const runtimeConfig = RuntimeConfig.ensure(this);
     lessonMediaBucket.bindSettings(transcodeCleanup);
     // Needs both: list the job's own nonce-scoped prefix, then delete
     // everything found there.
@@ -450,7 +448,6 @@ export class MediaPipelineStack extends Stack {
       schedulerRoleArn: schedulerRole.roleArn,
       scheduleGroupName: scheduleGroup.scheduleGroupName,
     };
-    runtimeConfig.set('mediaConvert', 'TranscodeCleanup', cleanupSettings);
 
     return { transcodeCleanup, scheduleGroup, schedulerRole, cleanupSettings };
   }
