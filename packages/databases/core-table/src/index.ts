@@ -57,9 +57,14 @@ export {
   readCourseAnalytics,
   readCourseQuizzes,
   readCourseSummaries,
+  readCourseVideoQuestions,
   readLessonFunnel,
   readQuizAnalytics,
+  readVideoQuestionAnalytics,
   type ScoreBand,
+  type VideoQuestionAnalytics,
+  type VideoQuestionFigures,
+  type VideoQuestionListing,
 } from './helpers/analytics-reads.js';
 export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';
 export {
