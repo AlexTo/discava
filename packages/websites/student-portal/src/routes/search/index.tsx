@@ -8,6 +8,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { CatalogueResults } from '../../components/catalogue-results';
 import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
+import { PageContainer } from '../../components/page-container';
 import {
   type CatalogueFilters,
   catalogueFiltersToSearch,
@@ -44,7 +45,7 @@ function RouteComponent() {
     });
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
+    <PageContainer>
       <PageBreadcrumbs crumbs={[{ label: 'Search' }]} className="mb-6" />
       {!query && !hasCatalogueFilters(filters) ? (
         <div className="py-16 text-center">
@@ -69,6 +70,6 @@ function RouteComponent() {
           />
         </>
       )}
-    </main>
+    </PageContainer>
   );
 }

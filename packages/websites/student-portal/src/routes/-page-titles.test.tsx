@@ -88,7 +88,8 @@ const titleIs = (title: string) =>
 
 describe('page titles', () => {
   it.each([
-    ['/', 'Browse courses · Discava'],
+    ['/', 'Home · Discava'],
+    ['/courses', 'Browse courses · Discava'],
     ['/search', 'Search · Discava'],
     ['/search?query=algebra', 'Search: algebra · Discava'],
     ['/certificates/ABCD', 'Certificate · Discava'],
@@ -185,7 +186,7 @@ describe('page titles', () => {
   });
 
   it('has exactly one h1 on the catalogue, search results and an empty search', async () => {
-    open('/');
+    open('/courses');
     await screen.findByRole('heading', {
       name: 'Browse courses for every goal.',
     });
