@@ -141,6 +141,50 @@ describe('gradingQueue.list', () => {
     expect(result.items.map(({ userId }) => userId)).toEqual(['u2', 'u3']);
   });
 
+  it('lists a student waiting on two assignments of one course', async () => {
+    // DynamoDB refuses a batch get whose keys repeat.
+    const refusingDuplicates =
+      (key: (k: Record<string, string>) => string, data: unknown) =>
+      (keys: Record<string, string>[]) => {
+        const seen = new Set(keys.map(key));
+        return seen.size === keys.length
+          ? resolves(data ?? keys.map((k) => ({ ...k, status: 'active' })))
+          : { go: vi.fn().mockRejectedValue(new Error('duplicates')) };
+      };
+    courseInstructorQueryByInstructor.mockReturnValue(
+      resolves([{ courseId: 'c1' }]),
+    );
+    assignmentSubmissionQueryByWaiting.mockReturnValue(
+      resolves([
+        waiting('c1', 'u1', '2026-11-03T00:00:00.000Z', 'item-1'),
+        waiting('c1', 'u1', '2026-11-04T00:00:00.000Z', 'item-2'),
+      ]),
+    );
+    enrolmentGet.mockImplementation(
+      refusingDuplicates(({ courseId, userId }) => `${courseId}#${userId}`),
+    );
+    contentItemQueryPrimary.mockReturnValue(
+      resolves([item('c1'), { ...item('c1'), contentItemId: 'item-2' }]),
+    );
+    lessonGet.mockImplementation(
+      refusingDuplicates(
+        ({ courseId, lessonId }) => `${courseId}#${lessonId}`,
+        [{ courseId: 'c1', lessonId: 'lesson-c1', title: 'Essay c1' }],
+      ),
+    );
+
+    const result = await call().list({});
+    expect(result.total).toBe(2);
+    expect(result.items.map(({ contentItemId }) => contentItemId)).toEqual([
+      'item-1',
+      'item-2',
+    ]);
+    expect(result.items[1]).toMatchObject({
+      userId: 'u1',
+      assignmentTitle: 'Essay c1',
+    });
+  });
+
   it('limits the items but counts every waiting entry', async () => {
     const result = await call().list({ limit: 2 });
     expect(result.items).toHaveLength(2);
