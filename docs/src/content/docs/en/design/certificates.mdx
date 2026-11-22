@@ -20,7 +20,7 @@ Completion itself is unchanged by the criteria: an enrolment still becomes `comp
 ## The criteria
 
 - **Where they live**: a `certificateCriteria` map on the course, beside the per-course switch: `{ version, requireQuizPass }`. A new course has `{ version: 1, requireQuizPass: false }`. `setCertificateCriteria` is its only writer after creation and adds one to `version` only when something changed.
-- **The rule**: `evaluateCertificateCriteria` in `core-table` is a pure function used by both the issuer and the reader (`certificate.requirements`, which the course home shows), so the page and the issuer can't disagree. With `requireQuizPass` on, every assessed quiz must be passed. An assessed quiz is an effectively visible quiz with a pass mark above 0; a quiz with a 0% pass mark is practice and is not assessed.
+- **The rule**: `evaluateCertificateCriteria` in `core-table` is a pure function used by both the issuer and the reader (`certificate.requirements`, which the course home shows), so the page and the issuer can't disagree. With `requireQuizPass` on, every assessed quiz must be passed: its `passedAt` is set (and `passedAt` is permanent) **and** the student's best score reaches the quiz's *current* pass mark. So raising a pass mark can hold back a certificate that hasn't been issued yet, and lowering one can release it. An assessed quiz is an effectively visible quiz with a pass mark above 0; a quiz with a 0% pass mark is practice and is not assessed.
 - **Changing criteria on a live course**: the criteria read when a student is evaluated apply. A certificate already issued is never re-examined. Loosening issues certificates to everyone it makes qualify; tightening only affects students who haven't qualified yet. The instructor's control says this before saving.
 
 ## What the certificate records
@@ -34,9 +34,9 @@ The certificate copies the criteria it was issued under, with their `version`, i
 
 The recalculation (see <Link path="design/progress-and-completion">Progress and completion</Link>) runs for more than a completed item. A student who qualifies is issued a certificate within seconds of:
 
-- passing a quiz after its item was already complete (attempts used up, limit raised, a later attempt passing): that student;
+- passing a quiz after its item was already complete (attempts used up, limit raised, a later attempt passing), or a better best score on a quiz already passed: that student;
 - the criteria changing, or certificates being turned on: every enrolled student who hasn't dropped;
-- a quiz's pass mark crossing 0 (assessed or not): every enrolled student who hasn't dropped;
+- a quiz's pass mark changing (including to or from 0, which changes whether it is assessed): every enrolled student who hasn't dropped;
 - the item completions and visibility changes that already triggered it.
 
 This replaces the "no backfill" limitation: turning certificates on now issues to everyone who already qualifies.

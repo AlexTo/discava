@@ -71,11 +71,11 @@ The core table's stream (new and old images), through the <Link path="design/str
 |---|---|
 | `itemCompletion` inserted | That one student, in that course |
 | Module, lesson or content item: `visibility` or `archivedAt` changed, or record removed | Every enrolled student in the course who hasn't dropped out |
-| `quizSummary` inserted or modified | That one student, only when `passedAt` appears; every other change is ignored |
+| `quizSummary` inserted or modified | That one student, when `passedAt` appears or the best score of an already passed quiz rises; every other change is ignored |
 | `course` modified | Every enrolled student who hasn't dropped out, only when `certificateCriteria.version` or `certificatesEnabled` differs between the old and new image; any other course edit is ignored |
-| Quiz content item: `settings.passMarkPercent` goes to or from 0 | Every enrolled student who hasn't dropped out; a change between two positive values is ignored, as it doesn't change who is assessed |
+| Quiz content item: `settings.passMarkPercent` changed | Every enrolled student who hasn't dropped out. A pass counts only while the best score reaches the current mark, so lowering a mark can make a student eligible, and a mark crossing 0 changes who is assessed |
 
-A filter can't compare a record's old and new images, so every change to a module, lesson, content item, quiz summary or course reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were: a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
+A filter can't compare a record's old and new images, so every change to a module, lesson, content item, quiz summary or course reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were (a quiz's pass mark is the exception, see above): a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
 
 ### What it does
 
