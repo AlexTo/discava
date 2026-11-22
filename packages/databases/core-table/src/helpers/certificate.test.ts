@@ -459,6 +459,14 @@ describe('recordLinkedInClick', () => {
     expect(store.get('u1/c1')?.linkedInClickSource).toBe('my-learning');
   });
 
+  it('refuses a revoked certificate without recording a click', async () => {
+    const { coreTable, store, patch } = fakeForClick();
+    store.get('u1/c1')!.revokedAt = NOW.toISOString();
+    expect(await click(coreTable)).toBeUndefined();
+    expect(patch).not.toHaveBeenCalled();
+    expect(store.get('u1/c1')?.linkedInClickedAt).toBeUndefined();
+  });
+
   it('returns undefined for an unknown ID', async () => {
     const { coreTable, patch } = fakeForClick();
     expect(
@@ -576,6 +584,15 @@ describe('claimCertificateReminder', () => {
     const { coreTable, get } = fakeForReminder();
     get.mockReturnValueOnce({ go: async () => ({ data: null }) } as never);
     expect(await claim(coreTable)).toBeUndefined();
+  });
+
+  it('skips a revoked certificate', async () => {
+    const { coreTable, item, patch } = fakeForReminder({
+      revokedAt: NOW.toISOString(),
+    });
+    expect(await claim(coreTable)).toBeUndefined();
+    expect(patch).not.toHaveBeenCalled();
+    expect(item.reminderSentAt).toBeUndefined();
   });
 
   it('sets reminderSentAt and returns it', async () => {

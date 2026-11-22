@@ -36,6 +36,7 @@ import { ArchivedSection } from './-components/course/archived-section';
 import { CourseCaptionLanguagesForm } from './-components/course/course-caption-languages-form';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
 import { CourseCertificateCriteria } from './-components/course/course-certificate-criteria';
+import { CourseCertificatesList } from './-components/course/course-certificates-list';
 import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseFirstLessonPromptForm } from './-components/course/course-first-lesson-prompt-form';
 import { CourseImage } from './-components/course/course-image';
@@ -201,6 +202,9 @@ function RouteComponent() {
                 requireQuizPass={course.certificateCriteria.requireQuizPass}
               />
             </div>
+          </div>
+          <div className="mt-4 border-t pt-4">
+            <CourseCertificatesList courseId={course.courseId} />
           </div>
           <div className="mt-4 border-t pt-4">
             <CourseFirstLessonPromptForm

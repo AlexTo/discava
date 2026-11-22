@@ -11,6 +11,12 @@ import {
   type IGradingQueueOutput,
 } from '../schema/index.js';
 
+// The first of each run of entries with the same key, for a batch get, which
+// DynamoDB refuses when its keys repeat.
+const uniqueKeys = <T>(entries: T[], key: (entry: T) => string): T[] => [
+  ...new Map(entries.map((entry) => [key(entry), entry] as const)).values(),
+];
+
 // The work waiting for the caller across all their courses, oldest first
 // (specs/20261120-230057-assignment-grading/contracts/
 // instructor-api-assignment-submission.md). Every waiting entry is read, so
@@ -45,8 +51,15 @@ export const listGradingQueue = courseProcedure
       return { total: 0, items: [] };
     }
 
+    // One key per student and course: a student can have several waiting
+    // submissions in a course, and a batch get refuses duplicate keys.
     const { data: enrolments } = await coreTable.entities.enrolment
-      .get(waiting.map(({ courseId, userId }) => ({ courseId, userId })))
+      .get(
+        uniqueKeys(
+          waiting,
+          ({ courseId, userId }) => `${courseId}#${userId}`,
+        ).map(({ courseId, userId }) => ({ courseId, userId })),
+      )
       .go();
     const left = new Set(
       enrolments
@@ -107,7 +120,10 @@ export const listGradingQueue = courseProcedure
     );
     const { data: lessons } = await coreTable.entities.lesson
       .get(
-        [...assignments.values()].map(({ courseId, moduleId, lessonId }) => ({
+        uniqueKeys(
+          [...assignments.values()],
+          ({ courseId, lessonId }) => `${courseId}#${lessonId}`,
+        ).map(({ courseId, moduleId, lessonId }) => ({
           courseId,
           moduleId,
           lessonId,
