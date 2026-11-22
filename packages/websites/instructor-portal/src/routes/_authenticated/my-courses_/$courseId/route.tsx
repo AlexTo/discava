@@ -202,7 +202,6 @@ function RouteComponent() {
           </div>
           <div className="mt-4 border-t pt-4">
             <CourseFirstLessonPromptForm
-              key={course.firstLessonPrompt ?? ''}
               courseId={course.courseId}
               firstLessonPrompt={course.firstLessonPrompt}
               defaultFirstLessonPrompt={course.defaultFirstLessonPrompt}
