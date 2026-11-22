@@ -10,8 +10,11 @@ import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useEffect, useRef } from 'react';
+import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../../api';
+import { EnrolmentActions } from './enrolment-actions';
 import { errorCode, FreePreviewItem } from './free-preview-item';
 
 function Unavailable({
@@ -57,6 +60,32 @@ export function FreePreviewPage({
   const outlineLesson = module?.lessons.find(
     (lesson) => lesson.lessonId === lessonId,
   );
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const enrolmentQuery = useQuery(
+    trpc.course.myEnrolment.queryOptions(
+      { courseId },
+      { enabled: isAuthenticated },
+    ),
+  );
+  // A student already enrolled when they arrive goes to the lesson. One who
+  // enrols from this page is left on it, to choose "Start this lesson".
+  const enrolledOnArrival = useRef<boolean | undefined>(undefined);
+  if (enrolledOnArrival.current === undefined && !enrolmentQuery.isPending) {
+    enrolledOnArrival.current =
+      enrolmentQuery.data?.status === 'active' ||
+      enrolmentQuery.data?.status === 'completed';
+  }
+  const redirect = enrolledOnArrival.current === true;
+  useEffect(() => {
+    if (redirect) {
+      void navigate({
+        to: '/learn/$courseId/lesson/$lessonId',
+        params: { courseId, lessonId },
+        replace: true,
+      });
+    }
+  }, [redirect, navigate, courseId, lessonId]);
   const isMarked = outlineLesson?.freePreview === true;
   const lessonQuery = useQuery(
     trpc.freePreview.lesson.queryOptions(
@@ -70,7 +99,16 @@ export function FreePreviewPage({
     courseQuery.data?.title,
   );
 
-  if (courseQuery.isLoading || (isMarked && lessonQuery.isLoading)) {
+  // The enrolment comes before the states below, so a student of an archived
+  // course still reaches their lesson.
+  if (redirect) {
+    return null;
+  }
+  if (
+    (isAuthenticated && enrolmentQuery.isPending) ||
+    courseQuery.isLoading ||
+    (isMarked && lessonQuery.isLoading)
+  ) {
     return (
       <main className="mx-auto w-full max-w-3xl px-6 py-24 lg:px-8">
         <div
@@ -106,11 +144,16 @@ export function FreePreviewPage({
       />
     );
   }
-  if (!lessonQuery.data || !module) {
+  if (!lessonQuery.data || !module || !courseQuery.data) {
     return null;
   }
 
   const { course, lesson, items } = lessonQuery.data;
+  const otherPreviews = courseQuery.data.modules.flatMap((candidate) =>
+    candidate.lessons.filter(
+      (other) => other.freePreview && other.lessonId !== lessonId,
+    ),
+  );
   return (
     <main className="mx-auto w-full max-w-3xl space-y-8 px-6 py-10 lg:px-8">
       <header>
@@ -145,6 +188,41 @@ export function FreePreviewPage({
           />
         ))
       )}
+
+      <section className="space-y-3 rounded-lg border p-6">
+        <h2 className="text-xl font-semibold">Like what you see?</h2>
+        <p className="text-sm text-muted-foreground">
+          Your progress is saved once you enrol.
+        </p>
+        <div className="max-w-sm space-y-3">
+          <EnrolmentActions
+            courseId={courseId}
+            courseTitle={courseQuery.data.title}
+            priceAmount={courseQuery.data.priceAmount}
+            priceCurrency={courseQuery.data.priceCurrency}
+            continueTo={{ lessonId }}
+          />
+        </div>
+      </section>
+
+      {otherPreviews.length > 0 ? (
+        <section className="space-y-3">
+          <h2 className="text-xl font-semibold">More free previews</h2>
+          <ul className="space-y-1">
+            {otherPreviews.map((other) => (
+              <li key={other.lessonId}>
+                <Link
+                  to="/learn/$courseId/preview/$lessonId"
+                  params={{ courseId, lessonId: other.lessonId }}
+                  className="font-medium underline-offset-4 hover:underline"
+                >
+                  {other.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </main>
   );
 }

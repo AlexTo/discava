@@ -2,7 +2,12 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { type ApiUser, anonymousCoreClient, apiUser } from '../helpers/api.js';
+import {
+  type ApiUser,
+  anonymousCoreClient,
+  apiUser,
+  connectLocalPayments,
+} from '../helpers/api.js';
 import {
   createFreePreviewCourseViaApi,
   lessonRow,
@@ -256,6 +261,112 @@ test.describe('a visitor watches a free preview', () => {
         await instructor.instructor.course.archive.mutate({ courseId });
       });
     });
+  });
+});
+
+// From a preview to enrolling: the preview records nothing, offers the
+// course's enrol or buy action, and sends an enrolled student on to the lesson.
+test.describe('a student goes from a preview to enrolling', () => {
+  test('enrols from a free course preview and lands on the lesson', async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const { courseId, open } = await createFreePreviewCourseViaApi(
+      instructor,
+      uniqueName('E2E free preview enrol'),
+    );
+    const page = await browser.newPage();
+    const user = newUser('Nia', ['student']);
+
+    await page.goto(`${PORTALS.student}/my-learning`);
+    await signIn(page, user);
+    await page.goto(previewUrl(courseId, open.lessonId));
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Open' }),
+    ).toBeVisible();
+
+    await test.step('playing the video to its end records nothing', async () => {
+      await page.getByRole('button', { name: 'Play' }).click();
+      const video = lessonVideo(page, 'Open video');
+      await expect(video).toBeAttached();
+      await video.evaluate(
+        (element: HTMLVideoElement) =>
+          new Promise<void>((resolve) => {
+            if (element.ended) {
+              resolve();
+              return;
+            }
+            element.addEventListener('ended', () => resolve(), { once: true });
+            void element.play();
+          }),
+      );
+      // Nothing was recorded: the page still offers to enrol, and shows no
+      // completion or progress. The table invariants check the rest.
+      await expect(
+        page.getByRole('button', { name: 'Enrol now' }),
+      ).toBeVisible();
+      await expect(page.getByText(/Mark as done|% complete/)).toHaveCount(0);
+    });
+
+    await test.step('the enrol panel offers to enrol, and lists no other preview', async () => {
+      await expect(
+        page.getByRole('heading', { name: 'Like what you see?' }),
+      ).toBeVisible();
+      await expect(
+        page.getByText('Your progress is saved once you enrol.'),
+      ).toBeVisible();
+      await expect(page.getByText('More free previews')).toHaveCount(0);
+      await screenshot(page, 'preview-enrol-panel', { fullPage: true });
+    });
+
+    await test.step('Enrol now then Start this lesson lands on the lesson, nothing done', async () => {
+      await page.getByRole('button', { name: 'Enrol now' }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText("You're enrolled")).toBeVisible();
+      await screenshot(page, 'preview-enrolled-dialog');
+      await dialog.getByRole('link', { name: 'Start this lesson' }).click();
+      await page.waitForURL(
+        new RegExp(`/learn/${courseId}/lesson/${open.lessonId}$`),
+      );
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Open' }),
+      ).toBeVisible();
+      await expect(page.getByText('Done', { exact: true })).toHaveCount(0);
+    });
+
+    await test.step('opening the preview address again lands on the lesson', async () => {
+      await page.goto(previewUrl(courseId, open.lessonId));
+      await page.waitForURL(
+        new RegExp(`/learn/${courseId}/lesson/${open.lessonId}$`),
+      );
+      await expect(page.getByText('Done', { exact: true })).toHaveCount(0);
+    });
+  });
+
+  test('a priced course preview shows Buy now with the price', async ({
+    browser,
+  }) => {
+    test.setTimeout(240_000);
+    await connectLocalPayments();
+    const instructor = await apiUser('Ivy', ['instructor']);
+    const { courseId, open } = await createFreePreviewCourseViaApi(
+      instructor,
+      uniqueName('E2E free preview buy'),
+    );
+    await instructor.instructor.course.setPrice.mutate({
+      courseId,
+      priceAmount: 1999,
+      priceCurrency: 'USD',
+    });
+    const page = await browser.newPage();
+    await page.goto(`${PORTALS.student}/my-learning`);
+    await signIn(page, newUser('Pat', ['student']));
+    await page.goto(previewUrl(courseId, open.lessonId));
+
+    await expect(page.getByText('$19.99')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Buy now' })).toBeVisible();
+    await screenshot(page, 'preview-buy-panel', { fullPage: true });
   });
 });
 

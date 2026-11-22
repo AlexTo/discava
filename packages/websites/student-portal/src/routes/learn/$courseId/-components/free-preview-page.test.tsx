@@ -3,28 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithCoreApi,
 } from '../../../../test/render-with-core-api';
 import { FreePreviewPage } from './free-preview-page';
 
+// There's no route tree in these renders; navigation is a spy.
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, { useNavigate: () => navigate });
+});
+
+afterEach(() => navigate.mockReset());
+
 vi.mock('@discava/common-shadcn/components/hls-video', () => ({
   HlsVideo: () => <div data-testid="player" />,
 }));
 
-const outline = (freePreview: boolean) => ({
+const outline = (freePreview: boolean, extraLessons: unknown[] = []) => ({
   courseId: 'c1',
   title: 'Linear Algebra',
   status: 'published',
+  priceAmount: 0,
+  priceCurrency: 'USD',
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
   modules: [
     {
       moduleId: 'm1',
       title: 'Ax = b',
-      lessons: [{ lessonId: 'l1', title: 'Welcome', freePreview }],
+      lessons: [
+        { lessonId: 'l1', title: 'Welcome', freePreview },
+        ...extraLessons,
+      ],
     },
   ],
 });
@@ -91,7 +105,7 @@ describe('FreePreviewPage', () => {
     expect(screen.getByText('Intro')).toBeInTheDocument();
     expect(screen.getByText('2 questions')).toBeInTheDocument();
     expect(screen.queryByText('Mark as done')).toBeNull();
-    expect(screen.queryByText(/progress/i)).toBeNull();
+    expect(screen.queryByText(/% complete/i)).toBeNull();
     expect(screen.queryByText(/discussion/i)).toBeNull();
     expect(calls.find((c) => c.path === 'freePreview.lesson')?.input).toEqual({
       courseId: 'c1',
@@ -180,13 +194,131 @@ describe('FreePreviewPage', () => {
         {
           'course.publicView': () => outline(true),
           'freePreview.lesson': () => previewLesson(items),
+          'course.myEnrolment': () => null,
         },
         { signedIn },
       );
       await screen.findByRole('heading', { level: 1, name: 'Welcome' });
-      expect(paths(calls)).not.toContain('course.myEnrolment');
       expect(paths(calls)).not.toContain('course.view');
+      if (!signedIn) {
+        expect(paths(calls)).not.toContain('course.myEnrolment');
+      }
       unmount();
     }
+  });
+
+  it('offers to enrol, with the price, and says progress is saved once enrolled', async () => {
+    renderPage({
+      'course.publicView': () => ({
+        ...outline(true),
+        priceAmount: 2500,
+      }),
+      'freePreview.lesson': () => previewLesson(items),
+    });
+
+    expect(
+      await screen.findByRole('heading', { name: 'Like what you see?' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Your progress is saved once you enrol.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('$25.00')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Sign in to buy' }),
+    ).toBeInTheDocument();
+  });
+
+  it("lists the course's other free previews in order, and not this one", async () => {
+    renderPage({
+      'course.publicView': () =>
+        outline(true, [
+          { lessonId: 'l2', title: 'Second', freePreview: true },
+          { lessonId: 'l3', title: 'Locked', freePreview: false },
+          { lessonId: 'l4', title: 'Third', freePreview: true },
+        ]),
+      'freePreview.lesson': () => previewLesson(items),
+    });
+
+    await screen.findByRole('heading', { name: 'More free previews' });
+    const links = screen
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('href')?.includes('/preview/'));
+    expect(links.map((link) => link.textContent)).toEqual(['Second', 'Third']);
+    expect(links[0]).toHaveAttribute('href', '/learn/c1/preview/l2');
+  });
+
+  it('leaves out "More free previews" when there are no others', async () => {
+    renderPage({
+      'course.publicView': () => outline(true),
+      'freePreview.lesson': () => previewLesson(items),
+    });
+
+    await screen.findByRole('heading', { level: 1, name: 'Welcome' });
+    expect(screen.queryByText('More free previews')).toBeNull();
+  });
+
+  it.each(['active', 'completed'])(
+    'sends a student with a %s enrolment to the lesson',
+    async (status) => {
+      renderPage(
+        {
+          'course.publicView': () => outline(true),
+          'freePreview.lesson': () => previewLesson(items),
+          'course.myEnrolment': () => ({ courseId: 'c1', status }),
+        },
+        { signedIn: true },
+      );
+
+      await vi.waitFor(() =>
+        expect(navigate).toHaveBeenCalledWith({
+          to: '/learn/$courseId/lesson/$lessonId',
+          params: { courseId: 'c1', lessonId: 'l1' },
+          replace: true,
+        }),
+      );
+    },
+  );
+
+  it('sends an enrolled student to the lesson even when the course is gone', async () => {
+    renderPage(
+      {
+        'course.publicView': () => {
+          throw new ApiError('NOT_FOUND', 'Not found');
+        },
+        'course.myEnrolment': () => ({ courseId: 'c1', status: 'active' }),
+      },
+      { signedIn: true },
+    );
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+    expect(
+      screen.queryByText('This preview is no longer available.'),
+    ).toBeNull();
+  });
+
+  it('keeps a student whose enrolment was dropped on the preview', async () => {
+    renderPage(
+      {
+        'course.publicView': () => outline(true),
+        'freePreview.lesson': () => previewLesson(items),
+        'course.myEnrolment': () => ({ courseId: 'c1', status: 'dropped' }),
+      },
+      { signedIn: true },
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Welcome' }),
+    ).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('has no arrow icon in any button', async () => {
+    const { container } = renderPage({
+      'course.publicView': () => outline(true),
+      'freePreview.lesson': () => previewLesson(items),
+    });
+
+    await screen.findByRole('heading', { level: 1, name: 'Welcome' });
+    expect(container.querySelector('button svg[class*="arrow"]')).toBeNull();
   });
 });
