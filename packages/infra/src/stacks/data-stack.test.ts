@@ -11,7 +11,12 @@ import {
 } from '@discava/common-infra-config';
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { resources, synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsReadingAppConfig,
+  resources,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('lesson media CORS', () => {
   const data = synth({})('Data');
@@ -273,5 +278,22 @@ describe('the notification unsubscribe secret', () => {
 
   it('is the only notification secret in Data', () => {
     expect(unsubscribeSecrets({})).toHaveLength(1);
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('Data');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    PreTokenGeneration: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    SearchCollectionIndexSyncHandler: ['DISCAVA_OPENSEARCH_SEARCH'],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

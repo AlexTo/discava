@@ -6,7 +6,12 @@
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { functionsMissingSettings, synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsMissingSettings,
+  functionsReadingAppConfig,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('search indexing (#53)', () => {
   const stack = synth({});
@@ -293,5 +298,42 @@ describe('caption translation', () => {
       },
       Timeout: 900,
     });
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('StreamRouter');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    CertificateReminder: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    ProgressRecalculation: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_CERTIFICATES_REMINDER',
+    ],
+    SearchIndexing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+    ],
+    TranscriptIndexing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    AnalyticsUpdate: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    NotificationDelivery: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    EarningsRecording: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    CaptionTranslation: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+    ],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

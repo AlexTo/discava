@@ -2,20 +2,18 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getCaptionJob,
   keyFromS3Uri,
   startCaptionJob,
 } from './transcribe-client.js';
 
-const { send, isLocalDev, callLocalEventRunner, resolveAppConfigValue } =
-  vi.hoisted(() => ({
-    send: vi.fn(),
-    isLocalDev: vi.fn(),
-    callLocalEventRunner: vi.fn(),
-    resolveAppConfigValue: vi.fn(),
-  }));
+const { send, isLocalDev, callLocalEventRunner } = vi.hoisted(() => ({
+  send: vi.fn(),
+  isLocalDev: vi.fn(),
+  callLocalEventRunner: vi.fn(),
+}));
 
 vi.mock('@aws-sdk/client-transcribe', () => ({
   TranscribeClient: vi.fn(function () {
@@ -30,7 +28,6 @@ vi.mock('@aws-sdk/client-transcribe', () => ({
 }));
 
 vi.mock('@discava/common-server-utils/lesson-media-bucket', () => ({
-  resolveAppConfigValue,
   resolveLessonMediaBucketName: vi.fn(async () => 'media-bucket'),
   resolveLessonMediaUploadBucketName: vi.fn(async () => 'upload-bucket'),
 }));
@@ -53,8 +50,11 @@ const OUTPUT_KEY =
 beforeEach(() => {
   vi.clearAllMocks();
   isLocalDev.mockReturnValue(false);
-  resolveAppConfigValue.mockRejectedValue(new Error('not configured'));
   send.mockResolvedValue({});
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('startCaptionJob', () => {
@@ -81,8 +81,8 @@ describe('startCaptionJob', () => {
     });
   });
 
-  it('uses the language from runtime config when there is one', async () => {
-    resolveAppConfigValue.mockResolvedValue('fr-FR');
+  it('uses the language from the setting when there is one', async () => {
+    vi.stubEnv('DISCAVA_MEDIA_CONVERT_CAPTION_LANGUAGE_CODE', '"fr-FR"');
 
     await startCaptionJob(TARGET);
 

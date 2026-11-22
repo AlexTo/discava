@@ -154,30 +154,30 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - `grep -rnE "getAppConfig|resolveAppConfigValue|RUNTIME_CONFIG_APP_ID|grantReadAppConfig\(" packages --include=*.ts --exclude-dir=node_modules` finds only `runtime-config.ts`'s definitions and tests asserting absence;
 - `pnpm build` passes.
 
-- [ ] T021 [P] [US1] Tests first, in `packages/common/server-utils/src/`:
+- [x] T021 [P] [US1] Tests first, in `packages/common/server-utils/src/`:
   - `lesson-media-bucket.ts`: `resolveBucketName(key)` returns `readSetting<{ bucketName: string }>('s3', key).bucketName`, keeping its local branch. Delete `resolveAppConfigValue`.
   - `lesson-media.ts`: the CloudFront config is `readSetting('s3', 'LessonMediaBucket')`, with the same field checks and messages.
   - `cleanup-scheduler.ts`: `readSetting('mediaConvert', 'TranscodeCleanup')`.
   - `caption-translation-settings.ts`: `readOptionalSetting('captionTranslation', 'Settings')`. When absent, or when the JSON is invalid, return `OFF` exactly as today. The clamp to `0..MAX_CAPTION_LANGUAGES` is unchanged.
-- [ ] T022 [US1] Update those modules' tests: `lesson-media-bucket.test.ts`, `lesson-media.test.ts`, `cleanup-scheduler.test.ts` and `caption-translation-settings.test.ts`. They stub the `DISCAVA_*` variables instead of mocking `@aws-lambda-powertools/parameters/appconfig`, with the same fixture objects. Tests asserting `RUNTIME_CONFIG_APP_ID environment variable is not set` assert `Missing deploy-time setting DISCAVA_…` instead. This is a named test change.
-- [ ] T023 [P] [US1] Tests first, then switch the remaining readers:
+- [x] T022 [US1] Update those modules' tests: `lesson-media-bucket.test.ts`, `lesson-media.test.ts`, `cleanup-scheduler.test.ts` and `caption-translation-settings.test.ts`. They stub the `DISCAVA_*` variables instead of mocking `@aws-lambda-powertools/parameters/appconfig`, with the same fixture objects. Tests asserting `RUNTIME_CONFIG_APP_ID environment variable is not set` assert `Missing deploy-time setting DISCAVA_…` instead. This is a named test change.
+- [x] T023 [P] [US1] Tests first, then switch the remaining readers:
   - `packages/apis/instructor-api/src/helpers/mediaconvert-client.ts`: `readSetting('mediaConvert', 'VideoTranscodePipeline')`. Update `mediaconvert-client.test.ts`'s line asserting the `RUNTIME_CONFIG_APP_ID` error; this is a named test change.
   - `packages/events/src/media/transcribe-client.ts`: `readOptionalSetting<string>('mediaConvert', 'CaptionLanguageCode') ?? DEFAULT_CAPTION_LANGUAGE`.
   - `packages/events/src/certificates/reminder-schedule.ts`: `readSetting('certificates', 'Reminder')`.
 
   Each keeps its local branch and gets present and absent tests.
-- [ ] T024 [US1] Give each function the settings its code reads, next to its grants, with `bindSettings` for the bucket and pipeline constructs and `addSetting` for the stack-level objects. Then remove `RUNTIME_CONFIG_APP_ID` and `grantReadAppConfig` from every function.
+- [x] T024 [US1] Give each function the settings its code reads, next to its grants, with `bindSettings` for the bucket and pipeline constructs and `addSetting` for the stack-level objects. Then remove `RUNTIME_CONFIG_APP_ID` and `grantReadAppConfig` from every function.
   - `packages/infra/src/stacks/media-pipeline-stack.ts`: `mediaConvert.TranscodeCleanup` (`{ lambdaArn, schedulerRoleArn, scheduleGroupName }`) on every function that calls `cleanup-scheduler`. That includes instructor-api's and core-api's handlers, passed through their stack props as the pipeline's other values are.
   - `packages/infra/src/stacks/stream-router-stack.ts`: `certificates.Reminder` on progress recalculation; `captionTranslation.Settings` on the caption translation handler. Delete `grantAppConfig`.
   - The stack holding instructor-api: `captionTranslation.Settings` on its handler, from the stage's `captionTranslation` config with the same defaults as `stream-router-stack.ts` (`enabled ?? true`, `maxLanguagesPerCourse ?? 9`). Move those defaults into one exported helper both stacks call.
   - The bucket settings (`DISCAVA_S3_LESSON_MEDIA_BUCKET`, `DISCAVA_S3_LESSON_MEDIA_UPLOAD_BUCKET`, `DISCAVA_S3_PUBLIC_MEDIA_BUCKET`) and `DISCAVA_MEDIA_CONVERT_VIDEO_TRANSCODE_PIPELINE` on each function whose code calls the matching reader. Find them by following each reader's importers (`resolveLessonMediaBucketName`, `resolveBucketName`, `lesson-media`, `mediaconvert-client`).
 
   Keep every `RuntimeConfig.set` call, which Phase 4 removes.
-- [ ] T025 [US1] Tests first: in each stack test (`core-api-stack.test.ts`, `instructor-api-stack.test.ts`, `admin-api-stack.test.ts`, `media-pipeline-stack.test.ts`, `stream-router-stack.test.ts`, `payments-stack.test.ts`, `data-stack.test.ts`), add a table of function logical-ID prefix → required `DISCAVA_*` names, built from T024's list, and assert every function in it has them.
+- [x] T025 [US1] Tests first: in each stack test (`core-api-stack.test.ts`, `instructor-api-stack.test.ts`, `admin-api-stack.test.ts`, `media-pipeline-stack.test.ts`, `stream-router-stack.test.ts`, `payments-stack.test.ts`, `data-stack.test.ts`), add a table of function logical-ID prefix → required `DISCAVA_*` names, built from T024's list, and assert every function in it has them.
   - Assert that no function in any application stack has `RUNTIME_CONFIG_APP_ID` or an `appconfig:` action.
   - Update any existing assertion on those, and on `grantAppConfig`'s output, to match. This is a named test change.
-- [ ] T026 [US1] Remove `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` from the `package.json` of every package that no longer imports them (`common-server-utils`, `instructor-api`, `core-api`, `events`, and any other the grep finds). Run `pnpm i`. In any test that throws the old `RUNTIME_CONFIG_APP_ID` error from a mock, use the new message; this is a named test change.
-- [ ] T027 [US1] Check the scheduler targets for self-references (research R-6): synthesise and confirm no function's environment references its own ARN. If one does, build that ARN from a fixed function name instead and note it in the PR.
+- [x] T026 [US1] Remove `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` from the `package.json` of every package that no longer imports them (`common-server-utils`, `instructor-api`, `core-api`, `events`, and any other the grep finds). Run `pnpm i`. In any test that throws the old `RUNTIME_CONFIG_APP_ID` error from a mock, use the new message; this is a named test change.
+- [x] T027 [US1] Check the scheduler targets for self-references (research R-6): synthesise and confirm no function's environment references its own ARN. If one does, build that ARN from a fixed function name instead and note it in the PR.
 - [ ] T028 [US1] (human) After this PR deploys, walk the media, certificate, caption translation, payment and stream rows of [quickstart.md](./quickstart.md) step 7 on `discava-development`. Then confirm [contracts/rollout.md](./contracts/rollout.md) step 3: no function in the stage has `RUNTIME_CONFIG_APP_ID`, and no role but the deploy role has an `appconfig:` action.
 
 ---
