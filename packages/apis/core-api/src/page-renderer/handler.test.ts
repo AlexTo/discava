@@ -163,11 +163,14 @@ describe('page renderer: the brand', () => {
     expect(data['course.publicView']).toBeDefined();
   });
 
-  it('embeds the brand on a not-found page, but reads nothing for a signed-in shell', async () => {
-    const response = await build({
+  it('gives a not-found page the brand’s icon but no page data, and reads nothing for a signed-in shell', async () => {
+    const notFoundPage = await build({
+      loadTemplate: async () => withIconTemplate,
       coreTable: tableWithBrand(storedBrand),
     }).render(get('/learn/missing'));
-    expect(response.body).toContain('"brand"');
+    expect(notFoundPage.statusCode).toBe(404);
+    expect(notFoundPage.body).toContain(`brand/icon/${NONCE}.png`);
+    expect(notFoundPage.body).not.toContain('discava-page-data');
 
     const entities = vi.fn(() => ({}));
     const table = Object.defineProperty({}, 'entities', { get: entities });

@@ -270,11 +270,18 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         const { context, inject } = await withBrand();
         return html(200, inject(page(context)), PAGE_CACHE);
       };
+      // A not-found page carries no page data at all (the same bytes for every
+      // address that isn't a page), so it gets the brand's icon but doesn't
+      // embed the brand: the portal fetches it as usual.
       const notFound = async () => {
-        const { context, inject } = await withBrand();
+        const { context } = await withBrand();
         return html(
           404,
-          inject({ head: notFoundHead(context), root: '' }),
+          injectIntoTemplate(template, {
+            head: notFoundHead(context),
+            root: '',
+            brand: { iconUrl: context.brand.iconUrl },
+          }),
           NOT_FOUND_CACHE,
           { 'X-Robots-Tag': 'noindex' },
         );

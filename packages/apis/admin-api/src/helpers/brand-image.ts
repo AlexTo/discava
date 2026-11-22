@@ -45,7 +45,10 @@ const parser = new XMLParser({
   attributeNamePrefix: '',
   ignoreDeclaration: true,
   ignorePiTags: true,
-  processEntities: false,
+  // Declared (and the five predefined) entities are expanded, so the rules
+  // below see the values a browser will. Numeric character references are
+  // decoded by decodeReferences.
+  processEntities: true,
   trimValues: false,
 });
 
@@ -88,7 +91,16 @@ const checkAttributes = (
 ): string | undefined => {
   for (const [name, rawValue] of Object.entries(attributes ?? {})) {
     const lower = name.toLowerCase();
-    const value = String(rawValue);
+    // A name is never written with a reference (XML forbids it), so one is an
+    // attempt to hide what the name is from the rules.
+    if (name.includes('&')) {
+      return `a reference in an attribute name (${name})`;
+    }
+    const decoded = decodeReferences(String(rawValue));
+    if (decoded === undefined) {
+      return `a character reference that is not a character (${name})`;
+    }
+    const value = decoded;
     if (lower.startsWith('on')) {
       return `an event handler (${name})`;
     }
@@ -115,14 +127,16 @@ const checkAttributes = (
   return undefined;
 };
 
-const textOf = (children: unknown): string =>
-  (Array.isArray(children) ? children : [])
-    .map((child) =>
-      typeof child === 'object' && child !== null && '#text' in child
-        ? String((child as Record<string, unknown>)['#text'])
-        : '',
-    )
-    .join('');
+const textOf = (children: unknown): string | undefined =>
+  decodeReferences(
+    (Array.isArray(children) ? children : [])
+      .map((child) =>
+        typeof child === 'object' && child !== null && '#text' in child
+          ? String((child as Record<string, unknown>)['#text'])
+          : '',
+      )
+      .join(''),
+  );
 
 const walk = (nodes: XmlNode[]): string | undefined => {
   for (const node of nodes) {
@@ -132,6 +146,9 @@ const walk = (nodes: XmlNode[]): string | undefined => {
     }
     const lower = name.toLowerCase();
     const tag = localName(name);
+    if (name.includes('&')) {
+      return `a reference in an element name (${name})`;
+    }
     if (
       IGNORED_ELEMENTS.has(tag) ||
       EDITOR_PREFIXES.some((prefix) => lower.startsWith(prefix))
@@ -147,7 +164,7 @@ const walk = (nodes: XmlNode[]): string | undefined => {
     }
     if (tag === 'style') {
       const css = textOf(node[name]);
-      if (/@import/i.test(css) || unsafeUrl(css)) {
+      if (css === undefined || /@import/i.test(css) || unsafeUrl(css)) {
         return 'a stylesheet that loads something from outside the file';
       }
     }
@@ -192,47 +209,58 @@ const svgSize = (
 // below look for. Illustrator's exports declare plain-text entities for
 // namespace URLs, which are fine; anything that could build markup, a
 // parameter entity or an external one is refused.
-const ENTITY_DECLARATION =
-  /<!ENTITY\s+(%\s*)?[^\s>]+\s+(?:"([^"]*)"|'([^']*)'|(SYSTEM|PUBLIC)\b)/gi;
+// What a browser does with the file's own DTD, which the rules below can't see
+// through: it expands entities into the text and attributes that use them and
+// applies `<!ATTLIST>` defaults. So the DTD may declare only plain-text
+// entities (what Illustrator writes for its namespace URLs): short values with
+// no markup and no references, nothing external, no parameter entities, and
+// nothing else. Anything that doesn't match is refused, so a declaration
+// written in an unexpected way can't get through.
+const ENTITY_KEYWORD = /<!ENTITY/gi;
+const PLAIN_ENTITY =
+  /<!ENTITY\s+[^\s%&<>"']+\s+(?:"[^"<&]{0,200}"|'[^'<&]{0,200}')\s*>/gi;
+const OTHER_DECLARATION =
+  /<!(?:ATTLIST|ELEMENT|NOTATION)\b|<!\[(?:CDATA\[)?\s*(?:INCLUDE|IGNORE)/i;
+const MAX_ENTITIES = 20;
 
-const hasUnsafeEntity = (text: string): boolean => {
-  for (const match of text.matchAll(ENTITY_DECLARATION)) {
-    const [, parameter, double, single, external] = match;
-    if (parameter || external || /[<&]/.test(double ?? single ?? '')) {
-      return true;
-    }
-  }
-  return false;
+const hasUnsafeDtd = (text: string): boolean => {
+  const declared = text.match(ENTITY_KEYWORD)?.length ?? 0;
+  const plain = text.match(PLAIN_ENTITY)?.length ?? 0;
+  return (
+    declared !== plain ||
+    declared > MAX_ENTITIES ||
+    OTHER_DECLARATION.test(text)
+  );
 };
 
-// Where the entities may be used. The checks below read the file as written,
-// but a browser substitutes an entity's text wherever it appears, so a
-// plain-text entity could stand in for "href" or "url(https://…)" and slip
-// past them. The only use that needs entities is Illustrator's namespace
-// declarations (xmlns:x="&ns_extend;"), whose values are never fetched:
-// every other reference to anything but the five predefined entities and
-// numeric character references is refused.
-const DOCTYPE = /<!DOCTYPE[^[>]*(\[[\s\S]*?\])?\s*>/i;
-const NAMESPACE_DECLARATION = /\sxmlns(?::[\w.-]+)?\s*=\s*("[^"]*"|'[^']*')/g;
-const PLAIN_REFERENCE = /&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i;
-
-const usesEntityOutsideNamespaces = (text: string): boolean =>
-  PLAIN_REFERENCE.test(
-    text.replace(DOCTYPE, '').replace(NAMESPACE_DECLARATION, ''),
+// Numeric character references (`&#104;`, `&#x68;`), which the parser leaves
+// as written but a browser turns into the character, so `&#104;ref` is
+// `href`. Returns undefined for one that isn't a character.
+const decodeReferences = (value: string): string | undefined => {
+  let valid = true;
+  const decoded = value.replace(
+    /&#(?:(\d{1,7})|x([0-9a-f]{1,6}));/gi,
+    (_match, decimal?: string, hex?: string) => {
+      const code = decimal
+        ? Number.parseInt(decimal, 10)
+        : Number.parseInt(hex ?? '', 16);
+      if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) {
+        valid = false;
+        return '';
+      }
+      return String.fromCodePoint(code);
+    },
   );
+  return valid ? decoded : undefined;
+};
 
 const inspectSvg = (
   label: string,
   text: string,
 ): { problem?: string; size?: { width: number; height: number } } => {
-  if (hasUnsafeEntity(text)) {
+  if (hasUnsafeDtd(text)) {
     return {
-      problem: `The ${label} can't declare an entity that holds markup or loads from outside the file.`,
-    };
-  }
-  if (usesEntityOutsideNamespaces(text)) {
-    return {
-      problem: `The ${label} can't use an entity other than in a namespace declaration. Write the value out.`,
+      problem: `The ${label} can only declare plain-text entities: no markup, references, external files or other declarations in its DTD.`,
     };
   }
   let tree: XmlNode[];

@@ -147,10 +147,10 @@ describe('inspectBrandImage: refused images', () => {
     expect(JSON.stringify(result)).toMatch(message);
   });
 
-  describe('entities declared in the file’s own DTD', () => {
-    const svg = (dtd: string, body = '&x;') =>
+  describe('what a browser would substitute: entities and character references', () => {
+    const doc = (body: string, dtd = '') =>
       new TextEncoder().encode(
-        `<!DOCTYPE svg [${dtd}]>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">${body}</svg>`,
+        `${dtd ? `<!DOCTYPE svg [${dtd}]>\n` : ''}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">${body}</svg>`,
       );
     const serve = (bytes: Uint8Array) => {
       head.mockResolvedValue({
@@ -158,6 +158,10 @@ describe('inspectBrandImage: refused images', () => {
         contentLength: bytes.length,
       });
       getBytes.mockResolvedValue(bytes);
+    };
+    const inspect = async (bytes: Uint8Array) => {
+      serve(bytes);
+      return inspectBrandImage('logo', 'brand/logo/x.svg');
     };
 
     it.each([
@@ -174,59 +178,133 @@ describe('inspectBrandImage: refused images', () => {
         '<!ENTITY x PUBLIC "-//X//Y" "https://evil.example/x">',
       ],
       ['a parameter entity', '<!ENTITY % x "<!ENTITY y \'z\'>">'],
-    ])('refuses %s', async (_name, dtd) => {
-      serve(svg(dtd));
-      const result = await inspectBrandImage('logo', 'brand/logo/x.svg');
+      ['an unterminated declaration', '<!ENTITY x "a"'],
+      [
+        'a default attribute that runs code',
+        '<!ATTLIST rect onload CDATA "alert(1)">',
+      ],
+      ['an element declaration', '<!ELEMENT rect ANY>'],
+    ])('refuses a DTD with %s', async (_name, dtd) => {
+      const result = await inspect(doc('&x;', dtd));
       expect(result).toMatchObject({ ok: false });
-      expect(JSON.stringify(result)).toMatch(/entity/);
+      expect(JSON.stringify(result)).toMatch(/DTD/);
+    });
+
+    it('refuses a DTD with more entities than any logo needs', async () => {
+      const dtd = Array.from(
+        { length: 21 },
+        (_, i) => `<!ENTITY e${i} "v">`,
+      ).join('');
+      expect(await inspect(doc('', dtd))).toMatchObject({ ok: false });
+    });
+
+    // The rules see the expanded values, so each is refused exactly as if the
+    // value had been written out.
+    it.each([
+      [
+        'an animation target written through an entity',
+        '<a><animate attributeName="&h;" values="javascript:alert(1)"/><text y="20">x</text></a>',
+        '<!ENTITY h "href">',
+        /animation/,
+      ],
+      [
+        'an outside URL written through an entity',
+        '<rect width="1" height="1" style="fill:&u;"/>',
+        '<!ENTITY u "url(https://evil.example/x.png)">',
+        /outside the file/,
+      ],
+      [
+        'a link written through an entity',
+        '<image href="&l;" width="1" height="1"/>',
+        '<!ENTITY l "https://evil.example/x.png">',
+        /link to/,
+      ],
+      [
+        'a stylesheet import written through an entity',
+        '<style>&i;</style>',
+        '<!ENTITY i "@import url(https://evil.example/x.css);">',
+        /stylesheet/,
+      ],
+      [
+        'an event handler name written through numeric references',
+        '<rect width="1" height="1" o&#110;load="alert(1)"/>',
+        '',
+        null,
+      ],
+    ])('refuses %s', async (_name, body, dtd, message) => {
+      const result = await inspect(doc(body, dtd));
+      expect(result).toMatchObject({ ok: false });
+      if (message) expect(JSON.stringify(result)).toMatch(message);
     });
 
     it.each([
       [
-        'an animation whose target is written through an entity',
-        '<!ENTITY h "href">',
-        '<a><animate attributeName="&h;" values="javascript:alert(1)"/><text y="20">x</text></a>',
+        'a decimal character reference in a link animation target',
+        '<a><animate attributeName="&#104;ref" values="javascript:alert(1)"/><text y="20">x</text></a>',
+        /animation/,
       ],
       [
-        'an outside URL written through an entity',
-        '<!ENTITY u "url(https://evil.example/x.png)">',
-        '<rect width="1" height="1" style="fill:&u;"/>',
+        'a decimal character reference in a url()',
+        '<rect width="1" height="1" style="fill:&#117;rl(https://evil.example/x.png)"/>',
+        /outside the file/,
       ],
       [
-        'a link written through an entity',
-        '<!ENTITY l "https://evil.example/x.png">',
-        '<image href="&l;" width="1" height="1"/>',
+        'a hex character reference in a link',
+        '<image href="&#x68;ttps://evil.example/x.png" width="1" height="1"/>',
+        /link to/,
       ],
       [
-        'an entity used as text',
-        '<!ENTITY t "hello">',
-        '<text y="20">&t;</text>',
+        'a character reference in a stylesheet',
+        '<style>&#64;import url(https://evil.example/x.css);</style>',
+        /stylesheet/,
       ],
-    ])('refuses %s', async (_name, dtd, body) => {
-      serve(svg(dtd, body));
-      const result = await inspectBrandImage('logo', 'brand/logo/x.svg');
+    ])('refuses %s', async (_name, body, message) => {
+      const result = await inspect(doc(body));
       expect(result).toMatchObject({ ok: false });
-      expect(JSON.stringify(result)).toMatch(/entity/);
+      expect(JSON.stringify(result)).toMatch(message);
     });
 
-    it('accepts the predefined entities and numeric character references', async () => {
-      serve(
-        svg('', '<text y="20" title="a &amp; b &lt; c &#65; &#x42;">x</text>'),
-      );
-      expect(await inspectBrandImage('logo', 'brand/logo/x.svg')).toEqual({
-        ok: true,
-      });
+    it('refuses a character reference that is not a character', async () => {
+      expect(
+        await inspect(doc('<rect width="1" height="1" data-x="&#1114112;"/>')),
+      ).toMatchObject({ ok: false });
     });
 
-    it('still accepts plain-text entities in namespace declarations, as Illustrator writes them', async () => {
-      serve(
-        new TextEncoder().encode(
-          '<!DOCTYPE svg [<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">]>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="&ns_extend;" viewBox="0 0 200 100"><rect width="1" height="1"/></svg>',
+    it('is not fooled by text that looks like a namespace declaration', async () => {
+      const result = await inspect(
+        doc(
+          `<rect width="1" height="1" data-a=' xmlns="' style='fill:&u;' data-b='"'/>`,
+          '<!ENTITY u "url(https://evil.example/x.png)">',
         ),
       );
-      expect(await inspectBrandImage('logo', 'brand/logo/x.svg')).toEqual({
-        ok: true,
-      });
+      expect(result).toMatchObject({ ok: false });
+      expect(JSON.stringify(result)).toMatch(/outside the file/);
+    });
+
+    it('accepts the predefined entities and numeric character references that are harmless', async () => {
+      expect(
+        await inspect(
+          doc(
+            '<text y="20" title="a &amp; b &lt; c &#65; &#x42;">x &amp; y</text>',
+          ),
+        ),
+      ).toEqual({ ok: true });
+    });
+
+    it('accepts plain-text entities, as Illustrator writes for its namespaces', async () => {
+      expect(
+        await inspect(
+          new TextEncoder().encode(
+            '<!DOCTYPE svg [<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">]>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="&ns_extend;" viewBox="0 0 200 100"><rect width="1" height="1"/></svg>',
+          ),
+        ),
+      ).toEqual({ ok: true });
+    });
+
+    it('accepts a harmless plain-text entity used for text', async () => {
+      expect(
+        await inspect(doc('<text y="20">&t;</text>', '<!ENTITY t "hello">')),
+      ).toEqual({ ok: true });
     });
   });
 
