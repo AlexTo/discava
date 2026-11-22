@@ -86,6 +86,15 @@ describe('checkBrandImage: icon', () => {
     expect(icon(512, 256)).toMatchObject({ ok: false });
   });
 
+  // The rule starts with "PNG": an acronym keeps its capitals (#895).
+  it('states the rule with the file type in capitals', () => {
+    expect(icon(512, 256)).toEqual({
+      ok: false,
+      message:
+        'The icon is 512 × 256, which has the wrong shape. The icon must be PNG, up to 1 MB, square, at least 192 × 192.',
+    });
+  });
+
   it('refuses an SVG or JPEG icon', () => {
     expect(icon(512, 512, 'image/svg+xml')).toMatchObject({ ok: false });
     expect(icon(512, 512, 'image/jpeg')).toMatchObject({ ok: false });

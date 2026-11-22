@@ -87,9 +87,16 @@ export const brandImageExtension = (
   contentType: BrandImageContentType,
 ): string => EXTENSIONS[contentType];
 
+// Lower-cases the description's first word to continue the sentence, unless
+// it's an acronym such as "PNG".
+const continuing = (text: string): string =>
+  /^[A-Z][A-Z]/.test(text)
+    ? text
+    : `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+
 const sentence = (kind: BrandImageKind): string => {
   const { label, description } = BRAND_IMAGE_RULES[kind];
-  return `The ${label} must be ${description.charAt(0).toLowerCase()}${description.slice(1)}`;
+  return `The ${label} must be ${continuing(description)}`;
 };
 
 /**
