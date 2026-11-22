@@ -45,7 +45,9 @@ describe('Marketing home brand name', () => {
     });
 
     expect(
-      await screen.findByText(/Acme Academy brings your courses/),
+      await screen.findByText(
+        /certificates you can share\. Acme Academy brings your courses/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/Acme Academy brings the important parts/),
