@@ -91,6 +91,8 @@ const FILE = 'WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello there\n';
 
 describe('transcriptIndexing', () => {
   const tables = new Map<string, Record<string, unknown>>();
+  const parents = new Map<string, Record<string, unknown>>();
+  const visibleParent = { visibility: 'visible' };
   const docs = new Map<string, Record<string, unknown>>();
   const client = {
     search: vi.fn(),
@@ -100,6 +102,7 @@ describe('transcriptIndexing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     tables.clear();
+    parents.clear();
     docs.clear();
     getOpenSearchClientMock.mockResolvedValue(client);
     readCaptionFileMock.mockResolvedValue(FILE);
@@ -111,9 +114,34 @@ describe('transcriptIndexing', () => {
       entities: {
         contentItem: {
           get: get((key) => tables.get(key.contentItemId) ?? null),
+          query: {
+            // Every item under the module (and lesson) the key names.
+            primary: vi.fn((key: Record<string, string>) => ({
+              go: async ({ pages }: { pages?: string }) => {
+                expect(pages).toBe('all');
+                return {
+                  data: [...tables.values()].filter(
+                    (row) =>
+                      row.courseId === key.courseId &&
+                      row.moduleId === key.moduleId &&
+                      (key.lessonId === undefined ||
+                        row.lessonId === key.lessonId),
+                  ),
+                };
+              },
+            })),
+          },
         },
-        lesson: { get: get(() => ({ visibility: 'visible' })) },
-        module: { get: get(() => ({ visibility: 'visible' })) },
+        lesson: {
+          get: get(
+            (key) => parents.get(`lesson:${key.lessonId}`) ?? visibleParent,
+          ),
+        },
+        module: {
+          get: get(
+            (key) => parents.get(`module:${key.moduleId}`) ?? visibleParent,
+          ),
+        },
       },
     });
     client.search.mockImplementation(async ({ body }) => {
@@ -260,5 +288,106 @@ describe('transcriptIndexing', () => {
     expect(SYNC_CONCURRENCY).toBe(5);
     expect(peak).toBe(5);
     expect(docs.size).toBe(12);
+  });
+
+  describe('a lesson or module changes', () => {
+    const parentRecord = (
+      entity: 'lesson' | 'module',
+      from: string,
+      to: string,
+    ) =>
+      record(
+        'MODIFY',
+        {
+          __edb_e__: entity,
+          courseId: 'c1',
+          moduleId: 'm1',
+          lessonId: 'l1',
+          visibility: from,
+        },
+        {
+          __edb_e__: entity,
+          courseId: 'c1',
+          moduleId: 'm1',
+          lessonId: 'l1',
+          visibility: to,
+        },
+      );
+
+    it('hides every video under a module, and shows them again', async () => {
+      tables.set('i1', item('i1', ['t1']));
+      tables.set('i2', item('i2', ['t1'], { lessonId: 'l2' }));
+      tables.set('text', { ...item('text', []), type: 'text' });
+      await transcriptIndexing(
+        event(tracksChanged('i1', [], ['t1']), tracksChanged('i2', [], ['t1'])),
+      );
+      expect(ids()).toEqual(['i1.t1.00000', 'i2.t1.00000']);
+
+      parents.set('module:m1', { visibility: 'hidden' });
+      await transcriptIndexing(
+        event(parentRecord('module', 'visible', 'hidden')),
+      );
+      expect(ids()).toEqual([]);
+
+      parents.delete('module:m1');
+      await transcriptIndexing(
+        event(parentRecord('module', 'hidden', 'visible')),
+      );
+      expect(ids()).toEqual(['i1.t1.00000', 'i2.t1.00000']);
+    });
+
+    it('syncs only the videos of the lesson that changed', async () => {
+      tables.set('i1', item('i1', ['t1']));
+      tables.set('i2', item('i2', ['t1'], { lessonId: 'l2' }));
+      await transcriptIndexing(
+        event(tracksChanged('i1', [], ['t1']), tracksChanged('i2', [], ['t1'])),
+      );
+
+      parents.set('lesson:l1', { visibility: 'hidden' });
+      await transcriptIndexing(
+        event(parentRecord('lesson', 'visible', 'hidden')),
+      );
+
+      expect(ids()).toEqual(['i2.t1.00000']);
+    });
+
+    it('syncs an item once when its own record and its lesson arrive together', async () => {
+      tables.set('i1', item('i1', ['t1']));
+      readCaptionFileMock.mockClear();
+
+      await transcriptIndexing(
+        event(
+          tracksChanged('i1', [], ['t1']),
+          parentRecord('lesson', 'hidden', 'visible'),
+        ),
+      );
+
+      expect(readCaptionFileMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('deletes by lessonId when a lesson is removed, and by moduleId for a module', async () => {
+      client.search.mockClear();
+
+      await transcriptIndexing(
+        event(
+          record('REMOVE', {
+            __edb_e__: 'lesson',
+            courseId: 'c1',
+            moduleId: 'm1',
+            lessonId: 'l1',
+          }),
+          record('REMOVE', {
+            __edb_e__: 'module',
+            courseId: 'c1',
+            moduleId: 'm9',
+          }),
+        ),
+      );
+
+      const terms = client.search.mock.calls.map(
+        ([{ body }]) => body.query.term,
+      );
+      expect(terms).toEqual([{ lessonId: 'l1' }, { moduleId: 'm9' }]);
+    });
   });
 });
