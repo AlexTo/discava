@@ -29,6 +29,12 @@ import {
   returnAssignmentSubmission,
 } from './procedures/assignment-submission.js';
 import {
+  certificateHistory,
+  listCertificates,
+  restoreCertificate,
+  revokeCertificate,
+} from './procedures/certificate.js';
+import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
@@ -160,6 +166,12 @@ export const appRouter = router({
     list: listAnnouncements,
     update: updateAnnouncement,
     delete: deleteAnnouncement,
+  }),
+  certificate: router({
+    list: listCertificates,
+    history: certificateHistory,
+    revoke: revokeCertificate,
+    restore: restoreCertificate,
   }),
   profile: router({
     get: getProfile,

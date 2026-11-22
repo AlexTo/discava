@@ -26,6 +26,8 @@ describe('NOTIFICATION_TYPES', () => {
       'assignment.submissions_received',
       'certificate.issued',
       'certificate.reminder',
+      'certificate.restored',
+      'certificate.revoked',
       'discussion.accepted',
       'discussion.answered',
       'discussion.reply',
@@ -51,6 +53,8 @@ describe('NOTIFICATION_TYPES', () => {
       'assignment.submissions_received': 'default-off',
       'certificate.issued': 'default-on',
       'certificate.reminder': 'default-on',
+      'certificate.revoked': 'default-on',
+      'certificate.restored': 'default-on',
       'announcement.posted': 'default-on',
       'discussion.reply': 'default-on',
       'discussion.answered': 'default-on',
@@ -122,6 +126,39 @@ describe('buildNotification', () => {
       },
     });
   });
+
+  it('builds the revoked and restored certificate notifications', () => {
+    const revoked = buildNotification('certificate.revoked', {
+      courseId: 'c1',
+      courseTitle: 'History',
+      reason: 'Academic integrity',
+    });
+    expect(revoked.title).toBe('Your certificate for History was revoked');
+    expect(revoked.body).toContain('History');
+    expect(revoked.body).toContain('Academic integrity');
+    expect(revoked.link).toEqual({ portal: 'student', path: '/my-learning' });
+
+    const restored = buildNotification('certificate.restored', {
+      courseId: 'c1',
+      courseTitle: 'History',
+    });
+    expect(restored.title).toBe('Your certificate for History was restored');
+    expect(restored.body).toContain('History');
+    expect(restored.link).toEqual({ portal: 'student', path: '/my-learning' });
+  });
+
+  it.each(['certificate.revoked', 'certificate.restored'])(
+    '%s fits a very long course title',
+    (id) => {
+      const built = buildNotification(id, {
+        courseId: 'c1',
+        courseTitle: 'T'.repeat(300),
+        reason: 'Academic integrity',
+      });
+      expect(built.title.length).toBeLessThanOrEqual(120);
+      expect(built.body.length).toBeLessThanOrEqual(500);
+    },
+  );
 
   it('builds the certificate reminder, with the reminder-email source', () => {
     expect(

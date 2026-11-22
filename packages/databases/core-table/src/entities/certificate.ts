@@ -104,6 +104,23 @@ export const createCertificateEntity = async () =>
         reminderSentAt: {
           type: 'string',
         },
+        // Set while the certificate is revoked, all three together, by
+        // revokeCertificate; restoreCertificate removes them. `revokedByRole`
+        // decides who may restore it.
+        revokedAt: {
+          type: 'string',
+        },
+        revocationReason: {
+          type: [
+            'academic-integrity',
+            'issued-in-error',
+            'other',
+            'refunded',
+          ] as const,
+        },
+        revokedByRole: {
+          type: ['instructor', 'admin'] as const,
+        },
         createdAt: {
           type: 'string',
           required: true,

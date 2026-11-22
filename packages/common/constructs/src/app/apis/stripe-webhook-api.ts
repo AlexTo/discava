@@ -110,7 +110,7 @@ export class StripeWebhookApi extends RestApi<
     if (!enableTracing) cfn.tracingConfig = undefined;
     if (options.timeout) cfn.timeout = options.timeout.toSeconds();
     // The generated wrapper leaves Lambda's 128 MB default, on which a cold
-    // start (core-table, AppConfig, the Stripe SDK) outruns the 10-second
+    // start (core-table, the Stripe SDK) outruns the 10-second
     // timeout, so every delivery fails and no order is ever settled (#654).
     cfn.memorySize = 512;
     for (const [name, value] of Object.entries(options.environment ?? {})) {
