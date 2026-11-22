@@ -49,7 +49,7 @@ test('an instructor describes a course and it is found by facet', async ({
 
     await instructor.getByLabel('Category').selectOption(first.categoryId);
     await instructor.getByLabel('Level').selectOption('intermediate');
-    await instructor.getByLabel('Language').selectOption('de');
+    await instructor.getByLabel('Language', { exact: true }).selectOption('de');
     await instructor.getByLabel('Duration (hours)').fill('6');
     await instructor.getByLabel('Tags').fill(scope);
     await instructor.getByLabel('Tags').press('Enter');

@@ -8,13 +8,14 @@ import {
   PortalShell,
 } from '@discava/common-shadcn/components/portal-shell';
 import type { UserMenuItem } from '@discava/common-shadcn/components/user-menu';
-import { CreditCard, Home, MessageSquareText, Tags } from 'lucide-react';
+import { Award, CreditCard, Home, MessageSquareText, Tags } from 'lucide-react';
 import type * as React from 'react';
 
 const navItems: PortalNavItem[] = [
   { label: 'Home', to: '/', icon: Home },
   { label: 'Categories', to: '/categories', icon: Tags },
   { label: 'Reviews', to: '/reviews', icon: MessageSquareText },
+  { label: 'Certificates', to: '/certificates', icon: Award },
   { label: 'Payments', to: '/payments', icon: CreditCard },
 ];
 
@@ -23,6 +24,7 @@ const navItems: PortalNavItem[] = [
 export const segmentLabels = {
   categories: 'Categories',
   reviews: 'Reviews',
+  certificates: 'Certificates',
   payments: 'Payments',
   settings: 'Settings',
   notifications: 'Notifications',
