@@ -7,9 +7,26 @@
 import { App, Stack } from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
+import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { describe, expect, it } from 'vitest';
 import { MediaBucket } from './media-bucket.js';
-import { RuntimeConfig } from './runtime-config.js';
+
+/** The `s3` setting `media` hands a function, as synthesised into its environment. */
+const settingOf = (stack: Stack, media: MediaBucket): string => {
+  const fn = new Function(stack, 'Reader', {
+    runtime: Runtime.NODEJS_24_X,
+    handler: 'index.handler',
+    code: Code.fromInline('exports.handler = () => {}'),
+  });
+  media.bindSettings(fn);
+  const functions = Template.fromStack(stack).findResources(
+    'AWS::Lambda::Function',
+  );
+  return JSON.stringify(
+    functions[stack.getLogicalId(fn.node.defaultChild as any)].Properties
+      .Environment.Variables,
+  );
+};
 
 type Resources = Record<
   string,
@@ -168,7 +185,7 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
     const stack = new Stack(new App(), 'Stack', {
       env: { account: 'test-account', region: 'ap-southeast-2' },
     });
-    new MediaBucket(stack, 'Media', {
+    const media = new MediaBucket(stack, 'Media', {
       runtimeConfigKey: 'media',
       enableWaf: false,
       domainNames: ['media.example.com'],
@@ -179,8 +196,8 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
       ),
     });
 
-    expect(RuntimeConfig.of(stack)?.get('s3').media.cloudFrontDomainName).toBe(
-      'media.example.com',
+    expect(settingOf(stack, media)).toContain(
+      '\\"cloudFrontDomainName\\":\\"media.example.com\\"',
     );
   });
 
@@ -193,12 +210,8 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
       enableWaf: false,
     });
 
-    const published = stack.resolve(
-      RuntimeConfig.of(stack)?.get('s3').media.cloudFrontDomainName,
-    );
-
-    expect(published).toEqual(
-      stack.resolve(media.cloudFrontDistribution.domainName),
+    expect(settingOf(stack, media)).toContain(
+      JSON.stringify(stack.resolve(media.cloudFrontDistribution.domainName)),
     );
   });
 
@@ -211,6 +224,7 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
       enableWaf: false,
       domainNames: ['media.example.com'],
     });
+    const setting = settingOf(stack, media);
     const template = Template.fromStack(stack);
 
     // domainNames alone never reaches the Distribution as an alias.
@@ -219,11 +233,8 @@ describe('MediaBucket', { timeout: 30_000 }, () => {
         Match.objectLike({ Aliases: Match.anyValue() }),
       ),
     });
-    const published = stack.resolve(
-      RuntimeConfig.of(stack)?.get('s3').media.cloudFrontDomainName,
-    );
-    expect(published).toEqual(
-      stack.resolve(media.cloudFrontDistribution.domainName),
+    expect(setting).toContain(
+      JSON.stringify(stack.resolve(media.cloudFrontDistribution.domainName)),
     );
   });
 });

@@ -188,7 +188,13 @@ export function GradingForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            // Points were emptied after the last send; start from the grade.
+            setPoints(
+              submission.points !== undefined ? String(submission.points) : '',
+            );
+            setEditing(true);
+          }}
         >
           Edit grade
         </Button>

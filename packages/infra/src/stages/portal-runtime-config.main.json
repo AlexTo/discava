@@ -1,0 +1,266 @@
+{
+  "StudentPortalRuntimeConfigDeploymentCustomResource1024MiB11CB78A9": [
+    {
+      "<<marker:0xbaba:0>>": {
+        "Fn::Join": [
+          "",
+          [
+            "{\"portals\":{\"StudentPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttStudentPortalCloudfrontDistributionD33D5A76DomainName5D1AF114"
+            },
+            "\",\"InstructorPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttInstructorPortalCloudfrontDistribution9FF7EE76DomainName638B0857"
+            },
+            "\",\"AdminPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttAdminPortalCloudfrontDistribution6823F0EDDomainName350AD794"
+            },
+            "\"},\"site\":{\"name\":\"Discava\"},\"cognitoProps\":{\"region\":\"ap-southeast-2\",\"identityPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityIdentityPool01DA4AB216B31710"
+            },
+            "\",\"userPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPool96FE3B9BD02245CA"
+            },
+            "\",\"userPoolWebClientId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPoolWebClient274C53C40758372A"
+            },
+            "\"},\"media\":{\"PublicMediaBucket\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputFnGetAttPublicMediaBucketDistributionBAE5ED07DomainNameF61E125E"
+            },
+            "/\"},\"apis\":{\"StripeWebhookApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiB1D6939312EBDEC3"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiDeploymentStageprod54B9F8BD0DF655FB"
+            },
+            "/\",\"CoreApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApi425C5BE8EC308791"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApiDeploymentStageprod78BFF5653D81EFA9"
+            },
+            "/\",\"InstructorApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiB50595E39F67BB70"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiDeploymentStageprod71E1424DC8C1E224"
+            },
+            "/\",\"AdminApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiB3376E3965A32E82"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiDeploymentStageprod4E67E9AC4ABF436E"
+            },
+            "/\"}}"
+          ]
+        ]
+      }
+    }
+  ],
+  "InstructorPortalRuntimeConfigDeploymentCustomResource1024MiBD69ED9CD": [
+    {
+      "<<marker:0xbaba:0>>": {
+        "Fn::Join": [
+          "",
+          [
+            "{\"portals\":{\"StudentPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttStudentPortalCloudfrontDistributionD33D5A76DomainName5D1AF114"
+            },
+            "\",\"InstructorPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttInstructorPortalCloudfrontDistribution9FF7EE76DomainName638B0857"
+            },
+            "\",\"AdminPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttAdminPortalCloudfrontDistribution6823F0EDDomainName350AD794"
+            },
+            "\"},\"site\":{\"name\":\"Discava\"},\"cognitoProps\":{\"region\":\"ap-southeast-2\",\"identityPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityIdentityPool01DA4AB216B31710"
+            },
+            "\",\"userPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPool96FE3B9BD02245CA"
+            },
+            "\",\"userPoolWebClientId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPoolWebClient274C53C40758372A"
+            },
+            "\"},\"media\":{\"PublicMediaBucket\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputFnGetAttPublicMediaBucketDistributionBAE5ED07DomainNameF61E125E"
+            },
+            "/\"},\"apis\":{\"StripeWebhookApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiB1D6939312EBDEC3"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiDeploymentStageprod54B9F8BD0DF655FB"
+            },
+            "/\",\"CoreApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApi425C5BE8EC308791"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApiDeploymentStageprod78BFF5653D81EFA9"
+            },
+            "/\",\"InstructorApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiB50595E39F67BB70"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiDeploymentStageprod71E1424DC8C1E224"
+            },
+            "/\",\"AdminApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiB3376E3965A32E82"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiDeploymentStageprod4E67E9AC4ABF436E"
+            },
+            "/\"}}"
+          ]
+        ]
+      }
+    }
+  ],
+  "AdminPortalRuntimeConfigDeploymentCustomResource1024MiBA2F24009": [
+    {
+      "<<marker:0xbaba:0>>": {
+        "Fn::Join": [
+          "",
+          [
+            "{\"portals\":{\"StudentPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttStudentPortalCloudfrontDistributionD33D5A76DomainName5D1AF114"
+            },
+            "\",\"InstructorPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttInstructorPortalCloudfrontDistribution9FF7EE76DomainName638B0857"
+            },
+            "\",\"AdminPortal\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Websites:ExportsOutputFnGetAttAdminPortalCloudfrontDistribution6823F0EDDomainName350AD794"
+            },
+            "\"},\"site\":{\"name\":\"Discava\"},\"cognitoProps\":{\"region\":\"ap-southeast-2\",\"identityPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityIdentityPool01DA4AB216B31710"
+            },
+            "\",\"userPoolId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPool96FE3B9BD02245CA"
+            },
+            "\",\"userPoolWebClientId\":\"",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputRefIdentityUserPoolWebClient274C53C40758372A"
+            },
+            "\"},\"media\":{\"PublicMediaBucket\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Data:ExportsOutputFnGetAttPublicMediaBucketDistributionBAE5ED07DomainNameF61E125E"
+            },
+            "/\"},\"apis\":{\"StripeWebhookApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiB1D6939312EBDEC3"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-Payments:ExportsOutputRefStripeWebhookApiDeploymentStageprod54B9F8BD0DF655FB"
+            },
+            "/\",\"CoreApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApi425C5BE8EC308791"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-CoreApi:ExportsOutputRefCoreApiDeploymentStageprod78BFF5653D81EFA9"
+            },
+            "/\",\"InstructorApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiB50595E39F67BB70"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-InstructorApi:ExportsOutputRefInstructorApiDeploymentStageprod71E1424DC8C1E224"
+            },
+            "/\",\"AdminApi\":\"https://",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiB3376E3965A32E82"
+            },
+            ".execute-api.ap-southeast-2.",
+            {
+              "Ref": "AWS::URLSuffix"
+            },
+            "/",
+            {
+              "Fn::ImportValue": "discava-test-AdminApi:ExportsOutputRefAdminApiDeploymentStageprod4E67E9AC4ABF436E"
+            },
+            "/\"}}"
+          ]
+        ]
+      }
+    }
+  ]
+}

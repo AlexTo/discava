@@ -4,7 +4,6 @@
  */
 // @vitest-environment node
 
-import { RuntimeConfig } from '@discava/common-constructs';
 import {
   resolveStage,
   type StageComponents,
@@ -151,7 +150,7 @@ describe('search collection (#53)', () => {
   );
 
   // The index-sync custom resource runs while the Data stack deploys, before
-  // the RuntimeConfig stack has published anything to AppConfig, so it's
+  // the PortalConfig stack exists, so it's
   // handed the endpoint as its setting, like every other function.
   it("hands the index-sync handler the collection's endpoint, not AppConfig", () => {
     const [handler] = resources(

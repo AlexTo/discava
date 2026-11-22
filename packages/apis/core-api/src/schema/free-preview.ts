@@ -79,9 +79,10 @@ export const FreePreviewMediaInputSchema = ContentItemRefSchema;
 
 // This operation's own schema: nothing added to contentItem.videoUrl's output
 // (in-video questions, #591) reaches visitors unless it is added here on
-// purpose. A visitor has no saved position.
+// purpose. A visitor has no saved position and is not offered questions.
 export const FreePreviewVideoUrlOutputSchema = VideoUrlOutputSchema.omit({
   resumeAt: true,
+  questionCount: true,
 }).strict();
 
 export type IFreePreviewVideoUrlOutput = z.output<

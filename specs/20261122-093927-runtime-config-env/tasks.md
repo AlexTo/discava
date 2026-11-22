@@ -192,25 +192,25 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 - `grep -rn "aws-appconfig\|appconfig" packages scripts --include=*.ts --include=*.sh --exclude-dir=node_modules` finds only the tests asserting absence;
 - `pnpm build` passes.
 
-- [ ] T029 [US3] Tests first, then in `packages/infra/src/stages/application-stage.test.ts`, before changing the code, snapshot each portal's `runtime-config.json` source (the `Source.data` content of its `BucketDeployment`) as synthesised from `main`. Then add these assertions:
+- [x] T029 [US3] Tests first, then in `packages/infra/src/stages/application-stage.test.ts`, before changing the code, snapshot each portal's `runtime-config.json` source (the `Source.data` content of its `BucketDeployment`) as synthesised from `main`. Then add these assertions:
   - no stack contains an `AWS::AppConfig::*` resource;
   - no IAM statement in any stack has an `appconfig:` action;
   - no function's serialised `Environment.Variables` exceeds 4,096 bytes;
   - the stage has a stack with id `PortalConfig` that depends on every other application stack, and none with id `RuntimeConfig`;
   - each portal's `runtime-config.json` source equals the snapshot.
-- [ ] T030 [US3] In `packages/common/constructs/src/core/runtime-config.ts`:
+- [x] T030 [US3] In `packages/common/constructs/src/core/runtime-config.ts`:
   - Delete `placeIn`, `appConfigApplicationId`, `grantReadAppConfig`, `ensureAspect` and its aspect, `runtimeConfigApplicationName`, `RuntimeConfigPlacement`, and every `aws-appconfig` import.
   - Keep `ensure`, `of`, `set` and `get` for `connection`. Make `set` throw for any other namespace, so no one adds a runtime-config namespace by habit, and test it in `runtime-config.test.ts`.
   - Update the class comment to say it holds the portals' `connection` settings only.
-- [ ] T031 [US3] Delete every `RuntimeConfig.set` call for `dynamodb`, `s3`, `opensearch`, `mediaConvert`, `certificates` and `captionTranslation`. That covers `dynamodb.ts`, `media-bucket.ts`, `upload-bucket.ts`, `public-bucket.ts` (keep its `connection.media` call), `opensearch.ts`, `video-transcode-pipeline.ts`, `media-pipeline-stack.ts` and `stream-router-stack.ts`. Update the constructs' tests that asserted those namespaces; this is a named test change, since the values now live in `bindSettings`, tested in T003.
-- [ ] T032 [US3] In `packages/infra/src/stages/application-stage.ts`:
+- [x] T031 [US3] Delete every `RuntimeConfig.set` call for `dynamodb`, `s3`, `opensearch`, `mediaConvert`, `certificates` and `captionTranslation`. That covers `dynamodb.ts`, `media-bucket.ts`, `upload-bucket.ts`, `public-bucket.ts` (keep its `connection.media` call), `opensearch.ts`, `video-transcode-pipeline.ts`, `media-pipeline-stack.ts` and `stream-router-stack.ts`. Update the constructs' tests that asserted those namespaces; this is a named test change, since the values now live in `bindSettings`, tested in T003.
+- [x] T032 [US3] In `packages/infra/src/stages/application-stage.ts`:
   - Create the last stack as `new Stack(this, 'PortalConfig', stackProps)`, and rename `runtimeConfigScope` to `portalConfigScope` through `websites-stack.ts`, `static-website.ts` and the portal constructs.
   - Delete `RuntimeConfig.ensure(data).placeIn(...)` and its comment.
   - Update the class comment's deploy order (`… -> AdminApi -> PortalConfig`) and the paragraph describing `RuntimeConfig`.
-- [ ] T033 [US3] Confirm the portal `BucketDeployment`s in `packages/common/constructs/src/core/static-website.ts` keep CDK's default `retainOnDelete: true`, so deleting the old stack leaves each `runtime-config.json` in place (research R-8). If the code sets it, set `retainOnDelete: true` explicitly, and add a construct test asserting `RetainOnDelete` is true.
-- [ ] T034 [P] [US3] Tests first, then in `scripts/setup-stage.sh`, delete the execution role's `AppConfigForDiscava` statement and the two `appconfig:` actions from the boundary's `ResourcesNamedById`. In `setup-stage.test.ts`, assert neither policy has any `appconfig:` action. Update the comment block that lists "MediaConvert and AppConfig".
-- [ ] T035 [P] [US3] Remove any remaining `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` dependency, and their entries from `pnpm-workspace.yaml`'s catalog if nothing uses them. Run `pnpm i`.
-- [ ] T036 [US4] Write the upgrade steps into the PR description, copied from [contracts/rollout.md](./contracts/rollout.md) steps 3 to 6 with the real stack names (`discava-development-RuntimeConfig`, `discava-development-Data`), and the two failure messages and what to do about them.
+- [x] T033 [US3] Confirm the portal `BucketDeployment`s in `packages/common/constructs/src/core/static-website.ts` keep CDK's default `retainOnDelete: true`, so deleting the old stack leaves each `runtime-config.json` in place (research R-8). If the code sets it, set `retainOnDelete: true` explicitly, and add a construct test asserting `RetainOnDelete` is true.
+- [x] T034 [P] [US3] Tests first, then in `scripts/setup-stage.sh`, delete the execution role's `AppConfigForDiscava` statement and the two `appconfig:` actions from the boundary's `ResourcesNamedById`. In `setup-stage.test.ts`, assert neither policy has any `appconfig:` action. Update the comment block that lists "MediaConvert and AppConfig".
+- [x] T035 [P] [US3] Remove any remaining `@aws-lambda-powertools/parameters` and `@aws-sdk/client-appconfigdata` dependency, and their entries from `pnpm-workspace.yaml`'s catalog if nothing uses them. Run `pnpm i`.
+- [x] T036 [US4] Write the upgrade steps into the PR description, copied from [contracts/rollout.md](./contracts/rollout.md) steps 3 to 6 with the real stack names (`discava-development-RuntimeConfig`, `discava-development-Data`), and the two failure messages and what to do about them.
 - [ ] T037 [US4] (human, before merge) Confirm [contracts/rollout.md](./contracts/rollout.md) step 3 still holds on `discava-development`. Then do step 4: `aws cloudformation delete-stack --stack-name discava-development-RuntimeConfig` and `aws cloudformation wait stack-delete-complete --stack-name discava-development-RuntimeConfig`. Check each portal still loads its `runtime-config.json`, then merge.
 - [ ] T038 [US4] (human) After the deploy: `aws appconfig list-applications` lists no Discava application, `discava-development-PortalConfig` exists, each portal signs in, and each portal's `runtime-config.json` has the same content as before. Then optionally re-run `scripts/setup-stage.sh discava-development` to drop the AppConfig rights (rollout step 6).
 

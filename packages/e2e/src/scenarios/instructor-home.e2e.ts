@@ -3,6 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { apiUser } from '../helpers/api.js';
+import {
+  apiUserFor,
+  createUploadAssignmentCourse,
+  returnSubmission,
+  uploadSubmissionFile,
+} from '../helpers/assignment.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
@@ -91,5 +98,59 @@ test('a new instructor sees their real courses on the home page', async ({
       await expect(page.getByText(invented)).toHaveCount(0);
     }
     await screenshot(page, 'my courses with real figures');
+  });
+});
+
+// Waiting work from every course the instructor teaches is queued on the home
+// page, oldest first, and leaves it once returned (#102).
+test('the home page queues work waiting for grading across courses', async ({
+  page,
+}) => {
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const tess = await apiUser('Tess', ['student']);
+  const sam = await apiUser('Sam', ['student']);
+  const first = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('E2E queue course A'),
+    assignmentTitle: 'Essay',
+  });
+  const second = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('E2E queue course B'),
+    assignmentTitle: 'Report',
+  });
+  // Tess submits to the first course before Sam does to the second.
+  await tess.core.course.enrol.mutate({ courseId: first.courseId });
+  await tess.core.assignment.submit.mutate(
+    await uploadSubmissionFile(tess, first, 'a.txt', Buffer.from('a')),
+  );
+  await sam.core.course.enrol.mutate({ courseId: second.courseId });
+  await sam.core.assignment.submit.mutate(
+    await uploadSubmissionFile(sam, second, 'b.txt', Buffer.from('b')),
+  );
+
+  await page.goto(`${PORTALS.instructor}/`);
+  await signIn(page, ivy);
+  const queue = page.getByRole('region', { name: 'Waiting for grading' });
+
+  await test.step('both are listed oldest first with the total', async () => {
+    await expect(queue.getByRole('link')).toHaveText([/Tess/, /Sam/]);
+    await expect(queue.getByText('2', { exact: true })).toBeVisible();
+    for (const sample of SAMPLE_STRINGS) {
+      await expect(page.getByText(sample)).toHaveCount(0);
+    }
+    await screenshot(page, 'grading queue on the home page');
+  });
+
+  await test.step('an entry opens its review page, and returning it empties its place', async () => {
+    await queue.getByRole('link', { name: /Tess/ }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: /Tess/ }),
+    ).toBeVisible();
+    await returnSubmission(page, 5, 'Fine');
+
+    await page.goto(`${PORTALS.instructor}/`);
+    await expect(queue.getByRole('link')).toHaveText([/Sam/]);
+    await expect(queue.getByRole('link', { name: /Tess/ })).toHaveCount(0);
+    await screenshot(page, 'grading queue after returning one');
   });
 });

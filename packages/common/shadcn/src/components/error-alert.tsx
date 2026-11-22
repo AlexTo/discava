@@ -32,11 +32,13 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
       <AlertTitle>{header}</AlertTitle>
       <AlertDescription>{children}</AlertDescription>
       {onRetry && (
+        // Alert is a grid whose first column is the (zero-width) icon slot;
+        // the button goes in the content column, under the description.
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="mt-3"
+          className="col-start-2 mt-3 justify-self-start"
           onClick={onRetry}
         >
           {retryLabel}

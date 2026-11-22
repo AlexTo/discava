@@ -39,7 +39,7 @@ export interface WebsitesStackProps extends StackProps {
    * URLs and Cognito ids, and the APIs depend on this stack for their CORS
    * origins, so it can't live here.
    */
-  readonly runtimeConfigScope: Construct;
+  readonly portalConfigScope: Construct;
 }
 
 /**
@@ -63,7 +63,7 @@ export class WebsitesStack extends Stack {
       studentPortal,
       instructorPortal,
       adminPortal,
-      runtimeConfigScope,
+      portalConfigScope,
       ...props
     }: WebsitesStackProps,
   ) {
@@ -73,12 +73,12 @@ export class WebsitesStack extends Stack {
       StudentPortal,
       'StudentPortal',
       studentPortal,
-      runtimeConfigScope,
+      portalConfigScope,
       this.studentPortalProps(studentPortal),
     );
     // The issuer a certificate names when it's added to LinkedIn.
     const linkedInOrganizationId = studentPortal?.linkedInOrganizationId;
-    RuntimeConfig.ensure(runtimeConfigScope).set('connection', 'site', {
+    RuntimeConfig.ensure(portalConfigScope).set('connection', 'site', {
       name: studentPortal?.siteName ?? 'Discava',
       ...(linkedInOrganizationId && { linkedInOrganizationId }),
     });
@@ -86,13 +86,13 @@ export class WebsitesStack extends Stack {
       InstructorPortal,
       'InstructorPortal',
       instructorPortal,
-      runtimeConfigScope,
+      portalConfigScope,
     );
     this.adminPortal = this.createPortal(
       AdminPortal,
       'AdminPortal',
       adminPortal,
-      runtimeConfigScope,
+      portalConfigScope,
     );
     this.portalUrls = {
       student: this.portalUrl(this.studentPortal, studentPortal),
@@ -132,7 +132,7 @@ export class WebsitesStack extends Stack {
     Portal: new (scope: Construct, id: string, props?: StudentPortalProps) => T,
     id: string,
     config: PortalConfig | undefined,
-    runtimeConfigScope: Construct,
+    portalConfigScope: Construct,
     extraProps: Partial<StudentPortalProps> = {},
   ): T {
     const wafEnabled = config?.enableWaf ?? true;
@@ -150,7 +150,7 @@ export class WebsitesStack extends Stack {
       enableKeyRotation: config?.enableKeyRotation ?? true,
       domainNames: config?.domainNames,
       certificate,
-      runtimeConfigScope,
+      portalConfigScope,
       ...(kmsEnabled ? {} : { encryption: BucketEncryption.S3_MANAGED }),
       ...extraProps,
     });
