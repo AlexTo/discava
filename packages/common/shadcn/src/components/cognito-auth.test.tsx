@@ -51,6 +51,21 @@ describe('CognitoAuth', () => {
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument();
   });
 
+  it('keeps the page shown while it redirects to sign in', async () => {
+    authState.value = {
+      isLoading: true,
+      activeNavigator: 'signinRedirect',
+      error: undefined,
+    };
+
+    renderAuth({ localOidc: { authority: 'http://local', clientId: 'x' } });
+
+    expect(await screen.findByText('Protected content')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('status', { name: 'Loading' }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an error if the sign-in service couldn't be reached", async () => {
     authState.value = {
       isLoading: false,
