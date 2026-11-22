@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  addSetting,
   CoreTable,
   ImportedStripeSecrets,
   InstructorApi,
@@ -13,10 +14,14 @@ import {
   type StripeSecrets,
   UserIdentity,
 } from '@discava/common-constructs';
-import type { InstructorApiComponentConfig } from '@discava/common-infra-config';
+import type {
+  CaptionTranslationSettings,
+  InstructorApiComponentConfig,
+} from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
 import { Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { captionTranslationSetting } from './caption-translation-settings.js';
 import type { MediaPipelineStack } from './media-pipeline-stack.js';
 import { privilegedHandler, trpcApiProps } from './trpc-api-props.js';
 
@@ -55,6 +60,8 @@ export interface InstructorApiStackProps extends StackProps {
   readonly stripeSecrets: StripeSecrets;
   /** The only portal that calls instructor-api. */
   readonly instructorPortal: InstructorPortal;
+  /** The stage's caption translation settings. @default translation on, up to nine languages a course */
+  readonly captionTranslation?: CaptionTranslationSettings;
 }
 
 /**
@@ -80,6 +87,7 @@ export class InstructorApiStack extends Stack {
       mediaPipeline,
       stripeSecrets,
       instructorPortal,
+      captionTranslation,
       ...props
     }: InstructorApiStackProps,
   ) {
@@ -106,6 +114,16 @@ export class InstructorApiStack extends Stack {
       coreTable.grantReadWriteData(handler);
       coreTable.bindSettings(handler);
     });
+
+    // course.captionLanguages and course.updateCaptionLanguages report and
+    // enforce the stage's caption translation settings. They're on the shared
+    // router function, which needs no extra permission to read a setting.
+    addSetting(
+      this.integrations['course.captionLanguages'].handler,
+      'captionTranslation',
+      'Settings',
+      captionTranslationSetting(captionTranslation),
+    );
 
     this.bindMediaSettings(
       lessonMediaBucket,
