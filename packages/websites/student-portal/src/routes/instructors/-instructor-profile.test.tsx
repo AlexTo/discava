@@ -46,9 +46,24 @@ describe('/instructors/$handle', () => {
     expect(screen.getByText('Second paragraph.')).toBeInTheDocument();
   });
 
+  it('shows a breadcrumb from Home to the instructor, like the other pages', async () => {
+    open();
+
+    const breadcrumb = await screen.findByRole('navigation', {
+      name: 'breadcrumb',
+    });
+    expect(
+      within(breadcrumb).getByRole('link', { name: 'Home' }),
+    ).toHaveAttribute('href', '/');
+    expect(await within(breadcrumb).findByText('Gil Strang')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
   it('asks for the handle in the address', async () => {
     const { calls } = open(() => profile, '/instructors/gil');
-    await screen.findByText('Gil Strang');
+    await screen.findByRole('heading', { level: 1, name: 'Gil Strang' });
     expect(
       calls.find(({ path }) => path === 'instructorProfile.publicView')?.input,
     ).toEqual({ handle: 'gil' });
@@ -71,7 +86,7 @@ describe('/instructors/$handle', () => {
 
   it('draws the picture at its full size, not the large avatar size', async () => {
     const { container } = open();
-    await screen.findByText('Gil Strang');
+    await screen.findByRole('heading', { level: 1, name: 'Gil Strang' });
     const avatar = container.querySelector('[data-slot="avatar"]');
     expect(avatar).toHaveClass('size-28');
     expect(avatar).not.toHaveAttribute('data-size', 'lg');
@@ -96,7 +111,7 @@ describe('/instructors/$handle', () => {
 
   it('sets the document title to the display name', async () => {
     open();
-    await screen.findByText('Gil Strang');
+    await screen.findByRole('heading', { level: 1, name: 'Gil Strang' });
     await waitFor(() => expect(document.title).toBe('Gil Strang · Discava'));
   });
 

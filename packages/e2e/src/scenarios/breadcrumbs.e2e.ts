@@ -83,6 +83,7 @@ test('the breadcrumb sits in the same place on the student pages that have one',
       .click();
     await expect(page).toHaveURL(/\/instructors\//);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectBreadcrumb('instructor');
     await screenshot(page, 'instructor breadcrumb at desktop width');
   });
 
