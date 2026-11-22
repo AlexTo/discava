@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  AdminPortal,
   CoreTable,
   EventsPostConfirmation,
   EventsPreTokenGeneration,
@@ -56,6 +57,8 @@ export interface DataStackProps extends StackProps {
   readonly instructorPortal: InstructorPortal;
   /** Plays lesson videos: allowed by the lesson media bucket's CORS only. */
   readonly studentPortal: StudentPortal;
+  /** Uploads the brand's images: allowed by the public media bucket's CORS. */
+  readonly adminPortal: AdminPortal;
 }
 
 /**
@@ -87,6 +90,7 @@ export class DataStack extends Stack {
       search: searchConfig,
       instructorPortal,
       studentPortal,
+      adminPortal,
       ...props
     }: DataStackProps,
   ) {
@@ -132,10 +136,13 @@ export class DataStack extends Stack {
       ...localPortalOrigins('instructor', 'student'),
     );
     // Images are shown with plain <img> tags, which need no CORS; only the
-    // instructor portal's uploads do.
+    // uploads do: course images and profile photos from the instructor
+    // portal, and the brand's logo, icon and share image from the admin
+    // portal (#814).
     this.publicMediaBucket.restrictCorsTo(
       instructorPortal,
-      ...localPortalOrigins('instructor'),
+      adminPortal,
+      ...localPortalOrigins('instructor', 'admin'),
     );
   }
 

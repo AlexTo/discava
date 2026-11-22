@@ -102,6 +102,7 @@ export class ApplicationStage extends Stage {
       search,
       instructorPortal: websites.instructorPortal,
       studentPortal: websites.studentPortal,
+      adminPortal: websites.adminPortal,
     });
 
     const paymentsStack = new PaymentsStack(this, 'Payments', {

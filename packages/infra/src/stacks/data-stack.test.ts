@@ -62,6 +62,31 @@ describe('lesson media CORS', () => {
   });
 });
 
+describe('public media CORS', () => {
+  const data = synth({})('Data');
+
+  // Instructors upload course images and profile photos; administrators the
+  // brand's logo, icon and share image (#814, #895). Both go straight to the
+  // bucket from the browser. Students upload nothing here.
+  it('lets the instructor and admin portals upload', () => {
+    const buckets = Object.entries(data.findResources('AWS::S3::Bucket'));
+    const [, publicMedia] = buckets.find(([id]) =>
+      id.startsWith('PublicMediaBucket'),
+    )!;
+    const allowed = JSON.stringify(
+      (publicMedia as { Properties: { CorsConfiguration: unknown } }).Properties
+        .CorsConfiguration,
+    );
+
+    expect(allowed).toMatch(/InstructorPortal/);
+    expect(allowed).toMatch(/AdminPortal/);
+    expect(allowed).toContain('http://localhost:4200');
+    expect(allowed).toContain('http://localhost:4202');
+    expect(allowed).not.toMatch(/StudentPortal/);
+    expect(allowed).not.toContain('localhost:4201');
+  });
+});
+
 describe('the sign-up trigger (#29)', () => {
   const stack = synth({});
 
