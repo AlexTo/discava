@@ -16,7 +16,10 @@ import { Link } from '@tanstack/react-router';
 import { Check, Circle } from 'lucide-react';
 import { useRef } from 'react';
 import { useCoreApi } from '../../../../api';
-import { CertificateActions } from '../../../../components/certificate-actions';
+import {
+  CertificateActions,
+  revokedText,
+} from '../../../../components/certificate-actions';
 
 // How often, and for how long, to look again for a certificate that is
 // being issued.
@@ -99,6 +102,14 @@ export function CertificateRequirements({
               Try again
             </Button>
           </div>
+        ) : data.certificate?.status === 'revoked' &&
+          data.certificate.revokedAt ? (
+          <p className="text-sm text-muted-foreground">
+            {revokedText(
+              data.certificate.revokedAt,
+              data.certificate.revocationReason,
+            )}
+          </p>
         ) : data.certificate ? (
           <div className="space-y-3">
             <p className="text-sm font-medium">You earned a certificate</p>

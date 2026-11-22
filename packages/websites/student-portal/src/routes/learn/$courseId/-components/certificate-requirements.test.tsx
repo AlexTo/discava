@@ -148,6 +148,31 @@ describe('CertificateRequirements', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the revoked text in place of the requirements and actions', async () => {
+    render(() =>
+      answer({
+        allMet: true,
+        requirements: [complete(2, 2)],
+        certificate: {
+          certificateId: 'ABCD-EFGH',
+          status: 'revoked',
+          revokedAt: '2026-11-12T08:00:00.000Z',
+          revocationReason: 'refunded',
+        },
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Certificate revoked on 12 November 2026. Reason: Order refunded.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('You earned a certificate')).toBeNull();
+    expect(screen.queryByText(/Complete every item/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'View' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Download PDF' })).toBeNull();
+  });
+
   it('shows a retryable error', async () => {
     let fail = true;
     render(() => {
