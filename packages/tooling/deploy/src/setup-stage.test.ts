@@ -386,6 +386,34 @@ describe.concurrent('setup-stage.sh execution policy', {
     );
   });
 
+  it("lets CloudFormation manage only the stage's settings parameters", async () => {
+    // The Data stack writes /<stage>/page-renderer as an SSM parameter.
+    const { status, executionStatements } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+
+    expect(status).toBe(0);
+    const statement = executionStatements.find(
+      (s) => s.Sid === 'StageSettingsParameters',
+    );
+    expect(statement).toEqual(
+      expect.objectContaining({
+        Effect: 'Allow',
+        Action: [
+          'ssm:PutParameter',
+          'ssm:DeleteParameter',
+          'ssm:GetParameters',
+          'ssm:AddTagsToResource',
+          'ssm:RemoveTagsFromResource',
+          'ssm:ListTagsForResource',
+        ],
+        Resource:
+          'arn:aws:ssm:ap-southeast-2:111122223333:parameter/discava-development/*',
+      }),
+    );
+  });
+
   it("allows the student portal's CloudFront functions, policies and page renderer URL", async () => {
     // The portals' SPA rewrite and host forwarding are CloudFront Functions,
     // and the public page renderer is a Lambda function URL origin behind its
@@ -722,6 +750,29 @@ describe.concurrent('setup-stage.sh permissions boundary', {
         Effect: 'Allow',
         Action: 'aoss:APIAccessAll',
         Resource: 'arn:aws:aoss:ap-southeast-2:111122223333:collection/*',
+      }),
+    );
+  });
+
+  it("lets the page renderer read its stage's settings parameter", async () => {
+    // The renderer's role is capped by the boundary, so without this it's
+    // denied the parameter however its own policy reads.
+    const { status, policyDocument } = await runSetup({
+      kind: 'response',
+      useDefault: true,
+    });
+    const boundary = policyDocument(
+      'permissions-boundary-discava-development.json',
+    );
+
+    expect(status).toBe(0);
+    expect(boundary.Statement).toContainEqual(
+      expect.objectContaining({
+        Sid: 'StageSettingsParameterRead',
+        Effect: 'Allow',
+        Action: 'ssm:GetParameter',
+        Resource:
+          'arn:aws:ssm:ap-southeast-2:111122223333:parameter/discava-development/*',
       }),
     );
   });

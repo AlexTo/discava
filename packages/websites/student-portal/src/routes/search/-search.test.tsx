@@ -61,7 +61,7 @@ describe('/search', () => {
 
     expect(await screen.findByText('Vectors and matrices')).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: 'Preview Linear Algebra' }),
+      screen.getByRole('link', { name: 'Linear Algebra' }),
     ).toHaveAttribute('href', '/learn/linalg');
     expect(screen.getByText('Learn more')).toBeInTheDocument();
   });

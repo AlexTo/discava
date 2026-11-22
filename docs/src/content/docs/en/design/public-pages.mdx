@@ -35,7 +35,7 @@ On boot the portal reads and removes that element and seeds React Query with it,
 
 The canonical address uses the viewer's host, copied by a CloudFront Function into `x-discava-host`, and only if it is one of the stage's student portal domains (or a `*.cloudfront.net` host when none is configured). Any other host falls back to the first configured domain, so pointing a domain at the distribution can't poison canonicals.
 
-If the table, AppConfig or the `index.html` read fails, the answer is a plain-text `503` (`Service temporarily unavailable`) with `Cache-Control: no-store`, `X-Robots-Tag: noindex` and `Retry-After: 5`. It is never cached and never turned into a `404`. It has no HTML, so a visitor who loads a landing page or profile during an outage sees that text, not the app; in-app navigation doesn't reach the renderer and keeps working.
+If the table, the settings parameter or the `index.html` read fails, the answer is a plain-text `503` (`Service temporarily unavailable`) with `Cache-Control: no-store`, `X-Robots-Tag: noindex` and `Retry-After: 5`. It is never cached and never turned into a `404`. It has no HTML, so a visitor who loads a landing page or profile during an outage sees that text, not the app; in-app navigation doesn't reach the renderer and keeps working.
 
 ## Caching and freshness
 

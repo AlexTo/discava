@@ -7,6 +7,7 @@ import type { Route } from '@playwright/test';
 import {
   apiUser,
   createLongTitledCourseViaApi,
+  createPublishedCourseViaApi,
   createPublishedQuizCourseViaApi,
 } from '../helpers/api.js';
 import {
@@ -23,6 +24,8 @@ import {
   enrol,
   enrolAndLand,
   expectCourseCompleted,
+  lessonItem,
+  lessonSteps,
   openCourse,
   startFirstLesson,
 } from '../helpers/student-portal.js';
@@ -56,6 +59,14 @@ test('an instructor publishes a course, and a student completes it', async ({
 
   await test.step('a new student finds the course and enrols', async () => {
     await openCourse(student, course);
+    // Following the search result's link moved focus to the page's heading.
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await expect(student.getByRole('heading', { level: 1 })).toBeFocused();
+    await screenshot(student, 'course page after following a link');
+    await student.goBack();
+    await expect(student).toHaveTitle(`Search: ${course} · Discava`);
+    await student.goForward();
+    await expect(student).toHaveTitle(`${course} · Discava`);
     await enrol(student, newUser('Sam', ['student']));
     await expect(
       student.getByText('0% complete', { exact: true }),
@@ -68,8 +79,13 @@ test('an instructor publishes a course, and a student completes it', async ({
       student.getByRole('heading', { name: 'Reading one' }),
     ).toBeVisible();
     await expect(student.getByText(reading)).toBeVisible();
+    await expect(student).toHaveTitle(`Lesson one · ${course} · Discava`);
+    await screenshot(student, 'lesson page with its own title');
     await student.getByRole('button', { name: 'Mark as done' }).click();
     await expect(student.getByText('1/1 lessons complete')).toBeVisible();
+    await student.goBack();
+    await expect(student).toHaveTitle(`${course} · Discava`);
+    await student.goForward();
   });
 
   await test.step('the course shows as completed', async () => {
@@ -210,4 +226,69 @@ test('a quiz that fails to load offers to try again', async ({ page }) => {
   await page.unroute('**/quiz.view*', fail);
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('button', { name: 'Start quiz' })).toBeVisible();
+});
+
+// A step's link is the lesson's address with the item's fragment, so it opens
+// that item in a new tab (#756). The items appear only once the course has
+// loaded, after the browser has looked for the fragment, so the lesson scrolls
+// to the item itself.
+test("a lesson's step links lead to their items", async ({ page }) => {
+  const title = uniqueName('E2E step link course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { courseId, lessonId, texts, quiz } = await createPublishedCourseViaApi(
+    instructor,
+    title,
+  );
+  const lastId = quiz.contentItemId;
+  const lastAddress = `${PORTALS.student}/learn/${courseId}/lesson/${lessonId}#item-${lastId}`;
+
+  await openCourse(page, title);
+  await enrolAndLand(page, newUser('Sid', ['student']));
+
+  await test.step('each step links to the lesson with its item', async () => {
+    const steps = lessonSteps(page);
+    await expect(steps).toHaveCount(3);
+    const ids = [...texts.map((t) => t.contentItemId), lastId];
+    for (const [i, id] of ids.entries()) {
+      await expect(steps.nth(i)).toHaveAttribute(
+        'href',
+        `/learn/${courseId}/lesson/${lessonId}#item-${id}`,
+      );
+    }
+  });
+
+  await test.step('the last step, visited directly, opens at its item', async () => {
+    await page.goto(lastAddress);
+    const item = page.locator(`#item-${lastId}`);
+    await expect(item).toBeFocused();
+    await expect(item).toBeInViewport();
+    const header = await page.getByRole('banner').first().boundingBox();
+    const box = await item.boundingBox();
+    expect(box?.y ?? -1).toBeGreaterThanOrEqual(
+      (header?.y ?? 0) + (header?.height ?? 0) - 1,
+    );
+    await screenshot(page, 'lesson opened at its last step');
+  });
+
+  await test.step('clicking a step scrolls to it without changing the address', async () => {
+    await page.goto(`${PORTALS.student}/learn/${courseId}/lesson/${lessonId}`);
+    const first = lessonItem(page, 'Reading 1');
+    await expect(first).toBeVisible();
+    const before = page.url();
+    await lessonSteps(page).nth(2).click();
+    const item = page.locator(`#item-${lastId}`);
+    await expect(item).toBeFocused();
+    // The scroll is smooth: wait for the item to settle just below the
+    // header, as when its address is visited directly. Merely intersecting
+    // the viewport already holds before the click.
+    await expect
+      .poll(async () => {
+        const header = await page.getByRole('banner').first().boundingBox();
+        const box = await item.boundingBox();
+        return (box?.y ?? Number.POSITIVE_INFINITY) - (header?.height ?? 0);
+      })
+      .toBeLessThanOrEqual(40);
+    expect(page.url()).toBe(before);
+    await screenshot(page, 'lesson after clicking a step');
+  });
 });

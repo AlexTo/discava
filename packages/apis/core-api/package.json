@@ -13,6 +13,7 @@
     "@aws-sdk/client-dynamodb": "catalog:",
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/client-scheduler": "catalog:",
+    "@aws-sdk/client-ssm": "catalog:",
     "@aws-sdk/credential-providers": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
     "@discava/common-server-utils": "workspace:*",
