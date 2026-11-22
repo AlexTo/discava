@@ -13,7 +13,15 @@ import { CourseCertificateCriteria } from './course-certificate-criteria';
 const COURSE_ID = 'course-1';
 
 const renderCriteria = (
-  { requireQuizPass = false, certificatesEnabled = true } = {},
+  {
+    requireQuizPass = false,
+    certificatesEnabled = true,
+    minUploadScorePercent,
+  }: {
+    requireQuizPass?: boolean;
+    certificatesEnabled?: boolean;
+    minUploadScorePercent?: number;
+  } = {},
   handlers = {},
 ) =>
   renderWithInstructorApi(
@@ -21,6 +29,7 @@ const renderCriteria = (
       courseId={COURSE_ID}
       certificatesEnabled={certificatesEnabled}
       requireQuizPass={requireQuizPass}
+      minUploadScorePercent={minUploadScorePercent}
     />,
     { handlers },
   );
@@ -112,5 +121,123 @@ describe('CourseCertificateCriteria', () => {
     expect(checkbox().checked).toBe(true);
     await user.click(checkbox());
     expect(calls).toEqual([]);
+  });
+
+  describe('graded assignments', () => {
+    const uploadBox = () =>
+      screen.getByRole('checkbox', {
+        name: 'Require graded assignments to be returned with at least',
+      });
+    const percent = () =>
+      screen.getByRole('spinbutton', {
+        name: 'Minimum assignment score, percent',
+      });
+
+    it('is off, with 60 in the field, when nothing is stored', () => {
+      renderCriteria();
+
+      expect(uploadBox().checked).toBe(false);
+      expect(percent()).toHaveValue(60);
+    });
+
+    it('shows the stored percentage', () => {
+      renderCriteria({ minUploadScorePercent: 75 });
+
+      expect(uploadBox().checked).toBe(true);
+      expect(percent()).toHaveValue(75);
+    });
+
+    it('sets it by ticking the box', async () => {
+      const { calls, user } = renderCriteria(
+        {},
+        { 'course.setCertificateCriteria': () => ({}) },
+      );
+
+      await user.click(uploadBox());
+
+      await waitFor(() =>
+        expect(calls).toEqual([
+          {
+            path: 'course.setCertificateCriteria',
+            input: {
+              courseId: COURSE_ID,
+              requireQuizPass: false,
+              minUploadScorePercent: 60,
+            },
+          },
+        ]),
+      );
+    });
+
+    it('changes the percentage when the field loses focus', async () => {
+      const { calls, user } = renderCriteria(
+        { minUploadScorePercent: 60 },
+        { 'course.setCertificateCriteria': () => ({}) },
+      );
+
+      await user.clear(percent());
+      await user.type(percent(), '80');
+      await user.tab();
+
+      await waitFor(() =>
+        expect(calls).toEqual([
+          {
+            path: 'course.setCertificateCriteria',
+            input: {
+              courseId: COURSE_ID,
+              requireQuizPass: false,
+              minUploadScorePercent: 80,
+            },
+          },
+        ]),
+      );
+    });
+
+    it('clears it with null by unticking the box', async () => {
+      const { calls, user } = renderCriteria(
+        { minUploadScorePercent: 60, requireQuizPass: true },
+        { 'course.setCertificateCriteria': () => ({}) },
+      );
+
+      await user.click(uploadBox());
+
+      await waitFor(() =>
+        expect(calls).toEqual([
+          {
+            path: 'course.setCertificateCriteria',
+            input: {
+              courseId: COURSE_ID,
+              requireQuizPass: true,
+              minUploadScorePercent: null,
+            },
+          },
+        ]),
+      );
+    });
+
+    it.each(['0', '101', '', '5.5'])(
+      'refuses %j without calling the API',
+      async (typed) => {
+        const { calls, user } = renderCriteria({ minUploadScorePercent: 60 });
+
+        await user.clear(percent());
+        if (typed) {
+          await user.type(percent(), typed);
+        }
+        await user.tab();
+
+        expect(
+          await screen.findByText('Enter a whole number from 1 to 100.'),
+        ).toBeInTheDocument();
+        expect(calls).toEqual([]);
+      },
+    );
+
+    it('is disabled while certificates are off', () => {
+      renderCriteria({ certificatesEnabled: false, minUploadScorePercent: 60 });
+
+      expect(uploadBox()).toBeDisabled();
+      expect(percent()).toBeDisabled();
+    });
   });
 });

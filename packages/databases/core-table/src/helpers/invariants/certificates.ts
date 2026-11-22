@@ -271,7 +271,9 @@ export const checkCertificateNotificationsMatch = (
   });
 };
 
-// What a certificate says was assessed was met: with quiz pass required, every
+// What a certificate says was assessed was met: with a minimum upload score,
+// every listed upload scored at least that and the student has a submission
+// for it (it may have been reopened since); with quiz pass required, every
 // listed quiz has a score at or above its pass mark (above 0) that the
 // student's quizSummary backs, passed by the time of issue; with nothing
 // required, the list is empty. Compared with what the certificate recorded,
@@ -285,15 +287,22 @@ export const checkCertificateMetCriteria = (
       q,
     ]),
   );
+  const submitted = new Set(
+    snapshot.assignmentSubmissions.map(
+      (s) => `${s.userId} ${s.courseId} ${s.contentItemId}`,
+    ),
+  );
   return snapshot.certificates.flatMap((certificate) => {
     const { assessment, userId, courseId, issuedAt } = certificate;
     if (!assessment) {
       return [];
     }
     const items = assessment.assessedItems ?? [];
+    const quizItems = items.filter((i) => i.kind === 'quiz');
+    const uploadItems = items.filter((i) => i.kind === 'upload');
     const problems: string[] = [];
     if (assessment.requireQuizPass) {
-      for (const item of items) {
+      for (const item of quizItems) {
         const summary = summaries.get(
           `${userId} ${courseId} ${item.contentItemId}`,
         );
@@ -313,11 +322,26 @@ export const checkCertificateMetCriteria = (
           );
         }
       }
-    } else if (
-      assessment.minUploadScorePercent === undefined &&
-      items.length > 0
-    ) {
-      problems.push('assessedItems is not empty though nothing was required');
+    } else if (quizItems.length > 0) {
+      problems.push('a quiz is listed though quiz pass was not required');
+    }
+    const minUpload = assessment.minUploadScorePercent;
+    if (minUpload === undefined) {
+      if (uploadItems.length > 0) {
+        problems.push('an upload is listed though no score was required');
+      }
+    } else {
+      for (const item of uploadItems) {
+        if (item.scorePercent < minUpload) {
+          problems.push(
+            `upload ${item.contentItemId} was listed below the required ${minUpload}%`,
+          );
+        }
+        // A submission reopened since issue is still a submission.
+        if (!submitted.has(`${userId} ${courseId} ${item.contentItemId}`)) {
+          problems.push(`upload ${item.contentItemId} has no submission`);
+        }
+      }
     }
     return problems.map((message) =>
       violation('certificate-met-criteria', { userId, courseId }, message),

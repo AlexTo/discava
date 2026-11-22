@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { EntityItem } from 'electrodb';
+import type { createAssignmentSubmissionEntity } from '../entities/assignment-submission.js';
 import type { createCertificateEntity } from '../entities/certificate.js';
 import type { createCourseEntity } from '../entities/course.js';
 import type { createQuizSummaryEntity } from '../entities/quiz-summary.js';
@@ -37,10 +38,26 @@ export type QuizRequirementState =
   | 'no-attempts-left'
   | 'not-passed';
 
-export interface CertificateRequirement {
-  kind: 'pass-quizzes';
-  quizzes: { contentItemId: string; state: QuizRequirementState }[];
-}
+export type UploadRequirementState =
+  | 'met'
+  | 'not-submitted'
+  | 'awaiting-grade'
+  | 'below-score';
+
+export type CertificateRequirement =
+  | {
+      kind: 'pass-quizzes';
+      quizzes: { contentItemId: string; state: QuizRequirementState }[];
+    }
+  | {
+      kind: 'graded-uploads';
+      minScorePercent: number;
+      uploads: {
+        contentItemId: string;
+        state: UploadRequirementState;
+        scorePercent?: number;
+      }[];
+    };
 
 export interface CertificateEvaluation {
   met: boolean;
@@ -51,6 +68,11 @@ export interface CertificateEvaluation {
 type QuizSummary = Pick<
   Item<typeof createQuizSummaryEntity>,
   'contentItemId' | 'attemptsUsed' | 'bestScore' | 'passedAt'
+>;
+
+type Submission = Pick<
+  Item<typeof createAssignmentSubmissionEntity>,
+  'contentItemId' | 'status' | 'points' | 'pointsOutOf'
 >;
 
 interface QuizSettings {
@@ -75,6 +97,7 @@ export interface CriteriaCurriculum {
     order?: number;
     type?: string;
     settings?: unknown;
+    maxPoints?: number;
   })[];
 }
 
@@ -82,6 +105,8 @@ export interface EvaluateCertificateCriteriaInput {
   criteria: CertificateCriteria;
   curriculum: CriteriaCurriculum;
   quizSummaries: QuizSummary[];
+  // Only read when `criteria.minUploadScorePercent` is set.
+  submissions?: Submission[];
 }
 
 // Whether a student's record meets a course's certificate criteria, and what
@@ -91,6 +116,7 @@ export const evaluateCertificateCriteria = ({
   criteria,
   curriculum,
   quizSummaries,
+  submissions = [],
 }: EvaluateCertificateCriteriaInput): CertificateEvaluation => {
   const visible = filterEffectivelyVisible(curriculum);
   const lessonOrder = new Map(
@@ -155,19 +181,75 @@ export const evaluateCertificateCriteria = ({
     requirements.push({ kind: 'pass-quizzes', quizzes: [] });
   }
 
-  const assessedItems = criteria.requireQuizPass
-    ? quizzes.map(({ item, summary, passMark }) => ({
+  // Every visible assignment is assessed when a minimum score is required:
+  // met once its submission is returned with at least that share of its points.
+  const minScore = criteria.minUploadScorePercent;
+  const uploads =
+    minScore === undefined
+      ? []
+      : visible.contentItems
+          .filter((item) => item.type === 'assignment')
+          .sort(
+            (a, b) =>
+              (lessonOrder.get(a.lessonId) ?? 0) -
+                (lessonOrder.get(b.lessonId) ?? 0) ||
+              (a.order ?? 0) - (b.order ?? 0),
+          )
+          .map((item) => {
+            const submission = submissions.find(
+              (s) => s.contentItemId === item.contentItemId,
+            );
+            const outOf = submission?.pointsOutOf ?? item.maxPoints ?? 0;
+            const scorePercent =
+              submission?.status === 'returned'
+                ? outOf > 0
+                  ? Math.floor(((submission.points ?? 0) / outOf) * 100)
+                  : 0
+                : undefined;
+            const state: UploadRequirementState = !submission
+              ? 'not-submitted'
+              : scorePercent === undefined
+                ? 'awaiting-grade'
+                : scorePercent >= (minScore ?? 0)
+                  ? 'met'
+                  : 'below-score';
+            return { item, state, scorePercent };
+          });
+  if (minScore !== undefined) {
+    requirements.push({
+      kind: 'graded-uploads',
+      minScorePercent: minScore,
+      uploads: uploads.map(({ item, state, scorePercent }) => ({
         contentItemId: item.contentItemId,
-        kind: 'quiz' as const,
-        scorePercent: summary?.bestScore ?? 0,
-        passMarkPercent: passMark,
-      }))
-    : [];
-  const met =
-    !criteria.requireQuizPass ||
-    quizzes.every(({ state }) => state === 'passed');
+        state,
+        ...(scorePercent !== undefined && { scorePercent }),
+      })),
+    });
+  }
 
-  const passMarks = assessedItems.map((i) => i.passMarkPercent);
+  const assessedItems = [
+    ...(criteria.requireQuizPass
+      ? quizzes.map(({ item, summary, passMark }) => ({
+          contentItemId: item.contentItemId,
+          kind: 'quiz' as const,
+          scorePercent: summary?.bestScore ?? 0,
+          passMarkPercent: passMark,
+        }))
+      : []),
+    ...uploads.map(({ item, scorePercent }) => ({
+      contentItemId: item.contentItemId,
+      kind: 'upload' as const,
+      scorePercent: scorePercent ?? 0,
+    })),
+  ];
+  const met =
+    (!criteria.requireQuizPass ||
+      quizzes.every(({ state }) => state === 'passed')) &&
+    uploads.every(({ state }) => state === 'met');
+
+  const passMarks = assessedItems.flatMap((i) =>
+    'passMarkPercent' in i ? [i.passMarkPercent] : [],
+  );
   const assessment: CertificateAssessment = {
     criteriaVersion: criteria.version,
     requireQuizPass: criteria.requireQuizPass,
@@ -176,10 +258,13 @@ export const evaluateCertificateCriteria = ({
     }),
     itemCount: visible.contentItems.length,
     assessedItemCount: assessedItems.length,
+    ...(minScore !== undefined && { assessedUploadCount: uploads.length }),
     assessedItems,
-    ...(assessedItems.length > 0 && {
+    ...(passMarks.length > 0 && {
       passMarkLowest: Math.min(...passMarks),
       passMarkHighest: Math.max(...passMarks),
+    }),
+    ...(assessedItems.length > 0 && {
       scoreBand: scoreBand(
         assessedItems.reduce((sum, i) => sum + i.scorePercent, 0) /
           assessedItems.length,
@@ -201,7 +286,12 @@ export const setCertificateCriteria = async ({
 }: {
   coreTable: CoreTable;
   courseId: string;
-  criteria: Pick<CertificateCriteria, 'requireQuizPass'>;
+  // `minUploadScorePercent`: an integer from 1 to 100 sets it, `null`
+  // removes it, left out keeps it.
+  criteria: {
+    requireQuizPass: boolean;
+    minUploadScorePercent?: number | null;
+  };
 }) => {
   for (let attempt = 0; attempt < 2; attempt++) {
     const { data: course } = await coreTable.entities.course
@@ -211,16 +301,32 @@ export const setCertificateCriteria = async ({
       throw new Error(`Course ${courseId} not found`);
     }
     const stored = course.certificateCriteria;
-    if (stored.requireQuizPass === criteria.requireQuizPass) {
+    const { minUploadScorePercent, requireQuizPass } = criteria;
+    const nextMin =
+      minUploadScorePercent === undefined
+        ? stored.minUploadScorePercent
+        : (minUploadScorePercent ?? undefined);
+    if (
+      stored.requireQuizPass === requireQuizPass &&
+      stored.minUploadScorePercent === nextMin
+    ) {
       return course;
     }
+    if (
+      nextMin !== undefined &&
+      !(Number.isInteger(nextMin) && nextMin >= 1 && nextMin <= 100)
+    ) {
+      throw new Error('minUploadScorePercent must be an integer from 1 to 100');
+    }
+    const { minUploadScorePercent: _removed, ...rest } = stored;
     try {
       const { data } = await coreTable.entities.course
         .patch({ courseId })
         .set({
           certificateCriteria: {
-            ...stored,
-            ...criteria,
+            ...rest,
+            requireQuizPass,
+            ...(nextMin !== undefined && { minUploadScorePercent: nextMin }),
             version: stored.version + 1,
           },
         })

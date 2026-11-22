@@ -200,6 +200,9 @@ function RouteComponent() {
                 courseId={course.courseId}
                 certificatesEnabled={course.certificatesEnabled}
                 requireQuizPass={course.certificateCriteria.requireQuizPass}
+                minUploadScorePercent={
+                  course.certificateCriteria.minUploadScorePercent
+                }
               />
             </div>
           </div>

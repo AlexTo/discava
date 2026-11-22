@@ -181,10 +181,18 @@ export const recalculateStudent = async (
           .primary({ userId, courseId })
           .go({ pages: 'all' })
       : { data: [] };
+    // Likewise submissions, only when graded uploads are required.
+    const { data: submissions } =
+      course.certificateCriteria.minUploadScorePercent !== undefined
+        ? await coreTable.entities.assignmentSubmission.query
+            .byUser({ userId, courseId })
+            .go({ pages: 'all' })
+        : { data: [] };
     const evaluation = evaluateCertificateCriteria({
       criteria: course.certificateCriteria,
       curriculum,
       quizSummaries,
+      submissions,
     });
     certificate = await issueCertificate({
       coreTable,

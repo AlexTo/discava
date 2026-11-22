@@ -64,6 +64,9 @@ export const createCertificateEntity = async () =>
             minUploadScorePercent: { type: 'number' },
             itemCount: { type: 'number', required: true },
             assessedItemCount: { type: 'number', required: true },
+            // How many of them are graded uploads, when a minimum score
+            // was required; the rest are quizzes.
+            assessedUploadCount: { type: 'number' },
             assessedItems: {
               type: 'list',
               required: true,

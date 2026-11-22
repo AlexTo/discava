@@ -15,6 +15,7 @@ const { db, writes } = vi.hoisted(() => ({
     certificate: null as any,
     completions: [] as any[],
     summaries: [] as any[],
+    submissions: [] as any[],
   },
   writes: vi.fn(),
 }));
@@ -29,6 +30,9 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
       certificate: { get: () => go(db.certificate), patch: writes },
       itemCompletion: {
         query: { primary: (key: any) => go(db.completions) },
+      },
+      assignmentSubmission: {
+        query: { byUser: (key: any) => go(db.submissions) },
       },
       quizSummary: {
         query: {
@@ -93,6 +97,7 @@ beforeEach(() => {
   db.certificate = null;
   db.completions = [{ contentItemId: 't1' }];
   db.summaries = [];
+  db.submissions = [];
 });
 
 describe('certificate.requirements', () => {
@@ -182,6 +187,66 @@ describe('certificate.requirements', () => {
           lessonId: 'l1',
           title: 'Quiz q4',
           state: 'not-attempted',
+        },
+      ],
+    });
+  });
+
+  it('reports each graded upload state with the returned score', async () => {
+    db.course.certificateCriteria.minUploadScorePercent = 60;
+    const work = (id: string, maxPoints = 10) => ({
+      ...shown({
+        moduleId: 'm1',
+        lessonId: 'l1',
+        contentItemId: id,
+        type: 'assignment',
+        title: `Work ${id}`,
+        order: 3,
+        maxPoints,
+      }),
+    });
+    db.items = [text('t1'), work('w1'), work('w2'), work('w3'), work('w4')];
+    db.submissions = [
+      { contentItemId: 'w1', status: 'returned', points: 6, pointsOutOf: 10 },
+      { contentItemId: 'w2', status: 'returned', points: 5, pointsOutOf: 10 },
+      { contentItemId: 'w3', status: 'submitted' },
+    ];
+
+    const { requirements, allMet } = await call();
+
+    expect(allMet).toBe(false);
+    expect(requirements[1]).toEqual({
+      kind: 'graded-uploads',
+      met: false,
+      done: 1,
+      total: 4,
+      minScorePercent: 60,
+      items: [
+        {
+          contentItemId: 'w1',
+          lessonId: 'l1',
+          title: 'Work w1',
+          state: 'met',
+          scorePercent: 60,
+        },
+        {
+          contentItemId: 'w2',
+          lessonId: 'l1',
+          title: 'Work w2',
+          state: 'below-score',
+          scorePercent: 50,
+        },
+        {
+          contentItemId: 'w3',
+          lessonId: 'l1',
+          title: 'Work w3',
+          state: 'awaiting-grade',
+        },
+        {
+          contentItemId: 'w4',
+          lessonId: 'l1',
+          title: 'Work w4',
+          state: 'not-submitted',
         },
       ],
     });
