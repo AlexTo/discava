@@ -155,19 +155,21 @@ test('an instructor chooses caption languages and every video gets them', async 
       timeout: 90_000,
     });
 
-    await visitor.goto(coursePageUrl(courseId));
-    await visitor.getByRole('button', { name: 'Play preview' }).click();
-    await expectToPlay(visitor.locator('video[data-slot="hls-video"]'));
     const captions = visitor.getByRole('button', { name: /^Captions/ });
-    // The translations arrive after the automatic captions do.
+    // The player reads the preview's tracks once, when it opens, and the
+    // translations arrive after the automatic captions do: open the page
+    // afresh until they are there.
     await expect(async () => {
+      await visitor.goto(coursePageUrl(courseId));
+      await visitor.getByRole('button', { name: 'Play preview' }).click();
+      await expectToPlay(visitor.locator('video[data-slot="hls-video"]'));
       await captions.click();
       await expect(
         visitor.getByRole('menuitemradio', {
           name: 'Español (auto-translated)',
         }),
-      ).toBeVisible({ timeout: 5_000 });
-    }).toPass({ timeout: 90_000 });
+      ).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 120_000 });
     await expect(
       visitor.getByRole('menuitemradio', {
         name: 'Français (auto-translated)',
