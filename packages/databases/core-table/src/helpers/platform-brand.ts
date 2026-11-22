@@ -134,16 +134,16 @@ export const saveBrand = async (
         })
         .go();
     } else {
-      const patch = entity
-        .patch({})
-        .set({
-          ...set,
-          showNameBesideLogo: fields.showNameBesideLogo,
-          revision,
-          ...audit,
-        })
-        .where((attr, op) => op.eq(attr.revision, expectedRevision));
-      await (removed.length > 0 ? patch.remove(removed) : patch).go(ALL_NEW);
+      // ElectroDB's `where` ends the chain of changes, so `remove` comes first.
+      const patch = entity.patch({}).set({
+        ...set,
+        showNameBesideLogo: fields.showNameBesideLogo,
+        revision,
+        ...audit,
+      });
+      await (removed.length > 0 ? patch.remove(removed) : patch)
+        .where((attr, op) => op.eq(attr.revision, expectedRevision))
+        .go(ALL_NEW);
     }
   } catch (error) {
     if (isConditionalCheckFailed(error)) {

@@ -226,7 +226,12 @@ export const createFakeCoreTable = () => {
         set: (values: Row) => ((changes = { ...changes, ...values }), chain),
         add: (values: Row) => ((adds = values), chain),
         remove: (names: string[]) => ((removed = names), chain),
-        where: (fn: typeof where) => ((where = fn), chain),
+        // As ElectroDB's: `where` ends the chain of changes, so `set`, `add`
+        // and `remove` after it don't exist.
+        where: (fn: typeof where) => {
+          where = fn;
+          return { where: chain.where, commit: chain.commit, go: chain.go };
+        },
         commit: build,
         go: async () => {
           if (!run([build()])) throw conditionFailed();

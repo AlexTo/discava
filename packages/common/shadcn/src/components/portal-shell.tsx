@@ -173,17 +173,17 @@ export const PortalShell = ({
         </Sidebar>
         <SidebarInset>
           <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="h-6" />
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <img
                   height={40}
                   alt={`${brand.name} logo`}
-                  className="h-10 w-auto max-w-40 shrink object-contain"
+                  className="h-10 w-auto min-w-0 max-w-40 shrink object-contain"
                   src={brand.logoUrl}
                 />
-                <div className="flex flex-col leading-tight">
+                <div className="hidden flex-col leading-tight sm:flex">
                   <span className="text-sm font-semibold">{brand.name}</span>
                 </div>
               </div>
