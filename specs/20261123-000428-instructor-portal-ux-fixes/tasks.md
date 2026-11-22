@@ -182,7 +182,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - The two submissions pages also label the `$contentItemId` path with the assignment's title, and the review page labels its own path with the student's name.
 
   **Tests** in each route's existing test file: the crumb texts.
-- [ ] T018 [P] [US2] Test first, then add a `notFoundComponent` to `IP/route.tsx` (A-05). It renders, inside `AppLayout`, an `h1` "Page not found", a sentence, and a `Link to="/"` "Go to the home page". Also set `defaultNotFoundComponent` in the instructor portal's router setup (`packages/websites/instructor-portal/src/main.tsx` or its router file) to the same component, so an unmatched path under the shell uses it. **Test:** an unknown path renders the heading inside the shell.
+- [ ] T018 [P] [US2] Test first, then add a `notFoundComponent` to `IP/route.tsx` (A-05). It renders, inside `AppLayout`, an `h1` "Page not found", a sentence, and a `Link to="/"` "Go to the home page". Also set `defaultNotFoundComponent` in `createRouter` in `packages/websites/instructor-portal/src/router.ts` to the same component, so an unmatched path under the shell uses it. **Test:** an unknown path renders the heading inside the shell.
 - [ ] T019 [P] [US2] Test first in `IPC/course/landing-page-checklist.test.tsx`, then change `IPC/course/landing-page-checklist.tsx` (C-02):
   - each "Add it" link becomes `<Link to="." hash="<section id>">` with `aria-label="Add it: <item name>"`;
   - the profile line becomes `<Link to="/profile">`.
@@ -317,7 +317,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
   **Tests:** heading order.
 - [ ] T037 [P] [US4] Use `LoadingState` (T004) for every whole-page or whole-section wait (A-07, A-22, B-19, C-05, E-14):
-  - `packages/websites/instructor-portal/src/routes/signin.tsx`: "Signing you in…", `size="page"`;
+  - `packages/websites/instructor-portal/src/routes/signin.tsx`: "Signing you in…", `size="page"`, under a visually hidden `h1` "Signing in", so the page has its one main heading (FR-012, A-07);
   - the `RuntimeConfigProvider` and `CognitoAuth` fallbacks in `packages/websites/instructor-portal/src/main.tsx`: "Loading Discava…";
   - `IP/my-courses_/$courseId/route.tsx`: "Loading the course…";
   - `IP/profile.tsx`: "Loading your profile…";
@@ -363,6 +363,8 @@ At 1440px nothing changes, apart from long-content fixes.
   | `IP/my-courses_/$courseId_/questions/-components/thread-dialog.tsx` (Post reply) | "Posting…" |
   | `IP/my-courses_/$courseId_/questions/-components/moderation.tsx` | "Hiding…", "Unhiding…", "Marking…" |
 
+  The "Saved" note of the price, catalogue, first-lesson prompt, landing page and caption languages forms becomes a `StatusMessage` (T003) set on success, in place of a `role="status"` span mounted together with its text (C-17, research R-14). **Test:** in each form's test, the region exists before saving and reads "Saved" after.
+
   The certificates switch (`IPC/course/course-certificates-switch.tsx`) and the criteria checkbox (`IPC/course/course-certificate-criteria.tsx`) stay enabled while saving, ignore changes until the save settles, and set `aria-busy` on their row.
 - [ ] T042 [P] [US5] Make the course editor's lists keep focus when an item goes or changes (research R-6; C-08, C-06).
   - **In `IPC/course/course-modules.tsx`:** keep a ref map of each module's and lesson's first control by id. After delete or archive succeeds, focus the next item's, else the previous one's, else the "Course content" heading (`tabIndex={-1}`). Do the same in `IPC/course/archived-section.tsx` after Restore or Delete.
@@ -385,6 +387,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - **Reorder announcements:** in `IPC/content-items/quiz/sortable-question-list.tsx`, pass `accessibility={{ announcements, screenReaderInstructions }}` naming "Question N" and the prompt's first 40 characters, and the new position "of M", phrased like `IPC/sortable-list.tsx`. Refocus the moved handle by id after the drop.
   - **Remove and move:** after `removeQuestion` (`IPC/content-items/quiz/use-quiz-builder-state.ts`), and after `remove` or `move` (`IPC/content-items/video-questions/use-video-questions-editor.ts`), focus the neighbouring question's header control, or the other move button when one becomes disabled.
   - **Clock:** remove `role="status"` from the clock in `video-questions-editor.tsx`.
+  - **First or last item:** for a question that can't move further, its Move up (or Move down) control is disabled and skipped by Tab (spec Edge Cases). Focus never rests on it after a move, because the other move button takes it. **Test:** after moving question 2 up to first place, focus is on its "Move down".
 
   **Tests** in the existing test files.
 - [ ] T045 [P] [US5] Captions and uploads (D-14, D-23):
@@ -433,11 +436,15 @@ At 1440px nothing changes, apart from long-content fixes.
 **Independent test**: quickstart, US6.
 
 - [ ] T051 [US6] Test first, then move the quiz builder's discard confirmation into shared code (research R-8, [contracts/shared-components.md](./contracts/shared-components.md)).
-  - **New files:** `SH/components/discard-changes-dialog.tsx` and `SH/hooks/use-discard-guard.ts`, returning `contentProps` (`onEscapeKeyDown`, `onInteractOutside`), `requestClose` and `confirmation`. The wording is unchanged: "Discard unsaved changes?", "Keep editing", "Discard changes". Keep editing returns focus through `useReturnFocus`.
+  - **New files:** `SH/components/discard-changes-dialog.tsx` and `SH/hooks/use-discard-guard.tsx` (`.tsx`: it returns JSX), returning `contentProps` (`onEscapeKeyDown`, `onInteractOutside`), `requestClose` and `confirmation`. The wording is unchanged: "Discard unsaved changes?", "Keep editing", "Discard changes". Keep editing returns focus through `useReturnFocus`.
   - **Callers:** switch `IPC/content-items/quiz/quiz-builder-dialog.tsx` and `IPC/content-items/video-questions/video-questions-dialog.tsx` to it. Their tests must pass unchanged.
-- [ ] T052 [US6] Test first, then add `useUnsavedChangesGuard(dirty)` in `SH/hooks/use-unsaved-changes-guard.ts`.
-  - **Mechanism:** it uses TanStack Router's `useBlocker` with `enableBeforeUnload: () => dirty`. Its `withResolver` state drives an `AlertDialog`: "Leave without saving?", with **Stay** (first) and **Leave**.
-  - **Callers:** move the `beforeunload` listeners in `IPC/content-items/quiz/use-quiz-builder-state.ts` and `IPC/content-items/video-questions/use-video-questions-editor.ts` onto it.
+- [ ] T052 [US6] Test first, then add `useUnsavedChangesGuard(dirty)` in `SH/hooks/use-unsaved-changes-guard.tsx`. It returns `{ confirmation }` for the caller to render once, as [contracts/shared-components.md](./contracts/shared-components.md) says.
+  - **Mechanism:** it uses TanStack Router's `useBlocker` with `shouldBlockFn: () => dirty`, `withResolver: true` and `enableBeforeUnload: () => dirty`. The blocker's state drives the `AlertDialog` returned as `confirmation`: "Leave without saving?", with **Stay** (first, which calls `reset`) and **Leave** (which calls `proceed`).
+  - **Tests:**
+    - with `dirty` false, navigation proceeds;
+    - with `dirty` true, it shows the dialog;
+    - Stay cancels and Leave navigates.
+  - **Callers:** move the `beforeunload` listeners in `IPC/content-items/quiz/use-quiz-builder-state.ts` and `IPC/content-items/video-questions/use-video-questions-editor.ts` onto it. Their dialogs (`quiz-builder-dialog.tsx`, `video-questions-dialog.tsx`) render its `confirmation`.
 - [ ] T053 [P] [US6] Keep input after a failed save (C-09). Remove the `catch`-block resets in `IPC/course/course-first-lesson-prompt-form.tsx` and `IPC/course/course-price-form.tsx`. **Tests:** after a mocked failure, the field holds the typed value, and Save sends it again. Change any existing assertion that the field resets, and say so in the pull request.
 - [ ] T054 [P] [US6] Make Cancel reset (B-11, C-10). In each dialog, close through the same handler as Escape (the one that resets the form), or wrap Cancel in `DialogClose asChild`:
   - `packages/websites/instructor-portal/src/components/create-course-dialog.tsx`;
@@ -455,7 +462,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
   **Tests:** Escape on a dirty dialog shows the confirmation; Keep editing returns to the field; on a clean dialog Escape closes.
 - [ ] T056 [US6] Guard the course editor's settings (C-11).
-  - **Context:** add `IPC/course/unsaved-changes-context.tsx` with a provider in `IP/my-courses_/$courseId/route.tsx` that collects dirty flags by section key. The route calls `useUnsavedChangesGuard(anyDirty)`.
+  - **Context:** add `IPC/course/unsaved-changes-context.tsx` with a provider in `IP/my-courses_/$courseId/route.tsx` that collects dirty flags by section key. The route calls `useUnsavedChangesGuard(anyDirty)` and renders its `confirmation`.
   - **Reporters:** these report their dirty state through the context:
     - `course-catalogue-form.tsx`;
     - `course-price-form.tsx`;
@@ -699,7 +706,7 @@ At 1440px nothing changes, apart from long-content fixes.
 | FR-014 focus after removal or swap | T042, T043, T044, T046, T047, T048 |
 | FR-015 focus after closing | T002, T040, T043, T044, T046 |
 | FR-016 reorder focus and announcement | T042, T044, T048 |
-| FR-017 results announced once | T003, T043, T045, T046 |
+| FR-017 results announced once | T003, T041, T043, T045, T046 |
 | FR-018 failed save keeps input | T053, T057 |
 | FR-019 Cancel resets; dismissal asks | T051, T054, T055, T057 |
 | FR-020 leaving the editor asks | T052, T056, T057 |

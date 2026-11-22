@@ -169,8 +169,8 @@ packages/common/shadcn/src/
 ├── discussion/post-card.tsx (+ test)  # min-w-0, headingLevel
 └── hooks/
     ├── use-return-focus.ts (+ test)   # new
-    ├── use-discard-guard.ts (+ test)  # new
-    └── use-unsaved-changes-guard.ts (+ test)  # new
+    ├── use-discard-guard.tsx (+ test)  # new; .tsx because it returns JSX
+    └── use-unsaved-changes-guard.tsx (+ test)  # new; .tsx because it returns JSX
 
 packages/websites/instructor-portal/src/
 ├── main.tsx, routes/signin.tsx, components/app-layout.tsx, components/create-course-dialog.tsx

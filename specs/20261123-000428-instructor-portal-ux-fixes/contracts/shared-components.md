@@ -36,6 +36,8 @@ function useReturnFocus(open: boolean): {
 
 ## `DiscardChangesDialog` and `useDiscardGuard` (`@discava/common-shadcn/components/discard-changes-dialog`, `.../hooks/use-discard-guard`), new
 
+Both hooks in this file that return JSX (`useDiscardGuard`, `useUnsavedChangesGuard`) live in `.tsx` files.
+
 ```ts
 function useDiscardGuard(options: {
   dirty: boolean;
@@ -65,10 +67,13 @@ function useDiscardGuard(options: {
 ## `useUnsavedChangesGuard` (`@discava/common-shadcn/hooks/use-unsaved-changes-guard`), new
 
 ```ts
-function useUnsavedChangesGuard(dirty: boolean): void;
+function useUnsavedChangesGuard(dirty: boolean): {
+  /** The "Leave without saving?" dialog. Render once in the page. */
+  confirmation: React.ReactNode;
+};
 ```
 
-- **In-app links:** while `dirty`, following a link inside the portal opens "Leave without saving?" with **Stay** (focused first) and **Leave**.
+- **In-app links:** while `dirty`, following a link inside the portal opens the `confirmation`, "Leave without saving?", with **Stay** (focused first) and **Leave**. **Stay** cancels the navigation, and **Leave** lets it proceed.
 - **Closing or reloading:** the browser's own leave prompt is enabled for closing or reloading the tab.
 - **Redirects:** a redirect the portal makes itself (session expired, sign-in) is not blocked.
 - **Implementation note:** this uses the router's blocker. The package already depends on `@tanstack/react-router` for `PortalShell`, and imports no portal's route tree.

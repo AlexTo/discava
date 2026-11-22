@@ -19,7 +19,7 @@
 Five questions were resolved with the recommended defaults, for the maintainer to confirm in review. Three were put to the maintainer, who chose the recommended answer each time; they are marked "confirmed by the maintainer".
 
 - Q: On a phone, how do a lesson row's controls fit beside a long title (C-01, D-04)? → A: The title takes the row's full width and wraps. The controls go on a line below it, and that line wraps too. Every control stays one tap away. A "more" menu would save a line, but it would hide Edit and Remove behind a second tap and change what the e2e helpers find. At desktop width the row is unchanged (FR-002, US1).
-- Q: How is the course editor's long page made quick to use (C-03)? → A: Two changes. "Course content" moves directly below the course's header card, ahead of the settings sections. A row of section links under the header ("Content", "Landing page", "Catalogue", "Captions", "Certificates", "Announcements", "Archived") leads to each section, with the section's name in the address after `#`. There are no tabs and nothing collapses: every section stays on one page, as today, so nothing moves out of reach of a search in the page (FR-024, US10).
+- Q: How is the course editor's long page made quick to use (C-03)? → A: Two changes. "Course content" moves directly below the course's header card, ahead of the settings sections. A row of section links under the header ("Content", "Landing page", "Catalogue", "Captions", "Certificates", "First-lesson prompt", "Price", "Announcements", "Archived", each shown only when its section is on the page) leads to each section, with the section's name in the address after `#`. There are no tabs and nothing collapses: every section stays on one page, as today, so nothing moves out of reach of a search in the page (FR-024, US10).
 - Q: Which unsaved work is guarded, and does Cancel ask (C-11, D-06)? → A: The question is asked when a dialog holding typed or uploaded work is dismissed with Escape or a click outside it, and when someone leaves the course editor, in the portal or by closing the tab, with a settings section that has unsaved changes. Cancel is a deliberate choice, so it discards without asking, and it always discards: reopening shows the saved values (FR-018 to FR-020, US6).
 - Q: What does a button do while its save is running, given that disabling it loses focus (C-07, A-13)? → A: It keeps focus, says what it is doing ("Saving…"), and ignores further presses until the save finishes. It is never removed from the tab order mid-action (FR-013, US5).
 - Q: What should the home page's "Give feedback" button, which does nothing, become (A-08)? → A: It is removed (confirmed by the maintainer). There is no feedback destination in the product, and making one is a feature (US2 scenario 7).
@@ -339,7 +339,7 @@ Fixing them once does not stop them coming back.
 ### Edge Cases
 
 - **A lesson with no items:** the phone layout shows the add-item buttons on their own line, and nothing is clipped.
-- **A course with one module and one lesson:** the section links and reordering still work, and a reorder control that can't move is not focusable.
+- **A course with one module and one lesson:** the section links and reordering still work. A Move up or Move down control that can't move is disabled and skipped by Tab, and after a move focus goes to the control that can still move.
 - **A dialog opened from a state with no trigger** (Preview as student, Keep editing): on close, focus returns to the control that was focused before it opened.
 - **A save conflict ("changed since you opened it"):** the instructor's input is kept, as for any failed save, and the existing conflict message shows unchanged.
 - **An archived course:** read-only, as today. The section links leave out sections that aren't shown, and no unsaved-changes question is asked, since nothing can be edited.
@@ -444,7 +444,7 @@ Fixing them once does not stop them coming back.
 - **SC-005**: With the keyboard alone, focus is lost 0 times across the actions listed in User Story 5. Today it is lost more than 40 times.
 - **SC-006**: Typed work is lost 0 times across the six cases in User Story 6. Today it is lost in all six.
 - **SC-007**: With the network blocked, 0 screens show "Failed to fetch". Every failed load offers one Try again, and each Try again recovers its whole section.
-- **SC-008**: Every instructor page has its own tab title and exactly one main heading in each of its states, and no two different pages share a title. Today every page is titled "Discava", and 5 page states have no heading.
+- **SC-008**: Every instructor page has its own tab title and exactly one main heading in each of its states, and no two different pages share a title. Today every page is titled "Discava", and 7 page states have no heading: sign-in, profile loading, profile error, course analytics error, course analytics not found, course editor error, submission error.
 - **SC-009**: At phone width the course editor's "Course content" heading starts within the first 812px below the header card. Today it starts 5,892px down.
 - **SC-010**: No control an instructor must use is smaller than 24px in either direction, other than links inside a sentence.
 - **SC-011**: Reloading My Courses, the questions page and earnings keeps the view chosen in each. Today all three reset.

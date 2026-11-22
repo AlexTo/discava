@@ -73,6 +73,8 @@ See [contracts/url-state.md](./contracts/url-state.md) for the parameters. The r
 | `catalogue` | Catalogue details | not archived |
 | `captions` | Caption languages | caption translation is on for the stage |
 | `certificates` | Certificates | always |
+| `first-lesson-prompt` | First-lesson prompt | not archived |
+| `price` | Price | not archived |
 | `announcements` | Announcements | always (a draft shows the "publish first" line) |
 | `archived` | Archived | the course has archived modules or lessons |
 
