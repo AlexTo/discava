@@ -16,12 +16,15 @@
 
 ### Session 2026-11-23
 
-These were resolved without asking, using the recommended defaults (non-interactive run). Each is a default for the maintainer to confirm in review.
+Five questions were resolved with the recommended defaults, for the maintainer to confirm in review. Three were put to the maintainer, who chose the recommended answer each time; they are marked "confirmed by the maintainer".
 
 - Q: On a phone, how do a lesson row's controls fit beside a long title (C-01, D-04)? → A: The title takes the row's full width and wraps. The controls go on a line below it, and that line wraps too. Every control stays one tap away. A "more" menu would save a line, but it would hide Edit and Remove behind a second tap and change what the e2e helpers find. At desktop width the row is unchanged (FR-002, US1).
 - Q: How is the course editor's long page made quick to use (C-03)? → A: Two changes. "Course content" moves directly below the course's header card, ahead of the settings sections. A row of section links under the header ("Content", "Landing page", "Catalogue", "Captions", "Certificates", "Announcements", "Archived") leads to each section, with the section's name in the address after `#`. There are no tabs and nothing collapses: every section stays on one page, as today, so nothing moves out of reach of a search in the page (FR-024, US10).
 - Q: Which unsaved work is guarded, and does Cancel ask (C-11, D-06)? → A: The question is asked when a dialog holding typed or uploaded work is dismissed with Escape or a click outside it, and when someone leaves the course editor, in the portal or by closing the tab, with a settings section that has unsaved changes. Cancel is a deliberate choice, so it discards without asking, and it always discards: reopening shows the saved values (FR-018 to FR-020, US6).
 - Q: What does a button do while its save is running, given that disabling it loses focus (C-07, A-13)? → A: It keeps focus, says what it is doing ("Saving…"), and ignores further presses until the save finishes. It is never removed from the tab order mid-action (FR-013, US5).
+- Q: What should the home page's "Give feedback" button, which does nothing, become (A-08)? → A: It is removed (confirmed by the maintainer). There is no feedback destination in the product, and making one is a feature (US2 scenario 7).
+- Q: How far should the course editor's long-page fix go (C-03)? → A: "Course content" first, plus section links kept in the address. Every section stays on one page; no tabs (confirmed by the maintainer, as the default above).
+- Q: Is My Courses' 100-course limit (B-23) fixed here? → A: No. It is a separate bug fix, because following the list's cursor adds requests (confirmed by the maintainer).
 - Q: Several fixes are in components the three portals share (the dialog frame, breadcrumbs, the route announcer in the shell, discussion post cards, notification settings, switches and checkboxes). Do the student and admin portals change too? → A: Yes, wherever the fix is in shared code. The admin portal gains page focus on navigation and working breadcrumbs from the shared shell. Both portals gain dialogs that fit a phone and larger close buttons and switches. Nothing else in them is touched, and they are not re-audited here (FR-033).
 
 ## User Scenarios & Testing *(mandatory)*
@@ -97,7 +100,7 @@ An instructor uses the breadcrumb trail to step back up from a submission to its
 4. **Given** the landing-page checklist, **When** the instructor uses an "Add it" link, **Then** the page scrolls to that section of the same course page, the address is still the course page (with the section's name after `#`), and each link's name says what it adds ("Add it: Preview video").
 5. **Given** the checklist's profile line, **When** it is used, **Then** the profile page opens within the portal, without reloading the app.
 6. **Given** an address in the portal that matches no page, **When** it is opened, **Then** a "Page not found" page shows inside the portal's shell, with its navigation and a link home.
-7. **Given** the home page, **When** it loads, **Then** every control on it does something: "Give feedback" either leads to where feedback is collected, or is gone.
+7. **Given** the home page, **When** it loads, **Then** every control on it does something, and the "Give feedback" card is gone.
 
 ---
 
@@ -451,9 +454,9 @@ Fixing them once does not stop them coming back.
 
 - **Audit data.** The measurements were taken on the local stack with data made for the audit. The layout defects depend on that data only in that long titles and words make them visible. Earnings answers were stubbed in the browser, so the earnings figures themselves were not checked.
 - **What "without changing behaviour" covers.** Moving "Course content" up, adding section links, keeping a view in the address, asking before discarding, and keeping input after a failed save all change what is shown and when, not what is requested. That is within "without changing behaviour", which concerns requests and data. Reading a view from the address sends the same inputs the on-screen control sends today.
-- **Out of scope: the 100-course limit (B-23).** My Courses loads only the first 100 courses. Fixing that means following the list's cursor, which is a new request. It is left for a fix of its own and recorded in [audit.md](./audit.md).
+- **Out of scope: the 100-course limit (B-23).** My Courses loads only the first 100 courses. Fixing that means following the list's cursor, which is a new request. It is left for a fix of its own, as the maintainer confirmed, and recorded in [audit.md](./audit.md).
 - **Out of scope: the improvements in [audit.md](./audit.md).** Sorting, next-submission navigation, counts on links, one save or autosave, collapsible modules, a shared upload drop zone and full-screen phone dialogs are new features. They are recorded for later.
-- **"Give feedback" (A-08).** The button is removed unless the maintainer names where feedback goes. There is no feedback destination in the product today, and making one is a feature.
+- **"Give feedback" (A-08).** The card is removed, as the maintainer confirmed. There is no feedback destination in the product today, and making one is a feature.
 - **The admin portal.** It is not audited. It gains only what the shared fixes give it (FR-033). An admin-portal reviews screen like the instructor one probably shares E-03, and is noted for its own audit.
 - **Not checked.** Screen-reader announcements are checked by a person with a screen reader before merge; automated tests check focus and the markup that causes the announcement. Touch dragging on a real phone, dark mode and the deployed Cognito sign-in were not checked by the audit and are not changed here.
 - **The Web Interface Guidelines** are the public guidelines the project's `web-design-guidelines` skill fetches. The UI rules link to them and restate only what this project has decided.
