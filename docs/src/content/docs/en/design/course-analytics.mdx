@@ -7,6 +7,8 @@ sidebar:
 
 import Link from '@components/link.astro';
 
+**Spec:** [`specs/20261120-154551-first-lesson-start/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-154551-first-lesson-start/) (activation and the first-lesson prompt's answers and dismissals)
+
 The instructor portal's dashboard shows one summary card per course, and each card opens that course's analytics page. Both read figures that are kept up to date from the core table's stream, not counted from the records on every request, so they load quickly however many students are enrolled.
 
 ## Definitions
@@ -18,6 +20,9 @@ The instructor portal's dashboard shows one summary card per course, and each ca
 | **Active learner** | An enrolled student who completed an item (which includes submitting an assignment) or submitted a quiz attempt. Signing in or opening a page doesn't count, because neither is recorded |
 | **Active this week** | Distinct active learners in the current calendar week, Monday to Sunday, UTC. The analytics page also shows distinct active learners per UTC day, for the last 30 or 90 days |
 | **Completion rate** | Completed enrolments divided by all enrolments that haven't dropped. A course with no such enrolments shows "No data", not 0% |
+| **Activated** | Enrolments that have done a first thing in the course: the enrolment has a last-activity time, which is set by the first completed item, quiz attempt or assignment submission. Every enrolment counts, ended ones included. It is counted from the enrolment's last-activity time, so no new marker is kept, and it is "so far": a learner who hasn't started yet may still become activated. The history chart attributes it to the UTC day the student enrolled |
+| **Activation rate** | Activated enrolments divided by all enrolments, ended ones included in both. It is shown for all time and for learners who enrolled in the last 30 or 90 days. A course with no enrolments shows "No data", not 0% |
+| **Prompt answers and dismissals** | How many learners answered the first-lesson prompt, and how many pressed **Not now**. Each learner counts once per course. How often the prompt was shown isn't recorded, so there is no rate |
 | **Drop-off** | For each lesson currently shown to students, in course order: how many learners started it, how many completed it, and the completed share of those who started. Hidden or archived lessons, and lessons of hidden or archived modules, are left out |
 | **Score bands** | Each student's best score per quiz, in ten-point bands (0-9, 10-19, ... 90-100), so a student counts once however many attempts they made |
 | **Most-missed questions** | Ranked by miss rate across every attempt. A question needs at least 5 attempts to be ranked, so one bad attempt can't put it first |

@@ -5,7 +5,11 @@ sidebar:
   order: 6
 ---
 
+import Link from '@components/link.astro';
+
 **Spec:** [`specs/_archive/20261115-204517-video-player/`](https://github.com/AlexTo/discava/tree/main/specs/_archive/20261115-204517-video-player/)
+
+**Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
 
 Both portals play lesson videos with the same player, with its own control bar in place of the browser's.
 
@@ -44,3 +48,32 @@ When a video has caption tracks, the player shows a captions menu: **Off**, then
 ### Caption status
 
 A video's `captionsStatus` is `pending` while Transcribe runs, then `ready` or `failed`. A job still pending after 2 hours is reported as `failed`. A failure only affects captions; the video itself stays playable. The instructor's lesson row shows the status and the track count.
+
+## Transcript
+
+A **Transcript** button in the control bar opens a panel with every line of the video's captions, each with its time. It is only in the student lesson player, and only when the video has at least one caption track. The preview and the instructor portal don't show it. On wide screens the panel sits beside the player at the player's height; on narrow ones it sits below, at most 20rem or half the viewport high. Nothing scrolls sideways at phone width.
+
+- **Which track:** the one the captions menu has chosen. Choosing another language changes the lines and the panel's name, "Transcript (language)". With captions **Off**, the panel still shows the remembered track, or the default. If no track's file loads, the panel says "This transcript couldn't be loaded." and the video keeps playing.
+- **Choosing a line:** clicking or tapping a line seeks to its start and plays.
+- **Following:** the current line is marked (a left border and a heavier weight, plus `aria-current="true"`) and the panel scrolls itself to keep it in view. It never scrolls the page and never moves focus. Scrolling, wheeling, touching or moving focus inside the panel pauses following and shows **Jump to current line**; that button, or choosing a line, resumes it. With reduced motion set, the scroll isn't animated.
+- **Screen readers:** there is no live region, because the captions and the audio already carry the live content. Each line reads as its time in words ("12 minutes 40 seconds") and then its text.
+- **Remembered open state:** open or closed is remembered in the browser with the other player preferences (`transcriptOpen`, closed by default).
+
+### Transcript keys
+
+The panel is outside the player's shortcut container, so the shortcuts above don't apply inside it: Space, arrows and the letter keys never change the video from there.
+
+| Key | Action |
+|-----|--------|
+| Tab | Into the list, onto the current line (the first line before any cue); one more Tab leaves it |
+| Down, Up | Focus the next, previous line |
+| Home, End | Focus the first, last line |
+| Enter, Space | Seek to the focused line and play; focus stays on it |
+
+### Built in the browser
+
+There is no transcript API. The player already fetches each track's WebVTT file for the captions overlay; the panel parses the same text once (`parseWebVtt`, in `@discava/common-web-utils/webvtt`) into cues, so it makes no extra request and has exactly the access the captions have. Cue text is reduced to plain text (cue settings, `<v>`, `<c>`, `<i>` and timestamp tags dropped, the five WebVTT entities decoded) and rendered as text nodes. The whole transcript is rendered, with no virtual list, so find-in-page and a screen reader's reading commands work on it. The indexer for <Link path="design/search">transcript search</Link> uses the same parser, so the panel and the index agree on what a line is.
+
+### Opening a lesson at a moment
+
+A lesson's address takes two optional parameters: `?item=<contentItemId>&t=<seconds>`. With `item` naming a video in the lesson, the lesson scrolls to it, moves focus to its player, seeks to `t`, stays paused, and shows "Starting at m:ss" with no **Start over** button. `t` takes the place of the saved position for that visit, and the seek saves nothing. Anything else in the parameters is ignored and the lesson opens as usual. The parameters grant nothing: the lesson still loads through the usual enrolment and visibility checks. A transcript search result links this way.

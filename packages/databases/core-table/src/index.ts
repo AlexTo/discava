@@ -163,6 +163,7 @@ export { type CategoryCreate, categoryWrites } from './helpers/category.js';
 export {
   CERTIFICATE_REMINDER_DELAY_DAYS,
   type Certificate,
+  type CertificateActor,
   type CertificateReminderInput,
   certificateReminderDueAt,
   claimCertificateReminder,
@@ -175,8 +176,17 @@ export {
   learnerName,
   markCertificateReminderScheduled,
   normaliseCertificateId,
+  REVOCATION_NOTE_MAX_LENGTH,
+  REVOCATION_REASONS,
   type RecordLinkedInClickInput,
+  type RestoreCertificateInput,
+  RestoreForbiddenError,
+  type RevocationReason,
+  type RevokeCertificateInput,
   recordLinkedInClick,
+  restoreCertificate,
+  revocationReasonLabel,
+  revokeCertificate,
 } from './helpers/certificate.js';
 export {
   type CertificateAssessment,

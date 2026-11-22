@@ -5,6 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { PDF } from '@libpdf/core';
 import { type Download, expect, type Page } from '@playwright/test';
+import { type ApiUser } from './api.js';
 import { createPublishedCourse } from './instructor-portal.js';
 import { PORTALS } from './portals.js';
 import {
@@ -119,3 +120,19 @@ export const downloadedPdfText = async (download: Download) => {
 // The ID printed on a certificate's page or PDF, in its display form.
 export const CERTIFICATE_ID =
   /[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){3}/;
+
+// Revocation steps (#594). The instructor's screen arrives later, so the
+// instructor revokes and restores through instructor-api, as that screen will.
+
+// The course's certificates, newest first, as the instructor sees them.
+export const courseCertificates = async (
+  instructor: ApiUser,
+  courseId: string,
+) => (await instructor.instructor.certificate.list.query({ courseId })).items;
+
+// The text My Learning and the course home give a learner for a revoked
+// certificate, for the reason `label`.
+export const revokedCertificateText = (label: string) =>
+  new RegExp(
+    `^Certificate revoked on \\d{1,2} [A-Z][a-z]+ \\d{4}\\. Reason: ${label}\\.$`,
+  );
