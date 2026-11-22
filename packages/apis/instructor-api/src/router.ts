@@ -39,6 +39,7 @@ import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
+  retryContentItemCaptionTranslation,
 } from './procedures/content-item-captions.js';
 import {
   createContentItemFile,
@@ -82,6 +83,7 @@ import {
 } from './procedures/course.js';
 import {
   courseCaptionLanguages,
+  retryCourseCaptionTranslations,
   updateCourseCaptionLanguages,
 } from './procedures/course-caption-languages.js';
 import {
@@ -201,6 +203,7 @@ export const appRouter = router({
     updateCatalogue: updateCourseCatalogue,
     captionLanguages: courseCaptionLanguages,
     updateCaptionLanguages: updateCourseCaptionLanguages,
+    retryCaptionTranslations: retryCourseCaptionTranslations,
     updateLanding: updateCourseLanding,
   }),
   coursePreview: router({
@@ -270,6 +273,7 @@ export const appRouter = router({
     captionUploadUrl: createContentItemCaptionUploadUrl,
     attachCaption: attachContentItemCaption,
     removeCaption: removeContentItemCaption,
+    retryCaptionTranslation: retryContentItemCaptionTranslation,
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,

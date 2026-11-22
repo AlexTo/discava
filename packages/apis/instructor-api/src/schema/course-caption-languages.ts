@@ -38,3 +38,12 @@ export const CourseCaptionLanguagesOutputSchema = z.object({
 export type ICourseCaptionLanguagesOutput = z.output<
   typeof CourseCaptionLanguagesOutputSchema
 >;
+
+export const RetryCourseCaptionTranslationsInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export const RetryCourseCaptionTranslationsOutputSchema = z.object({
+  // The number of videos asked.
+  requested: z.number(),
+});

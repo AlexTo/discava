@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'node:crypto';
+import { resolveCaptionTranslationSettings } from '@discava/common-server-utils/caption-translation-settings';
 import {
   CAPTION_MAX_BYTES,
   captionKey,
@@ -22,6 +23,7 @@ import {
   type CoreTable,
   captionWriteCondition,
   isConditionalCheckFailed,
+  requestCaptionTranslation,
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -31,7 +33,11 @@ import {
   putCaptionFile,
   readCaptionUpload,
 } from '../helpers/caption-files.js';
-import { requireCourseInstructor } from '../helpers/course-access.js';
+import { reportedCaptionTranslations } from '../helpers/caption-translations.js';
+import {
+  getCourseOrThrow,
+  requireCourseInstructor,
+} from '../helpers/course-access.js';
 import {
   requireAncestorsNotArchived,
   requireNotArchived,
@@ -40,11 +46,14 @@ import { courseProcedure } from '../init.js';
 import {
   AttachCaptionInputSchema,
   CaptionTracksOutputSchema,
+  CaptionTranslationsOutputSchema,
   CaptionUploadUrlInputSchema,
   CaptionUploadUrlOutputSchema,
   type ICaptionTracksOutput,
   RemoveCaptionInputSchema,
+  RetryCaptionTranslationInputSchema,
 } from '../schema/index.js';
+import { requireTranslationOn } from './course-caption-languages.js';
 
 // Caption tracks an instructor manages. A track's file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then checked and
@@ -305,4 +314,28 @@ export const removeContentItemCaption = courseProcedure
     await bestEffortDeleteCaptionFile(ctx.logger, change.removed.key);
     await deleteDisplacedFiles(ctx.logger, change);
     return tracksOutput(change.tracks, nonce);
+  });
+
+// Asks the video for its translations again: clears the recorded outcome and
+// touches the request marker the stream feature watches. Answers with the
+// status as it now reads, which is "translating" for every missing language.
+export const retryContentItemCaptionTranslation = courseProcedure
+  .input(RetryCaptionTranslationInputSchema)
+  .output(CaptionTranslationsOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { item, nonce } = await requireReadyVideo(
+      coreTable,
+      input,
+      ctx.user.sub,
+    );
+    const course = await getCourseOrThrow(coreTable, input.courseId);
+    await requireTranslationOn(course.captionLanguages);
+
+    await requestCaptionTranslation(coreTable.entities, input);
+    return reportedCaptionTranslations(
+      { ...item, nonce, captionTranslation: undefined },
+      course,
+      await resolveCaptionTranslationSettings(),
+    );
   });

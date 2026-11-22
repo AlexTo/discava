@@ -351,6 +351,24 @@ export type ICreateContentItemVideoUrlInput = z.output<
   typeof CreateContentItemVideoUrlInputSchema
 >;
 
+export const CaptionTranslationsOutputSchema = z.array(
+  z.object({
+    language: z.string(),
+    label: z.string(),
+    nativeLabel: z.string(),
+    state: z.enum([
+      'translated',
+      'uploaded',
+      'translating',
+      'failed',
+      'too-long',
+      'no-room',
+      'not-translated',
+    ]),
+    reason: z.enum(['no-captions', 'language-mismatch', 'disabled']).optional(),
+  }),
+);
+
 export const CreateContentItemVideoUrlOutputSchema = z.object({
   url: z.string(),
   // Whether the player must send credentials for it: the signed CloudFront
@@ -378,6 +396,9 @@ export const CreateContentItemVideoUrlOutputSchema = z.object({
       url: z.string(),
     }),
   ),
+  // The status of each of the course's caption languages for this video;
+  // [] when the course has none.
+  translations: CaptionTranslationsOutputSchema,
 });
 
 export type ICreateContentItemVideoUrlOutput = z.output<
@@ -428,6 +449,9 @@ export const RemoveCaptionInputSchema = z.object({
   ...CaptionItemRefSchema,
   trackId: z.string(),
 });
+
+export const RetryCaptionTranslationInputSchema =
+  z.object(CaptionItemRefSchema);
 
 export const DeleteContentItemInputSchema = z.object({
   courseId: z.string(),

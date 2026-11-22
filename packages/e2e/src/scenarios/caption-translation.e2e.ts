@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   AUTO_CAPTION_CUE,
   CAPTION_CUE,
@@ -392,4 +392,135 @@ test('translations follow the source', async ({ browser }) => {
     ).toBeVisible();
     await closeDialog(instructor);
   });
+});
+
+test('a failed translation leaves the video playable', async ({ browser }) => {
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+  const course = uniqueName('E2E translation fails');
+  const FAILING_CUE = 'This cue fails to translate [[fail-translation:fr-FR]].';
+
+  await test.step('French fails while Spanish is translated', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Tess', ['instructor']));
+    await createCourse(instructor, {
+      title: course,
+      summary: 'A course whose French translation fails.',
+    });
+    await addModule(instructor, 'Module one');
+    await addLesson(instructor, 'Lesson one');
+    await addVideoItem(instructor, {
+      title: 'Video one',
+      file: THREE_SECOND_VIDEO,
+    });
+    await expectCaptionTrackListed(instructor, 'Video one', 'English');
+    await closeDialog(instructor);
+    await chooseCaptionLanguages(instructor, course, ['Spanish', 'French']);
+    await expectCaptionTrackListed(instructor, 'Video one', 'Français');
+    await closeDialog(instructor);
+
+    await uploadCaption(instructor, 'Video one', {
+      tag: 'en-US',
+      cue: FAILING_CUE,
+    });
+    await closeDialog(instructor);
+    await publishCourse(instructor);
+
+    let dialog: Locator | undefined;
+    await expect(async () => {
+      dialog = await openCaptionsDialog(instructor, 'Video one');
+      try {
+        await expect(
+          dialog.getByText('French: Translation failed'),
+        ).toBeVisible({ timeout: 3_000 });
+      } catch (error) {
+        await closeDialog(instructor);
+        throw error;
+      }
+    }).toPass({ timeout: 90_000 });
+    await expect(
+      (dialog as Locator)
+        .getByRole('listitem', { name: 'Español' })
+        .getByText('Auto-translated'),
+    ).toBeVisible();
+    await screenshot(instructor, 'captions-dialog-translation-failed');
+    await closeDialog(instructor);
+  });
+
+  await test.step('the student plays the video with its English and Spanish tracks', async () => {
+    await openCourse(student, course);
+    await enrol(student, newUser('Sol', ['student']));
+    await startFirstLesson(student);
+    await expectToPlay(lessonVideo(student, 'Video one'));
+    await openCaptionsMenu(student, 'Video one');
+    await expect(student.getByRole('menuitemradio')).toHaveText([
+      'Off',
+      'English (default)',
+      'Español (auto-translated)',
+    ]);
+  });
+
+  await test.step('Translate again runs it again and the row stays failed', async () => {
+    const dialog = await openCaptionsDialog(instructor, 'Video one');
+    await dialog.getByRole('button', { name: 'Translate again' }).click();
+    await waitForQueuesToDrain();
+    await expect(dialog.getByText('French: Translation failed')).toBeVisible({
+      timeout: 60_000,
+    });
+    await closeDialog(instructor);
+  });
+
+  await test.step('a clean source file produces the French track', async () => {
+    await uploadCaption(instructor, 'Video one', {
+      tag: 'en-US',
+      cue: CAPTION_CUE,
+    });
+    await closeDialog(instructor);
+    const dialog = await expectCaptionTrackListed(
+      instructor,
+      'Video one',
+      'Français',
+    );
+    await expect(dialog.getByText('French: Translation failed')).toHaveCount(0);
+    await closeDialog(instructor);
+  });
+});
+
+test('a course in Spanish with only English automatic captions is not translated', async ({
+  browser,
+}) => {
+  const instructor = await browser.newPage();
+  const course = uniqueName('E2E language mismatch');
+
+  await instructor.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(instructor, newUser('Tess', ['instructor']));
+  await createCourse(instructor, {
+    title: course,
+    summary: 'A Spanish course with English automatic captions.',
+  });
+  await instructor.getByLabel('Language', { exact: true }).selectOption('es');
+  await instructor
+    .getByRole('button', { name: 'Save catalogue details' })
+    .click();
+  await expect(instructor.getByText('Saved').first()).toBeVisible();
+  await chooseCaptionLanguages(instructor, course, ['French']);
+  await addModule(instructor, 'Module one');
+  await addLesson(instructor, 'Lesson one');
+  await addVideoItem(instructor, {
+    title: 'Video one',
+    file: THREE_SECOND_VIDEO,
+  });
+  await expectCaptionTrackListed(instructor, 'Video one', 'English');
+
+  const dialog = instructor.getByRole('dialog', { name: 'Captions' });
+  await expect(
+    dialog.getByText(
+      "French: The automatic captions aren't in the course's language. Upload captions in the video's language to translate them.",
+    ),
+  ).toBeVisible();
+  await expect(dialog.getByRole('listitem', { name: 'Français' })).toHaveCount(
+    0,
+  );
+  await screenshot(instructor, 'captions-dialog-language-mismatch');
+  await closeDialog(instructor);
 });

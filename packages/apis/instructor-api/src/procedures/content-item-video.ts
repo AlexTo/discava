@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { resolveCaptionTranslationSettings } from '@discava/common-server-utils/caption-translation-settings';
 import {
   getCloudFrontVideoUrl,
   getSignedCloudFrontCookies,
@@ -23,6 +24,7 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { v7 as uuidv7 } from 'uuid';
+import { reportedCaptionTranslations } from '../helpers/caption-translations.js';
 import { asContentItemOutput } from '../helpers/content-item.js';
 import { getCourseOrThrow } from '../helpers/course-access.js';
 import {
@@ -474,11 +476,21 @@ export const createContentItemVideoUrl = courseProcedure
       ),
     );
 
+    const [{ data: course }, settings] = await Promise.all([
+      coreTable.entities.course.get({ courseId }).go(),
+      resolveCaptionTranslationSettings(),
+    ]);
+
     return {
       url,
       withCredentials: cookies.length > 0,
       versionId,
       captionsStatus: reportedCaptionsStatus(contentItem),
       captions,
+      translations: reportedCaptionTranslations(
+        { ...contentItem, nonce: versionId },
+        course ?? {},
+        settings,
+      ),
     };
   });
