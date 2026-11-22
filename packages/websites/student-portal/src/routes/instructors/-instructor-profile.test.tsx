@@ -138,7 +138,7 @@ describe('/instructors/$handle', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: 'Browse courses' }),
-    ).toHaveAttribute('href', '/');
+    ).toHaveAttribute('href', '/courses');
   });
 
   it('offers a retry, not "not found", when the call fails otherwise', {

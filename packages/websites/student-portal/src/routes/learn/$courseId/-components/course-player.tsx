@@ -31,6 +31,7 @@ import {
   type Crumb,
   PageBreadcrumbs,
 } from '../../../../components/page-breadcrumbs';
+import { PageContainer } from '../../../../components/page-container';
 import {
   type CoursePlayer,
   errorCode,
@@ -98,7 +99,9 @@ export function Unavailable({
         </div>
       )}
       <Button className="mt-6" asChild>
-        <Link to="/">Browse courses</Link>
+        <Link to="/courses" search={{}}>
+          Browse courses
+        </Link>
       </Button>
     </main>
   );
@@ -325,7 +328,7 @@ export function CoursePlayerLayout({
   ];
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
+    <PageContainer>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
         <PageBreadcrumbs crumbs={crumbs} className="min-w-0" />
         <Link
@@ -398,6 +401,6 @@ export function CoursePlayerLayout({
         </aside>
         <section className="min-w-0">{children(player)}</section>
       </div>
-    </main>
+    </PageContainer>
   );
 }

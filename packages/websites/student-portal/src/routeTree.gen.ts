@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as CategorySlugRouteImport } from './routes/category/$slug'
+import { Route as CoursesIndexRouteImport } from './routes/courses/index'
 import { Route as InstructorsHandleRouteImport } from './routes/instructors/$handle'
 import { Route as MyLearningIndexRouteImport } from './routes/my-learning/index'
 import { Route as SearchIndexRouteImport } from './routes/search/index'
@@ -37,6 +38,11 @@ const UnsubscribeRoute = UnsubscribeRouteImport.update({
 const CategorySlugRoute = CategorySlugRouteImport.update({
   id: '/category/$slug',
   path: '/category/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesIndexRoute = CoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstructorsHandleRoute = InstructorsHandleRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/category/$slug': typeof CategorySlugRoute
   '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/courses/': typeof CoursesIndexRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/category/$slug': typeof CategorySlugRoute
   '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/courses': typeof CoursesIndexRoute
   '/my-learning': typeof MyLearningIndexRoute
   '/search': typeof SearchIndexRoute
   '/signin': typeof SigninIndexRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/category/$slug': typeof CategorySlugRoute
   '/instructors/$handle': typeof InstructorsHandleRoute
   '/settings/notifications': typeof SettingsNotificationsRoute
+  '/courses/': typeof CoursesIndexRoute
   '/my-learning/': typeof MyLearningIndexRoute
   '/search/': typeof SearchIndexRoute
   '/signin/': typeof SigninIndexRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/category/$slug'
     | '/instructors/$handle'
     | '/settings/notifications'
+    | '/courses/'
     | '/my-learning/'
     | '/search/'
     | '/signin/'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/category/$slug'
     | '/instructors/$handle'
     | '/settings/notifications'
+    | '/courses'
     | '/my-learning'
     | '/search'
     | '/signin'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/category/$slug'
     | '/instructors/$handle'
     | '/settings/notifications'
+    | '/courses/'
     | '/my-learning/'
     | '/search/'
     | '/signin/'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   CategorySlugRoute: typeof CategorySlugRoute
   InstructorsHandleRoute: typeof InstructorsHandleRoute
   SettingsNotificationsRoute: typeof SettingsNotificationsRoute
+  CoursesIndexRoute: typeof CoursesIndexRoute
   MyLearningIndexRoute: typeof MyLearningIndexRoute
   SearchIndexRoute: typeof SearchIndexRoute
   SigninIndexRoute: typeof SigninIndexRoute
@@ -236,6 +249,13 @@ declare module '@tanstack/react-router' {
       path: '/category/$slug'
       fullPath: '/category/$slug'
       preLoaderRoute: typeof CategorySlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses/': {
+      id: '/courses/'
+      path: '/courses'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof CoursesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/instructors/$handle': {
@@ -324,6 +344,7 @@ const rootRouteChildren: RootRouteChildren = {
   CategorySlugRoute: CategorySlugRoute,
   InstructorsHandleRoute: InstructorsHandleRoute,
   SettingsNotificationsRoute: SettingsNotificationsRoute,
+  CoursesIndexRoute: CoursesIndexRoute,
   MyLearningIndexRoute: MyLearningIndexRoute,
   SearchIndexRoute: SearchIndexRoute,
   SigninIndexRoute: SigninIndexRoute,

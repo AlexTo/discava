@@ -284,7 +284,7 @@ describe('CoursePage', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /Browse courses/ }),
-    ).toHaveAttribute('href', '/');
+    ).toHaveAttribute('href', '/courses');
   });
 
   describe('preview video', () => {
