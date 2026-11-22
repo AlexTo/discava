@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
+import { DEFAULT_FIRST_LESSON_PROMPT } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
 import {
@@ -24,6 +25,7 @@ import {
   restoreCourse,
   setCourseCertificateCriteria,
   setCourseCertificates,
+  setCourseFirstLessonPrompt,
   viewCourse,
 } from './course.js';
 
@@ -35,6 +37,7 @@ const {
   courseInstructorPatch,
   courseInstructorQueryPrimary,
   coursePatch,
+  coursePatchRemove,
   coursePreviewGet,
   curriculumCollection,
   ensureProfile,
@@ -78,6 +81,7 @@ const router = t.router({
   restoreCourse,
   setCourseCertificates,
   setCourseCertificateCriteria,
+  setCourseFirstLessonPrompt,
   viewCourse,
 });
 
@@ -521,6 +525,135 @@ describe('setCourseCertificates', () => {
   });
 });
 
+describe('setCourseFirstLessonPrompt', () => {
+  const input = { courseId: course.courseId, prompt: 'What will you build?' };
+
+  it('rejects callers who are not in the instructor group before checking course membership', async () => {
+    await expect(
+      callAs(['student']).setCourseFirstLessonPrompt(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(courseInstructorGet).not.toHaveBeenCalled();
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('throws FORBIDDEN when the caller does not teach the course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: undefined }),
+    });
+
+    await expect(
+      callAs().setCourseFirstLessonPrompt(input),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('sets the trimmed text and returns the course', async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, firstLessonPrompt: 'What will you build?' },
+    });
+
+    const result = await callAs().setCourseFirstLessonPrompt({
+      ...input,
+      prompt: '  What will you build?\n ',
+    });
+
+    expect(coursePatch).toHaveBeenCalledWith({ courseId: course.courseId });
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      firstLessonPrompt: 'What will you build?',
+    });
+    expect(result.firstLessonPrompt).toBe('What will you build?');
+  });
+
+  it('accepts exactly 200 characters', async () => {
+    const prompt = 'a'.repeat(200);
+
+    await callAs().setCourseFirstLessonPrompt({ ...input, prompt });
+
+    expect(coursePatchSet).toHaveBeenCalledWith({ firstLessonPrompt: prompt });
+  });
+
+  it('refuses more than 200 characters after trimming, writing nothing', async () => {
+    await expect(
+      callAs().setCourseFirstLessonPrompt({
+        ...input,
+        prompt: 'a'.repeat(201),
+      }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'The prompt must be at most 200 characters',
+    });
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+
+  it('counts the text after trimming against the limit', async () => {
+    await callAs().setCourseFirstLessonPrompt({
+      ...input,
+      prompt: ` ${'a'.repeat(200)} `,
+    });
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      firstLessonPrompt: 'a'.repeat(200),
+    });
+  });
+
+  it.each([null, '', '  \n\t '])(
+    "removes the course's own text for %j, so it uses the default",
+    async (prompt) => {
+      await callAs().setCourseFirstLessonPrompt({ ...input, prompt });
+
+      expect(coursePatchRemove).toHaveBeenCalledWith(['firstLessonPrompt']);
+      expect(coursePatchSet).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['draft', 'published', 'archived'] as const)(
+    'changes the text of a %s course',
+    async (status) => {
+      coursePatchGo.mockResolvedValueOnce({
+        data: { ...course, status, firstLessonPrompt: 'What will you build?' },
+      });
+
+      const result = await callAs().setCourseFirstLessonPrompt(input);
+
+      expect(result.status).toBe(status);
+      expect(coursePatchWhere).not.toHaveBeenCalled();
+    },
+  );
+
+  it("moves updatedAt and every instructor's courseUpdatedAt", async () => {
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, updatedAt: '2024-03-01T00:00:00.000Z' },
+    });
+    courseInstructorQueryPrimary.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: [
+          { courseId: course.courseId, instructorId: INSTRUCTOR_SUB },
+          { courseId: course.courseId, instructorId: 'co-instructor' },
+        ],
+      }),
+    });
+
+    const result = await callAs().setCourseFirstLessonPrompt(input);
+
+    expect(result.updatedAt).toBe('2024-03-01T00:00:00.000Z');
+    expect(courseInstructorPatchSet).toHaveBeenCalledWith({
+      courseUpdatedAt: '2024-03-01T00:00:00.000Z',
+    });
+    expect(courseInstructorPatch).toHaveBeenCalledWith({
+      courseId: course.courseId,
+      instructorId: 'co-instructor',
+    });
+  });
+
+  it('reads and writes no enrolment', async () => {
+    await callAs().setCourseFirstLessonPrompt(input);
+
+    // The entity mock has no `enrolment` entity, so a touch would throw.
+    expect(coursePatch).toHaveBeenCalledTimes(1);
+    expect(transactionWrite).not.toHaveBeenCalled();
+  });
+});
+
 describe('setCourseCertificateCriteria', () => {
   const input = { courseId: course.courseId, requireQuizPass: true };
   const required = { version: 2, requireQuizPass: true };
@@ -678,6 +811,37 @@ describe('viewCourse', () => {
     expect(result.publishedAt).toBe('2024-02-01T00:00:00.000Z');
   });
 
+  it('returns the default prompt, and no custom text when the course has none', async () => {
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { course: [course], module: [], lesson: [], contentItem: [] },
+      }),
+    });
+
+    const result = await callAs().viewCourse({ courseId: course.courseId });
+
+    expect(result.defaultFirstLessonPrompt).toBe(DEFAULT_FIRST_LESSON_PROMPT);
+    expect(result.firstLessonPrompt).toBeUndefined();
+  });
+
+  it("returns the course's own prompt beside the default", async () => {
+    curriculumCollection.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: {
+          course: [{ ...course, firstLessonPrompt: 'What will you build?' }],
+          module: [],
+          lesson: [],
+          contentItem: [],
+        },
+      }),
+    });
+
+    const result = await callAs().viewCourse({ courseId: course.courseId });
+
+    expect(result.firstLessonPrompt).toBe('What will you build?');
+    expect(result.defaultFirstLessonPrompt).toBe(DEFAULT_FIRST_LESSON_PROMPT);
+  });
+
   it('returns the preview as the editor needs it, without keys or uploader', async () => {
     courseInstructorGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({
@@ -752,6 +916,7 @@ describe('viewCourse', () => {
     });
     expect(result).toEqual({
       ...course,
+      defaultFirstLessonPrompt: DEFAULT_FIRST_LESSON_PROMPT,
       modules: [
         {
           ...module,
