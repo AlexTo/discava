@@ -2,12 +2,15 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { Link } from '@tanstack/react-router';
 
 interface Line {
   label: string;
   // Undefined while its data loads (only the profile line); shown as "Checking…".
   done?: boolean;
-  href?: string;
+  // The id of the section on this page that fixes it, or the profile page.
+  hash?: string;
+  to?: '/profile';
 }
 
 const LINK_CLASS =
@@ -39,26 +42,26 @@ export function LandingPageChecklist({
     {
       label: 'Learning outcomes',
       done: hasOutcomes,
-      href: '#landing-page-heading',
+      hash: 'landing-page',
     },
     {
       label: 'Requirements',
       done: hasRequirements,
-      href: '#landing-page-heading',
+      hash: 'landing-page',
     },
-    { label: 'Preview video', done: hasPreview, href: '#landing-page-heading' },
-    { label: 'Course image', done: hasImage, href: '#course-image' },
+    { label: 'Preview video', done: hasPreview, hash: 'preview-video' },
+    { label: 'Course image', done: hasImage, hash: 'course-image' },
     {
       label: 'Your profile (headline and photo)',
       done: hasProfile,
-      href: '/profile',
+      to: '/profile',
     },
   ];
 
   return (
     <div className="space-y-3">
       <ul className="space-y-2 text-sm">
-        {lines.map(({ label, done, href }) => (
+        {lines.map(({ label, done, hash, to }) => (
           <li key={label} className="flex flex-wrap items-center gap-2">
             {done === undefined ? (
               <>
@@ -73,10 +76,24 @@ export function LandingPageChecklist({
                 <span className="text-muted-foreground">
                   {done ? 'Done' : 'Not yet'}
                 </span>
-                {!done && href && (
-                  <a href={href} className={LINK_CLASS}>
+                {!done && to && (
+                  <Link
+                    to={to}
+                    aria-label={`Add it: ${label}`}
+                    className={LINK_CLASS}
+                  >
                     Add it
-                  </a>
+                  </Link>
+                )}
+                {!done && hash && (
+                  <Link
+                    to="."
+                    hash={hash}
+                    aria-label={`Add it: ${label}`}
+                    className={LINK_CLASS}
+                  >
+                    Add it
+                  </Link>
                 )}
               </>
             )}

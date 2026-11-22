@@ -12,9 +12,13 @@ export const BreadcrumbOverrideContext = createContext<{
   setOverride: (pathname: string, label: string | undefined) => void;
 } | null>(null);
 
-export function useBreadcrumbLabel(label: string | undefined) {
+// `path` labels a crumb above the current page (a course, say), for pages
+// that sit under it without rendering inside its layout. It defaults to the
+// current pathname.
+export function useBreadcrumbLabel(label: string | undefined, path?: string) {
   const ctx = useContext(BreadcrumbOverrideContext);
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const pathname = path ?? location.pathname;
 
   useEffect(() => {
     if (!ctx || !label) return;

@@ -24,6 +24,7 @@ const navItems: PortalNavItem[] = [
 // might load (e.g. a course title) - those instead go through
 // useBreadcrumbLabel.
 const segmentLabels = {
+  earnings: 'Earnings',
   dashboard: 'Dashboard',
   'my-courses': 'My Courses',
   assignments: 'Assignments',
@@ -32,7 +33,7 @@ const segmentLabels = {
   reviews: 'Reviews',
   profile: 'Profile',
   settings: 'Settings',
-  notifications: 'Notifications',
+  notifications: 'Notification settings',
 };
 
 const userMenuItems: UserMenuItem[] = [
