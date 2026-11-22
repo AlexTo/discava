@@ -169,6 +169,20 @@ describe('page renderer', () => {
     expect(publicView).not.toHaveBeenCalled();
   });
 
+  it('serves the plain noindex shell at the preview address, reading nothing', async () => {
+    const entities = vi.fn(() => ({}));
+    const table = Object.defineProperty({}, 'entities', { get: entities });
+    const { render, publicView } = build({ coreTable: async () => table });
+    const response = await render(get('/learn/c1/preview/l1'));
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['X-Robots-Tag']).toBe('noindex');
+    expect(response.body).toContain('<meta name="robots" content="noindex" />');
+    expect(response.body).not.toContain('Intro to Rust');
+    expect(response.body).not.toContain('discava-page-data');
+    expect(publicView).not.toHaveBeenCalled();
+    expect(entities).not.toHaveBeenCalled();
+  });
+
   it('ignores a host that is not allowed', async () => {
     const { render } = build();
     const response = await render(

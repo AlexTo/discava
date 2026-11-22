@@ -100,6 +100,7 @@ describe('sitemapEntries', () => {
       '/learn/a',
       '/learn/b',
     ]);
+    expect(paths.some((path) => path.includes('/preview'))).toBe(false);
     expect(entries.find((e) => e.path === '/instructors/ada')?.lastmod).toBe(
       '2026-04-01T00:00:00.000Z',
     );
