@@ -40,15 +40,22 @@ const assessmentProblems = (assessment: Assessment | undefined): string[] => {
     }
     return problems;
   }
+  // Pass marks come with quizzes; a certificate that assessed only graded
+  // uploads has a band but no pass marks.
+  const hasQuiz = items.some((i) => i.kind === 'quiz');
   if (
-    passMarkLowest === undefined ||
-    passMarkHighest === undefined ||
+    hasQuiz !== (passMarkLowest !== undefined) ||
+    hasQuiz !== (passMarkHighest !== undefined) ||
     band === undefined
   ) {
     problems.push('assessment lacks pass marks or a band');
     return problems;
   }
-  if (passMarkLowest > passMarkHighest) {
+  if (
+    passMarkLowest !== undefined &&
+    passMarkHighest !== undefined &&
+    passMarkLowest > passMarkHighest
+  ) {
     problems.push('assessment.passMarkLowest is above passMarkHighest');
   }
   if (!Number.isInteger(band) || band < 0 || band > 90 || band % 10 !== 0) {

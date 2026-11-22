@@ -467,6 +467,13 @@ describe('certificate assessment and criteria invariants', () => {
       issueUpload();
       table.assignmentSubmissions = [submission()];
       expect(of('certificate-met-criteria')).toEqual([]);
+      // No pass marks, as no quiz was assessed.
+      expect(of('certificate-shape')).toEqual([]);
+    });
+
+    it('reports pass marks on a certificate that assessed no quiz', () => {
+      issueUpload({ passMarkLowest: 70, passMarkHighest: 70 });
+      expect(of('certificate-shape').join('\n')).toMatch(/lacks pass marks/);
     });
 
     it('accepts a submission reopened since issue', () => {
