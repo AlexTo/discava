@@ -13,6 +13,17 @@ beforeEach(() => {
 });
 const { item } = testHelpers(() => table);
 
+// The fixture enrolment has activity, so it is activated.
+const summary = {
+  courseId: 'c1',
+  enrolments: 1,
+  completed: 0,
+  dropped: 0,
+  activated: 1,
+  promptAnswered: 0,
+  promptDismissed: 0,
+};
+
 describe('analytics-matches-records', () => {
   const violations = () =>
     checkAllInvariants(table).filter(
@@ -49,9 +60,7 @@ describe('analytics-matches-records', () => {
   });
 
   it('reports an enrolments count that is off by one, with the course', () => {
-    table.courseStats = [
-      { courseId: 'c1', enrolments: 2, completed: 0, dropped: 0 },
-    ];
+    table.courseStats = [{ ...summary, enrolments: 2 }];
     expect(violations()).toEqual([
       expect.objectContaining({
         record: { courseId: 'c1', item: 'SUMMARY' },
@@ -61,9 +70,7 @@ describe('analytics-matches-records', () => {
   });
 
   it('reports a completed count for a status nobody has', () => {
-    table.courseStats = [
-      { courseId: 'c1', enrolments: 1, completed: 1, dropped: 0 },
-    ];
+    table.courseStats = [{ ...summary, completed: 1 }];
     expect(violations()).toEqual([
       expect.objectContaining({
         record: { courseId: 'c1', item: 'SUMMARY' },
@@ -86,6 +93,41 @@ describe('analytics-matches-records', () => {
         record: { courseId: 'c1', item: 'SUMMARY' },
         message: 'enrolments is 0, but its records add up to 1',
       }),
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'SUMMARY' },
+        message: 'activated is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports an activated count one too high', () => {
+    table.courseStats[0].activated = 2;
+    expect(violations().map((v) => v.message)).toEqual([
+      'activated is 2, but its records add up to 1',
+    ]);
+  });
+
+  it('reports an activated count one too low on the enrolment day', () => {
+    table.periodStats[0].activated = 0;
+    expect(violations()).toEqual([
+      expect.objectContaining({
+        record: { courseId: 'c1', item: 'DAY#2026-01-01' },
+        message: 'activated is 0, but its records add up to 1',
+      }),
+    ]);
+  });
+
+  it('reports a promptAnswered that no enrolment backs', () => {
+    table.courseStats[0].promptAnswered = 1;
+    expect(violations().map((v) => v.message)).toEqual([
+      'promptAnswered is 1, but its records add up to 0',
+    ]);
+  });
+
+  it('expects promptAnswered and promptDismissed for enrolments in those states', () => {
+    table.enrolments[0].firstLessonPromptState = 'dismissed';
+    expect(violations().map((v) => v.message)).toEqual([
+      'promptDismissed is 0, but its records add up to 1',
     ]);
   });
 

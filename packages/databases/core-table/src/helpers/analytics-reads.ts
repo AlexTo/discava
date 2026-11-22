@@ -17,6 +17,12 @@ export interface CourseSummary {
   enrolments: number;
   completed: number;
   dropped: number;
+  /** Enrolments that have done a first thing; never above `enrolments`. */
+  activated: number;
+  /** Enrolments that answered the first-lesson prompt. */
+  promptAnswered: number;
+  /** Enrolments that dismissed the first-lesson prompt. */
+  promptDismissed: number;
   /** Learners active in the current UTC calendar week. */
   activeLearners: number;
   /** When the course's analytics last changed; null when they never have. */
@@ -85,11 +91,15 @@ export const readCourseSummaries = async (
   const weekOf = new Map(weeks.map((item) => [item.courseId, item]));
   return courseIds.map((courseId) => {
     const summary = summaryOf.get(courseId);
+    const enrolments = counter(summary?.enrolments);
     return {
       courseId,
-      enrolments: counter(summary?.enrolments),
+      enrolments,
       completed: counter(summary?.completed),
       dropped: counter(summary?.dropped),
+      activated: Math.min(enrolments, counter(summary?.activated)),
+      promptAnswered: counter(summary?.promptAnswered),
+      promptDismissed: counter(summary?.promptDismissed),
       activeLearners: counter(weekOf.get(courseId)?.activeLearners),
       updatedAt: summary?.updatedAt ?? null,
     };
@@ -101,6 +111,8 @@ export interface CourseDay {
   date: string;
   enrolments: number;
   activeLearners: number;
+  /** Of the enrolments made that day, how many are activated; never above `enrolments`. */
+  activated: number;
 }
 
 export interface CourseAnalytics extends CourseSummary {
@@ -418,10 +430,12 @@ export const readCourseAnalytics = async (
     quizzes: quizListings(loaded),
     daily: dates.map((date) => {
       const item = dayOf.get(`DAY#${date}`);
+      const enrolments = counter(item?.enrolments);
       return {
         date,
-        enrolments: counter(item?.enrolments),
+        enrolments,
         activeLearners: counter(item?.activeLearners),
+        activated: Math.min(enrolments, counter(item?.activated)),
       };
     }),
   };

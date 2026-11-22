@@ -122,6 +122,13 @@ export const course = analyticsCourseProcedure
           analytics.dropped,
         ),
         activeThisWeek: analytics.activeLearners,
+        activated: analytics.activated,
+        activationRate:
+          analytics.enrolments > 0
+            ? Math.floor((analytics.activated * 100) / analytics.enrolments)
+            : null,
+        promptAnswered: analytics.promptAnswered,
+        promptDismissed: analytics.promptDismissed,
         updatedAt: analytics.updatedAt,
       },
       daily: analytics.daily,
