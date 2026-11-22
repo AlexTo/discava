@@ -4,6 +4,7 @@
  */
 import type { Logger } from '@aws-lambda-powertools/logger';
 import type { Metrics } from '@aws-lambda-powertools/metrics';
+import { applyCaptionChange } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MIN_REMAINING_MS,
@@ -512,5 +513,115 @@ describe('translateVideoCaptions', () => {
         fallbacks: 0,
       }),
     );
+  });
+});
+
+describe('orderings against an instructor change (real track rules)', () => {
+  const captionFile = (name: string) =>
+    SOURCE_KEY.replace('src.vtt', `${name}.vtt`);
+  // Applies `change` to the stored record the way instructor-api's writers
+  // do: through applyCaptionChange, on the revision, so it moves the revision.
+  const instructorChange = (
+    change: Parameters<typeof applyCaptionChange>[1],
+  ) => {
+    const item = h.db.item as {
+      captionTracks: Track[];
+      captionTracksRev: number;
+    };
+    const result = applyCaptionChange(item.captionTracks, change, {
+      currentNonce: NONCE,
+      captionLanguages: ['es-ES', 'fr-FR'],
+    });
+    item.captionTracks = result.tracks as Track[];
+    item.captionTracksRev += 1;
+    return result;
+  };
+  const uploadedSpanish = {
+    trackId: 'up-es',
+    nonce: NONCE,
+    language: 'es-ES',
+    label: 'Español',
+    source: 'uploaded' as const,
+    key: captionFile('up-es'),
+  };
+  const once = (fn: () => void) => {
+    let fired = false;
+    h.beforeWrite.fn = () => {
+      if (!fired) {
+        fired = true;
+        fn();
+      }
+    };
+  };
+
+  it('an upload written between the read and the write wins, and the translation file is deleted', async () => {
+    h.files.set(uploadedSpanish.key, SOURCE_VTT);
+    once(() =>
+      instructorChange({ type: 'add', nonce: NONCE, track: uploadedSpanish }),
+    );
+
+    await run();
+
+    const tracks = h.db.item?.captionTracks as Track[];
+    expect(tracks.filter((t) => t.language === 'es-ES')).toEqual([
+      expect.objectContaining({ trackId: 'up-es', source: 'uploaded' }),
+    ]);
+    expect(tracksOf().map((t) => t.language)).toEqual(['fr-FR']);
+    // The source, the upload and the French translation: the losing Spanish
+    // translation's file was deleted.
+    expect([...h.files.keys()]).toHaveLength(3);
+    expect(h.files.has(uploadedSpanish.key)).toBe(true);
+  });
+
+  it('a translation written first is replaced by the later upload', async () => {
+    await run();
+    const [spanish] = tracksOf().filter((t) => t.language === 'es-ES');
+
+    const result = instructorChange({
+      type: 'add',
+      nonce: NONCE,
+      track: uploadedSpanish,
+    });
+
+    expect(result.replaced?.trackId).toBe(spanish.trackId);
+    const tracks = h.db.item?.captionTracks as Track[];
+    expect(tracks.filter((t) => t.language === 'es-ES')).toEqual([
+      expect.objectContaining({ source: 'uploaded' }),
+    ]);
+    // A later run leaves the upload alone.
+    h.translateTexts.mockClear();
+    await run();
+    expect(h.translateTexts).not.toHaveBeenCalled();
+    expect(
+      (h.db.item?.captionTracks as Track[]).find((t) => t.language === 'es-ES')
+        ?.source,
+    ).toBe('uploaded');
+  });
+
+  it('a source replaced mid-run leaves no track from the old source', async () => {
+    once(() =>
+      instructorChange({
+        type: 'add',
+        nonce: NONCE,
+        track: {
+          trackId: 'src2',
+          nonce: NONCE,
+          language: 'en-US',
+          label: 'English',
+          source: 'uploaded',
+          key: captionFile('src2'),
+        },
+      }),
+    );
+
+    await run();
+
+    const tracks = h.db.item?.captionTracks as Track[];
+    expect(tracks.map((t) => t.trackId)).toEqual(['src2']);
+    expect(tracks.filter((t) => t.sourceTrackId === 'src')).toEqual([]);
+    // Every file the run wrote for the old source was deleted again.
+    expect(
+      [...h.files.keys()].filter((k) => k.includes('/n1/captions/')),
+    ).toEqual([SOURCE_KEY]);
   });
 });

@@ -124,6 +124,14 @@ describe('HlsVideo', () => {
     expect(getByRole('button', { name: 'Playback speed' })).toBeTruthy();
   });
 
+  it('plays inline, so a phone does not open its full-screen player', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+
+    const { container } = render(<HlsVideo url={URL} withCredentials />);
+
+    expect(video(container).hasAttribute('playsinline')).toBe(true);
+  });
+
   it('puts the className on the player and blocks the context menu', () => {
     vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
 

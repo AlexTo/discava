@@ -248,6 +248,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
                 ...parts,
                 brand: {
                   iconUrl: context.brand.iconUrl,
+                  colour: brandDocument?.colour,
                   document: brandDocument,
                 },
               }),
@@ -278,7 +279,10 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           injectIntoTemplate(template, {
             head: notFoundHead(context),
             root: '',
-            brand: { iconUrl: context.brand.iconUrl },
+            brand: {
+              iconUrl: context.brand.iconUrl,
+              colour: context.brand.palette?.variables['--primary'],
+            },
           }),
           NOT_FOUND_CACHE,
           { 'X-Robots-Tag': 'noindex' },

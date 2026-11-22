@@ -140,6 +140,25 @@ describe('page renderer: the brand', () => {
     expect(response.body).toContain('rel="apple-touch-icon"');
   });
 
+  it('puts the brand colour on a page as a style and theme colour', async () => {
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: tableWithBrand(storedBrand),
+    }).render(get('/learn/c1'));
+    expect(response.body).toContain('<style>:root{--primary:#1d4ed8;');
+    expect(response.body).toContain(
+      '<meta name="theme-color" content="#1d4ed8" />',
+    );
+  });
+
+  it('adds no colour style when the brand has no colour', async () => {
+    const response = await build({
+      loadTemplate: async () => withIconTemplate,
+      coreTable: tableWithBrand({ ...storedBrand, colour: undefined }),
+    }).render(get('/learn/c1'));
+    expect(response.body).not.toContain('<style>');
+  });
+
   it('keeps the template’s icon when the brand has no icon', async () => {
     const response = await build({
       loadTemplate: async () => withIconTemplate,

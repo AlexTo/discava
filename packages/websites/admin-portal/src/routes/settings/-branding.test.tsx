@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -91,6 +91,7 @@ describe('the Branding page', () => {
     open({
       'branding.get': () => ({
         ...none,
+        brand: { ...none.brand, name: 'Acme' },
         revision: 2,
         changed: {
           by: 'a',
@@ -101,6 +102,28 @@ describe('the Branding page', () => {
     });
     expect(
       await screen.findByText(/Last changed by Carol Admin, /),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Using the default Discava brand/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says both that the brand is the default and who last changed it, once reset and saved', async () => {
+    open({
+      'branding.get': () => ({
+        ...none,
+        revision: 6,
+        changed: {
+          by: 'a',
+          byName: 'Carol Admin',
+          at: new Date().toISOString(),
+        },
+      }),
+    });
+    expect(
+      await screen.findByText(
+        /^Using the default Discava brand · Last changed by Carol Admin, /,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -274,7 +297,12 @@ describe('the Branding page', () => {
       }),
     });
     await screen.findByLabelText('Upload share image');
-    await user.click(screen.getByRole('button', { name: 'Reset to default' }));
+    await user.click(
+      within(screen.getByRole('region', { name: 'Share image' })).getByRole(
+        'button',
+        { name: 'Reset to default' },
+      ),
+    );
     expect(
       screen.queryByRole('img', { name: 'Share image preview' }),
     ).not.toBeInTheDocument();
@@ -402,5 +430,178 @@ describe('the Branding page', () => {
     expect(
       await screen.findByRole('button', { name: 'Try again' }),
     ).toBeInTheDocument();
+  });
+
+  describe('resetting to the default', () => {
+    const custom = {
+      ...none,
+      brand: {
+        name: 'Acme',
+        showNameBesideLogo: false,
+        colour: '#1d4ed8',
+        logoKey: `brand/logo/${NONCE}.png`,
+        iconKey: `brand/icon/${NONCE}.png`,
+        shareImageKey: `brand/share-image/${NONCE}.png`,
+      },
+      revision: 4,
+      changed: { by: 'a', byName: 'Carol Admin', at: new Date().toISOString() },
+    };
+    const saveHandler: Handler = (input) => ({
+      ...none,
+      brand: input as typeof none.brand,
+      revision: 5,
+    });
+
+    it('resets the logo only, sending logoKey null and keeping the colour', async () => {
+      const { calls, user } = open({
+        'branding.get': () => custom,
+        'branding.save': saveHandler,
+      });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        within(screen.getByRole('region', { name: 'Logo' })).getByRole(
+          'button',
+          { name: 'Reset to default' },
+        ),
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.path === 'branding.save')?.input).toEqual({
+          expectedRevision: 4,
+          ...custom.brand,
+          logoKey: null,
+        }),
+      );
+    });
+
+    it('asks before resetting all, then sends every field null and the switch on', async () => {
+      const { calls, user } = open({
+        'branding.get': () => custom,
+        'branding.save': saveHandler,
+      });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        screen.getByRole('button', { name: 'Reset all to default' }),
+      );
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reset all' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.path === 'branding.save')?.input).toEqual({
+          expectedRevision: 4,
+          name: null,
+          showNameBesideLogo: true,
+          colour: null,
+          logoKey: null,
+          iconKey: null,
+          shareImageKey: null,
+        }),
+      );
+    });
+
+    it('changes nothing when the reset all is cancelled', async () => {
+      const { user } = open({ 'branding.get': () => custom });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        screen.getByRole('button', { name: 'Reset all to default' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Name')).toHaveValue('Acme');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+  });
+
+  describe('the brand colour', () => {
+    const hex = () => screen.getByLabelText('Hex colour');
+
+    it('refuses #777777 with the message, and disables Save', async () => {
+      open();
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#777777' } });
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Text on this colour would be hard to read. Choose a darker or lighter shade.',
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
+
+    it('previews #1d4ed8 with light text and its contrast ratio, in the preview only', async () => {
+      open();
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      expect(screen.getByText(/Text colour: light/)).toHaveTextContent(
+        /contrast 6\.\d:1/,
+      );
+      const preview = screen.getByTestId('brand-preview');
+      expect(preview.style.getPropertyValue('--primary')).toBe('#1d4ed8');
+      expect(preview.style.getPropertyValue('--primary-foreground')).toBe(
+        '#fafafa',
+      );
+      // The page outside the preview keeps its colours until Save.
+      expect(document.documentElement.style.getPropertyValue('--primary')).toBe(
+        '',
+      );
+    });
+
+    it('previews the default, not the saved colour, after a reset or a refused colour', async () => {
+      open({
+        'branding.get': () => ({
+          ...none,
+          brand: { ...none.brand, colour: '#1d4ed8' },
+          revision: 1,
+        }),
+      });
+      await screen.findByLabelText('Hex colour');
+      // What the portal has applied to the page for the saved brand.
+      document.documentElement.style.setProperty('--primary', '#1d4ed8');
+      const preview = screen.getByTestId('brand-preview');
+      expect(preview.style.getPropertyValue('--primary')).toBe('#1d4ed8');
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reset colour to default' }),
+      );
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
+      fireEvent.change(hex(), { target: { value: '#777777' } });
+      expect(preview.style.getPropertyValue('--primary')).toBe(
+        'oklch(0.205 0 0)',
+      );
+      document.documentElement.style.removeProperty('--primary');
+    });
+
+    it('sends the colour on Save, and null after a reset', async () => {
+      const { calls } = open({
+        'branding.save': (input) => ({
+          ...none,
+          brand: input,
+          revision: 1,
+        }),
+      });
+      await screen.findByLabelText('Hex colour');
+      fireEvent.change(hex(), { target: { value: '#1D4ED8' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(
+          (
+            calls.find((c) => c.path === 'branding.save')?.input as {
+              colour: string;
+            }
+          ).colour,
+        ).toBe('#1d4ed8'),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Reset colour to default' }),
+      );
+      expect(hex()).toHaveValue('');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    });
   });
 });
