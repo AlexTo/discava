@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Tabs,
@@ -24,6 +25,7 @@ export const Route = createFileRoute(
 
 function RouteComponent() {
   const { courseId } = Route.useParams();
+  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
 
   return (
     <main className="w-full space-y-6 pb-8">

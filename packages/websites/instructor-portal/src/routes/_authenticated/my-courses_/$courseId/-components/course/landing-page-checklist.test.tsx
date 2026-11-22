@@ -3,7 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { mockRouter } = await import('@discava/common-web-utils/testing');
+  return mockRouter(importOriginal, {
+    // A real Link needs a router; render the address it would link to, "." being
+    // the course page.
+    Link: ({
+      to,
+      hash,
+      children,
+      ...props
+    }: {
+      to: string;
+      hash?: string;
+      children: React.ReactNode;
+    } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+      <a
+        href={`${to === '.' ? '/my-courses/c1' : to}${hash ? `#${hash}` : ''}`}
+        {...props}
+      >
+        {children}
+      </a>
+    ),
+  });
+});
+
 import { LandingPageChecklist } from './landing-page-checklist';
 
 const line = (label: string) =>
@@ -62,15 +88,26 @@ describe('LandingPageChecklist', () => {
   });
 
   it.each([
-    ['Learning outcomes', '#landing-page-heading'],
-    ['Requirements', '#landing-page-heading'],
-    ['Preview video', '#landing-page-heading'],
-    ['Course image', '#course-image'],
+    ['Learning outcomes', '/my-courses/c1#landing-page'],
+    ['Requirements', '/my-courses/c1#landing-page'],
+    ['Preview video', '/my-courses/c1#preview-video'],
+    ['Course image', '/my-courses/c1#course-image'],
   ])('%s links to its fix when missing', (label, href) => {
     renderChecklist();
 
     expect(within(line(label)).getByText('Not yet')).toBeVisible();
     expect(within(line(label)).getByRole('link')).toHaveAttribute('href', href);
+  });
+
+  it('keeps every "Add it" link on the course page, with its own name', () => {
+    const { container } = renderChecklist({ hasProfile: false });
+
+    expect(container.querySelector('a[href^="#"]')).toBeNull();
+    const names = screen
+      .getAllByRole('link', { name: /^Add it: / })
+      .map((link) => link.getAttribute('aria-label'));
+    expect(names).toHaveLength(5);
+    expect(new Set(names).size).toBe(5);
   });
 
   it('links to the public page only when one is given', () => {

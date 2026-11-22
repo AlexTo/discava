@@ -11,6 +11,7 @@ import { getUserIdentity } from '@discava/common-web-utils/user-profile';
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import AppLayout from '../../components/app-layout';
+import { NotFound } from '../../components/not-found';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ context, location }) => {
@@ -20,6 +21,7 @@ export const Route = createFileRoute('/_authenticated')({
     }
   },
   component: InstructorsOnly,
+  notFoundComponent: NotFound,
 });
 
 // The portal is for the `instructor` group; anyone else signed in gets a page

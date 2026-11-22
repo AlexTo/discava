@@ -310,7 +310,11 @@ function RouteComponent() {
         </Card>
       </section>
 
-      <section aria-labelledby="landing-page-heading" className="space-y-4">
+      <section
+        id="landing-page"
+        aria-labelledby="landing-page-heading"
+        className="space-y-4"
+      >
         <div>
           <div className="flex items-center gap-2">
             <Presentation className="size-5 text-primary" />

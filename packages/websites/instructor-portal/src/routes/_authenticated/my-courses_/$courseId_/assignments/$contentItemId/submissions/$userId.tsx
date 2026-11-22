@@ -32,6 +32,11 @@ function RouteComponent() {
     }),
   );
   const data = query.data;
+  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  useBreadcrumbLabel(
+    data?.assignment.title,
+    `/my-courses/${courseId}/assignments/${contentItemId}`,
+  );
   useBreadcrumbLabel(data?.student.displayName);
 
   const back = (

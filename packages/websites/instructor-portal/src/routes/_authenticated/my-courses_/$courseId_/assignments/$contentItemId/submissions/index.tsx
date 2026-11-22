@@ -28,7 +28,11 @@ function RouteComponent() {
   );
   const first = query.data?.pages[0];
   const rows = query.data?.pages.flatMap((page) => page.rows) ?? [];
-  useBreadcrumbLabel(first?.assignment.title);
+  useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  useBreadcrumbLabel(
+    first?.assignment.title,
+    `/my-courses/${courseId}/assignments/${contentItemId}`,
+  );
 
   return (
     <main className="w-full space-y-6 pb-8">
