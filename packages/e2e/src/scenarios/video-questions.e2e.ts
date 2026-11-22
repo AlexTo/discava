@@ -308,3 +308,82 @@ test('a learner seeks past a question and opens it from its marker', async ({
     ).rejects.toMatchObject({ data: { code: 'PRECONDITION_FAILED' } });
   });
 });
+
+// A video with questions for the end asks them by itself when it finishes, one
+// after another. The learner answers one, skips the other and reads the
+// summary, which counts the questions answered so far.
+test('a learner takes the check at the end of a video', async ({ page }) => {
+  const title = uniqueName('E2E end of video check');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await createCaptionedVideoViaApi(instructor, title);
+  await setVideoQuestionsViaApi(instructor, video, [
+    {
+      questionId: 'e1',
+      prompt: 'What is on screen?',
+      options: ['Colour bars', 'A cat'],
+      correct: 0,
+      atSeconds: null,
+    },
+    {
+      questionId: 'e2',
+      prompt: 'Did you enjoy it?',
+      options: ['Yes', 'No'],
+      correct: 0,
+      atSeconds: null,
+    },
+  ]);
+  await instructor.instructor.course.publish.mutate({
+    courseId: video.courseId,
+  });
+
+  await openCourse(page, title);
+  await enrol(page, newUser('Sam', ['student']));
+  await startFirstLesson(page);
+
+  const player = page.getByRole('group', { name: 'Video player' });
+  await player.getByRole('button', { name: 'Play', exact: true }).click();
+  const question = openVideoQuestion(page);
+
+  await test.step('the first question appears by itself when the video ends', async () => {
+    await expect(question).toBeVisible({ timeout: 15_000 });
+    await expect(
+      question.getByRole('heading', { name: 'Question 1 of 2' }),
+    ).toBeFocused();
+    await expect(question.getByText('What is on screen?')).toBeVisible();
+    await screenshot(page, 'end of video check');
+  });
+
+  await test.step('answering one and skipping the other ends in the summary', async () => {
+    await question.getByRole('radio', { name: 'Colour bars' }).check();
+    await question.getByRole('button', { name: 'Submit answer' }).click();
+    await expect(question.getByRole('status')).toContainText('Correct');
+    await question.getByRole('button', { name: 'Continue' }).click();
+    await expect(
+      question.getByRole('heading', { name: 'Question 2 of 2' }),
+    ).toBeVisible();
+    await question.getByRole('button', { name: 'Skip' }).click();
+    await expect(
+      page.getByRole('heading', { name: '1 of 1 correct' }),
+    ).toBeVisible();
+    await screenshot(page, 'end check summary');
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: '1 of 1 correct' }),
+    ).toBeHidden();
+  });
+
+  await test.step('the end marker shows one of two answered, and the video does not play again', async () => {
+    await expect(
+      player.getByRole('button', {
+        name: 'Questions at the end, 1 of 2 answered',
+      }),
+    ).toBeVisible();
+    await expect(
+      lessonVideo(page, 'Video').evaluate((v: HTMLVideoElement) => v.ended),
+    ).resolves.toBe(true);
+  });
+
+  await test.step('Mark as done still completes the video', async () => {
+    await markItemDone(page, 'Video');
+  });
+});

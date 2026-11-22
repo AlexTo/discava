@@ -19,6 +19,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import {
   BookOpen,
   CalendarDays,
+  Captions,
   Info,
   ListChecks,
   Megaphone,
@@ -32,8 +33,10 @@ import {
 } from '../../../../lib/course-status';
 import { AnnouncementsSection } from './-components/announcements/announcements-section';
 import { ArchivedSection } from './-components/course/archived-section';
+import { CourseCaptionLanguagesForm } from './-components/course/course-caption-languages-form';
 import { CourseCatalogueForm } from './-components/course/course-catalogue-form';
 import { CourseCertificateCriteria } from './-components/course/course-certificate-criteria';
+import { CourseCertificatesList } from './-components/course/course-certificates-list';
 import { CourseCertificatesSwitch } from './-components/course/course-certificates-switch';
 import { CourseFirstLessonPromptForm } from './-components/course/course-first-lesson-prompt-form';
 import { CourseImage } from './-components/course/course-image';
@@ -201,6 +204,9 @@ function RouteComponent() {
             </div>
           </div>
           <div className="mt-4 border-t pt-4">
+            <CourseCertificatesList courseId={course.courseId} />
+          </div>
+          <div className="mt-4 border-t pt-4">
             <CourseFirstLessonPromptForm
               courseId={course.courseId}
               firstLessonPrompt={course.firstLessonPrompt}
@@ -273,6 +279,29 @@ function RouteComponent() {
             level={course.level}
             language={course.language}
             durationHours={course.durationHours}
+            readOnly={readOnly}
+          />
+        </Card>
+      </section>
+
+      <section
+        aria-labelledby="caption-languages-heading"
+        className="space-y-4"
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <Captions className="size-5 text-primary" />
+            <h2
+              id="caption-languages-heading"
+              className="text-xl font-semibold"
+            >
+              Caption languages
+            </h2>
+          </div>
+        </div>
+        <Card className="p-5 sm:p-6">
+          <CourseCaptionLanguagesForm
+            courseId={course.courseId}
             readOnly={readOnly}
           />
         </Card>

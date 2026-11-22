@@ -986,6 +986,22 @@ describe('HlsVideo cues', () => {
     expect(onCue).toHaveBeenCalledWith(['end'], 'ended');
   });
 
+  it('reports a timed cue past the duration at the end', () => {
+    const { el, onCue } = setup([cue('a', 10, 'answered'), cue('past', 500)]);
+
+    emit(el, 'ended');
+
+    expect(onCue).toHaveBeenCalledWith(['past'], 'ended');
+  });
+
+  it('reports nothing at the end when every end cue is answered', () => {
+    const { el, onCue } = setup([cue('end', null, 'answered')]);
+
+    emit(el, 'ended');
+
+    expect(onCue).not.toHaveBeenCalled();
+  });
+
   it('saves the position just before the open cue', () => {
     vi.useFakeTimers();
     const onPositionChange = vi.fn();
@@ -1027,12 +1043,12 @@ describe('HlsVideo cues', () => {
     });
   });
 
-  it('shows a marker for each timed cue', () => {
+  it('shows a marker for each timed cue and one for the end', () => {
     const { container } = setup();
     emit(video(container), 'durationchange');
     expect(
       container.querySelectorAll('[data-slot="video-cue-marker"]'),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it('changes nothing without cues', () => {
