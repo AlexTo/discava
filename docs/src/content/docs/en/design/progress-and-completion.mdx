@@ -33,6 +33,8 @@ core-api writes `itemCompletion` records and quiz attempts. It never writes `pro
 | Quiz | Passed, or all attempts used |
 | Upload assignment | The student submits a file |
 
+A quiz that completes by running out of attempts is complete for progress, but it doesn't count as passed for a certificate: where the course requires quizzes to be passed, the student has a completed course and no certificate until they pass.
+
 Text, video and file items never complete on their own: there is no scroll, watch-time or download tracking. The student decides when they're done with an item, as on most learning platforms.
 
 ### Recording a completion
@@ -69,8 +71,11 @@ The core table's stream (new and old images), through the <Link path="design/str
 |---|---|
 | `itemCompletion` inserted | That one student, in that course |
 | Module, lesson or content item: `visibility` or `archivedAt` changed, or record removed | Every enrolled student in the course who hasn't dropped out |
+| `quizSummary` inserted or modified | That one student, only when `passedAt` appears; every other change is ignored |
+| `course` modified | Every enrolled student who hasn't dropped out, only when `certificateCriteria.version` or `certificatesEnabled` differs between the old and new image; any other course edit is ignored |
+| Quiz content item: `settings.passMarkPercent` goes to or from 0 | Every enrolled student who hasn't dropped out; a change between two positive values is ignored, as it doesn't change who is assessed |
 
-A filter can't compare a record's old and new images, so every change to a module, lesson or content item reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were: a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
+A filter can't compare a record's old and new images, so every change to a module, lesson, content item, quiz summary or course reaches the Lambda. The Lambda then ignores the ones that leave `visibility` and `archivedAt` as they were: a new title, an order or a `studentActivityCount`. The Lambda's own writes, to `progress` and `enrolment`, match no filter, so it never triggers itself.
 
 ### What it does
 
@@ -84,6 +89,7 @@ For each affected (student, course):
    - No record means not started, so an untouched lesson isn't written.
    - `completed` is only ever set, never cleared: the write is conditioned on the record not already being `completed`.
 4. Write the enrolment's `progressPercent` (rounded down, so it's 100 only when everything is done) if it changed. At 100%, set `status: 'completed'` and `completedAt`, conditioned on the enrolment still being `active`. A course with nothing visible is never completed.
+5. If the enrolment is `completed`, the student isn't dropped and has no certificate yet, check the course's certificate criteria against the student's quiz summaries (`evaluateCertificateCriteria`, see <Link path="design/certificates">Certificates</Link>) and call `issueCertificate` only when they are met.
 
 Students are recalculated a few at a time, and each course's curriculum is loaded once per batch.
 
