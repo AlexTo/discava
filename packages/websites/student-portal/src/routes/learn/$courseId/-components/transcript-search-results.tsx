@@ -68,7 +68,7 @@ export function TranscriptSearchResults({
   } else if (search.data.items.length === 0) {
     status = 'No moments match';
     body = (
-      <p className="text-muted-foreground">
+      <p className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
         No moments match '{text}'. Check the spelling, or try the words in the
         captions' language.
       </p>
@@ -78,7 +78,9 @@ export function TranscriptSearchResults({
     status = `${items.length} ${items.length === 1 ? 'moment' : 'moments'} found`;
     body = (
       <>
-        <h2 className="text-lg font-semibold">Moments matching '{text}'</h2>
+        <h2 className="min-w-0 text-lg font-semibold [overflow-wrap:anywhere]">
+          Moments matching '{text}'
+        </h2>
         <ol aria-label="Search results" className="mt-4 space-y-3">
           {items.map((moment) => (
             <li
