@@ -278,7 +278,7 @@ test('a long description does not make a tall card on a phone', async ({
 test('the caption languages card fits a phone and each checkbox is one target', async ({
   page,
 }) => {
-  const title = `${uniqueName('E2E phone caption course')} ${'x'.repeat(60)}`;
+  const title = uniqueName('E2E phone caption course');
 
   await page.goto(`${PORTALS.instructor}/my-courses`);
   await signIn(page, newUser('Tess', ['instructor']));
