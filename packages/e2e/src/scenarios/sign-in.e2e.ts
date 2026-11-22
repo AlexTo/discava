@@ -47,6 +47,20 @@ test('a student signs in to the student portal', async ({ page }) => {
   await expect(page.locator('#main-content')).toBeFocused();
 });
 
+test('the student sign-in page stays up while it redirects', async ({
+  page,
+}) => {
+  // Hold the request to the OIDC server, so the browser stays on the page that
+  // started the redirect long enough to look at it (#782).
+  await page.route(/localhost:9400\/discava\/authorize/, () => {});
+  await page.goto(`${PORTALS.student}/signin`);
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Signing you in…' }),
+  ).toBeVisible();
+  await screenshot(page, 'signing you in');
+});
+
 test('an admin signs in to the admin portal', async ({ page }) => {
   await page.goto(PORTALS.admin);
   await signIn(page, testUser('Carol'));
