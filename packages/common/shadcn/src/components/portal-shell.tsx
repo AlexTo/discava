@@ -139,13 +139,23 @@ export const PortalShell = ({
   );
 
   React.useEffect(() => {
-    // A page exists when the deepest match is neither the root route nor a
-    // not-found match.
+    // A page exists when the deepest match is a route of the href's own depth:
+    // a path below a layout route (".../assignments" under a course) matches
+    // the layout, but its page is not found.
+    const depth = (path: string) => path.split('/').filter(Boolean).length;
     const routeExists = (href: string) => {
       const matches = router.matchRoutes(href);
       const deepest = matches[matches.length - 1];
       if (!deepest || deepest.status === 'notFound') return false;
-      return href === '/' || deepest.routeId !== '__root__';
+      if (href === '/') return true;
+      const route = router.routesById[deepest.routeId as never] as
+        | { fullPath: string }
+        | undefined;
+      return (
+        deepest.routeId !== '__root__' &&
+        route !== undefined &&
+        depth(route.fullPath) === depth(href)
+      );
     };
     const breadcrumbs = getBreadcrumbs(
       routeExists,
