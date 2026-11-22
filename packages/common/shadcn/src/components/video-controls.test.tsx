@@ -295,6 +295,22 @@ describe('VideoControls controls', () => {
     expect(screen.queryByRole('button', { name: 'Fullscreen' })).toBeNull();
   });
 
+  it("offers the native player's full screen where the page has none (iPhone)", () => {
+    Object.defineProperty(document, 'fullscreenEnabled', {
+      configurable: true,
+      value: false,
+    });
+    const enter = vi.fn();
+    (HTMLVideoElement.prototype as any).webkitEnterFullscreen = enter;
+    try {
+      setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Fullscreen' }));
+      expect(enter).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (HTMLVideoElement.prototype as any).webkitEnterFullscreen;
+    }
+  });
+
   it('shows fullscreen where supported', () => {
     setup();
     expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeVisible();
