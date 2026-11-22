@@ -124,6 +124,10 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
     ] as const) {
       const visitor = await browser.newPage();
       await visitor.goto(url);
+      // The instructor portal has no signed-out view: it sends visitors to sign in.
+      if (portal === 'instructor') {
+        await signIn(visitor, newUser('Ian', ['instructor']));
+      }
       // A first visit holds the render until brand.json arrives; a cached
       // copy may take up to a minute to give way to the new one.
       await expect(async () => {

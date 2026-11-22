@@ -216,26 +216,45 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         deps.logger?.error('Public media base URL unavailable', { error });
         return undefined;
       });
-      // The brand, read once per render. If it can't be read (or isn't a
-      // valid brand) the page still renders, with the default brand.
-      const brandDocument = await readBrandDocument(coreTable, deps.logger);
-      const context: PageContext = {
+      const baseContext = {
         host,
         siteName: config.siteName,
-        brand: resolveBrand(brandDocument, mediaBase),
         allowIndexing: config.allowIndexing,
-        mediaUrl: (key) =>
+        mediaUrl: (key: string | undefined) =>
           key && mediaBase ? new URL(key, mediaBase).toString() : undefined,
         defaultImageUrl: `${originOf(host)}/og-default.png`,
       };
       const template = await deps.loadTemplate();
-      // Every page carries the brand's icon and the document the portal's
-      // brand provider starts from.
-      const inject = (parts: Parameters<typeof injectIntoTemplate>[1]) =>
-        injectIntoTemplate(template, {
-          ...parts,
-          brand: { iconUrl: context.brand.iconUrl, document: brandDocument },
-        });
+      // The brand, read at most once per render and only by the pages that
+      // show it: the signed-in shells read nothing. If it can't be read (or
+      // isn't a valid brand) the page still renders, with the default brand.
+      // Every such page carries the brand's icon and the document the
+      // portal's brand provider starts from.
+      let branded:
+        | Promise<{
+            context: PageContext;
+            inject: (parts: Parameters<typeof injectIntoTemplate>[1]) => string;
+          }>
+        | undefined;
+      const withBrand = () =>
+        (branded ??= (async () => {
+          const brandDocument = await readBrandDocument(coreTable, deps.logger);
+          const context: PageContext = {
+            ...baseContext,
+            brand: resolveBrand(brandDocument, mediaBase),
+          };
+          return {
+            context,
+            inject: (parts) =>
+              injectIntoTemplate(template, {
+                ...parts,
+                brand: {
+                  iconUrl: context.brand.iconUrl,
+                  document: brandDocument,
+                },
+              }),
+          };
+        })());
       const html = (
         statusCode: number,
         page: string,
@@ -247,16 +266,29 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           headers: { 'Content-Type': HTML, 'Cache-Control': cache, ...headers },
           body: page,
         });
-      const render = (page: RenderedPage) =>
-        html(200, inject(page), PAGE_CACHE);
-      const notFound = () =>
-        html(
+      const render = async (page: (context: PageContext) => RenderedPage) => {
+        const { context, inject } = await withBrand();
+        return html(200, inject(page(context)), PAGE_CACHE);
+      };
+      const notFound = async () => {
+        const { context, inject } = await withBrand();
+        return html(
           404,
-          inject({
-            head: notFoundHead(context),
+          inject({ head: notFoundHead(context), root: '' }),
+          NOT_FOUND_CACHE,
+          { 'X-Robots-Tag': 'noindex' },
+        );
+      };
+      // A signed-in shell: the portal's own page, never indexed, reading
+      // nothing.
+      const shell = () =>
+        html(
+          200,
+          injectIntoTemplate(template, {
+            head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
             root: '',
           }),
-          NOT_FOUND_CACHE,
+          PAGE_CACHE,
           { 'X-Robots-Tag': 'noindex' },
         );
 
@@ -264,15 +296,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
       if (first === 'learn') {
         if (!id || rest.length > 0) {
           // The learning routes: signed-in, never indexed.
-          return html(
-            200,
-            inject({
-              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
-              root: '',
-            }),
-            PAGE_CACHE,
-            { 'X-Robots-Tag': 'noindex' },
-          );
+          return shell();
         }
         try {
           const [course, summary, reviews] = await Promise.all([
@@ -280,31 +304,24 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
             deps.caller.review.summary({ courseId: id }),
             deps.caller.review.list({ courseId: id, limit: 10 }),
           ]);
-          return render(
+          return await render((context) =>
             renderCoursePage(context, { course, summary, reviews }),
           );
         } catch (error) {
-          if (isNotFound(error)) return notFound();
+          if (isNotFound(error)) return await notFound();
           throw error;
         }
       }
       if (first === 'certificates' && id) {
         if (rest.length > 0) {
           // The signed-in routes under a certificate: never indexed.
-          return html(
-            200,
-            inject({
-              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
-              root: '',
-            }),
-            PAGE_CACHE,
-            { 'X-Robots-Tag': 'noindex' },
-          );
+          return shell();
         }
         try {
           const certificate = await deps.caller.certificate.verify({
             certificateId: id,
           });
+          const { context, inject } = await withBrand();
           return html(
             200,
             inject(renderCertificatePage(context, certificate)),
@@ -314,7 +331,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         } catch (error) {
           // An over-long ID fails the procedure's input check: it is as
           // malformed as any other and gets the same 404.
-          if (isNotFound(error) || isBadRequest(error)) return notFound();
+          if (isNotFound(error) || isBadRequest(error)) return await notFound();
           throw error;
         }
       }
@@ -323,13 +340,13 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           const profile = await deps.caller.instructorProfile.publicView({
             handle: id,
           });
-          return render(renderProfilePage(context, profile));
+          return await render((context) => renderProfilePage(context, profile));
         } catch (error) {
-          if (isNotFound(error)) return notFound();
+          if (isNotFound(error)) return await notFound();
           throw error;
         }
       }
-      return notFound();
+      return await notFound();
     } catch (error) {
       // A dependency failed (table, settings parameter, template): never cached, never a 404.
       deps.logger?.error('Page render failed', { path, error });

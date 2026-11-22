@@ -163,12 +163,20 @@ describe('page renderer: the brand', () => {
     expect(data['course.publicView']).toBeDefined();
   });
 
-  it('embeds the brand on a not-found page and a signed-in shell too', async () => {
-    const ctx = { coreTable: tableWithBrand(storedBrand) };
-    for (const path of ['/learn/missing', '/learn/c1/lessons/1']) {
-      const response = await build(ctx).render(get(path));
-      expect(response.body).toContain('"brand"');
-    }
+  it('embeds the brand on a not-found page, but reads nothing for a signed-in shell', async () => {
+    const response = await build({
+      coreTable: tableWithBrand(storedBrand),
+    }).render(get('/learn/missing'));
+    expect(response.body).toContain('"brand"');
+
+    const entities = vi.fn(() => ({}));
+    const table = Object.defineProperty({}, 'entities', { get: entities });
+    const shell = await build({ coreTable: async () => table }).render(
+      get('/learn/c1/lessons/1'),
+    );
+    expect(shell.statusCode).toBe(200);
+    expect(shell.body).not.toContain('discava-page-data');
+    expect(entities).not.toHaveBeenCalled();
   });
 
   it('still renders, with the default brand, when the brand cannot be read', async () => {
