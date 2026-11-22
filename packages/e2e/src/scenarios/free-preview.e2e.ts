@@ -330,7 +330,7 @@ test.describe('a student goes from a preview to enrolling', () => {
         new RegExp(`/learn/${courseId}/lesson/${open.lessonId}$`),
       );
       await expect(
-        page.getByRole('heading', { level: 1, name: 'Open' }),
+        page.getByRole('heading', { level: 2, name: 'Open', exact: true }),
       ).toBeVisible();
       await expect(page.getByText('Done', { exact: true })).toHaveCount(0);
     });
@@ -340,6 +340,9 @@ test.describe('a student goes from a preview to enrolling', () => {
       await page.waitForURL(
         new RegExp(`/learn/${courseId}/lesson/${open.lessonId}$`),
       );
+      await expect(
+        page.getByRole('heading', { level: 2, name: 'Open', exact: true }),
+      ).toBeVisible();
       await expect(page.getByText('Done', { exact: true })).toHaveCount(0);
     });
   });
