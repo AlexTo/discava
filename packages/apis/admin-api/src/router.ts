@@ -5,6 +5,11 @@
 
 import { t } from './init.js';
 import {
+  createBrandUploadUrl,
+  getBranding,
+  saveBranding,
+} from './procedures/branding.js';
+import {
   archiveCategory,
   createCategory,
   listCategories,
@@ -29,6 +34,11 @@ import {
 export const router = t.router;
 
 export const appRouter = router({
+  branding: router({
+    get: getBranding,
+    createUploadUrl: createBrandUploadUrl,
+    save: saveBranding,
+  }),
   category: router({
     list: listCategories,
     create: createCategory,

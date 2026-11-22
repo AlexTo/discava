@@ -57,6 +57,9 @@ export const ADMIN_API_DEDICATED_FUNCTIONS = {
   // The only holder of write access to the two Stripe secrets: connects,
   // replaces and disconnects the administrator's Stripe account.
   PaymentsConnect: ['payment.connect', 'payment.disconnect'],
+  // Uploads and saves the platform brand's images, so the only function with
+  // a grant on the public media bucket (brand/ objects only).
+  Branding: ['branding.createUploadUrl', 'branding.save'],
 } as const satisfies Record<string, readonly Operations[]>;
 
 const functionNameFor = (op: Operations | '$router'): string =>

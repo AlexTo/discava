@@ -8,7 +8,7 @@ Local stand-ins (one folder each under `src/`, with `start-container.ts` and `pu
 
 - DynamoDB local (`src/dynamodb`): `dynamodb` starts it and creates the local table; run by `@discava/core-table:dev`. Runs in `packages/databases/core-table`, whose `config.json` it reads
 - OpenSearch (`src/opensearch`): `opensearch` starts it and syncs the local indices; run by `@discava/search:dev`. Runs in `packages/databases/search`, whose `config.json` it reads
-- S3Mock for S3 (`@discava/tooling-local-dev:s3mock`)
+- S3Mock for S3 (`@discava/tooling-local-dev:s3mock`). The portals fetch the published brand (`brand/brand.json`) from it cross-origin, which needs `Access-Control-Allow-Origin`: `src/s3mock/cors.test.ts` checks it whenever S3Mock is running (skipped otherwise). If it ever fails, proxy `/brand` to `http://localhost:9090/discava-public-media/brand` in each portal's Vite config and have `BrandProvider` fetch the same-origin path in local dev
 - ElasticMQ for SQS (`@discava/tooling-local-dev:elasticmq`)
 - the local OIDC server for Cognito (`@discava/tooling-local-dev:local-oidc`), with its own `src/local-oidc/config.json` and sign-in page in `src/local-oidc/login.html`
 

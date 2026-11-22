@@ -121,6 +121,11 @@ export {
   isLateSubmission,
 } from './helpers/assignment-submission.js';
 export {
+  BRAND_STREAM_FILTERS,
+  type BrandStreamRecord,
+  matchesBrandStreamFilters,
+} from './helpers/brand-stream.js';
+export {
   applyCaptionChange,
   CAPTIONS_PENDING_TIMEOUT_MS,
   type CaptionChange,
@@ -451,6 +456,13 @@ export {
   releasePayout,
   saveAccountStatus,
 } from './helpers/payout.js';
+export {
+  BrandConflictError,
+  BrandValidationError,
+  getBrand,
+  type PlatformBrandRecord,
+  saveBrand,
+} from './helpers/platform-brand.js';
 export {
   type Curriculum,
   computeProgress,

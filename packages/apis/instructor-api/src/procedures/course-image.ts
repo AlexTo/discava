@@ -4,18 +4,16 @@
  */
 import { randomUUID } from 'node:crypto';
 import {
+  attachPublicMediaObject,
+  bestEffortDetachPublicMediaObject,
   courseImageKey,
+  headPublicMediaObject,
   isCourseImageKey,
+  presignJpegUpload,
 } from '@discava/common-server-utils/public-media';
 import { TRPCError } from '@trpc/server';
 import { refreshInstructorCourseUpdatedAt } from '../helpers/course-access.js';
 import { requireActiveCourse } from '../helpers/curriculum-guards.js';
-import {
-  attachPublicMediaObject,
-  bestEffortDetachPublicMediaObject,
-  headPublicMediaObject,
-  presignJpegUpload,
-} from '../helpers/public-media-client.js';
 import { courseInstructorProcedure } from '../init.js';
 import {
   COURSE_IMAGE_MAX_BYTES,

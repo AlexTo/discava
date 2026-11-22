@@ -6,6 +6,7 @@ import {
   addSetting,
   CoreTable,
   EventsAnalyticsUpdate,
+  EventsBrandPublishing,
   EventsCaptionTranslation,
   EventsCertificateReminder,
   EventsEarningsRecording,
@@ -16,6 +17,7 @@ import {
   EventsTranscriptIndexing,
   EventsTranscriptReindex,
   LessonMediaBucket,
+  type PublicMediaBucket,
   SearchCollection,
   StreamRouter,
   suppressRules,
@@ -44,6 +46,8 @@ export interface StreamRouterStackProps extends StackProps {
   readonly searchCollection: SearchCollection;
   /** Holds the caption files the transcript indexer reads and the caption translation function reads and writes. */
   readonly lessonMediaBucket: LessonMediaBucket;
+  /** Where the brand publishing function writes `brand/brand.json`. */
+  readonly publicMediaBucket: PublicMediaBucket;
   /** Sender and SES identity for notification emails. @default no sender, no SES access */
   readonly notifications?: NotificationsComponentConfig;
   /** Signs the unsubscribe links the delivery function puts in each email. */
@@ -78,6 +82,7 @@ export class StreamRouterStack extends Stack {
       coreTable,
       searchCollection,
       lessonMediaBucket,
+      publicMediaBucket,
       notifications,
       notificationUnsubscribeSecret,
       portalUrls,
@@ -121,6 +126,10 @@ export class StreamRouterStack extends Stack {
       'earnings-recording': this.createEarningsRecordingLambda(
         coreTable,
         payouts,
+      ),
+      'brand-publishing': this.createBrandPublishingLambda(
+        coreTable,
+        publicMediaBucket,
       ),
       'caption-translation': this.createCaptionTranslationLambda(
         coreTable,
@@ -301,6 +310,21 @@ export class StreamRouterStack extends Stack {
     );
     recording.addEnvironment('PAYOUT_HOLD_DAYS', String(payouts.holdDays));
     return recording;
+  }
+
+  // Publishes the platform brand to `brand/brand.json`, run from its feature's
+  // queue. It reads the table and puts that one object: no other key in the
+  // bucket, and no other record.
+  private createBrandPublishingLambda(
+    coreTable: CoreTable,
+    publicMediaBucket: PublicMediaBucket,
+  ) {
+    const publishing = new EventsBrandPublishing(this, 'BrandPublishing');
+    coreTable.grantReadData(publishing);
+    coreTable.bindSettings(publishing);
+    publicMediaBucket.bucket.grantPut(publishing, 'brand/brand.json');
+    publicMediaBucket.bindSettings(publishing);
+    return publishing;
   }
 
   // Translates each video's default caption track into its course's caption

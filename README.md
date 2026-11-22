@@ -30,11 +30,12 @@
 
 ---
 
-**Discava is a free, open source learning platform designed around AI from the start, and it runs entirely in your own AWS account.** The courses, the learner data and the AI that works with them all stay with you.
+**Discava is a free, open source (Apache 2.0) learning platform designed around AI from the start, and it runs entirely in your own AWS account.** The courses, the learner data and the AI that works with them all stay with you.
 
 - **AI at the core** *(coming soon)*: an assistant built into the learning experience, not bolted on as a plugin.
 - **Scales to zero**: fully serverless, so you pay for what you use and next to nothing when no one is learning.
 - **Scales up too**: the same deployment grows from your first student to your ten-thousandth, with no servers to manage.
+- **Hardened for production**: built on the proven [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws), so you start from battle-tested, secure-by-default infrastructure.
 - **Sell or share**: publish free or paid courses, and get paid through Stripe.
 - **Teach your way**: video lessons with questions along the way, quizzes and graded assignments.
 - **Keep learners moving**: progress tracking, a searchable transcript for every video, and certificates they can share.
@@ -84,15 +85,7 @@
 > [!TIP]
 > 🤖 **AI built in, not bolted on.** ✨ An AI assistant and personalised learning are part of the core experience, not a paid add-on. Coming soon.
 
-## Why Discava
-
-- ☁️ **Serverless.** Pay for what you use. It scales to zero.
-- 🔒 **Your AWS account.** You own your data.
-- 🛡️ **Hardened production defaults.** WAF and KMS encryption.
-- 🆓 **Free and open source.** Apache 2.0.
-- 🤖 **Built with AI in mind** from the start.
-
-## For developers
+### 🧑‍💻 For developers
 
 Discava is a TypeScript monorepo. It is opinionated by design: one cloud provider, one way to deploy.
 
@@ -101,7 +94,7 @@ Discava is a TypeScript monorepo. It is opinionated by design: one cloud provide
 - 🧱 Built with the [Nx Plugin for AWS](https://github.com/awslabs/nx-plugin-for-aws), so every API, portal and stack is scaffolded the same way, following AWS's proven best practices.
 - ✅ Well tested.
 
-### Try it locally
+#### Try it locally
 
 With Docker running:
 

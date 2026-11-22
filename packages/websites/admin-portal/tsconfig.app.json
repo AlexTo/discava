@@ -41,6 +41,9 @@
   ],
   "references": [
     {
+      "path": "../../common/branding/tsconfig.lib.json"
+    },
+    {
       "path": "../../common/infra-config/tsconfig.lib.json"
     },
     {

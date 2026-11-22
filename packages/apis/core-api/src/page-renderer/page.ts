@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import type { ResolvedBrand } from '@discava/common-branding/brand';
 import { escapeHtml, jsonForScript, metaDescription } from './html.js';
 
 /** What a page is rendered for. */
@@ -9,6 +10,8 @@ export interface PageContext {
   /** The viewer's host, already checked against the allowed list. */
   host: string;
   siteName: string;
+  /** The platform brand: the saved one, or the default when none or unreadable. */
+  brand: ResolvedBrand;
   /** Whether search engines may index the page. */
   allowIndexing: boolean;
   /** A public media object's absolute URL, if it has a key and a base. */

@@ -97,4 +97,21 @@ describe('PublicBucket', { timeout: 30_000 }, () => {
       ]),
     );
   });
+
+  it('limits a manager to the key patterns it is given', () => {
+    const { stack, media } = setup();
+    const role = new Role(stack, 'Role', {
+      assumedBy: new ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    media.grantManageObjects(role, ['brand/logo/*']);
+
+    const resources = JSON.stringify(
+      Object.values(
+        Template.fromStack(stack).findResources('AWS::IAM::Policy'),
+      ),
+    );
+    expect(resources).toContain('/brand/logo/*');
+    expect(resources).not.toMatch(/"\/\*"/);
+  });
 });
