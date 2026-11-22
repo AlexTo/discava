@@ -181,11 +181,47 @@ describe('inspectBrandImage: refused images', () => {
       expect(JSON.stringify(result)).toMatch(/entity/);
     });
 
-    it('still accepts plain-text entities, as Illustrator writes for its namespaces', async () => {
+    it.each([
+      [
+        'an animation whose target is written through an entity',
+        '<!ENTITY h "href">',
+        '<a><animate attributeName="&h;" values="javascript:alert(1)"/><text y="20">x</text></a>',
+      ],
+      [
+        'an outside URL written through an entity',
+        '<!ENTITY u "url(https://evil.example/x.png)">',
+        '<rect width="1" height="1" style="fill:&u;"/>',
+      ],
+      [
+        'a link written through an entity',
+        '<!ENTITY l "https://evil.example/x.png">',
+        '<image href="&l;" width="1" height="1"/>',
+      ],
+      [
+        'an entity used as text',
+        '<!ENTITY t "hello">',
+        '<text y="20">&t;</text>',
+      ],
+    ])('refuses %s', async (_name, dtd, body) => {
+      serve(svg(dtd, body));
+      const result = await inspectBrandImage('logo', 'brand/logo/x.svg');
+      expect(result).toMatchObject({ ok: false });
+      expect(JSON.stringify(result)).toMatch(/entity/);
+    });
+
+    it('accepts the predefined entities and numeric character references', async () => {
       serve(
-        svg(
-          '<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">',
-          '<rect width="1" height="1"/>',
+        svg('', '<text y="20" title="a &amp; b &lt; c &#65; &#x42;">x</text>'),
+      );
+      expect(await inspectBrandImage('logo', 'brand/logo/x.svg')).toEqual({
+        ok: true,
+      });
+    });
+
+    it('still accepts plain-text entities in namespace declarations, as Illustrator writes them', async () => {
+      serve(
+        new TextEncoder().encode(
+          '<!DOCTYPE svg [<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">]>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:x="&ns_extend;" viewBox="0 0 200 100"><rect width="1" height="1"/></svg>',
         ),
       );
       expect(await inspectBrandImage('logo', 'brand/logo/x.svg')).toEqual({

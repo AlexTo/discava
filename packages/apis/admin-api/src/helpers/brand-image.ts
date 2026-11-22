@@ -205,6 +205,22 @@ const hasUnsafeEntity = (text: string): boolean => {
   return false;
 };
 
+// Where the entities may be used. The checks below read the file as written,
+// but a browser substitutes an entity's text wherever it appears, so a
+// plain-text entity could stand in for "href" or "url(https://…)" and slip
+// past them. The only use that needs entities is Illustrator's namespace
+// declarations (xmlns:x="&ns_extend;"), whose values are never fetched:
+// every other reference to anything but the five predefined entities and
+// numeric character references is refused.
+const DOCTYPE = /<!DOCTYPE[^[>]*(\[[\s\S]*?\])?\s*>/i;
+const NAMESPACE_DECLARATION = /\sxmlns(?::[\w.-]+)?\s*=\s*("[^"]*"|'[^']*')/g;
+const PLAIN_REFERENCE = /&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);)/i;
+
+const usesEntityOutsideNamespaces = (text: string): boolean =>
+  PLAIN_REFERENCE.test(
+    text.replace(DOCTYPE, '').replace(NAMESPACE_DECLARATION, ''),
+  );
+
 const inspectSvg = (
   label: string,
   text: string,
@@ -212,6 +228,11 @@ const inspectSvg = (
   if (hasUnsafeEntity(text)) {
     return {
       problem: `The ${label} can't declare an entity that holds markup or loads from outside the file.`,
+    };
+  }
+  if (usesEntityOutsideNamespaces(text)) {
+    return {
+      problem: `The ${label} can't use an entity other than in a namespace declaration. Write the value out.`,
     };
   }
   let tree: XmlNode[];
