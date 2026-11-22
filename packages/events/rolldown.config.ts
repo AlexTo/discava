@@ -13,6 +13,7 @@ const LAMBDAS: [name: string, input: string][] = [
   ['analytics-update', 'src/analytics/analytics-update.ts'],
   ['progress-recalculation', 'src/progress/progress-recalculation.ts'],
   ['search-indexing', 'src/search/search-indexing.ts'],
+  ['caption-translation', 'src/media/caption-translation.ts'],
   ['transcode-reconciler', 'src/media/transcode-reconciler.ts'],
   ['pre-token-generation', 'src/identity/pre-token-generation.ts'],
   ['search-reindex', 'src/search/search-reindex.ts'],

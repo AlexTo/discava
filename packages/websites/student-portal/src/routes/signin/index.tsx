@@ -4,6 +4,7 @@
  */
 
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { safeReturnTo } from '@discava/common-web-utils/return-to';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/signin/')({
 
 function RouteComponent() {
   const auth = useAuth();
+  usePageTitle('Signing in');
   const navigate = useNavigate();
   const returnTo = safeReturnTo(Route.useSearch().redirect);
   // `auth` is a fresh object on every render, so only try once: a
@@ -44,5 +46,15 @@ function RouteComponent() {
     }
   }, [auth, navigate, returnTo]);
 
-  return <Spinner />;
+  return (
+    <main
+      className="mx-auto flex w-full max-w-3xl items-center justify-center gap-3 px-6 py-24 lg:px-8"
+      role="status"
+    >
+      <Spinner role="presentation" aria-hidden="true" />
+      <h1 className="text-sm font-normal text-muted-foreground">
+        Signing you in…
+      </h1>
+    </main>
+  );
 }

@@ -20,7 +20,12 @@ function RouteComponent() {
   const { courseId } = Route.useParams();
   const { q } = Route.useSearch();
   return (
-    <CoursePlayerLayout courseId={courseId} crumb="Search" query={q}>
+    <CoursePlayerLayout
+      courseId={courseId}
+      crumb="Search"
+      query={q}
+      titleParts={(course) => (course ? ['Search', course.title] : ['Search'])}
+    >
       {() => <TranscriptSearchResults courseId={courseId} q={q ?? ''} />}
     </CoursePlayerLayout>
   );

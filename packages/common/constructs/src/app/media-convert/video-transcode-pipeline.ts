@@ -4,10 +4,12 @@
  */
 import { Names } from 'aws-cdk-lib';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import { CfnJobTemplate } from 'aws-cdk-lib/aws-mediaconvert';
 import { Construct } from 'constructs';
 import { MediaBucket } from '../../core/media-bucket.js';
 import { RuntimeConfig } from '../../core/runtime-config.js';
+import { addSetting } from '../../core/settings.js';
 import { UploadBucket } from '../../core/upload-bucket.js';
 
 export interface VideoTranscodePipelineProps {
@@ -182,9 +184,22 @@ export class VideoTranscodePipeline extends Construct {
       settingsJson: buildSettingsJson(),
     });
 
-    RuntimeConfig.ensure(this).set('mediaConvert', 'VideoTranscodePipeline', {
+    RuntimeConfig.ensure(this).set(
+      'mediaConvert',
+      'VideoTranscodePipeline',
+      this.settings,
+    );
+  }
+
+  /** Gives `fn` the pipeline's deploy-time `mediaConvert` setting. */
+  public bindSettings(fn: LambdaFunction): void {
+    addSetting(fn, 'mediaConvert', 'VideoTranscodePipeline', this.settings);
+  }
+
+  private get settings() {
+    return {
       roleArn: this.role.roleArn,
       jobTemplateArn: this.jobTemplate.attrArn,
-    });
+    };
   }
 }

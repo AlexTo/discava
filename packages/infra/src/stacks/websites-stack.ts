@@ -5,8 +5,8 @@
 import {
   AdminPortal,
   InstructorPortal,
+  pageRendererParameterName,
   RuntimeConfig,
-  runtimeConfigApplicationName,
   StaticWebsite,
   StudentPortal,
   StudentPortalProps,
@@ -118,9 +118,7 @@ export class WebsitesStack extends Stack {
         allowSearchEngineIndexing,
         siteName: config?.siteName ?? 'Discava',
         reservedConcurrency: config?.pageRendererReservedConcurrency ?? 20,
-        runtimeConfigAppName: runtimeConfigApplicationName(
-          RuntimeConfig.ensure(this),
-        ),
+        settingsParameterName: pageRendererParameterName(this),
         allowedHosts: config?.domainNames ?? [],
       },
     };

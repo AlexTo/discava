@@ -197,9 +197,10 @@ const textBody = (text: string) =>
 export const createPublishedCourseViaApi = async (
   instructor: ApiUser,
   title: string,
+  description?: string,
 ) => {
   const api = instructor.instructor;
-  const { courseId } = await api.course.create.mutate({ title });
+  const { courseId } = await api.course.create.mutate({ title, description });
   const { moduleId } = await api.module.create.mutate({
     courseId,
     title: 'Module 1',
@@ -243,6 +244,51 @@ export const createPublishedCourseViaApi = async (
   });
   await api.course.publish.mutate({ courseId });
   return { ...lesson, texts, quiz: { ...lesson, contentItemId: quizId } };
+};
+
+// A published course with one lesson holding a three-question quiz titled
+// "Keyboard quiz" (pass mark 50%, two attempts), built through instructor-api.
+export const createPublishedQuizCourseViaApi = async (
+  instructor: ApiUser,
+  title: string,
+) => {
+  const api = instructor.instructor;
+  const { courseId } = await api.course.create.mutate({ title });
+  const { moduleId } = await api.module.create.mutate({
+    courseId,
+    title: 'Module 1',
+  });
+  const { lessonId } = await api.lesson.create.mutate({
+    courseId,
+    moduleId,
+    title: 'Lesson 1',
+  });
+  const ids = ['q1', 'q2', 'q3'];
+  await api.contentItem.createQuiz.mutate({
+    courseId,
+    moduleId,
+    lessonId,
+    title: 'Keyboard quiz',
+    questions: ids.map((questionId, i) => ({
+      questionId,
+      kind: 'single' as const,
+      prompt: textBody(`Question text ${i + 1}?`),
+      options: [
+        { optionId: 'a', text: 'Right' },
+        { optionId: 'b', text: 'Wrong' },
+      ],
+    })),
+    answerKey: Object.fromEntries(
+      ids.map((id) => [id, { correctOptionIds: ['a'] }]),
+    ),
+    settings: {
+      passMarkPercent: 50,
+      attemptsAllowed: 2,
+      shuffleOptions: false,
+      revealAnswers: 'never',
+    },
+  });
+  await api.course.publish.mutate({ courseId });
 };
 
 // A published course whose module and two lessons have titles over 60

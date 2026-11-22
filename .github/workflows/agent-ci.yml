@@ -7,7 +7,7 @@ name: Agent CI Status
 # `software-factory/review` in state `failure` or `error` (worker.py in the
 # automation's package; it polls every 15 minutes). Nothing here set that
 # status, so a failing CI run went unanswered. This posts it when PR Checks
-# fails on an agent's branch (`openhands/issue-<n>`), at most five times per
+# fails on an agent's branch (`openhands/*`), at most five times per
 # pull request (labels `ci-fix-1` to `ci-fix-5`), then comments and stops
 # (`ci-fix-exhausted`). A passing run posts nothing.
 # The rules are in packages/tooling/agent/src/agent-ci/.
@@ -38,7 +38,7 @@ jobs:
     name: Send the agent back after a failed run
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
-      startsWith(github.event.workflow_run.head_branch, 'openhands/issue-') &&
+      startsWith(github.event.workflow_run.head_branch, 'openhands/') &&
       (github.event.workflow_run.conclusion == 'failure' ||
       github.event.workflow_run.conclusion == 'timed_out')
     uses: ./.github/workflows/agent-status.yml

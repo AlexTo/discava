@@ -457,6 +457,7 @@ describe('notification delivery', () => {
         'ADMIN_PORTAL_URL',
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
+        'DISCAVA_DYNAMODB_CORE_TABLE',
         'NOTIFICATIONS_FROM_ADDRESS',
         'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
@@ -494,20 +495,25 @@ describe('notification delivery', () => {
     expect(sesStatements({})).toEqual([]);
   });
 
-  it('may send only from the configured identity, and no other function may send', () => {
+  it('may send only from the configured address, and no other function may send', () => {
     const statements = sesStatements(configured);
     expect(statements).toHaveLength(1);
     expect(statements[0].name).toBe('StreamRouter');
     expect(statements[0].statement.Action).toBe('ses:SendEmail');
+    // Every identity, since in the SES sandbox the recipients' verified
+    // identities are authorised too; the condition pins the sender.
     expect(statements[0].statement.Resource).toEqual({
       'Fn::Join': [
         '',
         [
           'arn:',
           { Ref: 'AWS::Partition' },
-          ':ses:ap-southeast-2:111122223333:identity/example.com',
+          ':ses:ap-southeast-2:111122223333:identity/*',
         ],
       ],
+    });
+    expect(statements[0].statement.Condition).toEqual({
+      StringEquals: { 'ses:FromAddress': 'notifications@example.com' },
     });
   });
 

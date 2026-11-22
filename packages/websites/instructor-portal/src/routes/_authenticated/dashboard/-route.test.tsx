@@ -150,7 +150,11 @@ describe('Dashboard', () => {
     expect(
       await screen.findByText("Couldn't load your courses"),
     ).toBeInTheDocument();
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Retry' }));
 

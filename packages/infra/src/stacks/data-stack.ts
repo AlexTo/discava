@@ -10,7 +10,7 @@ import {
   LessonMediaBucket,
   LessonMediaUploadBucket,
   PublicMediaBucket,
-  RuntimeConfig,
+  pageRendererParameterName,
   SearchCollection,
   StripeSecrets,
   StudentPortal,
@@ -25,13 +25,20 @@ import type {
   SearchComponentConfig,
 } from '@discava/common-infra-config';
 import { localPortalOrigins } from '@discava/common-infra-config/local-portals';
-import { Names, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
+import {
+  CfnOutput,
+  Names,
+  RemovalPolicy,
+  Stack,
+  StackProps,
+} from 'aws-cdk-lib';
 import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Mfa, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { TableEncryption } from 'aws-cdk-lib/aws-dynamodb';
 import { Policy, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam';
 import { Key } from 'aws-cdk-lib/aws-kms';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
 export interface DataStackProps extends StackProps {
@@ -87,13 +94,17 @@ export class DataStack extends Stack {
 
     this.identity = this.createIdentity(identityConfig);
     this.coreTable = this.createCoreTable(coreTableConfig);
+    // For the operator scripts, which read the table through core-table.
+    new CfnOutput(this, 'CoreTableName', {
+      value: this.coreTable.table.tableName,
+    });
     this.syncUsersToCoreTable();
-    this.grantPageRenderer(studentPortal);
     this.lessonMediaBucket = this.createLessonMediaBucket(lessonMediaConfig);
     this.lessonMediaUploadBucket =
       this.createLessonMediaUploadBucket(lessonMediaConfig);
     this.publicMediaBucket = this.createPublicMediaBucket(publicMediaConfig);
     this.searchCollection = this.createSearchCollection(searchConfig);
+    this.grantPageRenderer(studentPortal);
     this.notificationUnsubscribeSecret =
       this.createNotificationUnsubscribeSecret(coreTableConfig);
     this.stripeSecrets = new StripeSecrets(this, 'StripeSecrets', {
@@ -170,7 +181,7 @@ export class DataStack extends Stack {
       return;
     }
     // A mutable import, so the policy is created here, in Data. Granting on
-    // the Websites-owned role would put the table's and AppConfig's ARNs in
+    // the Websites-owned role would put the table's and the parameter's ARNs in
     // Websites, which Data already depends on: a cycle.
     const role = Role.fromRoleArn(
       this,
@@ -179,7 +190,17 @@ export class DataStack extends Stack {
       { mutable: true },
     );
     this.coreTable.grantReadData(role);
-    RuntimeConfig.ensure(this).grantReadAppConfig(role);
+    // The renderer isn't bound to the table's setting, as it learns its name
+    // from this parameter at runtime: the Websites stack names it, and
+    // creating it here keeps Data from depending on Websites.
+    const parameter = new StringParameter(this, 'PageRendererSettings', {
+      parameterName: pageRendererParameterName(this),
+      stringValue: this.toJsonString({
+        tableName: this.coreTable.table.tableName,
+        publicMediaBaseUrl: this.publicMediaBucket.baseUrl,
+      }),
+    });
+    parameter.grantRead(role);
   }
 
   // Keeps each user's core table record in step with Cognito (#230). Pre
@@ -191,21 +212,16 @@ export class DataStack extends Stack {
       this,
       'PreTokenGeneration',
     );
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    preTokenGeneration.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(preTokenGeneration);
     this.coreTable.grantReadWriteData(preTokenGeneration);
-    // Its environment only holds the AppConfig application's ID (a Ref).
+    this.coreTable.bindSettings(preTokenGeneration);
+    // Its environment only holds the table setting (a Ref).
     // Checkov's secret scan also reads a __file__ key its own parser injects
     // (the template's path), and this stack's CDK-hashed template file name
     // trips CKV_AWS_45 on it.
     suppressRules(
       preTokenGeneration,
       ['CKV_AWS_45'],
-      'Environment only holds the AppConfig application ID; checkov flags its injected template path',
+      'Environment only holds the table setting; checkov flags its injected template path',
     );
     this.identity.userPool.addTrigger(
       UserPoolOperation.PRE_TOKEN_GENERATION,

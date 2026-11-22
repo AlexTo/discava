@@ -10,6 +10,7 @@ export * from './media-bucket.js';
 export * from './opensearch.js';
 export * from './public-bucket.js';
 export * from './runtime-config.js';
+export * from './settings.js';
 export * from './stage-isolation.js';
 export * from './static-website.js';
 export * from './stream-router.js';

@@ -30,11 +30,12 @@ export interface PageRendererProps {
   readonly siteName: string;
   readonly reservedConcurrency: number;
   /**
-   * The AppConfig application's name (`runtimeConfigApplicationName`), which
-   * the renderer reads the table's name through. A name rather than an id,
-   * since the application is in a stack that depends on this one.
+   * The name of the SSM parameter (`pageRendererParameterName`) the renderer
+   * reads the table's name and the public media base URL from. A name rather
+   * than a reference, since the parameter is in a stack that depends on this
+   * one.
    */
-  readonly runtimeConfigAppName: string;
+  readonly settingsParameterName: string;
   /** The hosts pages may name as their own; empty allows `*.cloudfront.net`. */
   readonly allowedHosts: string[];
 }
@@ -88,7 +89,7 @@ export class StudentPortal extends StaticWebsite {
     const renderer = new CoreApiPageRenderer(this, 'PageRenderer', {
       reservedConcurrentExecutions: pageRenderer.reservedConcurrency,
       environment: {
-        RUNTIME_CONFIG_APP_ID: pageRenderer.runtimeConfigAppName,
+        PAGE_RENDERER_PARAMETER: pageRenderer.settingsParameterName,
         WEBSITE_BUCKET: this.websiteBucket.bucketName,
         ALLOW_SEARCH_ENGINE_INDEXING: String(
           pageRenderer.allowSearchEngineIndexing,

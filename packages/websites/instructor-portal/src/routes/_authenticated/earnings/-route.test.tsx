@@ -201,7 +201,11 @@ describe('earnings report', () => {
       },
     });
 
-    expect(await screen.findByText('The report is down')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(await screen.findByText('Status:')).toBeInTheDocument();
     expect(
       await screen.findByText('Next release 25 Nov 2026'),
@@ -429,7 +433,11 @@ describe('balance and payouts', () => {
       },
     });
 
-    expect(await screen.findAllByText('Balances are down')).not.toHaveLength(0);
+    expect(
+      await screen.findAllByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).not.toHaveLength(0);
     expect(
       await screen.findByRole('table', { name: 'Earnings in USD' }),
     ).toBeInTheDocument();

@@ -4,7 +4,7 @@
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { AlertTriangle, CircleCheck, FileX } from 'lucide-react';
 import { Fragment, useEffect, useRef } from 'react';
 import type { PlayerItem } from '../../../../hooks/use-course-player';
@@ -17,6 +17,20 @@ import {
 import { QuestionsSection } from './discussion/questions-section';
 import { EnrolledNotice } from './enrolled-notice';
 import { useQuizFailed } from './quiz-item';
+
+// Scrolls to an item on this page, at once under reduced motion, and moves
+// focus to it.
+const goToItem = (anchor: string) => {
+  const target = document.getElementById(anchor);
+  const reduceMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  target?.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+  target?.focus({ preventScroll: true });
+};
 
 // One item as a step: ✓ done, ⚠ a quiz finished without passing, or the
 // item's type. It scrolls to the item on this page.
@@ -44,18 +58,19 @@ function Step({
         params={{ courseId: item.courseId, lessonId: item.lessonId }}
         hash={itemAnchor(item.contentItemId)}
         onClick={(event) => {
+          // A modified or middle click is left to the browser, which opens
+          // the step's address in a new tab or window.
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return;
+          }
           event.preventDefault();
-          const target = document.getElementById(
-            itemAnchor(item.contentItemId),
-          );
-          const reduceMotion = window.matchMedia(
-            '(prefers-reduced-motion: reduce)',
-          ).matches;
-          target?.scrollIntoView({
-            behavior: reduceMotion ? 'auto' : 'smooth',
-            block: 'start',
-          });
-          target?.focus({ preventScroll: true });
+          goToItem(itemAnchor(item.contentItemId));
         }}
         className={cn(
           'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors hover:bg-muted/60',
@@ -154,6 +169,16 @@ function Lesson({
     });
     target.focus({ preventScroll: true });
   }, [momentItemId]);
+
+  // Opened at a step's address (a new tab, a copied link): the items only
+  // exist once the course has loaded, after the browser and the router have
+  // looked for the fragment, so go to the item here.
+  const hash = useLocation({ select: (location) => location.hash });
+  useEffect(() => {
+    if (hash.startsWith(itemAnchor(''))) {
+      goToItem(hash);
+    }
+  }, [hash]);
 
   // Hidden, archived or deleted by the instructor (or never in this course):
   // course.view lists only what a student may see.
@@ -298,7 +323,18 @@ export function LessonPage({
   t?: number;
 }) {
   return (
-    <CoursePlayerLayout courseId={courseId} activeLessonId={lessonId}>
+    <CoursePlayerLayout
+      courseId={courseId}
+      activeLessonId={lessonId}
+      titleParts={(course) => {
+        if (!course) return ['Lesson'];
+        const lesson = course.modules
+          .flatMap((module) => module.lessons)
+          .find((candidate) => candidate.lessonId === lessonId);
+        // A lesson the course no longer lists has the course's title only.
+        return lesson ? [lesson.title, course.title] : [course.title];
+      }}
+    >
       {(player) => (
         <Lesson
           courseId={courseId}

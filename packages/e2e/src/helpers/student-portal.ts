@@ -127,7 +127,7 @@ export const takeQuiz = async (page: Page, title: string, answer: string) => {
     .click();
   await quiz.getByRole('radio', { name: answer, exact: true }).check();
   await quiz.getByRole('button', { name: 'Review answers' }).click();
-  await quiz.getByRole('button', { name: 'Submit' }).click();
+  await quiz.getByRole('button', { name: 'Submit answers' }).click();
   return quiz;
 };
 

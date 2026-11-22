@@ -241,7 +241,11 @@ describe('My courses', () => {
     expect(
       await screen.findByText("Couldn't load your courses"),
     ).toBeInTheDocument();
-    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('links each course to its course page', async () => {

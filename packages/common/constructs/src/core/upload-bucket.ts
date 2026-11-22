@@ -6,6 +6,7 @@ import { Duration, Lazy, RemovalPolicy } from 'aws-cdk-lib';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
 import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import {
   BlockPublicAccess,
   Bucket,
@@ -18,6 +19,7 @@ import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { findCloudFrontDomainNames } from './cloudfront.js';
 import { RuntimeConfig } from './runtime-config.js';
+import { addSetting } from './settings.js';
 
 export interface UploadBucketProps {
   /**
@@ -61,6 +63,8 @@ export interface UploadBucketProps {
  */
 export class UploadBucket extends Construct {
   public readonly bucket: IBucket;
+  private readonly runtimeConfigKey: string;
+  private readonly settings: Record<string, unknown>;
   private allowedOrigins: string[] = ['*'];
 
   constructor(
@@ -75,6 +79,7 @@ export class UploadBucket extends Construct {
     }: UploadBucketProps,
   ) {
     super(scope, id);
+    this.runtimeConfigKey = runtimeConfigKey;
 
     const key: IKey | undefined = enableKmsEncryption
       ? (encryptionKey ?? new Key(this, 'EncryptionKey', { enableKeyRotation }))
@@ -116,9 +121,13 @@ export class UploadBucket extends Construct {
       'Raw uploads are deleted as soon as downstream processing succeeds or fails; versioning would only retain copies of something already discarded',
     );
 
-    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, {
-      bucketName: this.bucket.bucketName,
-    });
+    this.settings = { bucketName: this.bucket.bucketName };
+    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, this.settings);
+  }
+
+  /** Gives `fn` the bucket's deploy-time `s3` setting. */
+  public bindSettings(fn: LambdaFunction): void {
+    addSetting(fn, 's3', this.runtimeConfigKey, this.settings);
   }
 
   /**
