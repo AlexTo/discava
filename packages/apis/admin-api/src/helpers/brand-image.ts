@@ -186,10 +186,34 @@ const svgSize = (
   return width && height ? { width, height } : undefined;
 };
 
+// Entity declarations in the file's own DTD. The parser leaves entities
+// unexpanded, but a browser expands them into markup, so an entity that holds
+// markup (or a character reference that makes it) would hide what the checks
+// below look for. Illustrator's exports declare plain-text entities for
+// namespace URLs, which are fine; anything that could build markup, a
+// parameter entity or an external one is refused.
+const ENTITY_DECLARATION =
+  /<!ENTITY\s+(%\s*)?[^\s>]+\s+(?:"([^"]*)"|'([^']*)'|(SYSTEM|PUBLIC)\b)/gi;
+
+const hasUnsafeEntity = (text: string): boolean => {
+  for (const match of text.matchAll(ENTITY_DECLARATION)) {
+    const [, parameter, double, single, external] = match;
+    if (parameter || external || /[<&]/.test(double ?? single ?? '')) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const inspectSvg = (
   label: string,
   text: string,
 ): { problem?: string; size?: { width: number; height: number } } => {
+  if (hasUnsafeEntity(text)) {
+    return {
+      problem: `The ${label} can't declare an entity that holds markup or loads from outside the file.`,
+    };
+  }
   let tree: XmlNode[];
   try {
     tree = parser.parse(text) as XmlNode[];

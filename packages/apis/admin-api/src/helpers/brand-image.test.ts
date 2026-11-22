@@ -147,6 +147,53 @@ describe('inspectBrandImage: refused images', () => {
     expect(JSON.stringify(result)).toMatch(message);
   });
 
+  describe('entities declared in the file’s own DTD', () => {
+    const svg = (dtd: string, body = '&x;') =>
+      new TextEncoder().encode(
+        `<!DOCTYPE svg [${dtd}]>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">${body}</svg>`,
+      );
+    const serve = (bytes: Uint8Array) => {
+      head.mockResolvedValue({
+        contentType: 'image/svg+xml',
+        contentLength: bytes.length,
+      });
+      getBytes.mockResolvedValue(bytes);
+    };
+
+    it.each([
+      ['markup in the value', '<!ENTITY x "<script>alert(1)</script>">'],
+      ['markup in single quotes', "<!ENTITY x '<script>alert(1)</script>'>"],
+      [
+        'a character reference that makes markup',
+        '<!ENTITY x "&#60;script&#62;alert(1)&#60;/script&#62;">',
+      ],
+      ['a reference to another entity', '<!ENTITY a "b"><!ENTITY x "&a;">'],
+      ['an external entity', '<!ENTITY x SYSTEM "https://evil.example/x.xml">'],
+      [
+        'a public external entity',
+        '<!ENTITY x PUBLIC "-//X//Y" "https://evil.example/x">',
+      ],
+      ['a parameter entity', '<!ENTITY % x "<!ENTITY y \'z\'>">'],
+    ])('refuses %s', async (_name, dtd) => {
+      serve(svg(dtd));
+      const result = await inspectBrandImage('logo', 'brand/logo/x.svg');
+      expect(result).toMatchObject({ ok: false });
+      expect(JSON.stringify(result)).toMatch(/entity/);
+    });
+
+    it('still accepts plain-text entities, as Illustrator writes for its namespaces', async () => {
+      serve(
+        svg(
+          '<!ENTITY ns_extend "http://ns.adobe.com/Extensibility/1.0/">',
+          '<rect width="1" height="1"/>',
+        ),
+      );
+      expect(await inspectBrandImage('logo', 'brand/logo/x.svg')).toEqual({
+        ok: true,
+      });
+    });
+  });
+
   it('refuses text that is not an SVG', async () => {
     head.mockResolvedValue({ contentType: 'image/svg+xml', contentLength: 9 });
     getBytes.mockResolvedValue(new TextEncoder().encode('<html></html>'));
