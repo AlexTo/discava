@@ -357,7 +357,7 @@ test('an instructor uploads a video, and a student watches it', async ({
     });
     await expect(
       dialog.getByRole('listitem', { name: 'English' }),
-    ).toContainText('uploaded');
+    ).toContainText('Uploaded');
     await screenshot(
       instructor,
       'captions dialog with an uploaded English track',
@@ -446,7 +446,7 @@ test('an instructor uploads a video, and a student watches it', async ({
     });
     await expect(
       added.getByRole('listitem', { name: 'Spanish' }),
-    ).toContainText('uploaded');
+    ).toContainText('Uploaded');
     await screenshot(instructor, 'captions dialog with a second language');
     await closeDialog(instructor);
 

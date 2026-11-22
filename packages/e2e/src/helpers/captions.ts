@@ -134,6 +134,28 @@ export const chooseCaptionLanguages = async (
 };
 
 /**
+ * Unticks caption languages (by English name) on the open course's "Caption
+ * languages" card and saves. Languages saved earlier are already ticked.
+ */
+export const removeCaptionLanguages = async (
+  page: Page,
+  courseTitle: string,
+  labels: string[],
+) => {
+  await expect(
+    page.getByRole('heading', { level: 1, name: courseTitle }),
+  ).toBeVisible();
+  for (const label of labels) {
+    await page
+      .getByRole('checkbox', { name: new RegExp(`^${label} `) })
+      .uncheck();
+  }
+  const card = page.getByRole('region', { name: 'Caption languages' });
+  await card.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(card.getByText('Saved', { exact: true })).toBeVisible();
+};
+
+/**
  * Waits until a track named `label` is in the video's Captions dialog,
  * reopening the dialog while translation runs. Leaves the dialog open.
  */

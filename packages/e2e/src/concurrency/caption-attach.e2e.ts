@@ -12,6 +12,7 @@ import {
 import { LESSON_MEDIA_BUCKET } from '../helpers/assignment.js';
 import { webVtt } from '../helpers/captions.js';
 import { SERVICES } from '../helpers/portals.js';
+import { waitForQueuesToDrain } from '../helpers/router.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { uniqueName } from '../helpers/users.js';
 
@@ -105,4 +106,47 @@ test('two instructors attaching the same language at once leave one track and no
   await expect
     .poll(async () => (await captionFiles()).sort(), { timeout: 15_000 })
     .toEqual(captions.map((track) => track.trackId).sort());
+});
+
+test('an upload and a caption language change adding the same language at once leave the upload', async () => {
+  // The second instructor acts too (as in the test above), which is what
+  // gives them a user record for the table invariants.
+  await upload(second, 'Unused');
+  const uploadId = await upload(first, 'An uploaded Spanish cue');
+
+  const results = await Promise.allSettled([
+    first.instructor.contentItem.attachCaption.mutate({
+      ...video,
+      uploadId,
+      language: 'es-ES',
+    }),
+    first.instructor.course.updateCaptionLanguages.mutate({
+      courseId: video.courseId,
+      languages: ['es-ES'],
+    }),
+  ]);
+
+  // The upload may lose its conditional write to the translation, and is
+  // then told to try again; the language change always succeeds.
+  expect(results[1].status).toBe('fulfilled');
+  if (results[0].status === 'rejected') {
+    expect((results[0].reason as { data?: { code?: string } }).data?.code).toBe(
+      'CONFLICT',
+    );
+    const retry = await upload(first, 'An uploaded Spanish cue');
+    await first.instructor.contentItem.attachCaption.mutate({
+      ...video,
+      uploadId: retry,
+      language: 'es-ES',
+    });
+  }
+
+  // The translation queue handles the language change, then the upload's own.
+  await waitForQueuesToDrain();
+
+  const { captions } =
+    await first.instructor.contentItem.createVideoUrl.query(video);
+  const spanish = captions.filter((track) => track.language === 'es-ES');
+  expect(spanish).toHaveLength(1);
+  expect(spanish[0]?.source).toBe('uploaded');
 });
