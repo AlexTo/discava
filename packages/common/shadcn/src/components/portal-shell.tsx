@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import Config from '@discava/common-web-utils/app-config';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
@@ -108,6 +108,7 @@ export const PortalShell = ({
   const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
     { href: string; text: string }[]
   >([{ text: '/', href: '/' }]);
+  const brand = useBrand();
   const matchRoute = useMatchRoute();
   const { pathname } = useLocation();
   const [overrides, setOverrides] = React.useState<Record<string, string>>({});
@@ -177,16 +178,13 @@ export const PortalShell = ({
               <Separator orientation="vertical" className="h-6" />
               <div className="flex items-center gap-2">
                 <img
-                  width={40}
                   height={40}
-                  alt={`${Config.applicationName} logo`}
-                  className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
-                  src={Config.logo}
+                  alt={`${brand.name} logo`}
+                  className="h-10 w-auto max-w-40 shrink object-contain"
+                  src={brand.logoUrl}
                 />
                 <div className="flex flex-col leading-tight">
-                  <span className="text-sm font-semibold">
-                    {Config.applicationName}
-                  </span>
+                  <span className="text-sm font-semibold">{brand.name}</span>
                 </div>
               </div>
             </div>
