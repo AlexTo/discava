@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@discava/common-branding": "workspace:*",
     "@aws-lambda-powertools/logger": "catalog:",
     "@aws-lambda-powertools/metrics": "catalog:",
     "@aws-lambda-powertools/parser": "catalog:",

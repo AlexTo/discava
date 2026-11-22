@@ -58,6 +58,9 @@
       "path": "./packages/e2e"
     },
     {
+      "path": "./packages/common/branding"
+    },
+    {
       "path": "./packages/common/web-utils"
     },
     {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import Config from '@discava/common-web-utils/app-config';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { Link, useLocation, useMatchRoute } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
@@ -108,6 +108,7 @@ export const PortalShell = ({
   const [activeBreadcrumbs, setActiveBreadcrumbs] = React.useState<
     { href: string; text: string }[]
   >([{ text: '/', href: '/' }]);
+  const brand = useBrand();
   const matchRoute = useMatchRoute();
   const { pathname } = useLocation();
   const [overrides, setOverrides] = React.useState<Record<string, string>>({});
@@ -172,22 +173,21 @@ export const PortalShell = ({
         </Sidebar>
         <SidebarInset>
           <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="-ml-1" />
               <Separator orientation="vertical" className="h-6" />
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <img
-                  width={40}
                   height={40}
-                  alt={`${Config.applicationName} logo`}
-                  className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
-                  src={Config.logo}
+                  alt={`${brand.name} logo`}
+                  className="h-10 w-auto min-w-0 max-w-40 shrink object-contain"
+                  src={brand.logoUrl}
                 />
-                <div className="flex flex-col leading-tight">
-                  <span className="text-sm font-semibold">
-                    {Config.applicationName}
-                  </span>
-                </div>
+                {brand.showNameBesideLogo && (
+                  <div className="hidden flex-col leading-tight sm:flex">
+                    <span className="text-sm font-semibold">{brand.name}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="ml-auto flex items-center gap-3">

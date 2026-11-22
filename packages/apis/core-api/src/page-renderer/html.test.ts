@@ -72,6 +72,140 @@ describe('injectIntoTemplate', () => {
     );
   });
 
+  describe('the brand', () => {
+    const withIcon =
+      '<html><head><title>Discava</title><link rel="icon" type="image/x-icon" href="/favicon.ico" /></head><body><div id="root"></div></body></html>';
+    const document = { revision: 2, name: 'Acme', colour: null };
+
+    it('replaces the template’s icon with the brand’s, and adds the touch icon', () => {
+      const out = injectIntoTemplate(withIcon, {
+        head: '<title>T</title>',
+        root: '',
+        brand: { iconUrl: 'https://media.test/brand/icon/x.png' },
+      });
+      expect(out).not.toContain('favicon.ico');
+      expect(out).toContain(
+        '<link rel="icon" type="image/png" href="https://media.test/brand/icon/x.png" />',
+      );
+      expect(out).toContain(
+        '<link rel="apple-touch-icon" href="https://media.test/brand/icon/x.png" />',
+      );
+      expect(out.match(/rel="icon"/g)).toHaveLength(1);
+    });
+
+    it('keeps the template’s icon when the brand has none', () => {
+      const out = injectIntoTemplate(withIcon, {
+        head: '',
+        root: '',
+        brand: { iconUrl: null },
+      });
+      expect(out).toContain('href="/favicon.ico"');
+      expect(out).not.toContain('apple-touch-icon');
+    });
+
+    it('escapes the icon URL', () => {
+      const out = injectIntoTemplate(withIcon, {
+        head: '',
+        root: '',
+        brand: { iconUrl: 'https://media.test/"><script>x</script>' },
+      });
+      expect(out).not.toContain('<script>x');
+    });
+
+    describe('the brand colour', () => {
+      const withTheme =
+        '<html><head><title>Discava</title><meta name="theme-color" content="#ffffff" /></head><body><div id="root"></div></body></html>';
+      const inject = (colour: string | null | undefined, html = withTheme) =>
+        injectIntoTemplate(html, {
+          head: '',
+          root: '',
+          brand: { iconUrl: null, colour },
+        });
+
+      it('writes the palette as a :root style and replaces the template’s theme colour', () => {
+        const out = inject('#1d4ed8');
+        const style = /<style>(:root\{[^<]*\})<\/style>/.exec(out);
+        expect(style?.[1]).toContain('--primary:#1d4ed8;');
+        expect(style?.[1]).toContain('--primary-foreground:#fafafa;');
+        expect(style?.[1]).toContain('--brand-link:#1d4ed8;');
+        expect(out).toContain('<meta name="theme-color" content="#1d4ed8" />');
+        expect(out).not.toContain('content="#ffffff"');
+        expect(out.match(/name="theme-color"/g)).toHaveLength(1);
+      });
+
+      it('adds the theme colour when the template has none', () => {
+        const out = inject('#1d4ed8', withIcon);
+        expect(out).toContain('<meta name="theme-color" content="#1d4ed8" />');
+      });
+
+      it('keeps the template’s own theme colour, and adds no style, without a colour', () => {
+        for (const colour of [undefined, null]) {
+          const out = inject(colour);
+          expect(out).toContain('content="#ffffff"');
+          expect(out).not.toContain('<style>');
+        }
+      });
+
+      it('adds nothing for a colour that is not a readable hex', () => {
+        for (const colour of ['#777777', 'red', '#12345']) {
+          const out = inject(colour);
+          expect(out).not.toContain('<style>');
+          expect(out).toContain('content="#ffffff"');
+        }
+      });
+
+      it('cannot be broken out of the style element by a hostile colour', () => {
+        const out = inject('#fff;}</style><script>alert(1)</script>');
+        expect(out).not.toContain('<script>alert');
+        expect(out).not.toContain('<style>');
+        const styled = inject('#1d4ed8');
+        const css = /<style>([^<]*)<\/style>/.exec(styled)?.[1] ?? '';
+        expect(css).toMatch(
+          /^:root\{(--[a-z-]+:(#[0-9a-f]{6}|var\(--foreground\));)+\}$/,
+        );
+      });
+    });
+
+    it('embeds the brand document in the page data, beside the page’s own', () => {
+      const out = injectIntoTemplate(template, {
+        head: '',
+        root: '',
+        pageData: '{"a":1}',
+        brand: { iconUrl: null, document },
+      });
+      const json = /id="discava-page-data">([^<]*)</.exec(out)?.[1] ?? '';
+      expect(JSON.parse(json)).toEqual({ a: 1, brand: document });
+    });
+
+    it('embeds the brand alone on a page with no data of its own', () => {
+      const out = injectIntoTemplate(template, {
+        head: '',
+        root: '',
+        brand: { iconUrl: null, document },
+      });
+      const json = /id="discava-page-data">([^<]*)</.exec(out)?.[1] ?? '';
+      expect(JSON.parse(json)).toEqual({ brand: document });
+    });
+
+    it('cannot be broken out of the script by a brand name', () => {
+      const out = injectIntoTemplate(template, {
+        head: '',
+        root: '',
+        brand: { iconUrl: null, document: { name: HOSTILE } },
+      });
+      expect(out.match(/<\/script>/g)).toHaveLength(1);
+    });
+
+    it('writes no page data without a brand document or page data', () => {
+      const out = injectIntoTemplate(template, {
+        head: '',
+        root: '',
+        brand: { iconUrl: null },
+      });
+      expect(out).not.toContain('discava-page-data');
+    });
+  });
+
   it('does not read $ in the content as a replacement pattern', () => {
     const out = injectIntoTemplate(template, {
       head: '',

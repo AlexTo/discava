@@ -16,7 +16,6 @@ const ENV_KEYS = [
   'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_DOMAIN_NAMES',
   'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_CERTIFICATE_ARN',
   'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_ALLOW_SEARCH_ENGINE_INDEXING',
-  'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_SITE_NAME',
   'DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_PAGE_RENDERER_RESERVED_CONCURRENCY',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_ENABLE_WAF',
   'DISCAVA_TEST_STAGE_INFRA_CORE_API_DOMAIN_NAME',
@@ -226,8 +225,6 @@ describe('applyEnvOverrides', () => {
   it('overrides the student portal page renderer settings', () => {
     process.env.DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_ALLOW_SEARCH_ENGINE_INDEXING =
       'true';
-    process.env.DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_SITE_NAME =
-      'Acme Learn';
     process.env.DISCAVA_TEST_STAGE_INFRA_STUDENT_PORTAL_PAGE_RENDERER_RESERVED_CONCURRENCY =
       '7';
 
@@ -235,7 +232,6 @@ describe('applyEnvOverrides', () => {
       infra: {
         studentPortal: {
           allowSearchEngineIndexing: true,
-          siteName: 'Acme Learn',
           pageRendererReservedConcurrency: 7,
         },
       },

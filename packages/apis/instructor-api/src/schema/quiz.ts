@@ -75,7 +75,9 @@ export const QuizSettingsSchema = z.object({
   // null = unlimited
   attemptsAllowed: z.number().int().min(1).nullable(),
   shuffleOptions: z.boolean(),
-  revealAnswers: z.enum(['after_each_attempt', 'after_final_attempt', 'never']),
+  revealAnswers: z
+    .enum(['after_each_attempt', 'after_final_attempt', 'never'])
+    .default('after_each_attempt'),
 });
 
 export type IQuizSettings = z.output<typeof QuizSettingsSchema>;

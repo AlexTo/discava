@@ -18,6 +18,7 @@ import { DailyChart } from './-components/daily-chart';
 import { LessonDropOff } from './-components/lesson-drop-off';
 import { QuizPanel } from './-components/quiz-panel';
 import { TotalsRow } from './-components/totals-row';
+import { VideoQuestionsPanel } from './-components/video-questions-panel';
 
 type Days = 30 | 90;
 const RANGES: Days[] = [30, 90];
@@ -166,7 +167,10 @@ function RouteComponent() {
               aria-label="Lesson drop-off and activation"
               className="grid gap-4 xl:grid-cols-2"
             >
-              <LessonDropOff lessons={analytics.lessons} />
+              <LessonDropOff
+                lessons={analytics.lessons}
+                modulesWithoutQuestions={analytics.modulesWithoutQuestions}
+              />
               <ActivationCard
                 totals={analytics.totals}
                 daily={analytics.daily}
@@ -184,6 +188,14 @@ function RouteComponent() {
                   quiz={quiz}
                 />
               ))}
+            </section>
+          )}
+          {analytics.totals.enrolments > 0 && (
+            <section aria-label="Video questions results">
+              <VideoQuestionsPanel
+                courseId={courseId}
+                videos={analytics.videoQuestions}
+              />
             </section>
           )}
         </>

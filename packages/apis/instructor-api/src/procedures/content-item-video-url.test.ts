@@ -10,6 +10,7 @@ import {
   COURSE_ID,
   contentItem,
   contentItemGet,
+  courseGet,
   courseInstructorGet,
   INSTRUCTOR_SUB,
   installDefaults,
@@ -36,6 +37,17 @@ const {
 
 vi.mock('@discava/core-table', async (importOriginal) =>
   mockModule(await importOriginal()),
+);
+
+vi.mock(
+  '@discava/common-server-utils/caption-translation-settings',
+  async (importActual) => ({
+    ...(await importActual<object>()),
+    resolveCaptionTranslationSettings: async () => ({
+      enabled: true,
+      maxLanguagesPerCourse: 9,
+    }),
+  }),
 );
 
 vi.mock('@aws-sdk/client-s3', () => ({
@@ -138,10 +150,61 @@ describe('createContentItemVideoUrl', () => {
       withCredentials: true,
       versionId: '',
       captions: [],
+      translations: [],
     });
     expect(responseCookies).toEqual([
       'CloudFront-Policy=fake; Domain=example.com',
     ]);
+  });
+
+  describe('translations', () => {
+    const folder = `courses/${COURSE_ID}/modules/${MODULE_ID}/lessons/${LESSON_ID}/content-items/${CONTENT_ITEM_ID}`;
+    const track = (language: string, extra = {}) => ({
+      trackId: `track-${language}`,
+      nonce: 'n1',
+      language,
+      label: language,
+      source: 'uploaded' as const,
+      key: `${folder}/n1/captions/track-${language}.vtt`,
+      isDefault: false,
+      ...extra,
+    });
+
+    it('reports translated, failed and translating languages', async () => {
+      courseGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: { captionLanguages: ['es-ES', 'fr-FR', 'de-DE'] },
+        }),
+      });
+      contentItemGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: {
+            ...contentItem,
+            s3Key: `${folder}/n1/master.m3u8`,
+            captionTracks: [
+              track('en-US', { isDefault: true }),
+              track('es-ES', {
+                source: 'translated',
+                sourceTrackId: 'track-en-US',
+              }),
+            ],
+            captionTranslation: {
+              sourceTrackId: 'track-en-US',
+              failures: [{ language: 'fr-FR', reason: 'failed' }],
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          },
+        }),
+      });
+
+      const { translations } = await callAs().createContentItemVideoUrl(input);
+
+      expect(translations.map((x) => [x.language, x.state])).toEqual([
+        ['es-ES', 'translated'],
+        ['fr-FR', 'failed'],
+        ['de-DE', 'translating'],
+      ]);
+    });
   });
 
   describe('captions', () => {
@@ -176,7 +239,7 @@ describe('createContentItemVideoUrl', () => {
     it('lists the played version’s tracks, default first, with source and URL', async () => {
       withCaptions({
         captionTracks: [
-          track('es-ES'),
+          track('es-ES', { source: 'translated' }),
           track('fr-FR', { nonce: 'old' }),
           track('en-US', { isDefault: true, source: 'auto' }),
         ],
@@ -195,6 +258,7 @@ describe('createContentItemVideoUrl', () => {
           label: 'en-US',
           isDefault: true,
           source: 'auto',
+          machineTranslated: false,
           url: `https://example.cloudfront.net/${folder}/n1/captions/track-en-US.vtt`,
         },
         {
@@ -202,7 +266,8 @@ describe('createContentItemVideoUrl', () => {
           language: 'es-ES',
           label: 'es-ES',
           isDefault: false,
-          source: 'uploaded',
+          source: 'translated',
+          machineTranslated: true,
           url: `https://example.cloudfront.net/${folder}/n1/captions/track-es-ES.vtt`,
         },
       ]);

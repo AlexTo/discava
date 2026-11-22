@@ -121,6 +121,15 @@ const renderExisting = (handlers = {}, props = {}) =>
 const save = () => screen.getByRole('button', { name: /save quiz/i });
 
 describe('QuizBuilder', () => {
+  it('explains the default reveal setting under the select', () => {
+    renderBuilder();
+    expect(
+      screen.getByRole('combobox', { name: 'Show the correct answers' }),
+    ).toHaveAccessibleDescription(
+      'Learners remember more when they see the answers straight after each attempt.',
+    );
+  });
+
   it('creates a new quiz on the first save, then updates it', async () => {
     const { user, calls, onCreated } = renderBuilder(
       {},
@@ -576,5 +585,21 @@ describe('Preview as student', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByText('Give the quiz a title.')).toBeInTheDocument();
+  });
+
+  it('wraps the save bar and keeps the question cards shrinkable on a phone', () => {
+    renderExisting();
+
+    const saveBar = save().closest('.sticky') as HTMLElement;
+    const buttons = save().parentElement as HTMLElement;
+    expect(buttons).toHaveClass('flex-wrap');
+    expect(saveBar.querySelector('[role="status"]')).toHaveClass('basis-full');
+    expect(
+      screen.getByRole('button', { name: /preview as student/i }),
+    ).toBeInTheDocument();
+    const card = screen
+      .getByRole('button', { name: 'Remove Question 1' })
+      .closest('div.gap-0');
+    expect(card).toHaveClass('min-w-0');
   });
 });

@@ -57,9 +57,14 @@ export {
   readCourseAnalytics,
   readCourseQuizzes,
   readCourseSummaries,
+  readCourseVideoQuestions,
   readLessonFunnel,
   readQuizAnalytics,
+  readVideoQuestionAnalytics,
   type ScoreBand,
+  type VideoQuestionAnalytics,
+  type VideoQuestionFigures,
+  type VideoQuestionListing,
 } from './helpers/analytics-reads.js';
 export { rebuildCourseAnalytics } from './helpers/analytics-rebuild.js';
 export {
@@ -115,6 +120,11 @@ export {
   assignmentSubmissionWrites,
   isLateSubmission,
 } from './helpers/assignment-submission.js';
+export {
+  BRAND_STREAM_FILTERS,
+  type BrandStreamRecord,
+  matchesBrandStreamFilters,
+} from './helpers/brand-stream.js';
 export {
   applyCaptionChange,
   CAPTIONS_PENDING_TIMEOUT_MS,
@@ -446,6 +456,13 @@ export {
   releasePayout,
   saveAccountStatus,
 } from './helpers/payout.js';
+export {
+  BrandConflictError,
+  BrandValidationError,
+  getBrand,
+  type PlatformBrandRecord,
+  saveBrand,
+} from './helpers/platform-brand.js';
 export {
   type Curriculum,
   computeProgress,

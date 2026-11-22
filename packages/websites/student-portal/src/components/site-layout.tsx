@@ -12,7 +12,7 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { TooltipProvider } from '@discava/common-shadcn/components/ui/tooltip';
 import { UserMenu } from '@discava/common-shadcn/components/user-menu';
-import Config from '@discava/common-web-utils/app-config';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { Link, useRouterState } from '@tanstack/react-router';
@@ -27,6 +27,7 @@ const DISCAVA_URL = 'https://alexto.github.io/discava';
 // link to the instructor portal), then the page.
 // There's no app-wide sidebar; a course's own pages bring their outline.
 const SiteLayout = ({ children }: { children: ReactNode }) => {
+  const brand = useBrand();
   const { isAuthenticated, user } = useAuth();
   const { portals } = useRuntimeConfig();
   // Only the path: a filter or tab change is not a new page. The resolved
@@ -50,15 +51,16 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
         <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b bg-background/90 px-6 backdrop-blur lg:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <img
-              width={40}
               height={40}
-              alt={`${Config.applicationName} logo`}
-              className="size-10 rounded-lg border border-border/60 bg-background object-cover shadow-sm"
-              src={Config.logo}
+              alt={`${brand.name} logo`}
+              className="h-10 w-auto max-w-40 shrink object-contain"
+              src={brand.logoUrl}
             />
-            <span className="hidden text-sm font-semibold sm:inline">
-              {Config.applicationName}
-            </span>
+            {brand.showNameBesideLogo && (
+              <span className="hidden text-sm font-semibold sm:inline">
+                {brand.name}
+              </span>
+            )}
           </Link>
           <div className="flex min-w-0 flex-1 justify-center">
             <SiteSearch />

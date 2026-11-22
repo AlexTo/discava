@@ -5,6 +5,7 @@
 
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { BrandProvider } from '@discava/common-web-utils/brand';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
   RuntimeConfigProvider,
@@ -15,6 +16,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useAuth } from 'react-oidc-context';
 import { AdminApiClientProvider, CoreApiClientProvider } from './api';
+import { AdminBrandSync } from './components/admin-brand-sync';
 import { LOCAL_DEV_CONFIG } from './local-dev-config';
 import { router } from './router';
 import './styles.css';
@@ -22,7 +24,12 @@ import './styles.css';
 const App = () => {
   const auth = useAuth();
   const runtimeConfig = useRuntimeConfig();
-  return <RouterProvider router={router} context={{ runtimeConfig, auth }} />;
+  return (
+    <>
+      <AdminBrandSync />
+      <RouterProvider router={router} context={{ runtimeConfig, auth }} />
+    </>
+  );
 };
 
 const root = document.getElementById('root');
@@ -33,19 +40,21 @@ root &&
         localDevConfig={LOCAL_DEV_CONFIG}
         fallback={<Spinner />}
       >
-        <CognitoAuth
-          autoSignIn
-          // The router isn't created until signed in, so it starts on this page.
-          onReturn={(path) => window.history.replaceState(null, '', path)}
-        >
-          <QueryClientProvider>
-            <CoreApiClientProvider>
-              <AdminApiClientProvider>
-                <App />
-              </AdminApiClientProvider>
-            </CoreApiClientProvider>
-          </QueryClientProvider>
-        </CognitoAuth>
+        <BrandProvider fallback={<Spinner />}>
+          <CognitoAuth
+            autoSignIn
+            // The router isn't created until signed in, so it starts on this page.
+            onReturn={(path) => window.history.replaceState(null, '', path)}
+          >
+            <QueryClientProvider>
+              <CoreApiClientProvider>
+                <AdminApiClientProvider>
+                  <App />
+                </AdminApiClientProvider>
+              </CoreApiClientProvider>
+            </QueryClientProvider>
+          </CognitoAuth>
+        </BrandProvider>
       </RuntimeConfigProvider>
     </React.StrictMode>,
   );

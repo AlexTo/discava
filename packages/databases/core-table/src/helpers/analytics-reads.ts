@@ -124,6 +124,33 @@ export interface CourseAnalytics extends CourseSummary {
   lessons: LessonFunnel[];
   /** The quizzes currently shown to students, in course order. */
   quizzes: QuizListing[];
+  /** The videos currently shown to students that have questions, in course order. */
+  videoQuestions: VideoQuestionListing[];
+  /** Shown modules with video and no questions, in course order. */
+  modulesWithoutQuestions: ModuleWithoutQuestions[];
+}
+
+export interface ModuleWithoutQuestions {
+  moduleId: string;
+  title: string;
+}
+
+export interface VideoQuestionListing {
+  contentItemId: string;
+  lessonId: string;
+  title: string;
+  /** How many questions the video has now. */
+  questions: number;
+}
+
+export interface VideoQuestionFigures extends QuizQuestionFigures {
+  /** Whole seconds into the video, or null for an end question. */
+  atSeconds: number | null;
+}
+
+export interface VideoQuestionAnalytics {
+  /** Ranked questions first, by miss rate then answers, then the rest in asking order. */
+  questions: VideoQuestionFigures[];
 }
 
 export interface QuizListing {
@@ -329,6 +356,52 @@ const plainText = (prompt: unknown): string => {
   return parts.join('').replace(/\s+/g, ' ').trim();
 };
 
+// The figures of an item's current questions, in the order given: a removed
+// question's stats are dropped and a new one shows zeros.
+const questionFigures = (
+  loaded: LoadedCourse,
+  contentItemId: string,
+  stored: unknown,
+): QuizQuestionFigures[] => {
+  const statsOf = new Map(
+    loaded.aggregates.quizQuestionStats
+      .filter((item) => item.contentItemId === contentItemId)
+      .map((item) => [item.questionId, item]),
+  );
+  const current: { questionId: string; prompt?: unknown }[] = Array.isArray(
+    stored,
+  )
+    ? stored
+    : [];
+  return current.map(({ questionId, prompt }) => {
+    const stats = statsOf.get(questionId);
+    const attempts = counter(stats?.attempts);
+    const misses = Math.min(attempts, counter(stats?.misses));
+    return {
+      questionId,
+      text: plainText(prompt),
+      attempts,
+      misses,
+      missRate: attempts > 0 ? Math.floor((misses * 100) / attempts) : null,
+      ranked: attempts >= MIN_RANKED_ATTEMPTS,
+    };
+  });
+};
+
+// Questions with at least MIN_RANKED_ATTEMPTS attempts first, by miss rate
+// then attempts, both descending; the rest follow in the order given.
+const rankQuestions = <Figures extends QuizQuestionFigures>(
+  questions: Figures[],
+): Figures[] => [
+  ...questions
+    .filter(({ ranked }) => ranked)
+    .sort(
+      (a, b) =>
+        (b.missRate ?? 0) - (a.missRate ?? 0) || b.attempts - a.attempts,
+    ),
+  ...questions.filter(({ ranked }) => !ranked),
+];
+
 /**
  * One quiz's most-missed ranking and score distribution, for the quiz as it
  * is now: only its current questions (a deleted question's stats are
@@ -349,46 +422,118 @@ export const readQuizAnalytics = async (
   if (!quiz) {
     return undefined;
   }
-  const statsOf = new Map(
-    loaded.aggregates.quizQuestionStats
-      .filter((item) => item.contentItemId === contentItemId)
-      .map((item) => [item.questionId, item]),
-  );
-  const current: { questionId: string; prompt?: unknown }[] = Array.isArray(
-    quiz.questions,
-  )
-    ? quiz.questions
-    : [];
-  const questions = current.map(({ questionId, prompt }) => {
-    const stats = statsOf.get(questionId);
-    const attempts = counter(stats?.attempts);
-    const misses = Math.min(attempts, counter(stats?.misses));
-    return {
-      questionId,
-      text: plainText(prompt),
-      attempts,
-      misses,
-      missRate: attempts > 0 ? Math.floor((misses * 100) / attempts) : null,
-      ranked: attempts >= MIN_RANKED_ATTEMPTS,
-    };
-  });
+  const questions = questionFigures(loaded, contentItemId, quiz.questions);
   const bands = scoreBands(
     loaded.aggregates.quizScoreStats.find(
       (item) => item.contentItemId === contentItemId,
     ),
   );
   return {
-    questions: [
-      ...questions
-        .filter(({ ranked }) => ranked)
-        .sort(
-          (a, b) =>
-            (b.missRate ?? 0) - (a.missRate ?? 0) || b.attempts - a.attempts,
-        ),
-      ...questions.filter(({ ranked }) => !ranked),
-    ],
+    questions: rankQuestions(questions),
     scoreBands: bands,
     students: sumOfBands(bands),
+  };
+};
+
+// The shown videos that have questions, in course order.
+const shownVideosWithQuestions = (loaded: LoadedCourse) => {
+  const { modules, lessons, contentItems } = shownCurriculum(loaded);
+  return modules.flatMap((module) =>
+    lessons
+      .filter((lesson) => lesson.moduleId === module.moduleId)
+      .sort((a, b) => a.order - b.order)
+      .flatMap((lesson) =>
+        contentItems
+          .filter(
+            (item) =>
+              item.type === 'video' &&
+              item.lessonId === lesson.lessonId &&
+              Array.isArray(item.questions) &&
+              item.questions.length > 0,
+          )
+          .sort((a, b) => a.order - b.order),
+      ),
+  );
+};
+
+const videoQuestionListings = (loaded: LoadedCourse): VideoQuestionListing[] =>
+  shownVideosWithQuestions(loaded).map(
+    ({ contentItemId, lessonId, title, questions }) => ({
+      contentItemId,
+      lessonId,
+      title,
+      questions: Array.isArray(questions) ? questions.length : 0,
+    }),
+  );
+
+// The shown modules with at least one shown video and no shown quiz and no
+// shown video with questions, in course order.
+const modulesWithoutQuestions = (
+  loaded: LoadedCourse,
+): ModuleWithoutQuestions[] => {
+  const { modules, lessons, contentItems } = shownCurriculum(loaded);
+  return modules
+    .filter((module) => {
+      const lessonIds = new Set(
+        lessons
+          .filter((lesson) => lesson.moduleId === module.moduleId)
+          .map((lesson) => lesson.lessonId),
+      );
+      const items = contentItems.filter((item) => lessonIds.has(item.lessonId));
+      const hasVideo = items.some((item) => item.type === 'video');
+      const hasQuestions = items.some(
+        (item) =>
+          item.type === 'quiz' ||
+          (item.type === 'video' &&
+            Array.isArray(item.questions) &&
+            item.questions.length > 0),
+      );
+      return hasVideo && !hasQuestions;
+    })
+    .map(({ moduleId, title }) => ({ moduleId, title }));
+};
+
+/**
+ * The videos shown to students that have questions, in course order, each
+ * with how many questions it has now: one query of the course's aggregates
+ * and one of its curriculum.
+ */
+export const readCourseVideoQuestions = async (
+  coreTable: CoreTable,
+  courseId: string,
+): Promise<VideoQuestionListing[]> =>
+  videoQuestionListings(await loadCourse(coreTable, courseId));
+
+/**
+ * One video's per-question figures, for the video as it is now: a removed
+ * question is dropped and a new one shows zeros. Ranked as a quiz's are, the
+ * rest in asking order. Undefined when the course has no such video shown to
+ * students with questions.
+ */
+export const readVideoQuestionAnalytics = async (
+  coreTable: CoreTable,
+  courseId: string,
+  contentItemId: string,
+): Promise<VideoQuestionAnalytics | undefined> => {
+  const loaded = await loadCourse(coreTable, courseId);
+  const video = shownVideosWithQuestions(loaded).find(
+    (item) => item.contentItemId === contentItemId,
+  );
+  if (!video) {
+    return undefined;
+  }
+  const stored = video.questions as { atSeconds?: unknown }[];
+  const figures = questionFigures(loaded, contentItemId, stored);
+  return {
+    questions: rankQuestions(
+      figures.map((figure, i) => {
+        const { atSeconds } = stored[i];
+        return {
+          ...figure,
+          atSeconds: typeof atSeconds === 'number' ? atSeconds : null,
+        };
+      }),
+    ),
   };
 };
 
@@ -428,6 +573,8 @@ export const readCourseAnalytics = async (
     ),
     lessons: lessonFunnel(loaded),
     quizzes: quizListings(loaded),
+    videoQuestions: videoQuestionListings(loaded),
+    modulesWithoutQuestions: modulesWithoutQuestions(loaded),
     daily: dates.map((date) => {
       const item = dayOf.get(`DAY#${date}`);
       const enrolments = counter(item?.enrolments);

@@ -79,7 +79,7 @@ export function AnnouncementsSection({
                   <>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <h3 className="text-balance font-medium">
+                        <h3 className="text-balance font-medium break-words">
                           {item.title}
                         </h3>
                         <p className="text-xs text-muted-foreground">

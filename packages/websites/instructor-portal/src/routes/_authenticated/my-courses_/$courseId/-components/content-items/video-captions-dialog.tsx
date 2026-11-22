@@ -31,6 +31,11 @@ import { CAPTION_LANGUAGES } from '@discava/common-web-utils/caption-languages';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import {
+  CaptionTranslationsList,
+  isTranslating,
+  needsRetry,
+} from './caption-translations-list';
 
 // Native select styled like Input, as the language list is short and fixed.
 const SELECT_CLASS =
@@ -50,6 +55,12 @@ type Track = {
   label: string;
   isDefault: boolean;
   source: 'auto' | 'uploaded' | 'translated';
+};
+
+const SOURCE_BADGES: Record<Track['source'], string> = {
+  auto: 'Automatic',
+  uploaded: 'Uploaded',
+  translated: 'Auto-translated',
 };
 
 const putCaptionFile = async (
@@ -86,8 +97,12 @@ export function VideoCaptionsDialog({
   const videoUrlQuery = useQuery({
     ...contentItem.createVideoUrl.queryOptions(keys),
     enabled: open,
+    // Translating happens in the background: look again until it settles.
+    refetchInterval: (query) =>
+      isTranslating(query.state.data?.translations ?? []) ? 5000 : false,
   });
   const tracks: Track[] = videoUrlQuery.data?.captions ?? [];
+  const translations = videoUrlQuery.data?.translations ?? [];
   const replacing = tracks.find((track) => track.language === language);
 
   const { mutateAsync: createUploadUrl } = useMutation(
@@ -101,6 +116,9 @@ export function VideoCaptionsDialog({
     isPending: isRemoving,
     reset: resetRemove,
   } = useMutation(contentItem.removeCaption.mutationOptions());
+  const { mutateAsync: retryTranslation, isPending: isRetrying } = useMutation(
+    contentItem.retryCaptionTranslation.mutationOptions(),
+  );
 
   // The track list comes from the preview query; the row's badge from the
   // course view.
@@ -137,6 +155,16 @@ export function VideoCaptionsDialog({
     }
   };
 
+  const handleRetry = async () => {
+    setError(undefined);
+    try {
+      await retryTranslation(keys);
+      await refresh();
+    } catch (failure) {
+      setError(apiErrorMessage(failure, "Couldn't ask for the translations"));
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -154,7 +182,7 @@ export function VideoCaptionsDialog({
           <DialogTitle>Captions</DialogTitle>
           <p className="text-sm text-muted-foreground">
             Captions for "{title}". A video can have up to 10 tracks, one per
-            language.
+            language, including auto-translated ones.
           </p>
         </DialogHeader>
 
@@ -188,61 +216,82 @@ export function VideoCaptionsDialog({
                 <span className="text-xs text-muted-foreground">
                   {track.language}
                 </span>
-                <Badge variant="outline">{track.source}</Badge>
+                <Badge variant="outline">{SOURCE_BADGES[track.source]}</Badge>
                 {track.isDefault && <Badge>Default</Badge>}
-                <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${track.label}`}
-                    >
-                      Remove
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="sm:max-w-md">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove caption</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Students will no longer see the {track.label} captions
-                        on "{title}".
-                        {track.isDefault &&
-                          ' The next track becomes the default.'}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {track.source === 'translated' ? (
+                  <span className="text-xs text-muted-foreground">
+                    From the course's caption languages
+                  </span>
+                ) : (
+                  <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
+                    <AlertDialogTrigger asChild>
                       <Button
                         type="button"
-                        variant="destructive"
-                        disabled={isRemoving}
-                        onClick={async () => {
-                          setError(undefined);
-                          try {
-                            await removeCaption({
-                              ...keys,
-                              trackId: track.trackId,
-                            });
-                            await refresh();
-                          } catch (failure) {
-                            setError(
-                              apiErrorMessage(
-                                failure,
-                                "Couldn't remove the caption",
-                              ),
-                            );
-                          }
-                        }}
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${track.label}`}
                       >
-                        {isRemoving ? 'Removing…' : 'Remove caption'}
+                        Remove
                       </Button>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="sm:max-w-md">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove caption</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Students will no longer see the {track.label} captions
+                          on "{title}".
+                          {track.isDefault &&
+                            ' The next track becomes the default.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={isRemoving}
+                          onClick={async () => {
+                            setError(undefined);
+                            try {
+                              await removeCaption({
+                                ...keys,
+                                trackId: track.trackId,
+                              });
+                              await refresh();
+                            } catch (failure) {
+                              setError(
+                                apiErrorMessage(
+                                  failure,
+                                  "Couldn't remove the caption",
+                                ),
+                              );
+                            }
+                          }}
+                        >
+                          {isRemoving ? 'Removing…' : 'Remove caption'}
+                        </Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </li>
             ))}
           </ul>
+        )}
+
+        <CaptionTranslationsList translations={translations} />
+        {needsRetry(translations) && (
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isRetrying}
+              onClick={() => void handleRetry()}
+            >
+              {isRetrying ? 'Asking…' : 'Translate again'}
+            </Button>
+          </div>
         )}
 
         <div className="space-y-3">

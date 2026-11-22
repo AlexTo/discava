@@ -34,10 +34,32 @@ const QUIZ_STATE_TEXT = {
     'Not passed, no attempts left. Ask your instructor for another attempt.',
 } as const;
 
-const REQUIREMENT_LABEL = {
-  'complete-items': 'Complete every item',
-  'pass-quizzes': 'Pass every quiz',
+const UPLOAD_STATE_TEXT = {
+  met: 'Done',
+  'not-submitted': 'Not submitted',
+  'awaiting-grade': 'Waiting to be graded',
 } as const;
+
+const requirementLabel = (requirement: {
+  kind: string;
+  minScorePercent?: number;
+}) =>
+  requirement.kind === 'complete-items'
+    ? 'Complete every item'
+    : requirement.kind === 'pass-quizzes'
+      ? 'Pass every quiz'
+      : `Graded assignments returned with at least ${requirement.minScorePercent}%`;
+
+// The state of one unmet item, in words.
+const itemStateText = (
+  requirement: { kind: string; minScorePercent?: number },
+  item: { state: string; scorePercent?: number },
+) =>
+  requirement.kind === 'pass-quizzes'
+    ? QUIZ_STATE_TEXT[item.state as keyof typeof QUIZ_STATE_TEXT]
+    : item.state === 'below-score'
+      ? `Returned with ${item.scorePercent ?? 0}%; ${requirement.minScorePercent}% needed`
+      : UPLOAD_STATE_TEXT[item.state as keyof typeof UPLOAD_STATE_TEXT];
 
 // What a student still needs for the course's certificate, and the
 // certificate once they have it. Its own errors stay in the card, so the rest
@@ -156,14 +178,17 @@ export function CertificateRequirements({
                     />
                   )}
                   <span>
-                    {REQUIREMENT_LABEL[requirement.kind]}: {requirement.done} of{' '}
+                    {requirementLabel(requirement)}: {requirement.done} of{' '}
                     {requirement.total}
                   </span>
                 </p>
-                {requirement.kind === 'pass-quizzes' && !requirement.met ? (
+                {requirement.kind !== 'complete-items' && !requirement.met ? (
                   <ul className="ml-6 space-y-1">
                     {requirement.items
-                      .filter((item) => item.state !== 'passed')
+                      .filter(
+                        (item) =>
+                          item.state !== 'passed' && item.state !== 'met',
+                      )
                       .map((item) => (
                         <li key={item.contentItemId}>
                           <Link
@@ -175,7 +200,7 @@ export function CertificateRequirements({
                           </Link>
                           <span className="text-muted-foreground">
                             {' '}
-                            · {QUIZ_STATE_TEXT[item.state]}
+                            · {itemStateText(requirement, item)}
                           </span>
                         </li>
                       ))}

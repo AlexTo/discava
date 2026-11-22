@@ -102,6 +102,7 @@ export class ApplicationStage extends Stage {
       search,
       instructorPortal: websites.instructorPortal,
       studentPortal: websites.studentPortal,
+      adminPortal: websites.adminPortal,
     });
 
     const paymentsStack = new PaymentsStack(this, 'Payments', {
@@ -143,6 +144,7 @@ export class ApplicationStage extends Stage {
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
       lessonMediaBucket: data.lessonMediaBucket,
+      publicMediaBucket: data.publicMediaBucket,
       notifications,
       notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       portalUrls: websites.portalUrls,
@@ -169,6 +171,7 @@ export class ApplicationStage extends Stage {
       mediaPipeline,
       stripeSecrets: data.stripeSecrets,
       instructorPortal: websites.instructorPortal,
+      captionTranslation,
     });
 
     new AdminApiStack(this, 'AdminApi', {
@@ -176,6 +179,7 @@ export class ApplicationStage extends Stage {
       adminApi,
       identity: data.identity,
       coreTable: data.coreTable,
+      publicMediaBucket: data.publicMediaBucket,
       stripeSecrets: data.stripeSecrets,
       webhookUrl: paymentsStack.webhookUrl,
       adminPortal: websites.adminPortal,

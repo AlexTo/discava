@@ -13,6 +13,8 @@ SPDX-License-Identifier: Apache-2.0
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  /* Link colour. brandPalette (@discava/common-branding) overrides it with the brand colour when that is readable on the page background. */
+  --brand-link: var(--foreground);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);

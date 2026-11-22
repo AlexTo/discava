@@ -9,6 +9,7 @@ import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
+  retryContentItemCaptionTranslation,
 } from './content-item-captions.js';
 
 const {
@@ -28,6 +29,8 @@ const {
   putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
+  requestCaptionTranslation,
+  resolveCaptionTranslationSettings,
   mockModule,
 } = await vi.hoisted(async () => ({
   patchSet: vi.fn(),
@@ -40,6 +43,8 @@ const {
   putCaptionFile: vi.fn(),
   bestEffortDeleteCaptionFile: vi.fn(),
   bestEffortDeleteCaptionUpload: vi.fn(),
+  requestCaptionTranslation: vi.fn(),
+  resolveCaptionTranslationSettings: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     courseInstructor: ['get'],
     course: ['get'],
@@ -50,7 +55,15 @@ const {
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) =>
-  mockModule(await importOriginal()),
+  mockModule(await importOriginal(), { requestCaptionTranslation }),
+);
+
+vi.mock(
+  '@discava/common-server-utils/caption-translation-settings',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveCaptionTranslationSettings,
+  }),
 );
 
 vi.mock(
@@ -77,6 +90,7 @@ const router = t.router({
   captionUploadUrl: createContentItemCaptionUploadUrl,
   attachCaption: attachContentItemCaption,
   removeCaption: removeContentItemCaption,
+  retryCaptionTranslation: retryContentItemCaptionTranslation,
 });
 
 const INSTRUCTOR_SUB = 'instructor-1';
@@ -550,6 +564,98 @@ describe('attachCaption', () => {
     expect(JSON.stringify(result)).not.toContain('courses/');
     expect(JSON.stringify(result)).not.toContain('"key"');
   });
+
+  describe('with translated tracks', () => {
+    const source = track('src', 'en-US', { isDefault: true, source: 'auto' });
+    const translated = (trackId: string, language: string) =>
+      track(trackId, language, {
+        source: 'translated',
+        sourceTrackId: 'src',
+      });
+    const deletedKeys = () =>
+      bestEffortDeleteCaptionFile.mock.calls.map(([, key]) => key);
+
+    it('replaces a translated track of its language and deletes its file', async () => {
+      const es = translated('tr-es', 'es-ES');
+      setItem(video({ captionTracks: [source, es], captionTracksRev: 2 }));
+
+      const result = await callAs().attachCaption(attachInput());
+
+      expect(
+        writtenTracks().map((x: { trackId: string }) => x.trackId),
+      ).toEqual(['src', expect.not.stringMatching(/^tr-es$/)]);
+      expect(deletedKeys()).toEqual([es.key]);
+      expect(result.captions.at(-1)).toMatchObject({
+        language: 'es-ES',
+        source: 'uploaded',
+      });
+    });
+
+    it('evicts a translated track at ten tracks and deletes its file', async () => {
+      courseGet.mockReturnValue({
+        go: vi.fn().mockResolvedValue({
+          data: { status: 'draft', captionLanguages: ['fr-FR', 'de-DE'] },
+        }),
+      });
+      const others = Array.from({ length: 7 }, (_, i) =>
+        track(`u${i}`, `xx-${i}`),
+      );
+      const fr = translated('tr-fr', 'fr-FR');
+      const de = translated('tr-de', 'de-DE');
+      setItem(
+        video({
+          captionTracks: [source, ...others, fr, de],
+          captionTracksRev: 1,
+        }),
+      );
+
+      await callAs().attachCaption(attachInput());
+
+      expect(writtenTracks()).toHaveLength(10);
+      expect(deletedKeys()).toEqual([de.key]);
+    });
+
+    it('still refuses an eleventh track when none is translated', async () => {
+      setItem(
+        video({
+          captionTracks: [
+            source,
+            ...Array.from({ length: 9 }, (_, i) => track(`u${i}`, `xx-${i}`)),
+          ],
+        }),
+      );
+
+      await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject(
+        { code: 'BAD_REQUEST' },
+      );
+      expect(bestEffortDeleteCaptionFile).not.toHaveBeenCalled();
+    });
+
+    it('deletes every stale translated file when it replaces the default', async () => {
+      const fr = translated('tr-fr', 'fr-FR');
+      const es = translated('tr-es', 'es-ES');
+      setItem(video({ captionTracks: [source, fr, es], captionTracksRev: 1 }));
+
+      await callAs().attachCaption(attachInput({ language: 'en-US' }));
+
+      expect(writtenTracks()).toHaveLength(1);
+      expect(deletedKeys()).toEqual(
+        expect.arrayContaining([source.key, fr.key, es.key]),
+      );
+      expect(deletedKeys()).toHaveLength(3);
+    });
+
+    it('deletes nothing but the new file when the condition is lost', async () => {
+      const es = translated('tr-es', 'es-ES');
+      setItem(video({ captionTracks: [source, es], captionTracksRev: 2 }));
+      patchGo.mockRejectedValue(conditionalCheckFailedError());
+
+      await expect(callAs().attachCaption(attachInput())).rejects.toMatchObject(
+        { code: 'CONFLICT' },
+      );
+      expect(deletedKeys()).toEqual([putCaptionFile.mock.calls[0][0]]);
+    });
+  });
 });
 
 describe('removeCaption', () => {
@@ -605,5 +711,154 @@ describe('removeCaption', () => {
       callAs().removeCaption({ ...ref, trackId: 't2' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
     expect(bestEffortDeleteCaptionFile).not.toHaveBeenCalled();
+  });
+
+  describe('with translated tracks', () => {
+    const source = track('t1', 'en-US', { isDefault: true, source: 'auto' });
+    const translated = (trackId: string, language: string) =>
+      track(trackId, language, {
+        source: 'translated',
+        sourceTrackId: 't1',
+      });
+
+    it('refuses a translated track before any write', async () => {
+      setItem(
+        video({
+          captionTracks: [source, translated('t3', 'fr-FR')],
+          captionTracksRev: 1,
+        }),
+      );
+
+      await expect(
+        callAs().removeCaption({ ...ref, trackId: 't3' }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining("can't be removed here"),
+      });
+      expect(contentItemPatch).not.toHaveBeenCalled();
+      expect(bestEffortDeleteCaptionFile).not.toHaveBeenCalled();
+    });
+
+    it('drops the translated tracks and deletes their files when the default goes', async () => {
+      const fr = translated('t3', 'fr-FR');
+      setItem(
+        video({
+          captionTracks: [source, fr],
+          captionTracksRev: 1,
+        }),
+      );
+
+      const result = await callAs().removeCaption({ ...ref, trackId: 't1' });
+
+      expect(result.captions).toEqual([]);
+      const deleted = bestEffortDeleteCaptionFile.mock.calls.map(
+        ([, key]) => key,
+      );
+      expect(deleted).toEqual(expect.arrayContaining([source.key, fr.key]));
+    });
+
+    it('leaves translated tracks alone when a non-default upload goes', async () => {
+      const es = track('t2', 'es-ES');
+      setItem(
+        video({
+          captionTracks: [source, es, translated('t3', 'fr-FR')],
+          captionTracksRev: 1,
+        }),
+      );
+
+      const result = await callAs().removeCaption({ ...ref, trackId: 't2' });
+
+      expect(result.captions.map((c) => c.trackId)).toEqual(['t1', 't3']);
+      expect(bestEffortDeleteCaptionFile).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('retryCaptionTranslation', () => {
+  beforeEach(() => {
+    resolveCaptionTranslationSettings.mockResolvedValue({
+      enabled: true,
+      maxLanguagesPerCourse: 9,
+    });
+    requestCaptionTranslation.mockResolvedValue(undefined);
+  });
+
+  const withLanguages = (captionLanguages?: string[]) =>
+    courseGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { courseId: COURSE_ID, captionLanguages },
+      }),
+    });
+
+  it('refuses a caller outside the instructor group', async () => {
+    await expect(
+      callAs(['student']).retryCaptionTranslation(ref),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('refuses an instructor of another course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: null }),
+    });
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('asks for the translation again and reports the languages as translating', async () => {
+    withLanguages(['es-ES']);
+    setItem(
+      video({
+        captionTracks: [track('t-en', 'en-US', { isDefault: true })],
+        captionTranslation: {
+          sourceTrackId: 't-en',
+          failures: [{ language: 'es-ES', reason: 'failed' }],
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+    );
+
+    const result = await callAs().retryCaptionTranslation(ref);
+
+    expect(requestCaptionTranslation).toHaveBeenCalledWith(
+      expect.anything(),
+      ref,
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ language: 'es-ES', state: 'translating' }),
+    ]);
+  });
+
+  it.each([
+    [
+      'translation is off',
+      { enabled: false, maxLanguagesPerCourse: 0 },
+      ['es-ES'],
+    ],
+    [
+      'the course has no caption languages',
+      { enabled: true, maxLanguagesPerCourse: 9 },
+      undefined,
+    ],
+  ])('is refused when %s', async (_name, settings, languages) => {
+    resolveCaptionTranslationSettings.mockResolvedValue(settings);
+    withLanguages(languages);
+    setItem(
+      video({ captionTracks: [track('t-en', 'en-US', { isDefault: true })] }),
+    );
+
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('is NOT_FOUND for a missing video', async () => {
+    setItem(null);
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });

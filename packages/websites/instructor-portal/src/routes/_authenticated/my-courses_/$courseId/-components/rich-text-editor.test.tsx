@@ -87,4 +87,13 @@ describe('RichTextEditor', () => {
       screen.getByRole('menuitem', { name: 'Block formula' }),
     ).toBeInTheDocument();
   });
+
+  it('wraps a long word instead of widening the dialog', () => {
+    renderEditor();
+
+    expect(screen.getByLabelText('Body')).toHaveClass(
+      'break-words',
+      '[overflow-wrap:anywhere]',
+    );
+  });
 });

@@ -15,6 +15,9 @@
   "references": [
     {
       "path": "../../common/web-utils/tsconfig.lib.json"
+    },
+    {
+      "path": "../../common/branding/tsconfig.lib.json"
     }
   ],
   "exclude": [

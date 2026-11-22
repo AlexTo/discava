@@ -6,6 +6,7 @@ import {
   readCourseAnalytics,
   readCourseSummaries,
   readQuizAnalytics,
+  readVideoQuestionAnalytics,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -17,6 +18,8 @@ import {
   type ICourseSummary,
   QuizAnalyticsInputSchema,
   QuizAnalyticsOutputSchema,
+  VideoQuestionsAnalyticsInputSchema,
+  VideoQuestionsAnalyticsOutputSchema,
 } from '../schema/index.js';
 
 // Every procedure about one course's analytics starts here: the caller must
@@ -100,7 +103,8 @@ export const courseSummaries = courseProcedure
   });
 
 // One course's totals, its last 30 or 90 days, its lessons' drop-off and the
-// quizzes shown to students (the list to open with `quiz`).
+// quizzes shown to students (the list to open with `quiz`) and the videos with
+// questions (the list to open with `videoQuestions`).
 export const course = analyticsCourseProcedure
   .input(CourseAnalyticsInputSchema)
   .output(CourseAnalyticsOutputSchema)
@@ -157,6 +161,17 @@ export const course = analyticsCourseProcedure
           students,
         }),
       ),
+      modulesWithoutQuestions: analytics.modulesWithoutQuestions.map(
+        ({ moduleId, title }) => ({ moduleId, title }),
+      ),
+      videoQuestions: analytics.videoQuestions.map(
+        ({ contentItemId, lessonId, title, questions }) => ({
+          contentItemId,
+          lessonId,
+          title,
+          questions,
+        }),
+      ),
     };
   });
 
@@ -167,6 +182,24 @@ export const quiz = analyticsCourseProcedure
   .output(QuizAnalyticsOutputSchema)
   .query(async ({ ctx, input }) => {
     const figures = await readQuizAnalytics(
+      ctx.coreTable,
+      input.courseId,
+      input.contentItemId,
+    );
+    if (!figures) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+    return figures;
+  });
+
+// One video's per-question figures. A video that isn't shown in this course,
+// has no questions or isn't a video answers like one that doesn't exist
+// (NOT_FOUND).
+export const videoQuestions = analyticsCourseProcedure
+  .input(VideoQuestionsAnalyticsInputSchema)
+  .output(VideoQuestionsAnalyticsOutputSchema)
+  .query(async ({ ctx, input }) => {
+    const figures = await readVideoQuestionAnalytics(
       ctx.coreTable,
       input.courseId,
       input.contentItemId,

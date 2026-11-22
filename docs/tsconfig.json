@@ -66,6 +66,9 @@
       ],
       "@discava/common-infra-config/*": [
         "../packages/common/infra-config/src/*.ts"
+      ],
+      "@discava/common-branding/*": [
+        "../packages/common/branding/src/*.ts"
       ]
     }
   }

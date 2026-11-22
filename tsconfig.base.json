@@ -62,6 +62,9 @@
       "@discava/admin-api": [
         "./packages/apis/admin-api/src/index.ts"
       ],
+      "@discava/common-branding/*": [
+        "./packages/common/branding/src/*.ts"
+      ],
       "@discava/common-tiptap": [
         "./packages/common/tiptap/src/index.ts"
       ],

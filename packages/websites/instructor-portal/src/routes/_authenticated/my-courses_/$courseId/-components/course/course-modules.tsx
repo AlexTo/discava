@@ -128,7 +128,7 @@ function ModuleLessons({
               row?.isDragging && 'relative z-10 bg-background shadow-md',
             )}
           >
-            <div className="group flex items-center gap-2 px-4 py-2.5 sm:pl-12 sm:pr-5">
+            <div className="group flex flex-wrap items-center gap-2 px-4 py-2.5 sm:pl-12 sm:pr-5">
               {row && (
                 <DragHandle row={row} title={lesson.title} className="-ml-2" />
               )}
@@ -139,140 +139,146 @@ function ModuleLessons({
                   <FileText className="size-4" />
                 )}
               </div>
-              <span className="font-medium">{lesson.title}</span>
-              {lesson.visibility === 'hidden' && <HiddenBadge />}
-              {lesson.freePreview === true && (
-                <FreePreviewBadge
-                  open={
-                    published &&
-                    module.visibility === 'visible' &&
-                    lesson.visibility === 'visible'
-                  }
-                />
-              )}
-              <Badge
-                variant="outline"
-                className="hidden text-[10px] sm:inline-flex"
-              >
-                {isAssignment ? 'Assignment' : 'Lesson'}
-              </Badge>
-              {isAssignment && item && item.type !== 'quiz' && (
-                <Button asChild variant="outline" size="sm">
-                  <Link
-                    to="/my-courses/$courseId/assignments/$contentItemId/submissions"
-                    params={{ courseId, contentItemId: item.contentItemId }}
-                    aria-label={`Submissions for ${lesson.title}`}
-                  >
-                    Submissions
-                  </Link>
-                </Button>
-              )}
-              {!readOnly && (
-                <>
-                  <LessonVisibilityButton
-                    courseId={courseId}
-                    moduleId={module.moduleId}
-                    lessonId={lesson.lessonId}
-                    title={lesson.title}
-                    visibility={lesson.visibility}
-                    draft={draft}
-                    noun={noun}
-                    className="ml-auto"
+              <div className="flex min-w-0 basis-full flex-wrap items-center gap-2 break-words sm:basis-0 sm:flex-1">
+                <span className="min-w-0 font-medium break-words">
+                  {lesson.title}
+                </span>
+                {lesson.visibility === 'hidden' && <HiddenBadge />}
+                {lesson.freePreview === true && (
+                  <FreePreviewBadge
+                    open={
+                      published &&
+                      module.visibility === 'visible' &&
+                      lesson.visibility === 'visible'
+                    }
                   />
-                  {!isAssignment && !lesson.archivedAt && (
-                    <FreePreviewButton
+                )}
+                <Badge
+                  variant="outline"
+                  className="hidden text-[10px] sm:inline-flex"
+                >
+                  {isAssignment ? 'Assignment' : 'Lesson'}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {isAssignment && item && item.type !== 'quiz' && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link
+                      to="/my-courses/$courseId/assignments/$contentItemId/submissions"
+                      params={{ courseId, contentItemId: item.contentItemId }}
+                      aria-label={`Submissions for ${lesson.title}`}
+                    >
+                      Submissions
+                    </Link>
+                  </Button>
+                )}
+                {!readOnly && (
+                  <>
+                    <LessonVisibilityButton
                       courseId={courseId}
                       moduleId={module.moduleId}
                       lessonId={lesson.lessonId}
                       title={lesson.title}
-                      freePreview={lesson.freePreview === true}
+                      visibility={lesson.visibility}
+                      draft={draft}
+                      noun={noun}
+                      className="ml-auto"
                     />
-                  )}
-                  {isAssignment ? (
-                    item &&
-                    (item.type === 'quiz' ? (
-                      <QuizBuilderDialog
+                    {!isAssignment && !lesson.archivedAt && (
+                      <FreePreviewButton
                         courseId={courseId}
                         moduleId={module.moduleId}
                         lessonId={lesson.lessonId}
-                        contentItemId={item.contentItemId}
-                        trigger={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            type="button"
-                            aria-label={`Edit assignment ${lesson.title}`}
-                            className="-ml-2"
-                          >
-                            <PencilLine />
-                          </Button>
-                        }
-                      />
-                    ) : (
-                      <EditAssignmentDialog
-                        courseId={courseId}
-                        moduleId={module.moduleId}
-                        lessonId={lesson.lessonId}
-                        contentItemId={item.contentItemId}
                         title={lesson.title}
-                        body={item.body}
-                        maxPoints={item.maxPoints}
-                        dueAt={item.dueAt}
+                        freePreview={lesson.freePreview === true}
+                      />
+                    )}
+                    {isAssignment ? (
+                      item &&
+                      (item.type === 'quiz' ? (
+                        <QuizBuilderDialog
+                          courseId={courseId}
+                          moduleId={module.moduleId}
+                          lessonId={lesson.lessonId}
+                          contentItemId={item.contentItemId}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              type="button"
+                              aria-label={`Edit assignment ${lesson.title}`}
+                              className="-ml-2"
+                            >
+                              <PencilLine />
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <EditAssignmentDialog
+                          courseId={courseId}
+                          moduleId={module.moduleId}
+                          lessonId={lesson.lessonId}
+                          contentItemId={item.contentItemId}
+                          title={lesson.title}
+                          body={item.body}
+                          maxPoints={item.maxPoints}
+                          dueAt={item.dueAt}
+                          trigger={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              type="button"
+                              aria-label={`Edit assignment ${lesson.title}`}
+                              className="-ml-2"
+                            >
+                              <PencilLine />
+                            </Button>
+                          }
+                        />
+                      ))
+                    ) : (
+                      <EditLessonDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        lessonId={lesson.lessonId}
+                        title={lesson.title}
+                        description={lesson.description}
                         trigger={
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             type="button"
-                            aria-label={`Edit assignment ${lesson.title}`}
+                            aria-label={`Edit lesson ${lesson.title}`}
                             className="-ml-2"
                           >
                             <PencilLine />
                           </Button>
                         }
                       />
-                    ))
-                  ) : (
-                    <EditLessonDialog
+                    )}
+                    <DeleteLessonDialog
                       courseId={courseId}
                       moduleId={module.moduleId}
                       lessonId={lesson.lessonId}
                       title={lesson.title}
-                      description={lesson.description}
+                      usedItems={usedItemCount(lesson.contentItems)}
+                      archive={archive}
+                      noun={noun}
                       trigger={
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           type="button"
-                          aria-label={`Edit lesson ${lesson.title}`}
+                          aria-label={`Remove ${noun} ${lesson.title}`}
                           className="-ml-2"
                         >
-                          <PencilLine />
+                          <Trash2 />
                         </Button>
                       }
                     />
-                  )}
-                  <DeleteLessonDialog
-                    courseId={courseId}
-                    moduleId={module.moduleId}
-                    lessonId={lesson.lessonId}
-                    title={lesson.title}
-                    usedItems={usedItemCount(lesson.contentItems)}
-                    archive={archive}
-                    noun={noun}
-                    trigger={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        type="button"
-                        aria-label={`Remove ${noun} ${lesson.title}`}
-                        className="-ml-2"
-                      >
-                        <Trash2 />
-                      </Button>
-                    }
-                  />
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
             {!isAssignment && (
               <LessonContentItemsRow
@@ -357,7 +363,7 @@ export function CourseModules({
             )}
           >
             <CardHeader className="border-b bg-muted/30 px-4 py-3 sm:px-5">
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 {row && (
                   <DragHandle
                     row={row}
@@ -368,64 +374,70 @@ export function CourseModules({
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-xs font-semibold shadow-xs">
                   {moduleIndex + 1}
                 </span>
-                <span className="font-semibold">{module.title}</span>
-                {module.visibility === 'hidden' && <HiddenBadge />}
-                <Badge variant="outline" className="hidden sm:inline-flex">
-                  {module.lessons.length}{' '}
-                  {module.lessons.length === 1 ? 'lesson' : 'lessons'}
-                </Badge>
-                {!readOnly && (
-                  <>
-                    <ModuleVisibilityButton
-                      courseId={courseId}
-                      moduleId={module.moduleId}
-                      title={module.title}
-                      visibility={module.visibility}
-                      draft={draft}
-                      className="ml-auto"
-                    />
-                    <EditModuleDialog
-                      courseId={courseId}
-                      moduleId={module.moduleId}
-                      title={module.title}
-                      description={module.description}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          type="button"
-                          aria-label={`Edit module ${moduleIndex + 1}`}
-                          className="-ml-2"
-                        >
-                          <PencilLine />
-                        </Button>
-                      }
-                    />
-                    <DeleteModuleDialog
-                      courseId={courseId}
-                      moduleId={module.moduleId}
-                      title={module.title}
-                      lessonCount={module.lessons.length}
-                      usedItems={module.lessons.reduce(
-                        (count, lesson) =>
-                          count + usedItemCount(lesson.contentItems),
-                        0,
-                      )}
-                      archive={archive}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          type="button"
-                          aria-label={`Remove module ${moduleIndex + 1}`}
-                          className="-ml-2"
-                        >
-                          <Trash2 />
-                        </Button>
-                      }
-                    />
-                  </>
-                )}
+                <div className="flex min-w-0 basis-full flex-wrap items-center gap-2 break-words sm:basis-0 sm:flex-1">
+                  <span className="min-w-0 font-semibold break-words">
+                    {module.title}
+                  </span>
+                  {module.visibility === 'hidden' && <HiddenBadge />}
+                  <Badge variant="outline" className="hidden sm:inline-flex">
+                    {module.lessons.length}{' '}
+                    {module.lessons.length === 1 ? 'lesson' : 'lessons'}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {!readOnly && (
+                    <>
+                      <ModuleVisibilityButton
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        title={module.title}
+                        visibility={module.visibility}
+                        draft={draft}
+                        className="ml-auto"
+                      />
+                      <EditModuleDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        title={module.title}
+                        description={module.description}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            aria-label={`Edit module ${moduleIndex + 1}`}
+                            className="-ml-2"
+                          >
+                            <PencilLine />
+                          </Button>
+                        }
+                      />
+                      <DeleteModuleDialog
+                        courseId={courseId}
+                        moduleId={module.moduleId}
+                        title={module.title}
+                        lessonCount={module.lessons.length}
+                        usedItems={module.lessons.reduce(
+                          (count, lesson) =>
+                            count + usedItemCount(lesson.contentItems),
+                          0,
+                        )}
+                        archive={archive}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            type="button"
+                            aria-label={`Remove module ${moduleIndex + 1}`}
+                            className="-ml-2"
+                          >
+                            <Trash2 />
+                          </Button>
+                        }
+                      />
+                    </>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">

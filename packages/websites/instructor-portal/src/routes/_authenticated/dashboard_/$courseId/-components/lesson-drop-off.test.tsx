@@ -41,4 +41,31 @@ describe('LessonDropOff', () => {
     render(<LessonDropOff lessons={[lesson('a', 100), lesson('b', null)]} />);
     expect(badged()).toEqual([]);
   });
+
+  it('names the modules with video and no questions', () => {
+    render(
+      <LessonDropOff
+        lessons={[lesson('a', 100)]}
+        modulesWithoutQuestions={[
+          { moduleId: 'm1', title: 'Intro' },
+          { moduleId: 'm2', title: 'Basics' },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /These modules have video and no questions: Intro, Basics\. Learners remember more when a video asks them something\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no note when every module has questions', () => {
+    render(
+      <LessonDropOff
+        lessons={[lesson('a', 100)]}
+        modulesWithoutQuestions={[]}
+      />,
+    );
+    expect(screen.queryByText(/no questions/)).not.toBeInTheDocument();
+  });
 });

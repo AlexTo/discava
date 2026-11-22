@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "catalog:",
+    "@discava/common-branding": "workspace:*",
     "@discava/common-web-utils": "workspace:*",
     "electrodb": "catalog:",
     "tslib": "^2.3.0",

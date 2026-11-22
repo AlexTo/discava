@@ -298,7 +298,9 @@ export function AttachLessonFileDialog({
               <Paperclip />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>{shownFile.fileName}</ItemTitle>
+              <ItemTitle className="min-w-0 break-words">
+                {shownFile.fileName}
+              </ItemTitle>
               <ItemDescription>
                 {fileKind(shownFile.fileName)}
                 {shownFile.fileSize !== undefined &&

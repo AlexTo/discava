@@ -35,6 +35,10 @@ describe('matchesProgressStreamFilters', () => {
     ['a new quiz summary', record('INSERT', 'NewImage', 'quizSummary')],
     ['a changed quiz summary', record('MODIFY', 'NewImage', 'quizSummary')],
     ['a course edit', record('MODIFY', 'NewImage', 'course')],
+    [
+      'a changed submission',
+      record('MODIFY', 'NewImage', 'assignmentSubmission'),
+    ],
   ])('lets through %s', (_, streamRecord) => {
     expect(matchesProgressStreamFilters(streamRecord)).toBe(true);
   });
@@ -72,9 +76,9 @@ describe('matchesProgressStreamFilters', () => {
     ['a new vote', record('INSERT', 'NewImage', 'discussionVote')],
     ['a changed vote', record('MODIFY', 'NewImage', 'discussionVote')],
     ['a removed vote', record('REMOVE', 'OldImage', 'discussionVote')],
-    // A submission's own change; its completion is what drives progress.
+    // A new submission; its completion is what drives progress. A changed one
+    // passes the filter and the recalculation checks its grade.
     ['a new submission', record('INSERT', 'NewImage', 'assignmentSubmission')],
-    ['a resubmission', record('MODIFY', 'NewImage', 'assignmentSubmission')],
     // Reviews and the rating tally change no item, so no progress.
     ...['review', 'courseRating'].flatMap((entity) => [
       [`a new ${entity}`, record('INSERT', 'NewImage', entity)],

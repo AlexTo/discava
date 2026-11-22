@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { randomUUID } from 'node:crypto';
+import { resolveCaptionTranslationSettings } from '@discava/common-server-utils/caption-translation-settings';
 import {
   CAPTION_MAX_BYTES,
   captionKey,
@@ -22,6 +23,7 @@ import {
   type CoreTable,
   captionWriteCondition,
   isConditionalCheckFailed,
+  requestCaptionTranslation,
   tracksForPlayback,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
@@ -31,7 +33,11 @@ import {
   putCaptionFile,
   readCaptionUpload,
 } from '../helpers/caption-files.js';
-import { requireCourseInstructor } from '../helpers/course-access.js';
+import { reportedCaptionTranslations } from '../helpers/caption-translations.js';
+import {
+  getCourseOrThrow,
+  requireCourseInstructor,
+} from '../helpers/course-access.js';
 import {
   requireAncestorsNotArchived,
   requireNotArchived,
@@ -40,11 +46,14 @@ import { courseProcedure } from '../init.js';
 import {
   AttachCaptionInputSchema,
   CaptionTracksOutputSchema,
+  CaptionTranslationsOutputSchema,
   CaptionUploadUrlInputSchema,
   CaptionUploadUrlOutputSchema,
   type ICaptionTracksOutput,
   RemoveCaptionInputSchema,
+  RetryCaptionTranslationInputSchema,
 } from '../schema/index.js';
+import { requireTranslationOn } from './course-caption-languages.js';
 
 // Caption tracks an instructor manages. A track's file is uploaded to
 // the lesson media upload bucket through a presigned PUT, then checked and
@@ -100,13 +109,36 @@ const tracksOutput = (
   ),
 });
 
+// Deletes the files of every track a change took out of the list. Called only
+// after the conditional write succeeded: on a failed write none of them is
+// deleted, since the list still points at them.
+const deleteDisplacedFiles = async (
+  logger: Parameters<typeof bestEffortDeleteCaptionFile>[0],
+  change: ReturnType<typeof applyCaptionChange>,
+) => {
+  const displaced = [
+    change.replaced,
+    change.evicted,
+    ...(change.staleTranslated ?? []),
+  ];
+  for (const track of displaced) {
+    if (track) {
+      await bestEffortDeleteCaptionFile(logger, track.key);
+    }
+  }
+};
+
 const applyChange = (
   tracks: Parameters<typeof applyCaptionChange>[0],
   change: CaptionChange,
   nonce: string,
+  captionLanguages?: readonly string[],
 ) => {
   try {
-    return applyCaptionChange(tracks, change, { currentNonce: nonce });
+    return applyCaptionChange(tracks, change, {
+      currentNonce: nonce,
+      captionLanguages,
+    });
   } catch (error) {
     if (error instanceof CaptionTrackError) {
       throw error.code === 'TOO_MANY_TRACKS'
@@ -180,6 +212,9 @@ export const attachContentItemCaption = courseProcedure
     const rev = item.captionTracksRev ?? 0;
     const trackId = randomUUID();
     const key = captionKey(ref, nonce, trackId);
+    const { data: course } = await coreTable.entities.course
+      .get({ courseId: ref.courseId })
+      .go();
     // Checked before the copy, so a refused change leaves nothing behind.
     const change = applyChange(
       item.captionTracks,
@@ -196,6 +231,7 @@ export const attachContentItemCaption = courseProcedure
         },
       },
       nonce,
+      course?.captionLanguages,
     );
 
     // Written from the bytes that were validated, not copied from the upload
@@ -225,9 +261,7 @@ export const attachContentItemCaption = courseProcedure
       throw error;
     }
 
-    if (change.replaced) {
-      await bestEffortDeleteCaptionFile(ctx.logger, change.replaced.key);
-    }
+    await deleteDisplacedFiles(ctx.logger, change);
     await bestEffortDeleteCaptionUpload(ctx.logger, uploadKey);
     return tracksOutput(change.tracks, nonce);
   });
@@ -244,6 +278,16 @@ export const removeContentItemCaption = courseProcedure
       ctx.user.sub,
     );
 
+    // A translated track belongs to the course's caption languages: it goes
+    // when the language is unticked, or an upload takes its place.
+    const target = item.captionTracks?.find((t) => t.trackId === trackId);
+    if (target?.source === 'translated') {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message:
+          "An auto-translated track can't be removed here. Upload your own captions for this language, or remove the language from the course's caption languages.",
+      });
+    }
     const change = applyChange(
       item.captionTracks,
       { type: 'remove', nonce, trackId },
@@ -268,5 +312,30 @@ export const removeContentItemCaption = courseProcedure
     }
 
     await bestEffortDeleteCaptionFile(ctx.logger, change.removed.key);
+    await deleteDisplacedFiles(ctx.logger, change);
     return tracksOutput(change.tracks, nonce);
+  });
+
+// Asks the video for its translations again: clears the recorded outcome and
+// touches the request marker the stream feature watches. Answers with the
+// status as it now reads, which is "translating" for every missing language.
+export const retryContentItemCaptionTranslation = courseProcedure
+  .input(RetryCaptionTranslationInputSchema)
+  .output(CaptionTranslationsOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const coreTable = ctx.coreTable;
+    const { item, nonce } = await requireReadyVideo(
+      coreTable,
+      input,
+      ctx.user.sub,
+    );
+    const course = await getCourseOrThrow(coreTable, input.courseId);
+    await requireTranslationOn(course.captionLanguages);
+
+    await requestCaptionTranslation(coreTable.entities, input);
+    return reportedCaptionTranslations(
+      { ...item, nonce, captionTranslation: undefined },
+      course,
+      await resolveCaptionTranslationSettings(),
+    );
   });

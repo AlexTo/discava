@@ -97,6 +97,16 @@ export const QuizListingSchema = z.object({
 
 export type IQuizListing = z.output<typeof QuizListingSchema>;
 
+export const VideoQuestionListingSchema = z.object({
+  contentItemId: z.string(),
+  lessonId: z.string(),
+  title: z.string(),
+  /** How many questions the video has now. */
+  questions: z.number().int().positive(),
+});
+
+export type IVideoQuestionListing = z.output<typeof VideoQuestionListingSchema>;
+
 export const CourseAnalyticsOutputSchema = z.object({
   totals: CourseTotalsSchema,
   /** Exactly `days` entries, oldest first, zero filled. */
@@ -105,6 +115,12 @@ export const CourseAnalyticsOutputSchema = z.object({
   lessons: z.array(LessonDropOffSchema),
   /** Quizzes currently shown to students, in course order. */
   quizzes: z.array(QuizListingSchema),
+  /** Videos currently shown to students that have questions, in course order. */
+  videoQuestions: z.array(VideoQuestionListingSchema),
+  /** Modules shown to students with video and no questions, in course order. */
+  modulesWithoutQuestions: z.array(
+    z.object({ moduleId: z.string(), title: z.string() }),
+  ),
 });
 
 export type ICourseAnalyticsOutput = z.output<
@@ -143,3 +159,21 @@ export const QuizAnalyticsOutputSchema = z.object({
 });
 
 export type IQuizAnalyticsOutput = z.output<typeof QuizAnalyticsOutputSchema>;
+
+export const VideoQuestionsAnalyticsInputSchema = z.object({
+  contentItemId: z.string().min(1),
+});
+
+export const VideoQuestionsAnalyticsOutputSchema = z.object({
+  /** Ranked questions first (miss rate, then answers), then the rest in asking order. */
+  questions: z.array(
+    QuizQuestionFiguresSchema.extend({
+      /** Whole seconds into the video, or null for an end question. */
+      atSeconds: z.number().int().min(0).nullable(),
+    }),
+  ),
+});
+
+export type IVideoQuestionsAnalyticsOutput = z.output<
+  typeof VideoQuestionsAnalyticsOutputSchema
+>;

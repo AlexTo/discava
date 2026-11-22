@@ -4,6 +4,7 @@
  */
 
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useCoreApiClient } from '../api';
 import { buildLinkedInAddToProfileUrl } from '../lib/linkedin-add-to-profile';
@@ -12,7 +13,7 @@ type LinkedInSource = 'my-learning' | 'certificate-page';
 
 /**
  * The address of LinkedIn's form for a certificate, issued by this site
- * (`site` in the runtime config).
+ * (the brand's name, and `site` in the runtime config for a LinkedIn page).
  */
 export const useLinkedInAddToProfileUrl = (certificate: {
   courseTitle: string;
@@ -20,11 +21,12 @@ export const useLinkedInAddToProfileUrl = (certificate: {
   certificateId: string;
 }) => {
   const { site } = useRuntimeConfig();
+  const brand = useBrand();
   return buildLinkedInAddToProfileUrl({
     ...certificate,
     verifyUrl: `${window.location.origin}/certificates/${certificate.certificateId}`,
     issuer: {
-      name: site?.name ?? 'Discava',
+      name: brand.name,
       linkedInOrganizationId: site?.linkedInOrganizationId,
     },
   });

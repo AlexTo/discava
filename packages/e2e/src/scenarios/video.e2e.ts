@@ -105,6 +105,11 @@ test('an instructor uploads a video, and a student watches it', async ({
     await screenshot(student, 'control bar on a paused video');
 
     await expectToPlay(video);
+    // Playing stays on the page: `playsinline` keeps iOS Safari from opening
+    // its own full-screen player, and nothing here asked for full screen.
+    await expect(video).toHaveAttribute('playsinline', '');
+    expect(await student.evaluate(() => document.fullscreenElement)).toBeNull();
+    await screenshot(student, 'playing inline, not full screen');
 
     const speed = lessonItem(student, 'Video one').getByRole('button', {
       name: 'Playback speed',
@@ -357,7 +362,7 @@ test('an instructor uploads a video, and a student watches it', async ({
     });
     await expect(
       dialog.getByRole('listitem', { name: 'English' }),
-    ).toContainText('uploaded');
+    ).toContainText('Uploaded');
     await screenshot(
       instructor,
       'captions dialog with an uploaded English track',
@@ -446,7 +451,7 @@ test('an instructor uploads a video, and a student watches it', async ({
     });
     await expect(
       added.getByRole('listitem', { name: 'Spanish' }),
-    ).toContainText('uploaded');
+    ).toContainText('Uploaded');
     await screenshot(instructor, 'captions dialog with a second language');
     await closeDialog(instructor);
 

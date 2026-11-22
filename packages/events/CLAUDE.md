@@ -18,4 +18,4 @@ In local dev, the package's `dev` target runs the event runner (`src/local/event
 - the daily payout run (`src/earnings/payout-run.ts`): `POST /payout-run` on port 2024 runs it once (optional `{ "graceSeconds": 0 }` replaces the 15-minute recovery grace so a test can recover what an earlier run left), and `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` (default off) runs it on a timer; it moves money only through the Stripe stand-in
 - a user first seen by an API's local server → pre-token-generation, which writes their `user` record as Cognito's trigger does when deployed (#230; `syncLocalUser` in `common-server-utils/local-dev`)
 
-Backend code switches to these and S3Mock when `LOCAL_DEV=true` (see `common-server-utils/local-dev`); CONTRIBUTING.md's "Running Discava Locally" lists what only runs on a deployed stage.
+Backend code switches to these and S3Mock when `LOCAL_DEV=true` (see `common-server-utils/local-dev`); DEVELOPMENT.md's "Running Discava Locally" lists what only runs on a deployed stage.

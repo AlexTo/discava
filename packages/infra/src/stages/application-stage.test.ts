@@ -237,14 +237,12 @@ describe('the site runtime config', () => {
       }).node.findChild('Websites'),
     )?.get('connection').site;
 
-  it('names the site, with no organisation ID by default', () => {
-    expect(siteOf({})).toEqual({ name: 'Discava' });
-    expect(siteOf({ siteName: 'Acme Learn' })).toEqual({ name: 'Acme Learn' });
+  it('holds no site name (the brand names the site), and no organisation ID by default', () => {
+    expect(siteOf({})).toEqual({});
   });
 
   it('carries the LinkedIn organisation ID when the stage has one', () => {
     expect(siteOf({ linkedInOrganizationId: '12345' })).toEqual({
-      name: 'Discava',
       linkedInOrganizationId: '12345',
     });
   });

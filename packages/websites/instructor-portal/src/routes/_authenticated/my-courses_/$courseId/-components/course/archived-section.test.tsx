@@ -343,4 +343,13 @@ describe('ArchivedSection', () => {
       screen.getByText(/Restore the course to restore these/),
     ).toBeInTheDocument();
   });
+
+  it('lays each row out so a long title wraps and Restore and Delete drop below it', () => {
+    renderSection();
+
+    const text = screen.getByText('Lesson Two').closest('div') as HTMLElement;
+    expect(text).toHaveClass('min-w-0', 'basis-full', 'break-words');
+    expect(text.parentElement).toHaveClass('flex-wrap');
+    expect(text.querySelector('p')).not.toHaveClass('truncate');
+  });
 });

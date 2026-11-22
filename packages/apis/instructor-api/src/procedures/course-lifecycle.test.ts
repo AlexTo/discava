@@ -729,15 +729,65 @@ describe('setCourseCertificateCriteria', () => {
     });
   });
 
-  it('refuses minUploadScorePercent until graded uploads exist', async () => {
-    await expect(
-      callAs().setCourseCertificateCriteria({
-        ...input,
-        minUploadScorePercent: 70,
-      } as never),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
-    expect(coursePatch).not.toHaveBeenCalled();
+  it('stores a minimum upload score with the next version', async () => {
+    const withScore = {
+      version: 2,
+      requireQuizPass: true,
+      minUploadScorePercent: 60,
+    };
+    coursePatchGo.mockResolvedValueOnce({
+      data: { ...course, certificateCriteria: withScore },
+    });
+
+    const result = await callAs().setCourseCertificateCriteria({
+      ...input,
+      minUploadScorePercent: 60,
+    });
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      certificateCriteria: withScore,
+    });
+    expect(result.certificateCriteria).toEqual(withScore);
   });
+
+  it('removes the minimum upload score with null', async () => {
+    givenCourse({
+      certificateCriteria: {
+        version: 2,
+        requireQuizPass: false,
+        minUploadScorePercent: 60,
+      },
+    });
+    coursePatchGo.mockResolvedValueOnce({
+      data: {
+        ...course,
+        certificateCriteria: { version: 3, requireQuizPass: false },
+      },
+    });
+
+    await callAs().setCourseCertificateCriteria({
+      courseId: course.courseId,
+      requireQuizPass: false,
+      minUploadScorePercent: null,
+    });
+
+    expect(coursePatchSet).toHaveBeenCalledWith({
+      certificateCriteria: { version: 3, requireQuizPass: false },
+    });
+  });
+
+  it.each([0, 101, 59.5])(
+    'refuses a minimum upload score of %s',
+    async (minUploadScorePercent) => {
+      await expect(
+        callAs().setCourseCertificateCriteria({
+          ...input,
+          minUploadScorePercent,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+      expect(coursePatch).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['draft', 'published', 'archived'] as const)(
     'changes the criteria of a %s course',

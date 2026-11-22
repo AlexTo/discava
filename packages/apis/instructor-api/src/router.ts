@@ -7,6 +7,7 @@ import { t } from './init.js';
 import {
   course as analyticsCourse,
   quiz as analyticsQuiz,
+  videoQuestions as analyticsVideoQuestions,
   courseSummaries,
 } from './procedures/analytics.js';
 import {
@@ -38,6 +39,7 @@ import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
+  retryContentItemCaptionTranslation,
 } from './procedures/content-item-captions.js';
 import {
   createContentItemFile,
@@ -81,6 +83,7 @@ import {
 } from './procedures/course.js';
 import {
   courseCaptionLanguages,
+  retryCourseCaptionTranslations,
   updateCourseCaptionLanguages,
 } from './procedures/course-caption-languages.js';
 import {
@@ -152,6 +155,7 @@ export const appRouter = router({
     courseSummaries,
     course: analyticsCourse,
     quiz: analyticsQuiz,
+    videoQuestions: analyticsVideoQuestions,
   }),
   assignmentSubmission: router({
     list: listAssignmentSubmissions,
@@ -199,6 +203,7 @@ export const appRouter = router({
     updateCatalogue: updateCourseCatalogue,
     captionLanguages: courseCaptionLanguages,
     updateCaptionLanguages: updateCourseCaptionLanguages,
+    retryCaptionTranslations: retryCourseCaptionTranslations,
     updateLanding: updateCourseLanding,
   }),
   coursePreview: router({
@@ -268,6 +273,7 @@ export const appRouter = router({
     captionUploadUrl: createContentItemCaptionUploadUrl,
     attachCaption: attachContentItemCaption,
     removeCaption: removeContentItemCaption,
+    retryCaptionTranslation: retryContentItemCaptionTranslation,
     createFileUploadUrl: createContentItemFileUploadUrl,
     createFile: createContentItemFile,
     updateFile: updateContentItemFile,
