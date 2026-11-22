@@ -592,7 +592,16 @@ test('the course editor fits a phone', async ({ page }) => {
     for (const title of [textTitle, quizTitle, longTitle(1)]) {
       await expect(content.getByText(title, { exact: true })).toBeVisible();
     }
-    await screenshot(page, 'course editor at phone width');
+    await content.scrollIntoViewIfNeeded();
+    await screenshot(page, 'course editor at phone width', { fullPage: true });
+  });
+
+  await test.step('the archived rows fit, with Restore and Delete on screen', async () => {
+    const archivedSection = page.getByRole('region', { name: 'Archived' });
+    await archivedSection.scrollIntoViewIfNeeded();
+    await expect(archivedSection).toBeVisible();
+    await expectOnScreen(archivedSection.getByRole('button'));
+    await screenshot(page, 'archived rows at phone width');
   });
 
   await test.step('the quiz builder fits, with Save in reach', async () => {
