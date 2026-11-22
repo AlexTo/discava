@@ -8,7 +8,6 @@ import { buildHead, type PageContext } from './page.js';
 
 const context = (allowIndexing: boolean): PageContext => ({
   host: 'learn.example.com',
-  siteName: 'Discava',
   allowIndexing,
   mediaUrl: () => undefined,
   defaultImageUrl: 'https://learn.example.com/og-default.png',

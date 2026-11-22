@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { AddToLinkedInButton } from '../../../../components/add-to-linkedin-button';
 
 /**
@@ -19,11 +19,11 @@ export function OwnerShare({
     completedOn: string;
   };
 }) {
-  const { site } = useRuntimeConfig();
+  const brand = useBrand();
   const [, month, year] = certificate.completedOn.split(' ');
   const values = [
     ['Name', certificate.courseTitle],
-    ['Issuing organisation', site?.name ?? 'Discava'],
+    ['Issuing organisation', brand.name],
     ['Issue date', `${month} ${year}`],
     ['Credential ID', certificate.certificateId],
     [

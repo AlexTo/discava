@@ -13,7 +13,6 @@ const HOSTILE = '</script><script>alert(1)</script>"\'&';
 
 const context = (allowIndexing: boolean): PageContext => ({
   host: 'learn.example.com',
-  siteName: 'Discava',
   allowIndexing,
   mediaUrl: (key) => (key ? `https://media.example.com/${key}` : undefined),
   defaultImageUrl: 'https://learn.example.com/og-default.png',
@@ -285,6 +284,84 @@ describe('renderProfilePage', () => {
     const all = `${page.head}${page.root}${page.pageData}`;
     expect(all.match(/<script/g)).toHaveLength(1);
     expect(all).not.toContain('<script>alert');
+  });
+});
+
+describe('the brand in a rendered page', () => {
+  const brand = resolveBrand(
+    {
+      name: 'Acme <&> "Academy"',
+      showNameBesideLogo: true,
+      colour: null,
+      logoKey: null,
+      iconKey: null,
+      shareImageKey:
+        'brand/share-image/0193a5c8-7b1e-7a3c-9d2f-1e4b6c8a0f12.png',
+    },
+    'https://media.example.com/',
+  );
+  const SHARE =
+    'https://media.example.com/brand/share-image/0193a5c8-7b1e-7a3c-9d2f-1e4b6c8a0f12.png';
+  const acme = (): PageContext => ({ ...context(true), brand });
+  const ESCAPED = 'Acme &lt;&amp;&gt; &quot;Academy&quot;';
+  const profile = {
+    handle: 'ada',
+    displayName: 'Ada Lovelace',
+    courses: [{ courseId: 'c1', title: 'Intro to Rust', ratingCount: 0 }],
+  };
+
+  it('uses the name, escaped, in the course title, texts and provider', () => {
+    const page = renderCoursePage(acme(), {
+      course: { ...fullCourse, description: undefined, learningOutcomes: [] },
+      summary: { count: 0, average: undefined },
+      reviews: { items: [], cursor: null },
+    } as never);
+    expect(page.head).toContain(`<title>Intro to Rust | ${ESCAPED}</title>`);
+    expect(page.head).toContain(`a course on ${ESCAPED}.`);
+    expect(page.head).toContain(`og:site_name" content="${ESCAPED}"`);
+    expect(page.head).not.toContain('Discava');
+    expect(page.head).toContain(
+      '"provider":{"@type":"Organization","name":"Acme <&> \\"Academy\\""}'.replace(
+        /<|>|&/g,
+        (c) =>
+          ({ '<': '\\u003c', '>': '\\u003e', '&': '\\u0026' })[c] as string,
+      ),
+    );
+  });
+
+  it('keeps a course’s own cover over the share image', () => {
+    const page = renderCoursePage(acme(), {
+      course: fullCourse,
+      summary: { count: 0, average: undefined },
+      reviews: { items: [], cursor: null },
+    } as never);
+    expect(page.head).toContain(
+      'og:image" content="https://media.example.com/courses/c1/image/x.jpg"',
+    );
+    expect(page.head).not.toContain(SHARE);
+  });
+
+  it('gives a profile without a photo the share image, and with one its photo', () => {
+    expect(renderProfilePage(acme(), profile).head).toContain(
+      `og:image" content="${SHARE}"`,
+    );
+    expect(
+      renderProfilePage(acme(), { ...profile, photoKey: 'p/a.jpg' }).head,
+    ).toContain('og:image" content="https://media.example.com/p/a.jpg"');
+    expect(renderProfilePage(acme(), profile).head).toContain(`on ${ESCAPED}.`);
+  });
+
+  it('names the brand as the certificate’s issuer', () => {
+    const page = renderCertificatePage(acme(), {
+      status: 'valid',
+      statement: [],
+      certificateId: 'ABCD-EFGH-JKMN-PQRS',
+      learnerName: 'Sam',
+      courseTitle: 'Rust',
+      completedAt: '2026-11-19T23:30:00.000Z',
+      completedOn: '19 November 2026',
+    } as never);
+    expect(page.head).toContain(`Issued by ${ESCAPED}.`);
   });
 });
 

@@ -2,16 +2,23 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { resolveBrand } from '@discava/common-branding/brand';
+import {
+  BRAND_NAME_MAX_LENGTH,
+  DEFAULT_BRAND_NAME,
+  resolveBrand,
+} from '@discava/common-branding/brand';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { Input } from '@discava/common-shadcn/components/ui/input';
+import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { Switch } from '@discava/common-shadcn/components/ui/switch';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useSetBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useAdminApi } from '../../../api';
 import { BrandPreview } from './brand-preview';
 import { ImageField } from './image-field';
@@ -48,12 +55,20 @@ const relativeTime = (iso: string): string => {
 };
 
 // Which section a message from the server is about, by what it names.
-const fieldOf = (message: string): 'logo' | 'icon' | undefined =>
-  /\blogo\b/i.test(message)
-    ? 'logo'
-    : /\bicon\b/i.test(message)
-      ? 'icon'
-      : undefined;
+const fieldOf = (
+  message: string,
+): 'name' | 'logo' | 'icon' | 'share-image' | undefined =>
+  /\bname\b/i.test(message)
+    ? 'name'
+    : /\bshare image\b/i.test(message)
+      ? 'share-image'
+      : /\blogo\b/i.test(message)
+        ? 'logo'
+        : /\bicon\b/i.test(message)
+          ? 'icon'
+          : undefined;
+
+const NAME_MESSAGE = `The name must be 1–${BRAND_NAME_MAX_LENGTH} characters.`;
 
 export function BrandingForm({
   saved,
@@ -77,14 +92,25 @@ export function BrandingForm({
 
   const [form, setForm] = useState(saved.brand);
   // Where an image uploaded in this session can be seen before it is saved.
-  const [previews, setPreviews] = useState<{ logo?: string; icon?: string }>(
-    {},
-  );
+  const [previews, setPreviews] = useState<{
+    logo?: string;
+    icon?: string;
+    shareImage?: string;
+  }>({});
+  const nameId = useId();
+  const nameMessageId = useId();
+  const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
 
   const dirty =
+    form.name !== saved.brand.name ||
+    form.showNameBesideLogo !== saved.brand.showNameBesideLogo ||
     form.logoKey !== saved.brand.logoKey ||
-    form.iconKey !== saved.brand.iconKey;
+    form.iconKey !== saved.brand.iconKey ||
+    form.shareImageKey !== saved.brand.shareImageKey;
+  const nameText = form.name ?? DEFAULT_BRAND_NAME;
+  const nameLength = nameText.trim().length;
+  const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
 
   useBlocker({
     shouldBlockFn: () => dirty && !window.confirm(UNSAVED_MESSAGE),
@@ -99,9 +125,16 @@ export function BrandingForm({
   const shown = resolveBrand(form, mediaBase);
   const logoUrl = previews.logo ?? shown.logoUrl;
   const iconUrl = previews.icon ?? shown.iconUrl ?? '/favicon.ico';
+  const shareImageUrl = previews.shareImage ?? shown.shareImageUrl;
+  const name = nameText.trim() || DEFAULT_BRAND_NAME;
   const conflict = save.error as { data?: { code?: string } } | null;
   const isConflict = conflict?.data?.code === 'CONFLICT';
   const serverField = serverError ? fieldOf(serverError) : undefined;
+  const nameMessage = nameInvalid
+    ? NAME_MESSAGE
+    : serverField === 'name'
+      ? serverError
+      : undefined;
 
   const submit = async () => {
     setServerError(undefined);
@@ -133,6 +166,64 @@ export function BrandingForm({
         void submit();
       }}
     >
+      <section className="space-y-3" aria-labelledby={`${nameId}-title`}>
+        <h2 id={`${nameId}-title`} className="text-lg font-semibold">
+          Platform name
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Shown in tab titles, share previews and in text such as the student
+          portal's home page.
+        </p>
+        <div className="max-w-sm space-y-2">
+          <Label htmlFor={nameId}>Name</Label>
+          <Input
+            id={nameId}
+            value={nameText}
+            aria-invalid={nameMessage ? true : undefined}
+            aria-describedby={nameMessage ? nameMessageId : undefined}
+            onChange={(event) => {
+              setServerError(undefined);
+              setForm((current) => ({ ...current, name: event.target.value }));
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            1–{BRAND_NAME_MAX_LENGTH} characters.
+          </p>
+          {nameMessage && (
+            <p
+              id={nameMessageId}
+              role="alert"
+              className="break-words text-sm text-destructive"
+            >
+              {nameMessage}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            id={showNameId}
+            checked={form.showNameBesideLogo}
+            onCheckedChange={(checked) =>
+              setForm((current) => ({
+                ...current,
+                showNameBesideLogo: checked,
+              }))
+            }
+          />
+          <Label htmlFor={showNameId}>Show the name beside the logo</Label>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setServerError(undefined);
+            setForm((current) => ({ ...current, name: null }));
+          }}
+        >
+          Reset name to default
+        </Button>
+      </section>
       <ImageField
         kind="logo"
         title="Logo"
@@ -159,10 +250,29 @@ export function BrandingForm({
           setPreviews((current) => ({ ...current, icon: preview }));
         }}
       />
+      <ImageField
+        kind="share-image"
+        title="Share image"
+        help="Shown when a link to the platform is shared, for pages with no image of their own."
+        imageUrl={shareImageUrl}
+        emptyText="No share image set. Pages without an image use the Discava default."
+        previewClassName="aspect-[1.91/1] w-60 rounded border bg-background object-cover"
+        serverError={serverField === 'share-image' ? serverError : undefined}
+        onChoose={() => setServerError(undefined)}
+        onUploaded={(key, preview) => {
+          setForm((current) => ({ ...current, shareImageKey: key }));
+          setPreviews((current) => ({ ...current, shareImage: preview }));
+        }}
+        onReset={() => {
+          setForm((current) => ({ ...current, shareImageKey: null }));
+          setPreviews((current) => ({ ...current, shareImage: undefined }));
+        }}
+      />
       <BrandPreview
         logoUrl={logoUrl}
-        name={shown.name}
-        showName={shown.showNameBesideLogo}
+        name={name}
+        showName={form.showNameBesideLogo}
+        shareImageUrl={shareImageUrl}
       />
 
       {serverError && !serverField && (
@@ -191,7 +301,10 @@ export function BrandingForm({
             ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
             : 'Using the default Discava brand'}
         </p>
-        <Button type="submit" disabled={!dirty || save.isPending}>
+        <Button
+          type="submit"
+          disabled={!dirty || nameInvalid || save.isPending}
+        >
           {save.isPending ? (
             <>
               <Spinner /> Saving…

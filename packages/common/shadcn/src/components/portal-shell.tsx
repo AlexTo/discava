@@ -183,9 +183,11 @@ export const PortalShell = ({
                   className="h-10 w-auto min-w-0 max-w-40 shrink object-contain"
                   src={brand.logoUrl}
                 />
-                <div className="hidden flex-col leading-tight sm:flex">
-                  <span className="text-sm font-semibold">{brand.name}</span>
-                </div>
+                {brand.showNameBesideLogo && (
+                  <div className="hidden flex-col leading-tight sm:flex">
+                    <span className="text-sm font-semibold">{brand.name}</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="ml-auto flex items-center gap-3">

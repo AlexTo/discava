@@ -50,7 +50,7 @@ const structuredData = (
   ...(course.description && { description: course.description }),
   url: `https://${context.host}/learn/${course.courseId}`,
   ...(image && { image }),
-  provider: { '@type': 'Organization', name: context.siteName },
+  provider: { '@type': 'Organization', name: context.brand.name },
   ...(course.instructors.length > 0 && {
     instructor: course.instructors.map((instructor) => ({
       '@type': 'Person',
@@ -81,7 +81,7 @@ export const renderCoursePage = (
   const description =
     course.description ??
     course.learningOutcomes[0] ??
-    `${course.title}, a course on ${context.siteName}.`;
+    `${course.title}, a course on ${context.brand.name}.`;
 
   const facts: [string, string][] = [
     ['Price', priceText(course.priceAmount, course.priceCurrency)],

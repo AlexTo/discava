@@ -72,6 +72,29 @@ describe('PortalShell’s header brand', () => {
     expect(screen.getByText('Acme Academy')).toBeInTheDocument();
   });
 
+  it('shows the name only when showNameBesideLogo is on; the alt always uses it', () => {
+    const brand = {
+      ...resolveBrand(
+        {
+          name: 'Acme Academy',
+          showNameBesideLogo: false,
+          colour: null,
+          logoKey: null,
+          iconKey: null,
+          shareImageKey: null,
+        },
+        'https://media.test/',
+      ),
+    };
+    render(
+      <BrandContextProvider value={brand}>{shell()}</BrandContextProvider>,
+    );
+    expect(
+      screen.getByRole('img', { name: 'Acme Academy logo' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Acme Academy')).not.toBeInTheDocument();
+  });
+
   it('does not crop a wide logo: it is contained, at the header height, up to four times as wide', () => {
     render(shell());
     const logo = screen.getByRole('img', { name: 'Discava logo' });

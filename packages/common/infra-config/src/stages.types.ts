@@ -291,9 +291,7 @@ export type StudentPortalComponentConfig = {
   certificateArn?: string;
   /** Let search engines index the public pages. Default `false`. When off, every response carries `noindex` */
   allowSearchEngineIndexing?: boolean;
-  /** Site name shown in page titles and social cards. Default `"Discava"` */
-  siteName?: string;
-  /** The stage's LinkedIn organisation page ID (digits). When set, certificates added to LinkedIn name that page; otherwise the site name is sent as text */
+  /** The stage's LinkedIn organisation page ID (digits). When set, certificates added to LinkedIn name that page; otherwise the platform name (set on the admin portal's Branding page) is sent as text */
   linkedInOrganizationId?: string;
   /** Reserved concurrency for the page renderer Lambda. Default `20` */
   pageRendererReservedConcurrency?: number;

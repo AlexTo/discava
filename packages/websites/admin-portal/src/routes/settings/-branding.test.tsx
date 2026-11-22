@@ -179,6 +179,112 @@ describe('the Branding page', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
+  it('refuses a blank or 51-character name, with its message, and disables Save', async () => {
+    const { user } = open();
+    const input = await screen.findByLabelText('Name');
+    expect(input).toHaveValue('Discava');
+    await user.clear(input);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The name must be 1–50 characters.',
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.type(input, 'x'.repeat(51));
+    expect(screen.getByRole('alert')).toHaveTextContent('1–50 characters');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.clear(input);
+    await user.type(input, 'Acme Academy');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('hides the name in the preview header only when the switch is off', async () => {
+    const { user } = open();
+    const input = await screen.findByLabelText('Name');
+    await user.clear(input);
+    await user.type(input, 'Acme Academy');
+    const header = () =>
+      screen.getByRole('img', { name: 'Acme Academy logo' }).parentElement!;
+    expect(header()).toHaveTextContent('Acme Academy');
+    await user.click(screen.getByLabelText('Show the name beside the logo'));
+    expect(header()).not.toHaveTextContent('Acme Academy');
+    // The share preview still names the platform.
+    expect(screen.getByText(/A page title · Acme Academy/)).toBeInTheDocument();
+  });
+
+  it('refuses a share image under 1200 × 630, without uploading it', async () => {
+    measureImage.mockResolvedValue({ width: 1000, height: 524 });
+    const { calls } = open();
+    await screen.findByLabelText('Upload share image');
+    choose('Upload share image', file('share.png', 'image/png'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /1000 × 524.*too small/,
+    );
+    expect(calls.some((c) => c.path === 'branding.createUploadUrl')).toBe(
+      false,
+    );
+  });
+
+  it('uploads a share image, previews it, and saves its key with the name', async () => {
+    measureImage.mockResolvedValue({ width: 1200, height: 630 });
+    const { calls, user } = open({
+      'branding.save': (input) => ({ ...none, brand: input, revision: 1 }),
+    });
+    await screen.findByLabelText('Upload share image');
+    choose('Upload share image', file('share.png', 'image/png', 5000));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect(
+      calls.find((c) => c.path === 'branding.createUploadUrl')?.input,
+    ).toEqual({
+      kind: 'share-image',
+      contentType: 'image/png',
+      contentLength: 5000,
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('img', { name: 'Share image preview' }),
+      ).toHaveAttribute('src', 'blob:preview'),
+    );
+    const input = screen.getByLabelText('Name');
+    await user.clear(input);
+    await user.type(input, 'Acme Academy');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.path === 'branding.save')?.input).toEqual({
+        expectedRevision: 0,
+        name: 'Acme Academy',
+        showNameBesideLogo: true,
+        colour: null,
+        logoKey: null,
+        iconKey: null,
+        shareImageKey: `brand/share-image/${NONCE}.png`,
+      }),
+    );
+  });
+
+  it('resets the share image and the name to the default in the form', async () => {
+    const { user } = open({
+      'branding.get': () => ({
+        ...none,
+        brand: {
+          ...none.brand,
+          name: 'Acme',
+          shareImageKey: `brand/share-image/${NONCE}.png`,
+        },
+        revision: 3,
+      }),
+    });
+    await screen.findByLabelText('Upload share image');
+    await user.click(screen.getByRole('button', { name: 'Reset to default' }));
+    expect(
+      screen.queryByRole('img', { name: 'Share image preview' }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: 'Reset name to default' }),
+    );
+    expect(screen.getByLabelText('Name')).toHaveValue('Discava');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
   it('shows an error when the upload itself fails', async () => {
     put.mockResolvedValue(new Response(null, { status: 403 }));
     open();
