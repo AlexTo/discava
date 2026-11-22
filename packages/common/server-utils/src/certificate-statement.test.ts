@@ -84,6 +84,39 @@ describe('assessmentStatement', () => {
     );
   });
 
+  it('counts graded assignments on their own line, after the quizzes', () => {
+    expect(
+      assessmentStatement(
+        quizzes({
+          assessedItemCount: 5,
+          assessedUploadCount: 2,
+          minUploadScorePercent: 60,
+        }) as any,
+      ),
+    ).toEqual([
+      'Completed all 14 items of the course.',
+      'Passed 3 assessed quizzes. Pass mark: 70%.',
+      'Graded assignments returned with at least 60%: 2.',
+      'Overall score: 80–89%.',
+    ]);
+  });
+
+  it('has no quiz line when only graded assignments were required', () => {
+    expect(
+      assessmentStatement({
+        ...none,
+        assessedItemCount: 1,
+        assessedUploadCount: 1,
+        minUploadScorePercent: 60,
+        scoreBand: 70,
+      } as any),
+    ).toEqual([
+      'Completed all 14 items of the course.',
+      'Graded assignments returned with at least 60%: 1.',
+      'Overall score: 70–79%.',
+    ]);
+  });
+
   it('adds the course length, singular for one hour', () => {
     expect(assessmentStatement({ ...none, courseHours: 12 } as any)).toEqual([
       'Completed all 14 items of the course.',

@@ -440,10 +440,80 @@ describe('certificate assessment and criteria invariants', () => {
     expect(of('certificate-met-criteria')).toHaveLength(1);
   });
 
+  describe('with a minimum upload score', () => {
+    const uploadAssessment = {
+      minUploadScorePercent: 60,
+      assessedItemCount: 1,
+      assessedItems: [
+        { contentItemId: 'work', kind: 'upload' as const, scorePercent: 70 },
+      ],
+      scoreBand: 70,
+      passMarkLowest: undefined,
+    };
+    const submission = (status: 'returned' | 'submitted' = 'returned') =>
+      ({
+        ...consistentTable().assignmentSubmissions[0],
+        userId: 'student',
+        courseId: 'c1',
+        contentItemId: 'work',
+        status,
+      }) as TableSnapshot['assignmentSubmissions'][number];
+    const issueUpload = (extra = {}) => {
+      const { passMarkLowest: _, ...assessment } = uploadAssessment;
+      issue({ ...assessment, ...extra } as never);
+    };
+
+    it('accepts an upload scored at the threshold with a submission', () => {
+      issueUpload();
+      table.assignmentSubmissions = [submission()];
+      expect(of('certificate-met-criteria')).toEqual([]);
+      // No pass marks, as no quiz was assessed.
+      expect(of('certificate-shape')).toEqual([]);
+    });
+
+    it('reports pass marks on a certificate that assessed no quiz', () => {
+      issueUpload({ passMarkLowest: 70, passMarkHighest: 70 });
+      expect(of('certificate-shape').join('\n')).toMatch(/lacks pass marks/);
+    });
+
+    it('accepts a submission reopened since issue', () => {
+      issueUpload();
+      table.assignmentSubmissions = [submission('submitted')];
+      expect(of('certificate-met-criteria')).toEqual([]);
+    });
+
+    it('reports an upload below the threshold', () => {
+      issueUpload({
+        assessedItems: [
+          { contentItemId: 'work', kind: 'upload', scorePercent: 59 },
+        ],
+      });
+      table.assignmentSubmissions = [submission()];
+      expect(of('certificate-met-criteria').join('\n')).toMatch(
+        /below the required 60%/,
+      );
+    });
+
+    it('reports an upload with no submission', () => {
+      issueUpload();
+      expect(of('certificate-met-criteria').join('\n')).toMatch(
+        /no submission/,
+      );
+    });
+
+    it('reports an upload listed without a minimum score', () => {
+      issueUpload({ minUploadScorePercent: undefined });
+      table.assignmentSubmissions = [submission()];
+      expect(of('certificate-met-criteria').join('\n')).toMatch(
+        /no score was required/,
+      );
+    });
+  });
+
   it('reports a listed quiz when quiz pass was not required', () => {
     issue({ ...quizAssessment, requireQuizPass: false });
     expect(of('certificate-met-criteria').join('\n')).toMatch(
-      /nothing was required/,
+      /quiz pass was not required/,
     );
   });
 

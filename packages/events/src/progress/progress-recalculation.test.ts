@@ -322,6 +322,46 @@ describe('studentsToRecalculate for certificate criteria', () => {
     expect(enrolled).not.toHaveBeenCalled();
   });
 
+  it('recalculates the student of a submission only when its grade or status changes', async () => {
+    enrolled.mockClear();
+    const submission = (
+      before: { [key: string]: unknown },
+      after: { [key: string]: unknown },
+    ) => {
+      const base = {
+        __edb_e__: 'assignmentSubmission',
+        courseId: 'course-1',
+        userId: 's1',
+      };
+      return record('MODIFY', { ...base, ...before }, { ...base, ...after });
+    };
+    const returned = { status: 'returned', points: 6, returnedAt: 'then' };
+
+    for (const change of [
+      submission({ status: 'submitted' }, returned),
+      submission(returned, { ...returned, points: 9 }),
+    ]) {
+      expect(asLists(await studentsToRecalculate([change], enrolled))).toEqual({
+        'course-1': ['s1'],
+      });
+    }
+    // A resubmission before the return changes none of the three.
+    expect(
+      asLists(
+        await studentsToRecalculate(
+          [
+            submission(
+              { status: 'submitted', file: 'a' },
+              { status: 'submitted', file: 'b' },
+            ),
+          ],
+          enrolled,
+        ),
+      ),
+    ).toEqual({});
+    expect(enrolled).not.toHaveBeenCalled();
+  });
+
   it('recalculates everyone enrolled when the criteria or the switch changes', async () => {
     for (const [before, after] of [
       [criteria(1), criteria(2)],

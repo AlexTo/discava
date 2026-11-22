@@ -176,7 +176,7 @@ describe('createContentItemVideoUrl', () => {
     it('lists the played version’s tracks, default first, with source and URL', async () => {
       withCaptions({
         captionTracks: [
-          track('es-ES'),
+          track('es-ES', { source: 'translated' }),
           track('fr-FR', { nonce: 'old' }),
           track('en-US', { isDefault: true, source: 'auto' }),
         ],
@@ -195,6 +195,7 @@ describe('createContentItemVideoUrl', () => {
           label: 'en-US',
           isDefault: true,
           source: 'auto',
+          machineTranslated: false,
           url: `https://example.cloudfront.net/${folder}/n1/captions/track-en-US.vtt`,
         },
         {
@@ -202,7 +203,8 @@ describe('createContentItemVideoUrl', () => {
           language: 'es-ES',
           label: 'es-ES',
           isDefault: false,
-          source: 'uploaded',
+          source: 'translated',
+          machineTranslated: true,
           url: `https://example.cloudfront.net/${folder}/n1/captions/track-es-ES.vtt`,
         },
       ]);

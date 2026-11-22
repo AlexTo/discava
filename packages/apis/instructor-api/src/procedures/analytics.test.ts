@@ -11,6 +11,7 @@ import {
   course as analyticsCourse,
   analyticsCourseProcedure,
   quiz as analyticsQuiz,
+  videoQuestions as analyticsVideoQuestions,
   courseSummaries,
 } from './analytics.js';
 
@@ -21,11 +22,13 @@ const {
   readCourseSummaries,
   readCourseAnalytics,
   readQuizAnalytics,
+  readVideoQuestionAnalytics,
   mockModule,
 } = await vi.hoisted(async () => ({
   readCourseSummaries: vi.fn(),
   readCourseAnalytics: vi.fn(),
   readQuizAnalytics: vi.fn(),
+  readVideoQuestionAnalytics: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     course: ['get'],
     courseInstructor: ['get', 'query.byInstructor'],
@@ -37,6 +40,7 @@ vi.mock('@discava/core-table', async (importActual) =>
     readCourseSummaries,
     readCourseAnalytics,
     readQuizAnalytics,
+    readVideoQuestionAnalytics,
   }),
 );
 
@@ -47,6 +51,7 @@ const router = t.router({
   courseSummaries,
   course: analyticsCourse,
   quiz: analyticsQuiz,
+  videoQuestions: analyticsVideoQuestions,
   probe,
 });
 
@@ -83,6 +88,7 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
       updatedAt: '2026-11-17T09:00:00.000Z',
       lessons: [],
       quizzes: [],
+      videoQuestions: [],
       daily: Array.from({ length: days }, (_, i) => ({
         date: `d${i}`,
         enrolments: 0,
@@ -102,6 +108,7 @@ beforeEach(() => {
     scoreBands: [],
     students: 0,
   });
+  readVideoQuestionAnalytics.mockResolvedValue({ questions: [] });
   courseInstructorGet.mockImplementation(
     ({ courseId, instructorId }: Record<string, string>) => ({
       go: async () => ({
@@ -129,6 +136,13 @@ describe('analyticsCourseProcedure: who may read a course’s analytics', () => 
       name: 'analytics.quiz',
       call: (c: ReturnType<typeof callAs>, id: string) =>
         c.quiz({ courseId: id, contentItemId: 'quiz-1' }).then(() => 'allowed'),
+    },
+    {
+      name: 'analytics.videoQuestions',
+      call: (c: ReturnType<typeof callAs>, id: string) =>
+        c
+          .videoQuestions({ courseId: id, contentItemId: 'video-1' })
+          .then(() => 'allowed'),
     },
   ];
 
@@ -419,6 +433,7 @@ describe('analytics.course', () => {
     });
     expect(result.lessons).toEqual([]);
     expect(result.quizzes).toEqual([]);
+    expect(result.videoQuestions).toEqual([]);
   });
 
   it('lists the course’s shown quizzes', async () => {
@@ -439,6 +454,28 @@ describe('analytics.course', () => {
         lessonId: 'l1',
         title: 'Checkpoint',
         students: 7,
+      },
+    ]);
+  });
+
+  it('lists the course’s shown videos with questions', async () => {
+    analytics({
+      videoQuestions: [
+        {
+          contentItemId: 'video-1',
+          lessonId: 'l1',
+          title: 'Intro',
+          questions: 2,
+        },
+      ],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.videoQuestions).toEqual([
+      {
+        contentItemId: 'video-1',
+        lessonId: 'l1',
+        title: 'Intro',
+        questions: 2,
       },
     ]);
   });
@@ -564,6 +601,7 @@ describe('analytics.course', () => {
       'lessons',
       'quizzes',
       'totals',
+      'videoQuestions',
     ]);
     expect(Object.keys(result.daily[0]).sort()).toEqual([
       'activated',
@@ -669,6 +707,92 @@ describe('analytics.quiz', () => {
     ]);
     expect(Object.keys(result.questions[0]).sort()).toEqual(
       ['attempts', 'misses', 'missRate', 'questionId', 'ranked', 'text'].sort(),
+    );
+  });
+});
+
+describe('analytics.videoQuestions', () => {
+  const figures = {
+    questions: [
+      {
+        questionId: 'q2',
+        text: 'Second',
+        atSeconds: null,
+        attempts: 8,
+        misses: 6,
+        missRate: 75,
+        ranked: true,
+      },
+      {
+        questionId: 'q1',
+        text: 'First',
+        atSeconds: 90,
+        attempts: 2,
+        misses: 1,
+        missRate: 50,
+        ranked: false,
+      },
+    ],
+  };
+
+  it('gives each question with its moment, answers, misses and rate', async () => {
+    readVideoQuestionAnalytics.mockResolvedValue(figures);
+    const result = await callAs().videoQuestions({
+      courseId: 'course-1',
+      contentItemId: 'video-1',
+    });
+
+    expect(readVideoQuestionAnalytics).toHaveBeenCalledWith(
+      expect.anything(),
+      'course-1',
+      'video-1',
+    );
+    expect(result).toEqual(figures);
+  });
+
+  it('answers NOT_FOUND for a video that is hidden, has no questions, is a quiz or does not exist', async () => {
+    readVideoQuestionAnalytics.mockResolvedValue(undefined);
+    await expect(
+      callAs().videoQuestions({
+        courseId: 'course-1',
+        contentItemId: 'other',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('reads nothing for a course the caller does not teach', async () => {
+    await expect(
+      callAs('instructor-2').videoQuestions({
+        courseId: 'course-1',
+        contentItemId: 'video-1',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(readVideoQuestionAnalytics).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed video id', async () => {
+    await expect(
+      callAs().videoQuestions({ courseId: 'course-1', contentItemId: '' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
+  it('contains no student identifier', async () => {
+    readVideoQuestionAnalytics.mockResolvedValue(figures);
+    const result = await callAs().videoQuestions({
+      courseId: 'course-1',
+      contentItemId: 'video-1',
+    });
+    expect(Object.keys(result)).toEqual(['questions']);
+    expect(Object.keys(result.questions[0]).sort()).toEqual(
+      [
+        'atSeconds',
+        'attempts',
+        'misses',
+        'missRate',
+        'questionId',
+        'ranked',
+        'text',
+      ].sort(),
     );
   });
 });

@@ -23,6 +23,15 @@ Completion itself is unchanged by the criteria: an enrolment still becomes `comp
 - **The rule**: `evaluateCertificateCriteria` in `core-table` is a pure function used by both the issuer and the reader (`certificate.requirements`, which the course home shows), so the page and the issuer can't disagree. With `requireQuizPass` on, every assessed quiz must be passed: its `passedAt` is set (and `passedAt` is permanent) **and** the student's best score reaches the quiz's *current* pass mark. So raising a pass mark can hold back a certificate that hasn't been issued yet, and lowering one can release it. An assessed quiz is an effectively visible quiz with a pass mark above 0; a quiz with a 0% pass mark is practice and is not assessed.
 - **Changing criteria on a live course**: the criteria read when a student is evaluated apply. A certificate already issued is never re-examined. Loosening issues certificates to everyone it makes qualify; tightening only affects students who haven't qualified yet. The instructor's control says this before saving.
 
+## Graded uploads
+
+A second criterion, `minUploadScorePercent` (a whole number from 1 to 100, absent when not required), sits in the same map and is set through the same `setCertificateCriteria`, which removes it when given `null`.
+
+- **The rule**: with it set, every effectively visible assignment is assessed. One is met when the student's submission is `returned` and `floor(points / pointsOutOf * 100)` is at least the minimum, where `pointsOutOf` is what the work was graded out of (the assignment's `maxPoints` when there is no grade to read it from). A submission that is missing is "not submitted", one not yet returned is "waiting to be graded", and one returned with fewer points is "below the score". A course with no visible assignment has nothing to meet.
+- **Regrading**: a submission's `status`, `points` or `returnedAt` changing recalculates that student, so a grade amended upwards issues the certificate, and a resubmission (which changes none of them) does nothing. A returned submission that an instructor reopens is waiting again and doesn't count until it is returned.
+- **What is recorded**: the certificate's `assessment` keeps `minUploadScorePercent`, `assessedUploadCount` and one `upload` entry per assignment in the internal list; the band is over quizzes and uploads together. The statement gains "Graded assignments returned with at least 60%: 2."
+- Submissions are read only when the criterion is set.
+
 ## What the certificate records
 The certificate copies the criteria it was issued under, with their `version`, into a read-only `assessment`, so what it describes never drifts when the course changes:
 
@@ -75,7 +84,7 @@ A **revoked** certificate shows "This certificate has been revoked and is no lon
 
 ## Invariants
 
-The invariant checks (see the spec's research R-10) hold that: a certificate's `assessment` is well formed and its counts, pass marks and band follow from the listed items; every listed quiz was passed by the student no later than the issue time, at or above its pass mark (`certificate-met-criteria`); a certificate is revoked exactly when its latest event is `revoked` (`certificate-status-matches-history`); every course has well-formed criteria; and a certificate still needs a completed (or dropped-after-completion) enrolment, revoked or not. Not violations: a completed enrolment with no certificate, a certificate that differs from the course's current criteria, and a listed quiz since hidden or given a higher pass mark.
+The invariant checks (see the spec's research R-10) hold that: a certificate's `assessment` is well formed and its counts, pass marks and band follow from the listed items; every listed quiz was passed by the student no later than the issue time, at or above its pass mark, and every listed upload scored at least the recorded minimum and still has a submission, even one reopened since (`certificate-met-criteria`); a certificate is revoked exactly when its latest event is `revoked` (`certificate-status-matches-history`); every course has well-formed criteria; and a certificate still needs a completed (or dropped-after-completion) enrolment, revoked or not. Not violations: a completed enrolment with no certificate, a certificate that differs from the course's current criteria, and a listed quiz since hidden or given a higher pass mark.
 
 ## Sharing and verifying
 

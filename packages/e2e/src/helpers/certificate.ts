@@ -75,6 +75,29 @@ export const setCertificateCriteria = async (
   await expect(checkbox).toBeChecked({ checked: requireQuizPass });
 };
 
+// Ticks "Require graded assignments to be returned with at least" with
+// `percent` in the course editor at `courseUrl`, and waits for it to be saved.
+export const setGradedUploadCriterion = async (
+  page: Page,
+  courseUrl: string,
+  percent: number,
+) => {
+  await page.goto(courseUrl);
+  const checkbox = page.getByRole('checkbox', {
+    name: 'Require graded assignments to be returned with at least',
+  });
+  const field = page.getByRole('spinbutton', {
+    name: 'Minimum assignment score, percent',
+  });
+  await expect(checkbox).toBeVisible();
+  await field.fill(String(percent));
+  await checkbox.check();
+  // Saved, not just shown: it is still there after a reload.
+  await page.reload();
+  await expect(checkbox).toBeChecked();
+  await expect(field).toHaveValue(String(percent));
+};
+
 // A student enrols in the course `title` (signing in as `user` first, when
 // given) and completes its only reading, and waits for the course to say so.
 export const completeCourse = async (

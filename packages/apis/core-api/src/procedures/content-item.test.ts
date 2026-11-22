@@ -293,7 +293,7 @@ describe('contentItem.videoUrl', () => {
 
     it('lists the played version’s tracks, default first, as plain URLs', async () => {
       db.contentItem.captionTracks = [
-        track('es-ES'),
+        track('es-ES', { source: 'translated' }),
         track('fr-FR', { nonce: 'older-nonce' }),
         track('en-US', { isDefault: true, source: 'auto' }),
       ];
@@ -308,6 +308,7 @@ describe('contentItem.videoUrl', () => {
           language: 'en-US',
           label: 'English',
           isDefault: true,
+          machineTranslated: false,
           url: `https://media.example.com/${FOLDER}/nonce-1/captions/track-en-US.vtt`,
         },
         {
@@ -315,8 +316,27 @@ describe('contentItem.videoUrl', () => {
           language: 'es-ES',
           label: 'es-ES',
           isDefault: false,
+          machineTranslated: true,
           url: `https://media.example.com/${FOLDER}/nonce-1/captions/track-es-ES.vtt`,
         },
+      ]);
+    });
+
+    it('flags only translated tracks as machine-translated', async () => {
+      db.contentItem.captionTracks = [
+        track('en-US', { isDefault: true, source: 'auto' }),
+        track('es-ES', { source: 'translated' }),
+        track('fr-FR', { source: 'uploaded' }),
+      ];
+      db.contentItem.captionTracksRev = 5;
+      db.contentItem.captionsStatus = 'ready';
+
+      const { captions } = await call().videoUrl(ref);
+
+      expect(captions.map((c) => [c.language, c.machineTranslated])).toEqual([
+        ['en-US', false],
+        ['es-ES', true],
+        ['fr-FR', false],
       ]);
     });
 
