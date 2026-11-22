@@ -8,7 +8,9 @@ import {
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { chooseCaptionLanguages } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
+import { createCourse } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
@@ -271,4 +273,40 @@ test('a long description does not make a tall card on a phone', async ({
 
   await card(longTitle).getByRole('link', { name: longTitle }).click();
   await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
+});
+
+test('the caption languages card fits a phone and each checkbox is one target', async ({
+  page,
+}) => {
+  const title = `${uniqueName('E2E phone caption course')} ${'x'.repeat(60)}`;
+
+  await page.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(page, newUser('Tess', ['instructor']));
+  await createCourse(page, { title, summary: 'A course for a phone.' });
+  const card = page.getByRole('region', { name: 'Caption languages' });
+  await expect(card.getByRole('checkbox').first()).toBeVisible();
+
+  await test.step('nothing scrolls sideways', async () => {
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'caption languages at phone width');
+  });
+
+  await test.step('a checkbox and its label touch, and both are at least 24px', async () => {
+    const box = card.getByRole('checkbox').first();
+    const label = card.locator(`label[for="${await box.getAttribute('id')}"]`);
+    const [boxRect, labelRect] = await Promise.all([
+      box.boundingBox(),
+      label.boundingBox(),
+    ]);
+    expect(boxRect?.width ?? 0).toBeGreaterThanOrEqual(16);
+    expect(labelRect?.height ?? 0).toBeGreaterThanOrEqual(24);
+    const gap =
+      (labelRect?.x ?? 0) - ((boxRect?.x ?? 0) + (boxRect?.width ?? 0));
+    expect(gap).toBeLessThanOrEqual(1);
+  });
+
+  await test.step('choosing languages saves and still fits', async () => {
+    await chooseCaptionLanguages(page, title, ['Spanish']);
+    await expectNoSidewaysScroll(page);
+  });
 });
