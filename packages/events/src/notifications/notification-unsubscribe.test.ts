@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const createCoreTableService = vi.hoisted(() =>
   vi.fn(async () => {
-    throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
+    throw new Error('Missing deploy-time setting DISCAVA_DYNAMODB_CORE_TABLE');
   }),
 );
 vi.mock('@discava/core-table', async (importOriginal) => ({

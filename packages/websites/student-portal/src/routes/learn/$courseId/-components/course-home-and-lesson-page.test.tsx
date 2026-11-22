@@ -857,6 +857,43 @@ describe('LessonPage', () => {
     });
   });
 
+  it('leaves a modified click on a step to the browser, to open a new tab', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    openLesson('lesson-1');
+
+    const steps = within(
+      await screen.findByRole('navigation', { name: 'Lesson steps' }),
+    );
+    const step = steps.getAllByRole('link')[0];
+    const click = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      ctrlKey: true,
+    });
+    act(() => {
+      step.dispatchEvent(click);
+    });
+
+    expect(click.defaultPrevented).toBe(false);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("opened at a step's address, goes to that item once it has loaded", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    renderWithCoreApi(<LessonPage courseId="course-1" lessonId="lesson-1" />, {
+      handlers: handlers(),
+      path: '/#item-text-1',
+    });
+
+    const notes = await item('Notes');
+    await waitFor(() => expect(notes).toBe(document.activeElement));
+    expect(scrollIntoView.mock.contexts).toContain(notes);
+  });
+
   it('says a video is still processing, without asking for its URL', async () => {
     const { calls } = openLesson('lesson-1', {
       'course.view': () =>

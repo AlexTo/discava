@@ -83,12 +83,10 @@ On `discava-production`, self sign-up is on: people who sign up are added to the
 Courses are organised by categories that an admin manages. Either sign in to the admin portal and create them, or write the starting set (Science, Technology, Mathematics, Communication, Business) from your machine:
 
 ```sh
-APP_ID=$(aws cloudformation describe-stacks \
-  --stack-name discava-development-Data \
-  --query 'Stacks[0].Outputs[?contains(OutputKey, `RuntimeConfigApplicationId`)].OutputValue' \
-  --output text)
+TABLE=$(aws cloudformation describe-stacks --stack-name discava-development-Data \
+  --query 'Stacks[0].Outputs[?contains(OutputKey, `CoreTableName`)].OutputValue' --output text)
 
-RUNTIME_CONFIG_APP_ID=$APP_ID pnpm nx run @discava/tooling-deploy:seed-categories
+DISCAVA_DYNAMODB_CORE_TABLE="{\"tableName\":\"$TABLE\"}" pnpm nx run @discava/tooling-deploy:seed-categories
 ```
 
 It uses your AWS credentials and region, and skips categories that already exist.

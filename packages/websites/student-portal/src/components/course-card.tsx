@@ -2,7 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,
@@ -30,7 +29,7 @@ import { RatingSummary } from './rating-summary';
  */
 export function CourseCard({ course }: { course: DisplayCourse }) {
   return (
-    <Card className="group overflow-hidden pt-0 transition-[translate,border-color,box-shadow] hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/40 hover:shadow-lg">
+    <Card className="group relative overflow-hidden pt-0 transition-[translate,border-color,box-shadow] hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/40 hover:shadow-lg">
       <CourseThumbnail
         course={course}
         iconClassName="transition-transform group-hover:scale-110"
@@ -45,7 +44,15 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
             </span>
           )}
         </div>
-        <CardTitle className="mt-2">{course.title}</CardTitle>
+        <CardTitle className="mt-2 leading-snug">
+          <Link
+            to="/learn/$courseId"
+            params={{ courseId: course.courseId }}
+            className="after:absolute after:inset-0"
+          >
+            {course.title}
+          </Link>
+        </CardTitle>
         {course.priceAmount !== undefined && course.priceCurrency ? (
           <p className="text-sm font-semibold">
             {formatPrice(course.priceAmount, course.priceCurrency)}
@@ -55,7 +62,7 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
           average={course.ratingAverage}
           count={course.ratingCount}
         />
-        <CardDescription className="leading-6">
+        <CardDescription className="line-clamp-3 leading-6">
           {course.description}
         </CardDescription>
       </CardHeader>
@@ -71,15 +78,9 @@ export function CourseCard({ course }: { course: DisplayCourse }) {
             <span>{LANGUAGE_LABELS[course.language] ?? course.language}</span>
           )}
         </span>
-        <Button variant="ghost" size="sm" asChild>
-          <Link
-            to="/learn/$courseId"
-            params={{ courseId: course.courseId }}
-            aria-label={`Preview ${course.title}`}
-          >
-            Learn more
-          </Link>
-        </Button>
+        <span className="text-sm font-medium group-hover:underline">
+          Learn more
+        </span>
       </CardContent>
     </Card>
   );

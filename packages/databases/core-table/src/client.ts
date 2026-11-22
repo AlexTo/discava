@@ -2,14 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-
-// Generated: must match runtimeConfigKey in config.json
-const runtimeConfigKey = 'CoreTable';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // config.json is only present in local dev (not included in the deployed bundle); guard with LOCAL_DEV check
@@ -41,34 +37,29 @@ export const getDynamoDBClient = (): DynamoDBClient => {
   return _client;
 };
 
-type DynamoDBConfig = {
-  tableName: string;
-};
-
-let _tableName: string | undefined;
+// The deploy-time setting the CoreTable construct binds to every function
+// that uses the table (common-constructs' `bindSettings`). The name is
+// `settingEnvName('dynamodb', runtimeConfigKey)`; common-server-utils depends
+// on this package, so it can't be imported here.
+const SETTING = 'DISCAVA_DYNAMODB_CORE_TABLE';
 
 export const resolveTableName = async (): Promise<string> => {
   if (process.env.LOCAL_DEV === 'true') {
     const { tableName } = localDev();
     return tableName;
   }
-  if (_tableName === undefined) {
-    const appId = process.env.RUNTIME_CONFIG_APP_ID;
-    if (!appId) {
-      throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
-    }
-    const config = await getAppConfig<{
-      [key: string]: DynamoDBConfig | undefined;
-    }>('dynamodb', {
-      application: appId,
-      environment: 'default',
-      transform: 'json',
-    });
-    const tableName = config?.[runtimeConfigKey]?.tableName;
-    if (!tableName) {
-      throw new Error('Could not resolve table name from runtime config');
-    }
-    _tableName = tableName;
+  const raw = process.env[SETTING];
+  if (!raw) {
+    throw new Error(`Missing deploy-time setting ${SETTING}`);
   }
-  return _tableName!;
+  let tableName: string | undefined;
+  try {
+    tableName = (JSON.parse(raw) as { tableName?: string }).tableName;
+  } catch {
+    throw new Error(`Invalid deploy-time setting ${SETTING}`);
+  }
+  if (!tableName) {
+    throw new Error(`Could not resolve table name from ${SETTING}`);
+  }
+  return tableName;
 };

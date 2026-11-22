@@ -53,6 +53,14 @@ describe('the student portal page renderer', () => {
     });
   });
 
+  it("is told its stage's settings parameter, not an AppConfig application", () => {
+    const environment = rendererEnvironment(synth({})('Websites'));
+    expect(environment.PAGE_RENDERER_PARAMETER).toBe(
+      '/discava-test/page-renderer',
+    );
+    expect(environment).not.toHaveProperty('RUNTIME_CONFIG_APP_ID');
+  });
+
   it('serves four paths from a function URL that only CloudFront can call', () => {
     const websites = synth({})('Websites');
     websites.hasResourceProperties('AWS::Lambda::Url', { AuthType: 'AWS_IAM' });
@@ -102,7 +110,7 @@ describe('the student portal page renderer', () => {
     expect(policies).not.toContain('s3:ListBucket');
   });
 
-  it('keeps the table and AppConfig grants in Data, and Websites free of imports', () => {
+  it('keeps the table and settings parameter grants in Data, and Websites free of imports', () => {
     const stack = synth(stageConfig('discava-production'));
     expect(JSON.stringify(stack('Websites').toJSON())).not.toContain(
       'Fn::ImportValue',
@@ -123,8 +131,8 @@ describe('the student portal page renderer', () => {
     expect(actions).toContain('dynamodb:GetItem');
     expect(actions).toContain('dynamodb:Query');
     expect(actions).toContain('kms:Decrypt');
-    expect(actions).toContain('appconfig:GetLatestConfiguration');
-    expect(actions).toContain('appconfig:StartConfigurationSession');
+    expect(actions).toContain('ssm:GetParameter');
+    expect(actions.some((a) => a.startsWith('appconfig:'))).toBe(false);
     expect(actions.some((a) => a === 'dynamodb:PutItem')).toBe(false);
   });
 });

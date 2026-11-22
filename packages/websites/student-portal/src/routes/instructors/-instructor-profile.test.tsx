@@ -65,8 +65,33 @@ describe('/instructors/$handle', () => {
     expect(within(section).getByText('4.5')).toBeInTheDocument();
     expect(within(section).getByText('No ratings yet')).toBeInTheDocument();
     expect(
-      within(section).getByRole('link', { name: 'Preview Linear Algebra' }),
+      within(section).getByRole('link', { name: 'Linear Algebra' }),
     ).toHaveAttribute('href', '/learn/course-1');
+  });
+
+  it('draws the picture at its full size, not the large avatar size', async () => {
+    const { container } = open();
+    await screen.findByText('Gil Strang');
+    const avatar = container.querySelector('[data-slot="avatar"]');
+    expect(avatar).toHaveClass('size-28');
+    expect(avatar).not.toHaveAttribute('data-size', 'lg');
+  });
+
+  it('says so when there are no published courses, and not otherwise', async () => {
+    open();
+    await screen.findByRole('region', { name: 'Courses by Gil Strang' });
+    expect(screen.queryByText('No published courses yet.')).toBeNull();
+  });
+
+  it('says there are no published courses yet for an instructor without any', async () => {
+    open(() => ({ ...profile, courses: [] }));
+    const section = await screen.findByRole('region', {
+      name: 'Courses by Gil Strang',
+    });
+    expect(
+      within(section).getByText('No published courses yet.'),
+    ).toBeInTheDocument();
+    expect(within(section).queryByRole('link')).toBeNull();
   });
 
   it('sets the document title to the display name', async () => {

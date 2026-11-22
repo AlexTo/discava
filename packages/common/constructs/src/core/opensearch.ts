@@ -31,6 +31,7 @@ import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { RuntimeConfig } from './runtime-config.js';
+import { addSetting } from './settings.js';
 
 /** One index's settings/mappings, as the search package's manifest holds it. */
 export interface OpenSearchIndexManifestEntry {
@@ -237,6 +238,7 @@ const COLLECTION_NAME_PATTERN = new RegExp(
 export abstract class OpenSearchCollection extends Construct {
   public readonly collection: CfnCollection;
   private readonly collectionName: string;
+  private readonly runtimeConfigKey: string;
   // One entry per grantee: the same role can be granted more than once (the
   // shared router Lambda backs many procedures), and all its grants share
   // its one policy.
@@ -270,6 +272,7 @@ export abstract class OpenSearchCollection extends Construct {
       );
     }
     this.collectionName = collectionName;
+    this.runtimeConfigKey = runtimeConfigKey;
 
     const key: IKey | undefined = enableKmsEncryption
       ? (encryptionKey ??
@@ -351,6 +354,13 @@ export abstract class OpenSearchCollection extends Construct {
     );
   }
 
+  /** Gives `fn` the collection's endpoint as its deploy-time `opensearch` setting. */
+  public bindSettings(fn: Function): void {
+    addSetting(fn, 'opensearch', this.runtimeConfigKey, {
+      endpoint: this.collection.attrCollectionEndpoint,
+    });
+  }
+
   private grant(
     grantee: IRole,
     indexPermissions: readonly string[],
@@ -429,15 +439,11 @@ export abstract class OpenSearchCollection extends Construct {
       code,
       timeout: Duration.minutes(5),
       tracing: Tracing.ACTIVE,
-      // The collection's endpoint, directly: this runs while this stack
-      // deploys, before RuntimeConfig's AppConfig content (deployed last)
-      // exists to look it up in. CKV_AWS_45 is suppressed below: checkov's
-      // secret scan trips on a __file__ key its own parser injects (the
-      // CDK-hashed template path), not on this value.
-      environment: {
-        OPENSEARCH_ENDPOINT: this.collection.attrCollectionEndpoint,
-      },
     });
+    // The collection's endpoint, as every other function gets it. CKV_AWS_45
+    // is suppressed below: checkov's secret scan trips on a __file__ key its
+    // own parser injects (the CDK-hashed template path), not on this value.
+    this.bindSettings(handler);
 
     Grant.addToPrincipal({
       grantee: handler,
