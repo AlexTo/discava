@@ -202,7 +202,7 @@ test('the instructor and an administrator revoke and restore a certificate from 
     await adminPage.getByLabel('Reason').selectOption('refunded');
     await adminPage.getByRole('button', { name: 'Revoke certificate' }).click();
     await expect(
-      adminPage.getByText(/^Revoked on .*: Order refunded/),
+      adminPage.getByText(/^Revoked on \S+: Order refunded$/),
     ).toBeVisible();
     await screenshot(adminPage, 'admin-certificate-revoked');
   });
