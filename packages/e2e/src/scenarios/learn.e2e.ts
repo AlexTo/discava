@@ -221,7 +221,7 @@ test('a quiz that fails to load offers to try again', async ({ page }) => {
       "Couldn't reach Discava. Check your connection and try again.",
     ),
   ).toBeVisible();
-  await screenshot(page, 'quiz load error with Try again');
+  await screenshot(page, 'quiz load error with Try again under the message');
 
   await page.unroute('**/quiz.view*', fail);
   await page.getByRole('button', { name: 'Try again' }).click();
