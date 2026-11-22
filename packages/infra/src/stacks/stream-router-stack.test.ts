@@ -303,6 +303,92 @@ describe('caption translation', () => {
   });
 });
 
+describe('brand publishing', () => {
+  const template = synth({})('StreamRouter');
+  const brandRole = () => {
+    const fn = Object.values(
+      template.findResources('AWS::Lambda::Function'),
+    ).find((resource) =>
+      JSON.stringify(resource.Properties.Environment ?? {}).includes(
+        'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+      ),
+    );
+    return (fn?.Properties.Role as { 'Fn::GetAtt': string[] })[
+      'Fn::GetAtt'
+    ][0] as string;
+  };
+  const statements = () =>
+    Object.values(template.findResources('AWS::IAM::Policy'))
+      .filter((policy) =>
+        (
+          policy as { Properties: { Roles: { Ref: string }[] } }
+        ).Properties.Roles.some(({ Ref }) => Ref === brandRole()),
+      )
+      .flatMap(
+        (policy) =>
+          (
+            policy as {
+              Properties: {
+                PolicyDocument: {
+                  Statement: { Action: string | string[]; Resource: unknown }[];
+                };
+              };
+            }
+          ).Properties.PolicyDocument.Statement,
+      );
+
+  it('has a function, a queue, a failure queue and an alarm for the feature', () => {
+    const ids = (type: string) => Object.keys(template.findResources(type));
+    expect(
+      ids('AWS::Lambda::Function').some((id) =>
+        id.startsWith('BrandPublishing'),
+      ),
+    ).toBe(true);
+    expect(
+      ids('AWS::SQS::Queue').some((id) => id.includes('BrandPublishingQueue')),
+    ).toBe(true);
+    expect(
+      ids('AWS::SQS::Queue').some((id) =>
+        id.includes('BrandPublishingFailures'),
+      ),
+    ).toBe(true);
+    expect(
+      ids('AWS::CloudWatch::Alarm').some((id) =>
+        id.includes('BrandPublishingFailuresAlarm'),
+      ),
+    ).toBe(true);
+  });
+
+  it('is passed to the stream router for the brand-publishing feature', () => {
+    expect(JSON.stringify(template.toJSON())).toContain('brand-publishing');
+  });
+
+  it('can put brand/brand.json and nothing else in the bucket', () => {
+    const s3 = statements().filter(({ Action }) =>
+      [Action].flat().some((action) => action.startsWith('s3:')),
+    );
+    const writes = s3.filter(({ Action }) =>
+      [Action].flat().some((action) => action.startsWith('s3:Put')),
+    );
+    expect(writes.length).toBeGreaterThan(0);
+    for (const { Resource } of writes) {
+      expect(JSON.stringify(Resource)).toContain('/brand/brand.json');
+    }
+    for (const { Action } of s3) {
+      for (const action of [Action].flat()) {
+        expect(action).not.toMatch(/^s3:(Delete|GetObject|List)/);
+      }
+    }
+  });
+
+  it('may use the bucket key to write, and the table only to read', () => {
+    const actions = statements().flatMap(({ Action }) => [Action].flat());
+    expect(actions.some((action) => action.startsWith('kms:'))).toBe(true);
+    expect(actions).not.toContain('dynamodb:PutItem');
+    expect(actions).not.toContain('dynamodb:UpdateItem');
+  });
+});
+
 describe('deploy-time settings per function', () => {
   const template = synth({})('StreamRouter');
   // Function logical-ID prefix to the settings its code reads.
@@ -324,6 +410,10 @@ describe('deploy-time settings per function', () => {
     AnalyticsUpdate: ['DISCAVA_DYNAMODB_CORE_TABLE'],
     NotificationDelivery: ['DISCAVA_DYNAMODB_CORE_TABLE'],
     EarningsRecording: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    BrandPublishing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_PUBLIC_MEDIA_BUCKET',
+    ],
     CaptionTranslation: [
       'DISCAVA_DYNAMODB_CORE_TABLE',
       'DISCAVA_S3_LESSON_MEDIA_BUCKET',

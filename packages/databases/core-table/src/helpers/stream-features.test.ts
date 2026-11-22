@@ -5,6 +5,10 @@
 import { describe, expect, it } from 'vitest';
 import { createCoreTableService } from '../service.js';
 import {
+  BRAND_STREAM_FILTERS,
+  matchesBrandStreamFilters,
+} from './brand-stream.js';
+import {
   EARNINGS_STREAM_FILTERS,
   matchesEarningsStreamFilters,
 } from './earnings-stream.js';
@@ -48,6 +52,8 @@ const SAMPLE = [
   record('INSERT', 'NewImage', 'notificationBroadcast'),
   record('INSERT', 'NewImage', 'order'),
   record('MODIFY', 'NewImage', 'order'),
+  record('INSERT', 'NewImage', 'platformBrand'),
+  record('MODIFY', 'NewImage', 'platformBrand'),
 ];
 
 describe('the earnings entities', () => {
@@ -90,6 +96,41 @@ describe('the earnings entities', () => {
       }
     },
   );
+});
+
+describe('the platform brand', () => {
+  it.each(['INSERT', 'MODIFY'])(
+    'routes a %s to brand publishing only',
+    (eventName) => {
+      expect(
+        featuresFor(record(eventName, 'NewImage', 'platformBrand')),
+      ).toEqual(['brand-publishing']);
+    },
+  );
+
+  it('routes a removal to no feature', () => {
+    expect(featuresFor(record('REMOVE', 'OldImage', 'platformBrand'))).toEqual(
+      [],
+    );
+  });
+
+  it('is matched by no other feature’s filters', () => {
+    for (const feature of STREAM_FEATURES.filter(
+      ({ name }) => name !== 'brand-publishing',
+    )) {
+      for (const filter of feature.filters) {
+        expect(filter.entities).not.toContain('platformBrand');
+      }
+    }
+    expect(
+      BRAND_STREAM_FILTERS.every(({ entities }) =>
+        entities.every((entity) => entity === 'platformBrand'),
+      ),
+    ).toBe(true);
+    expect(
+      matchesBrandStreamFilters(record('MODIFY', 'NewImage', 'order')),
+    ).toBe(false);
+  });
 });
 
 describe('featuresFor', () => {

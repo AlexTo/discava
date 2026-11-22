@@ -143,6 +143,7 @@ export class ApplicationStage extends Stage {
       coreTable: data.coreTable,
       searchCollection: data.searchCollection,
       lessonMediaBucket: data.lessonMediaBucket,
+      publicMediaBucket: data.publicMediaBucket,
       notifications,
       notificationUnsubscribeSecret: data.notificationUnsubscribeSecret,
       portalUrls: websites.portalUrls,

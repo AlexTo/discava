@@ -1228,6 +1228,9 @@ importers:
       '@aws-sdk/client-translate':
         specifier: 'catalog:'
         version: 3.1164.0
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../common/branding
       '@discava/common-server-utils':
         specifier: workspace:*
         version: link:../common/server-utils

@@ -116,6 +116,11 @@ export {
   isLateSubmission,
 } from './helpers/assignment-submission.js';
 export {
+  BRAND_STREAM_FILTERS,
+  type BrandStreamRecord,
+  matchesBrandStreamFilters,
+} from './helpers/brand-stream.js';
+export {
   applyCaptionChange,
   CAPTIONS_PENDING_TIMEOUT_MS,
   type CaptionChange,
