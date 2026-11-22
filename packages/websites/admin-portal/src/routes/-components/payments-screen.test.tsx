@@ -99,6 +99,17 @@ describe('the Payments page', () => {
     ).toBeInTheDocument();
   });
 
+  it('scrolls the recent changes inside a named, focusable region', async () => {
+    render(active);
+
+    const region = await screen.findByRole('region', {
+      name: 'Recent changes',
+    });
+    expect(region).toHaveAttribute('tabindex', '0');
+    expect(region).toHaveClass('overflow-x-auto');
+    expect(within(region).getByRole('table')).toHaveClass('min-w-[36rem]');
+  });
+
   it('disables the buttons and polls while a change is in progress', async () => {
     const rendered = render({ ...active, state: 'changing' });
 

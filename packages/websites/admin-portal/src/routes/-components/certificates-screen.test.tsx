@@ -144,8 +144,36 @@ describe('the Certificates screen', () => {
     const rendered = render({ 'certificate.get': () => revoked });
     await lookUp(rendered);
 
-    expect(
-      await screen.findByText(/by An administrator.*Note: Chargeback/),
-    ).toBeInTheDocument();
+    const note = await screen.findByText('Note: Chargeback');
+    expect(note).toHaveClass('block', 'break-words');
+    expect(note.parentElement).toHaveTextContent(/by An administrator/);
+  });
+
+  it('wraps a long learner name, course title and note', async () => {
+    const word = 'x'.repeat(70);
+    const rendered = render({
+      'certificate.get': () => ({
+        ...revoked,
+        learnerName: 'Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel',
+        courseTitle: `Course ${word}`,
+        history: [
+          { ...revoked.history[0], note: `${'n'.repeat(500)} ${word}` },
+        ],
+      }),
+    });
+    await lookUp(rendered);
+
+    const details = (await screen.findByText(/Featherstonehaugh/))
+      .parentElement;
+    expect(details).toHaveClass(
+      'min-w-0',
+      'flex-1',
+      'basis-full',
+      'break-words',
+      'sm:basis-0',
+    );
+    expect(details?.parentElement).toHaveClass('flex-wrap');
+    expect(screen.getByText(valid.certificateId)).toHaveClass('break-all');
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
   });
 });

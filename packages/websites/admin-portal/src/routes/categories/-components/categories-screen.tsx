@@ -122,8 +122,8 @@ export function CategoriesScreen() {
         </ErrorAlert>
       )}
       {categories.data && (
-        <table className="w-full max-w-3xl text-left text-sm">
-          <thead className="border-b text-muted-foreground">
+        <table className="w-full max-w-3xl text-left text-sm max-sm:block">
+          <thead className="border-b text-muted-foreground max-sm:sr-only">
             <tr>
               <th className="py-2 font-medium">Name</th>
               <th className="py-2 font-medium">Slug</th>
@@ -132,20 +132,27 @@ export function CategoriesScreen() {
               <th className="py-2" />
             </tr>
           </thead>
-          <tbody>
+          <tbody className="max-sm:block">
             {categories.data.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-4 text-muted-foreground">
+                <td
+                  colSpan={5}
+                  className="py-4 text-muted-foreground max-sm:block"
+                >
                   No categories yet.
                 </td>
               </tr>
             )}
             {categories.data.map((category) => (
-              <tr key={category.id} className="border-b">
-                <td className="py-2">
+              <tr
+                key={category.id}
+                className="border-b max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-x-3 max-sm:gap-y-1 max-sm:py-3 max-sm:[grid-template-areas:'name_name'_'slug_slug'_'status_count'_'actions_actions']"
+              >
+                <td className="min-w-0 break-words py-2 [overflow-wrap:anywhere] max-sm:block max-sm:py-0 max-sm:[grid-area:name]">
                   {renaming?.id === category.id ? (
-                    <form className="flex gap-2" onSubmit={onRename}>
+                    <form className="flex flex-wrap gap-2" onSubmit={onRename}>
                       <Input
+                        className="min-w-0 flex-1 basis-40"
                         aria-label={`New name for ${category.name}`}
                         value={renaming.name}
                         maxLength={60}
@@ -180,8 +187,11 @@ export function CategoriesScreen() {
                     category.name
                   )}
                 </td>
-                <td className="py-2 font-mono text-xs">{category.slug}</td>
-                <td className="py-2">
+                <td className="break-all py-2 font-mono text-xs max-sm:block max-sm:py-0 max-sm:[grid-area:slug]">
+                  <span className="sm:sr-only">Slug: </span>
+                  {category.slug}
+                </td>
+                <td className="py-2 max-sm:block max-sm:py-0 max-sm:[grid-area:status]">
                   <Badge
                     variant={
                       category.status === 'active' ? 'secondary' : 'outline'
@@ -190,9 +200,12 @@ export function CategoriesScreen() {
                     {category.status === 'active' ? 'Active' : 'Archived'}
                   </Badge>
                 </td>
-                <td className="py-2">{category.courseCount}</td>
-                <td className="py-2 text-right">
-                  <div className="flex justify-end gap-2">
+                <td className="py-2 max-sm:block max-sm:py-0 max-sm:[grid-area:count]">
+                  <span className="sm:sr-only">Courses: </span>
+                  {category.courseCount}
+                </td>
+                <td className="py-2 text-right max-sm:block max-sm:py-0 max-sm:text-left max-sm:[grid-area:actions]">
+                  <div className="flex flex-wrap justify-end gap-2 max-sm:justify-start">
                     <Button
                       size="sm"
                       variant="outline"

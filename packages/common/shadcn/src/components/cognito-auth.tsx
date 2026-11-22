@@ -23,6 +23,11 @@ export interface CognitoAuthProps extends PropsWithChildren {
    * router, so it navigates however the portal can at that point.
    */
   onReturn: (path: string) => void;
+  /**
+   * Shown while signing in or redirecting to sign in, in place of a bare
+   * spinner.
+   */
+  fallback?: React.ReactNode;
 }
 
 /**
@@ -34,6 +39,7 @@ const CognitoAuth: React.FC<CognitoAuthProps> = ({
   children,
   autoSignIn = false,
   onReturn,
+  fallback,
 }) => {
   const { cognitoProps, localOidc } = useRuntimeConfig();
 
@@ -67,7 +73,7 @@ const CognitoAuth: React.FC<CognitoAuthProps> = ({
 
   return (
     <AuthProvider {...cognitoAuthConfig}>
-      <CognitoAuthInternal autoSignIn={autoSignIn}>
+      <CognitoAuthInternal autoSignIn={autoSignIn} fallback={fallback}>
         {children}
       </CognitoAuthInternal>
     </AuthProvider>
@@ -75,8 +81,8 @@ const CognitoAuth: React.FC<CognitoAuthProps> = ({
 };
 
 const CognitoAuthInternal: React.FC<
-  PropsWithChildren<{ autoSignIn: boolean }>
-> = ({ children, autoSignIn }) => {
+  PropsWithChildren<{ autoSignIn: boolean; fallback?: React.ReactNode }>
+> = ({ children, autoSignIn, fallback }) => {
   const auth = useAuth();
 
   useEffect(() => {
@@ -105,7 +111,7 @@ const CognitoAuthInternal: React.FC<
   // (`activeNavigator`): keep that page, e.g. the student portal's "Signing
   // you in…", on screen until the browser leaves.
   if (autoSignIn || (auth.isLoading && !auth.activeNavigator)) {
-    return <Spinner />;
+    return fallback ?? <Spinner />;
   }
 
   return children;
