@@ -74,6 +74,25 @@ const forEachLimited = async <T>(
   }
 };
 
+// The video items under a lesson or module: a content item primary-index
+// query by course, module and, for a lesson, lesson, every page.
+const videoItemsUnder = async (
+  coreTable: Awaited<ReturnType<typeof createCoreTableService>>,
+  key: { courseId: string; moduleId: string; lessonId?: string },
+): Promise<TranscriptItemKey[]> => {
+  const { data } = await coreTable.entities.contentItem.query
+    .primary(key)
+    .go({ pages: 'all' });
+  return data
+    .filter((record) => record.type === 'video')
+    .map(({ courseId, moduleId, lessonId, contentItemId }) => ({
+      courseId,
+      moduleId,
+      lessonId,
+      contentItemId,
+    }));
+};
+
 // Keeps the transcripts index in step with the core table. The stream records
 // only say which items changed; each is read from the table and its documents
 // written or removed to match it. Idempotent and order-insensitive, the same
@@ -104,6 +123,10 @@ export const transcriptIndexing = async (
   for (const action of wanted) {
     if (action.type === 'delete-by') {
       deletes.set(`${action.field}:${action.value}`, action);
+    } else if (action.type === 'sync-under') {
+      for (const key of await videoItemsUnder(coreTable, action.key)) {
+        items.set(key.contentItemId, key);
+      }
     } else {
       items.set(action.key.contentItemId, action.key);
     }

@@ -69,6 +69,7 @@ import {
   restoreCourse,
   setCourseCertificateCriteria,
   setCourseCertificates,
+  setCourseFirstLessonPrompt,
   setCoursePrice,
   viewCourse,
 } from './procedures/course.js';
@@ -174,6 +175,7 @@ export const appRouter = router({
     restore: restoreCourse,
     setCertificates: setCourseCertificates,
     setCertificateCriteria: setCourseCertificateCriteria,
+    setFirstLessonPrompt: setCourseFirstLessonPrompt,
     setPrice: setCoursePrice,
     view: viewCourse,
     createImageUploadUrl: createCourseImageUploadUrl,
