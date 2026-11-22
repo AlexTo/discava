@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { routeTree } from '../../routeTree.gen';
 import { renderWithCoreApi } from '../../test/render-with-core-api';
 
-describe('Catalogue footer', () => {
+describe('Marketing home footer', () => {
   it('has no dead Terms link, and About stays on the home page', async () => {
     renderWithCoreApi(null, {
       routeTree,
