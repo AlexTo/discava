@@ -30,7 +30,6 @@ import {
 import { Provider } from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
-import { RuntimeConfig } from './runtime-config.js';
 import { addSetting } from './settings.js';
 
 /** One index's settings/mappings, as the search package's manifest holds it. */
@@ -51,7 +50,7 @@ export interface OpenSearchCollectionProps {
    */
   readonly collectionName: string;
 
-  /** RuntimeConfig key used under the `opensearch` namespace. */
+  /** Deploy-time setting key used under the `opensearch` namespace. */
   readonly runtimeConfigKey: string;
 
   readonly description?: string;
@@ -340,11 +339,6 @@ export abstract class OpenSearchCollection extends Construct {
     this.collection.addResourceDependency(encryptionPolicy);
     this.collection.addResourceDependency(networkPolicy);
     this.collection.applyRemovalPolicy(removalPolicy);
-
-    const rc = RuntimeConfig.ensure(this);
-    rc.set('opensearch', runtimeConfigKey, {
-      endpoint: this.collection.attrCollectionEndpoint,
-    });
 
     this.createIndexSync(
       collectionName,

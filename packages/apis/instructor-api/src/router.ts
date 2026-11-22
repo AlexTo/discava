@@ -98,6 +98,7 @@ import {
   lines as earningsLines,
   report as earningsReport,
 } from './procedures/earnings.js';
+import { listGradingQueue } from './procedures/grading-queue.js';
 import {
   createLesson,
   deleteLesson,
@@ -204,6 +205,9 @@ export const appRouter = router({
   earnings: router({
     report: earningsReport,
     lines: earningsLines,
+  }),
+  gradingQueue: router({
+    list: listGradingQueue,
   }),
   payout: router({
     account: payoutAccount,

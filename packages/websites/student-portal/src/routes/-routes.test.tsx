@@ -72,52 +72,15 @@ const pathAfterLoad = async (router: ReturnType<typeof open>['router']) => {
 };
 
 describe('/', () => {
-  it('shows signed-out visitors the catalogue', async () => {
+  it('shows signed-out visitors a welcome with a link to every course', async () => {
     open('/');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent(
+      'Learn something new',
+    );
     expect(
-      await screen.findByRole('heading', {
-        name: 'Browse courses for every goal.',
-      }),
-    ).toBeInTheDocument();
-  });
-
-  it('offers the categories from the API as chips, with their counts', async () => {
-    renderWithCoreApi(null, {
-      routeTree,
-      path: '/',
-      signedIn: false,
-      handlers: {
-        ...handlers,
-        'category.list': () => [
-          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
-          { id: 'cat-2', name: 'Art', slug: 'art', courseCount: 0 },
-        ],
-      },
-    });
-
-    expect(
-      await screen.findByRole('link', { name: 'Science (3)' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Art (0)' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Technology' })).toBeNull();
-  });
-
-  it('links each category chip to its landing page', async () => {
-    renderWithCoreApi(null, {
-      routeTree,
-      path: '/',
-      signedIn: false,
-      handlers: {
-        ...handlers,
-        'category.list': () => [
-          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
-        ],
-      },
-    });
-
-    expect(
-      await screen.findByRole('link', { name: 'Science (3)' }),
-    ).toHaveAttribute('href', '/category/science');
+      screen.getAllByRole('link', { name: 'Browse all courses' })[0],
+    ).toHaveAttribute('href', '/courses');
+    expect(screen.queryByRole('group', { name: 'Filters' })).toBeNull();
   });
 
   it('shows signed-in students their own home', async () => {
@@ -221,5 +184,55 @@ describe('/certificates/<ID>', () => {
     const location = await pathAfterLoad(router);
     expect(location.pathname).toBe('/certificates/ABCD-EFGH-JKLM');
     expect(calls.map((c) => c.path)).toEqual(['certificate.verify']);
+  });
+});
+
+describe('/courses', () => {
+  it('shows the catalogue', async () => {
+    open('/courses');
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Browse courses for every goal.',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('offers the categories from the API as chips, with their counts', async () => {
+    renderWithCoreApi(null, {
+      routeTree,
+      path: '/courses',
+      signedIn: false,
+      handlers: {
+        ...handlers,
+        'category.list': () => [
+          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
+          { id: 'cat-2', name: 'Art', slug: 'art', courseCount: 0 },
+        ],
+      },
+    });
+
+    expect(
+      await screen.findByRole('link', { name: 'Science (3)' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Art (0)' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Technology' })).toBeNull();
+  });
+
+  it('links each category chip to its landing page', async () => {
+    renderWithCoreApi(null, {
+      routeTree,
+      path: '/courses',
+      signedIn: false,
+      handlers: {
+        ...handlers,
+        'category.list': () => [
+          { id: 'cat-1', name: 'Science', slug: 'science', courseCount: 3 },
+        ],
+      },
+    });
+
+    expect(
+      await screen.findByRole('link', { name: 'Science (3)' }),
+    ).toHaveAttribute('href', '/category/science');
   });
 });

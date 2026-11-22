@@ -31,7 +31,10 @@ const question = (overrides: Record<string, unknown> = {}) => ({
 
 const render = (
   handlers: Record<string, Handler> = {},
-  { readOnly = false } = {},
+  {
+    readOnly = false,
+    firstLessonPrompt,
+  }: { readOnly?: boolean; firstLessonPrompt?: string } = {},
 ) =>
   renderWithCoreApi(
     <QuestionsSection
@@ -39,6 +42,7 @@ const render = (
       moduleId="module-1"
       lessonId="lesson-1"
       readOnly={readOnly}
+      firstLessonPrompt={firstLessonPrompt}
     />,
     {
       handlers: {
@@ -245,6 +249,66 @@ describe('QuestionsSection', () => {
       const asks = calls.filter((c) => c.path === 'discussion.ask');
       expect(asks).toHaveLength(2);
       expect(postIdOf(asks[1])).toBe(postIdOf(asks[0]));
+    });
+  });
+
+  describe('first-lesson prompt', () => {
+    const PROMPT = 'What do you hope to learn?';
+    const prompt = () => screen.queryByRole('group', { name: PROMPT });
+
+    it('shows once the list has loaded', async () => {
+      render({}, { firstLessonPrompt: PROMPT });
+      expect(
+        await screen.findByRole('group', { name: PROMPT }),
+      ).toBeInTheDocument();
+    });
+
+    it('is absent without the prop', async () => {
+      render();
+      await screen.findByText('What is a basis?');
+      expect(prompt()).toBeNull();
+    });
+
+    it('is absent while the list loads', async () => {
+      render(
+        { 'discussion.listQuestions': () => new Promise(() => {}) },
+        { firstLessonPrompt: PROMPT },
+      );
+      await screen.findByRole('status', { name: 'Loading questions' });
+      expect(prompt()).toBeNull();
+    });
+
+    it('is absent when the list fails', async () => {
+      render(
+        {
+          'discussion.listQuestions': () => {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+          },
+        },
+        { firstLessonPrompt: PROMPT },
+      );
+      await screen.findByText("Couldn't load the questions");
+      expect(prompt()).toBeNull();
+    });
+
+    it('is absent with a thread open', async () => {
+      const { user } = render({}, { firstLessonPrompt: PROMPT });
+      await screen.findByRole('group', { name: PROMPT });
+      await user.click(
+        await screen.findByRole('button', { name: 'Open question' }),
+      );
+      await waitFor(() => expect(prompt()).toBeNull());
+    });
+
+    it('labels a prompt answer in the list', async () => {
+      render({
+        'discussion.listQuestions': () => ({
+          items: [question({ promptAnswer: true })],
+        }),
+      });
+      expect(
+        await screen.findByText('Answer to the course prompt'),
+      ).toBeInTheDocument();
     });
   });
 

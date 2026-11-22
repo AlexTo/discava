@@ -6,7 +6,12 @@
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { functionsMissingSettings, synth } from './stack-test-fixture.js';
+import {
+  functionsMissingNamedSettings,
+  functionsMissingSettings,
+  functionsReadingAppConfig,
+  synth,
+} from './stack-test-fixture.js';
 
 describe('search indexing (#53)', () => {
   const stack = synth({});
@@ -200,23 +205,25 @@ describe('certificate reminder', () => {
 });
 
 describe('caption translation', () => {
-  it('publishes the settings it was given, and the defaults without any', () => {
-    const published = (
-      components: Parameters<typeof synth>[0],
-    ): Record<string, unknown>[] =>
-      Object.values(
-        synth(components)('RuntimeConfig').findResources(
-          'AWS::AppConfig::HostedConfigurationVersion',
-        ),
-      ).map((resource) => resource as Record<string, unknown>);
-    const content = (components: Parameters<typeof synth>[0]) =>
-      JSON.stringify(published(components));
+  it('hands the function the settings it was given, and the defaults without any', () => {
+    const setting = (components: Parameters<typeof synth>[0]) =>
+      JSON.stringify(
+        Object.entries(
+          synth(components)('StreamRouter').findResources(
+            'AWS::Lambda::Function',
+          ),
+        )
+          .filter(([id]) => id.startsWith('CaptionTranslation'))
+          .map(
+            ([, fn]) =>
+              fn.Properties.Environment.Variables
+                .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
+          ),
+      );
     expect(
-      content({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
-    ).toMatch(/captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
-    expect(content({})).toMatch(
-      /captionTranslation[\s\S]*maxLanguagesPerCourse[\s\S]*9/,
-    );
+      setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
+    ).toMatch(/maxLanguagesPerCourse[\s\S]*3/);
+    expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
   });
 
   const stack = synth({});
@@ -293,5 +300,42 @@ describe('caption translation', () => {
       },
       Timeout: 900,
     });
+  });
+});
+
+describe('deploy-time settings per function', () => {
+  const template = synth({})('StreamRouter');
+  // Function logical-ID prefix to the settings its code reads.
+  const required = {
+    CertificateReminder: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    ProgressRecalculation: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_CERTIFICATES_REMINDER',
+    ],
+    SearchIndexing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+    ],
+    TranscriptIndexing: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_OPENSEARCH_SEARCH',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+    ],
+    AnalyticsUpdate: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    NotificationDelivery: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    EarningsRecording: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    CaptionTranslation: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_S3_LESSON_MEDIA_BUCKET',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+    ],
+  };
+
+  it('gives each function the settings its code reads', () => {
+    expect(functionsMissingNamedSettings(template, required)).toEqual([]);
+  });
+
+  it('leaves no function able to read AppConfig', () => {
+    expect(functionsReadingAppConfig(template)).toEqual([]);
   });
 });

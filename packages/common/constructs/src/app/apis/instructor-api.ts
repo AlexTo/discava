@@ -43,7 +43,6 @@ import {
   RestApiIntegration,
 } from '../../core/api/utils.js';
 import { findCloudFrontDomainNames } from '../../core/cloudfront.js';
-import { RuntimeConfig } from '../../core/runtime-config.js';
 
 type Operations = Procedures<AppRouter>;
 
@@ -197,7 +196,6 @@ export class InstructorApi<
     scope: Construct,
     functionOptions?: ApiFunctionOptions,
   ) => {
-    const rc = RuntimeConfig.ensure(scope);
     const handlers = new Map<string, Function>();
     return IntegrationBuilder.rest({
       pattern: 'isolated',
@@ -228,11 +226,6 @@ export class InstructorApi<
             `InstructorApi${functionName}Handler`,
             props,
           );
-          handler.addEnvironment(
-            'RUNTIME_CONFIG_APP_ID',
-            rc.appConfigApplicationId,
-          );
-          rc.grantReadAppConfig(handler);
           handlers.set(functionName, handler);
         }
         return {

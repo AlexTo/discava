@@ -29,6 +29,21 @@ describe('PostCard', () => {
     expect(screen.getByText('Instructor')).toBeInTheDocument();
   });
 
+  it('labels an answer to the course prompt, beside the title', () => {
+    render(
+      <PostCard
+        post={{ ...shown, title: 'Hello', promptAnswer: true }}
+        showTitle
+      />,
+    );
+    expect(screen.getByText('Answer to the course prompt')).toBeInTheDocument();
+  });
+
+  it('has no prompt label without the flag', () => {
+    render(<PostCard post={{ ...shown, title: 'Hello' }} showTitle />);
+    expect(screen.queryByText('Answer to the course prompt')).toBeNull();
+  });
+
   it('shows a markup title as text', () => {
     render(<PostCard post={{ ...shown, title: '<i>Why?</i>' }} showTitle />);
     expect(screen.getByText('<i>Why?</i>')).toBeInTheDocument();

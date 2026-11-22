@@ -199,6 +199,12 @@ const handlers = (overrides: Record<string, Handler> = {}) => ({
   'course.myLessonProgress': () => ({ lessons: [] }),
   'course.myEnrolment': () => enrolment,
   'announcement.list': () => ({ items: [] }),
+  'certificate.requirements': () => ({
+    certificatesEnabled: false,
+    certificate: null,
+    allMet: false,
+    requirements: [],
+  }),
   'contentItem.videoUrl': () => ({
     url: 'https://media.example.com/master.m3u8',
     withCredentials: false,
@@ -498,6 +504,75 @@ const openLesson = (
 const item = (title: string) => screen.findByRole('article', { name: title });
 
 describe('LessonPage', () => {
+  describe('first-lesson prompt', () => {
+    const PROMPT = 'What do you hope to learn?';
+    const withPrompt = (extra: Record<string, Handler> = {}) => ({
+      'course.view': () => course({ firstLessonPrompt: PROMPT }),
+      ...extra,
+    });
+    const prompt = () => screen.queryByRole('group', { name: PROMPT });
+
+    it('is shown on the first lesson to a new learner', async () => {
+      openLesson('lesson-1', withPrompt());
+      expect(
+        await screen.findByRole('group', { name: PROMPT }),
+      ).toBeInTheDocument();
+    });
+
+    it('is absent on the second lesson', async () => {
+      openLesson('lesson-2', withPrompt());
+      await screen.findByText(/No questions yet/);
+      expect(prompt()).toBeNull();
+    });
+
+    it.each(['answered', 'dismissed'])('is absent once %s', async (state) => {
+      openLesson(
+        'lesson-1',
+        withPrompt({
+          'course.myEnrolment': () => ({
+            ...enrolment,
+            firstLessonPromptState: state,
+          }),
+        }),
+      );
+      await screen.findByText(/No questions yet/);
+      expect(prompt()).toBeNull();
+    });
+
+    it('is absent in an archived course', async () => {
+      openLesson(
+        'lesson-1',
+        withPrompt({
+          'course.view': () =>
+            course({ status: 'archived', firstLessonPrompt: PROMPT }),
+        }),
+      );
+      await screen.findByText(/No questions yet/);
+      expect(prompt()).toBeNull();
+    });
+
+    it('is absent with no enrolment', async () => {
+      openLesson('lesson-1', withPrompt({ 'course.myEnrolment': () => null }));
+      await screen.findByText(/No questions yet/);
+      expect(prompt()).toBeNull();
+    });
+
+    it('is gone after Post, and the list is refetched', async () => {
+      const { user, calls } = openLesson(
+        'lesson-1',
+        withPrompt({ 'discussion.answerPrompt': () => ({}) }),
+      );
+      await user.type(await screen.findByLabelText('Your answer'), 'To code');
+      await user.click(screen.getByRole('button', { name: 'Post' }));
+      await waitFor(() => expect(prompt()).toBeNull());
+      await waitFor(() =>
+        expect(
+          calls.filter((c) => c.path === 'discussion.listQuestions').length,
+        ).toBeGreaterThan(1),
+      );
+    });
+  });
+
   it('shows every item of the lesson in order, with a step for each', async () => {
     openLesson('lesson-1');
 
@@ -654,6 +729,53 @@ describe('LessonPage', () => {
     expect(
       within(lecture).getByLabelText('Lecture video').hasAttribute('controls'),
     ).toBe(false);
+  });
+
+  it('asks for no video questions when the video has none (FR-021)', async () => {
+    const { calls } = openLesson('lesson-1', {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: false,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [],
+        questionCount: 0,
+      }),
+    });
+
+    const lecture = await item('Lecture video');
+    await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+    expect(calls.some((call) => call.path === 'videoQuestion.view')).toBe(
+      false,
+    );
+  });
+
+  it('loads the questions of a video that has some', async () => {
+    const { calls } = openLesson('lesson-1', {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: false,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [],
+        questionCount: 2,
+      }),
+      'videoQuestion.view': () => ({
+        quizVersion: 1,
+        questions: [],
+        answers: {},
+      }),
+    });
+
+    const lecture = await item('Lecture video');
+    await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === 'videoQuestion.view')).toBe(
+        true,
+      ),
+    );
   });
 
   describe('captions', () => {

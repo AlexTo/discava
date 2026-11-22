@@ -7,8 +7,8 @@ import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useState } from 'react';
-import { useCoreApiClient } from '../../../api';
-import { AddToLinkedInButton } from '../../../components/add-to-linkedin-button';
+import { useCoreApiClient } from '../api';
+import { AddToLinkedInButton } from './add-to-linkedin-button';
 
 const certificatePath = (certificateId: string) =>
   `/certificates/${certificateId}`;
