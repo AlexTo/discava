@@ -147,7 +147,11 @@ describe('FirstLessonPrompt', () => {
     });
     await user.type(await screen.findByLabelText('Your answer'), 'To code');
     await user.click(post());
-    expect(await screen.findByText('Boom')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Something went wrong on our side. Try again in a moment.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Your answer')).toHaveValue('To code');
     expect(screen.getByRole('button', { name: 'Not now' })).toBeEnabled();
   });
