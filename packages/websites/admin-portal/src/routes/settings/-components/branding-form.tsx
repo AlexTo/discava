@@ -13,6 +13,16 @@ import {
   parseHex,
 } from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
@@ -111,6 +121,7 @@ export function BrandingForm({
   const nameMessageId = useId();
   const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
+  const [confirmingReset, setConfirmingReset] = useState(false);
 
   const typedColour = colourText.trim();
   const palette = typedColour ? brandPalette(typedColour) : undefined;
@@ -126,6 +137,13 @@ export function BrandingForm({
     form.logoKey !== saved.brand.logoKey ||
     form.iconKey !== saved.brand.iconKey ||
     form.shareImageKey !== saved.brand.shareImageKey;
+  const savedIsDefault =
+    saved.brand.name === null &&
+    saved.brand.showNameBesideLogo &&
+    saved.brand.colour === null &&
+    saved.brand.logoKey === null &&
+    saved.brand.iconKey === null &&
+    saved.brand.shareImageKey === null;
   const nameText = form.name ?? DEFAULT_BRAND_NAME;
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
@@ -153,6 +171,21 @@ export function BrandingForm({
     : serverField === 'name'
       ? serverError
       : undefined;
+
+  const resetAll = () => {
+    setServerError(undefined);
+    setForm({
+      name: null,
+      showNameBesideLogo: true,
+      colour: null,
+      logoKey: null,
+      iconKey: null,
+      shareImageKey: null,
+    });
+    setPreviews({});
+    setColourText('');
+    setConfirmingReset(false);
+  };
 
   const submit = async () => {
     setServerError(undefined);
@@ -256,6 +289,10 @@ export function BrandingForm({
           setForm((current) => ({ ...current, logoKey: key }));
           setPreviews((current) => ({ ...current, logo: preview }));
         }}
+        onReset={() => {
+          setForm((current) => ({ ...current, logoKey: null }));
+          setPreviews((current) => ({ ...current, logo: undefined }));
+        }}
       />
       <ImageField
         kind="icon"
@@ -268,6 +305,10 @@ export function BrandingForm({
         onUploaded={(key, preview) => {
           setForm((current) => ({ ...current, iconKey: key }));
           setPreviews((current) => ({ ...current, icon: preview }));
+        }}
+        onReset={() => {
+          setForm((current) => ({ ...current, iconKey: null }));
+          setPreviews((current) => ({ ...current, icon: undefined }));
         }}
       />
       <ImageField
@@ -376,23 +417,53 @@ export function BrandingForm({
       )}
       <footer className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="min-w-0 break-words text-sm text-muted-foreground">
-          {saved.changed
-            ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
-            : 'Using the default Discava brand'}
+          {[
+            savedIsDefault ? 'Using the default Discava brand' : undefined,
+            saved.changed
+              ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Using the default Discava brand'}
         </p>
-        <Button
-          type="submit"
-          disabled={!dirty || nameInvalid || colourInvalid || save.isPending}
-        >
-          {save.isPending ? (
-            <>
-              <Spinner /> Saving…
-            </>
-          ) : (
-            'Save'
-          )}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmingReset(true)}
+          >
+            Reset all to default
+          </Button>
+          <Button
+            type="submit"
+            disabled={!dirty || nameInvalid || colourInvalid || save.isPending}
+          >
+            {save.isPending ? (
+              <>
+                <Spinner /> Saving…
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </div>
       </footer>
+      <AlertDialog open={confirmingReset} onOpenChange={setConfirmingReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all to the default brand?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The name, logo, icon, share image and colour go back to the
+              Discava default in this form. Nothing changes for visitors until
+              you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={resetAll}>Reset all</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
