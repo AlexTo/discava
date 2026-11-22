@@ -35,6 +35,7 @@ import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
+  expectAfterReloads,
   expectCourseCompleted,
   markItemDone,
   openCourse,
@@ -281,8 +282,12 @@ test('an instructor requires graded work to reach a score for a certificate', as
 
   await test.step('a regrade to enough points issues the certificate, which counts the assignment', async () => {
     await editGrade(instructor, 8);
-    await expect(student.getByText('You earned a certificate')).toBeVisible({
-      timeout: 60_000,
+    // The card only looks again by itself once every requirement is met, and
+    // the recalculation lands a few seconds after the regrade.
+    await expectAfterReloads(student, async () => {
+      await expect(student.getByText('You earned a certificate')).toBeVisible({
+        timeout: 2_000,
+      });
     });
     const href = await student
       .getByRole('link', { name: 'View', exact: true })
