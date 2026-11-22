@@ -87,9 +87,11 @@ export const brandImageExtension = (
   contentType: BrandImageContentType,
 ): string => EXTENSIONS[contentType];
 
+// Each description starts with a file type ("PNG, …"), so it goes into the
+// sentence as written.
 const sentence = (kind: BrandImageKind): string => {
   const { label, description } = BRAND_IMAGE_RULES[kind];
-  return `The ${label} must be ${description.charAt(0).toLowerCase()}${description.slice(1)}`;
+  return `The ${label} must be ${description}`;
 };
 
 /**
