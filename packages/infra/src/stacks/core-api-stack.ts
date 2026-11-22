@@ -12,7 +12,6 @@ import {
   InstructorPortal,
   LessonMediaBucket,
   LessonMediaUploadBucket,
-  RuntimeConfig,
   SearchCollection,
   type StripeSecrets,
   StudentPortal,
@@ -131,7 +130,9 @@ export class CoreApiStack extends Stack {
 
     Object.values(integrations).forEach(({ handler }) => {
       coreTable.grantReadWriteData(handler);
+      coreTable.bindSettings(handler);
       searchCollection.grantRead(handler.role!);
+      searchCollection.bindSettings(handler);
     });
     for (const op of [
       'contentItem.videoUrl',
@@ -216,14 +217,10 @@ export class CoreApiStack extends Stack {
     searchCollection: SearchCollection,
   ) {
     const reindex = new EventsSearchReindex(this, 'SearchReindex');
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    reindex.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(reindex);
     coreTable.grantReadData(reindex);
+    coreTable.bindSettings(reindex);
     searchCollection.grantWrite(reindex.role!);
+    searchCollection.bindSettings(reindex);
     return reindex;
   }
 
@@ -240,12 +237,7 @@ export class CoreApiStack extends Stack {
       'NotificationUnsubscribe',
     );
     coreTable.grantReadWriteData(unsubscribe);
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    unsubscribe.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(unsubscribe);
+    coreTable.bindSettings(unsubscribe);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(unsubscribe);
     unsubscribe.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);

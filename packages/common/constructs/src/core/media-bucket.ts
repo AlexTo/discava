@@ -15,6 +15,7 @@ import {
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import {
   BlockPublicAccess,
   Bucket,
@@ -28,6 +29,7 @@ import { suppressRules } from './checkov.js';
 import { findCloudFrontDomainNames } from './cloudfront.js';
 import { RsaKeyPairSecret } from './rsa-key-pair-secret/construct.js';
 import { RuntimeConfig } from './runtime-config.js';
+import { addSetting } from './settings.js';
 import { CloudfrontWebAcl } from './static-website.js';
 
 export interface MediaBucketProps {
@@ -99,6 +101,8 @@ export class MediaBucket extends Construct {
   public readonly cloudFrontDistribution: Distribution;
   private readonly signingKeyPairSecret: RsaKeyPairSecret;
   private allowedOrigins: string[] = ['*'];
+  private readonly runtimeConfigKey: string;
+  private readonly settings: Record<string, unknown>;
 
   constructor(
     scope: Construct,
@@ -116,6 +120,7 @@ export class MediaBucket extends Construct {
     }: MediaBucketProps,
   ) {
     super(scope, id);
+    this.runtimeConfigKey = runtimeConfigKey;
 
     const key: IKey | undefined = enableKmsEncryption
       ? (encryptionKey ?? new Key(this, 'EncryptionKey', { enableKeyRotation }))
@@ -230,7 +235,7 @@ export class MediaBucket extends Construct {
       'Access logs are not required for this internal media distribution',
     );
 
-    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, {
+    this.settings = {
       bucketName: this.bucket.bucketName,
       // The first custom domain, so signed URLs use it, but only with
       // `certificate` set: like the Distribution above, `domainNames` alone
@@ -242,7 +247,8 @@ export class MediaBucket extends Construct {
       cloudFrontKeyPairId: signingPublicKey.publicKeyId,
       cloudFrontPrivateKeySecretArn: this.signingKeyPairSecret.secretArn,
       cookieDomain,
-    });
+    };
+    RuntimeConfig.ensure(this).set('s3', runtimeConfigKey, this.settings);
 
     // Always the generated *.cloudfront.net hostname, even with a custom
     // domain configured: it's the target a custom domain's DNS record points
@@ -255,6 +261,11 @@ export class MediaBucket extends Construct {
   /**
    * Restricts the bucket's CORS configuration to the provided origins.
    */
+  /** Gives `fn` the bucket's deploy-time `s3` setting. */
+  public bindSettings(fn: LambdaFunction): void {
+    addSetting(fn, 's3', this.runtimeConfigKey, this.settings);
+  }
+
   public restrictCorsTo(
     ...origins: (
       | string

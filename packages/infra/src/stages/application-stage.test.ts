@@ -457,6 +457,7 @@ describe('notification delivery', () => {
         'ADMIN_PORTAL_URL',
         'CORE_API_URL',
         'INSTRUCTOR_PORTAL_URL',
+        'DISCAVA_DYNAMODB_CORE_TABLE',
         'NOTIFICATIONS_FROM_ADDRESS',
         'RUNTIME_CONFIG_APP_ID',
         'STUDENT_PORTAL_URL',
