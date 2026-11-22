@@ -31,7 +31,8 @@
     "tslib": "^2.3.0",
     "tw-animate-css": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@discava/common-branding": "workspace:*"
   },
   "license": "Apache-2.0",
   "imports": {

@@ -9,13 +9,22 @@ import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  type BrandDocument,
+  BrandDocumentSchema,
+  resolveBrand,
+} from '@discava/common-branding/brand';
 import { getS3Client } from '@discava/common-server-utils/lesson-media-bucket';
 import {
   isLocalDev,
   LOCAL_PORTAL_URLS,
   localObjectUrl,
 } from '@discava/common-server-utils/local-dev';
-import { type CoreTable, createCoreTableService } from '@discava/core-table';
+import {
+  type CoreTable,
+  createCoreTableService,
+  getBrand,
+} from '@discava/core-table';
 import middy from '@middy/core';
 import { TRPCError } from '@trpc/server';
 import { sitemapEntries } from '../helpers/sitemap.js';
@@ -67,7 +76,7 @@ export interface PageRendererDeps {
     /** The host used when the request names none that is allowed. */
     fallbackHost: string;
   };
-  logger?: Pick<Logger, 'error'>;
+  logger?: Pick<Logger, 'error'> & Partial<Pick<Logger, 'warn'>>;
 }
 
 const HTML = 'text/html; charset=utf-8';
@@ -93,6 +102,32 @@ const isNotFound = (error: unknown): boolean =>
 
 const isBadRequest = (error: unknown): boolean =>
   error instanceof TRPCError && error.code === 'BAD_REQUEST';
+
+/**
+ * The saved brand as the published document (no one's name, no timestamps),
+ * or undefined when none is saved, it can't be read or isn't a valid brand.
+ */
+const readBrandDocument = async (
+  coreTable: CoreTable,
+  logger: PageRendererDeps['logger'],
+): Promise<BrandDocument | undefined> => {
+  try {
+    const stored = await getBrand(coreTable);
+    if (!stored) {
+      return undefined;
+    }
+    const parsed = BrandDocumentSchema.safeParse(stored);
+    if (!parsed.success) {
+      throw new Error('The saved brand is not valid');
+    }
+    return parsed.data;
+  } catch (error) {
+    logger?.warn?.('The brand could not be read; using the default brand', {
+      error,
+    });
+    return undefined;
+  }
+};
 
 const decode = (segment: string): string => {
   try {
@@ -181,15 +216,45 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         deps.logger?.error('Public media base URL unavailable', { error });
         return undefined;
       });
-      const context: PageContext = {
+      const baseContext = {
         host,
         siteName: config.siteName,
         allowIndexing: config.allowIndexing,
-        mediaUrl: (key) =>
+        mediaUrl: (key: string | undefined) =>
           key && mediaBase ? new URL(key, mediaBase).toString() : undefined,
         defaultImageUrl: `${originOf(host)}/og-default.png`,
       };
       const template = await deps.loadTemplate();
+      // The brand, read at most once per render and only by the pages that
+      // show it: the signed-in shells read nothing. If it can't be read (or
+      // isn't a valid brand) the page still renders, with the default brand.
+      // Every such page carries the brand's icon and the document the
+      // portal's brand provider starts from.
+      let branded:
+        | Promise<{
+            context: PageContext;
+            inject: (parts: Parameters<typeof injectIntoTemplate>[1]) => string;
+          }>
+        | undefined;
+      const withBrand = () =>
+        (branded ??= (async () => {
+          const brandDocument = await readBrandDocument(coreTable, deps.logger);
+          const context: PageContext = {
+            ...baseContext,
+            brand: resolveBrand(brandDocument, mediaBase),
+          };
+          return {
+            context,
+            inject: (parts) =>
+              injectIntoTemplate(template, {
+                ...parts,
+                brand: {
+                  iconUrl: context.brand.iconUrl,
+                  document: brandDocument,
+                },
+              }),
+          };
+        })());
       const html = (
         statusCode: number,
         page: string,
@@ -201,16 +266,36 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           headers: { 'Content-Type': HTML, 'Cache-Control': cache, ...headers },
           body: page,
         });
-      const render = (page: RenderedPage) =>
-        html(200, injectIntoTemplate(template, page), PAGE_CACHE);
-      const notFound = () =>
-        html(
+      const render = async (page: (context: PageContext) => RenderedPage) => {
+        const { context, inject } = await withBrand();
+        return html(200, inject(page(context)), PAGE_CACHE);
+      };
+      // A not-found page carries no page data at all (the same bytes for every
+      // address that isn't a page), so it gets the brand's icon but doesn't
+      // embed the brand: the portal fetches it as usual.
+      const notFound = async () => {
+        const { context } = await withBrand();
+        return html(
           404,
           injectIntoTemplate(template, {
             head: notFoundHead(context),
             root: '',
+            brand: { iconUrl: context.brand.iconUrl },
           }),
           NOT_FOUND_CACHE,
+          { 'X-Robots-Tag': 'noindex' },
+        );
+      };
+      // A signed-in shell: the portal's own page, never indexed, reading
+      // nothing.
+      const shell = () =>
+        html(
+          200,
+          injectIntoTemplate(template, {
+            head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
+            root: '',
+          }),
+          PAGE_CACHE,
           { 'X-Robots-Tag': 'noindex' },
         );
 
@@ -218,15 +303,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
       if (first === 'learn') {
         if (!id || rest.length > 0) {
           // The learning routes: signed-in, never indexed.
-          return html(
-            200,
-            injectIntoTemplate(template, {
-              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
-              root: '',
-            }),
-            PAGE_CACHE,
-            { 'X-Robots-Tag': 'noindex' },
-          );
+          return shell();
         }
         try {
           const [course, summary, reviews] = await Promise.all([
@@ -234,44 +311,34 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
             deps.caller.review.summary({ courseId: id }),
             deps.caller.review.list({ courseId: id, limit: 10 }),
           ]);
-          return render(
+          return await render((context) =>
             renderCoursePage(context, { course, summary, reviews }),
           );
         } catch (error) {
-          if (isNotFound(error)) return notFound();
+          if (isNotFound(error)) return await notFound();
           throw error;
         }
       }
       if (first === 'certificates' && id) {
         if (rest.length > 0) {
           // The signed-in routes under a certificate: never indexed.
-          return html(
-            200,
-            injectIntoTemplate(template, {
-              head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
-              root: '',
-            }),
-            PAGE_CACHE,
-            { 'X-Robots-Tag': 'noindex' },
-          );
+          return shell();
         }
         try {
           const certificate = await deps.caller.certificate.verify({
             certificateId: id,
           });
+          const { context, inject } = await withBrand();
           return html(
             200,
-            injectIntoTemplate(
-              template,
-              renderCertificatePage(context, certificate),
-            ),
+            inject(renderCertificatePage(context, certificate)),
             PAGE_CACHE,
             { 'X-Robots-Tag': 'noindex' },
           );
         } catch (error) {
           // An over-long ID fails the procedure's input check: it is as
           // malformed as any other and gets the same 404.
-          if (isNotFound(error) || isBadRequest(error)) return notFound();
+          if (isNotFound(error) || isBadRequest(error)) return await notFound();
           throw error;
         }
       }
@@ -280,13 +347,13 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           const profile = await deps.caller.instructorProfile.publicView({
             handle: id,
           });
-          return render(renderProfilePage(context, profile));
+          return await render((context) => renderProfilePage(context, profile));
         } catch (error) {
-          if (isNotFound(error)) return notFound();
+          if (isNotFound(error)) return await notFound();
           throw error;
         }
       }
-      return notFound();
+      return await notFound();
     } catch (error) {
       // A dependency failed (table, settings parameter, template): never cached, never a 404.
       deps.logger?.error('Page render failed', { path, error });

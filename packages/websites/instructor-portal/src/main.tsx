@@ -5,6 +5,7 @@
 
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { BrandProvider } from '@discava/common-web-utils/brand';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
   RuntimeConfigProvider,
@@ -33,19 +34,21 @@ root &&
         localDevConfig={LOCAL_DEV_CONFIG}
         fallback={<Spinner />}
       >
-        <CognitoAuth
-          // Runs above <RouterProvider>, so useNavigate isn't available: the
-          // router instance navigates without a full page reload.
-          onReturn={(path) => router.navigate({ href: path, replace: true })}
-        >
-          <QueryClientProvider>
-            <InstructorApiClientProvider>
-              <CoreApiClientProvider>
-                <App />
-              </CoreApiClientProvider>
-            </InstructorApiClientProvider>
-          </QueryClientProvider>
-        </CognitoAuth>
+        <BrandProvider fallback={<Spinner />}>
+          <CognitoAuth
+            // Runs above <RouterProvider>, so useNavigate isn't available: the
+            // router instance navigates without a full page reload.
+            onReturn={(path) => router.navigate({ href: path, replace: true })}
+          >
+            <QueryClientProvider>
+              <InstructorApiClientProvider>
+                <CoreApiClientProvider>
+                  <App />
+                </CoreApiClientProvider>
+              </InstructorApiClientProvider>
+            </QueryClientProvider>
+          </CognitoAuth>
+        </BrandProvider>
       </RuntimeConfigProvider>
     </React.StrictMode>,
   );

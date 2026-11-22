@@ -65,6 +65,7 @@
       "!**/*.css",
       "!**/*.gen.*",
       "!**/generated/**",
+      "!**/__fixtures__/**",
       "!**/tsconfig*.json"
     ]
   },

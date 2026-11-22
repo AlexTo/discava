@@ -119,7 +119,10 @@ describe('deploy-time settings per function', () => {
   const template = synth({})('InstructorApi');
   // Function logical-ID prefix to the settings its code reads.
   const required = {
-    InstructorApiRouterHandler: ['DISCAVA_DYNAMODB_CORE_TABLE'],
+    InstructorApiRouterHandler: [
+      'DISCAVA_DYNAMODB_CORE_TABLE',
+      'DISCAVA_CAPTION_TRANSLATION_SETTINGS',
+    ],
     InstructorApiMediaUrlHandler: [
       'DISCAVA_DYNAMODB_CORE_TABLE',
       'DISCAVA_S3_LESSON_MEDIA_BUCKET',
@@ -144,5 +147,31 @@ describe('deploy-time settings per function', () => {
 
   it('leaves no function able to read AppConfig', () => {
     expect(functionsReadingAppConfig(template)).toEqual([]);
+  });
+});
+
+describe('caption languages (#755)', () => {
+  it('hands the router function the stage settings it was given, and the defaults without any', () => {
+    const setting = (components: Parameters<typeof synth>[0]) =>
+      JSON.stringify(
+        Object.entries(
+          synth(components)('InstructorApi').findResources(
+            'AWS::Lambda::Function',
+          ),
+        )
+          .filter(([id]) => id.startsWith('InstructorApiRouterHandler'))
+          .map(
+            ([, fn]) =>
+              fn.Properties.Environment.Variables
+                .DISCAVA_CAPTION_TRANSLATION_SETTINGS,
+          ),
+      );
+    expect(
+      setting({ captionTranslation: { maxLanguagesPerCourse: 3 } }),
+    ).toMatch(/enabled[\s\S]*true[\s\S]*maxLanguagesPerCourse[\s\S]*3/);
+    expect(setting({ captionTranslation: { enabled: false } })).toMatch(
+      /enabled[\s\S]*false/,
+    );
+    expect(setting({})).toMatch(/maxLanguagesPerCourse[\s\S]*9/);
   });
 });

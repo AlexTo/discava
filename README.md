@@ -42,6 +42,14 @@
 > [!IMPORTANT]
 > Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
 
+## Why Discava
+
+- ☁️ **Serverless.** Pay for what you use. It scales to zero.
+- 🔒 **Your AWS account.** You own your data.
+- 🛡️ **Hardened production defaults.** WAF and KMS encryption.
+- 🆓 **Free and open source.** Apache 2.0.
+- 🤖 **Built with AI in mind** from the start.
+
 ## What you get
 
 ### 🎓 For learners
@@ -84,15 +92,7 @@
 > [!TIP]
 > 🤖 **AI built in, not bolted on.** ✨ An AI assistant and personalised learning are part of the core experience, not a paid add-on. Coming soon.
 
-## Why Discava
-
-- ☁️ **Serverless.** Pay for what you use. It scales to zero.
-- 🔒 **Your AWS account.** You own your data.
-- 🛡️ **Hardened production defaults.** WAF and KMS encryption.
-- 🆓 **Free and open source.** Apache 2.0.
-- 🤖 **Built with AI in mind** from the start.
-
-## For developers
+### 🧑‍💻 For developers
 
 Discava is a TypeScript monorepo. It is opinionated by design: one cloud provider, one way to deploy.
 
@@ -101,7 +101,7 @@ Discava is a TypeScript monorepo. It is opinionated by design: one cloud provide
 - 🧱 Built with the [Nx Plugin for AWS](https://github.com/awslabs/nx-plugin-for-aws), so every API, portal and stack is scaffolded the same way, following AWS's proven best practices.
 - ✅ Well tested.
 
-### Try it locally
+#### Try it locally
 
 With Docker running:
 
