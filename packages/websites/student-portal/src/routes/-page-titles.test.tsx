@@ -62,6 +62,8 @@ const handlers: Record<string, Handler> = {
   'notification.list': () => ({ items: [], cursor: null }),
   'notification.unreadCount': () => ({ count: 0 }),
   'certificate.verify': () => ({
+    status: 'valid',
+    statement: ['Completed all 3 items of the course.'],
     certificateId: 'ABCD',
     learnerName: 'Ada',
     courseTitle: 'Linear Algebra',

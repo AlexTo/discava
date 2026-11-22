@@ -12,6 +12,12 @@ import {
 } from '../../../test/render-with-core-api';
 
 const certificate = {
+  status: 'valid',
+  statement: [
+    'Completed all 14 items of the course.',
+    'Passed 3 assessed quizzes. Pass mark: 70%.',
+    'Overall score: 80–89%.',
+  ],
   certificateId: 'ABCD-EFGH-JKLM',
   learnerName: 'Ada Lovelace',
   courseTitle: 'Linear Algebra',
@@ -48,6 +54,18 @@ describe('/certificates/<ID>', () => {
       path: 'certificate.verify',
       input: { certificateId: 'ABCD-EFGH-JKLM' },
     });
+  });
+
+  it('lists what the certificate confirms, in order', async () => {
+    open(() => certificate);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'What this certificate confirms',
+      }),
+    ).toBeInTheDocument();
+    const items = screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(items).toEqual(certificate.statement);
   });
 
   it('shows the API’s date, not one formatted for the viewer', async () => {

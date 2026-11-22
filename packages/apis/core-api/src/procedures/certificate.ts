@@ -12,6 +12,7 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { drawCertificatePdf, formatDate } from '../helpers/certificate-pdf.js';
+import { assessmentStatement } from '../helpers/certificate-statement.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import {
   CertificatePdfInputSchema,
@@ -34,8 +35,9 @@ const notFound = () =>
 
 /**
  * Public: the details printed on a certificate, looked up by its ID. Returns
- * only those fields, never the student's id, the course's id or anything
- * else on the record.
+ * only those fields and the statement of what was assessed, never the
+ * student's id, the course's id, the assessed items or anything else on the
+ * record.
  */
 export const verifyCertificate = publicCourseProcedure
   .input(VerifyCertificateInputSchema)
@@ -55,11 +57,13 @@ export const verifyCertificate = publicCourseProcedure
     }
 
     return {
+      status: 'valid' as const,
       certificateId: formatCertificateId(certificate.certificateId),
       learnerName: certificate.learnerName,
       courseTitle: certificate.courseTitle,
       completedAt: certificate.completedAt,
       completedOn: formatDate(certificate.completedAt),
+      statement: assessmentStatement(certificate.assessment),
     };
   });
 
@@ -138,6 +142,7 @@ export const certificatePdf = courseProcedure
       completedAt: certificate.completedAt,
       certificateId: displayId,
       verifyUrl,
+      statement: assessmentStatement(certificate.assessment),
     });
 
     return {
