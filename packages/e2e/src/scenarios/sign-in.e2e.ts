@@ -50,15 +50,20 @@ test('a student signs in to the student portal', async ({ page }) => {
 test('the student sign-in page stays up while it redirects', async ({
   page,
 }) => {
-  // Hold the request to the OIDC server, so the browser stays on the page that
-  // started the redirect long enough to look at it (#782).
-  await page.route(/localhost:9400\/discava\/authorize/, () => {});
+  // Look at the page as the browser sets off for the OIDC server (#782): a
+  // locator would wait for that navigation to finish, and by then it is gone.
+  let heading: string | null | undefined;
+  await page.route(/localhost:9400\/discava\/authorize/, async (route) => {
+    heading = await page.evaluate(
+      () => document.querySelector('h1')?.textContent,
+    );
+    await screenshot(page, 'signing you in');
+    await route.continue();
+  });
   await page.goto(`${PORTALS.student}/signin`);
+  await page.waitForURL(/localhost:9400\/discava\/authorize/);
 
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Signing you in…' }),
-  ).toBeVisible();
-  await screenshot(page, 'signing you in');
+  expect(heading).toBe('Signing you in…');
 });
 
 test('an admin signs in to the admin portal', async ({ page }) => {
