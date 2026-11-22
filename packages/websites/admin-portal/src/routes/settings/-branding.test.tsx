@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -274,7 +274,12 @@ describe('the Branding page', () => {
       }),
     });
     await screen.findByLabelText('Upload share image');
-    await user.click(screen.getByRole('button', { name: 'Reset to default' }));
+    await user.click(
+      within(screen.getByRole('region', { name: 'Share image' })).getByRole(
+        'button',
+        { name: 'Reset to default' },
+      ),
+    );
     expect(
       screen.queryByRole('img', { name: 'Share image preview' }),
     ).not.toBeInTheDocument();
@@ -402,6 +407,87 @@ describe('the Branding page', () => {
     expect(
       await screen.findByRole('button', { name: 'Try again' }),
     ).toBeInTheDocument();
+  });
+
+  describe('resetting to the default', () => {
+    const custom = {
+      ...none,
+      brand: {
+        name: 'Acme',
+        showNameBesideLogo: false,
+        colour: '#1d4ed8',
+        logoKey: `brand/logo/${NONCE}.png`,
+        iconKey: `brand/icon/${NONCE}.png`,
+        shareImageKey: `brand/share-image/${NONCE}.png`,
+      },
+      revision: 4,
+      changed: { by: 'a', byName: 'Carol Admin', at: new Date().toISOString() },
+    };
+    const saveHandler: Handler = (input) => ({
+      ...none,
+      brand: input as typeof none.brand,
+      revision: 5,
+    });
+
+    it('resets the logo only, sending logoKey null and keeping the colour', async () => {
+      const { calls, user } = open({
+        'branding.get': () => custom,
+        'branding.save': saveHandler,
+      });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        within(screen.getByRole('region', { name: 'Logo' })).getByRole(
+          'button',
+          { name: 'Reset to default' },
+        ),
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.path === 'branding.save')?.input).toEqual({
+          expectedRevision: 4,
+          ...custom.brand,
+          logoKey: null,
+        }),
+      );
+    });
+
+    it('asks before resetting all, then sends every field null and the switch on', async () => {
+      const { calls, user } = open({
+        'branding.get': () => custom,
+        'branding.save': saveHandler,
+      });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        screen.getByRole('button', { name: 'Reset all to default' }),
+      );
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reset all' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.path === 'branding.save')?.input).toEqual({
+          expectedRevision: 4,
+          name: null,
+          showNameBesideLogo: true,
+          colour: null,
+          logoKey: null,
+          iconKey: null,
+          shareImageKey: null,
+        }),
+      );
+    });
+
+    it('changes nothing when the reset all is cancelled', async () => {
+      const { user } = open({ 'branding.get': () => custom });
+      await screen.findByLabelText('Upload logo');
+      await user.click(
+        screen.getByRole('button', { name: 'Reset all to default' }),
+      );
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Name')).toHaveValue('Acme');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
   });
 
   describe('the brand colour', () => {
