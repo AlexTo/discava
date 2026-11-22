@@ -98,14 +98,8 @@ Discava is a TypeScript monorepo. It is opinionated by design: one cloud provide
 
 - 🐳 Everything runs locally with Docker. No AWS account needed to try it.
 - 🚀 One command deploys it to AWS with CDK.
+- 🧱 Built with the [Nx Plugin for AWS](https://github.com/awslabs/nx-plugin-for-aws), so every API, portal and stack is scaffolded the same way, following AWS's proven best practices.
 - ✅ Well tested.
-
-It's built with the [Nx Plugin for AWS](https://github.com/awslabs/nx-plugin-for-aws), which brings:
-
-- 🧱 **Generators, not boilerplate.** The tRPC APIs, React portals and CDK infrastructure come from the plugin's generators, so every package follows the same layout and build setup.
-- 🔗 **Type-safe from portal to API.** The portals call the APIs through tRPC clients typed from each API's router, so a changed procedure is a compile error, not a runtime surprise.
-- ⚡ **Fast, focused builds.** Nx caches every target and runs only what a change affects, locally and in CI.
-- 🤖 **Agent-friendly.** The plugin's MCP server lets coding agents find and run the right generator instead of hand-writing a new project.
 
 ### Try it locally
 
