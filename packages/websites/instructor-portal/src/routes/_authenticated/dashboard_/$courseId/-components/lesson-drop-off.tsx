@@ -18,6 +18,11 @@ export interface LessonFigures {
   completionShare: number | null;
 }
 
+export interface ModuleWithoutQuestions {
+  moduleId: string;
+  title: string;
+}
+
 // The lessons with the lowest share among those anyone started. Marked only
 // when at least two lessons have a share to compare and they don't all match
 // (a course with no drop-off has no lowest).
@@ -42,7 +47,13 @@ const lowestShare = (lessons: LessonFigures[]): Set<string> => {
 // One bar per lesson, in course order, of the share of those who started it
 // who completed it. The numbers show on hover or focus, and are always there
 // for assistive technology.
-export function LessonDropOff({ lessons }: { lessons: LessonFigures[] }) {
+export function LessonDropOff({
+  lessons,
+  modulesWithoutQuestions = [],
+}: {
+  lessons: LessonFigures[];
+  modulesWithoutQuestions?: ModuleWithoutQuestions[];
+}) {
   const lowest = lowestShare(lessons);
 
   return (
@@ -54,6 +65,13 @@ export function LessonDropOff({ lessons }: { lessons: LessonFigures[] }) {
         <p className="text-sm text-muted-foreground">
           Of the learners who started each lesson, the share who completed it.
         </p>
+        {modulesWithoutQuestions.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            These modules have video and no questions:{' '}
+            {modulesWithoutQuestions.map(({ title }) => title).join(', ')}.
+            Learners remember more when a video asks them something.
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         {lessons.length === 0 ? (

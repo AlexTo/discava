@@ -126,6 +126,13 @@ export interface CourseAnalytics extends CourseSummary {
   quizzes: QuizListing[];
   /** The videos currently shown to students that have questions, in course order. */
   videoQuestions: VideoQuestionListing[];
+  /** Shown modules with video and no questions, in course order. */
+  modulesWithoutQuestions: ModuleWithoutQuestions[];
+}
+
+export interface ModuleWithoutQuestions {
+  moduleId: string;
+  title: string;
 }
 
 export interface VideoQuestionListing {
@@ -459,6 +466,33 @@ const videoQuestionListings = (loaded: LoadedCourse): VideoQuestionListing[] =>
     }),
   );
 
+// The shown modules with at least one shown video and no shown quiz and no
+// shown video with questions, in course order.
+const modulesWithoutQuestions = (
+  loaded: LoadedCourse,
+): ModuleWithoutQuestions[] => {
+  const { modules, lessons, contentItems } = shownCurriculum(loaded);
+  return modules
+    .filter((module) => {
+      const lessonIds = new Set(
+        lessons
+          .filter((lesson) => lesson.moduleId === module.moduleId)
+          .map((lesson) => lesson.lessonId),
+      );
+      const items = contentItems.filter((item) => lessonIds.has(item.lessonId));
+      const hasVideo = items.some((item) => item.type === 'video');
+      const hasQuestions = items.some(
+        (item) =>
+          item.type === 'quiz' ||
+          (item.type === 'video' &&
+            Array.isArray(item.questions) &&
+            item.questions.length > 0),
+      );
+      return hasVideo && !hasQuestions;
+    })
+    .map(({ moduleId, title }) => ({ moduleId, title }));
+};
+
 /**
  * The videos shown to students that have questions, in course order, each
  * with how many questions it has now: one query of the course's aggregates
@@ -540,6 +574,7 @@ export const readCourseAnalytics = async (
     lessons: lessonFunnel(loaded),
     quizzes: quizListings(loaded),
     videoQuestions: videoQuestionListings(loaded),
+    modulesWithoutQuestions: modulesWithoutQuestions(loaded),
     daily: dates.map((date) => {
       const item = dayOf.get(`DAY#${date}`);
       const enrolments = counter(item?.enrolments);

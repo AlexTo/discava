@@ -1032,3 +1032,121 @@ describe('video question analytics', () => {
     });
   });
 });
+
+describe('modulesWithoutQuestions', () => {
+  const module = (moduleId: string, order: number, extra = {}) => ({
+    moduleId,
+    order,
+    title: `Module ${moduleId}`,
+    ...shown,
+    ...extra,
+  });
+  const lesson = (lessonId: string, moduleId: string) => ({
+    lessonId,
+    moduleId,
+    order: 1,
+    title: lessonId,
+    ...shown,
+  });
+  const item = (
+    contentItemId: string,
+    lessonId: string,
+    type: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    contentItemId,
+    lessonId,
+    type,
+    title: contentItemId,
+    order: 1,
+    ...shown,
+    ...extra,
+  });
+  const withQuestions = { questions: [{ questionId: 'q1' }] };
+
+  const read = async (
+    curriculum: Record<string, Record<string, unknown>[]>,
+  ) => {
+    const none = { go: async () => ({ data: [], unprocessed: [] }) };
+    const coreTable = {
+      collections: collectionsOf([], curriculum),
+      entities: {
+        courseStats: { get: () => none },
+        periodStats: {
+          get: () => none,
+          query: { primary: () => ({ between: () => none }) },
+        },
+      },
+    } as never;
+    return (await readCourseAnalytics(coreTable, 'c1', 1, NOW))
+      .modulesWithoutQuestions;
+  };
+  const one = (
+    items: Record<string, unknown>[],
+    extra: {
+      module?: Record<string, unknown>;
+      lesson?: Record<string, unknown>;
+    } = {},
+  ) =>
+    read({
+      module: [{ ...module('m1', 1), ...extra.module }],
+      lesson: [{ ...lesson('l1', 'm1'), ...extra.lesson }],
+      contentItem: items,
+    });
+
+  it('lists a module with only a video, in course order', async () => {
+    expect(
+      await read({
+        module: [module('m2', 2), module('m1', 1)],
+        lesson: [lesson('l1', 'm1'), lesson('l2', 'm2')],
+        contentItem: [item('v2', 'l2', 'video'), item('v1', 'l1', 'video')],
+      }),
+    ).toEqual([
+      { moduleId: 'm1', title: 'Module m1' },
+      { moduleId: 'm2', title: 'Module m2' },
+    ]);
+  });
+
+  it('leaves out a module with a video and a quiz', async () => {
+    expect(
+      await one([item('v', 'l1', 'video'), item('q', 'l1', 'quiz')]),
+    ).toEqual([]);
+  });
+
+  it('leaves out a module whose video has questions', async () => {
+    expect(await one([item('v', 'l1', 'video', withQuestions)])).toEqual([]);
+  });
+
+  it('counts a video with an empty question list as without questions', async () => {
+    expect(
+      await one([item('v', 'l1', 'video', { questions: [] })]),
+    ).toHaveLength(1);
+  });
+
+  it('leaves out a module with no video', async () => {
+    expect(await one([item('t', 'l1', 'text')])).toEqual([]);
+  });
+
+  it('leaves out a module whose only video is hidden', async () => {
+    expect(
+      await one([item('v', 'l1', 'video', { visibility: 'hidden' })]),
+    ).toEqual([]);
+  });
+
+  it('still lists a module when its quiz is hidden', async () => {
+    expect(
+      await one([
+        item('v', 'l1', 'video'),
+        item('q', 'l1', 'quiz', { visibility: 'hidden' }),
+      ]),
+    ).toHaveLength(1);
+  });
+
+  it('leaves out an archived module', async () => {
+    expect(
+      await one([item('v', 'l1', 'video')], {
+        module: { archivedAt: '2026-11-01T00:00:00.000Z' },
+      }),
+    ).toEqual([]);
+  });
+});

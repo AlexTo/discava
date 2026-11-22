@@ -69,6 +69,7 @@ const analytics = ({
   lessons = [] as unknown[],
   quizzes = [] as unknown[],
   videoQuestions = [] as unknown[],
+  modulesWithoutQuestions = [] as unknown[],
   ...totals
 }: Record<string, unknown> = {}) => ({
   totals: {
@@ -85,6 +86,7 @@ const analytics = ({
   lessons,
   quizzes,
   videoQuestions,
+  modulesWithoutQuestions,
 });
 
 const renderPage = (course: (input: unknown) => unknown = () => analytics()) =>

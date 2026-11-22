@@ -307,6 +307,34 @@ describe('createContentItemQuiz', () => {
     expect(result).toEqual(quizContentItem);
   });
 
+  it('stores after_each_attempt for a quiz sent without a reveal setting', async () => {
+    const { revealAnswers: _omitted, ...withoutReveal } = settings;
+
+    await callAs().createContentItemQuiz({
+      ...input,
+      settings: withoutReveal,
+    });
+
+    expect(contentItemCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: { ...withoutReveal, revealAnswers: 'after_each_attempt' },
+      }),
+    );
+  });
+
+  it('keeps a reveal setting of never', async () => {
+    await callAs().createContentItemQuiz({
+      ...input,
+      settings: { ...settings, revealAnswers: 'never' },
+    });
+
+    expect(contentItemCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        settings: expect.objectContaining({ revealAnswers: 'never' }),
+      }),
+    );
+  });
+
   it('starts hidden in a published course', async () => {
     courseGet.mockReturnValue({
       go: vi.fn().mockResolvedValue({ data: { status: 'published' } }),

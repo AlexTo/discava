@@ -89,6 +89,7 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
       lessons: [],
       quizzes: [],
       videoQuestions: [],
+      modulesWithoutQuestions: [],
       daily: Array.from({ length: days }, (_, i) => ({
         date: `d${i}`,
         enrolments: 0,
@@ -434,6 +435,17 @@ describe('analytics.course', () => {
     expect(result.lessons).toEqual([]);
     expect(result.quizzes).toEqual([]);
     expect(result.videoQuestions).toEqual([]);
+    expect(result.modulesWithoutQuestions).toEqual([]);
+  });
+
+  it('names the modules with video and no questions', async () => {
+    analytics({
+      modulesWithoutQuestions: [{ moduleId: 'm1', title: 'Intro', extra: 1 }],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.modulesWithoutQuestions).toEqual([
+      { moduleId: 'm1', title: 'Intro' },
+    ]);
   });
 
   it('lists the course’s shown quizzes', async () => {
@@ -599,6 +611,7 @@ describe('analytics.course', () => {
     expect(Object.keys(result).sort()).toEqual([
       'daily',
       'lessons',
+      'modulesWithoutQuestions',
       'quizzes',
       'totals',
       'videoQuestions',
