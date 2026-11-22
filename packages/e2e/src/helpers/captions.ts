@@ -106,3 +106,53 @@ export const webVttOf = (
     .map((c) => `${timestamp(c.start)} --> ${timestamp(c.end)}\n${c.text}\n`)
     .join('\n')}`;
 };
+
+/** What the event runner's stand-in for Amazon Translate makes of a cue. */
+export const LOCAL_TRANSLATION = (tag: string, cue: string) =>
+  `[${tag}] ${cue}`;
+
+/**
+ * Ticks the caption languages (by English name, e.g. `Spanish`) on the open
+ * course's "Caption languages" card and saves them.
+ */
+export const chooseCaptionLanguages = async (
+  page: Page,
+  courseTitle: string,
+  labels: string[],
+) => {
+  await expect(
+    page.getByRole('heading', { level: 1, name: courseTitle }),
+  ).toBeVisible();
+  for (const label of labels) {
+    await page
+      .getByRole('checkbox', { name: new RegExp(`^${label} `) })
+      .click();
+  }
+  const card = page.getByRole('region', { name: 'Caption languages' });
+  await card.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(card.getByText('Saved', { exact: true })).toBeVisible();
+};
+
+/**
+ * Waits until a track named `label` is in the video's Captions dialog,
+ * reopening the dialog while translation runs. Leaves the dialog open.
+ */
+export const expectCaptionTrackListed = async (
+  page: Page,
+  videoTitle: string,
+  label: string,
+): Promise<Locator> => {
+  let dialog: Locator | undefined;
+  await expect(async () => {
+    dialog = await openCaptionsDialog(page, videoTitle);
+    try {
+      await expect(dialog.getByRole('listitem', { name: label })).toBeVisible({
+        timeout: 3_000,
+      });
+    } catch (error) {
+      await closeDialog(page);
+      throw error;
+    }
+  }).toPass({ timeout: 90_000 });
+  return dialog as Locator;
+};
