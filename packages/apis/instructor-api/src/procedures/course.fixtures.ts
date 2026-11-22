@@ -165,7 +165,10 @@ export const installDefaults = () => {
     go: vi.fn().mockResolvedValue({ data: course }),
   });
 
-  coursePatch.mockReturnValue({ set: coursePatchSet });
+  coursePatch.mockReturnValue({
+    set: coursePatchSet,
+    remove: coursePatchRemove,
+  });
   // The result of whichever patch a test runs; archive's default.
   coursePatchGo.mockResolvedValue({ data: { ...course, status: 'archived' } });
   coursePatchSet.mockReturnValue({
