@@ -468,6 +468,7 @@ export const createContentItemVideoUrl = courseProcedure
           label: track.label,
           isDefault: track.isDefault,
           source: track.source,
+          machineTranslated: track.source === 'translated',
           url: await getCloudFrontVideoUrl(track.key),
         }),
       ),

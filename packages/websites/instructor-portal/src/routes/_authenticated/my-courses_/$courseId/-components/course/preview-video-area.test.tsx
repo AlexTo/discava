@@ -224,6 +224,7 @@ describe('PreviewVideoArea', () => {
                 language: 'es-ES',
                 label: 'Español',
                 isDefault: false,
+                source: 'translated',
                 machineTranslated: true,
                 url: 'https://media.test/preview/t2.vtt',
               },

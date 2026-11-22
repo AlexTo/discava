@@ -548,6 +548,35 @@ describe('createVideoUrl', () => {
     expect(cookies).toEqual(['cookie=1']);
   });
 
+  it('flags translated tracks as machine-translated', async () => {
+    const track = (trackId: string, source: string, isDefault = false) => ({
+      trackId,
+      nonce: 'nonce-1',
+      language: trackId,
+      label: trackId,
+      isDefault,
+      source,
+      key: `courses/${COURSE}/preview/nonce-1/captions/${trackId}.vtt`,
+    });
+    storedPreview(
+      record({
+        captionTracks: [
+          track('en-US', 'auto', true),
+          track('es-ES', 'translated'),
+        ],
+      }),
+    );
+
+    const { captions } = await call().createVideoUrl({ courseId: COURSE });
+
+    expect(
+      captions.map((c) => [c.language, c.source, c.machineTranslated]),
+    ).toEqual([
+      ['en-US', 'auto', false],
+      ['es-ES', 'translated', true],
+    ]);
+  });
+
   it('plays the previous version while a replacement processes', async () => {
     storedPreview(
       record({
