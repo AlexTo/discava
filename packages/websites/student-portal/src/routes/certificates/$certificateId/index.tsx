@@ -42,9 +42,10 @@ function RouteComponent() {
       enabled: isAuthenticated,
     }),
   );
+  const valid = query.data?.status === 'valid' ? query.data : undefined;
   const isOwner =
-    query.data?.status === 'valid' &&
-    (mine.data ?? []).some((c) => c.certificateId === query.data.certificateId);
+    valid !== undefined &&
+    (mine.data ?? []).some((c) => c.certificateId === valid.certificateId);
 
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-16">
@@ -130,7 +131,7 @@ function RouteComponent() {
           </p>
         </section>
       )}
-      {query.data && isOwner ? <OwnerShare certificate={query.data} /> : null}
+      {valid && isOwner ? <OwnerShare certificate={valid} /> : null}
     </main>
   );
 }
