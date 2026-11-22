@@ -82,6 +82,10 @@ Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) gene
 
 [Biome](https://biomejs.dev) formats and lints this codebase (single quotes, trailing commas, 80-column width); `pnpm lint` runs it with `--configuration=fix`. Every source file, except generated output, translated docs, and `.astro` files, carries an Apache-2.0 SPDX header, written by the `license#sync` Nx sync generator (configured in [aws-nx-plugin.config.mts](aws-nx-plugin.config.mts)). Please don't hand-edit headers; `pnpm lint` and `pnpm build` keep them in sync for you.
 
+### UI Changes
+
+Before opening a pull request that changes what a user sees in a portal or in `packages/common/shadcn`, check it against the UI rules in [`packages/websites/CLAUDE.md`](packages/websites/CLAUDE.md).
+
 ### Rules That Span Records
 
 Every API and event handler shares the core table, and some rules span records that different writers touch. For example, core-api counts the students who have used an item (`studentActivityCount`), and instructor-api relies on that count to refuse deleting the item. A write that keeps a rule another API or handler depends on goes in a `core-table` helper, for example `studentActivityWrites` in `helpers/student-activity.ts`, and every procedure making that write calls the helper. Don't write it by hand in each procedure. A rule that only one API keeps can stay in that API.
