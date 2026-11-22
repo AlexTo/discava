@@ -132,7 +132,7 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
   // At both widths the panel is below the player, the time label stays on
   // one line, and every control is inside the player.
   const player = page.getByRole('group', { name: 'Video player' });
-  const expectLayoutFits = async () => {
+  const expectLayoutFits = async (shot: string) => {
     await expect(panel).toBeVisible();
     await player.hover();
     const [playerBox, panelBox, timeBox] = await Promise.all([
@@ -154,10 +154,11 @@ test('a learner reads a video’s transcript and jumps to a line', async ({
         playerBox!.x + playerBox!.width,
       );
     }
+    await screenshot(page, shot);
   };
-  await expectLayoutFits();
+  await expectLayoutFits('transcript below the player, desktop width');
   await page.setViewportSize({ width: 375, height: 800 });
-  await expectLayoutFits();
+  await expectLayoutFits('controls and transcript fit, phone width');
   expect(
     await page.evaluate(
       () =>
