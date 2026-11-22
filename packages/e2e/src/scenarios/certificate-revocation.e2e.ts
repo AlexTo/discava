@@ -76,7 +76,9 @@ test('a revoked certificate stops verifying for learners and verifiers, and a re
       ).toBeVisible({ timeout: 2_000 });
     });
     await expect(certificateControl(student)).toHaveCount(0);
-    await expect(student.getByRole('link', { name: 'View' })).toHaveCount(0);
+    await expect(
+      student.getByRole('button', { name: 'Download PDF' }),
+    ).toHaveCount(0);
     await screenshot(student, 'certificate-revoked-my-learning');
   });
 
