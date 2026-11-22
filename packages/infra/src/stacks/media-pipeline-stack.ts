@@ -140,6 +140,7 @@ export class MediaPipelineStack extends Stack {
     );
     runtimeConfig.grantReadAppConfig(handler);
     coreTable.grantReadWriteData(handler);
+    coreTable.bindSettings(handler);
     lessonMediaUploadBucket.grantDelete(handler);
     // A submission whose mediaConvertJobId was never stamped can't be
     // canceled/scheduled early by whatever delete/replace call retired it
@@ -349,6 +350,7 @@ export class MediaPipelineStack extends Stack {
     );
     runtimeConfig.grantReadAppConfig(transcribeComplete);
     coreTable.grantReadWriteData(transcribeComplete);
+    coreTable.bindSettings(transcribeComplete);
     // The job's tags and the location of its WebVTT.
     transcribeComplete.addToRolePolicy(
       new PolicyStatement({
@@ -419,6 +421,7 @@ export class MediaPipelineStack extends Stack {
     // A student's submission folder is only deleted when no submission holds
     // its file (#102): read-only, to check.
     coreTable.grantReadData(transcodeCleanup);
+    coreTable.bindSettings(transcodeCleanup);
 
     // A dedicated group (rather than the account's default one) so the
     // scheduler:CreateSchedule/UpdateSchedule grant can be scoped to just

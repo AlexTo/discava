@@ -9,10 +9,7 @@ import { logMetrics } from '@aws-lambda-powertools/metrics/middleware';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import {
-  getS3Client,
-  resolveAppConfigValue,
-} from '@discava/common-server-utils/lesson-media-bucket';
+import { getS3Client } from '@discava/common-server-utils/lesson-media-bucket';
 import {
   isLocalDev,
   LOCAL_PORTAL_URLS,
@@ -23,6 +20,7 @@ import middy from '@middy/core';
 import { TRPCError } from '@trpc/server';
 import { sitemapEntries } from '../helpers/sitemap.js';
 import { appRouter } from '../router.js';
+import { resolvePageRendererSettings } from './helpers/page-renderer-settings.js';
 import { escapeHtml, injectIntoTemplate } from './html.js';
 import {
   notFoundHead,
@@ -285,7 +283,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
       }
       return notFound();
     } catch (error) {
-      // A dependency failed (table, AppConfig, template): never cached, never a 404.
+      // A dependency failed (table, settings parameter, template): never cached, never a 404.
       deps.logger?.error('Page render failed', { path, error });
       return respond({
         statusCode: 503,
@@ -350,16 +348,25 @@ export const httpTemplateSource =
 
 let coreTablePromise: Promise<CoreTable> | undefined;
 const readCoreTable = () => {
-  coreTablePromise ??= createCoreTableService();
+  coreTablePromise ??= (async () => {
+    if (!isLocalDev()) {
+      // The renderer learns its table from the settings parameter, not its
+      // environment, so core-table resolves it as every other function does.
+      const { tableName } = await resolvePageRendererSettings();
+      process.env.DISCAVA_DYNAMODB_CORE_TABLE = JSON.stringify({ tableName });
+    }
+    return createCoreTableService();
+  })();
+  // A failed read isn't kept: the next request retries.
+  coreTablePromise.catch(() => {
+    coreTablePromise = undefined;
+  });
   return coreTablePromise;
 };
 
 const readMediaBaseUrl = async (): Promise<string | undefined> => {
   if (isLocalDev()) return localObjectUrl('PublicMediaBucket', '');
-  const { cloudFrontDomainName } = await resolveAppConfigValue<{
-    cloudFrontDomainName: string;
-  }>('s3', 'PublicMediaBucket');
-  return `https://${cloudFrontDomainName}/`;
+  return (await resolvePageRendererSettings()).publicMediaBaseUrl;
 };
 
 /** The renderer as configured by its environment, for the Lambda and the local server. */

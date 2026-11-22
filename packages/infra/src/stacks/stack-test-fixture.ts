@@ -89,38 +89,6 @@ export const stackTemplates = (
 };
 
 // The logical ids of the stack's functions whose role can touch the core
-// table but which lack RUNTIME_CONFIG_APP_ID or the AppConfig read actions:
-// the core-table client resolves the table name through AppConfig, so such a
-// function fails on every invocation once deployed.
-export const tableFunctionsMissingAppConfig = (template: Template) => {
-  const byRole = actionsByRole(template);
-  return Object.entries(template.findResources('AWS::Lambda::Function'))
-    .filter(([, fn]) => {
-      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
-        'Fn::GetAtt'
-      ][0];
-      // The stream router only reads the table's stream, not its items.
-      return (byRole[role] ?? []).some((a) =>
-        /^dynamodb:(Get|BatchGet|Query|Put|Update)Item$|^dynamodb:Query$/.test(
-          a,
-        ),
-      );
-    })
-    .filter(([, fn]) => {
-      const role = (fn.Properties.Role as { 'Fn::GetAtt': string[] })[
-        'Fn::GetAtt'
-      ][0];
-      const actions = byRole[role] ?? [];
-      return !(
-        fn.Properties.Environment?.Variables?.RUNTIME_CONFIG_APP_ID &&
-        actions.includes('appconfig:StartConfigurationSession') &&
-        actions.includes('appconfig:GetLatestConfiguration')
-      );
-    })
-    .map(([id]) => id);
-};
-
-// The logical ids of the stack's functions whose role can touch the core
 // table or the search collection but which lack the matching deploy-time
 // setting: the core-table and search clients read these from the environment,
 // so such a function fails on every invocation once deployed.

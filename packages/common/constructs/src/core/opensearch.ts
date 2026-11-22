@@ -439,15 +439,11 @@ export abstract class OpenSearchCollection extends Construct {
       code,
       timeout: Duration.minutes(5),
       tracing: Tracing.ACTIVE,
-      // The collection's endpoint, directly: this runs while this stack
-      // deploys, before RuntimeConfig's AppConfig content (deployed last)
-      // exists to look it up in. CKV_AWS_45 is suppressed below: checkov's
-      // secret scan trips on a __file__ key its own parser injects (the
-      // CDK-hashed template path), not on this value.
-      environment: {
-        OPENSEARCH_ENDPOINT: this.collection.attrCollectionEndpoint,
-      },
     });
+    // The collection's endpoint, as every other function gets it. CKV_AWS_45
+    // is suppressed below: checkov's secret scan trips on a __file__ key its
+    // own parser injects (the CDK-hashed template path), not on this value.
+    this.bindSettings(handler);
 
     Grant.addToPrincipal({
       grantee: handler,
