@@ -15,10 +15,9 @@ export const MAX_CI_FIX_ATTEMPTS = 5;
 export const ATTEMPT_LABEL_PREFIX = 'ci-fix-';
 export const EXHAUSTED_LABEL = 'ci-fix-exhausted';
 
-// The automation only revises a pull request whose branch is exactly
-// `<branch prefix>-<issue number>`; a second branch for a re-run
-// (`openhands/issue-308-2`) is never revised, so it is not answered either.
-export const AGENT_BRANCH = /^openhands\/issue-\d+$/;
+// Any single-segment branch under `openhands/`: the issue branches
+// (`openhands/issue-308`) and the other agent branches (`openhands/test-fix-782`).
+export const AGENT_BRANCH = /^openhands\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 // GitHub refuses a status description over 140 characters.
 const MAX_DESCRIPTION = 140;

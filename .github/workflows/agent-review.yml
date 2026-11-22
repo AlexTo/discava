@@ -8,7 +8,7 @@ name: Agent Review Status
 # `software-factory/review` in state `failure` or `error`. The reviewer's
 # "🔄 CHANGES REQUESTED" verdict sets no status, so nothing woke the agent.
 # This posts it when the reviewer submits such a review on an agent's branch
-# (`openhands/issue-<n>`), at most five times per pull request (labels
+# (`openhands/*`), at most five times per pull request (labels
 # `review-fix-1` to `review-fix-5`), then comments and stops
 # (`review-fix-exhausted`). The reviewer looks again by itself once the agent
 # pushes: a new head commit is a new review for its scan.
@@ -37,7 +37,7 @@ jobs:
   review-status:
     name: Send the agent back after a review asking for changes
     if: >-
-      startsWith(github.event.pull_request.head.ref, 'openhands/issue-') &&
+      startsWith(github.event.pull_request.head.ref, 'openhands/') &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.review.body, 'CHANGES REQUESTED')
     uses: ./.github/workflows/agent-status.yml

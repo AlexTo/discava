@@ -102,9 +102,10 @@ export class InstructorApiStack extends Stack {
     });
     suppressLogGroupKmsRule();
 
-    Object.values(this.integrations).forEach(({ handler }) =>
-      coreTable.grantReadWriteData(handler),
-    );
+    Object.values(this.integrations).forEach(({ handler }) => {
+      coreTable.grantReadWriteData(handler);
+      coreTable.bindSettings(handler);
+    });
 
     this.grantLessonMediaAccess(lessonMediaBucket);
     this.grantLessonMediaUploadAccess(lessonMediaUploadBucket);

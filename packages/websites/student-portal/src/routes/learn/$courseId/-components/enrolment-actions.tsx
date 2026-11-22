@@ -36,7 +36,7 @@ const enrolErrorMessage = (error: unknown) =>
     ? 'This course is no longer open for enrolment.'
     : errorCode(error) === 'PRECONDITION_FAILED'
       ? 'This course must be purchased'
-      : ((error as Error | null)?.message ?? 'Something went wrong.');
+      : apiErrorMessage(error);
 
 const PAYMENTS_UNAVAILABLE =
   'Payments are unavailable right now. Please try again later.';
@@ -306,7 +306,11 @@ export function EnrolmentActions({
   return (
     <>
       {isAuthenticated && enrolmentQuery.isError ? (
-        <ErrorAlert type="error" header="Couldn't check your enrolment">
+        <ErrorAlert
+          type="error"
+          header="Couldn't check your enrolment"
+          onRetry={() => enrolmentQuery.refetch()}
+        >
           {apiErrorMessage(enrolmentQuery.error)}
         </ErrorAlert>
       ) : null}

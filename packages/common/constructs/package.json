@@ -8,14 +8,14 @@
     "@aws-sdk/client-iam": "catalog:",
     "@aws-sdk/client-secrets-manager": "catalog:",
     "@discava/admin-api": "workspace:*",
+    "@discava/common-infra-config": "workspace:*",
     "@discava/common-server-utils": "workspace:*",
     "@discava/core-api": "workspace:*",
     "@discava/instructor-api": "workspace:*",
     "@trpc/server": "catalog:",
     "aws-cdk-lib": "catalog:",
     "constructs": "catalog:",
-    "tslib": "^2.3.0",
-    "@discava/common-infra-config": "workspace:*"
+    "tslib": "^2.3.0"
   },
   "devDependencies": {
     "@types/node": "catalog:"

@@ -8,10 +8,15 @@ import {
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
-import { enrolAndLand, openCourse } from '../helpers/student-portal.js';
+import {
+  enrolAndLand,
+  expectAfterReloads,
+  openCourse,
+} from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
 import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
@@ -159,4 +164,111 @@ test('search and the user menu work on a phone for an instructor-student', async
     await expect(items.nth(1)).toHaveText('Instructor');
     await screenshot(page, 'user menu at phone width');
   });
+});
+
+test('search results come first on a phone, with the filters collapsed', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E phone filter course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const category = await createCategory(uniqueName('E2E phone category'));
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  await setCourseCatalogue(courseId, {
+    categoryId: category.categoryId,
+    level: 'beginner',
+    language: 'en',
+    durationHours: 3,
+    tags: [uniqueName('phonetag').toLowerCase()],
+  });
+
+  const expectResultsFirst = async () => {
+    const card = page.getByRole('link', { name: new RegExp(title) }).first();
+    await expect(card).toBeVisible();
+    const box = await card.boundingBox();
+    expect(box?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+      PHONE.height,
+    );
+    await expectNoSidewaysScroll(page);
+    await expect(
+      page.getByRole('button', { name: /^Filters/ }),
+    ).toHaveAttribute('aria-expanded', 'false');
+  };
+
+  await test.step('a search for the course shows it on the first screen', async () => {
+    // The index follows the table's stream by up to a few seconds.
+    await page.goto(
+      `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
+    );
+    await expectAfterReloads(page, async () => {
+      await expect(
+        page.getByRole('link', { name: new RegExp(title) }),
+      ).toBeVisible({
+        timeout: 2_000,
+      });
+    });
+    await expectResultsFirst();
+    await screenshot(page, 'search results at phone width');
+  });
+
+  await test.step('the category page shows it on the first screen', async () => {
+    await page.goto(`${PORTALS.student}/category/${category.slug}`);
+    await expectResultsFirst();
+  });
+
+  await test.step('the filters open on request', async () => {
+    await page.goto(
+      `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
+    );
+    await page.getByRole('button', { name: /^Filters/ }).click();
+    await expect(
+      page.getByRole('checkbox', { name: /^Beginner/ }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'filters open at phone width');
+  });
+
+  await test.step('a 70-character word does not push the page sideways', async () => {
+    await page.goto(`${PORTALS.student}/search?query=${'a'.repeat(70)}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+  });
+});
+
+test('a long description does not make a tall card on a phone', async ({
+  page,
+}) => {
+  const scope = uniqueName('phonecards').toLowerCase();
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const longTitle = uniqueName('E2E phone long description');
+  const shortTitle = uniqueName('E2E phone short description');
+  const long = await createPublishedCourseViaApi(
+    instructor,
+    longTitle,
+    'A long description of the course. '.repeat(15).slice(0, 500),
+  );
+  const short = await createPublishedCourseViaApi(
+    instructor,
+    shortTitle,
+    'One line.',
+  );
+  await setCourseCatalogue(long.courseId, { tags: [scope] });
+  await setCourseCatalogue(short.courseId, { tags: [scope] });
+
+  await page.goto(
+    `${PORTALS.student}/search?${new URLSearchParams({ tags: JSON.stringify([scope]) })}`,
+  );
+  const card = (title: string) =>
+    page.locator('[data-slot="card"]').filter({ hasText: title });
+  await expectAfterReloads(page, async () => {
+    await expect(card(longTitle)).toBeVisible({ timeout: 2_000 });
+    await expect(card(shortTitle)).toBeVisible({ timeout: 2_000 });
+  });
+  const tall = await card(longTitle).boundingBox();
+  const small = await card(shortTitle).boundingBox();
+  expect(tall?.height).toBeLessThanOrEqual((small?.height ?? 0) * 1.5);
+  await expectNoSidewaysScroll(page);
+  await screenshot(page, 'course cards at phone width');
+
+  await card(longTitle).getByRole('link', { name: longTitle }).click();
+  await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
 });

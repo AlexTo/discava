@@ -111,6 +111,12 @@ describe('the signed-in home', () => {
       await within(section).findByText('Catalogue c4'),
     ).toBeInTheDocument();
     expect(within(section).queryByText('Catalogue c1')).toBeNull();
+    // One link per card, named by its title.
+    const links = within(section).getAllByRole('link');
+    expect(links).toHaveLength(
+      section.querySelectorAll('[data-slot="card"]').length,
+    );
+    expect(links[0]).toHaveAccessibleName(/^Catalogue c/);
   });
 
   it('welcomes a student with no courses yet', async () => {

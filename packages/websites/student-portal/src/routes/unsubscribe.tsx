@@ -6,6 +6,7 @@
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -49,6 +50,7 @@ const callUnsubscribe = async (
 
 function Unsubscribe() {
   const { token } = Route.useSearch();
+  usePageTitle('Unsubscribe');
   const { apis } = useRuntimeConfig();
   const apiUrl: string = apis.CoreApi;
   const [phase, setPhase] = useState<'ask' | 'stopped' | 'resumed'>('ask');

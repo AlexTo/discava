@@ -6,7 +6,7 @@
 
 import { Match } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
-import { synth, tableFunctionsMissingAppConfig } from './stack-test-fixture.js';
+import { functionsMissingSettings, synth } from './stack-test-fixture.js';
 
 describe('search indexing (#53)', () => {
   const stack = synth({});
@@ -100,11 +100,9 @@ describe('transcript indexing', () => {
   });
 });
 
-describe('runtime config (#619)', () => {
-  it('gives every function that uses the core table the AppConfig application id and read access', () => {
-    expect(tableFunctionsMissingAppConfig(synth({})('StreamRouter'))).toEqual(
-      [],
-    );
+describe('deploy-time settings', () => {
+  it('gives every function that uses the core table or search its setting', () => {
+    expect(functionsMissingSettings(synth({})('StreamRouter'))).toEqual([]);
   });
 });
 

@@ -168,6 +168,7 @@ export class StreamRouterStack extends Stack {
     );
     this.grantAppConfig(recalculation);
     coreTable.grantReadWriteData(recalculation);
+    coreTable.bindSettings(recalculation);
     reminder.scheduleGroup.grantWriteSchedules(recalculation);
     recalculation.addToRolePolicy(
       new PolicyStatement({
@@ -190,6 +191,7 @@ export class StreamRouterStack extends Stack {
     const reminder = new EventsCertificateReminder(this, 'CertificateReminder');
     this.grantAppConfig(reminder);
     coreTable.grantReadWriteData(reminder);
+    coreTable.bindSettings(reminder);
 
     const scheduleGroup = new ScheduleGroup(this, 'CertificateReminderGroup', {
       removalPolicy: RemovalPolicy.DESTROY,
@@ -236,7 +238,9 @@ export class StreamRouterStack extends Stack {
     const indexing = new EventsSearchIndexing(this, 'SearchIndexing');
     this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
+    coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
+    searchCollection.bindSettings(indexing);
     return indexing;
   }
 
@@ -253,7 +257,9 @@ export class StreamRouterStack extends Stack {
     const indexing = new EventsTranscriptIndexing(this, 'TranscriptIndexing');
     this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
+    coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
+    searchCollection.bindSettings(indexing);
     lessonMediaBucket.grantRead(indexing);
     return indexing;
   }
@@ -265,6 +271,7 @@ export class StreamRouterStack extends Stack {
     const analytics = new EventsAnalyticsUpdate(this, 'AnalyticsUpdate');
     this.grantAppConfig(analytics);
     coreTable.grantReadWriteData(analytics);
+    coreTable.bindSettings(analytics);
     return analytics;
   }
 
@@ -278,6 +285,7 @@ export class StreamRouterStack extends Stack {
     const recording = new EventsEarningsRecording(this, 'EarningsRecording');
     this.grantAppConfig(recording);
     coreTable.grantReadWriteData(recording);
+    coreTable.bindSettings(recording);
     recording.addEnvironment(
       'PLATFORM_FEE_BASIS_POINTS',
       String(payouts.platformFeeBasisPoints),
@@ -300,6 +308,7 @@ export class StreamRouterStack extends Stack {
     );
     this.grantAppConfig(translation);
     coreTable.grantReadWriteData(translation);
+    coreTable.bindSettings(translation);
     // A caption file's key is courses/<id>/.../<nonce>/captions/<track>.vtt;
     // IAM's * spans slashes.
     const captionFiles = 'courses/*/captions/*';
@@ -337,6 +346,7 @@ export class StreamRouterStack extends Stack {
       'NotificationDelivery',
     );
     coreTable.grantReadWriteData(delivery);
+    coreTable.bindSettings(delivery);
     this.grantAppConfig(delivery);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(delivery);
@@ -351,7 +361,11 @@ export class StreamRouterStack extends Stack {
         notifications.fromAddress,
       );
     }
-    if (notifications?.sesIdentity) {
+    if (notifications?.sesIdentity && notifications.fromAddress) {
+      // SES authorises a send against the sender's identity and, while the
+      // account is in the SES sandbox, against each recipient's verified
+      // identity too, so the grant covers every identity in the account and
+      // the condition pins the sender to the configured address.
       delivery.addToRolePolicy(
         new PolicyStatement({
           actions: ['ses:SendEmail'],
@@ -359,9 +373,12 @@ export class StreamRouterStack extends Stack {
             this.formatArn({
               service: 'ses',
               resource: 'identity',
-              resourceName: notifications.sesIdentity,
+              resourceName: '*',
             }),
           ],
+          conditions: {
+            StringEquals: { 'ses:FromAddress': notifications.fromAddress },
+          },
         }),
       );
     }

@@ -2,12 +2,21 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from 'vitest';
 import {
   createPositionReporter,
   DEFAULT_PREFERENCES,
   keyToAction,
   loadPreferences,
+  type PlayerPosition,
   SPEEDS,
   savePreferences,
   stepSpeed,
@@ -199,10 +208,10 @@ describe('preferences', () => {
 
 describe('createPositionReporter', () => {
   let clock: number;
-  let report: ReturnType<typeof vi.fn>;
+  let report: Mock<(position: PlayerPosition) => void>;
   beforeEach(() => {
     clock = 0;
-    report = vi.fn();
+    report = vi.fn<(position: PlayerPosition) => void>();
   });
   const make = (initialPosition?: number) =>
     createPositionReporter(report, { now: () => clock, initialPosition });

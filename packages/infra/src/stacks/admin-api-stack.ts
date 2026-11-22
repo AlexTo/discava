@@ -77,9 +77,10 @@ export class AdminApiStack extends Stack {
     });
     suppressLogGroupKmsRule();
 
-    Object.values(integrations).forEach(({ handler }) =>
-      coreTable.grantReadWriteData(handler),
-    );
+    Object.values(integrations).forEach(({ handler }) => {
+      coreTable.grantReadWriteData(handler);
+      coreTable.bindSettings(handler);
+    });
 
     // The secrets are imported, so the grants land on the function's role and
     // not on the Data stack's key policy (a cycle otherwise).

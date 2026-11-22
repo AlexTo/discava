@@ -4,6 +4,7 @@
  */
 
 import { NotificationBell } from '@discava/common-shadcn/components/notification-bell-container';
+import { RouteAnnouncer } from '@discava/common-shadcn/components/route-announcer';
 import {
   MAIN_CONTENT_ID,
   SkipLink,
@@ -14,7 +15,7 @@ import { UserMenu } from '@discava/common-shadcn/components/user-menu';
 import Config from '@discava/common-web-utils/app-config';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { SiteSearch } from './site-search';
@@ -28,6 +29,12 @@ const DISCAVA_URL = 'https://alexto.github.io/discava';
 const SiteLayout = ({ children }: { children: ReactNode }) => {
   const { isAuthenticated, user } = useAuth();
   const { portals } = useRuntimeConfig();
+  // Only the path: a filter or tab change is not a new page. The resolved
+  // location, because `location` changes while the old page is still shown,
+  // and focus would go to its heading.
+  const pathname = useRouterState({
+    select: (state) => (state.resolvedLocation ?? state.location).pathname,
+  });
   // To My Courses rather than the portal's home: a page that needs signing in,
   // which the Cognito session then does without asking (#67).
   const instructorPortal =
@@ -39,6 +46,7 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
     <TooltipProvider delayDuration={0}>
       <div className="flex min-h-screen flex-col">
         <SkipLink />
+        <RouteAnnouncer containerId={MAIN_CONTENT_ID} pathname={pathname} />
         <header className="sticky top-0 z-50 flex h-16 items-center justify-between gap-4 border-b bg-background/90 px-6 backdrop-blur lg:px-8">
           <Link to="/" className="flex shrink-0 items-center gap-2">
             <img

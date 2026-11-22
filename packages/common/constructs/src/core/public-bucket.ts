@@ -13,6 +13,7 @@ import {
 import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Grant, IGrantable } from 'aws-cdk-lib/aws-iam';
 import { IKey, Key } from 'aws-cdk-lib/aws-kms';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import {
   BlockPublicAccess,
   Bucket,
@@ -25,6 +26,7 @@ import { Construct } from 'constructs';
 import { suppressRules } from './checkov.js';
 import { findCloudFrontDomainNames } from './cloudfront.js';
 import { RuntimeConfig } from './runtime-config.js';
+import { addSetting } from './settings.js';
 import { CloudfrontWebAcl } from './static-website.js';
 
 export interface PublicBucketProps {
@@ -90,6 +92,10 @@ export interface PublicBucketProps {
 export class PublicBucket extends Construct {
   public readonly bucket: IBucket;
   public readonly cloudFrontDistribution: Distribution;
+  /** `https://<cloudFrontDomainName>/`, the base of every object's public URL. */
+  public readonly baseUrl: string;
+  private readonly runtimeConfigKey: string;
+  private readonly settings: Record<string, unknown>;
   private allowedOrigins: string[] = ['*'];
 
   constructor(
@@ -107,6 +113,7 @@ export class PublicBucket extends Construct {
     }: PublicBucketProps,
   ) {
     super(scope, id);
+    this.runtimeConfigKey = runtimeConfigKey;
 
     const key: IKey | undefined = enableKmsEncryption
       ? (encryptionKey ?? new Key(this, 'EncryptionKey', { enableKeyRotation }))
@@ -189,16 +196,18 @@ export class PublicBucket extends Construct {
         ? domainNames[0]
         : this.cloudFrontDistribution.domainName;
     const rc = RuntimeConfig.ensure(this);
-    rc.set('s3', runtimeConfigKey, {
+    this.settings = {
       bucketName: this.bucket.bucketName,
       cloudFrontDomainName,
-    });
+    };
+    this.baseUrl = `https://${cloudFrontDomainName}/`;
+    rc.set('s3', runtimeConfigKey, this.settings);
     // The portals build image URLs themselves, from the object keys the APIs
     // return, so they get the base URL too: under `connection.media`, which
     // reaches their runtime-config.json, unlike `s3`.
     rc.set('connection', 'media', {
       ...rc.get('connection').media,
-      [runtimeConfigKey]: `https://${cloudFrontDomainName}/`,
+      [runtimeConfigKey]: this.baseUrl,
     });
 
     // Always the generated *.cloudfront.net hostname: it's the target a
@@ -206,6 +215,11 @@ export class PublicBucket extends Construct {
     new CfnOutput(this, 'DistributionDomainName', {
       value: this.cloudFrontDistribution.domainName,
     });
+  }
+
+  /** Gives `fn` the bucket's deploy-time `s3` setting. */
+  public bindSettings(fn: LambdaFunction): void {
+    addSetting(fn, 's3', this.runtimeConfigKey, this.settings);
   }
 
   /**
