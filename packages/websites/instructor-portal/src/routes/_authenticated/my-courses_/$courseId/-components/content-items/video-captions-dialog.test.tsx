@@ -34,6 +34,15 @@ const uploaded = {
   url: 'https://media.test/es.vtt',
 };
 
+const translated = {
+  trackId: 't-fr',
+  language: 'fr-FR',
+  label: 'Français',
+  isDefault: false,
+  source: 'translated' as const,
+  url: 'https://media.test/fr.vtt',
+};
+
 const videoUrl = (captions = [auto, uploaded], captionsStatus = 'ready') => ({
   url: 'https://media.test/master.m3u8',
   withCredentials: false,
@@ -83,13 +92,47 @@ describe('VideoCaptionsDialog', () => {
       name: 'English',
     });
     expect(within(english).getByText('en-US')).toBeInTheDocument();
-    expect(within(english).getByText('auto')).toBeInTheDocument();
+    expect(within(english).getByText('Automatic')).toBeInTheDocument();
     expect(within(english).getByText('Default')).toBeInTheDocument();
 
     const spanish = within(dialog).getByRole('listitem', { name: 'Spanish' });
     expect(within(spanish).getByText('es-ES')).toBeInTheDocument();
-    expect(within(spanish).getByText('uploaded')).toBeInTheDocument();
+    expect(within(spanish).getByText('Uploaded')).toBeInTheDocument();
     expect(within(spanish).queryByText('Default')).toBeNull();
+  });
+
+  it('marks a translated track, offers no Remove for it and explains where it comes from', async () => {
+    const rendered = renderDialog({
+      'contentItem.createVideoUrl': () =>
+        videoUrl([auto, uploaded, translated]),
+    });
+    const dialog = await open(rendered);
+
+    const french = await within(dialog).findByRole('listitem', {
+      name: 'Français',
+    });
+    expect(within(french).getByText('Auto-translated')).toBeInTheDocument();
+    expect(
+      within(french).getByText("From the course's caption languages"),
+    ).toBeInTheDocument();
+    expect(
+      within(french).queryByRole('button', { name: /remove/i }),
+    ).toBeNull();
+    // Other tracks keep theirs.
+    expect(
+      within(dialog).getByRole('button', { name: 'Remove Spanish' }),
+    ).toBeInTheDocument();
+  });
+
+  it('says that a video can have auto-translated tracks among its ten', async () => {
+    const rendered = renderDialog({});
+    const dialog = await open(rendered);
+
+    expect(
+      within(dialog).getByText(
+        /up to 10 tracks, one per language, including auto-translated ones\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('says so when there are no tracks', async () => {
