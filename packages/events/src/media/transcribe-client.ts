@@ -15,7 +15,6 @@ import {
   transcribeOutputPrefix,
 } from '@discava/common-server-utils/captions';
 import {
-  resolveAppConfigValue,
   resolveLessonMediaBucketName,
   resolveLessonMediaUploadBucketName,
 } from '@discava/common-server-utils/lesson-media-bucket';
@@ -24,6 +23,7 @@ import {
   isLocalDev,
   type LocalTranscriptionJobRequest,
 } from '@discava/common-server-utils/local-dev';
+import { readOptionalSetting } from '@discava/common-server-utils/settings';
 
 // The language automatic captions are made in, until a course can choose.
 const DEFAULT_CAPTION_LANGUAGE = 'en-US';
@@ -57,18 +57,11 @@ export type CaptionJobTarget =
       nonce: string;
     };
 
-// Published beside the pipeline ARNs, in the `mediaConvert` runtime config;
-// not there (or no config at all) means the default.
-const resolveCaptionLanguage = async (): Promise<string> => {
-  try {
-    return await resolveAppConfigValue<string>(
-      'mediaConvert',
-      'CaptionLanguageCode',
-    );
-  } catch {
-    return DEFAULT_CAPTION_LANGUAGE;
-  }
-};
+// The optional `mediaConvert.CaptionLanguageCode` deploy-time setting; not
+// set means the default.
+const resolveCaptionLanguage = async (): Promise<string> =>
+  readOptionalSetting<string>('mediaConvert', 'CaptionLanguageCode') ??
+  DEFAULT_CAPTION_LANGUAGE;
 
 /**
  * Starts the automatic captions for a version whose transcode just finished:

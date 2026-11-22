@@ -9,12 +9,12 @@ import {
   CreateScheduleCommand,
   SchedulerClient,
 } from '@aws-sdk/client-scheduler';
-import { resolveAppConfigValue } from './lesson-media-bucket.js';
 import {
   callLocalEventRunner,
   isLocalDev,
   type LocalScheduleRequest,
 } from './local-dev.js';
+import { readSetting } from './settings.js';
 
 // The one scheduler of the transcode-cleanup Lambda, used by instructor-api (a
 // canceled job's own output, a video replaced or deleted, a file item's
@@ -38,11 +38,8 @@ type TranscodeCleanupConfig = {
 
 // Published once by the media pipeline alongside the transcode-cleanup
 // Lambda itself.
-const resolveTranscodeCleanupConfig = (): Promise<TranscodeCleanupConfig> =>
-  resolveAppConfigValue<TranscodeCleanupConfig>(
-    'mediaConvert',
-    'TranscodeCleanup',
-  );
+const resolveTranscodeCleanupConfig = (): TranscodeCleanupConfig =>
+  readSetting<TranscodeCleanupConfig>('mediaConvert', 'TranscodeCleanup');
 
 // How long to wait before deleting a job's own S3 output. A canceled job's
 // must outlast MediaConvert's async write tail (writes were observed ~30s
@@ -111,7 +108,7 @@ const createCleanupSchedule = async (
     return;
   }
   const { lambdaArn, schedulerRoleArn, scheduleGroupName } =
-    await resolveTranscodeCleanupConfig();
+    resolveTranscodeCleanupConfig();
 
   // Schedule names cap out at 64 characters; a hash of the ids that actually
   // identify this folder (and why it's being cleaned up, when that's given)

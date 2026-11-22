@@ -2,8 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { resolveAppConfigValue } from './lesson-media-bucket.js';
 import { isLocalDev, LOCAL_CAPTION_TRANSLATION } from './local-dev.js';
+import { readOptionalSetting } from './settings.js';
 
 /** The most caption languages a course can choose, whatever the stage allows. */
 export const MAX_CAPTION_LANGUAGES = 9;
@@ -20,7 +20,7 @@ const OFF: CaptionTranslationSettings = {
 
 /**
  * The stage's caption translation settings: local dev's own values, else
- * `captionTranslation.Settings` of the runtime config with the language
+ * the `captionTranslation.Settings` deploy-time setting with the language
  * limit clamped to 0..9. A stage that never published them translates
  * nothing.
  */
@@ -30,9 +30,13 @@ export const resolveCaptionTranslationSettings =
       return { ...LOCAL_CAPTION_TRANSLATION };
     }
     try {
-      const value = await resolveAppConfigValue<
-        Partial<CaptionTranslationSettings>
-      >('captionTranslation', 'Settings');
+      const value = readOptionalSetting<Partial<CaptionTranslationSettings>>(
+        'captionTranslation',
+        'Settings',
+      );
+      if (value === undefined) {
+        return { ...OFF };
+      }
       const max = Number(value.maxLanguagesPerCourse);
       return {
         enabled: value.enabled === true,

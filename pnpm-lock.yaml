@@ -27,9 +27,6 @@ catalogs:
     '@aws-sdk/client-api-gateway':
       specifier: 3.1169.0
       version: 3.1169.0
-    '@aws-sdk/client-appconfigdata':
-      specifier: 3.1169.0
-      version: 3.1169.0
     '@aws-sdk/client-cognito-identity-provider':
       specifier: 3.1164.0
       version: 3.1164.0
@@ -544,9 +541,6 @@ importers:
       '@aws-lambda-powertools/metrics':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-lambda-powertools/parameters':
-        specifier: 'catalog:'
-        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1169.0)(@aws-sdk/client-dynamodb@3.1169.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/client-ssm@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1169.0))(@middy/core@7.9.2)
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
@@ -602,18 +596,12 @@ importers:
       '@aws-lambda-powertools/metrics':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-lambda-powertools/parameters':
-        specifier: 'catalog:'
-        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1169.0)(@aws-sdk/client-dynamodb@3.1169.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/client-ssm@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1169.0))(@middy/core@7.9.2)
       '@aws-lambda-powertools/parser':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)(zod@4.6.7)
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-sdk/client-appconfigdata':
-        specifier: 'catalog:'
-        version: 3.1169.0
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1169.0
@@ -702,15 +690,9 @@ importers:
       '@aws-lambda-powertools/metrics':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-lambda-powertools/parameters':
-        specifier: 'catalog:'
-        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1169.0)(@aws-sdk/client-dynamodb@3.1169.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/client-ssm@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1169.0))(@middy/core@7.9.2)
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-sdk/client-appconfigdata':
-        specifier: 'catalog:'
-        version: 3.1169.0
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1169.0
@@ -842,9 +824,6 @@ importers:
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-sdk/client-appconfigdata':
-        specifier: 'catalog:'
-        version: 3.1169.0
       '@aws-sdk/client-dynamodb':
         specifier: 'catalog:'
         version: 3.1169.0
@@ -1182,18 +1161,12 @@ importers:
       '@aws-lambda-powertools/metrics':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-lambda-powertools/parameters':
-        specifier: 'catalog:'
-        version: 2.36.0(@aws-sdk/client-appconfigdata@3.1169.0)(@aws-sdk/client-dynamodb@3.1169.0)(@aws-sdk/client-secrets-manager@3.1164.0)(@aws-sdk/client-ssm@3.1164.0)(@aws-sdk/util-dynamodb@3.996.9(@aws-sdk/client-dynamodb@3.1169.0))(@middy/core@7.9.2)
       '@aws-lambda-powertools/parser':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)(zod@4.6.7)
       '@aws-lambda-powertools/tracer':
         specifier: 'catalog:'
         version: 2.36.0(@middy/core@7.9.2)
-      '@aws-sdk/client-appconfigdata':
-        specifier: 'catalog:'
-        version: 3.1169.0
       '@aws-sdk/client-cognito-identity-provider':
         specifier: 'catalog:'
         version: 3.1164.0
@@ -10275,7 +10248,7 @@ snapshots:
 
   '@aws-sdk/checksums@3.1002.5':
     dependencies:
-      '@aws-sdk/core': 3.981.0
+      '@aws-sdk/core': 3.981.1
       '@aws-sdk/types': 3.975.1
       '@smithy/core': 3.40.0
       '@smithy/types': 4.20.0
@@ -10303,6 +10276,7 @@ snapshots:
       '@smithy/node-http-handler': 4.14.2
       '@smithy/types': 4.20.0
       tslib: 2.8.1
+    optional: true
 
   '@aws-sdk/client-bedrock-runtime@3.1166.0':
     dependencies:
@@ -10379,7 +10353,7 @@ snapshots:
   '@aws-sdk/client-s3@3.1169.0':
     dependencies:
       '@aws-sdk/checksums': 3.1002.5
-      '@aws-sdk/core': 3.981.0
+      '@aws-sdk/core': 3.981.1
       '@aws-sdk/credential-provider-node': 3.972.98
       '@aws-sdk/middleware-sdk-s3': 3.972.89
       '@aws-sdk/signature-v4-multi-region': 3.996.52
@@ -10755,7 +10729,7 @@ snapshots:
 
   '@aws-sdk/middleware-sdk-s3@3.972.89':
     dependencies:
-      '@aws-sdk/core': 3.981.0
+      '@aws-sdk/core': 3.981.1
       '@aws-sdk/signature-v4-multi-region': 3.996.52
       '@aws-sdk/types': 3.975.1
       '@smithy/core': 3.40.0

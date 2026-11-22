@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  addSetting,
   CoreTable,
   EventsAnalyticsUpdate,
   EventsCaptionTranslation,
@@ -28,12 +29,12 @@ import type {
 import { STREAM_FEATURES } from '@discava/core-table';
 import { Duration, RemovalPolicy, Stack, StackProps, Stage } from 'aws-cdk-lib';
 import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
-import type { Function } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
 import type { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
+import { captionTranslationSetting } from './caption-translation-settings.js';
 import { importNotificationUnsubscribeSecret } from './notification-secret.js';
 
 export interface StreamRouterStackProps extends StackProps {
@@ -119,15 +120,16 @@ export class StreamRouterStack extends Stack {
       'caption-translation': this.createCaptionTranslationLambda(
         coreTable,
         lessonMediaBucket,
+        captionTranslation,
       ),
     };
 
-    // One object under one key: the AppConfig reader treats a falsy value as
-    // missing, and \`enabled: false\` must be readable.
-    RuntimeConfig.ensure(this).set('captionTranslation', 'Settings', {
-      enabled: captionTranslation?.enabled ?? true,
-      maxLanguagesPerCourse: captionTranslation?.maxLanguagesPerCourse ?? 9,
-    });
+    // One object under one key, so `enabled: false` is a value like any other.
+    RuntimeConfig.ensure(this).set(
+      'captionTranslation',
+      'Settings',
+      captionTranslationSetting(captionTranslation),
+    );
 
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
       table: coreTable.table,
@@ -139,19 +141,6 @@ export class StreamRouterStack extends Stack {
     });
   }
 
-  // How a handler reads AppConfig: the application lives in Data, which this
-  // stack depends on, so the id is a plain cross-stack reference. The
-  // configuration's content is in RuntimeConfig, which deploys last and
-  // depends on every stack that grants here, so no cycle appears.
-  private grantAppConfig(handler: Function) {
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    handler.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(handler);
-  }
-
   // The single writer of lesson progress and of the enrolment's
   // progressPercent, status and completedAt, run from its feature's queue.
   //
@@ -160,15 +149,19 @@ export class StreamRouterStack extends Stack {
   // EventBridge Scheduler.
   private createProgressRecalculationLambda(
     coreTable: CoreTable,
-    reminder: { scheduleGroup: ScheduleGroup; schedulerRole: Role },
+    reminder: {
+      scheduleGroup: ScheduleGroup;
+      schedulerRole: Role;
+      settings: object;
+    },
   ) {
     const recalculation = new EventsProgressRecalculation(
       this,
       'ProgressRecalculation',
     );
-    this.grantAppConfig(recalculation);
     coreTable.grantReadWriteData(recalculation);
     coreTable.bindSettings(recalculation);
+    addSetting(recalculation, 'certificates', 'Reminder', reminder.settings);
     reminder.scheduleGroup.grantWriteSchedules(recalculation);
     recalculation.addToRolePolicy(
       new PolicyStatement({
@@ -189,7 +182,6 @@ export class StreamRouterStack extends Stack {
   // through the runtime config.
   private createCertificateReminderLambda(coreTable: CoreTable) {
     const reminder = new EventsCertificateReminder(this, 'CertificateReminder');
-    this.grantAppConfig(reminder);
     coreTable.grantReadWriteData(reminder);
     coreTable.bindSettings(reminder);
 
@@ -219,12 +211,15 @@ export class StreamRouterStack extends Stack {
       onFailure: new SqsDestination(failures),
     });
 
-    RuntimeConfig.ensure(this).set('certificates', 'Reminder', {
+    // Not bound to the reminder itself: it never schedules a reminder, and
+    // its own ARN in its environment would be a self-reference.
+    const settings = {
       lambdaArn: reminder.functionArn,
       schedulerRoleArn: schedulerRole.roleArn,
       scheduleGroupName: scheduleGroup.scheduleGroupName,
-    });
-    return { reminder, scheduleGroup, schedulerRole };
+    };
+    RuntimeConfig.ensure(this).set('certificates', 'Reminder', settings);
+    return { reminder, scheduleGroup, schedulerRole, settings };
   }
 
   // The single writer of the search collection's documents, run from its
@@ -236,7 +231,6 @@ export class StreamRouterStack extends Stack {
     searchCollection: SearchCollection,
   ) {
     const indexing = new EventsSearchIndexing(this, 'SearchIndexing');
-    this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
     coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
@@ -255,11 +249,11 @@ export class StreamRouterStack extends Stack {
     lessonMediaBucket: LessonMediaBucket,
   ) {
     const indexing = new EventsTranscriptIndexing(this, 'TranscriptIndexing');
-    this.grantAppConfig(indexing);
     coreTable.grantReadData(indexing);
     coreTable.bindSettings(indexing);
     searchCollection.grantWrite(indexing.role!);
     searchCollection.bindSettings(indexing);
+    lessonMediaBucket.bindSettings(indexing);
     lessonMediaBucket.grantRead(indexing);
     return indexing;
   }
@@ -269,7 +263,6 @@ export class StreamRouterStack extends Stack {
   // what it adds, so it only writes the table.
   private createAnalyticsUpdateLambda(coreTable: CoreTable) {
     const analytics = new EventsAnalyticsUpdate(this, 'AnalyticsUpdate');
-    this.grantAppConfig(analytics);
     coreTable.grantReadWriteData(analytics);
     coreTable.bindSettings(analytics);
     return analytics;
@@ -283,7 +276,6 @@ export class StreamRouterStack extends Stack {
     payouts: StreamRouterStackProps['payouts'],
   ) {
     const recording = new EventsEarningsRecording(this, 'EarningsRecording');
-    this.grantAppConfig(recording);
     coreTable.grantReadWriteData(recording);
     coreTable.bindSettings(recording);
     recording.addEnvironment(
@@ -301,14 +293,21 @@ export class StreamRouterStack extends Stack {
   private createCaptionTranslationLambda(
     coreTable: CoreTable,
     lessonMediaBucket: LessonMediaBucket,
+    captionTranslation: CaptionTranslationSettings | undefined,
   ) {
     const translation = new EventsCaptionTranslation(
       this,
       'CaptionTranslation',
     );
-    this.grantAppConfig(translation);
     coreTable.grantReadWriteData(translation);
     coreTable.bindSettings(translation);
+    lessonMediaBucket.bindSettings(translation);
+    addSetting(
+      translation,
+      'captionTranslation',
+      'Settings',
+      captionTranslationSetting(captionTranslation),
+    );
     // A caption file's key is courses/<id>/.../<nonce>/captions/<track>.vtt;
     // IAM's * spans slashes.
     const captionFiles = 'courses/*/captions/*';
@@ -347,7 +346,6 @@ export class StreamRouterStack extends Stack {
     );
     coreTable.grantReadWriteData(delivery);
     coreTable.bindSettings(delivery);
-    this.grantAppConfig(delivery);
     const secret = importNotificationUnsubscribeSecret(this, unsubscribeSecret);
     secret.grantRead(delivery);
     delivery.addEnvironment('UNSUBSCRIBE_SECRET_ARN', secret.secretArn);

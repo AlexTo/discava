@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import {
+  addSetting,
   CoreTable,
   EventsTranscodeCleanup,
   EventsTranscodeComplete,
@@ -23,12 +24,7 @@ import {
 } from 'aws-cdk-lib';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import {
-  IGrantable,
-  PolicyStatement,
-  Role,
-  ServicePrincipal,
-} from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Function as LambdaFunctionHandler } from 'aws-cdk-lib/aws-lambda';
 import { SqsDestination } from 'aws-cdk-lib/aws-lambda-destinations';
 import { ScheduleGroup } from 'aws-cdk-lib/aws-scheduler';
@@ -59,6 +55,11 @@ export class MediaPipelineStack extends Stack {
   public readonly videoTranscodePipeline: VideoTranscodePipeline;
   private readonly scheduleGroup: ScheduleGroup;
   private readonly schedulerRole: Role;
+  private readonly cleanupSettings: {
+    lambdaArn: string;
+    schedulerRoleArn: string;
+    scheduleGroupName: string;
+  };
 
   constructor(
     scope: Construct,
@@ -81,12 +82,11 @@ export class MediaPipelineStack extends Stack {
       },
     );
 
-    const { scheduleGroup, schedulerRole } = this.createTranscodeCleanupLambda(
-      lessonMediaBucket,
-      coreTable,
-    );
+    const { scheduleGroup, schedulerRole, cleanupSettings } =
+      this.createTranscodeCleanupLambda(lessonMediaBucket, coreTable);
     this.scheduleGroup = scheduleGroup;
     this.schedulerRole = schedulerRole;
+    this.cleanupSettings = cleanupSettings;
 
     this.createTranscodeCompleteLambda(
       lessonMediaBucket,
@@ -130,17 +130,12 @@ export class MediaPipelineStack extends Stack {
     lessonMediaUploadBucket: LessonMediaUploadBucket,
     coreTable: CoreTable,
   ) {
-    // The upload bucket's name is resolved at runtime via RuntimeConfig/
-    // AppConfig, granted below alongside the DynamoDB table name lookup
-    // @discava/core-table already needs.
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    handler.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(handler);
     coreTable.grantReadWriteData(handler);
     coreTable.bindSettings(handler);
+    // The buckets' names are deploy-time settings: the upload bucket's to
+    // delete the raw upload, and both to start the version's captions.
+    lessonMediaUploadBucket.bindSettings(handler);
+    lessonMediaBucket.bindSettings(handler);
     lessonMediaUploadBucket.grantDelete(handler);
     // A submission whose mediaConvertJobId was never stamped can't be
     // canceled/scheduled early by whatever delete/replace call retired it
@@ -210,9 +205,10 @@ export class MediaPipelineStack extends Stack {
 
   // instructor-api's video procedures submit the MediaConvert job themselves
   // (packages/apis/instructor-api/src/helpers/mediaconvert-client.ts).
-  // InstructorApi.defaultIntegrations already gives them AppConfig read, so
-  // only MediaConvert's permissions are added here.
+  // The caller binds the buckets' settings; the pipeline's role and job
+  // template come with the MediaConvert permissions added here.
   public grantSubmitTranscodeJob(handler: LambdaFunctionHandler) {
+    this.videoTranscodePipeline.bindSettings(handler);
     // MediaConvert's CreateJob isn't meaningfully resource-scoped for a
     // submitter role (the job doesn't exist yet), so this is the widest
     // permission in this stage that's still limited to one action.
@@ -269,7 +265,13 @@ export class MediaPipelineStack extends Stack {
   // scheduleGroup that targets schedulerRole: every handler that can retire
   // lesson media, whether by canceling a job, replacing a version, or
   // applying a finished job's outcome.
-  private grantScheduleCleanupWrite(handler: IGrantable) {
+  private grantScheduleCleanupWrite(handler: LambdaFunctionHandler) {
+    addSetting(
+      handler,
+      'mediaConvert',
+      'TranscodeCleanup',
+      this.cleanupSettings,
+    );
     this.scheduleGroup.grantWriteSchedules(handler);
     // Creating a schedule with a target role requires the creator to be
     // allowed to pass that role -- scoped to just this one role, and only
@@ -343,14 +345,9 @@ export class MediaPipelineStack extends Stack {
       this,
       'TranscribeComplete',
     );
-    const runtimeConfig = RuntimeConfig.ensure(this);
-    transcribeComplete.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(transcribeComplete);
     coreTable.grantReadWriteData(transcribeComplete);
     coreTable.bindSettings(transcribeComplete);
+    lessonMediaBucket.bindSettings(transcribeComplete);
     // The job's tags and the location of its WebVTT.
     transcribeComplete.addToRolePolicy(
       new PolicyStatement({
@@ -409,11 +406,7 @@ export class MediaPipelineStack extends Stack {
       'TranscodeCleanup',
     );
     const runtimeConfig = RuntimeConfig.ensure(this);
-    transcodeCleanup.addEnvironment(
-      'RUNTIME_CONFIG_APP_ID',
-      runtimeConfig.appConfigApplicationId,
-    );
-    runtimeConfig.grantReadAppConfig(transcodeCleanup);
+    lessonMediaBucket.bindSettings(transcodeCleanup);
     // Needs both: list the job's own nonce-scoped prefix, then delete
     // everything found there.
     lessonMediaBucket.grantRead(transcodeCleanup);
@@ -450,12 +443,15 @@ export class MediaPipelineStack extends Stack {
       ),
     });
 
-    runtimeConfig.set('mediaConvert', 'TranscodeCleanup', {
+    // Not bound to transcodeCleanup itself: it never schedules a cleanup, and
+    // its own ARN in its environment would be a self-reference.
+    const cleanupSettings = {
       lambdaArn: transcodeCleanup.functionArn,
       schedulerRoleArn: schedulerRole.roleArn,
       scheduleGroupName: scheduleGroup.scheduleGroupName,
-    });
+    };
+    runtimeConfig.set('mediaConvert', 'TranscodeCleanup', cleanupSettings);
 
-    return { transcodeCleanup, scheduleGroup, schedulerRole };
+    return { transcodeCleanup, scheduleGroup, schedulerRole, cleanupSettings };
   }
 }

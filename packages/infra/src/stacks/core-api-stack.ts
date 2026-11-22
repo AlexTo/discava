@@ -134,6 +134,10 @@ export class CoreApiStack extends Stack {
       searchCollection.grantRead(handler.role!);
       searchCollection.bindSettings(handler);
     });
+    // MediaUrl signs from the CloudFront config of the lesson media bucket.
+    lessonMediaBucket.bindSettings(
+      this.privilegedHandler(integrations, 'contentItem.videoUrl'),
+    );
     for (const op of [
       'contentItem.videoUrl',
       'contentItem.fileUrl',
@@ -177,7 +181,7 @@ export class CoreApiStack extends Stack {
   // upload, checks it (reading it), copies it into the lesson media bucket,
   // deletes that copy if the submission doesn't commit, and schedules the
   // cleanups of a student's folders. Its bucket names and the schedule's
-  // config come from AppConfig, which every core-api function can read.
+  // config are deploy-time settings.
   private grantAssignmentSubmitAccess(
     integrations: CoreApiIntegrations,
     lessonMediaBucket: LessonMediaBucket,
@@ -186,6 +190,8 @@ export class CoreApiStack extends Stack {
   ) {
     for (const op of ['assignment.uploadUrl', 'assignment.submit'] as const) {
       const handler = this.privilegedHandler(integrations, op);
+      lessonMediaUploadBucket.bindSettings(handler);
+      lessonMediaBucket.bindSettings(handler);
       lessonMediaUploadBucket.grantPut(handler);
       lessonMediaUploadBucket.grantRead(handler);
       lessonMediaBucket.grantPut(handler);
@@ -195,7 +201,7 @@ export class CoreApiStack extends Stack {
     }
   }
 
-  // Every grant beyond the baseline (table, AppConfig, search read) goes
+  // Every grant beyond the baseline (table, search read) goes
   // through this, so a procedure missing from CORE_API_DEDICATED_FUNCTIONS
   // fails synth instead of silently handing its permissions to the shared
   // router function that serves every other core-api procedure.
