@@ -16,6 +16,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { useAuth } from 'react-oidc-context';
 import { AdminApiClientProvider, CoreApiClientProvider } from './api';
+import { AdminBrandSync } from './components/admin-brand-sync';
 import { LOCAL_DEV_CONFIG } from './local-dev-config';
 import { router } from './router';
 import './styles.css';
@@ -23,7 +24,12 @@ import './styles.css';
 const App = () => {
   const auth = useAuth();
   const runtimeConfig = useRuntimeConfig();
-  return <RouterProvider router={router} context={{ runtimeConfig, auth }} />;
+  return (
+    <>
+      <AdminBrandSync />
+      <RouterProvider router={router} context={{ runtimeConfig, auth }} />
+    </>
+  );
 };
 
 const root = document.getElementById('root');

@@ -2,7 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { fileURLToPath } from 'node:url';
+import { deflateSync } from 'node:zlib';
 import { expect, type Locator, type Page } from '@playwright/test';
 
 // Two 1600x900 JPEGs, different enough to tell apart (SMPTE bars, and a test
@@ -30,3 +32,53 @@ export const expectImageLoaded = async (image: Locator, width: number) => {
     })
     .toBe(width);
 };
+
+// A solid-colour PNG of any size, made in memory, for the brand images (an
+// icon at least 192 × 192, a logo of any shape) without fixture files.
+export const solidPng = (width: number, height: number): Buffer => {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes: Buffer) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = crcTable[(c ^ byte) & 0xff]! ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const check = Buffer.alloc(4);
+    check.writeUInt32BE(crc(body));
+    return Buffer.concat([length, body, check]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // RGB
+  // Each row: a filter byte, then width × 3 bytes of blue.
+  const row = Buffer.alloc(1 + width * 3);
+  for (let x = 0; x < width; x++) {
+    row[2 + x * 3 + 1] = 0x4e;
+    row[2 + x * 3 + 2] = 0xd8;
+    row[2 + x * 3] = 0x1d;
+  }
+  const pixels = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+};
+
+// A 4:1 SVG logo, and one with a script in it, which the server refuses.
+export const LOGO_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><rect width="400" height="100" fill="#1d4ed8"/><text x="20" y="62" font-size="40" fill="#fff">Acme</text></svg>',
+);
+export const SCRIPTED_LOGO_SVG = Buffer.from(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100"><script>alert(1)</script><rect width="400" height="100"/></svg>',
+);

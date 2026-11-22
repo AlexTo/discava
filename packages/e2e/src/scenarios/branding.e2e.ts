@@ -1,0 +1,191 @@
+/**
+ * Copyright Discava Contributors. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
+import { type Brand, currentBrand, restoreBrand } from '../helpers/branding.js';
+import { LOGO_SVG, SCRIPTED_LOGO_SVG, solidPng } from '../helpers/images.js';
+import { PAGE_RENDERER, PORTALS } from '../helpers/portals.js';
+import { coursePageUrl } from '../helpers/public-pages.js';
+import { screenshot } from '../helpers/screenshots.js';
+import { expect, test } from '../helpers/table-invariants.js';
+import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
+
+// An administrator uploads a logo and an icon on Settings → Branding and saves
+// them; the portals' headers, the tab icon and a public course page then show
+// them. The brand is one record for the whole stack, so the scenario runs
+// serially and puts back what it found. Visitors see a change within five
+// minutes in a deployed stage; locally the published copy is read fresh by a
+// browser that has never visited, but a cached one may take up to a minute.
+test.describe.configure({ mode: 'serial' });
+
+const PORTAL_WAIT_MS = 90_000;
+
+let admin: Awaited<ReturnType<typeof apiUser>>;
+let before: Brand;
+
+test.beforeAll(async () => {
+  admin = await apiUser('Cara', ['admin']);
+  before = await currentBrand(admin);
+});
+
+test.afterAll(async () => {
+  await restoreBrand(admin, before);
+});
+
+const png = (name: string, width: number, height: number) => ({
+  name,
+  mimeType: 'image/png',
+  buffer: solidPng(width, height),
+});
+
+test('an administrator uploads a logo and an icon, and visitors see them', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+
+  await test.step('the Branding page starts from what is saved, with Save disabled', async () => {
+    await page.goto(`${PORTALS.admin}/settings/branding`);
+    await signIn(page, newUser('Cara', ['admin']));
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Branding' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await screenshot(page, 'branding page before changes');
+  });
+
+  await test.step('a non-square icon is refused, with the rule, and nothing is uploaded', async () => {
+    await page
+      .getByLabel('Upload icon')
+      .setInputFiles(png('icon.png', 512, 256));
+    await expect(page.getByRole('alert')).toContainText('wrong shape');
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await screenshot(page, 'refused non-square icon');
+  });
+
+  await test.step('a logo and an icon upload and show in the preview', async () => {
+    await page.getByLabel('Upload logo').setInputFiles({
+      name: 'logo.svg',
+      mimeType: 'image/svg+xml',
+      buffer: LOGO_SVG,
+    });
+    await page
+      .getByLabel('Upload icon')
+      .setInputFiles(png('icon.png', 512, 512));
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await expect(
+      page.getByRole('img', { name: /logo$/ }).last(),
+    ).toHaveAttribute('src', /^blob:/);
+    await screenshot(page, 'branding page with a new logo and icon');
+  });
+
+  await test.step('saving confirms, and the admin portal shows the logo at once', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(
+      page.locator('header img[alt$=" logo"]').first(),
+    ).toHaveAttribute('src', /brand\/logo\//);
+    await screenshot(page, 'branding saved');
+  });
+
+  await test.step('the page fits a phone without scrolling sideways', async () => {
+    const desktop = page.viewportSize();
+    await page.setViewportSize(PHONE);
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'branding page at phone width');
+    if (desktop) await page.setViewportSize(desktop);
+  });
+
+  await test.step('a scripted SVG logo is refused by the server, beside the logo', async () => {
+    await page.getByLabel('Upload logo').setInputFiles({
+      name: 'scripted.svg',
+      mimeType: 'image/svg+xml',
+      buffer: SCRIPTED_LOGO_SVG,
+    });
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText(/can't contain a <script>/)).toBeVisible();
+    await screenshot(page, 'scripted logo refused');
+  });
+
+  await test.step('the stored brand still has the earlier logo', async () => {
+    const saved = await currentBrand(admin);
+    expect(saved.brand.logoKey).toMatch(/^brand\/logo\/.*\.svg$/);
+    expect(saved.brand.iconKey).toMatch(/^brand\/icon\/.*\.png$/);
+  });
+
+  await test.step('the student and instructor portals show the logo and the tab icon', async () => {
+    for (const [portal, url] of [
+      ['student', PORTALS.student],
+      ['instructor', PORTALS.instructor],
+    ] as const) {
+      const visitor = await browser.newPage();
+      await visitor.goto(url);
+      // A first visit holds the render until brand.json arrives; a cached
+      // copy may take up to a minute to give way to the new one.
+      await expect(async () => {
+        await visitor.reload();
+        await expect(
+          visitor.locator('header img[alt$=" logo"]').first(),
+        ).toHaveAttribute('src', /brand\/logo\//, { timeout: 5_000 });
+      }).toPass({ timeout: PORTAL_WAIT_MS });
+      await expect(visitor.locator('link[rel="icon"]')).toHaveAttribute(
+        'href',
+        /brand\/icon\//,
+      );
+      await screenshot(visitor, `${portal} portal header with the brand`);
+      await visitor.close();
+    }
+  });
+
+  await test.step('a public course page carries the brand’s icon', async () => {
+    const instructor = await apiUser('Pam', ['instructor']);
+    const { courseId } = await createPublishedCourseViaApi(
+      instructor,
+      uniqueName('E2E branding course'),
+    );
+    await expect(async () => {
+      const html = await (
+        await fetch(`${PAGE_RENDERER}/learn/${courseId}`, {
+          headers: { 'x-discava-host': new URL(coursePageUrl('x')).host },
+        })
+      ).text();
+      expect(html).toMatch(
+        /<link rel="icon" type="image\/png" href="[^"]*brand\/icon\//,
+      );
+      expect(html).toContain('rel="apple-touch-icon"');
+      expect(html).toContain('id="discava-page-data"');
+    }).toPass({ timeout: 30_000 });
+  });
+
+  await test.step('someone who is not an administrator is kept out, and cannot save', async () => {
+    const student = await apiUser('Bob', ['student']);
+    await expect(student.admin.branding.get.query()).rejects.toMatchObject({
+      data: { code: 'FORBIDDEN' },
+    });
+    await expect(
+      student.admin.branding.save.mutate({
+        expectedRevision: 0,
+        name: null,
+        showNameBesideLogo: true,
+        colour: null,
+        logoKey: null,
+        iconKey: null,
+        shareImageKey: null,
+      }),
+    ).rejects.toMatchObject({ data: { code: 'FORBIDDEN' } });
+
+    const outsider = await browser.newPage();
+    await outsider.goto(`${PORTALS.admin}/settings/branding`);
+    await signIn(outsider, newUser('Bob', ['student']));
+    await expect(
+      outsider.getByText('The admin portal is for administrators'),
+    ).toBeVisible();
+    await expect(
+      outsider.getByRole('heading', { level: 1, name: 'Branding' }),
+    ).toHaveCount(0);
+  });
+});

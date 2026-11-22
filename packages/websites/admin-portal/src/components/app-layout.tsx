@@ -7,6 +7,7 @@ import {
   type PortalNavItem,
   PortalShell,
 } from '@discava/common-shadcn/components/portal-shell';
+import type { UserMenuItem } from '@discava/common-shadcn/components/user-menu';
 import { CreditCard, Home, MessageSquareText, Tags } from 'lucide-react';
 import type * as React from 'react';
 
@@ -25,7 +26,13 @@ export const segmentLabels = {
   payments: 'Payments',
   settings: 'Settings',
   notifications: 'Notifications',
+  branding: 'Branding',
 };
+
+// Beside the shared "Notification settings" entry.
+const userMenuItems: UserMenuItem[] = [
+  { label: 'Branding', to: '/settings/branding' },
+];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
   <PortalShell
@@ -33,6 +40,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => (
     label="Admin"
     navItems={navItems}
     segmentLabels={segmentLabels}
+    userMenuItems={userMenuItems}
   >
     {children}
   </PortalShell>

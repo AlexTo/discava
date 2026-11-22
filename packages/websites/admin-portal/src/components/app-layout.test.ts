@@ -21,6 +21,7 @@ describe('the admin breadcrumbs', () => {
     ['/reviews', ['/', 'Reviews']],
     ['/payments', ['/', 'Payments']],
     ['/settings/notifications', ['/', 'Settings', 'Notifications']],
+    ['/settings/branding', ['/', 'Settings', 'Branding']],
   ])('label %s', (path, expected) => {
     expect(labels(path)).toEqual(expected);
   });
