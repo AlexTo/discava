@@ -539,7 +539,8 @@ describe('delivery', () => {
     );
     expect(refund.amount).toBe(4900);
     expect(again.id).toBe(refund.id);
-    expect(hook.deliveries).toHaveLength(1);
+    // The stand-in answers the refund before it delivers the event.
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1));
     const [delivery] = hook.deliveries as [{ body: string; signature: string }];
     const event = Stripe.webhooks.constructEvent(
       delivery.body,
@@ -568,10 +569,11 @@ describe('learner refunds', () => {
       type: 'StripeInvalidRequestError',
       statusCode: 400,
     });
-    const refundNotices = hook.deliveries.filter(
-      (d) => JSON.parse(d.body).type === 'charge.refunded',
-    );
-    expect(refundNotices).toHaveLength(1);
+    const refundNotices = () =>
+      hook.deliveries.filter(
+        (d) => JSON.parse(d.body).type === 'charge.refunded',
+      );
+    await vi.waitFor(() => expect(refundNotices()).toHaveLength(1));
   });
 
   it('returns the first refund for the same idempotency key, delivering once', async () => {
@@ -587,7 +589,7 @@ describe('learner refunds', () => {
     const third = await stripe.refunds.create(params, options);
     expect(second.id).toBe(first.id);
     expect(third.id).toBe(first.id);
-    expect(hook.deliveries).toHaveLength(1);
+    await vi.waitFor(() => expect(hook.deliveries).toHaveLength(1));
     const listed = await request('/stripe/test/refunds', {
       method: 'POST',
       body: JSON.stringify({ sessionId: session.id }),
