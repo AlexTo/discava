@@ -1,6 +1,6 @@
 # Research: Admin-Set Platform Branding
 
-Each entry gives the decision, why, and what else was weighed. Code references are to `main` at the time of planning.
+Each entry gives the decision, why, and what else was weighed. Code references are to `main` at the time of planning, revised after the deploy-time settings change (`runtime-config-env`, #778 to #800): AppConfig is gone, each function reads its settings from `DISCAVA_*` environment variables (`readSetting` in `@discava/common-server-utils/settings`, given by a construct's `bindSettings(fn)`), the page renderer reads its own from the SSM parameter `/<stage>/page-renderer`, and the portals' `runtime-config.json` (the `PortalConfig` stack) holds only the `connection` namespace.
 
 ## R-1: Where the brand is stored
 
@@ -10,7 +10,8 @@ Each entry gives the decision, why, and what else was weighed. Code references a
 
 **Alternatives considered**:
 - *Stage config in `common/infra-config`* (as the payout settings are): needs a redeploy, which the spec rules out (SC-001).
-- *AWS AppConfig or SSM Parameter Store*: a second store for application data, and no local stand-in in `pnpm dev` today (constitution III).
+- *A deploy-time setting* (a `DISCAVA_*` environment variable, or a field of the page renderer's SSM parameter): fixed at deploy, like stage config, and the only places settings live now that AppConfig is gone (#800).
+- *SSM Parameter Store written at run time*: a second store for application data, and no local stand-in in `pnpm dev` (constitution III).
 - *A JSON file in S3 as the source of truth*: no conditional write on a revision without extra machinery; the table already gives it.
 
 ## R-2: Optimistic concurrency
@@ -24,7 +25,7 @@ Each entry gives the decision, why, and what else was weighed. Code references a
 **Decision**: a published brand document, `brand/brand.json`, in the existing public media bucket, served by its CloudFront distribution. The portals fetch it when they start; the page renderer reads the table directly (R-6). The document is written by a new feature registered with the core table's stream router, `brand-publishing`, whose handler reads the **current** `platformBrand` record (never the stream image, so out-of-order delivery cannot publish an older revision) and puts the document with `Cache-Control: public, max-age=60, s-maxage=240`.
 
 **Rationale**:
-- `runtime-config.json` is written at deploy time by CDK (`static-website.ts`), so it cannot carry a brand an admin changes at run time.
+- Both kinds of configuration are written at deploy time by CDK: the portals' `runtime-config.json` (the `connection` namespace, deployed by the `PortalConfig` stack) and the functions' `DISCAVA_*` settings. Neither can carry a brand an admin changes at run time.
 - A public core-api query would be a Lambda invocation and a table read on every page load of every visitor, uncached. A CDN-cached JSON costs nothing per visitor and works signed out.
 - A browser holds the document for at most 60 s and CloudFront for at most 240 s, so a change reaches every new page load within 5 minutes (SC-002, FR-020), within the 300 s the page renderer already uses.
 - Publishing through the stream router gives retries, a failure queue and an alarm for free, and runs locally through the event runner (constitution III). It keeps S3 out of the admin's save request, so a save never half-succeeds ("saved but not published").
@@ -49,7 +50,7 @@ The behavior uses `CachingOptimized`, which honours the origin's `Cache-Control`
 - `branding.createUploadUrl` presigns a `PUT` with the exact `Content-Type`, `Content-Length`, `Cache-Control: public, max-age=31536000, immutable` and `Tagging: lifecycle=unattached`;
 - `branding.save` validates the new object, removes the tag (attach), writes the record, then puts the tag back on the replaced object (best-effort detach); the bucket's existing lifecycle rule deletes unattached objects after a day.
 
-`presignJpegUpload`, `headPublicMediaObject`, `attachPublicMediaObject` and `bestEffortDetachPublicMediaObject` live in `instructor-api/src/helpers/public-media-client.ts` today. With admin-api as a second consumer they move to `common-server-utils/public-media` (constitution VIII), and the presign helper takes the content type and cache control instead of assuming JPEG.
+`presignJpegUpload`, `headPublicMediaObject`, `attachPublicMediaObject` and `bestEffortDetachPublicMediaObject` live in `instructor-api/src/helpers/public-media-client.ts` today. With admin-api as a second consumer they move to `common-server-utils/public-media` (constitution VIII), and the presign helper takes the content type and cache control instead of assuming JPEG. They keep finding the bucket through `resolveBucketName('PublicMediaBucket')`, which reads the deploy-time setting `DISCAVA_S3_PUBLIC_MEDIA_BUCKET` (locally, S3Mock's bucket). So every function that calls them, here admin-api's branding function and the `brand-publishing` handler, is given that setting with `publicMediaBucket.bindSettings(fn)` beside its S3 grants, as instructor-api's course image function is.
 
 **Rationale**: no new bucket, distribution or cleanup job. The nonce key solves the "replaced image" edge case: a new logo is a new URL, so no browser or CDN can serve the old one once `brand.json` points elsewhere.
 
@@ -62,9 +63,11 @@ The behavior uses `CachingOptimized`, which honours the origin's `Cache-Control`
 - an inline `<style>` setting the brand's CSS variables (R-7), so the server-rendered page shows the brand colour before any script runs;
 - the brand document embedded in the page data, so the student portal's brand provider starts from it instead of fetching (no flash on a renderer page).
 
+It needs no new setting or grant. The renderer already learns the table name and the public media base URL from its SSM parameter `/<stage>/page-renderer` (`resolvePageRendererSettings`): `getBrand` runs on the core table from `deps.coreTable()`, which resolves the table before the first read, and `resolveBrand` uses `deps.mediaBaseUrl()`. The Data stack's `grantPageRendererRead` already grants read on the whole table.
+
 A failed read logs a warning and renders with the default brand (SC-005).
 
-The stage setting `studentPortal.pageRenderer.siteName`, the `SITE_NAME` environment variable and the runtime-config `site.name` are removed, not kept as a fallback (constitution VII): the default name is a constant in `@discava/common-branding`, and the two student portal consumers of `useRuntimeConfig().site` read the brand instead.
+The stage setting `studentPortal.siteName` (passed to the renderer construct as `pageRenderer.siteName`), the renderer's `SITE_NAME` environment variable and `name` in the runtime config's `connection.site` are removed, not kept as a fallback (constitution VII): the default name is a constant in `@discava/common-branding`, and the two student portal consumers of `useRuntimeConfig().site.name` read the brand instead. `connection.site.linkedInOrganizationId` stays: it is still a stage setting (`studentPortal.linkedInOrganizationId`), and the LinkedIn button reads it from the runtime config as before.
 
 ## R-7: Applying the brand colour
 
@@ -99,12 +102,12 @@ Logos are shown through `<img>`, where browsers never run SVG scripts; R-4's res
 
 ## R-9: Avoiding a flash of the default brand (SC-004)
 
-**Decision**: a `BrandProvider` in `@discava/common-web-utils/brand`, mounted next to `RuntimeConfigProvider` in each portal:
+**Decision**: a `BrandProvider` in `@discava/common-web-utils/brand`, mounted inside `RuntimeConfigProvider` in each portal, because it reads the media base from `useRuntimeConfig().media.PublicMediaBucket`. The deployed `runtime-config.json` of all three portals has it (the `PublicBucket` construct publishes it under `connection.media`); the admin portal's `local-dev-config.ts` does not yet and gains it. The provider:
 1. Starts from, in order: the brand embedded by the page renderer, else the last brand it saw (kept in `localStorage`), else nothing.
 2. If it has a brand, it renders at once and refreshes from `brand.json` in the background; if not, it holds the first render until `brand.json` arrives or 1 s passes, then uses the defaults.
 3. Applies the brand to the document: CSS variables, `<link rel="icon">`, `apple-touch-icon`, `theme-color`, and the title suffix.
 
-So a first visit waits for one small cached fetch (made in parallel with `runtime-config.json`), and every later visit renders immediately. A failed or missing `brand.json` (no brand saved yet answers 404) falls back to the defaults (SC-005).
+So a first visit waits for one small cached fetch, made as soon as `runtime-config.json` has loaded (the media base comes from it, so the two cannot run in parallel; the 1 s cap starts then), and every later visit renders immediately. A failed or missing `brand.json` (no brand saved yet answers 404) falls back to the defaults (SC-005).
 
 The **admin portal** also feeds the provider from `branding.get` once signed in, and from the result of each save, so the admin who saved sees the change at once rather than after the cache expires (FR-020).
 
@@ -117,13 +120,13 @@ The **admin portal** also feeds the provider from `branding.get` once signed in,
 
 **Rationale**: the code is used by the portals (browser), admin-api, the brand-publishing handler, the page renderer and core-table's invariant check. `common-server-utils` is server-only (a Biome rule keeps the portals out), and `common-web-utils` is the portals' package; `common-tiptap` is the precedent for a small package both sides import. The package has no runtime dependencies beyond `zod`.
 
-`common-web-utils/app-config.ts` is deleted; its two consumers (`PortalShell`, `SiteLayout`) read `useBrand()`.
+`common-web-utils/app-config.ts` is deleted. Its consumers move to the brand: `PortalShell` and `SiteLayout` read `useBrand()`, and `common-web-utils/page-title.ts` (added on `main` after planning, used by `common-shadcn`'s `usePageTitle`) takes the name as an argument instead of importing `Config.applicationName`.
 
 ## R-11: Where the brand appears in the portals
 
 **Decision**: replace every place the brand is hard-coded:
 - `PortalShell` (instructor and admin portals) and `SiteLayout` (student portal): logo, name text (hidden when `showNameBesideLogo` is off), the logo's alt text. The logo is shown at the header's height (40 px) with `object-contain` and a maximum width of 4 × height; on narrow screens, where the name text is already hidden, it shrinks to fit.
-- `index.html` `<title>` in all three portals: the provider sets `document.title` to the brand name; routes that set their own title keep the `… | <name>` suffix through a shared helper.
+- `index.html` `<title>` in all three portals: the provider sets `document.title` to the brand name; routes that set their own title keep the `<page> · <name>` suffix through the existing `pageTitle` / `usePageTitle` helpers, which take the name from `useBrand()`. The page renderer keeps its own `<page> | <name>` format.
 - The student portal home page's copy ("Discava brings …") and footer ("© … Discava") use the brand name; the instructor portal's "To learn on Discava" text too.
 - The student portal footer's "Powered by Discava" link stays: it credits the software, not the platform.
 

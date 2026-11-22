@@ -2,7 +2,7 @@
 
 ## `brand/brand.json`
 
-Served by the public media distribution at `<media base>/brand/brand.json`, where the media base is the runtime config's `media.PublicMediaBucket` (deployed: the distribution's domain; local: `http://localhost:9090/discava-public-media/`).
+Served by the public media distribution at `<media base>/brand/brand.json`, where the media base is `media.PublicMediaBucket` in each portal's `runtime-config.json` (set by the `PublicBucket` construct under the `connection` namespace; deployed: the distribution's domain; local: `http://localhost:9090/discava-public-media/` from each portal's `local-dev-config.ts`). The page renderer gets the same base from its `/<stage>/page-renderer` parameter (`publicMediaBaseUrl`).
 
 Headers: `Content-Type: application/json`, `Cache-Control: public, max-age=60, s-maxage=240`, CORS `Access-Control-Allow-Origin: *` for `GET`/`HEAD` (research R-3, R-4).
 
@@ -30,7 +30,7 @@ Exposes `useBrand(): ResolvedBrand`, where `ResolvedBrand` has every field fille
 
 | Brand part | Applied as |
 |------------|------------|
-| name | `document.title` (`<name>` or `<page> \| <name>`), logo `alt`, header text |
+| name | `document.title` (`<name>` or `<page> · <name>`, through `pageTitle` / `usePageTitle`), logo `alt`, header text |
 | icon | `<link rel="icon" type="image/png">` and `<link rel="apple-touch-icon">`; when absent, the portal's own `favicon.ico` |
 | colour | `brandPalette(colour)` CSS variables on `document.documentElement`; `<meta name="theme-color">` |
 

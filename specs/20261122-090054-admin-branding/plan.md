@@ -6,14 +6,14 @@
 
 ## Summary
 
-The deployment's brand becomes a singleton record, `platformBrand`, in the core table, written by a new admin-api `branding` router with a revision check, and edited on a new admin portal page, Settings → Branding. Brand images go to the existing public media bucket under `brand/{kind}/{nonce}.{ext}` with the course-image upload pattern (presigned `PUT`, validate on save, attach/detach tags). A new stream router feature, `brand-publishing`, publishes the current record as `brand/brand.json` on the media CDN with a 60 s browser and 240 s CDN cache. The three portals load it through a shared `BrandProvider` that applies the name, logo, icon and colour, and the page renderer reads the record directly and renders the brand into the head of every public page. Shared rules (defaults, the document schema, contrast and palette maths, image rules) live in a new package, `@discava/common-branding`, used by both the browser and the server. The hard-coded brand (`app-config.ts`, the stage's `siteName`, `SITE_NAME`, runtime-config `site.name`, `<title>Discava</title>`) is removed, not kept as a fallback.
+The deployment's brand becomes a singleton record, `platformBrand`, in the core table, written by a new admin-api `branding` router with a revision check, and edited on a new admin portal page, Settings → Branding. Brand images go to the existing public media bucket under `brand/{kind}/{nonce}.{ext}` with the course-image upload pattern (presigned `PUT`, validate on save, attach/detach tags). A new stream router feature, `brand-publishing`, publishes the current record as `brand/brand.json` on the media CDN with a 60 s browser and 240 s CDN cache. The three portals load it through a shared `BrandProvider` that applies the name, logo, icon and colour, and the page renderer reads the record directly and renders the brand into the head of every public page. Shared rules (defaults, the document schema, contrast and palette maths, image rules) live in a new package, `@discava/common-branding`, used by both the browser and the server. The hard-coded brand (`app-config.ts`, the stage's `siteName`, the renderer's `SITE_NAME`, `name` in the runtime config's `connection.site`, `<title>Discava</title>`) is removed, not kept as a fallback. Functions that touch the bucket get its deploy-time setting (`DISCAVA_S3_PUBLIC_MEDIA_BUCKET`) through `bindSettings`, as everything has since AppConfig was removed (#800).
 
 What the existing code showed that the spec could not:
 
-1. **Nothing about the brand is dynamic today.** The logo and name are a constant in `common-web-utils/app-config.ts` (two consumers: `PortalShell`, `SiteLayout`); titles and favicons are static in each `index.html`; the page renderer's site name is a stage setting passed as `SITE_NAME`; runtime config is written at deploy time. So the portals need a run-time source that works signed out and costs nothing per visitor: a CDN-cached JSON document (research R-3).
+1. **Nothing about the brand is dynamic today.** The logo and name are a constant in `common-web-utils/app-config.ts` (consumers: `PortalShell`, `SiteLayout` and `page-title.ts`, behind `usePageTitle`); titles and favicons are static in each `index.html`; the page renderer's site name is a stage setting passed as `SITE_NAME`; the portals' `runtime-config.json` and the functions' `DISCAVA_*` settings are both written at deploy time. So the portals need a run-time source that works signed out and costs nothing per visitor: a CDN-cached JSON document (research R-3).
 2. **`paymentConnection` is the precedent for an admin-edited singleton** with a `revision` condition and `changedBy`/`changedAt`; `platformBrand` follows it (R-1, R-2).
 3. **Public media URLs are immutable by construction** (a new nonce per upload, no `Cache-Control` set, the distribution's default cache policy). Brand images keep that, so a replaced logo can never be served stale (R-5).
-4. **The page renderer already caches pages for 300 s at CloudFront**, which fits the spec's 5-minute propagation exactly; it reads the table per render, so it needs no published document (R-6).
+4. **The page renderer already caches pages for 300 s at CloudFront**, which fits the spec's 5-minute propagation exactly; it reads the table per render, so it needs no published document. Its table name and public media base URL already come from its SSM parameter `/<stage>/page-renderer`, so reading the brand needs no new setting or grant (R-6).
 5. **The icon must be PNG.** iOS home-screen icons cannot be SVG. FR-004 is amended to PNG only (spec updated in this PR, R-8).
 6. **Links cannot always take the brand colour.** A pale brand colour on white fails contrast. Links use it only when it reaches 4.5:1 against the page; FR-018 is amended (spec updated in this PR, R-7).
 
@@ -31,7 +31,7 @@ What the existing code showed that the spec could not:
 
 **Project Type**: web application: serverless backend + React portals
 
-**Performance Goals**: a saved change on every new page load within 5 minutes (SC-002); no added wait on repeat visits and at most one cached fetch (in parallel with `runtime-config.json`, capped at 1 s) on a first visit (SC-004); one extra key read per page-renderer render, which CloudFront caches for 300 s
+**Performance Goals**: a saved change on every new page load within 5 minutes (SC-002); no added wait on repeat visits and at most one cached fetch (after `runtime-config.json`, which holds the media base; capped at 1 s) on a first visit (SC-004); one extra key read per page-renderer render, which CloudFront caches for 300 s
 
 **Constraints**: no scan in a user request; no second table or bucket; no Lambda or table read per visitor page load for the brand; uploaded files never run scripts (FR-006); works under `pnpm dev` without AWS (FR-021)
 
@@ -48,8 +48,8 @@ What the existing code showed that the spec could not:
 | III. Everything runs locally | Pass | The record is in DynamoDB local, images and `brand.json` in S3Mock, `brand-publishing` runs under the local event runner through `HANDLERS`, and the page renderer reads the local table. One open point: S3Mock's CORS answer for the portals' `fetch`; a task checks it and falls back to a Vite proxy for `/brand` locally if needed (R-4) |
 | IV. Layered tests | Pass, planned | Unit tests for `common-branding`, the core-table helper, the admin-api procedures, the handler, the renderer and `BrandProvider`; a new invariant with breaking tests; an e2e scenario and a concurrency test. Impact check below |
 | V. Single-table via ElectroDB | Pass | One entity with a constant key; three access patterns, all on the primary key ([data-model.md](./data-model.md)); no index, no scan. The new record is routed by `STREAM_FEATURES` to `brand-publishing` only, and the existing features' filters are checked not to match it |
-| VI. Secure by default | Pass | Writes only through `adminProcedure`; uploads presigned per kind with exact type and length; server-side validation of every image, including an SVG allow-list; `brand/*` served with a sandboxing `Content-Security-Policy` and `nosniff`; the published document omits who saved. admin-api gets `s3:PutObject`/`GetObject`/`PutObjectTagging` on `brand/*` only; the publishing Lambda gets `PutObject` on `brand/brand.json` only |
-| VII. Change freely before launch | Pass | `studentPortal.siteName`, `SITE_NAME`, runtime-config `site.name` and `app-config.ts` are removed outright; consumers move to the brand. No fallback for old config |
+| VI. Secure by default | Pass | Writes only through `adminProcedure`; uploads presigned per kind with exact type and length; server-side validation of every image, including an SVG allow-list; `brand/*` served with a sandboxing `Content-Security-Policy` and `nosniff`; the published document omits who saved. admin-api's dedicated branding function gets `s3:PutObject`/`GetObject`/`PutObjectTagging` on `brand/*` only; the publishing Lambda gets `PutObject` on `brand/brand.json` only; each gets only the deploy-time settings its code reads |
+| VII. Change freely before launch | Pass | `studentPortal.siteName`, `SITE_NAME`, `connection.site.name` and `app-config.ts` are removed outright; consumers move to the brand. No fallback for old config |
 | VIII. Repo conventions | Pass | `core-table/src/helpers/platform-brand.ts`, `invariants/branding.ts`; the upload helpers move to `common-server-utils/public-media` now that two APIs use them; text-only buttons; the page's e2e scenario takes `screenshot()`s; docs in English, translations noted as pending in the PR |
 
 No violations, so Complexity Tracking is empty.
@@ -72,7 +72,7 @@ The feature writes no counter, enrolment, completion or content record.
 4. **Publish a document for the portals; read the record in the renderer** (R-3, R-6). `brand-publishing` writes the current record to `brand/brand.json` (`max-age=60, s-maxage=240`), so portals pay one cached fetch; the renderer reads the table per render and is cached 300 s.
 5. **One palette helper everywhere** (R-7). `brandPalette(hex)` picks the readable text colour, refuses the narrow failing band, and gives links the brand colour only when it is readable on white. The same code runs in admin-api, the preview, the portals and the renderer.
 6. **No flash** (R-9). `BrandProvider` starts from the renderer's embedded brand or the last brand in `localStorage`, otherwise waits up to 1 s for `brand.json`; the renderer inlines the colour so server-rendered pages are right before any script.
-7. **One source for the name** (R-6, R-11). The default name is a constant in `@discava/common-branding`; the stage `siteName`, `SITE_NAME` and runtime-config `site.name` go. LinkedIn sharing, which sends the site name as text when no organisation ID is set, sends the brand name.
+7. **One source for the name** (R-6, R-11). The default name is a constant in `@discava/common-branding`; the stage `siteName`, `SITE_NAME` and `connection.site.name` go (`connection.site.linkedInOrganizationId` stays). LinkedIn sharing, which sends the site name as text when no organisation ID is set, sends the brand name.
 8. **New shared package** (R-10). `@discava/common-branding` (`brand`, `colour`, `image-rules`), imported per module by the portals, admin-api, events, core-api and core-table.
 
 ## Project Structure
@@ -120,18 +120,25 @@ packages/
 ├── common/constructs/src/app/
 │   ├── lambda-functions/                     # generator-created events-brand-publishing
 │   ├── s3/public-media-bucket.ts             # `brand/*` behavior: CORS + CSP response headers policy (+ test)
-│   ├── apis/admin-api.ts                     # S3 grants on brand/* (+ test)
-│   └── static-websites/student-portal.ts     # SITE_NAME removed
-├── infra/src/stacks/{stream-router-stack,websites-stack}.ts   # wire the Lambda and its grant; drop site name
+│   ├── apis/admin-api.ts                     # branding group in ADMIN_API_DEDICATED_FUNCTIONS
+│   └── static-websites/student-portal.ts     # SITE_NAME and pageRenderer.siteName removed
+├── infra/src/stacks/admin-api-stack.ts       # publicMediaBucket prop; branding function: S3 grants on brand/*, bindSettings (+ test)
+├── infra/src/stacks/stream-router-stack.ts   # publicMediaBucket prop; brand-publishing Lambda, grants, bindSettings (+ test)
+├── infra/src/stacks/websites-stack.ts        # connection.site keeps only linkedInOrganizationId; no siteName
+├── infra/src/stages/application-stage.ts     # pass data.publicMediaBucket to AdminApi and StreamRouter
+├── infra/src/stages/portal-runtime-config.main.json   # snapshot regenerated: site.name gone
 ├── common/infra-config/src/stages.types.ts   # studentPortal.siteName removed (+ config, tests)
 ├── common/web-utils/src/
-│   ├── brand.ts                              # BrandProvider, useBrand, applyBrandToDocument, pageTitle (+ test)
+│   ├── brand.ts                              # BrandProvider, useBrand, applyBrandToDocument (+ test)
+│   ├── page-title.ts                         # takes the name instead of importing app-config
 │   └── app-config.ts                         # removed
 ├── common/shadcn/src/
 │   ├── components/portal-shell.tsx           # logo, name, showNameBesideLogo from useBrand (+ test)
+│   ├── hooks/use-page-title.ts               # passes useBrand().name to pageTitle
 │   └── styles/globals.css                    # --brand-link variable; links use it
 ├── websites/admin-portal/src/routes/settings/branding.tsx   # + -components/, -branding.test.tsx; sidebar entry
 ├── websites/{student,instructor,admin}-portal/src/main.tsx  # mount BrandProvider
+├── websites/admin-portal/src/local-dev-config.ts            # + media.PublicMediaBucket
 ├── websites/student-portal/src/                             # SiteLayout, catalogue copy and footer, LinkedIn/owner-share name
 ├── websites/instructor-portal/src/routes/_authenticated/route.tsx   # restricted-portal text
 ├── e2e/src/{scenarios/branding.e2e.ts, concurrency/brand-save.e2e.ts, helpers/branding.ts}   # + image fixtures
