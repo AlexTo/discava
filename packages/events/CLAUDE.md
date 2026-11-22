@@ -15,6 +15,7 @@ In local dev, the package's `dev` target runs the event runner (`src/local/event
   - a transcription stand-in (`src/local/transcriber.ts`) that writes a placeholder WebVTT track → transcribe-complete (caption writes go through `helpers/caption-tracks.ts` in core-table)
   - a translation stand-in (`src/local/translator.ts`) that prefixes each caption with its target language, used by the `caption-translation` stream feature's handler (`src/media/caption-translation.ts`)
   - delayed cleanups → transcode-cleanup
+- `brand-publishing` (`src/branding/brand-publishing.ts`): on a `platformBrand` write, reads the current record (never the stream image) and puts `brand/brand.json` in the public media bucket, which the portals fetch; failures go to its own queue and alarm
 - the daily payout run (`src/earnings/payout-run.ts`): `POST /payout-run` on port 2024 runs it once (optional `{ "graceSeconds": 0 }` replaces the 15-minute recovery grace so a test can recover what an earlier run left), and `LOCAL_PAYOUT_RUN_INTERVAL_SECONDS` (default off) runs it on a timer; it moves money only through the Stripe stand-in
 - a user first seen by an API's local server → pre-token-generation, which writes their `user` record as Cognito's trigger does when deployed (#230; `syncLocalUser` in `common-server-utils/local-dev`)
 

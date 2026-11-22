@@ -1,0 +1,48 @@
+---
+title: Branding
+description: "How the admin-set platform brand is stored, published and applied: the record and its revision, immutable image keys, the published document and its cache budget, the page renderer, the colour palette and the SVG checks."
+sidebar:
+  order: 13
+---
+
+**Spec:** [`specs/20261122-090054-admin-branding/`](https://github.com/AlexTo/discava/tree/main/specs/20261122-090054-admin-branding/)
+
+An administrator sets a logo, name, icon, share image and colour from the admin portal, and every portal and public page shows them within 5 minutes, with no deploy. This page describes how that works.
+
+## The record and its revision
+
+The brand is one `platformBrand` record in the core table, with a constant key. It is absent until the first save, and absent means the default brand. `saveBrand` in `helpers/platform-brand.ts` is its only writer.
+
+Each save carries the whole brand and the `revision` the administrator loaded. A first save is conditioned on the record not existing, and later ones on `revision` still being the loaded value. A failed condition becomes `CONFLICT` ("Someone else changed the branding. Reload to see their changes."), so a stale save can never half-apply. The `changedBy` and `changedAt` fields say who saved last.
+
+## Images and immutable keys
+
+Images live in the public media bucket under `brand/<kind>/<nonce>.<ext>`, where `kind` is `logo`, `icon` or `share-image`. `branding.createUploadUrl` presigns a `PUT` with the exact content type, length, a one-year immutable `Cache-Control` and the tag `lifecycle=unattached`. A new upload is a new key, so a replaced image can never be served from a cache once the brand points elsewhere.
+
+`branding.save` reads each newly referenced object and checks its type, size and shape against the rules in `@discava/common-branding/image-rules` (the admin portal runs the same rules before uploading). It removes the tag from an object it keeps, and puts the tag back on one it replaced, which the bucket's lifecycle rule deletes after a day. Nothing is written when any image fails.
+
+### SVG checks
+
+An SVG logo is parsed and refused unless every element and attribute is on an allow-list: no `script`, `foreignObject`, `iframe`, event-handler attributes, or references other than a same-document `#fragment`. Refusing rather than rewriting keeps the stored file exactly what was uploaded. Logos are shown through `<img>`, where browsers never run SVG scripts, and the distribution adds a `Content-Security-Policy` with `sandbox` for a file opened directly. The icon is PNG only, because iOS home-screen icons must be raster.
+
+## The published document
+
+Browsers do not read the table. The `brand-publishing` stream feature (see [the router](./stream-event-router/)) reads the current record, never the stream image, so a late delivery cannot publish an older revision. It puts `brand/brand.json` in the public media bucket with `Cache-Control: public, max-age=60, s-maxage=240` and CORS for `GET` and `HEAD`.
+
+That is the **cache budget**: a browser keeps the document for up to 60 seconds and CloudFront for up to 240, so a change reaches every new page load within 5 minutes. A missing, unreadable or invalid document means the default brand, so a failure never breaks a page.
+
+## In the portals
+
+`BrandProvider` in `@discava/common-web-utils/brand` sits inside `RuntimeConfigProvider` in each portal, and `useBrand()` gives the resolved brand. It starts from the brand the page renderer embedded, else the last brand it saw (kept in `localStorage`), else nothing. With a brand it renders at once and refreshes in the background; without one it holds the first render until `brand.json` arrives or one second passes. It sets the CSS variables, the icon links, the theme colour and the title. The admin portal also feeds it from `branding.get` and each save, so the administrator sees a change at once.
+
+## The page renderer
+
+The [page renderer](./public-pages/) reads the record on each render (the page is then cached for 300 seconds) and applies it to the title suffix, `og:site_name`, the JSON-LD provider, `og:image` and `twitter:image` (the share image when the page has none of its own), the icon links and an inline `:root` style, and embeds the brand document in the page data so the portal starts from it. If the read fails, it logs a warning and renders the default brand.
+
+## The colour palette
+
+`brandPalette(hex)` in `@discava/common-branding/colour` returns the CSS variables to override: `--primary`, `--primary-foreground`, `--ring`, the sidebar equivalents and `--brand-link`. It picks the text colour with the higher WCAG contrast ratio against the brand colour and refuses the colour when neither reaches 4.5:1. `--brand-link` is the brand colour only when it reaches 4.5:1 on the page background. The same function runs in admin-api, the admin portal's preview, the portals and the renderer, so they cannot disagree. Meaning colours (destructive, chart and status) are not touched.
+
+## What is not branded
+
+Cognito's hosted sign-in pages and the docs site keep their own look.

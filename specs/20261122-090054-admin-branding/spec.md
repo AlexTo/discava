@@ -8,6 +8,8 @@
 
 **Input**: User description: "Let admins set their own platform branding from the admin portal: upload an icon (favicon/app icon), a logo (shown in the portal headers and public pages), and optionally choose a color theme (primary/accent colors) that applies across the student, instructor and admin portals and the public course landing pages."
 
+**Design page**: [`design/branding`](../../docs/src/content/docs/en/design/branding.mdx)
+
 **Parent issue**: none. Related: #45 (design a Discava icon and logo, which becomes the default brand) and #52 (brand Cognito's hosted sign-in pages).
 
 ## Context
