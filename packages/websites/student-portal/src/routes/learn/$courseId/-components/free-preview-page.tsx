@@ -7,6 +7,7 @@ import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
@@ -64,10 +65,21 @@ export function FreePreviewPage({
     ),
   );
 
+  usePageTitle(
+    lessonQuery.data?.lesson.title ?? 'Free preview',
+    courseQuery.data?.title,
+  );
+
   if (courseQuery.isLoading || (isMarked && lessonQuery.isLoading)) {
     return (
-      <main className="mx-auto flex w-full max-w-3xl justify-center px-6 py-24 lg:px-8">
-        <Spinner />
+      <main className="mx-auto w-full max-w-3xl px-6 py-24 lg:px-8">
+        <div
+          role="status"
+          className="flex items-center justify-center gap-3 text-muted-foreground"
+        >
+          <Spinner />
+          <span>Loading…</span>
+        </div>
       </main>
     );
   }
