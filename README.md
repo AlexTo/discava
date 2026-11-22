@@ -30,10 +30,11 @@
 
 ---
 
-**Discava is a free, open source learning platform designed around AI from the start, and it runs entirely in your own AWS account.** The courses, the learner data and the AI that works with them all stay with you.
+**Discava is a free, open source (Apache 2.0) learning platform designed around AI from the start, and it runs entirely in your own AWS account.** The courses, the learner data and the AI that works with them all stay with you.
 
 - **AI at the core** *(coming soon)*: an assistant built into the learning experience, not bolted on as a plugin.
 - **Scales to zero**: fully serverless, so you pay for what you use and next to nothing when no one is learning.
+- **Hardened for production**: built on the proven [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws), so you start from battle-tested, secure-by-default infrastructure.
 - **Scales up too**: the same deployment grows from your first student to your ten-thousandth, with no servers to manage.
 - **Sell or share**: publish free or paid courses, and get paid through Stripe.
 - **Teach your way**: video lessons with questions along the way, quizzes and graded assignments.
@@ -41,14 +42,6 @@
 
 > [!IMPORTANT]
 > Discava is under active development and is not yet feature complete. Expect breaking changes and rough edges until a stable release is tagged.
-
-## Why Discava
-
-- ☁️ **Serverless.** Pay for what you use. It scales to zero.
-- 🔒 **Your AWS account.** You own your data.
-- 🛡️ **Hardened production defaults.** WAF and KMS encryption.
-- 🆓 **Free and open source.** Apache 2.0.
-- 🤖 **Built with AI in mind** from the start.
 
 ## What you get
 
