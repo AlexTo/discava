@@ -369,6 +369,25 @@ describe('graded uploads', () => {
     ).toBe(false);
   });
 
+  it.each([
+    [57, 100, 57],
+    [29, 50, 58],
+    [29, 100, 29],
+    [2, 3, 66],
+  ])(
+    'scores %i of %i as %i%% without floating-point loss',
+    (points, outOf, percent) => {
+      const { requirements } = evaluate(
+        { ...upload, minUploadScorePercent: percent },
+        [assignment('a', 1, outOf)],
+        [{ ...submission('a', 'returned', points), pointsOutOf: outOf }],
+      );
+      expect(requirements[0]).toMatchObject({
+        uploads: [{ state: 'met', scorePercent: percent }],
+      });
+    },
+  );
+
   it('records the uploads and mixes them into the band with quizzes', () => {
     const { met, assessment } = evaluate(
       { ...upload, requireQuizPass: true },

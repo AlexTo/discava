@@ -161,14 +161,16 @@ const coreTable = {
       },
     },
     assignmentSubmission: {
-      query: {
-        byUser: vi.fn(() => ({
-          go: async () => {
-            reads.submissions();
-            return { data: db.submissions };
-          },
-        })),
-      },
+      get: vi.fn((key: { contentItemId: string }) => ({
+        go: async (options?: { consistent?: boolean }) => {
+          reads.submissions(options);
+          return {
+            data: db.submissions.find(
+              (s) => s.contentItemId === key.contentItemId,
+            ),
+          };
+        },
+      })),
     },
     course: {
       get: vi.fn(() => ({
@@ -671,9 +673,15 @@ describe('recalculateStudent', () => {
             ],
           },
         });
+        // By key, one per assignment, and consistently.
         expect(
-          coreTable.entities.assignmentSubmission.query.byUser,
-        ).toHaveBeenCalledWith({ userId: 'student-1', courseId: 'course-1' });
+          coreTable.entities.assignmentSubmission.get,
+        ).toHaveBeenCalledWith({
+          courseId: 'course-1',
+          contentItemId: 'w',
+          userId: 'student-1',
+        });
+        expect(reads.submissions).toHaveBeenCalledWith({ consistent: true });
       });
 
       it.each([

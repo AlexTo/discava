@@ -181,13 +181,25 @@ export const recalculateStudent = async (
           .primary({ userId, courseId })
           .go({ pages: 'all' })
       : { data: [] };
-    // Likewise submissions, only when graded uploads are required.
-    const { data: submissions } =
+    // Likewise submissions, only when graded uploads are required. Read by
+    // key and consistently, one per assignment: this runs on the stream
+    // record of a grade, which the byUser index may not show yet.
+    const submissions =
       course.certificateCriteria.minUploadScorePercent !== undefined
-        ? await coreTable.entities.assignmentSubmission.query
-            .byUser({ userId, courseId })
-            .go({ pages: 'all' })
-        : { data: [] };
+        ? (
+            await Promise.all(
+              curriculum.contentItems
+                .filter(
+                  (item) => (item as { type?: string }).type === 'assignment',
+                )
+                .map(({ contentItemId }) =>
+                  coreTable.entities.assignmentSubmission
+                    .get({ courseId, contentItemId, userId })
+                    .go({ consistent: true }),
+                ),
+            )
+          ).flatMap(({ data }) => (data ? [data] : []))
+        : [];
     const evaluation = evaluateCertificateCriteria({
       criteria: course.certificateCriteria,
       curriculum,

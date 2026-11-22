@@ -203,7 +203,13 @@ export const evaluateCertificateCriteria = ({
             const scorePercent =
               submission?.status === 'returned'
                 ? outOf > 0
-                  ? Math.floor(((submission.points ?? 0) / outOf) * 100)
+                  ? // Multiplied before dividing, and rounded to 1/100 of a percent
+                    // first: points / outOf * 100 can land just under a whole
+                    // number (57 / 100 * 100 is 56.99999999999999).
+                    Math.floor(
+                      Math.round(((submission.points ?? 0) * 10000) / outOf) /
+                        100,
+                    )
                   : 0
                 : undefined;
             const state: UploadRequirementState = !submission
