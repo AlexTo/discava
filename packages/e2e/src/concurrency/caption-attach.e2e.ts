@@ -109,6 +109,9 @@ test('two instructors attaching the same language at once leave one track and no
 });
 
 test('an upload and a caption language change adding the same language at once leave the upload', async () => {
+  // The second instructor acts too (as in the test above), which is what
+  // gives them a user record for the table invariants.
+  await upload(second, 'Unused');
   const uploadId = await upload(first, 'An uploaded Spanish cue');
 
   const results = await Promise.allSettled([
