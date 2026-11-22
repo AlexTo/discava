@@ -60,6 +60,26 @@ describe('lesson media CORS', () => {
     expect(allowed).not.toMatch(/AdminPortal/);
     expect(allowed).not.toContain('localhost:4202');
   });
+
+  // Instructors upload course images; administrators upload the brand's
+  // logo, icon and share image (#854, #890). Students upload none.
+  it('lets the instructor and admin portals upload public media', () => {
+    const buckets = Object.entries(data.findResources('AWS::S3::Bucket'));
+    const [, publicMedia] = buckets.find(([id]) =>
+      id.startsWith('PublicMediaBucket'),
+    )!;
+    const allowed = origins(
+      (publicMedia as { Properties: { CorsConfiguration: unknown } }).Properties
+        .CorsConfiguration,
+    );
+
+    expect(allowed).toMatch(/InstructorPortal/);
+    expect(allowed).toMatch(/AdminPortal/);
+    expect(allowed).toContain('http://localhost:4200');
+    expect(allowed).toContain('http://localhost:4202');
+    expect(allowed).not.toMatch(/StudentPortal/);
+    expect(allowed).not.toContain('localhost:4201');
+  });
 });
 
 describe('the sign-up trigger (#29)', () => {

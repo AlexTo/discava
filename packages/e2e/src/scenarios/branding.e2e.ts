@@ -271,6 +271,18 @@ test('an administrator sets the platform name and share image, and visitors see 
     await screenshot(visitor, 'student portal home with the platform name');
     await visitor.close();
   });
+
+  await test.step('the student home’s copy puts the name in its own sentence', async () => {
+    const visitor = await browser.newPage();
+    await visitor.goto(PORTALS.student);
+    await expect(
+      visitor.getByText(
+        `certificates you can share. ${name} brings your courses`,
+      ),
+    ).toBeVisible({ timeout: PORTAL_WAIT_MS });
+    await screenshot(visitor, 'student home copy with the platform name');
+    await visitor.close();
+  });
 });
 
 test('an administrator chooses a brand colour, and a hard-to-read one is refused', async ({

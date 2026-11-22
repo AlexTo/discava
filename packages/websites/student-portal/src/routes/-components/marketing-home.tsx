@@ -94,7 +94,7 @@ export function MarketingHome() {
             Learn something new, from people who know it.
           </h1>
           <p className="mt-6 max-w-2xl text-balance text-lg text-muted-foreground">
-            Short lessons, clear progress and certificates you can share.
+            Short lessons, clear progress and certificates you can share.{' '}
             {brand.name} brings your courses together in one welcoming place.
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3">
