@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { assessmentStatement } from '@discava/common-server-utils/certificate-statement';
 import { getAllowedOrigin } from '@discava/common-server-utils/cors';
 import {
   evaluateCertificateCriteria,
@@ -12,7 +14,6 @@ import {
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { drawCertificatePdf, formatDate } from '../helpers/certificate-pdf.js';
-import { assessmentStatement } from '../helpers/certificate-statement.js';
 import { courseProcedure, publicCourseProcedure } from '../init.js';
 import {
   CertificatePdfInputSchema,
