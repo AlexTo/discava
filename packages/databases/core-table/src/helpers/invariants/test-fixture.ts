@@ -199,6 +199,7 @@ export const consistentTable = (): TableSnapshot => ({
   submissionFeedback: [],
   submissionNotices: [],
   certificates: [],
+  certificateEvents: [],
   // The student answered the video's question q1 wrongly, with no completion.
   videoAnswerSheets: [
     {

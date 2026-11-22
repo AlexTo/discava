@@ -99,6 +99,15 @@ describe('featuresFor', () => {
     );
   });
 
+  it('routes a certificate MODIFY (a revocation) and a certificateEvent INSERT to no feature', () => {
+    expect(featuresFor(record('MODIFY', 'NewImage', 'certificate'))).toEqual(
+      [],
+    );
+    expect(
+      featuresFor(record('INSERT', 'NewImage', 'certificateEvent')),
+    ).toEqual([]);
+  });
+
   it('routes a record to exactly the matching feature', () => {
     expect(featuresFor(record('INSERT', 'NewImage', 'course'))).toEqual([
       'search-indexing',
