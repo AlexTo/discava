@@ -133,6 +133,7 @@ describe('contentItem.videoUrl', () => {
       versionId: 'nonce-1',
       resumeAt: 0,
       captions: [],
+      questionCount: 0,
     });
   });
 
@@ -145,6 +146,7 @@ describe('contentItem.videoUrl', () => {
       versionId: 'nonce-1',
       resumeAt: 0,
       captions: [],
+      questionCount: 0,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/nonce-1/',
@@ -153,6 +155,39 @@ describe('contentItem.videoUrl', () => {
       'CloudFront-Policy=p; Domain=example.com',
       'CloudFront-Signature=s; Domain=example.com',
     ]);
+  });
+
+  it('counts the video’s questions', async () => {
+    db.contentItem = {
+      ...db.contentItem,
+      questions: [
+        { questionId: 'q1' },
+        { questionId: 'q2' },
+        { questionId: 'q3' },
+      ],
+      answerKey: {},
+      quizVersion: 1,
+    };
+
+    await expect(call().videoUrl(ref)).resolves.toMatchObject({
+      questionCount: 3,
+    });
+  });
+
+  it('counts no questions in an archived course', async () => {
+    db.contentItem = {
+      ...db.contentItem,
+      questions: [
+        { questionId: 'q1' },
+        { questionId: 'q2' },
+        { questionId: 'q3' },
+      ],
+    };
+    db.course = { ...db.course, status: 'archived' };
+
+    await expect(call().videoUrl(ref)).resolves.toMatchObject({
+      questionCount: 0,
+    });
   });
 
   it('still plays in an archived course the student is enrolled in', async () => {
@@ -221,6 +256,7 @@ describe('contentItem.videoUrl', () => {
       versionId: 'old-nonce',
       resumeAt: 0,
       captions: [],
+      questionCount: 0,
     });
     expect(getSignedCloudFrontCookies).toHaveBeenCalledWith(
       'courses/course-1/modules/module-1/lessons/lesson-1/content-items/item-1/old-nonce/',
@@ -368,6 +404,7 @@ describe('contentItem.videoUrl', () => {
 
     expect(Object.keys(result).sort()).toEqual([
       'captions',
+      'questionCount',
       'resumeAt',
       'url',
       'versionId',

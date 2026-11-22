@@ -656,6 +656,53 @@ describe('LessonPage', () => {
     ).toBe(false);
   });
 
+  it('asks for no video questions when the video has none (FR-021)', async () => {
+    const { calls } = openLesson('lesson-1', {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: false,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [],
+        questionCount: 0,
+      }),
+    });
+
+    const lecture = await item('Lecture video');
+    await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+    expect(calls.some((call) => call.path === 'videoQuestion.view')).toBe(
+      false,
+    );
+  });
+
+  it('loads the questions of a video that has some', async () => {
+    const { calls } = openLesson('lesson-1', {
+      'contentItem.videoUrl': () => ({
+        url: 'https://media.example.com/master.m3u8',
+        withCredentials: false,
+        versionId: 'nonce',
+        resumeAt: 0,
+        captions: [],
+        questionCount: 2,
+      }),
+      'videoQuestion.view': () => ({
+        quizVersion: 1,
+        questions: [],
+        answers: {},
+      }),
+    });
+
+    const lecture = await item('Lecture video');
+    await within(lecture).findByRole('button', { name: 'Playback speed' });
+
+    await waitFor(() =>
+      expect(calls.some((call) => call.path === 'videoQuestion.view')).toBe(
+        true,
+      ),
+    );
+  });
+
   describe('captions', () => {
     const captioned = {
       'contentItem.videoUrl': () => ({
