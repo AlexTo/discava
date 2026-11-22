@@ -227,6 +227,8 @@ describe('renderProfilePage', () => {
 
 describe('renderCertificatePage', () => {
   const certificate = {
+    status: 'valid' as const,
+    statement: ['Completed all items.'],
     certificateId: 'ABCD-EFGH-JKMN-PQRS',
     learnerName: 'Sam <b> "Q" & Co',
     courseTitle: 'Rust <i> & "Go"',
@@ -251,6 +253,19 @@ describe('renderCertificatePage', () => {
     expect(page.head).toContain(
       '<meta property="og:type" content="website" />',
     );
+  });
+
+  it('previews a revoked certificate with its ID alone', () => {
+    const { head } = renderCertificatePage(context(true), {
+      status: 'revoked',
+      certificateId: 'ABCD-EFGH-JKMN-PQRS',
+      revokedAt: '2026-11-20T00:00:00.000Z',
+      revokedOn: '20 November 2026',
+    });
+    expect(head).toContain('Certificate revoked');
+    expect(head).toContain('Certificate ID ABCD-EFGH-JKMN-PQRS');
+    expect(head).toContain('<meta name="robots" content="noindex" />');
+    expect(head).not.toContain('completed');
   });
 
   it('escapes the learner name and the course title', () => {

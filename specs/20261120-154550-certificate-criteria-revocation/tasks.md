@@ -139,7 +139,7 @@ Paths are relative to the repository root. Only the last PR that ships (Phase 8,
   - `certificate-has-completed-enrolment` is not changed: add tests that a revoked certificate with a `completed` enrolment passes, one with a `dropped` enrolment keeping the same `completedAt` passes, and one with an `active` enrolment fails.
 
   One breaking test per clause. Add to `helpers/stream-features.test.ts` that a `certificate` MODIFY and a `certificateEvent` INSERT match no feature's filters. `helpers/invariants-coverage.test.ts` must pass with the new entity in the snapshot.
-- [ ] T028 [US4] Tests first, then make core-api honour revocation per [contracts/core-api-certificate.md](./contracts/core-api-certificate.md), in `packages/apis/core-api/src/procedures/certificate.ts` and `schema/certificate.ts`:
+- [x] T028 [US4] Tests first, then make core-api honour revocation per [contracts/core-api-certificate.md](./contracts/core-api-certificate.md), in `packages/apis/core-api/src/procedures/certificate.ts` and `schema/certificate.ts`:
   - `verify` returns `{ status: 'revoked', certificateId, revokedAt, revokedOn }` for a revoked certificate, and a test asserts exactly those keys;
   - `myCertificates` items gain `status`, `revokedAt` and `revocationReason`, and keep revoked certificates in the list;
   - `pdf` throws `PRECONDITION_FAILED` "This certificate has been revoked" before drawing anything;
