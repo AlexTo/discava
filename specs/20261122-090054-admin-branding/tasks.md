@@ -114,7 +114,7 @@ description: "Task list for admin-set platform branding"
 
 **Independent test**: with a custom logo and colour saved, reset the logo only and save: the default logo returns and the colour stays; then reset all (spec US4).
 
-- [ ] T031 [US4] Test first, then add "Reset to default" to each section of the Branding page and "Reset all to default" with a confirmation dialog, per contracts/admin-portal-ui.md: a reset sets the form field to null (or the switch to on), updates the preview, and takes effect on Save; "Using the default Discava brand" shows in the footer when every field is default. Tests: resetting the logo only sends `logoKey: null` and keeps the colour; "Reset all" asks first and, confirmed, sends every field null and the switch on; cancelling changes nothing.
+- [x] T031 [US4] Test first, then add "Reset to default" to each section of the Branding page and "Reset all to default" with a confirmation dialog, per contracts/admin-portal-ui.md: a reset sets the form field to null (or the switch to on), updates the preview, and takes effect on Save; "Using the default Discava brand" shows in the footer when every field is default. Tests: resetting the logo only sends `logoKey: null` and keeps the colour; "Reset all" asks first and, confirmed, sends every field null and the switch on; cancelling changes nothing.
 
 ---
 
