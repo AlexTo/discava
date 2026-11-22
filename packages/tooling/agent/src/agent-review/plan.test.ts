@@ -76,9 +76,7 @@ describe('planReview', () => {
       true,
     );
     expect(
-      ignored(
-        planReview(review({ headBranch: 'openhands/issue-361-2' }), pr()),
-      ),
+      ignored(planReview(review({ headBranch: 'openhands/a/b' }), pr())),
     ).toBe(true);
   });
 
