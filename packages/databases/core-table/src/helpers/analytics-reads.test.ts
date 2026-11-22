@@ -71,6 +71,9 @@ describe('readCourseSummaries', () => {
           enrolments: 10,
           completed: 4,
           dropped: 1,
+          activated: 7,
+          promptAnswered: 3,
+          promptDismissed: 2,
           updatedAt: '2026-11-17T09:00:00.000Z',
         },
       ],
@@ -87,6 +90,9 @@ describe('readCourseSummaries', () => {
         enrolments: 10,
         completed: 4,
         dropped: 1,
+        activated: 7,
+        promptAnswered: 3,
+        promptDismissed: 2,
         activeLearners: 6,
         updatedAt: '2026-11-17T09:00:00.000Z',
       },
@@ -127,6 +133,9 @@ describe('readCourseSummaries', () => {
         enrolments: 0,
         completed: 0,
         dropped: 0,
+        activated: 0,
+        promptAnswered: 0,
+        promptDismissed: 0,
         activeLearners: 0,
         updatedAt: null,
       },
@@ -167,6 +176,31 @@ describe('readCourseSummaries', () => {
       dropped: 3,
       activeLearners: 0,
     });
+  });
+
+  it('clamps the activation and prompt counters, and activated to enrolments', async () => {
+    const { coreTable } = fakeCoreTable(
+      [
+        {
+          courseId: 'a',
+          enrolments: 3,
+          activated: 5,
+          promptAnswered: -1,
+          promptDismissed: -4,
+        },
+        { courseId: 'b', enrolments: 3, activated: -2 },
+      ],
+      [],
+    );
+
+    const [a, b] = await readCourseSummaries(coreTable, ['a', 'b'], NOW);
+
+    expect(a).toMatchObject({
+      activated: 3,
+      promptAnswered: 0,
+      promptDismissed: 0,
+    });
+    expect(b.activated).toBe(0);
   });
 
   it('asks again for what DynamoDB left unprocessed', async () => {
@@ -387,8 +421,18 @@ describe('readCourseAnalytics', () => {
     const { coreTable } = fakeTable(
       { enrolments: 3 },
       [
-        { periodKey: 'DAY#2026-11-17', enrolments: 2, activeLearners: 3 },
-        { periodKey: 'DAY#2026-11-15', enrolments: 1, activeLearners: -1 },
+        {
+          periodKey: 'DAY#2026-11-17',
+          enrolments: 2,
+          activeLearners: 3,
+          activated: 1,
+        },
+        {
+          periodKey: 'DAY#2026-11-15',
+          enrolments: 1,
+          activeLearners: -1,
+          activated: 4,
+        },
       ],
       { periodKey: 'WEEK#2026-W47', activeLearners: 3 },
     );
@@ -400,15 +444,17 @@ describe('readCourseAnalytics', () => {
         date: '2026-11-17',
         enrolments: 2,
         activeLearners: 3,
+        activated: 1,
       });
       expect(result.activeLearners).toBe(3);
     }
     const { daily } = await readCourseAnalytics(coreTable, 'c1', 30, NOW);
     expect(daily[0].date).toBe('2026-10-19');
     expect(daily.slice(-3)).toEqual([
-      { date: '2026-11-15', enrolments: 1, activeLearners: 0 },
-      { date: '2026-11-16', enrolments: 0, activeLearners: 0 },
-      { date: '2026-11-17', enrolments: 2, activeLearners: 3 },
+      // activated is never above that day's enrolments
+      { date: '2026-11-15', enrolments: 1, activeLearners: 0, activated: 1 },
+      { date: '2026-11-16', enrolments: 0, activeLearners: 0, activated: 0 },
+      { date: '2026-11-17', enrolments: 2, activeLearners: 3, activated: 1 },
     ]);
   });
 

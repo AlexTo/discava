@@ -10,6 +10,11 @@
 // rebuild (the sum over a course's records) and the
 // `analytics-matches-records` invariant (the same sum, compared to what is
 // stored). All pure.
+//
+// An enrolment contributes its status counts, and also whether the learner has
+// started (`activated`: it has `lastActivityAt`) and what they did with the
+// first-lesson prompt (`promptAnswered`, `promptDismissed`; see
+// specs/20261120-154551-first-lesson-start/data-model.md).
 
 export type AggregateKind =
   | 'courseStats'
@@ -245,6 +250,20 @@ export const contributions = (entity: string, image: Image): Contributions => {
             : []),
           ...(image.status === 'dropped' ? [delta('SUMMARY', 'dropped')] : []),
           ...(day ? [delta(day, 'enrolments')] : []),
+          // Activated: has done a first thing (`lastActivityAt`). Counted
+          // once, on the enrolment's own day, and kept when it is dropped.
+          ...(text(image.lastActivityAt)
+            ? [
+                delta('SUMMARY', 'activated'),
+                ...(day ? [delta(day, 'activated')] : []),
+              ]
+            : []),
+          ...(image.firstLessonPromptState === 'answered'
+            ? [delta('SUMMARY', 'promptAnswered')]
+            : []),
+          ...(image.firstLessonPromptState === 'dismissed'
+            ? [delta('SUMMARY', 'promptDismissed')]
+            : []),
         ],
         members: [],
       };

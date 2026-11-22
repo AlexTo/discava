@@ -4,7 +4,6 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { HlsVideo } from '@discava/common-shadcn/components/hls-video';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -33,11 +32,16 @@ import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Upload } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
 import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
 import { studentActivityNote } from '../student-activity';
+import type { VideoItem } from './video-questions/video-questions-form';
+import {
+  savedQuestions,
+  VideoQuestionsPreview,
+} from './video-questions/video-questions-preview';
 
 export const ACCEPTED_VIDEO_TYPES = {
   'video/mp4': ['.mp4'],
@@ -60,6 +64,7 @@ export function AttachLessonVideoDialog({
   description,
   status,
   hasPreviousVersion = false,
+  savedQuestions: saved,
   trigger,
 }: {
   courseId: string;
@@ -76,9 +81,15 @@ export function AttachLessonVideoDialog({
    * this one is processing, or after it failed (#209).
    */
   hasPreviousVersion?: boolean;
+  /** The video's saved questions, asked in the preview and graded locally. */
+  savedQuestions?: VideoItem;
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const previewQuestions = useMemo(
+    () => (saved ? savedQuestions(saved) : []),
+    [saved],
+  );
   const [titleValue, setTitleValue] = useState(title ?? '');
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
@@ -310,10 +321,11 @@ export function AttachLessonVideoDialog({
             </div>
           ) : (
             video && (
-              <HlsVideo
+              <VideoQuestionsPreview
                 url={video.url}
                 withCredentials={video.withCredentials}
                 captions={video.captions}
+                questions={previewQuestions}
                 className="w-full rounded-lg border"
               />
             )

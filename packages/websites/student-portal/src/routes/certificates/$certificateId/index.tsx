@@ -96,6 +96,19 @@ function RouteComponent() {
           </p>
           <h2 className="text-xl font-semibold">{query.data.courseTitle}</h2>
           <p className="text-sm">{query.data.completedOn}</p>
+          <section
+            aria-labelledby="certificate-statement"
+            className="space-y-2 pt-4"
+          >
+            <h3 id="certificate-statement" className="text-sm font-semibold">
+              What this certificate confirms
+            </h3>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {query.data.statement.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </section>
           <p className="pt-4 text-xs text-muted-foreground">
             Certificate ID: {query.data.certificateId}
           </p>

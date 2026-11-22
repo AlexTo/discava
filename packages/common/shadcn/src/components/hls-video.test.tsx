@@ -217,6 +217,62 @@ describe('HlsVideo', () => {
       expect(queryByText(/Resumed at/)).toBeNull();
     });
 
+    describe('startAt', () => {
+      const renderStarted = (
+        startAt: number,
+        onPositionChange?: any,
+        resumeAt = 30,
+      ) => {
+        vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
+        const result = render(
+          <HlsVideo
+            url={URL}
+            withCredentials
+            resumeAt={resumeAt}
+            startAt={startAt}
+            onPositionChange={onPositionChange}
+          />,
+        );
+        act(() => {
+          video(result.container).dispatchEvent(new Event('loadedmetadata'));
+        });
+        return result;
+      };
+
+      beforeEach(() => {
+        media.duration = 1_000;
+      });
+
+      it('seeks to startAt in place of resumeAt and stays paused', () => {
+        renderStarted(760);
+
+        expect(media.currentTime).toBe(760);
+        expect(media.paused).toBe(true);
+      });
+
+      it('says "Starting at" with no "Start over"', () => {
+        const { getByText, queryByRole, queryByText } = renderStarted(760);
+
+        expect(getByText('Starting at 12:40')).toBeTruthy();
+        expect(queryByRole('button', { name: 'Start over' })).toBeNull();
+        expect(queryByText(/Resumed at/)).toBeNull();
+      });
+
+      it('saves nothing for the seek', () => {
+        const onPositionChange = vi.fn();
+        renderStarted(760, onPositionChange);
+
+        expect(onPositionChange).not.toHaveBeenCalled();
+      });
+
+      it('clamps a start past the duration', () => {
+        media.duration = 60;
+        renderStarted(760);
+
+        expect(media.currentTime).toBeLessThan(60);
+      });
+    });
+
     it('applies resumeAt once: a new value while mounted changes nothing', () => {
       vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
       Object.defineProperty(HTMLMediaElement.prototype, 'readyState', {
@@ -954,6 +1010,29 @@ describe('HlsVideo cues', () => {
       positionSeconds: 9,
       durationSeconds: 120,
     });
+  });
+
+  it('saves the playhead when no overlay is open', () => {
+    vi.useFakeTimers();
+    const onPositionChange = vi.fn();
+    const { el } = setup(undefined, { onPositionChange });
+    emit(el, 'timeupdate', 5.2);
+    emit(el, 'timeupdate', 5.8);
+    media.paused = true;
+    emit(el, 'pause');
+
+    expect(onPositionChange).toHaveBeenCalledWith({
+      positionSeconds: 5.8,
+      durationSeconds: 120,
+    });
+  });
+
+  it('shows a marker for each timed cue', () => {
+    const { container } = setup();
+    emit(video(container), 'durationchange');
+    expect(
+      container.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(2);
   });
 
   it('changes nothing without cues', () => {

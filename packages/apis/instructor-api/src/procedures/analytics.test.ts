@@ -77,6 +77,9 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
       dropped: 1,
       active: 5,
       activeLearners: 6,
+      activated: 4,
+      promptAnswered: 2,
+      promptDismissed: 1,
       updatedAt: '2026-11-17T09:00:00.000Z',
       lessons: [],
       quizzes: [],
@@ -84,6 +87,7 @@ const analytics = (overrides: Record<string, unknown> = {}) => {
         date: `d${i}`,
         enrolments: 0,
         activeLearners: 0,
+        activated: 0,
       })),
       ...overrides,
     }),
@@ -407,6 +411,10 @@ describe('analytics.course', () => {
       dropped: 1,
       completionRate: 44,
       activeThisWeek: 6,
+      activated: 4,
+      activationRate: 40,
+      promptAnswered: 2,
+      promptDismissed: 1,
       updatedAt: '2026-11-17T09:00:00.000Z',
     });
     expect(result.lessons).toEqual([]);
@@ -459,9 +467,40 @@ describe('analytics.course', () => {
   });
 
   it('has no completion rate when nobody is left enrolled', async () => {
-    analytics({ enrolments: 2, dropped: 2, completed: 0, active: 0 });
+    analytics({
+      enrolments: 2,
+      dropped: 2,
+      completed: 0,
+      active: 0,
+      activated: 0,
+    });
     const result = await callAs().course({ courseId: 'course-1', days: 30 });
     expect(result.totals.completionRate).toBeNull();
+  });
+
+  it('rounds the activation rate down: 1 of 3 is 33', async () => {
+    analytics({ enrolments: 3, activated: 1 });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.totals.activated).toBe(1);
+    expect(result.totals.activationRate).toBe(33);
+  });
+
+  it('has no activation rate with no enrolments', async () => {
+    analytics({ enrolments: 0, activated: 0, completed: 0, dropped: 0 });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.totals.activationRate).toBeNull();
+  });
+
+  it('carries each day’s activated count', async () => {
+    analytics({
+      daily: [
+        { date: '2026-11-17', enrolments: 3, activeLearners: 1, activated: 2 },
+      ],
+    });
+    const result = await callAs().course({ courseId: 'course-1', days: 30 });
+    expect(result.daily).toEqual([
+      { date: '2026-11-17', enrolments: 3, activeLearners: 1, activated: 2 },
+    ]);
   });
 
   it('reads nothing for a course the caller does not teach', async () => {
@@ -527,6 +566,7 @@ describe('analytics.course', () => {
       'totals',
     ]);
     expect(Object.keys(result.daily[0]).sort()).toEqual([
+      'activated',
       'activeLearners',
       'date',
       'enrolments',

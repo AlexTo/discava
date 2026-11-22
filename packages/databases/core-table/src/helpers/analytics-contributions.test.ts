@@ -145,6 +145,90 @@ describe('contributionsOfChange', () => {
     expect(counts).toHaveLength(2);
   });
 
+  it('adds activated on the summary and the enrolment day at first activity only', () => {
+    const active = enrolment({ lastActivityAt: '2026-11-17T09:00:00.000Z' });
+    const first = contributionsOfChange('enrolment', enrolment(), active);
+    expect(
+      first.counts.map(({ sk, attribute, amount }) => [sk, attribute, amount]),
+    ).toEqual(
+      expect.arrayContaining([
+        ['SUMMARY', 'activated', 1],
+        ['DAY#2026-11-16', 'activated', 1],
+      ]),
+    );
+    expect(first.counts).toHaveLength(2);
+    const later = contributionsOfChange(
+      'enrolment',
+      active,
+      enrolment({ lastActivityAt: '2026-11-18T09:00:00.000Z' }),
+    );
+    expect(later.counts).toEqual([]);
+  });
+
+  it('keeps activated when an active enrolment is dropped', () => {
+    const { counts } = contributionsOfChange(
+      'enrolment',
+      enrolment({ lastActivityAt: '2026-11-17T09:00:00.000Z' }),
+      enrolment({
+        lastActivityAt: '2026-11-17T09:00:00.000Z',
+        status: 'dropped',
+      }),
+    );
+    expect(counts.some(({ attribute }) => attribute === 'activated')).toBe(
+      false,
+    );
+  });
+
+  it('takes activated back when an activated enrolment is removed', () => {
+    const { counts } = contributionsOfChange(
+      'enrolment',
+      enrolment({ lastActivityAt: '2026-11-17T09:00:00.000Z' }),
+      undefined,
+    );
+    expect(
+      counts.filter(({ attribute }) => attribute === 'activated'),
+    ).toHaveLength(2);
+    expect(counts.every(({ amount }) => amount === -1)).toBe(true);
+    expect(counts).toHaveLength(4);
+  });
+
+  it('does not count an empty lastActivityAt as activated', () => {
+    expect(
+      amount(
+        contributions('enrolment', enrolment({ lastActivityAt: '' })),
+        'SUMMARY',
+        'activated',
+      ),
+    ).toBe(0);
+  });
+
+  it('counts the prompt answered or dismissed on the summary', () => {
+    const answered = contributionsOfChange(
+      'enrolment',
+      enrolment(),
+      enrolment({ firstLessonPromptState: 'answered' }),
+    );
+    expect(answered.counts).toEqual([
+      expect.objectContaining({
+        sk: 'SUMMARY',
+        attribute: 'promptAnswered',
+        amount: 1,
+      }),
+    ]);
+    const dismissed = contributionsOfChange(
+      'enrolment',
+      enrolment(),
+      enrolment({ firstLessonPromptState: 'dismissed' }),
+    );
+    expect(dismissed.counts).toEqual([
+      expect.objectContaining({
+        sk: 'SUMMARY',
+        attribute: 'promptDismissed',
+        amount: 1,
+      }),
+    ]);
+  });
+
   it('gives nothing when neither image exists', () => {
     expect(contributionsOfChange('enrolment', undefined, undefined)).toEqual({
       counts: [],

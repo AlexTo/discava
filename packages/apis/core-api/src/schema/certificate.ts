@@ -15,14 +15,19 @@ export type IVerifyCertificateInput = z.output<
 
 // Public: exactly what a verifier may see, nothing that identifies the
 // student's account or course record.
-export const VerifyCertificateOutputSchema = z.object({
-  certificateId: z.string(),
-  learnerName: z.string(),
-  courseTitle: z.string(),
-  completedAt: z.string(),
-  // `completedAt` as the PDF prints it (UTC, e.g. `19 November 2026`).
-  completedOn: z.string(),
-});
+export const VerifyCertificateOutputSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('valid'),
+    certificateId: z.string(),
+    learnerName: z.string(),
+    courseTitle: z.string(),
+    completedAt: z.string(),
+    // `completedAt` as the PDF prints it (UTC, e.g. `19 November 2026`).
+    completedOn: z.string(),
+    // What the certificate confirms, one line each; the PDF draws the same.
+    statement: z.array(z.string()).min(1),
+  }),
+]);
 
 export type IVerifyCertificateOutput = z.output<
   typeof VerifyCertificateOutputSchema

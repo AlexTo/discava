@@ -898,3 +898,106 @@ describe('VideoControls overlay', () => {
     );
   });
 });
+
+describe('VideoControls markers', () => {
+  const cue = (
+    id: string,
+    atSeconds: number | null,
+    state: 'unanswered' | 'answered' = 'unanswered',
+  ) => ({
+    id,
+    atSeconds,
+    state,
+    label: `Question at ${atSeconds}, ${state === 'answered' ? 'answered' : 'not answered'}`,
+  });
+  const setupCues = (cues: ReturnType<typeof cue>[] | undefined) => {
+    const onCue = vi.fn();
+    const result = render(
+      <VideoControls cues={cues} onCue={onCue}>
+        <video data-testid="video" />
+      </VideoControls>,
+    );
+    return { ...result, onCue };
+  };
+
+  it('puts a labelled marker at each timed cue, none for an end cue', () => {
+    setupCues([cue('a', 25), cue('b', 50, 'answered'), cue('end', null)]);
+
+    const first = screen.getByRole('button', {
+      name: 'Question at 25, not answered',
+    });
+    const second = screen.getByRole('button', {
+      name: 'Question at 50, answered',
+    });
+    expect(first.style.left).toBe('25%');
+    expect(second.style.left).toBe('50%');
+    expect(
+      document.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(2);
+  });
+
+  it('shows a tick for an answered cue and a dot for an unanswered one', () => {
+    setupCues([cue('a', 25), cue('b', 50, 'answered')]);
+
+    const [dot, tick] = Array.from(
+      document.querySelectorAll('[data-slot="video-cue-marker"]'),
+    );
+    expect(dot.querySelector('svg')).toBeNull();
+    expect(dot).toHaveAttribute('data-state', 'unanswered');
+    expect(tick.querySelector('svg')).not.toBeNull();
+    expect(tick).toHaveAttribute('data-state', 'answered');
+  });
+
+  it('is at least 24 by 24 CSS pixels to hit', () => {
+    setupCues([cue('a', 25)]);
+    expect(screen.getByRole('button', { name: /Question at 25/ })).toHaveClass(
+      'size-6',
+    );
+  });
+
+  it('comes after the seek slider in the tab order', () => {
+    setupCues([cue('a', 25)]);
+    const slider = screen.getByRole('slider', { name: 'Seek' });
+    const marker = screen.getByRole('button', { name: /Question at 25/ });
+    expect(
+      slider.compareDocumentPosition(marker) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('seeks, pauses and chooses the cue on click', async () => {
+    media.paused = false;
+    const { onCue } = setupCues([cue('a', 25)]);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /Question at 25/ }),
+    );
+
+    expect(media.currentTime).toBe(25);
+    expect(pause).toHaveBeenCalled();
+    expect(onCue).toHaveBeenCalledWith(['a'], 'chosen');
+  });
+
+  it('does the same on Enter', async () => {
+    const { onCue } = setupCues([cue('a', 25)]);
+    screen.getByRole('button', { name: /Question at 25/ }).focus();
+
+    await userEvent.keyboard('{Enter}');
+
+    expect(media.currentTime).toBe(25);
+    expect(onCue).toHaveBeenCalledWith(['a'], 'chosen');
+  });
+
+  it('has no markers without cues, or before the duration is known', () => {
+    setupCues(undefined);
+    expect(
+      document.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(0);
+    cleanup();
+
+    media.duration = Number.NaN;
+    setupCues([cue('a', 25)]);
+    expect(
+      document.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(0);
+  });
+});

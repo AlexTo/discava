@@ -179,6 +179,7 @@ export function useVideoQuestionsEditor({
     setCurrentTime,
     addHere,
     addAtEnd,
+    jumpTo,
     changeQuestion,
     remove,
     move,

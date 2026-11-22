@@ -5,6 +5,7 @@
 
 import {
   apiUser,
+  createCaptionedVideoViaApi,
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
@@ -13,16 +14,19 @@ import {
   createUploadAssignmentCourse,
   uploadSubmissionFile,
 } from '../helpers/assignment.js';
-import { chooseCaptionLanguages } from '../helpers/captions.js';
+import { chooseCaptionLanguages, webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
+import { createFreePreviewCourseViaApi } from '../helpers/free-preview.js';
 import { createCourse } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
+  enrol,
   enrolAndLand,
   expectAfterReloads,
   openCourse,
+  searchTranscripts,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -323,6 +327,101 @@ test('the caption languages card fits a phone and each checkbox is one target', 
 
   await test.step('choosing languages saves and still fits', async () => {
     await chooseCaptionLanguages(page, title, ['Spanish']);
+    await expectNoSidewaysScroll(page);
+  });
+});
+
+test('transcript search results fit a phone, even for a 70-character word', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E phone transcript course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await createCaptionedVideoViaApi(instructor, title);
+  const word = uniqueName('nebula').replace(/[^a-z0-9]/gi, '');
+  const target =
+    await instructor.instructor.contentItem.captionUploadUrl.mutate(video);
+  const response = await fetch(target.url, {
+    method: 'PUT',
+    headers: target.headers,
+    body: webVttOf([
+      { start: 0, end: 2, text: 'Welcome to this lesson' },
+      { start: 2, end: 3, text: `and now ${word} ${'y'.repeat(70)}` },
+    ]),
+  });
+  expect(response.ok).toBe(true);
+  await instructor.instructor.contentItem.attachCaption.mutate({
+    ...video,
+    uploadId: target.uploadId,
+    language: 'en-US',
+  });
+  await instructor.instructor.course.publish.mutate({
+    courseId: video.courseId,
+  });
+
+  await openCourse(page, title);
+  await enrol(page, newUser('Pia', ['student']));
+
+  await test.step('the search box fits the top of the player', async () => {
+    await expectNoSidewaysScroll(page);
+    await searchTranscripts(page, word);
+  });
+
+  await test.step('the results fit, with the long word wrapped', async () => {
+    const result = page
+      .getByRole('list', { name: 'Search results' })
+      .getByRole('link');
+    await expectAfterReloads(page, async () => {
+      await expect(result).toHaveCount(1, { timeout: 5_000 });
+    });
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'transcript search results at phone width');
+  });
+
+  await test.step('a 70-character query does not push the page sideways', async () => {
+    await searchTranscripts(page, 'a'.repeat(70));
+    await expect(page.getByText(/No moments match/).first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'transcript search empty at phone width');
+  });
+});
+
+test('a free preview lesson fits a phone and has its own title', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const title = uniqueName('E2E phone free preview');
+  const { courseId, open } = await createFreePreviewCourseViaApi(
+    instructor,
+    title,
+  );
+
+  await page.goto(
+    `${PORTALS.student}/learn/${courseId}/preview/${open.lessonId}`,
+  );
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Open' }),
+  ).toBeVisible();
+
+  await test.step('the page is titled lesson first, then course', async () => {
+    await expect(page).toHaveTitle(/^Open · .*E2E phone free preview/);
+  });
+
+  await test.step('nothing scrolls sideways', async () => {
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'free preview at phone width', { fullPage: true });
+  });
+
+  await test.step('a lesson that is not a preview says so and fits too', async () => {
+    await page.goto(
+      `${PORTALS.student}/learn/${courseId}/preview/not-a-lesson`,
+    );
+    await expect(
+      page.getByRole('heading', {
+        level: 1,
+        name: 'This preview is no longer available.',
+      }),
+    ).toBeVisible();
     await expectNoSidewaysScroll(page);
   });
 });

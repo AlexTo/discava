@@ -173,6 +173,15 @@ describe('VideoQuestionCard answered', () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
+  it('closes instead of continuing when reviewing', async () => {
+    const { user, onContinue } = setup({ answer: wrong, review: true });
+    expect(
+      screen.queryByRole('button', { name: 'Continue' }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
   it('practises without recording: check, then close', async () => {
     const { user, onSubmit, onContinue, onTryAgain } = setup({ answer: wrong });
 

@@ -12,6 +12,8 @@ import {
 } from '../../../test/render-with-core-api';
 
 const certificate = {
+  status: 'valid',
+  statement: ['Completed all 3 items of the course.'],
   certificateId: 'ABCD-EFGH-JKLM-NPQR',
   learnerName: 'Ada Lovelace',
   courseTitle: 'Linear Algebra',

@@ -33,6 +33,21 @@ export const createCourseStatsEntity = async () =>
           type: 'number',
           default: 0,
         },
+        // Enrolments with `lastActivityAt`: learners who have done a first thing.
+        activated: {
+          type: 'number',
+          default: 0,
+        },
+        // Enrolments whose `firstLessonPromptState` is `answered`.
+        promptAnswered: {
+          type: 'number',
+          default: 0,
+        },
+        // Enrolments whose `firstLessonPromptState` is `dismissed`.
+        promptDismissed: {
+          type: 'number',
+          default: 0,
+        },
         updatedAt: {
           type: 'string',
           required: true,

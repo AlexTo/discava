@@ -41,6 +41,9 @@ export const checkTableInvariants = (snapshot: TableSnapshot) => {
         enrolments: 0,
         completed: 0,
         dropped: 0,
+        activated: 0,
+        promptAnswered: 0,
+        promptDismissed: 0,
         ...counters,
       })),
     periodStats: items
@@ -50,6 +53,7 @@ export const checkTableInvariants = (snapshot: TableSnapshot) => {
         periodKey: sk,
         enrolments: 0,
         activeLearners: 0,
+        activated: 0,
         ...counters,
       })),
   });
@@ -216,13 +220,24 @@ export const consistentTable = (): TableSnapshot => ({
   users: [{ userId: 'teacher' }, { userId: 'student' }],
   // What the stream handler leaves for the records above: one enrolment on
   // 1 January, and the student active on 2 January (week 1 of 2026).
-  courseStats: [{ courseId: 'c1', enrolments: 1, completed: 0, dropped: 0 }],
+  courseStats: [
+    {
+      courseId: 'c1',
+      enrolments: 1,
+      completed: 0,
+      dropped: 0,
+      activated: 1,
+      promptAnswered: 0,
+      promptDismissed: 0,
+    },
+  ],
   periodStats: [
     {
       courseId: 'c1',
       periodKey: 'DAY#2026-01-01',
       enrolments: 1,
       activeLearners: 0,
+      activated: 1,
     },
     {
       courseId: 'c1',

@@ -17,6 +17,8 @@ export interface ICertificatePdfInput {
   /** In display form, e.g. 0123-4567-89AB-CDEF. */
   certificateId: string;
   verifyUrl: string;
+  /** What the certificate confirms, one entry per line. */
+  statement: string[];
 }
 
 // Landscape A4, in points.
@@ -52,9 +54,31 @@ export const formatDate = (completedAt: string): string => {
       });
 };
 
+// Breaks `text` at spaces into lines no wider than `width`.
+const wrap = (
+  text: string,
+  font: FontInput,
+  size: number,
+  width: number,
+): string[] => {
+  const lines: string[] = [];
+  let current = '';
+  for (const word of text.split(' ')) {
+    const next = current ? `${current} ${word}` : word;
+    if (current && measureText(next, font, size) > width) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  }
+  lines.push(current);
+  return lines;
+};
+
 /**
- * A certificate as one landscape A4 page: heading, learner, course, date, ID
- * and verification URL. Text that wouldn't fit between the margins shrinks
+ * A certificate as one landscape A4 page: heading, learner, course, statement
+ * of what was assessed, date, ID and verification URL. Text that wouldn't fit between the margins shrinks
  * (to a floor, below which it is cut with an ellipsis) so the page stays one.
  */
 export const drawCertificatePdf = async (
@@ -104,7 +128,18 @@ export const drawCertificatePdf = async (
   centred(input.learnerName, 340, bold, 32);
   centred('has completed the course', 295, regular, 16);
   centred(input.courseTitle, 250, bold, 26);
-  centred(`Completed on ${formatDate(input.completedAt)}`, 200, regular, 16);
+  // Under the course title, wrapped to the margins, shrinking the line gap
+  // when there are many so the page stays one.
+  const statementSize = 10;
+  const lines = input.statement.flatMap((line) =>
+    wrap(sanitise(line), regular, statementSize, maxWidth),
+  );
+  const step = Math.min(14, 60 / Math.max(1, lines.length - 1));
+  lines.forEach((line, index) => {
+    centred(line, 224 - index * step, regular, statementSize);
+  });
+
+  centred(`Completed on ${formatDate(input.completedAt)}`, 145, regular, 16);
   centred(`Certificate ID: ${input.certificateId}`, 120, regular, 13);
   centred(`Verify at ${input.verifyUrl}`, 95, regular, 11);
 

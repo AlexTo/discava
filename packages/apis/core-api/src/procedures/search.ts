@@ -32,7 +32,7 @@ const SEARCH_REQUEST_TIMEOUT_MS = 8_000;
 // fail fast and quietly (research R-6) instead of holding the box for 8s.
 const SUGGEST_REQUEST_TIMEOUT_MS = 3_000;
 
-const mapSearchError = (error: unknown): never => {
+export const mapSearchError = (error: unknown): never => {
   if (error instanceof openSearchErrors.TimeoutError) {
     throw new TRPCError({
       code: 'TIMEOUT',

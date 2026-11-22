@@ -162,3 +162,12 @@ export const openTranscript = async (page: Page, video: string) => {
 // The lines of an open transcript panel.
 export const transcriptLines = (panel: Locator) =>
   panel.getByRole('listitem').getByRole('button');
+
+// Searches the open course's transcripts from the course player's header.
+export const searchTranscripts = async (page: Page, text: string) => {
+  const form = page.getByRole('search', {
+    name: "Search this course's transcripts",
+  });
+  await form.getByLabel('Search transcripts').fill(text);
+  await form.getByRole('button', { name: 'Search' }).click();
+};

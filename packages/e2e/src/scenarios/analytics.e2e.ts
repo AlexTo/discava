@@ -18,13 +18,16 @@ import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
+  enrolAndLand,
   expectAfterReloads,
+  markItemDone,
   openCourse,
   startFirstLesson,
   takeQuiz,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
+import { waitForAnalytics } from '../helpers/wait-for-analytics.js';
 
 // The instructor dashboard (#278): each course's card shows the enrolments,
 // active learners and completion rate counted from the records. The figures
@@ -260,5 +263,63 @@ test('an instructor sees which quiz question a learner missed', async ({
     await expect(scores.getByRole('row', { name: /0-9/ })).toContainText('1');
     await expect(scores.getByRole('row')).toHaveCount(11);
     await screenshot(instructor, 'quiz analysis with a missed question');
+  });
+});
+
+// Activation (first-lesson-start, story 3): a learner counts as started once,
+// at their first activity, however many items they complete after it.
+test('activation counts a learner once', async ({ browser }) => {
+  const title = uniqueName('E2E activation course');
+  const instructor = await browser.newPage();
+  const sam = await browser.newPage();
+  const riley = await browser.newPage();
+  let courseId = '';
+
+  await test.step('the instructor publishes a course with two readings', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, newUser('Ada', ['instructor']));
+    await createPublishedCourse(instructor, {
+      title,
+      readings: ['Reading one', 'Reading two'],
+    });
+    courseId = instructor.url().split('/').pop() ?? '';
+  });
+
+  await test.step('two students enrol, and one completes an item', async () => {
+    await openCourse(sam, title);
+    await enrolAndLand(sam, newUser('Sam', ['student']));
+    await openCourse(riley, title);
+    await enrolAndLand(riley, newUser('Riley', ['student']));
+    await markItemDone(sam, 'Reading one');
+  });
+
+  const activation = instructor.getByRole('heading', {
+    level: 2,
+    name: 'Activation',
+  });
+
+  await test.step('the Activation card says 1 of 2 have started', async () => {
+    expect(await waitForAnalytics()).toEqual([]);
+    await instructor.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expectAfterReloads(instructor, async () => {
+      await expect(
+        instructor.getByText('1 of 2 enrolled learners have started (50%)', {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: 2_000 });
+    });
+    await expect(activation).toBeVisible();
+    await screenshot(instructor, 'activation-card');
+  });
+
+  await test.step('a second item by the same learner does not count them again', async () => {
+    await markItemDone(sam, 'Reading two');
+    expect(await waitForAnalytics()).toEqual([]);
+    await instructor.reload();
+    await expect(
+      instructor.getByText('1 of 2 enrolled learners have started (50%)', {
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 });

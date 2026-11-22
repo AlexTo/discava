@@ -47,6 +47,25 @@ test('a student signs in to the student portal', async ({ page }) => {
   await expect(page.locator('#main-content')).toBeFocused();
 });
 
+test('the student sign-in page stays up while it redirects', async ({
+  page,
+}) => {
+  // Answer the OIDC server's authorize request with "no content", which a
+  // browser doesn't navigate on: it stays on the page that started the
+  // redirect, as it is for the moments before the real server's page loads
+  // (#782). Holding the request instead would leave the locator waiting for
+  // the navigation to finish.
+  await page.route(/localhost:9400\/discava\/authorize/, (route) =>
+    route.fulfill({ status: 204 }),
+  );
+  await page.goto(`${PORTALS.student}/signin`);
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Signing you in…' }),
+  ).toBeVisible();
+  await screenshot(page, 'signing you in');
+});
+
 test('an admin signs in to the admin portal', async ({ page }) => {
   await page.goto(PORTALS.admin);
   await signIn(page, testUser('Carol'));

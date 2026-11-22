@@ -10,6 +10,8 @@
 
 **Parent issue**: #102 (part 3)
 
+**Design page**: [`design/assignments`](../../docs/src/content/docs/en/design/assignments.mdx)
+
 ## Background
 
 Students can submit one file to an upload assignment and replace it until it is returned (the assignment-submissions feature, now archived at `specs/_archive/20261114-120542-assignment-submissions/`). Nothing yet lets an instructor see that work or answer it: no submission is ever returned, the `assignment.returned` notification is registered but never sent, and the "returned locks resubmission" rule is never triggered. A student who submits never hears back.
