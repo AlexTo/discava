@@ -274,6 +274,37 @@ describe('CoursePage', () => {
     expect(within(lesson).queryByText('Assignment')).toBeNull();
   });
 
+  it('links a free preview lesson, with a badge, and leaves the rest as text', async () => {
+    renderPage(() => ({
+      ...course,
+      modules: [
+        {
+          ...course.modules[0],
+          lessons: [
+            { ...course.modules[0].lessons[0], freePreview: true },
+            { ...course.modules[0].lessons[1], freePreview: false },
+            course.modules[0].lessons[2],
+          ],
+        },
+        course.modules[1],
+      ],
+    }));
+
+    const link = await screen.findByRole('link', {
+      name: 'The geometry of linear equations',
+    });
+    expect(link).toHaveAttribute('href', '/learn/course-1/preview/lesson-1');
+    const row = link.closest('li') as HTMLElement;
+    expect(within(row).getByText('Free preview')).toBeVisible();
+    expect(row.querySelector('button svg[class*="arrow"]')).toBeNull();
+    const plain = screen
+      .getByText('Elimination with matrices')
+      .closest('li') as HTMLElement;
+    expect(within(plain).queryByRole('link')).toBeNull();
+    expect(within(plain).queryByText('Free preview')).toBeNull();
+    expect(screen.getAllByText('Free preview')).toHaveLength(1);
+  });
+
   it("says when a course doesn't exist or isn't published", async () => {
     renderPage(() => {
       throw new ApiError('NOT_FOUND', 'Not found');

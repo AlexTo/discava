@@ -16,6 +16,7 @@ import {
 } from '../helpers/assignment.js';
 import { webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
+import { createFreePreviewCourseViaApi } from '../helpers/free-preview.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
@@ -344,6 +345,47 @@ test('transcript search results fit a phone, even for a 70-character word', asyn
     await expect(page.getByText(/No moments match/).first()).toBeVisible();
     await expectNoSidewaysScroll(page);
     await screenshot(page, 'transcript search empty at phone width');
+  });
+});
+
+test('a free preview lesson fits a phone and has its own title', async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const title = uniqueName('E2E phone free preview');
+  const { courseId, open } = await createFreePreviewCourseViaApi(
+    instructor,
+    title,
+  );
+
+  await page.goto(
+    `${PORTALS.student}/learn/${courseId}/preview/${open.lessonId}`,
+  );
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Open' }),
+  ).toBeVisible();
+
+  await test.step('the page is titled lesson first, then course', async () => {
+    await expect(page).toHaveTitle(/^Open · .*E2E phone free preview/);
+  });
+
+  await test.step('nothing scrolls sideways', async () => {
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'free preview at phone width', { fullPage: true });
+  });
+
+  await test.step('a lesson that is not a preview says so and fits too', async () => {
+    await page.goto(
+      `${PORTALS.student}/learn/${courseId}/preview/not-a-lesson`,
+    );
+    await expect(
+      page.getByRole('heading', {
+        level: 1,
+        name: 'This preview is no longer available.',
+      }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
   });
 });
 
