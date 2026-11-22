@@ -15,6 +15,13 @@
         "cwd": "{projectRoot}"
       }
     },
+    "reindex-transcripts": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/infra/reindex-transcripts.ts",
+        "cwd": "{projectRoot}"
+      }
+    },
     "rebuild-analytics": {
       "executor": "nx:run-commands",
       "options": {

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { screen } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -145,6 +146,53 @@ describe('CertificateRequirements', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Copy link' }),
+    ).toBeInTheDocument();
+  });
+
+  it('looks again once the course home sees the course completed', async () => {
+    // As the course home: completedAt arrives when progress recalculation
+    // lands, after the requirements were first fetched.
+    const Harness = () => {
+      const [completedAt, setCompletedAt] = useState<string>();
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => setCompletedAt('2026-11-10T00:00:00.000Z')}
+          >
+            Recalculated
+          </button>
+          <CertificateRequirements
+            courseId="course-1"
+            courseTitle="Intro"
+            completedAt={completedAt}
+          />
+        </>
+      );
+    };
+    let recalculated = false;
+    const { user } = renderWithCoreApi(<Harness />, {
+      handlers: {
+        'certificate.requirements': () =>
+          recalculated
+            ? answer({
+                allMet: true,
+                requirements: [complete(2, 2)],
+                certificate: { certificateId: 'ABCD-EFGH', status: 'valid' },
+              })
+            : answer({
+                requirements: [{ ...complete(2, 2), met: false }],
+              }),
+      },
+    });
+
+    expect(
+      await screen.findByText('Complete every item: 2 of 2'),
+    ).toBeInTheDocument();
+    recalculated = true;
+    await user.click(screen.getByRole('button', { name: 'Recalculated' }));
+    expect(
+      await screen.findByText('You earned a certificate'),
     ).toBeInTheDocument();
   });
 

@@ -18,6 +18,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Search } from 'lucide-react';
 import { useCoreApi } from '../../api';
 import { CourseCard } from '../../components/course-card';
+import { PageBreadcrumbs } from '../../components/page-breadcrumbs';
 import { PageContainer } from '../../components/page-container';
 import type { DisplayCourse } from '../../lib/course-display';
 import { toDisplayCourse } from '../../lib/course-display';
@@ -80,6 +81,10 @@ function RouteComponent() {
 
   return (
     <PageContainer>
+      <PageBreadcrumbs
+        crumbs={[{ label: profile?.displayName ?? 'Instructor' }]}
+        className="mb-6"
+      />
       {profileQuery.isPending ? (
         <div className="flex justify-center py-16">
           <Spinner />
