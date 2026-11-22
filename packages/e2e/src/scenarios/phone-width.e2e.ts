@@ -221,6 +221,17 @@ test('search results come first on a phone, with the filters collapsed', async (
     await expectResultsFirst();
   });
 
+  await test.step('the home page and the course catalogue fit a phone', async () => {
+    await page.goto(PORTALS.student);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'home page at phone width');
+    await page.goto(`${PORTALS.student}/courses`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course catalogue at phone width');
+  });
+
   await test.step('the filters open on request', async () => {
     await page.goto(
       `${PORTALS.student}/search?query=${encodeURIComponent(title)}`,
