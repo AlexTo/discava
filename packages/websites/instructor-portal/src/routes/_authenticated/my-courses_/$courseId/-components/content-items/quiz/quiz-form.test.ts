@@ -206,6 +206,26 @@ describe('toQuizInput', () => {
   });
 });
 
+describe('the reveal setting', () => {
+  it('starts a new quiz on after_each_attempt', () => {
+    expect(newQuiz().settings.revealAnswers).toBe('after_each_attempt');
+  });
+
+  it('keeps a saved never when the quiz is loaded', () => {
+    const input = toQuizInput(
+      quiz({
+        settings: { ...newQuiz().settings, revealAnswers: 'never' },
+      }),
+    );
+    const reloaded = fromQuizItem({
+      ...input,
+      description: undefined,
+      quizVersion: 1,
+    });
+    expect(reloaded.settings.revealAnswers).toBe('never');
+  });
+});
+
 describe('new questions', () => {
   it('start as single choice with two empty options and fresh ids', () => {
     const [a, b] = [newQuestion(), newQuestion()];

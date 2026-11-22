@@ -4,6 +4,7 @@
  */
 import { expect, type Page } from '@playwright/test';
 import { PORTALS } from './portals.js';
+import { screenshot } from './screenshots.js';
 import { expectToPlay } from './video.js';
 
 // Steps in the instructor portal's course editor, for scenarios to build on.
@@ -169,9 +170,12 @@ export const addQuiz = async (
     question,
     options,
     correct,
+    settingsScreenshot,
   }: {
     title: string;
     attempts: number;
+    // Names a screenshot of the new quiz's settings, taken before they change.
+    settingsScreenshot?: string;
     question: string;
     options: [string, string];
     correct: string;
@@ -180,6 +184,9 @@ export const addQuiz = async (
   await page.getByRole('button', { name: 'Quiz', exact: true }).last().click();
   const dialog = page.getByRole('dialog', { name: 'New quiz' });
   await dialog.getByLabel('Title', { exact: true }).fill(title);
+  if (settingsScreenshot) {
+    await screenshot(page, settingsScreenshot);
+  }
   await dialog.getByRole('checkbox', { name: 'Unlimited' }).uncheck();
   await dialog.getByLabel('Number of attempts').fill(String(attempts));
   await dialog.getByLabel('Question 1', { exact: true }).fill(question);

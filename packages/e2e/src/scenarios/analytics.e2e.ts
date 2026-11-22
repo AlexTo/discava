@@ -311,6 +311,12 @@ test('an instructor sees which video question a learner missed', async ({
     await saveVideoQuestions(dialog);
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).toBeHidden();
+    await addModule(instructor, 'Module two');
+    await addLesson(instructor, 'Lesson two');
+    await addVideoItem(instructor, {
+      title: 'Video two',
+      file: THREE_SECOND_VIDEO,
+    });
     await publishCourse(instructor);
   });
 
@@ -349,6 +355,15 @@ test('an instructor sees which video question a learner missed', async ({
     await expect(row.getByRole('cell').nth(3)).toHaveText('1');
     await expect(row.getByRole('cell').nth(4)).toHaveText('1');
     await screenshot(instructor, 'video question results');
+  });
+
+  await test.step('the drop-off names the module with a video and no questions', async () => {
+    await expect(
+      instructor.getByText(
+        'These modules have video and no questions: Module two.',
+      ),
+    ).toBeVisible();
+    await screenshot(instructor, 'drop-off note for modules without questions');
   });
 
   await test.step('a second instructor cannot open the results', async () => {

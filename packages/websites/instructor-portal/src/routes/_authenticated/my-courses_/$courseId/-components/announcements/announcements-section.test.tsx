@@ -118,4 +118,12 @@ describe('AnnouncementsSection', () => {
       expect(screen.getByText('No announcements yet.')).toBeInTheDocument(),
     );
   });
+
+  it('lets a long announcement title wrap', async () => {
+    render(false, () => ({ items: [item(1, { title: 'x'.repeat(80) })] }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'x'.repeat(80) }),
+    ).toHaveClass('break-words');
+  });
 });

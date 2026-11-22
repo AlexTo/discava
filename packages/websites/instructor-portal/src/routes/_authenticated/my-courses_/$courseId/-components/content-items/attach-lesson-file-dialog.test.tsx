@@ -118,4 +118,16 @@ describe('AttachLessonFileDialog', () => {
     );
     expect(title()).toHaveValue('');
   });
+
+  it('lets a long file name wrap', async () => {
+    const { user } = openDialog();
+
+    await pickFile(user);
+    uploads[0].finish();
+
+    expect(await screen.findByText('worksheet.pdf')).toHaveClass(
+      'min-w-0',
+      'break-words',
+    );
+  });
 });

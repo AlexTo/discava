@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { readFile } from 'node:fs/promises';
 import {
   apiUser,
   createCaptionedVideoViaApi,
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
+  textBody,
 } from '../helpers/api.js';
 import {
   apiUserFor,
@@ -16,6 +18,7 @@ import {
 } from '../helpers/assignment.js';
 import { chooseCaptionLanguages, webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
+import { WORKSHEET_PDF } from '../helpers/files.js';
 import { createFreePreviewCourseViaApi } from '../helpers/free-preview.js';
 import { createCourse } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
@@ -30,7 +33,16 @@ import {
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
-import { expectNoSidewaysScroll, PHONE } from '../helpers/viewport.js';
+import {
+  openVideoQuestions,
+  setVideoQuestionsViaApi,
+} from '../helpers/video-questions.js';
+import {
+  expectDialogFits,
+  expectNoSidewaysScroll,
+  expectOnScreen,
+  PHONE,
+} from '../helpers/viewport.js';
 
 // The student portal on a small phone: pages fit the width, and nothing needed
 // is pushed below the first screen.
@@ -447,4 +459,190 @@ test('the grading queue on the instructor home page fits a phone with long names
   await expect(queue.getByRole('link')).toHaveCount(1);
   await expectNoSidewaysScroll(page);
   await screenshot(page, 'grading queue at phone width');
+});
+
+// The instructor portal's course editor on a small phone: every control in
+// the module, lesson and item rows is on screen, however long the titles, and
+// the lesson-item dialogs fit with their Save in reach.
+test('the course editor fits a phone', async ({ page }) => {
+  const iris = newUser('Iris', ['instructor', 'student']);
+  const instructor = await apiUserFor(iris);
+  const api = instructor.instructor;
+  const longWord = 'x'.repeat(70);
+  const longTitle = (n: number) =>
+    `${n}: a title that runs on and on, well past sixty characters in all`.padEnd(
+      80,
+      '.',
+    );
+
+  // The first lesson holds a video, made with its own course.
+  const video = await createCaptionedVideoViaApi(
+    instructor,
+    uniqueName('E2E phone editor'),
+  );
+  const { courseId, moduleId, lessonId } = video;
+  const textTitle = `Reading with ${longWord}`;
+  const quizTitle = longTitle(0);
+  const lesson = { courseId, moduleId, lessonId };
+
+  await api.contentItem.createText.mutate({
+    ...lesson,
+    title: textTitle,
+    body: textBody(`A body with ${longWord} in it`),
+  });
+  const pdf = await readFile(WORKSHEET_PDF);
+  const fileTarget = await api.contentItem.createFileUploadUrl.mutate({
+    ...lesson,
+    fileName: 'worksheet.pdf',
+    fileSize: pdf.byteLength,
+  });
+  await fetch(fileTarget.uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/pdf' },
+    body: new Uint8Array(pdf),
+  });
+  await api.contentItem.createFile.mutate({
+    ...lesson,
+    contentItemId: fileTarget.contentItemId,
+    title: longTitle(1),
+    objectKey: fileTarget.objectKey,
+    fileName: 'worksheet.pdf',
+  });
+  const questionIds = Array.from({ length: 12 }, (_, i) => `q${i + 1}`);
+  await api.contentItem.createQuiz.mutate({
+    ...lesson,
+    title: quizTitle,
+    questions: questionIds.map((questionId, i) => ({
+      questionId,
+      kind: 'single' as const,
+      prompt: textBody(
+        i === 0
+          ? 'A long question. '.repeat(30).slice(0, 500)
+          : `Question ${i + 1}?`,
+      ),
+      options: [
+        { optionId: 'a', text: 'Right' },
+        { optionId: 'b', text: 'Wrong' },
+      ],
+    })),
+    answerKey: Object.fromEntries(
+      questionIds.map((id) => [id, { correctOptionIds: ['a'] }]),
+    ),
+    settings: {
+      passMarkPercent: 50,
+      attemptsAllowed: 2,
+      shuffleOptions: false,
+      revealAnswers: 'never',
+    },
+  });
+  await setVideoQuestionsViaApi(instructor, video, [
+    {
+      questionId: 'v1',
+      prompt: 'A long video question. '.repeat(20).slice(0, 400),
+      options: ['Colour bars', 'A cat'],
+      correct: 0,
+      atSeconds: 1,
+    },
+  ]);
+
+  // Three modules of three lessons with long titles; the first lesson above
+  // counts as one of the first module's.
+  for (let m = 0; m < 3; m++) {
+    const module =
+      m === 0
+        ? { moduleId }
+        : await api.module.create.mutate({
+            courseId,
+            title: m === 1 ? longWord : longTitle(10 + m),
+          });
+    for (let l = m === 0 ? 1 : 0; l < 3; l++) {
+      await api.lesson.create.mutate({
+        courseId,
+        moduleId: module.moduleId,
+        title: l === 0 && m === 1 ? longWord : longTitle(20 + m * 3 + l),
+      });
+    }
+  }
+  await api.course.publish.mutate({ courseId });
+  const archived = [
+    await api.lesson.create.mutate({
+      courseId,
+      moduleId,
+      title: longTitle(90),
+    }),
+    await api.lesson.create.mutate({ courseId, moduleId, title: longWord }),
+  ];
+  for (const { lessonId: archivedId } of archived) {
+    await api.lesson.delete.mutate({
+      courseId,
+      moduleId,
+      lessonId: archivedId,
+    });
+  }
+
+  await page.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(page, iris);
+  await page.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+  const content = page.getByRole('region', { name: 'Course content' });
+  await expect(content).toBeVisible();
+
+  await test.step('every control is on screen, and each item says what it is', async () => {
+    await expectNoSidewaysScroll(page);
+    await expectOnScreen(content.getByRole('button'));
+    for (const title of [textTitle, quizTitle, longTitle(1)]) {
+      await expect(content.getByText(title, { exact: true })).toBeVisible();
+    }
+    // Every long title, a module's included, wraps inside the screen: the
+    // card clips overflow, so a sideways-scroll check alone would miss it.
+    for (const title of [longWord, longTitle(12)]) {
+      const titles = await content.getByText(title, { exact: true }).all();
+      expect(titles.length).toBeGreaterThan(0);
+      for (const element of titles) {
+        await expect(element).toBeVisible();
+        const box = await element.boundingBox();
+        expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(
+          PHONE.width,
+        );
+      }
+    }
+    await content.scrollIntoViewIfNeeded();
+    await screenshot(page, 'course editor at phone width', { fullPage: true });
+  });
+
+  await test.step('the archived rows fit, with Restore and Delete on screen', async () => {
+    const archivedSection = page.getByRole('region', { name: 'Archived' });
+    await archivedSection.scrollIntoViewIfNeeded();
+    await expect(archivedSection).toBeVisible();
+    await expectOnScreen(archivedSection.getByRole('button'));
+    await screenshot(page, 'archived rows at phone width');
+  });
+
+  await test.step('the quiz builder fits, with Save in reach', async () => {
+    await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Collapse Question 1' }).click();
+    await expectDialogFits(dialog);
+    await expectOnScreen(dialog.getByRole('button', { name: 'Save quiz' }));
+    await screenshot(page, 'quiz builder at phone width');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  });
+
+  await test.step('the video questions fit, with Save in reach', async () => {
+    const dialog = await openVideoQuestions(page, 'Video');
+    await expectDialogFits(dialog);
+    await expectOnScreen(dialog.getByRole('button', { name: 'Save' }));
+    await screenshot(page, 'video questions with a long question');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+  });
+
+  await test.step('Edit text fits with a long word in the body', async () => {
+    await content.getByRole('button', { name: `Edit ${textTitle}` }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit text' });
+    await expect(dialog).toBeVisible();
+    await expectDialogFits(dialog);
+    await expectOnScreen(dialog.getByRole('button', { name: 'Save' }));
+  });
 });

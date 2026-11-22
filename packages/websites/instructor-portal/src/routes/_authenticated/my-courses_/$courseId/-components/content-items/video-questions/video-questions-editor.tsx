@@ -267,7 +267,7 @@ export function VideoQuestionsEditor({
             <li
               key={question.questionId}
               id={questionElementId(question.questionId)}
-              className="scroll-mt-4 space-y-2"
+              className="min-w-0 scroll-mt-4 space-y-2"
             >
               <QuestionCard
                 question={question}
@@ -379,7 +379,7 @@ export function VideoQuestionsEditor({
               {state.saveError.message}
             </ErrorAlert>
           ))}
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           <span className="text-sm text-muted-foreground" role="status">
             {state.justSaved ? 'Saved' : state.dirty ? 'Unsaved changes' : ''}
           </span>

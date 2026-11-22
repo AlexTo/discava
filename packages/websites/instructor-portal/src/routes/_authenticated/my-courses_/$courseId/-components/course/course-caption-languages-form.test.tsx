@@ -148,4 +148,38 @@ describe('CourseCaptionLanguagesForm', () => {
       await screen.findByText('Restore the course first'),
     ).toBeInTheDocument();
   });
+
+  it('asks for the missing captions again and reports how many videos', async () => {
+    const { calls, user } = renderForm(
+      { languages: ['es-ES'] },
+      { 'course.retryCaptionTranslations': () => ({ requested: 3 }) },
+    );
+
+    await user.click(
+      await screen.findByRole('button', {
+        name: 'Translate missing captions again',
+      }),
+    );
+
+    expect(await screen.findByText('Asked 3 videos')).toBeInTheDocument();
+    expect(
+      calls.filter((c) => c.path === 'course.retryCaptionTranslations'),
+    ).toEqual([
+      {
+        path: 'course.retryCaptionTranslations',
+        input: { courseId: COURSE_ID },
+      },
+    ]);
+  });
+
+  it('offers no retry for a course without caption languages', async () => {
+    renderForm();
+
+    await box('Spanish (Español)');
+    expect(
+      screen.queryByRole('button', {
+        name: 'Translate missing captions again',
+      }),
+    ).not.toBeInTheDocument();
+  });
 });

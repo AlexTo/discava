@@ -521,6 +521,9 @@ export function HlsVideo({
         ref={videoRef}
         data-slot="hls-video"
         autoPlay={autoPlay}
+        // iOS Safari opens its native full-screen player on play without this;
+        // full screen is the custom control's job.
+        playsInline
         controlsList="nodownload noremoteplayback"
         onContextMenu={(event) => event.preventDefault()}
         aria-label={title}

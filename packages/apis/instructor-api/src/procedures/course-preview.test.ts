@@ -33,6 +33,7 @@ const {
   scheduleTranscodeCleanup,
   getSignedCloudFrontCookies,
   courseUpdate,
+  courseGet,
 } = vi.hoisted(() => ({
   courseInstructorGet: vi.fn(),
   previewGet: vi.fn(),
@@ -53,6 +54,7 @@ const {
   scheduleTranscodeCleanup: vi.fn(),
   getSignedCloudFrontCookies: vi.fn(),
   courseUpdate: vi.fn(),
+  courseGet: vi.fn(),
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) => ({
@@ -60,7 +62,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   createCoreTableService: vi.fn(async () => ({
     entities: {
       // Any write to the course would show up here: previews must never touch it.
-      course: { patch: courseUpdate, update: courseUpdate },
+      course: { patch: courseUpdate, update: courseUpdate, get: courseGet },
       courseInstructor: { get: courseInstructorGet },
       coursePreview: {
         get: previewGet,
@@ -72,6 +74,16 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
   })),
 }));
 
+vi.mock(
+  '@discava/common-server-utils/caption-translation-settings',
+  async (importActual) => ({
+    ...(await importActual<object>()),
+    resolveCaptionTranslationSettings: async () => ({
+      enabled: true,
+      maxLanguagesPerCourse: 9,
+    }),
+  }),
+);
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: vi.fn(),
   PutObjectCommand: vi.fn(function (input) {
@@ -530,6 +542,12 @@ describe('remove', () => {
 });
 
 describe('createVideoUrl', () => {
+  beforeEach(() => {
+    courseGet.mockReturnValue({
+      go: async () => ({ data: { courseId: COURSE } }),
+    });
+  });
+
   it('signs the played version for the instructor, even in a draft course', async () => {
     storedPreview(record());
     const cookies: string[] = [];
@@ -574,6 +592,48 @@ describe('createVideoUrl', () => {
     ).toEqual([
       ['en-US', 'auto', false],
       ['es-ES', 'translated', true],
+    ]);
+  });
+
+  it('reports each caption language as translated, failed or translating', async () => {
+    const track = (trackId: string, source: string, extra = {}) => ({
+      trackId,
+      nonce: 'nonce-1',
+      language: trackId,
+      label: trackId,
+      isDefault: trackId === 'en-US',
+      source,
+      key: `courses/${COURSE}/preview/nonce-1/captions/${trackId}.vtt`,
+      ...extra,
+    });
+    courseGet.mockReturnValue({
+      go: async () => ({
+        data: {
+          courseId: COURSE,
+          captionLanguages: ['es-ES', 'fr-FR', 'de-DE'],
+        },
+      }),
+    });
+    storedPreview(
+      record({
+        captionTracks: [
+          track('en-US', 'uploaded'),
+          track('es-ES', 'translated', { sourceTrackId: 'en-US' }),
+        ],
+        captionTranslation: {
+          sourceTrackId: 'en-US',
+          failures: [{ language: 'fr-FR', reason: 'failed' }],
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+    );
+
+    const { translations } = await call().createVideoUrl({ courseId: COURSE });
+
+    expect(translations.map((x) => [x.language, x.state])).toEqual([
+      ['es-ES', 'translated'],
+      ['fr-FR', 'failed'],
+      ['de-DE', 'translating'],
     ]);
   });
 

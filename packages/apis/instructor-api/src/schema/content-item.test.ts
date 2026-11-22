@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ContentItemSchema,
+  CreateContentItemQuizInputSchema,
   UpdateContentItemVideoOutputSchema,
   UpdateVideoQuestionsInputSchema,
 } from './content-item.js';
@@ -190,5 +191,34 @@ describe('a video content item with questions', () => {
       answerKey: keyFor(questions),
       quizVersion: 2,
     });
+  });
+});
+
+describe('CreateContentItemQuizInputSchema reveal setting', () => {
+  const quizInput = (settings: Record<string, unknown>) => ({
+    courseId: 'c1',
+    moduleId: 'm1',
+    lessonId: 'l1',
+    title: 'Check',
+    questions: [videoQuestion(1, 0)].map(({ atSeconds: _at, ...rest }) => rest),
+    answerKey: keyFor([{ questionId: 'q1' }]),
+    settings,
+  });
+  const plain = {
+    passMarkPercent: 80,
+    attemptsAllowed: 3,
+    shuffleOptions: false,
+  };
+
+  it('defaults to after_each_attempt when left out', () => {
+    const parsed = CreateContentItemQuizInputSchema.parse(quizInput(plain));
+    expect(parsed.settings.revealAnswers).toBe('after_each_attempt');
+  });
+
+  it('keeps never', () => {
+    const parsed = CreateContentItemQuizInputSchema.parse(
+      quizInput({ ...plain, revealAnswers: 'never' }),
+    );
+    expect(parsed.settings.revealAnswers).toBe('never');
   });
 });

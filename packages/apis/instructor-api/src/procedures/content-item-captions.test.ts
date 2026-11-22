@@ -9,6 +9,7 @@ import {
   attachContentItemCaption,
   createContentItemCaptionUploadUrl,
   removeContentItemCaption,
+  retryContentItemCaptionTranslation,
 } from './content-item-captions.js';
 
 const {
@@ -28,6 +29,8 @@ const {
   putCaptionFile,
   bestEffortDeleteCaptionFile,
   bestEffortDeleteCaptionUpload,
+  requestCaptionTranslation,
+  resolveCaptionTranslationSettings,
   mockModule,
 } = await vi.hoisted(async () => ({
   patchSet: vi.fn(),
@@ -40,6 +43,8 @@ const {
   putCaptionFile: vi.fn(),
   bestEffortDeleteCaptionFile: vi.fn(),
   bestEffortDeleteCaptionUpload: vi.fn(),
+  requestCaptionTranslation: vi.fn(),
+  resolveCaptionTranslationSettings: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     courseInstructor: ['get'],
     course: ['get'],
@@ -50,7 +55,15 @@ const {
 }));
 
 vi.mock('@discava/core-table', async (importOriginal) =>
-  mockModule(await importOriginal()),
+  mockModule(await importOriginal(), { requestCaptionTranslation }),
+);
+
+vi.mock(
+  '@discava/common-server-utils/caption-translation-settings',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    resolveCaptionTranslationSettings,
+  }),
 );
 
 vi.mock(
@@ -77,6 +90,7 @@ const router = t.router({
   captionUploadUrl: createContentItemCaptionUploadUrl,
   attachCaption: attachContentItemCaption,
   removeCaption: removeContentItemCaption,
+  retryCaptionTranslation: retryContentItemCaptionTranslation,
 });
 
 const INSTRUCTOR_SUB = 'instructor-1';
@@ -756,6 +770,95 @@ describe('removeCaption', () => {
 
       expect(result.captions.map((c) => c.trackId)).toEqual(['t1', 't3']);
       expect(bestEffortDeleteCaptionFile).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('retryCaptionTranslation', () => {
+  beforeEach(() => {
+    resolveCaptionTranslationSettings.mockResolvedValue({
+      enabled: true,
+      maxLanguagesPerCourse: 9,
+    });
+    requestCaptionTranslation.mockResolvedValue(undefined);
+  });
+
+  const withLanguages = (captionLanguages?: string[]) =>
+    courseGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({
+        data: { courseId: COURSE_ID, captionLanguages },
+      }),
+    });
+
+  it('refuses a caller outside the instructor group', async () => {
+    await expect(
+      callAs(['student']).retryCaptionTranslation(ref),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('refuses an instructor of another course', async () => {
+    courseInstructorGet.mockReturnValue({
+      go: vi.fn().mockResolvedValue({ data: null }),
+    });
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('asks for the translation again and reports the languages as translating', async () => {
+    withLanguages(['es-ES']);
+    setItem(
+      video({
+        captionTracks: [track('t-en', 'en-US', { isDefault: true })],
+        captionTranslation: {
+          sourceTrackId: 't-en',
+          failures: [{ language: 'es-ES', reason: 'failed' }],
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      }),
+    );
+
+    const result = await callAs().retryCaptionTranslation(ref);
+
+    expect(requestCaptionTranslation).toHaveBeenCalledWith(
+      expect.anything(),
+      ref,
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ language: 'es-ES', state: 'translating' }),
+    ]);
+  });
+
+  it.each([
+    [
+      'translation is off',
+      { enabled: false, maxLanguagesPerCourse: 0 },
+      ['es-ES'],
+    ],
+    [
+      'the course has no caption languages',
+      { enabled: true, maxLanguagesPerCourse: 9 },
+      undefined,
+    ],
+  ])('is refused when %s', async (_name, settings, languages) => {
+    resolveCaptionTranslationSettings.mockResolvedValue(settings);
+    withLanguages(languages);
+    setItem(
+      video({ captionTracks: [track('t-en', 'en-US', { isDefault: true })] }),
+    );
+
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(requestCaptionTranslation).not.toHaveBeenCalled();
+  });
+
+  it('is NOT_FOUND for a missing video', async () => {
+    setItem(null);
+    await expect(callAs().retryCaptionTranslation(ref)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
     });
   });
 });

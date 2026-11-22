@@ -78,23 +78,28 @@ export function QuizSaveBar({
             {saveError.message}
           </ErrorAlert>
         ))}
-      <div className="flex items-center justify-end gap-3">
-        <span className="text-sm text-muted-foreground" role="status">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <span
+          className="basis-full text-sm text-muted-foreground sm:basis-auto"
+          role="status"
+        >
           {justSaved ? 'Saved' : dirty ? 'Unsaved changes' : ''}
         </span>
-        <Button type="button" variant="outline" onClick={onPreview}>
-          <Eye /> Preview as student
-        </Button>
-        {onClose && (
-          <Button type="button" variant="outline" onClick={onClose}>
-            Close
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button type="button" variant="outline" onClick={onPreview}>
+            <Eye /> Preview as student
           </Button>
-        )}
-        {!readOnly && (
-          <Button type="button" disabled={saving} onClick={onSave}>
-            <Save /> {saving ? 'Saving…' : 'Save quiz'}
-          </Button>
-        )}
+          {onClose && (
+            <Button type="button" variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          )}
+          {!readOnly && (
+            <Button type="button" disabled={saving} onClick={onSave}>
+              <Save /> {saving ? 'Saving…' : 'Save quiz'}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

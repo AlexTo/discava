@@ -78,6 +78,9 @@ export const captionMenuLabel = (
     ? `${caption.label} ${AUTO_TRANSLATED_SUFFIX}`
     : caption.label;
 
+// WebKit's own full screen for a `<video>`, the only kind on iPhone.
+type WebkitVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -154,6 +157,9 @@ export function VideoControls({
   const [muted, setMuted] = React.useState(false);
   const [speed, setSpeed] = React.useState(1);
   const [fullscreen, setFullscreen] = React.useState(false);
+  // iPhone Safari has no element full screen: the video itself goes full
+  // screen, in its native player, through the WebKit-only method.
+  const [videoFullscreen, setVideoFullscreen] = React.useState(false);
   const [pipAvailable, setPipAvailable] = React.useState(false);
   const [pip, setPip] = React.useState(false);
   const [focusWithin, setFocusWithin] = React.useState(false);
@@ -238,6 +244,13 @@ export function VideoControls({
       }
       video.removeEventListener('loadedmetadata', reapply);
     };
+  }, []);
+
+  React.useEffect(() => {
+    setVideoFullscreen(
+      typeof (getVideo() as WebkitVideo | undefined)?.webkitEnterFullscreen ===
+        'function',
+    );
   }, []);
 
   React.useEffect(() => {
@@ -405,7 +418,10 @@ export function VideoControls({
   };
 
   const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
+    if (!document.fullscreenEnabled) {
+      // The native player has its own way out.
+      (getVideo() as WebkitVideo | undefined)?.webkitEnterFullscreen?.();
+    } else if (document.fullscreenElement) {
       document.exitFullscreen?.()?.catch(() => {});
     } else {
       containerRef.current?.requestFullscreen?.()?.catch(() => {});
@@ -717,19 +733,20 @@ export function VideoControls({
                 <PictureInPicture2Icon />
               </Button>
             )}
-            {typeof document !== 'undefined' && document.fullscreenEnabled && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Fullscreen"
-                aria-pressed={fullscreen}
-                onClick={toggleFullscreen}
-                className="hover:bg-white/20 hover:text-white"
-              >
-                {fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
-              </Button>
-            )}
+            {typeof document !== 'undefined' &&
+              (document.fullscreenEnabled || videoFullscreen) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Fullscreen"
+                  aria-pressed={fullscreen}
+                  onClick={toggleFullscreen}
+                  className="hover:bg-white/20 hover:text-white"
+                >
+                  {fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
+                </Button>
+              )}
           </div>
         </div>
       </div>

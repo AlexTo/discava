@@ -161,6 +161,9 @@ export const course = analyticsCourseProcedure
           students,
         }),
       ),
+      modulesWithoutQuestions: analytics.modulesWithoutQuestions.map(
+        ({ moduleId, title }) => ({ moduleId, title }),
+      ),
       videoQuestions: analytics.videoQuestions.map(
         ({ contentItemId, lessonId, title, questions }) => ({
           contentItemId,
