@@ -382,12 +382,12 @@ export const setCourseCertificateCriteria = courseInstructorProcedure(
 )
   .output(SetCertificateCriteriaOutputSchema)
   .mutation(async ({ ctx, input }) => {
-    const { courseId, requireQuizPass } = input;
+    const { courseId, requireQuizPass, minUploadScorePercent } = input;
 
     const course = await setCertificateCriteria({
       coreTable: ctx.coreTable,
       courseId,
-      criteria: { requireQuizPass },
+      criteria: { requireQuizPass, minUploadScorePercent },
     });
 
     await refreshInstructorCourseUpdatedAt(

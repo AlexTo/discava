@@ -4,10 +4,23 @@
  */
 
 import {
+  apiUserFor,
+  assignmentItem,
+  chooseSubmissionFile,
+  createUploadAssignmentCourse,
+  editGrade,
+  openLesson,
+  openSubmissionReview,
+  openSubmissions,
+  returnSubmission,
+} from '../helpers/assignment.js';
+import {
   certificateControl,
   expectInCompleted,
   setCertificateCriteria,
+  setGradedUploadCriterion,
 } from '../helpers/certificate.js';
+import { WORKSHEET_PDF } from '../helpers/files.js';
 import {
   addLesson,
   addModule,
@@ -22,6 +35,7 @@ import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
+  expectAfterReloads,
   expectCourseCompleted,
   markItemDone,
   openCourse,
@@ -204,5 +218,86 @@ test('an instructor requires every quiz to be passed for a certificate', async (
       visitor.getByText('Passed 1 assessed quiz. Pass mark: 70%.'),
     ).toBeVisible();
     await expect(visitor.getByText(/^Overall score:/)).toBeVisible();
+  });
+});
+
+// The graded-upload criterion (#594): the work must be returned with enough of
+// its points, and a regrade upwards is what finally issues the certificate.
+test('an instructor requires graded work to reach a score for a certificate', async ({
+  browser,
+}) => {
+  const ASSIGNMENT = 'Essay';
+  const ivy = newUser('Ivy', ['instructor']);
+  const sam = newUser('Sam', ['student']);
+  const courseTitle = uniqueName('E2E graded certificate course');
+  const ref = await createUploadAssignmentCourse(await apiUserFor(ivy), {
+    courseTitle,
+    assignmentTitle: ASSIGNMENT,
+    maxPoints: 10,
+  });
+  const courseUrl = `${PORTALS.instructor}/my-courses/${ref.courseId}`;
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+
+  await test.step('the instructor requires 60% on graded assignments', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses`);
+    await signIn(instructor, ivy);
+    await setGradedUploadCriterion(instructor, courseUrl, 60);
+    await screenshot(instructor, 'certificate-criteria-graded-uploads');
+  });
+
+  await test.step('submitted work waits to be graded and earns no certificate', async () => {
+    await student.goto(`${PORTALS.student}/my-learning`);
+    await signIn(student, sam);
+    await openCourse(student, courseTitle);
+    await enrol(student);
+    await openLesson(student, ref);
+    await chooseSubmissionFile(student, ASSIGNMENT, WORKSHEET_PDF);
+    await assignmentItem(student, ASSIGNMENT)
+      .getByRole('button', { name: 'Submit', exact: true })
+      .click();
+    await expect(
+      assignmentItem(student, ASSIGNMENT).getByText(/^Submitted/),
+    ).toBeVisible({ timeout: 30_000 });
+    await student.goto(`${PORTALS.student}/learn/${ref.courseId}/home`);
+    await expect(
+      student.getByText(
+        'Graded assignments returned with at least 60%: 0 of 1',
+      ),
+    ).toBeVisible();
+    await expect(student.getByText(/Waiting to be graded/)).toBeVisible();
+    await expect(student.getByText('You earned a certificate')).toHaveCount(0);
+  });
+
+  await test.step('work returned below the score shows the score needed', async () => {
+    await openSubmissions(instructor, ref, ASSIGNMENT);
+    await openSubmissionReview(instructor, 'Sam');
+    await returnSubmission(instructor, 4, 'Not enough yet');
+    await student.reload();
+    await expect(
+      student.getByText(/Returned with 40%; 60% needed/),
+    ).toBeVisible({ timeout: 30_000 });
+    await screenshot(student, 'certificate-requirements-below-score');
+  });
+
+  await test.step('a regrade to enough points issues the certificate, which counts the assignment', async () => {
+    await editGrade(instructor, 8);
+    // The card only looks again by itself once every requirement is met, and
+    // the recalculation lands a few seconds after the regrade.
+    await expectAfterReloads(student, async () => {
+      await expect(student.getByText('You earned a certificate')).toBeVisible({
+        timeout: 2_000,
+      });
+    });
+    const href = await student
+      .getByRole('link', { name: 'View', exact: true })
+      .getAttribute('href');
+    const visitor = await browser.newPage();
+    await visitor.goto(`${PORTALS.student}${href}`);
+    await expect(
+      visitor.getByText('Graded assignments returned with at least 60%: 1.'),
+    ).toBeVisible();
+    await expect(visitor.getByText(/^Overall score:/)).toBeVisible();
+    await screenshot(visitor, 'certificate-statement-graded-uploads');
   });
 });

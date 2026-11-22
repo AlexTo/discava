@@ -117,6 +117,54 @@ describe('CertificateRequirements', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('lists each unmet graded assignment with its state and the score needed', async () => {
+    const items = [
+      ['met', 60],
+      ['not-submitted'],
+      ['awaiting-grade'],
+      ['below-score', 45],
+    ].map(([state, scorePercent], i) => ({
+      contentItemId: `w${i}`,
+      lessonId: `lesson-${i}`,
+      title: `Work ${i}`,
+      state,
+      scorePercent,
+    }));
+    render(() =>
+      answer({
+        requirements: [
+          complete(1, 1),
+          {
+            kind: 'graded-uploads',
+            met: false,
+            done: 1,
+            total: 4,
+            minScorePercent: 60,
+            items,
+          },
+        ],
+      }),
+    );
+
+    expect(
+      await screen.findByText(
+        'Graded assignments returned with at least 60%: 1 of 4',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Not submitted/)).toBeInTheDocument();
+    expect(screen.getByText(/Waiting to be graded/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Returned with 45%; 60% needed/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Work 3' })).toHaveAttribute(
+      'href',
+      '/learn/course-1/lesson/lesson-3',
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Work 0' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('says the certificate is being prepared once everything is met', async () => {
     render(() => answer({ allMet: true, requirements: [complete(2, 2)] }));
 

@@ -8,7 +8,7 @@ import { CURRICULUM_ENTITIES } from './curriculum.js';
  * Which of the core table's stream records can change a student's progress
  * or certificate, and so reach the progress recalculation: a new item
  * completion, an edit to or removal of a module, lesson or content item, a
- * quiz summary written (a pass is one of them) and a course edit (its
+ * quiz summary written (a pass is one of them), a graded submission and a course edit (its
  * certificate criteria). Its own writes (progress, enrolment, certificate)
  * match none of these, so it never triggers itself. ElectroDB
  * stores each record's entity name in `__edb_e__`; a filter can't compare the
@@ -31,7 +31,7 @@ export const PROGRESS_STREAM_FILTERS: readonly {
   {
     eventName: 'MODIFY',
     image: 'NewImage',
-    entities: ['quizSummary', 'course'],
+    entities: ['quizSummary', 'course', 'assignmentSubmission'],
   },
 ];
 

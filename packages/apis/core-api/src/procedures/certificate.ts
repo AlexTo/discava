@@ -206,6 +206,7 @@ export const certificateRequirements = courseProcedure
       { data: certificate },
       { data: completions },
       { data: summaries },
+      { data: submissions },
     ] = await Promise.all([
       coreTable.collections.curriculum({ courseId }).go({ pages: 'all' }),
       getEnrolment(coreTable, courseId, userId),
@@ -216,6 +217,11 @@ export const certificateRequirements = courseProcedure
       coreTable.entities.quizSummary.query
         .primary({ userId })
         .where(({ courseId: id }, { eq }) => eq(id, courseId))
+        .go({ pages: 'all' }),
+      // The caller's own submissions, by key; the rule ignores them unless
+      // graded uploads are required.
+      coreTable.entities.assignmentSubmission.query
+        .byUser({ userId, courseId })
         .go({ pages: 'all' }),
     ]);
     const [course] = curriculum.course;
@@ -257,17 +263,39 @@ export const certificateRequirements = courseProcedure
       criteria: course.certificateCriteria,
       curriculum: content,
       quizSummaries: summaries,
+      submissions,
     });
     const itemsById = new Map(
       visibleItems.map((item) => [item.contentItemId, item]),
     );
     const requirements = [
       complete,
-      ...evaluation.requirements.map(({ quizzes }) => {
-        const items = quizzes.map(({ contentItemId, state }) => ({
+      ...evaluation.requirements.map((requirement) => {
+        const describe = (contentItemId: string) => ({
           contentItemId,
           lessonId: itemsById.get(contentItemId)?.lessonId ?? '',
           title: itemsById.get(contentItemId)?.title ?? '',
+        });
+        if (requirement.kind === 'graded-uploads') {
+          const items = requirement.uploads.map(
+            ({ contentItemId, state, scorePercent }) => ({
+              ...describe(contentItemId),
+              state,
+              ...(scorePercent !== undefined && { scorePercent }),
+            }),
+          );
+          const done = items.filter((i) => i.state === 'met').length;
+          return {
+            kind: 'graded-uploads' as const,
+            met: done === items.length,
+            done,
+            total: items.length,
+            minScorePercent: requirement.minScorePercent,
+            items,
+          };
+        }
+        const items = requirement.quizzes.map(({ contentItemId, state }) => ({
+          ...describe(contentItemId),
           state,
         }));
         const done = items.filter((i) => i.state === 'passed').length;

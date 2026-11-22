@@ -289,6 +289,159 @@ const fakeCourseTable = (
   return { state, coreTable };
 };
 
+describe('graded uploads', () => {
+  const assignment = (id: string, order = 1, maxPoints = 10) => ({
+    ...shown,
+    moduleId: 'm1',
+    lessonId: 'l1',
+    contentItemId: id,
+    order,
+    type: 'assignment',
+    maxPoints,
+  });
+  const submission = (
+    contentItemId: string,
+    status: 'submitted' | 'returned' | 'resubmission_requested',
+    points?: number,
+  ) => ({ contentItemId, status, points, pointsOutOf: 10 });
+  const upload = {
+    version: 3,
+    requireQuizPass: false,
+    minUploadScorePercent: 60,
+  };
+  const evaluate = (
+    criteria: Parameters<typeof evaluateCertificateCriteria>[0]['criteria'],
+    items: unknown[],
+    submissions: ReturnType<typeof submission>[],
+    quizSummaries: ReturnType<typeof summary>[] = [],
+  ) =>
+    evaluateCertificateCriteria({
+      criteria,
+      curriculum: curriculumOf(items as never),
+      quizSummaries,
+      submissions: submissions as never,
+    });
+
+  it('gives each state', () => {
+    const { met, requirements } = evaluate(
+      upload,
+      [
+        assignment('none', 1),
+        assignment('wait', 2),
+        assignment('low', 3),
+        assignment('ok', 4),
+      ],
+      [
+        submission('wait', 'submitted'),
+        submission('low', 'returned', 5),
+        submission('ok', 'returned', 6),
+      ],
+    );
+    expect(met).toBe(false);
+    expect(requirements).toEqual([
+      {
+        kind: 'graded-uploads',
+        minScorePercent: 60,
+        uploads: [
+          { contentItemId: 'none', state: 'not-submitted' },
+          { contentItemId: 'wait', state: 'awaiting-grade' },
+          { contentItemId: 'low', state: 'below-score', scorePercent: 50 },
+          { contentItemId: 'ok', state: 'met', scorePercent: 60 },
+        ],
+      },
+    ]);
+  });
+
+  it('meets the threshold exactly and not one below it', () => {
+    expect(
+      evaluate(
+        upload,
+        [assignment('a', 1, 100)],
+        [{ ...submission('a', 'returned', 60), pointsOutOf: 100 }],
+      ).met,
+    ).toBe(true);
+    expect(
+      evaluate(
+        upload,
+        [assignment('a', 1, 100)],
+        [{ ...submission('a', 'returned', 59), pointsOutOf: 100 }],
+      ).met,
+    ).toBe(false);
+  });
+
+  it.each([
+    [57, 100, 57],
+    [29, 50, 58],
+    [29, 100, 29],
+    [2, 3, 66],
+  ])(
+    'scores %i of %i as %i%% without floating-point loss',
+    (points, outOf, percent) => {
+      const { requirements } = evaluate(
+        { ...upload, minUploadScorePercent: percent },
+        [assignment('a', 1, outOf)],
+        [{ ...submission('a', 'returned', points), pointsOutOf: outOf }],
+      );
+      expect(requirements[0]).toMatchObject({
+        uploads: [{ state: 'met', scorePercent: percent }],
+      });
+    },
+  );
+
+  it('records the uploads and mixes them into the band with quizzes', () => {
+    const { met, assessment } = evaluate(
+      { ...upload, requireQuizPass: true },
+      [quiz('q1', 70), assignment('a')],
+      [submission('a', 'returned', 7)],
+      [summary('q1', 90, true)],
+    );
+    expect(met).toBe(true);
+    expect(assessment.minUploadScorePercent).toBe(60);
+    expect(assessment.assessedItems).toEqual([
+      {
+        contentItemId: 'q1',
+        kind: 'quiz',
+        scorePercent: 90,
+        passMarkPercent: 70,
+      },
+      { contentItemId: 'a', kind: 'upload', scorePercent: 70 },
+    ]);
+    expect(assessment.scoreBand).toBe(80);
+    expect(assessment.passMarkLowest).toBe(70);
+  });
+
+  it('is not met when the quiz criterion fails though the upload is met', () => {
+    expect(
+      evaluate(
+        { ...upload, requireQuizPass: true },
+        [quiz('q1', 70), assignment('a')],
+        [submission('a', 'returned', 9)],
+        [summary('q1', 10, false)],
+      ).met,
+    ).toBe(false);
+  });
+
+  it('is met with only the upload criterion and no visible assignment', () => {
+    const { met, requirements, assessment } = evaluate(upload, [text], []);
+    expect(met).toBe(true);
+    expect(requirements).toEqual([
+      { kind: 'graded-uploads', minScorePercent: 60, uploads: [] },
+    ]);
+    expect(assessment.assessedItems).toEqual([]);
+    expect(assessment.scoreBand).toBeUndefined();
+  });
+
+  it('ignores assignments without the criterion', () => {
+    const { met, assessment } = evaluate(
+      DEFAULT_CERTIFICATE_CRITERIA,
+      [assignment('a')],
+      [],
+    );
+    expect(met).toBe(true);
+    expect(assessment.assessedItems).toEqual([]);
+  });
+});
+
 describe('setCertificateCriteria', () => {
   const course = (requireQuizPass: boolean, version = 1) => ({
     courseId: 'c1',
@@ -359,6 +512,44 @@ describe('setCertificateCriteria', () => {
     );
 
     await expect(set(coreTable, true)).rejects.toThrow(VersionConflictError);
+  });
+
+  it('sets and removes the upload score, bumping the version each time', async () => {
+    const { coreTable } = fakeCourseTable(course(false));
+
+    const set60 = await setCertificateCriteria({
+      coreTable,
+      courseId: 'c1',
+      criteria: { requireQuizPass: false, minUploadScorePercent: 60 },
+    });
+    expect(set60.certificateCriteria).toEqual({
+      version: 2,
+      requireQuizPass: false,
+      minUploadScorePercent: 60,
+    });
+    const kept = await set(coreTable, false);
+    expect(kept.certificateCriteria.version).toBe(2);
+    const cleared = await setCertificateCriteria({
+      coreTable,
+      courseId: 'c1',
+      criteria: { requireQuizPass: false, minUploadScorePercent: null },
+    });
+    expect(cleared.certificateCriteria).toEqual({
+      version: 3,
+      requireQuizPass: false,
+    });
+  });
+
+  it('refuses an upload score outside 1 to 100', async () => {
+    const { coreTable, state } = fakeCourseTable(course(false));
+    await expect(
+      setCertificateCriteria({
+        coreTable,
+        courseId: 'c1',
+        criteria: { requireQuizPass: false, minUploadScorePercent: 101 },
+      }),
+    ).rejects.toThrow('1 to 100');
+    expect(state.patches).toBe(0);
   });
 
   it('throws when the course is missing', async () => {
