@@ -43,6 +43,7 @@ test('a student fails a quiz, retakes it and passes', async ({ browser }) => {
     await addQuiz(instructor, {
       title: 'Quiz one',
       attempts: 2,
+      settingsScreenshot: 'new quiz reveal setting',
       question: 'What is 2 + 2?',
       options: ['3', '4'],
       correct: '4',

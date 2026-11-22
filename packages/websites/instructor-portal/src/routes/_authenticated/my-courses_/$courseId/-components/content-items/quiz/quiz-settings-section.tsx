@@ -151,7 +151,11 @@ export function QuizSettingsSection({
                 }
                 disabled={readOnly}
               >
-                <SelectTrigger id={`${ids}-reveal`} className="w-full">
+                <SelectTrigger
+                  id={`${ids}-reveal`}
+                  className="w-full"
+                  aria-describedby={`${ids}-reveal-hint`}
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -162,6 +166,13 @@ export function QuizSettingsSection({
                   ))}
                 </SelectContent>
               </Select>
+              <p
+                id={`${ids}-reveal-hint`}
+                className="text-xs text-muted-foreground"
+              >
+                Learners remember more when they see the answers straight after
+                each attempt.
+              </p>
             </div>
             <div className="flex items-center gap-2 self-end sm:h-9">
               <Checkbox

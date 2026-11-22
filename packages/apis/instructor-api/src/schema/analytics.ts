@@ -117,6 +117,10 @@ export const CourseAnalyticsOutputSchema = z.object({
   quizzes: z.array(QuizListingSchema),
   /** Videos currently shown to students that have questions, in course order. */
   videoQuestions: z.array(VideoQuestionListingSchema),
+  /** Modules shown to students with video and no questions, in course order. */
+  modulesWithoutQuestions: z.array(
+    z.object({ moduleId: z.string(), title: z.string() }),
+  ),
 });
 
 export type ICourseAnalyticsOutput = z.output<

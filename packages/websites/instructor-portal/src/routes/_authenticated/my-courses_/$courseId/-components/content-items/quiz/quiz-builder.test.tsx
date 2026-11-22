@@ -121,6 +121,15 @@ const renderExisting = (handlers = {}, props = {}) =>
 const save = () => screen.getByRole('button', { name: /save quiz/i });
 
 describe('QuizBuilder', () => {
+  it('explains the default reveal setting under the select', () => {
+    renderBuilder();
+    expect(
+      screen.getByRole('combobox', { name: 'Show the correct answers' }),
+    ).toHaveAccessibleDescription(
+      'Learners remember more when they see the answers straight after each attempt.',
+    );
+  });
+
   it('creates a new quiz on the first save, then updates it', async () => {
     const { user, calls, onCreated } = renderBuilder(
       {},

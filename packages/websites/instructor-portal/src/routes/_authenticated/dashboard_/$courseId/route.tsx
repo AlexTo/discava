@@ -167,7 +167,10 @@ function RouteComponent() {
               aria-label="Lesson drop-off and activation"
               className="grid gap-4 xl:grid-cols-2"
             >
-              <LessonDropOff lessons={analytics.lessons} />
+              <LessonDropOff
+                lessons={analytics.lessons}
+                modulesWithoutQuestions={analytics.modulesWithoutQuestions}
+              />
               <ActivationCard
                 totals={analytics.totals}
                 daily={analytics.daily}
