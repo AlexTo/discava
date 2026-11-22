@@ -5,17 +5,21 @@
 
 import {
   apiUser,
+  createCaptionedVideoViaApi,
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
 } from '../helpers/api.js';
+import { webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl, setLandingViaApi } from '../helpers/public-pages.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
+  enrol,
   enrolAndLand,
   expectAfterReloads,
   openCourse,
+  searchTranscripts,
 } from '../helpers/student-portal.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn, uniqueName } from '../helpers/users.js';
@@ -271,4 +275,58 @@ test('a long description does not make a tall card on a phone', async ({
 
   await card(longTitle).getByRole('link', { name: longTitle }).click();
   await expect(page).toHaveURL(new RegExp(`/learn/${long.courseId}`));
+});
+
+test('transcript search results fit a phone, even for a 70-character word', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E phone transcript course');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await createCaptionedVideoViaApi(instructor, title);
+  const word = uniqueName('nebula').replace(/[^a-z0-9]/gi, '');
+  const target =
+    await instructor.instructor.contentItem.captionUploadUrl.mutate(video);
+  const response = await fetch(target.url, {
+    method: 'PUT',
+    headers: target.headers,
+    body: webVttOf([
+      { start: 0, end: 2, text: 'Welcome to this lesson' },
+      { start: 2, end: 3, text: `and now ${word} ${'y'.repeat(70)}` },
+    ]),
+  });
+  expect(response.ok).toBe(true);
+  await instructor.instructor.contentItem.attachCaption.mutate({
+    ...video,
+    uploadId: target.uploadId,
+    language: 'en-US',
+  });
+  await instructor.instructor.course.publish.mutate({
+    courseId: video.courseId,
+  });
+
+  await openCourse(page, title);
+  await enrol(page, newUser('Pia', ['student']));
+
+  await test.step('the search box fits the top of the player', async () => {
+    await expectNoSidewaysScroll(page);
+    await searchTranscripts(page, word);
+  });
+
+  await test.step('the results fit, with the long word wrapped', async () => {
+    const result = page
+      .getByRole('list', { name: 'Search results' })
+      .getByRole('link');
+    await expectAfterReloads(page, async () => {
+      await expect(result).toHaveCount(1, { timeout: 5_000 });
+    });
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'transcript search results at phone width');
+  });
+
+  await test.step('a 70-character query does not push the page sideways', async () => {
+    await searchTranscripts(page, 'a'.repeat(70));
+    await expect(page.getByText(/No moments match/).first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'transcript search empty at phone width');
+  });
 });
