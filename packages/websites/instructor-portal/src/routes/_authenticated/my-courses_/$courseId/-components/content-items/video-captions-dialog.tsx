@@ -52,6 +52,12 @@ type Track = {
   source: 'auto' | 'uploaded' | 'translated';
 };
 
+const SOURCE_BADGES: Record<Track['source'], string> = {
+  auto: 'Automatic',
+  uploaded: 'Uploaded',
+  translated: 'Auto-translated',
+};
+
 const putCaptionFile = async (
   url: string,
   headers: Record<string, string>,
@@ -154,7 +160,7 @@ export function VideoCaptionsDialog({
           <DialogTitle>Captions</DialogTitle>
           <p className="text-sm text-muted-foreground">
             Captions for "{title}". A video can have up to 10 tracks, one per
-            language.
+            language, including auto-translated ones.
           </p>
         </DialogHeader>
 
@@ -188,58 +194,64 @@ export function VideoCaptionsDialog({
                 <span className="text-xs text-muted-foreground">
                   {track.language}
                 </span>
-                <Badge variant="outline">{track.source}</Badge>
+                <Badge variant="outline">{SOURCE_BADGES[track.source]}</Badge>
                 {track.isDefault && <Badge>Default</Badge>}
-                <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${track.label}`}
-                    >
-                      Remove
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="sm:max-w-md">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Remove caption</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Students will no longer see the {track.label} captions
-                        on "{title}".
-                        {track.isDefault &&
-                          ' The next track becomes the default.'}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                {track.source === 'translated' ? (
+                  <span className="text-xs text-muted-foreground">
+                    From the course's caption languages
+                  </span>
+                ) : (
+                  <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
+                    <AlertDialogTrigger asChild>
                       <Button
                         type="button"
-                        variant="destructive"
-                        disabled={isRemoving}
-                        onClick={async () => {
-                          setError(undefined);
-                          try {
-                            await removeCaption({
-                              ...keys,
-                              trackId: track.trackId,
-                            });
-                            await refresh();
-                          } catch (failure) {
-                            setError(
-                              apiErrorMessage(
-                                failure,
-                                "Couldn't remove the caption",
-                              ),
-                            );
-                          }
-                        }}
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${track.label}`}
                       >
-                        {isRemoving ? 'Removing…' : 'Remove caption'}
+                        Remove
                       </Button>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="sm:max-w-md">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove caption</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Students will no longer see the {track.label} captions
+                          on "{title}".
+                          {track.isDefault &&
+                            ' The next track becomes the default.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          disabled={isRemoving}
+                          onClick={async () => {
+                            setError(undefined);
+                            try {
+                              await removeCaption({
+                                ...keys,
+                                trackId: track.trackId,
+                              });
+                              await refresh();
+                            } catch (failure) {
+                              setError(
+                                apiErrorMessage(
+                                  failure,
+                                  "Couldn't remove the caption",
+                                ),
+                              );
+                            }
+                          }}
+                        >
+                          {isRemoving ? 'Removing…' : 'Remove caption'}
+                        </Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
               </li>
             ))}
           </ul>

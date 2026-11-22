@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Page } from '@playwright/test';
 import {
   AUTO_CAPTION_CUE,
+  CAPTION_CUE,
   chooseCaptionLanguages,
   closeDialog,
   expectCaptionTrackListed,
   LOCAL_TRANSLATION,
+  openCaptionsDialog,
+  removeCaption,
+  removeCaptionLanguages,
   shownCue,
+  uploadCaption,
 } from '../helpers/captions.js';
 import {
   addLesson,
@@ -20,6 +26,7 @@ import {
 } from '../helpers/instructor-portal.js';
 import { PORTALS } from '../helpers/portals.js';
 import { coursePageUrl } from '../helpers/public-pages.js';
+import { waitForQueuesToDrain } from '../helpers/router.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
   enrol,
@@ -176,5 +183,213 @@ test('an instructor chooses caption languages and every video gets them', async 
       }),
     ).toBeVisible();
     await screenshot(visitor, 'preview-captions-menu-auto-translated');
+  });
+});
+
+// A published course with one video translated into Spanish and French, taught
+// by a new instructor and watched by a new student who has started it.
+const translatedCourse = async (
+  instructor: Page,
+  student: Page,
+  name: string,
+) => {
+  const course = uniqueName(name);
+  await instructor.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(instructor, newUser('Tess', ['instructor']));
+  await createCourse(instructor, {
+    title: course,
+    summary: 'A course translated by the end-to-end tests.',
+  });
+  const courseId = instructor.url().split('/').pop() as string;
+  await addModule(instructor, 'Module one');
+  await addLesson(instructor, 'Lesson one');
+  await addVideoItem(instructor, {
+    title: 'Video one',
+    file: THREE_SECOND_VIDEO,
+  });
+  await expectCaptionTrackListed(instructor, 'Video one', 'English');
+  await closeDialog(instructor);
+  await chooseCaptionLanguages(instructor, course, ['Spanish', 'French']);
+  const dialog = await expectCaptionTrackListed(
+    instructor,
+    'Video one',
+    'Français',
+  );
+  await expect(dialog.getByRole('listitem', { name: 'Español' })).toBeVisible();
+  await closeDialog(instructor);
+  await publishCourse(instructor);
+  await openCourse(student, course);
+  await enrol(student, newUser('Sol', ['student']));
+  await startFirstLesson(student);
+  return { course, courseId };
+};
+
+// Opens the captions menu of the student's video, once its player is there.
+const openCaptionsMenu = async (student: Page, title: string) => {
+  const item = lessonItem(student, title);
+  const captions = item.getByRole('button', { name: /^Captions/ });
+  await expect(captions).toBeVisible({ timeout: 30_000 });
+  await item
+    .getByRole('group', { name: 'Video player' })
+    .scrollIntoViewIfNeeded();
+  await captions.click();
+  return captions;
+};
+
+test('an uploaded track replaces a translation and survives', async ({
+  browser,
+}) => {
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+  await translatedCourse(instructor, student, uniqueName('E2E upload wins'));
+
+  await test.step('an uploaded Spanish file replaces the translated Spanish', async () => {
+    const dialog = await uploadCaption(instructor, 'Video one', {
+      tag: 'es-ES',
+      cue: CAPTION_CUE,
+    });
+    const spanish = dialog.getByRole('listitem', { name: 'Spanish' });
+    await expect(spanish.getByText('Uploaded')).toBeVisible();
+    await expect(dialog.getByRole('listitem', { name: 'Español' })).toHaveCount(
+      0,
+    );
+    await screenshot(instructor, 'captions-dialog-upload-replaced-translation');
+    await closeDialog(instructor);
+  });
+
+  await test.step('the student’s menu offers the uploaded track, unmarked', async () => {
+    await student.reload();
+    const video = lessonVideo(student, 'Video one');
+    await openCaptionsMenu(student, 'Video one');
+    await expect(
+      student.getByRole('menuitemradio', { name: 'Spanish' }),
+    ).toBeVisible();
+    await expect(
+      student.getByRole('menuitemradio', { name: /Español/ }),
+    ).toHaveCount(0);
+    await expect(
+      student.getByRole('menuitemradio', {
+        name: 'Français (auto-translated)',
+      }),
+    ).toBeVisible();
+    await student.getByRole('menuitemradio', { name: 'Spanish' }).click();
+    await expect.poll(() => shownCue(video)).toBe(CAPTION_CUE);
+  });
+
+  await test.step('a new source keeps the upload and translates French again', async () => {
+    const dialog = await uploadCaption(instructor, 'Video one', {
+      tag: 'en-US',
+      cue: 'A new English cue.',
+    });
+    await expect(
+      dialog.getByRole('listitem', { name: 'English' }).getByText('Uploaded'),
+    ).toBeVisible();
+    await closeDialog(instructor);
+
+    const again = await expectCaptionTrackListed(
+      instructor,
+      'Video one',
+      'Français',
+    );
+    await expect(
+      again.getByRole('listitem', { name: 'Spanish' }).getByText('Uploaded'),
+    ).toBeVisible();
+    await expect(again.getByRole('listitem', { name: 'Español' })).toHaveCount(
+      0,
+    );
+    await closeDialog(instructor);
+  });
+
+  await test.step('removing the upload brings the translation back', async () => {
+    await removeCaption(instructor, 'Video one', 'Spanish');
+    await closeDialog(instructor);
+    const dialog = await expectCaptionTrackListed(
+      instructor,
+      'Video one',
+      'Español',
+    );
+    await expect(
+      dialog
+        .getByRole('listitem', { name: 'Español' })
+        .getByText('Auto-translated'),
+    ).toBeVisible();
+    await closeDialog(instructor);
+  });
+});
+
+test('translations follow the source', async ({ browser }) => {
+  const instructor = await browser.newPage();
+  const student = await browser.newPage();
+  const NEW_CUE = 'A different English cue.';
+  const { course, courseId } = await translatedCourse(
+    instructor,
+    student,
+    uniqueName('E2E translations follow'),
+  );
+
+  await test.step('replacing the source re-translates French', async () => {
+    await uploadCaption(instructor, 'Video one', {
+      tag: 'en-US',
+      cue: NEW_CUE,
+    });
+    await closeDialog(instructor);
+    await expectCaptionTrackListed(instructor, 'Video one', 'Français');
+    await closeDialog(instructor);
+
+    // The student's player reads the tracks when it opens: look again until
+    // the French track carries the new cue.
+    await expect(async () => {
+      await student.reload();
+      const video = lessonVideo(student, 'Video one');
+      await openCaptionsMenu(student, 'Video one');
+      await student
+        .getByRole('menuitemradio', { name: 'Français (auto-translated)' })
+        .click();
+      await expect
+        .poll(() => shownCue(video), { timeout: 5_000 })
+        .toBe(LOCAL_TRANSLATION('fr-FR', NEW_CUE));
+    }).toPass({ timeout: 90_000 });
+  });
+
+  await test.step('removing French from the course removes it from the videos', async () => {
+    await instructor.goto(`${PORTALS.instructor}/my-courses/${courseId}`);
+    await removeCaptionLanguages(instructor, course, ['French']);
+
+    await expect(async () => {
+      const dialog = await openCaptionsDialog(instructor, 'Video one');
+      try {
+        await expect(
+          dialog.getByRole('listitem', { name: 'Français' }),
+        ).toHaveCount(0, { timeout: 3_000 });
+      } catch (error) {
+        await closeDialog(instructor);
+        throw error;
+      }
+    }).toPass({ timeout: 60_000 });
+    const dialog = instructor.getByRole('dialog', { name: 'Captions' });
+    await expect(
+      dialog.getByRole('listitem', { name: 'Español' }),
+    ).toBeVisible();
+    await screenshot(instructor, 'captions-language-removed');
+    await closeDialog(instructor);
+  });
+
+  await test.step('renaming the video changes no track', async () => {
+    await instructor.getByRole('button', { name: 'Edit Video one' }).click();
+    const edit = instructor.getByRole('dialog', { name: 'Edit video' });
+    await edit.getByLabel('Title', { exact: true }).fill('Video renamed');
+    await edit.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      instructor.getByRole('button', { name: 'Hide video Video renamed' }),
+    ).toBeVisible();
+    // Give the stream time to deliver the change before looking.
+    await waitForQueuesToDrain();
+
+    const dialog = await openCaptionsDialog(instructor, 'Video renamed');
+    await expect(dialog.getByRole('listitem')).toHaveCount(2);
+    await expect(
+      dialog.getByRole('listitem', { name: 'Español' }),
+    ).toBeVisible();
+    await closeDialog(instructor);
   });
 });

@@ -7,7 +7,22 @@ import {
   DEFAULT_BRAND_NAME,
   resolveBrand,
 } from '@discava/common-branding/brand';
+import {
+  brandPalette,
+  DEFAULT_PALETTE_VARIABLES,
+  parseHex,
+} from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
@@ -97,17 +112,38 @@ export function BrandingForm({
     icon?: string;
     shareImage?: string;
   }>({});
+  // What is typed in the hex field, which may not be a colour yet.
+  const [colourText, setColourText] = useState(saved.brand.colour ?? '');
+  const colourId = useId();
+  const colourPickerId = useId();
+  const colourMessageId = useId();
   const nameId = useId();
   const nameMessageId = useId();
   const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
+  const [confirmingReset, setConfirmingReset] = useState(false);
+
+  const typedColour = colourText.trim();
+  const palette = typedColour ? brandPalette(typedColour) : undefined;
+  const colourMessage = palette && !palette.ok ? palette.reason : undefined;
+  const colour = typedColour ? parseHex(typedColour) : null;
+  const colourInvalid = colourMessage !== undefined;
 
   const dirty =
+    colour !== saved.brand.colour ||
+    colourInvalid ||
     form.name !== saved.brand.name ||
     form.showNameBesideLogo !== saved.brand.showNameBesideLogo ||
     form.logoKey !== saved.brand.logoKey ||
     form.iconKey !== saved.brand.iconKey ||
     form.shareImageKey !== saved.brand.shareImageKey;
+  const savedIsDefault =
+    saved.brand.name === null &&
+    saved.brand.showNameBesideLogo &&
+    saved.brand.colour === null &&
+    saved.brand.logoKey === null &&
+    saved.brand.iconKey === null &&
+    saved.brand.shareImageKey === null;
   const nameText = form.name ?? DEFAULT_BRAND_NAME;
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
@@ -136,18 +172,35 @@ export function BrandingForm({
       ? serverError
       : undefined;
 
+  const resetAll = () => {
+    setServerError(undefined);
+    setForm({
+      name: null,
+      showNameBesideLogo: true,
+      colour: null,
+      logoKey: null,
+      iconKey: null,
+      shareImageKey: null,
+    });
+    setPreviews({});
+    setColourText('');
+    setConfirmingReset(false);
+  };
+
   const submit = async () => {
     setServerError(undefined);
     try {
       const result = await save.mutateAsync({
         expectedRevision: saved.revision,
         ...form,
+        colour,
       });
       queryClient.setQueryData(
         trpc.branding.get.queryOptions().queryKey,
         result,
       );
       setBrand(result.brand);
+      setColourText(result.brand.colour ?? '');
       onSaved();
     } catch (error) {
       if (
@@ -236,6 +289,10 @@ export function BrandingForm({
           setForm((current) => ({ ...current, logoKey: key }));
           setPreviews((current) => ({ ...current, logo: preview }));
         }}
+        onReset={() => {
+          setForm((current) => ({ ...current, logoKey: null }));
+          setPreviews((current) => ({ ...current, logo: undefined }));
+        }}
       />
       <ImageField
         kind="icon"
@@ -248,6 +305,10 @@ export function BrandingForm({
         onUploaded={(key, preview) => {
           setForm((current) => ({ ...current, iconKey: key }));
           setPreviews((current) => ({ ...current, icon: preview }));
+        }}
+        onReset={() => {
+          setForm((current) => ({ ...current, iconKey: null }));
+          setPreviews((current) => ({ ...current, icon: undefined }));
         }}
       />
       <ImageField
@@ -268,7 +329,66 @@ export function BrandingForm({
           setPreviews((current) => ({ ...current, shareImage: undefined }));
         }}
       />
+      <section className="space-y-3" aria-labelledby={`${colourId}-title`}>
+        <h2 id={`${colourId}-title`} className="text-lg font-semibold">
+          Brand colour
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Used for primary buttons and highlights in every portal and on public
+          pages. Text on it is chosen for readability.
+        </p>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <Label htmlFor={colourPickerId}>Colour picker</Label>
+            <input
+              id={colourPickerId}
+              type="color"
+              className="block h-9 w-14 cursor-pointer rounded-md border bg-background p-1"
+              value={colour ?? '#000000'}
+              onChange={(event) => setColourText(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={colourId}>Hex colour</Label>
+            <Input
+              id={colourId}
+              className="w-36"
+              placeholder="#1d4ed8"
+              value={colourText}
+              aria-invalid={colourMessage ? true : undefined}
+              aria-describedby={colourMessage ? colourMessageId : undefined}
+              onChange={(event) => setColourText(event.target.value)}
+            />
+          </div>
+          {palette?.ok && (
+            <p className="text-sm text-muted-foreground">
+              Text colour: {palette.textColour === 'light' ? 'light' : 'dark'} ·
+              contrast {palette.contrast.toFixed(1)}:1
+            </p>
+          )}
+        </div>
+        {colourMessage && (
+          <p
+            id={colourMessageId}
+            role="alert"
+            className="break-words text-sm text-destructive"
+          >
+            {colourMessage}
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setColourText('')}
+        >
+          Reset colour to default
+        </Button>
+      </section>
       <BrandPreview
+        colourVariables={
+          palette?.ok ? palette.variables : DEFAULT_PALETTE_VARIABLES
+        }
         logoUrl={logoUrl}
         name={name}
         showName={form.showNameBesideLogo}
@@ -297,23 +417,53 @@ export function BrandingForm({
       )}
       <footer className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="min-w-0 break-words text-sm text-muted-foreground">
-          {saved.changed
-            ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
-            : 'Using the default Discava brand'}
+          {[
+            savedIsDefault ? 'Using the default Discava brand' : undefined,
+            saved.changed
+              ? `Last changed by ${saved.changed.byName}, ${relativeTime(saved.changed.at)}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Using the default Discava brand'}
         </p>
-        <Button
-          type="submit"
-          disabled={!dirty || nameInvalid || save.isPending}
-        >
-          {save.isPending ? (
-            <>
-              <Spinner /> Saving…
-            </>
-          ) : (
-            'Save'
-          )}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmingReset(true)}
+          >
+            Reset all to default
+          </Button>
+          <Button
+            type="submit"
+            disabled={!dirty || nameInvalid || colourInvalid || save.isPending}
+          >
+            {save.isPending ? (
+              <>
+                <Spinner /> Saving…
+              </>
+            ) : (
+              'Save'
+            )}
+          </Button>
+        </div>
       </footer>
+      <AlertDialog open={confirmingReset} onOpenChange={setConfirmingReset}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all to the default brand?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The name, logo, icon, share image and colour go back to the
+              Discava default in this form. Nothing changes for visitors until
+              you save.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={resetAll}>Reset all</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

@@ -271,4 +271,100 @@ test('an administrator sets the platform name and share image, and visitors see 
     await screenshot(visitor, 'student portal home with the platform name');
     await visitor.close();
   });
+
+  await test.step('the student home’s copy puts the name in its own sentence', async () => {
+    const visitor = await browser.newPage();
+    await visitor.goto(PORTALS.student);
+    await expect(
+      visitor.getByText(
+        `certificates you can share. ${name} brings your courses`,
+      ),
+    ).toBeVisible({ timeout: PORTAL_WAIT_MS });
+    await screenshot(visitor, 'student home copy with the platform name');
+    await visitor.close();
+  });
+});
+
+test('an administrator chooses a brand colour, and a hard-to-read one is refused', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('a colour that is hard to read is refused and Save stays disabled', async () => {
+    await page.getByLabel('Hex colour').fill('#777777');
+    await expect(page.getByRole('alert')).toContainText(
+      'Text on this colour would be hard to read. Choose a darker or lighter shade.',
+    );
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await screenshot(page, 'brand colour refused');
+  });
+
+  await test.step('a readable colour previews with light text, and only in the preview', async () => {
+    await page.getByLabel('Hex colour').fill('#1d4ed8');
+    await expect(page.getByText(/Text colour: light/)).toBeVisible();
+    await expect(page.getByTestId('brand-preview')).toHaveCSS(
+      '--primary',
+      '#1d4ed8',
+    );
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await screenshot(page, 'brand colour previewed');
+  });
+
+  await test.step('saving confirms', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await screenshot(page, 'brand colour saved');
+  });
+});
+
+test('an administrator resets the brand to the default', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Cara', ['admin']));
+
+  await test.step('a custom name and colour are saved', async () => {
+    await page
+      .getByLabel('Name', { exact: true })
+      .fill(uniqueName('Acme').slice(0, 50));
+    await page.getByLabel('Hex colour').fill('#1d4ed8');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+  });
+
+  await test.step('resetting the colour alone keeps the name', async () => {
+    await page.getByRole('button', { name: 'Reset colour to default' }).click();
+    await expect(page.getByLabel('Hex colour')).toHaveValue('');
+    await expect(page.getByLabel('Name', { exact: true })).not.toHaveValue(
+      'Discava',
+    );
+    await screenshot(page, 'colour reset, name kept');
+  });
+
+  await test.step('reset all asks first, then puts every part back', async () => {
+    await page.getByRole('button', { name: 'Reset all to default' }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await screenshot(page, 'reset all confirmation');
+    await page.getByRole('button', { name: 'Reset all' }).click();
+    await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+      'Discava',
+    );
+    await expect(page.getByLabel('Hex colour')).toHaveValue('');
+    await screenshot(page, 'brand reset to default in the form');
+  });
+
+  await test.step('saving makes the reset take effect', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await screenshot(page, 'default brand saved');
+  });
 });

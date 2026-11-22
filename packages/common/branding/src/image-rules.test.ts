@@ -123,6 +123,16 @@ describe('checkBrandImage: share image', () => {
       ok: false,
     });
   });
+
+  // The rule starts with a file type, which keeps its capitals (#890).
+  it('names the file types in capitals in the rule', () => {
+    expect(share(800, 420)).toMatchObject({
+      ok: false,
+      message: expect.stringContaining(
+        'The share image must be PNG, JPEG or WebP,',
+      ),
+    });
+  });
 });
 
 describe('brand image keys', () => {

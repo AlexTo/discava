@@ -60,6 +60,25 @@ export const BRAND_VARIABLES = [
   '--brand-link',
 ] as const;
 
+/**
+ * The light theme's value of every brand variable, from `:root` in
+ * packages/common/shadcn/src/styles/globals.css (keep them in step). A preview
+ * sets these when there is no usable brand colour, so it shows the default
+ * rather than the colour the page itself has applied.
+ */
+export const DEFAULT_PALETTE_VARIABLES: Record<
+  (typeof BRAND_VARIABLES)[number],
+  string
+> = {
+  '--primary': 'oklch(0.205 0 0)',
+  '--primary-foreground': 'oklch(0.985 0 0)',
+  '--ring': 'oklch(0.708 0 0)',
+  '--sidebar-primary': 'oklch(0.205 0 0)',
+  '--sidebar-primary-foreground': 'oklch(0.985 0 0)',
+  '--sidebar-ring': 'oklch(0.708 0 0)',
+  '--brand-link': 'var(--foreground)',
+};
+
 export type BrandPalette =
   | {
       ok: true;
