@@ -2,6 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { nxReadySignal } from '@nx/vite/plugins/nx-ready-signal.plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
@@ -30,6 +32,7 @@ export default defineConfig(() => ({
       generatedRouteTree: resolve(import.meta.dirname, 'src/routeTree.gen.ts'),
     }),
     react(),
+    nxReadySignal(),
     tailwindcss(),
   ],
   // Uncomment this if you are using workers.

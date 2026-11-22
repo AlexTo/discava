@@ -2,7 +2,6 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { getAppConfig } from '@aws-lambda-powertools/parameters/appconfig';
 import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import { Client } from '@opensearch-project/opensearch';
 import { AwsSigv4Signer } from '@opensearch-project/opensearch/aws';
@@ -11,59 +10,40 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { INDICES } from './indices/index.js';
 
-// Generated: must match runtimeConfigKey in config.json
-const runtimeConfigKey = 'Search';
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // config.json is only present in local dev (not included in the deployed
 // bundle); guard with LOCAL_DEV check, as core-table's client does.
 const localDev = () =>
   JSON.parse(readFileSync(join(__dirname, '../config.json'), 'utf-8')).localDev;
 
-type SearchConfig = {
-  endpoint: string;
-};
+// The deploy-time setting the OpenSearchCollection construct binds to every
+// function that uses the collection (common-constructs' `bindSettings`), the
+// same way core-table gets its table name. The name is
+// `settingEnvName('opensearch', runtimeConfigKey)`.
+const SETTING = 'DISCAVA_OPENSEARCH_SEARCH';
 
-let _endpoint: string | undefined;
-
-// The collection endpoint, published by the OpenSearchCollection construct
-// through RuntimeConfig (AppConfig) under the `opensearch` namespace, the
-// same way core-table publishes its table name under `dynamodb`.
-//
-// OPENSEARCH_ENDPOINT, when set, wins over that: the index-sync custom
-// resource runs while the stack holding the collection deploys, before the
-// RuntimeConfig stack (which deploys last) has published anything to
-// AppConfig, so it's handed the endpoint directly instead.
 export const resolveEndpoint = async (): Promise<string> => {
   if (process.env.LOCAL_DEV === 'true') {
     const { port } = localDev();
     // IPv4 explicitly, as common-server-utils' LOCAL_HOST explains.
     return `http://127.0.0.1:${port}`;
   }
-  if (process.env.OPENSEARCH_ENDPOINT) {
-    return process.env.OPENSEARCH_ENDPOINT;
+  const raw = process.env[SETTING];
+  if (!raw) {
+    throw new Error(`Missing deploy-time setting ${SETTING}`);
   }
-  if (_endpoint === undefined) {
-    const appId = process.env.RUNTIME_CONFIG_APP_ID;
-    if (!appId) {
-      throw new Error('RUNTIME_CONFIG_APP_ID environment variable is not set');
-    }
-    const config = await getAppConfig<{
-      [key: string]: SearchConfig | undefined;
-    }>('opensearch', {
-      application: appId,
-      environment: 'default',
-      transform: 'json',
-    });
-    const endpoint = config?.[runtimeConfigKey]?.endpoint;
-    if (!endpoint) {
-      throw new Error(
-        'Could not resolve the OpenSearch collection endpoint from runtime config',
-      );
-    }
-    _endpoint = endpoint;
+  let endpoint: string | undefined;
+  try {
+    endpoint = (JSON.parse(raw) as { endpoint?: string }).endpoint;
+  } catch {
+    throw new Error(`Invalid deploy-time setting ${SETTING}`);
   }
-  return _endpoint!;
+  if (!endpoint) {
+    throw new Error(
+      `Could not resolve the OpenSearch collection endpoint from ${SETTING}`,
+    );
+  }
+  return endpoint;
 };
 
 let _client: Client | undefined;

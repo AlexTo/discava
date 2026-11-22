@@ -8,9 +8,9 @@ import { type StageComponents } from '@discava/common-infra-config';
 import { describe, expect, it } from 'vitest';
 import {
   actionsOf,
+  functionsMissingSettings,
   resources,
   synth,
-  tableFunctionsMissingAppConfig,
 } from './stack-test-fixture.js';
 
 describe("core-api's functions", () => {
@@ -193,8 +193,8 @@ describe('the unsubscribe route', () => {
   });
 });
 
-describe('runtime config (#619)', () => {
-  it('gives every function that uses the core table the AppConfig application id and read access', () => {
-    expect(tableFunctionsMissingAppConfig(synth({})('CoreApi'))).toEqual([]);
+describe('deploy-time settings', () => {
+  it('gives every function that uses the core table or search its setting', () => {
+    expect(functionsMissingSettings(synth({})('CoreApi'))).toEqual([]);
   });
 });

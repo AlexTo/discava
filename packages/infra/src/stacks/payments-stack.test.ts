@@ -5,14 +5,14 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { synth, tableFunctionsMissingAppConfig } from './stack-test-fixture.js';
+import { functionsMissingSettings, synth } from './stack-test-fixture.js';
 
-describe('runtime config (#619)', () => {
-  it('gives every function that uses the core table the AppConfig application id and read access', () => {
+describe('deploy-time settings', () => {
+  it('gives every function that uses the core table or search its setting', () => {
     const template = synth({})('Payments');
     expect(
       Object.keys(template.findResources('AWS::Lambda::Function')),
     ).not.toEqual([]);
-    expect(tableFunctionsMissingAppConfig(template)).toEqual([]);
+    expect(functionsMissingSettings(template)).toEqual([]);
   });
 });

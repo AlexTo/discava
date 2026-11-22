@@ -62,7 +62,7 @@ pnpm dev
 
 **Notifications.** `pnpm nx run @discava/tooling-local-dev:notify-local -- --user <sub> --type <id> [--param k=v]... [--key <dedupeKey>]` publishes a notification to a local user (`--course <courseId>` notifies every student enrolled in a course), with canned params for the type; the email it sends shows up in the inbox above.
 
-**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `RUNTIME_CONFIG_APP_ID` is set and AWS credentials are present.
+**Course analytics.** The instructor dashboard's figures are kept up to date from the table's stream. `pnpm nx run @discava/tooling-deploy:rebuild-analytics -- <courseId> [<courseId> ...]` recomputes a course's figures from its records, to repair drift or backfill a course; it runs against local data, or against a deployed table when `DISCAVA_DYNAMODB_CORE_TABLE` is set (`{"tableName":"<table>"}`, the `CoreTableName` output of `<stage>-Data`) and AWS credentials are present.
 
 **Payments.** No Stripe account is needed. As Carol, open Payments in the admin portal and connect the key `sk_test_local`; Alice can then price a course and Bob can buy it on the stand-in's payment page (Pay, Decline card, Cancel). `POST http://localhost:2024/stripe/test/refund`, `/replay` and `/expire` do what the Stripe dashboard or a redelivery would, and `POST http://localhost:2024/payout-run` runs the daily payout run once. The docs' [Payments](./docs/src/content/docs/en/design/payments.mdx) and [Instructor payouts](./docs/src/content/docs/en/design/instructor-payouts.mdx) design pages describe both.
 
@@ -81,6 +81,10 @@ Prefer the [Nx Plugin for AWS](https://awslabs.github.io/nx-plugin-for-aws) gene
 ### Code Style and License Headers
 
 [Biome](https://biomejs.dev) formats and lints this codebase (single quotes, trailing commas, 80-column width); `pnpm lint` runs it with `--configuration=fix`. Every source file, except generated output, translated docs, and `.astro` files, carries an Apache-2.0 SPDX header, written by the `license#sync` Nx sync generator (configured in [aws-nx-plugin.config.mts](aws-nx-plugin.config.mts)). Please don't hand-edit headers; `pnpm lint` and `pnpm build` keep them in sync for you.
+
+### UI Changes
+
+Before opening a pull request that changes what a user sees in a portal or in `packages/common/shadcn`, check it against the UI rules in [`packages/websites/CLAUDE.md`](packages/websites/CLAUDE.md).
 
 ### Rules That Span Records
 

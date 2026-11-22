@@ -1,32 +1,116 @@
 {
   "migrations": [
     {
-      "version": "1.3.6",
-      "description": "Escape the ts#rdb create-db-user handler's SQL on an open connection, which mariadb 3.5.5 requires",
-      "implementation": "./src/migrations/latest/rdb-escape-on-connection/migration",
+      "version": "1.6.0",
+      "description": "Set NODE_EXTRA_CA_CERTS in ts#agent and ts#mcp-server Dockerfiles that install the RDS CA bundle, so Node trusts the Aurora certificate on direct connections",
+      "implementation": "./src/migrations/latest/ts-rdb-node-extra-ca-certs/migration",
       "package": "@aws/nx-plugin",
-      "name": "latest-rdb-escape-on-connection"
+      "name": "latest-ts-rdb-node-extra-ca-certs"
     },
     {
-      "version": "1.3.8",
-      "description": "Replace the current_time tool from strands-agents-tools, which 0.9.0 removed, with a local current_time tool in py#agent Strands agents",
-      "implementation": "./src/migrations/latest/py-agent-vend-current-time-tool/migration",
+      "version": "1.4.0",
+      "description": "Add the nxReadySignal() Vite plugin to react-website vite.config.mts files in the shape new websites get, or format it where nx migrate has already added it, so the format target passes",
+      "implementation": "./src/migrations/v1.4.0/0001-vite-config-nx-ready-signal/migration",
       "package": "@aws/nx-plugin",
-      "name": "latest-py-agent-vend-current-time-tool"
+      "name": "v1.4.0-0001-vite-config-nx-ready-signal"
     },
     {
-      "version": "1.3.2",
-      "description": "Launch Python AgentCore code with the managed interpreter",
-      "implementation": "./src/migrations/v1.3.2/0001-py-agentcore-launcher/migration",
+      "version": "1.4.0",
+      "description": "Move the nx.json target defaults of the removed @nx/vitest:test executor onto the test target the @nx/vitest plugin infers, or add the vitest test defaults when nx migrate has already removed that key",
+      "implementation": "./src/migrations/v1.4.0/0002-vitest-test-target-defaults/migration",
       "package": "@aws/nx-plugin",
-      "name": "v1.3.2-0001-py-agentcore-launcher"
+      "name": "v1.4.0-0002-vitest-test-target-defaults"
     },
     {
-      "version": "1.3.8",
+      "version": "1.6.0",
       "description": "Sync vended dependency versions and the tracked plugin version to those vended by this release",
       "implementation": "./src/utils/version-upgrade-migration/migration",
       "package": "@aws/nx-plugin",
       "name": "sync-vended-versions"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Converts targets using the removed `@nx/vitest` executors to inferred tasks; an AI prompt finishes the targets the converter cannot convert safely and validates the project graph.",
+      "implementation": "./dist/src/migrations/update-24-0-0/remove-deprecated-executors",
+      "prompt": "tools/ai-migrations/@nx/vitest/1.6.0/finish-inferred-conversion.md",
+      "documentation": "./dist/src/migrations/update-24-0-0/remove-deprecated-executors.md",
+      "package": "@nx/vitest",
+      "name": "remove-deprecated-executors"
+    },
+    {
+      "version": "24.0.0-beta.0",
+      "description": "Finds local executors that declare a custom hasher, which is deprecated and will be removed in Nx 25. Rewriting a hasher as target inputs means reading what its code hashes, so the rewrite is driven by an AI prompt; the generator only reports each hasher.",
+      "implementation": "./dist/src/migrations/update-24-0-0/find-custom-hashers",
+      "prompt": "tools/ai-migrations/nx/1.6.0/move-custom-hashers-to-inputs.md",
+      "documentation": "./dist/src/migrations/update-24-0-0/find-custom-hashers.md",
+      "package": "nx",
+      "name": "24-0-0-move-custom-hashers-to-inputs"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Sets affected.legacy to true in nx.json so nx affected keeps selecting whole projects. Nx 24 selects individual affected tasks by default.",
+      "implementation": "./dist/src/migrations/update-24-0-0/enable-legacy-affected",
+      "documentation": "./dist/src/migrations/update-24-0-0/enable-legacy-affected.md",
+      "package": "nx",
+      "name": "24-0-0-enable-legacy-affected"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Renames the ultracache target options \"ignoredReads\" and \"ignoredWrites\" to \"ignoreReads\" and \"ignoreWrites\", and renames .nx/workflows/sandboxing-config.yaml to ultracache-config.yaml with its \"exclude-reads\" and \"exclude-writes\" keys renamed to \"ignore-reads\" and \"ignore-writes\".",
+      "implementation": "./dist/src/migrations/update-24-0-0/rename-ultracache-ignore-options",
+      "documentation": "./dist/src/migrations/update-24-0-0/rename-ultracache-ignore-options.md",
+      "package": "nx",
+      "name": "24-0-0-rename-ultracache-ignore-options"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Register @nx/js/typescript with its typecheck target in workspaces that use @nx/react/router-plugin without it, and remove the router plugin's typecheckTargetName option, since @nx/react/router-plugin no longer infers typecheck targets.",
+      "implementation": "./dist/src/migrations/update-24-0-0/register-typescript-plugin-for-typecheck",
+      "documentation": "./dist/src/migrations/update-24-0-0/register-typescript-plugin-for-typecheck.md",
+      "package": "@nx/react",
+      "name": "update-24-0-0-register-typescript-plugin-for-typecheck"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Converts targets using the removed `@nx/vite` executors, and `@nx/vitest:test` targets, to inferred tasks; an AI prompt finishes the targets the converter cannot convert safely and validates the project graph.",
+      "implementation": "./dist/src/migrations/update-24-0-0/remove-deprecated-executors",
+      "prompt": "tools/ai-migrations/@nx/vite/1.6.0/finish-inferred-conversion.md",
+      "documentation": "./dist/src/migrations/update-24-0-0/remove-deprecated-executors.md",
+      "package": "@nx/vite",
+      "name": "remove-deprecated-executors"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Replace `nxViteTsPaths` with Vite's native `resolve.tsconfigPaths`, then migrate the remaining deprecated vite configuration helpers while preserving custom behavior.",
+      "implementation": "./dist/src/migrations/update-24-0-0/migrate-nx-vite-ts-paths",
+      "prompt": "tools/ai-migrations/@nx/vite/1.6.0/migrate-config-helpers.md",
+      "package": "@nx/vite",
+      "name": "update-24-0-0-migrate-config-helpers"
+    },
+    {
+      "version": "24.0.0-beta.3",
+      "description": "Register @nx/js/typescript with its typecheck target in workspaces that use @nx/vite/plugin without it, since @nx/vite/plugin no longer infers typecheck targets except for Vue projects.",
+      "implementation": "./dist/src/migrations/update-24-0-0/register-typescript-plugin-for-typecheck",
+      "documentation": "./dist/src/migrations/update-24-0-0/register-typescript-plugin-for-typecheck.md",
+      "package": "@nx/vite",
+      "name": "update-24-0-0-register-typescript-plugin-for-typecheck"
+    },
+    {
+      "version": "24.0.0-beta.5",
+      "description": "Add the `nxReadySignal()` plugin to the Vite configs of application projects, so that `@nx/vite/plugin` infers `readyWhen: { signal: true }` for their dev and preview targets; an AI prompt finishes the configs the codemod cannot edit safely.",
+      "implementation": "./dist/src/migrations/update-24-0-0/add-ready-signal-plugin",
+      "prompt": "tools/ai-migrations/@nx/vite/1.6.0/finish-ready-signal-plugin.md",
+      "documentation": "./dist/src/migrations/update-24-0-0/add-ready-signal-plugin.md",
+      "package": "@nx/vite",
+      "name": "update-24-0-0-add-ready-signal-plugin"
+    },
+    {
+      "version": "24.0.0-beta.5",
+      "description": "Sets `readyWhen: { signal: true }` on `@nx/web:file-server` targets that get no `readyWhen` from their own configuration or `targetDefaults`, so tasks that depend on them with `waitFor: 'ready'` start once the server is listening. Those targets also get their build target as a dependency.",
+      "implementation": "./dist/src/migrations/update-24-0-0/add-ready-when-signal",
+      "documentation": "./dist/src/migrations/update-24-0-0/add-ready-when-signal.md",
+      "package": "@nx/web",
+      "name": "update-24-0-0-add-ready-when-signal"
     }
   ]
 }

@@ -197,9 +197,10 @@ const textBody = (text: string) =>
 export const createPublishedCourseViaApi = async (
   instructor: ApiUser,
   title: string,
+  description?: string,
 ) => {
   const api = instructor.instructor;
-  const { courseId } = await api.course.create.mutate({ title });
+  const { courseId } = await api.course.create.mutate({ title, description });
   const { moduleId } = await api.module.create.mutate({
     courseId,
     title: 'Module 1',
