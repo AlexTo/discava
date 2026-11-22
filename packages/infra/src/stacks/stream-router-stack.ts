@@ -15,7 +15,6 @@ import {
   EventsStreamRouter,
   EventsTranscriptIndexing,
   LessonMediaBucket,
-  RuntimeConfig,
   SearchCollection,
   StreamRouter,
   suppressRules,
@@ -124,13 +123,6 @@ export class StreamRouterStack extends Stack {
       ),
     };
 
-    // One object under one key, so `enabled: false` is a value like any other.
-    RuntimeConfig.ensure(this).set(
-      'captionTranslation',
-      'Settings',
-      captionTranslationSetting(captionTranslation),
-    );
-
     this.streamRouter = new StreamRouter(this, 'StreamRouter', {
       table: coreTable.table,
       router,
@@ -218,7 +210,6 @@ export class StreamRouterStack extends Stack {
       schedulerRoleArn: schedulerRole.roleArn,
       scheduleGroupName: scheduleGroup.scheduleGroupName,
     };
-    RuntimeConfig.ensure(this).set('certificates', 'Reminder', settings);
     return { reminder, scheduleGroup, schedulerRole, settings };
   }
 
