@@ -6,7 +6,7 @@ Single-table DynamoDB access via ElectroDB; `client.ts` resolves table/client so
 
 ## Writes
 
-- A write that keeps a rule another API or handler relies on goes in a `core-table` helper every writer calls (e.g. `studentActivityWrites`), with a check in the matching topic file of `helpers/invariants/` (`snapshot.ts` lists the entities it reads); see CONTRIBUTING.md's "Rules That Span Records".
+- A write that keeps a rule another API or handler relies on goes in a `core-table` helper every writer calls (e.g. `studentActivityWrites`), with a check in the matching topic file of `helpers/invariants/` (`snapshot.ts` lists the entities it reads); see DEVELOPMENT.md's "Rules That Span Records".
 - After changing which code writes the core table, run `pnpm nx run @discava/tooling-agent:entity-writers` and commit the regenerated `core-table/entity-writers.json`; the `Invariant coverage` PR check fails without it.
 - Naming: a `*Writes` function returns transaction items for the caller to run; a verb-named function (`issueCertificate`, `publishNotification`, …) runs its own I/O.
 

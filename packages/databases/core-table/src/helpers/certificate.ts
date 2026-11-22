@@ -220,7 +220,7 @@ export interface RecordLinkedInClickInput {
 
 // Records the first use of "Add to LinkedIn profile" on a certificate. Later
 // calls, or one at the same moment as another, change nothing. Undefined for a
-// malformed or unknown ID.
+// malformed or unknown ID, and for a revoked certificate, which records nothing.
 export const recordLinkedInClick = async ({
   coreTable,
   certificateId,
@@ -237,7 +237,7 @@ export const recordLinkedInClick = async ({
   const {
     data: [found],
   } = await certificate.query.byCertificateId({ certificateId: id }).go();
-  if (!found) {
+  if (!found || found.revokedAt) {
     return undefined;
   }
   try {
@@ -247,7 +247,10 @@ export const recordLinkedInClick = async ({
         linkedInClickedAt: now.toISOString(),
         linkedInClickSource: source,
       })
-      .where((attr, op) => op.notExists(attr.linkedInClickedAt))
+      .where(
+        (attr, op) =>
+          `${op.notExists(attr.linkedInClickedAt)} AND ${op.notExists(attr.revokedAt)}`,
+      )
       .go();
     return 'recorded';
   } catch (error) {
@@ -299,7 +302,7 @@ export const markCertificateReminderScheduled = async ({
 // while no LinkedIn use is recorded. Returns the certificate and the stored
 // `reminderSentAt` when the reminder is to be published (a claim made by an
 // earlier run is read back, so a retry publishes with the same time), and
-// undefined when there is no certificate or a click won.
+// undefined when there is no certificate, a click won, or it is revoked.
 export const claimCertificateReminder = async ({
   coreTable,
   userId,
@@ -311,7 +314,7 @@ export const claimCertificateReminder = async ({
   const { certificate } = coreTable.entities;
   const key = { userId, courseId };
   const { data: existing } = await certificate.get(key).go();
-  if (!existing) {
+  if (!existing || existing.revokedAt) {
     return undefined;
   }
   if (existing.reminderSentAt) {
@@ -324,7 +327,7 @@ export const claimCertificateReminder = async ({
       .set({ reminderSentAt })
       .where(
         (attr, op) =>
-          `${op.notExists(attr.reminderSentAt)} AND ${op.notExists(attr.linkedInClickedAt)}`,
+          `${op.notExists(attr.reminderSentAt)} AND ${op.notExists(attr.linkedInClickedAt)} AND ${op.notExists(attr.revokedAt)}`,
       )
       .go();
     return { certificate: { ...existing, reminderSentAt }, reminderSentAt };
@@ -334,7 +337,7 @@ export const claimCertificateReminder = async ({
     }
   }
   const { data: current } = await certificate.get(key).go();
-  return current?.reminderSentAt
+  return current?.reminderSentAt && !current.revokedAt
     ? { certificate: current, reminderSentAt: current.reminderSentAt }
     : undefined;
 };

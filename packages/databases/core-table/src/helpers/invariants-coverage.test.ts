@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 // invariant checks (and the e2e suite after every scenario) read, so a new
 // entity can't arrive without someone deciding which rules it keeps. An
 // entity with nothing to check goes here, with the reason; the reviewer
-// judges the reason. See CONTRIBUTING.md's "Rules That Span Records".
+// judges the reason. See DEVELOPMENT.md's "Rules That Span Records".
 const NO_INVARIANTS: Record<string, string> = {
   'analytics-marker':
     'only guards the analytics stream against counting an event twice; the aggregates it guards are checked',

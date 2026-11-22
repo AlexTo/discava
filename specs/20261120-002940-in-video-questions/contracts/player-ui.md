@@ -58,7 +58,7 @@ export const MAX_PLAYBACK_STEP_SECONDS = 2;
 ### Markers
 
 - One marker per cue on the seek bar, at `cueTime / duration` of its width; end cues share one marker at the right edge.
-- Each is a `button` in the tab order after the seek slider, with `aria-label` from the cue's `label`. Activating it seeks to the cue's time (the end marker to the last second), pauses, and calls `onCue([id], 'chosen')`.
+- Each is a `button` in the tab order after the seek slider, with `aria-label` from the cue's `label`. Activating it seeks to the cue's time (the end marker to the last second), pauses, and calls `onCue([id], 'chosen')` (the end marker passes every end cue id, in order).
 - An answered marker shows a tick and an unanswered one a dot, so the state doesn't depend on colour. Markers are at least 24 by 24 CSS pixels to hit, though they may look smaller.
 - Markers render only once the duration is known.
 
