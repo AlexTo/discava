@@ -153,8 +153,13 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
           body: robotsTxt(host, config.allowIndexing),
         });
       }
+      // The table's setting must be in place before any procedure runs: the
+      // caller's core-table plugin resolves the table from the environment
+      // and keeps a failed resolution for the life of the instance.
+      const coreTable = await deps.coreTable();
+
       if (segments.length === 1 && segments[0] === 'sitemap.xml') {
-        const entries = await sitemapEntries(await deps.coreTable());
+        const entries = await sitemapEntries(coreTable);
         const origin = originOf(host);
         const body = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries
           .map(
