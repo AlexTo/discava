@@ -119,7 +119,7 @@ export function CourseCaptionLanguagesForm({
               />
               <Label
                 htmlFor={`caption-language-${tag}`}
-                className="min-w-0 flex-1 break-words py-1 pl-2"
+                className="min-w-0 flex-1 break-words py-1.5 pl-2"
               >
                 {label} ({nativeLabel})
               </Label>
