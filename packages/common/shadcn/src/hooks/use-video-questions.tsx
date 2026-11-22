@@ -71,6 +71,8 @@ function EndSummary({
  * Cues reached together are asked one after another before the overlay
  * clears. A skipped question is left alone for the life of the component: it
  * isn't asked again as playback reaches it, though its marker still opens it.
+ * A marker (`chosen`) opens its question even when answered or skipped: an
+ * answered one is a review, with Try again for practice that records nothing.
  * An end check asks its questions in order, then shows how many were right.
  */
 export function useVideoQuestions({
@@ -97,7 +99,11 @@ export function useVideoQuestions({
 } {
   // The ids still to ask, the open one first, and how the run began.
   const [queue, setQueue] = useState<string[]>([]);
-  const [run, setRun] = useState<{ total: number; end: boolean }>();
+  const [run, setRun] = useState<{
+    total: number;
+    end: boolean;
+    chosen: boolean;
+  }>();
   const [summary, setSummary] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -160,7 +166,11 @@ export function useVideoQuestions({
     }
     reset();
     setQueue(ids);
-    setRun({ total: ids.length, end: reason === 'ended' });
+    setRun({
+      total: ids.length,
+      end: reason === 'ended',
+      chosen: reason === 'chosen',
+    });
   };
 
   const question = questions.find((q) => q.questionId === queue[0]);
@@ -235,6 +245,7 @@ export function useVideoQuestions({
         pending={pending}
         error={error}
         updated={updated}
+        review={run.chosen}
         onSubmit={(optionIds) => record(question, optionIds)}
         onSkip={skip}
         onContinue={advance}

@@ -503,6 +503,8 @@ export function HlsVideo({
       captionNotice={captionFiles.notice}
       overlay={overlay}
       onOverlayDismiss={onOverlayDismiss}
+      cues={cues}
+      onCue={onCue}
       transcript={
         transcript
           ? {

@@ -138,6 +138,34 @@ describe('useVideoQuestions', () => {
     expect(screen.queryByTestId('overlay')).toBeEmptyDOMElement();
   });
 
+  it('opens an answered question from its marker for review and practice', async () => {
+    const { user, cue, submit } = setup({ answers: { q1: right } });
+    cue(['q1'], 'chosen');
+
+    expect(screen.getByText('Prompt q1')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Correct');
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(
+      screen.getByText("Practice: this answer isn't recorded"),
+    ).toBeVisible();
+    await user.click(screen.getByRole('radio', { name: 'Wrong' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Not quite');
+
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('overlay')).toBeEmptyDOMElement();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('opens an unanswered question from its marker to answer', async () => {
+    const { user, cue, submit } = setup();
+    cue(['q2'], 'chosen');
+    await user.click(screen.getByRole('radio', { name: 'Right' }));
+    await user.click(screen.getByRole('button', { name: 'Submit answer' }));
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
   it('does not ask an answered question', () => {
     const { cue } = setup({ answers: { q1: right } });
     cue(['q1']);

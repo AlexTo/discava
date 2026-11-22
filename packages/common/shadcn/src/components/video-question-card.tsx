@@ -29,6 +29,7 @@ export function VideoQuestionCard({
   pending = false,
   error,
   updated = false,
+  review = false,
   onSubmit,
   onSkip,
   onContinue,
@@ -45,6 +46,9 @@ export function VideoQuestionCard({
   error?: string;
   // Shows "This question was updated".
   updated?: boolean;
+  // Opened from its marker rather than asked in playback: the answered view
+  // closes instead of continuing.
+  review?: boolean;
   onSubmit: (optionIds: string[]) => void;
   onSkip: () => void;
   onContinue: () => void;
@@ -174,7 +178,7 @@ export function VideoQuestionCard({
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={onContinue}>
-              {practising ? 'Close' : 'Continue'}
+              {practising || review ? 'Close' : 'Continue'}
             </Button>
             <Button type="button" variant="outline" onClick={startPractice}>
               Try again

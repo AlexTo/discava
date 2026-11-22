@@ -203,6 +203,24 @@ describe('VideoQuestionsDialog', () => {
     ).toBeEnabled();
   });
 
+  it('shows a second player for Preview as student, and sends nothing', async () => {
+    const rendered = renderDialog();
+    await open(rendered);
+    await screen.findByTestId('player');
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Preview as student' }),
+    );
+
+    const preview = screen.getByRole('region', { name: 'Student preview' });
+    expect(within(preview).getByTestId('player')).toBeInTheDocument();
+    expect(
+      rendered.calls.filter(({ path }) =>
+        path.includes('updateVideoQuestions'),
+      ),
+    ).toEqual([]);
+  });
+
   it('adds a question at the current time, rounded down', async () => {
     const rendered = renderDialog();
     await open(rendered);

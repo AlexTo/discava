@@ -31,6 +31,7 @@ import {
 import { QuizBuilderDialog } from './quiz/quiz-builder-dialog';
 import { VideoCaptionsDialog } from './video-captions-dialog';
 import { VideoQuestionsDialog } from './video-questions/video-questions-dialog';
+import type { VideoItem } from './video-questions/video-questions-form';
 
 export type ContentItem = {
   contentItemId: string;
@@ -48,6 +49,8 @@ export type ContentItem = {
   studentActivityCount?: number;
   // A quiz's questions, to show how many it has.
   questions?: unknown[];
+  // A video's answer key, to preview its questions.
+  answerKey?: VideoItem['answerKey'];
   // A file item's file (#102).
   fileName?: string;
   fileSize?: number;
@@ -312,6 +315,14 @@ export function LessonContentItemsRow({
               description={item.description}
               status={item.status}
               hasPreviousVersion={Boolean(item.previousS3Key)}
+              savedQuestions={
+                item.answerKey
+                  ? {
+                      questions: item.questions as VideoItem['questions'],
+                      answerKey: item.answerKey,
+                    }
+                  : undefined
+              }
               trigger={
                 <Button
                   variant="ghost"

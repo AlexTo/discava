@@ -93,6 +93,19 @@ test('an instructor adds questions to a video', async ({ browser }) => {
       dialog.getByLabel('Question 1', { exact: true }),
     ).toContainText('What is on screen?');
   });
+
+  await test.step('Preview as student asks the question at 0:01, graded in the browser', async () => {
+    const dialog = instructor.getByRole('dialog', { name: 'Questions' });
+    await dialog.getByRole('button', { name: 'Preview as student' }).click();
+    const preview = dialog.getByRole('region', { name: 'Student preview' });
+    await preview.getByRole('button', { name: 'Play', exact: true }).click();
+    const question = preview.getByRole('group', { name: 'Video question' });
+    await expect(question).toBeVisible({ timeout: 15_000 });
+    await question.getByRole('radio', { name: 'Colour bars' }).check();
+    await question.getByRole('button', { name: 'Submit answer' }).click();
+    await expect(question.getByRole('status')).toContainText('Correct');
+    await screenshot(instructor, 'video questions preview');
+  });
 });
 
 // A learner is stopped by a question at 0:01, answers it wrongly, reads why
@@ -168,5 +181,118 @@ test('a learner is asked a video question, answers it and carries on', async ({
     const item = lessonItem(page, 'Video');
     await expect(item.getByText('Done', { exact: true })).toBeHidden();
     await markItemDone(page, 'Video');
+  });
+});
+
+// Seeking past a question doesn't stop the video for it; its marker on the
+// seek bar opens it, for an answer first and for review and practice after.
+test('a learner seeks past a question and opens it from its marker', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E video question markers');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const video = await createCaptionedVideoViaApi(instructor, title);
+  const colourBars = {
+    questionId: 'q1',
+    prompt: 'What is on screen?',
+    options: ['Colour bars', 'A cat'] as [string, string],
+    atSeconds: 1,
+    explanation: 'The test video is a set of colour bars',
+  };
+  await setVideoQuestionsViaApi(instructor, video, [
+    { ...colourBars, correct: 0 },
+  ]);
+  await instructor.instructor.course.publish.mutate({
+    courseId: video.courseId,
+  });
+
+  await openCourse(page, title);
+  await enrol(page, newUser('Sam', ['student']));
+  await startFirstLesson(page);
+
+  const player = page.getByRole('group', { name: 'Video player' });
+  const unanswered = player.getByRole('button', {
+    name: 'Question at 0:01, not answered',
+  });
+  const question = openVideoQuestion(page);
+
+  await test.step('seeking to the end asks nothing, and the marker shows', async () => {
+    await lessonVideo(page, 'Video').evaluate((v: HTMLVideoElement) => {
+      v.currentTime = v.duration;
+    });
+    await expect(unanswered).toBeVisible();
+    await expect(question).toBeHidden();
+    await screenshot(page, 'seek bar with question markers');
+  });
+
+  await test.step('the marker opens the question, and answering it is recorded', async () => {
+    await unanswered.click();
+    await expect(question).toBeVisible();
+    await question.getByRole('radio', { name: 'A cat' }).check();
+    await question.getByRole('button', { name: 'Submit answer' }).click();
+    await expect(question.getByRole('status')).toContainText('Not quite');
+    await question.getByRole('button', { name: 'Close' }).click();
+    await expect(question).toBeHidden();
+  });
+
+  await test.step('reviewing it shows the answer, and Try again records nothing', async () => {
+    await player
+      .getByRole('button', { name: 'Question at 0:01, answered' })
+      .click();
+    await expect(question.getByRole('status')).toContainText('Not quite');
+    await screenshot(page, 'reviewing an answered question');
+    await question.getByRole('button', { name: 'Try again' }).click();
+    await expect(
+      question.getByText("Practice: this answer isn't recorded"),
+    ).toBeVisible();
+    await question.getByRole('radio', { name: 'Colour bars' }).check();
+    await question.getByRole('button', { name: 'Check answer' }).click();
+    await expect(question.getByRole('status')).toContainText('Correct');
+    await question.getByRole('button', { name: 'Close' }).click();
+    await expect(question).toBeHidden();
+  });
+
+  await test.step('after a reload the marker is answered and playing through 0:01 does not pause', async () => {
+    await page.reload();
+    const answered = player.getByRole('button', {
+      name: 'Question at 0:01, answered',
+    });
+    await expect(answered).toBeVisible();
+    await lessonVideo(page, 'Video').evaluate((v: HTMLVideoElement) => {
+      v.currentTime = 0;
+    });
+    await player.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          lessonVideo(page, 'Video').evaluate((v: HTMLVideoElement) => v.ended),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await expect(question).toBeHidden();
+  });
+
+  await test.step('a changed answer key shows in the review, the learner’s result stays', async () => {
+    await setVideoQuestionsViaApi(
+      instructor,
+      video,
+      [{ ...colourBars, correct: 1 }],
+      1,
+    );
+    await page.reload();
+    await player
+      .getByRole('button', { name: 'Question at 0:01, answered' })
+      .click();
+    await expect(question.getByRole('status')).toContainText('Not quite');
+    await expect(
+      question.getByRole('listitem').filter({ hasText: '(correct answer)' }),
+    ).toContainText('A cat');
+  });
+
+  await test.step('a video a learner has used cannot be deleted permanently', async () => {
+    await instructor.instructor.contentItem.delete.mutate(video);
+    await expect(
+      instructor.instructor.contentItem.deletePermanently.mutate(video),
+    ).rejects.toMatchObject({ data: { code: 'PRECONDITION_FAILED' } });
   });
 });
