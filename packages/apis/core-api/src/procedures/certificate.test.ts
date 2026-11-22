@@ -463,6 +463,20 @@ describe('certificate.recordLinkedInClick', () => {
     expect(calls.patch).toEqual([]);
   });
 
+  it('refuses a revoked certificate without recording a click', async () => {
+    db.certificates = [
+      record({
+        revokedAt: '2026-11-12T10:00:00.000Z',
+        revocationReason: 'issued-in-error',
+        revokedByRole: 'instructor',
+      }),
+    ];
+    await expect(
+      click({ certificateId: '0123456789ABCDEF', source: 'my-learning' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(db.certificates[0].linkedInClickedAt).toBeUndefined();
+  });
+
   it('refuses a source outside the four', async () => {
     db.certificates = [record()];
     await expect(

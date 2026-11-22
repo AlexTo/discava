@@ -19,6 +19,7 @@ describe('the admin breadcrumbs', () => {
   it.each([
     ['/categories', ['/', 'Categories']],
     ['/reviews', ['/', 'Reviews']],
+    ['/certificates', ['/', 'Certificates']],
     ['/payments', ['/', 'Payments']],
     ['/settings/notifications', ['/', 'Settings', 'Notifications']],
   ])('label %s', (path, expected) => {
