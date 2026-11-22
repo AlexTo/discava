@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  BRAND_VARIABLES,
   brandPalette,
   contrastRatio,
   parseHex,
@@ -82,5 +83,12 @@ describe('brandPalette', () => {
         expect(names).not.toMatch(/destructive|accent/);
       }
     }
+  });
+
+  it('sets exactly the variables BRAND_VARIABLES lists', () => {
+    const palette = brandPalette('#1d4ed8');
+    expect(palette.ok && Object.keys(palette.variables).sort()).toEqual(
+      [...BRAND_VARIABLES].sort(),
+    );
   });
 });

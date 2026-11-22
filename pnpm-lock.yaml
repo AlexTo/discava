@@ -1041,6 +1041,9 @@ importers:
 
   packages/common/web-utils:
     dependencies:
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../branding
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.107.1(@types/react@19.3.0)(react@19.3.1)

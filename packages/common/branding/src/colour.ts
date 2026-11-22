@@ -49,6 +49,17 @@ export const contrastRatio = (a: string, b: string): number => {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 };
 
+/** Every variable a brand palette can set, so a client can clear them all. */
+export const BRAND_VARIABLES = [
+  '--primary',
+  '--primary-foreground',
+  '--ring',
+  '--sidebar-primary',
+  '--sidebar-primary-foreground',
+  '--sidebar-ring',
+  '--brand-link',
+] as const;
+
 export type BrandPalette =
   | {
       ok: true;

@@ -5,6 +5,7 @@
 
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { BrandProvider } from '@discava/common-web-utils/brand';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
   RuntimeConfigProvider,
@@ -33,19 +34,21 @@ root &&
         localDevConfig={LOCAL_DEV_CONFIG}
         fallback={<Spinner />}
       >
-        <CognitoAuth
-          autoSignIn
-          // The router isn't created until signed in, so it starts on this page.
-          onReturn={(path) => window.history.replaceState(null, '', path)}
-        >
-          <QueryClientProvider>
-            <CoreApiClientProvider>
-              <AdminApiClientProvider>
-                <App />
-              </AdminApiClientProvider>
-            </CoreApiClientProvider>
-          </QueryClientProvider>
-        </CognitoAuth>
+        <BrandProvider fallback={<Spinner />}>
+          <CognitoAuth
+            autoSignIn
+            // The router isn't created until signed in, so it starts on this page.
+            onReturn={(path) => window.history.replaceState(null, '', path)}
+          >
+            <QueryClientProvider>
+              <CoreApiClientProvider>
+                <AdminApiClientProvider>
+                  <App />
+                </AdminApiClientProvider>
+              </CoreApiClientProvider>
+            </QueryClientProvider>
+          </CognitoAuth>
+        </BrandProvider>
       </RuntimeConfigProvider>
     </React.StrictMode>,
   );
