@@ -182,6 +182,29 @@ describe('SiteLayout', () => {
       expect(logo).not.toHaveClass('object-cover');
     });
 
+    it('shows the name only when the brand says to; the logo alt always uses it', async () => {
+      renderWithCoreApi(<SiteLayout>Page</SiteLayout>, {
+        runtimeConfig: { portals },
+        brand: { ...acme, showNameBesideLogo: false },
+      });
+
+      expect(
+        await screen.findByRole('img', { name: 'Acme Academy logo' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Acme Academy')).not.toBeInTheDocument();
+    });
+
+    it('keeps the Powered by Discava link whatever the brand', async () => {
+      renderWithCoreApi(<SiteLayout>Page</SiteLayout>, {
+        runtimeConfig: { portals },
+        brand: acme,
+      });
+
+      expect(
+        await screen.findByRole('link', { name: 'Discava' }),
+      ).toHaveAttribute('href', 'https://alexto.github.io/discava');
+    });
+
     it('shows the Discava logo and name by default', async () => {
       renderWithCoreApi(<SiteLayout>Page</SiteLayout>, {
         runtimeConfig: { portals },

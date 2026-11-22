@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { RestrictedPortal } from '@discava/common-shadcn/components/restricted-portal';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
@@ -25,6 +26,7 @@ export const Route = createFileRoute('/_authenticated')({
 // saying so, pointing to the student portal, instead of the portal's pages and
 // its API's refusals (#235). instructor-api enforces the same rule.
 function InstructorsOnly() {
+  const brand = useBrand();
   const auth = useAuth();
   const { localOidc, portals } = useRuntimeConfig();
 
@@ -49,8 +51,8 @@ function InstructorsOnly() {
     >
       <p>You're signed in as {displayName}, who isn't an instructor.</p>
       <p>
-        To learn on Discava, use the student portal. If you teach a course, ask
-        an administrator to make you an instructor.
+        To learn on {brand.name}, use the student portal. If you teach a course,
+        ask an administrator to make you an instructor.
       </p>
     </RestrictedPortal>
   );

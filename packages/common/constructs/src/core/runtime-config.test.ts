@@ -11,8 +11,10 @@ describe('RuntimeConfig', () => {
 
   it("holds the portals' connection settings", () => {
     const rc = create();
-    rc.set('connection', 'site', { name: 'Discava' });
-    expect(rc.get('connection')).toEqual({ site: { name: 'Discava' } });
+    rc.set('connection', 'site', { linkedInOrganizationId: '12345' });
+    expect(rc.get('connection')).toEqual({
+      site: { linkedInOrganizationId: '12345' },
+    });
   });
 
   it.each(['dynamodb', 's3', 'opensearch', 'mediaConvert', 'certificates'])(

@@ -76,10 +76,10 @@ export class WebsitesStack extends Stack {
       portalConfigScope,
       this.studentPortalProps(studentPortal),
     );
-    // The issuer a certificate names when it's added to LinkedIn.
+    // The LinkedIn page a certificate names when it's added to LinkedIn; the
+    // issuer's name otherwise comes from the brand.
     const linkedInOrganizationId = studentPortal?.linkedInOrganizationId;
     RuntimeConfig.ensure(portalConfigScope).set('connection', 'site', {
-      name: studentPortal?.siteName ?? 'Discava',
       ...(linkedInOrganizationId && { linkedInOrganizationId }),
     });
     this.instructorPortal = this.createPortal(
@@ -116,7 +116,6 @@ export class WebsitesStack extends Stack {
       }),
       pageRenderer: {
         allowSearchEngineIndexing,
-        siteName: config?.siteName ?? 'Discava',
         reservedConcurrency: config?.pageRendererReservedConcurrency ?? 20,
         settingsParameterName: pageRendererParameterName(this),
         allowedHosts: config?.domainNames ?? [],

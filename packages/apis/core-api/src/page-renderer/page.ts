@@ -9,14 +9,13 @@ import { escapeHtml, jsonForScript, metaDescription } from './html.js';
 export interface PageContext {
   /** The viewer's host, already checked against the allowed list. */
   host: string;
-  siteName: string;
   /** The platform brand: the saved one, or the default when none or unreadable. */
   brand: ResolvedBrand;
   /** Whether search engines may index the page. */
   allowIndexing: boolean;
   /** A public media object's absolute URL, if it has a key and a base. */
   mediaUrl: (key: string | undefined) => string | undefined;
-  /** The card image for pages with none of their own. */
+  /** The card image for pages with none of their own, when the brand has no share image. */
   defaultImageUrl: string;
 }
 
@@ -45,10 +44,12 @@ export const buildHead = (
     noindex?: boolean;
   },
 ): string => {
-  const title = escapeHtml(`${page.title} | ${context.siteName}`);
+  const title = escapeHtml(`${page.title} | ${context.brand.name}`);
   const description = escapeHtml(metaDescription(page.description));
   const url = escapeHtml(`${originOf(context.host)}${page.path}`);
-  const image = escapeHtml(page.image ?? context.defaultImageUrl);
+  const image = escapeHtml(
+    page.image ?? context.brand.shareImageUrl ?? context.defaultImageUrl,
+  );
   return [
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
@@ -57,7 +58,7 @@ export const buildHead = (
       ? ''
       : '<meta name="robots" content="noindex" />',
     `<meta property="og:type" content="${page.type}" />`,
-    `<meta property="og:site_name" content="${escapeHtml(context.siteName)}" />`,
+    `<meta property="og:site_name" content="${escapeHtml(context.brand.name)}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
@@ -89,6 +90,6 @@ export const paragraphsHtml = (text: string, className: string): string =>
 /** The title shown for a page that doesn't exist; shared so every 404 is the same bytes. */
 export const notFoundHead = (context: PageContext): string =>
   [
-    `<title>Not found | ${escapeHtml(context.siteName)}</title>`,
+    `<title>Not found | ${escapeHtml(context.brand.name)}</title>`,
     '<meta name="robots" content="noindex" />',
   ].join('\n');

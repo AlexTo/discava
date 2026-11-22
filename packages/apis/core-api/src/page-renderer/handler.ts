@@ -70,7 +70,6 @@ export interface PageRendererDeps {
   mediaBaseUrl: () => Promise<string | undefined>;
   config: {
     allowIndexing: boolean;
-    siteName: string;
     /** Hosts a response may name; empty allows any `*.cloudfront.net`. */
     allowedHosts: string[];
     /** The host used when the request names none that is allowed. */
@@ -218,7 +217,6 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
       });
       const baseContext = {
         host,
-        siteName: config.siteName,
         allowIndexing: config.allowIndexing,
         mediaUrl: (key: string | undefined) =>
           key && mediaBase ? new URL(key, mediaBase).toString() : undefined,
@@ -292,7 +290,7 @@ export const createPageRenderer = (deps: PageRendererDeps) => {
         html(
           200,
           injectIntoTemplate(template, {
-            head: `<title>${escapeHtml(config.siteName)}</title>\n<meta name="robots" content="noindex" />`,
+            head: '<title></title>\n<meta name="robots" content="noindex" />',
             root: '',
           }),
           PAGE_CACHE,
@@ -455,7 +453,6 @@ export const createConfiguredPageRenderer = () => {
     mediaBaseUrl: readMediaBaseUrl,
     config: {
       allowIndexing: process.env.ALLOW_SEARCH_ENGINE_INDEXING === 'true',
-      siteName: process.env.SITE_NAME || 'Discava',
       allowedHosts: (process.env.ALLOWED_HOSTS ?? '')
         .split(',')
         .map((host) => host.trim())

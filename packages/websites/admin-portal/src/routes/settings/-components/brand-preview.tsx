@@ -8,11 +8,17 @@ export interface BrandPreviewProps {
   logoUrl: string;
   name: string;
   showName: boolean;
+  shareImageUrl: string | null;
 }
 
 // What visitors will see, drawn from the unsaved form: a portal header, a
 // primary and a secondary button, a link and an active navigation item.
-export function BrandPreview({ logoUrl, name, showName }: BrandPreviewProps) {
+export function BrandPreview({
+  logoUrl,
+  name,
+  showName,
+  shareImageUrl,
+}: BrandPreviewProps) {
   return (
     <section className="space-y-3" aria-labelledby="brand-preview-title">
       <h2 id="brand-preview-title" className="text-lg font-semibold">
@@ -43,6 +49,18 @@ export function BrandPreview({ logoUrl, name, showName }: BrandPreviewProps) {
           <span className="rounded-md bg-sidebar-accent px-3 py-1 text-sm font-medium text-sidebar-accent-foreground">
             Active menu item
           </span>
+        </div>
+        <div className="flex items-center gap-3 border-t p-4">
+          {shareImageUrl && (
+            <img
+              src={shareImageUrl}
+              alt="Share image preview"
+              className="aspect-[1.91/1] w-32 rounded border object-cover"
+            />
+          )}
+          <p className="min-w-0 break-words text-sm font-medium">
+            A page title · {name}
+          </p>
         </div>
       </div>
     </section>

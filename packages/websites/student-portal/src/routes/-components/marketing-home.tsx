@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { useBrand } from '@discava/common-web-utils/brand';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import {
@@ -68,6 +69,7 @@ const steps = [
 // way into the full catalogue (/courses). Signed-in students see SignedInHome
 // instead.
 export function MarketingHome() {
+  const brand = useBrand();
   const trpc = useCoreApi();
   const categoriesQuery = useQuery(trpc.category.list.queryOptions());
   const categories = (categoriesQuery.data ?? []).filter(
@@ -93,7 +95,7 @@ export function MarketingHome() {
           </h1>
           <p className="mt-6 max-w-2xl text-balance text-lg text-muted-foreground">
             Short lessons, clear progress and certificates you can share.
-            Discava brings your courses together in one welcoming place.
+            {brand.name} brings your courses together in one welcoming place.
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3">
             <Button size="lg" asChild>
@@ -166,8 +168,8 @@ export function MarketingHome() {
               Spend less time searching. More time learning.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Discava brings the important parts of your study day together in a
-              simple, welcoming workspace.
+              {brand.name} brings the important parts of your study day together
+              in a simple, welcoming workspace.
             </p>
           </div>
           <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -237,7 +239,9 @@ export function MarketingHome() {
 
       <footer className="border-t px-6 py-8 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 text-sm text-muted-foreground sm:flex-row">
-          <p>© {new Date().getFullYear()} Discava. Learning, made clearer.</p>
+          <p>
+            © {new Date().getFullYear()} {brand.name}. Learning, made clearer.
+          </p>
           <nav aria-label="Footer navigation" className="flex gap-6">
             <Link
               className="transition-colors hover:text-foreground"

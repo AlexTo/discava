@@ -8,6 +8,7 @@ import {
   checkBrandImage,
   checkBrandImageUpload,
 } from '@discava/common-branding/image-rules';
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
@@ -24,10 +25,14 @@ export interface ImageFieldProps {
   /** What the image is for, shown above the control. */
   help: string;
   /** The image shown now: the one in the form, or the default. */
-  imageUrl: string;
+  imageUrl: string | null;
+  /** Shown in place of the image when there is none. */
+  emptyText?: string;
   /** A message from the server about this image, shown beside the control. */
   serverError?: string;
   onUploaded: (key: string, previewUrl: string) => void;
+  /** Puts the default back in the form; the button shows only when this is set. */
+  onReset?: () => void;
   /** Called before a new file is checked, so an old server message is dropped. */
   onChoose?: () => void;
   /** The image's display box, so a logo is not cropped and an icon is square. */
@@ -42,8 +47,10 @@ export function ImageField({
   title,
   help,
   imageUrl,
+  emptyText,
   serverError,
   onUploaded,
+  onReset,
   onChoose,
   previewClassName,
 }: ImageFieldProps) {
@@ -116,11 +123,15 @@ export function ImageField({
       </h2>
       <p className="text-sm text-muted-foreground">{help}</p>
       <div className="flex flex-wrap items-center gap-4">
-        <img
-          src={imageUrl}
-          alt={`Current ${rules.label}`}
-          className={previewClassName}
-        />
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={`Current ${rules.label}`}
+            className={previewClassName}
+          />
+        ) : (
+          <p className="max-w-60 text-sm text-muted-foreground">{emptyText}</p>
+        )}
         <div className="min-w-0 space-y-2">
           <Label htmlFor={inputId}>Upload {rules.label}</Label>
           <Input
@@ -137,6 +148,20 @@ export function ImageField({
             }}
           />
           <p className="text-xs text-muted-foreground">{rules.description}</p>
+          {onReset && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={uploading}
+              onClick={() => {
+                setError(undefined);
+                onReset();
+              }}
+            >
+              Reset to default
+            </Button>
+          )}
           {uploading && (
             <p role="status" className="flex items-center gap-2 text-sm">
               <Spinner /> Uploading…

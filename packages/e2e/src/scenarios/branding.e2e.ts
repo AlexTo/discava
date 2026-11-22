@@ -193,3 +193,82 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
     ).toHaveCount(0);
   });
 });
+
+test('an administrator sets the platform name and share image, and visitors see them', async ({
+  browser,
+}) => {
+  const page = await browser.newPage();
+  const name = uniqueName('Acme Academy').slice(0, 50);
+
+  await test.step('a blank name is refused, with its message, and Save is disabled', async () => {
+    await page.goto(`${PORTALS.admin}/settings/branding`);
+    await signIn(page, newUser('Cara', ['admin']));
+    await page.getByLabel('Name', { exact: true }).fill('');
+    await expect(page.getByRole('alert')).toContainText(
+      'The name must be 1–50 characters.',
+    );
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await screenshot(page, 'blank platform name refused');
+  });
+
+  await test.step('a small share image is refused, with the rule', async () => {
+    await page.getByLabel('Name', { exact: true }).fill(name);
+    await page
+      .getByLabel('Upload share image')
+      .setInputFiles(png('small.png', 800, 420));
+    await expect(page.getByRole('alert')).toContainText('too small');
+    await screenshot(page, 'refused small share image');
+  });
+
+  await test.step('a valid share image uploads, and the name can be hidden beside the logo', async () => {
+    await page
+      .getByLabel('Upload share image')
+      .setInputFiles(png('share.png', 1200, 630));
+    await expect(
+      page.getByRole('img', { name: 'Share image preview' }),
+    ).toHaveAttribute('src', /^blob:/);
+    await page.getByLabel('Show the name beside the logo').click();
+    await screenshot(page, 'name and share image in the preview');
+    await page.getByLabel('Show the name beside the logo').click();
+  });
+
+  await test.step('saving confirms, and the admin portal shows the name at once', async () => {
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+    ).toBeVisible();
+    await expect(page.locator('header').first()).toContainText(name);
+    await screenshot(page, 'name and share image saved');
+  });
+
+  await test.step('a public course page carries the name and the share image', async () => {
+    const instructor = await apiUser('Pam', ['instructor']);
+    const { courseId } = await createPublishedCourseViaApi(
+      instructor,
+      uniqueName('E2E naming course'),
+    );
+    await expect(async () => {
+      const html = await (
+        await fetch(`${PAGE_RENDERER}/learn/${courseId}`, {
+          headers: { 'x-discava-host': new URL(coursePageUrl('x')).host },
+        })
+      ).text();
+      expect(html).toContain(`<meta property="og:site_name" content="${name}"`);
+      expect(html).toMatch(/<title>[^<]* \| [^<]*<\/title>/);
+      expect(html).toMatch(
+        /<meta property="og:image" content="[^"]*brand\/share-image\//,
+      );
+    }).toPass({ timeout: 30_000 });
+  });
+
+  await test.step('the student portal’s tab title ends with the name', async () => {
+    const visitor = await browser.newPage();
+    await visitor.goto(PORTALS.student);
+    await expect(async () => {
+      await visitor.reload();
+      await expect(visitor).toHaveTitle(new RegExp(name), { timeout: 5_000 });
+    }).toPass({ timeout: PORTAL_WAIT_MS });
+    await screenshot(visitor, 'student portal home with the platform name');
+    await visitor.close();
+  });
+});

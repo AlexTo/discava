@@ -26,8 +26,6 @@ import { CoreApiPageRenderer } from '../lambda-functions/index.js';
 export interface PageRendererProps {
   /** Whether search engines may index the pages. */
   readonly allowSearchEngineIndexing: boolean;
-  /** Shown in page titles and social cards. */
-  readonly siteName: string;
   readonly reservedConcurrency: number;
   /**
    * The name of the SSM parameter (`pageRendererParameterName`) the renderer
@@ -94,7 +92,6 @@ export class StudentPortal extends StaticWebsite {
         ALLOW_SEARCH_ENGINE_INDEXING: String(
           pageRenderer.allowSearchEngineIndexing,
         ),
-        SITE_NAME: pageRenderer.siteName,
         ALLOWED_HOSTS: pageRenderer.allowedHosts.join(','),
       },
     });

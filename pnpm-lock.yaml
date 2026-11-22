@@ -1437,6 +1437,9 @@ importers:
 
   packages/websites/instructor-portal:
     dependencies:
+      '@discava/common-branding':
+        specifier: workspace:*
+        version: link:../../common/branding
       '@discava/common-infra-config':
         specifier: workspace:*
         version: link:../../common/infra-config

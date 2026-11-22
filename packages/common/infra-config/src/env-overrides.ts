@@ -106,7 +106,6 @@ const COMPONENT_FIELDS: Record<
     domainNames: 'string[]',
     certificateArn: 'string',
     allowSearchEngineIndexing: 'boolean',
-    siteName: 'string',
     linkedInOrganizationId: 'string',
     pageRendererReservedConcurrency: 'number',
   },

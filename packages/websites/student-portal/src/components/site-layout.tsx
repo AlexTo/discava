@@ -56,9 +56,11 @@ const SiteLayout = ({ children }: { children: ReactNode }) => {
               className="h-10 w-auto max-w-40 shrink object-contain"
               src={brand.logoUrl}
             />
-            <span className="hidden text-sm font-semibold sm:inline">
-              {brand.name}
-            </span>
+            {brand.showNameBesideLogo && (
+              <span className="hidden text-sm font-semibold sm:inline">
+                {brand.name}
+              </span>
+            )}
           </Link>
           <div className="flex min-w-0 flex-1 justify-center">
             <SiteSearch />

@@ -26,7 +26,7 @@ export const renderCertificatePage = (
         }
       : {
           title: `${certificate.learnerName} completed ${certificate.courseTitle}`,
-          description: `Certificate of completion, ${certificate.completedOn}. Issued by ${context.siteName}. Certificate ID ${certificate.certificateId}.`,
+          description: `Certificate of completion, ${certificate.completedOn}. Issued by ${context.brand.name}. Certificate ID ${certificate.certificateId}.`,
           path: `/certificates/${certificate.certificateId}`,
           type: 'website',
           noindex: true,
