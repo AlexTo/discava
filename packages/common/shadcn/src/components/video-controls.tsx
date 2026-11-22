@@ -13,9 +13,14 @@ import {
   savePreferences,
   stepSpeed,
 } from '@discava/common-web-utils/video-player';
+import {
+  cueTime,
+  type PlayerCue,
+} from '@discava/common-web-utils/video-questions';
 import type { TranscriptCue } from '@discava/common-web-utils/webvtt';
 import { cn } from 'cn';
 import {
+  CheckIcon,
   MaximizeIcon,
   MinimizeIcon,
   PauseIcon,
@@ -82,6 +87,10 @@ const clamp = (value: number, min: number, max: number) =>
  * in fullscreen. If the video was playing it plays again when the overlay
  * clears (unless it ended), and focus returns to Play.
  *
+ * With `cues`, each timed one has a marker button on the seek bar, after the
+ * slider in the tab order: a tick when answered, a dot when not, so the state
+ * doesn't rest on colour.
+ *
  * The container takes focus and handles the shortcuts, so they work while
  * focus is anywhere in the player. Keys the focused control already uses
  * (Space on a button, arrows on a slider) are left to it.
@@ -94,6 +103,8 @@ export function VideoControls({
   transcript,
   overlay,
   onOverlayDismiss,
+  cues,
+  onCue,
 }: {
   // The `<video>` element to control.
   children: React.ReactNode;
@@ -113,6 +124,10 @@ export function VideoControls({
   overlay?: React.ReactNode;
   // The viewer pressed Escape while the overlay was open.
   onOverlayDismiss?: () => void;
+  // Markers on the seek bar, one per timed cue, once the duration is known.
+  // Choosing one seeks there, pauses and calls `onCue([id], 'chosen')`.
+  cues?: PlayerCue[];
+  onCue?: (cueIds: string[], reason: 'reached' | 'chosen' | 'ended') => void;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [paused, setPaused] = React.useState(true);
@@ -312,6 +327,14 @@ export function VideoControls({
     }
   };
 
+  // A marker moves to its cue's moment, pauses, and asks for the question.
+  const chooseCue = (id: string, at: number) => {
+    const video = getVideo();
+    seekTo(at);
+    video?.pause();
+    onCue?.([id], 'chosen');
+  };
+
   const setVideoVolume = (next: number) => {
     const video = getVideo();
     if (!video) {
@@ -464,16 +487,49 @@ export function VideoControls({
           !visible && 'pointer-events-none opacity-0',
         )}
       >
-        <Slider
-          thumbLabel="Seek"
-          thumbValueText={`${formatTime(currentTime)} of ${total}`}
-          min={0}
-          max={Math.max(duration, 1)}
-          step={1}
-          value={[Math.min(currentTime, Math.max(duration, 1))]}
-          disabled={!duration}
-          onValueChange={([value]) => seekTo(value)}
-        />
+        <div className="relative">
+          <Slider
+            thumbLabel="Seek"
+            thumbValueText={`${formatTime(currentTime)} of ${total}`}
+            min={0}
+            max={Math.max(duration, 1)}
+            step={1}
+            value={[Math.min(currentTime, Math.max(duration, 1))]}
+            disabled={!duration}
+            onValueChange={([value]) => seekTo(value)}
+          />
+          {duration > 0 &&
+            (cues ?? []).map((cue) => {
+              const at = cueTime(cue, duration);
+              if (at === null) {
+                return null;
+              }
+              return (
+                <button
+                  key={cue.id}
+                  type="button"
+                  aria-label={cue.label}
+                  data-slot="video-cue-marker"
+                  data-state={cue.state}
+                  onClick={() => chooseCue(cue.id, at)}
+                  style={{ left: `${(at / duration) * 100}%` }}
+                  className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 z-10 flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {cue.state === 'answered' ? (
+                    <CheckIcon
+                      aria-hidden="true"
+                      className="size-3.5 rounded-full bg-emerald-500 p-0.5 text-white"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 rounded-full border border-black/60 bg-amber-300"
+                    />
+                  )}
+                </button>
+              );
+            })}
+        </div>
         <div className="flex items-center gap-1">
           <Button
             type="button"

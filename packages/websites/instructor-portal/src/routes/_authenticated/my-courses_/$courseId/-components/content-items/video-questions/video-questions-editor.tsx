@@ -12,8 +12,9 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
+import { toCues } from '@discava/common-web-utils/video-questions';
 import { CirclePlus, Save } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { QuestionCard } from '../quiz/question-card';
 import {
   questionElementId,
@@ -28,6 +29,7 @@ import {
   type VideoItem,
   type VideoQuestionState,
 } from './video-questions-form';
+import { VideoQuestionsPreview } from './video-questions-preview';
 
 // The time a question is asked at, as `m:ss` text. What's typed is applied
 // when the field is left or Enter is pressed, so a card doesn't jump while
@@ -143,6 +145,26 @@ export function VideoQuestionsEditor({
   });
   const { questions, errors, showProblems } = state;
   const problemCount = Object.keys(errors.questions).length;
+  const [previewing, setPreviewing] = useState(false);
+  // A marker for each question on the editor's own player; choosing one
+  // scrolls to its card.
+  const cues = useMemo(
+    () =>
+      toCues(
+        questions
+          .filter((question) => !Number.isNaN(question.atSeconds))
+          .map((question) => ({
+            questionId: question.questionId,
+            kind: question.kind,
+            prompt: question.prompt,
+            options: question.options,
+            atSeconds: question.atSeconds,
+            contentHash: '',
+          })),
+        {},
+      ),
+    [questions],
+  );
   const limitReason = `A video can have at most ${MAX_VIDEO_QUESTIONS} questions.`;
 
   return (
@@ -170,6 +192,12 @@ export function VideoQuestionsEditor({
             captions={player.captions}
             className="w-full rounded-lg border"
             onTimeChange={state.setCurrentTime}
+            cues={cues}
+            onCue={(ids, reason) => {
+              if (reason === 'chosen') {
+                state.jumpTo(ids[0]);
+              }
+            }}
           />
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-3">
@@ -198,6 +226,28 @@ export function VideoQuestionsEditor({
                 </span>
               )}
             </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={previewing}
+            onClick={() => setPreviewing(!previewing)}
+          >
+            {previewing ? 'Stop previewing' : 'Preview as student'}
+          </Button>
+          {previewing && (
+            <section aria-label="Student preview" className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Answers are checked here and aren't recorded.
+              </p>
+              <VideoQuestionsPreview
+                url={player.url}
+                withCredentials={player.withCredentials}
+                captions={player.captions}
+                questions={questions}
+                className="w-full rounded-lg border"
+              />
+            </section>
           )}
         </div>
       )}

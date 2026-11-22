@@ -956,6 +956,29 @@ describe('HlsVideo cues', () => {
     });
   });
 
+  it('saves the playhead when no overlay is open', () => {
+    vi.useFakeTimers();
+    const onPositionChange = vi.fn();
+    const { el } = setup(undefined, { onPositionChange });
+    emit(el, 'timeupdate', 5.2);
+    emit(el, 'timeupdate', 5.8);
+    media.paused = true;
+    emit(el, 'pause');
+
+    expect(onPositionChange).toHaveBeenCalledWith({
+      positionSeconds: 5.8,
+      durationSeconds: 120,
+    });
+  });
+
+  it('shows a marker for each timed cue', () => {
+    const { container } = setup();
+    emit(video(container), 'durationchange');
+    expect(
+      container.querySelectorAll('[data-slot="video-cue-marker"]'),
+    ).toHaveLength(2);
+  });
+
   it('changes nothing without cues', () => {
     vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('');
     const { container } = render(<HlsVideo url={URL} withCredentials />);
