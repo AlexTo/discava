@@ -181,13 +181,19 @@ export function SignedInHome() {
             {newCourses.map((course) => (
               <Card
                 key={course.courseId}
-                className="group gap-4 overflow-hidden py-0 transition-[translate,border-color,box-shadow] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/30 hover:shadow-md"
+                className="group relative gap-4 overflow-hidden py-0 transition-[translate,border-color,box-shadow] hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0 hover:border-primary/30 hover:shadow-md"
               >
                 <CourseThumbnail course={course} iconClassName="text-4xl" />
                 <CardContent className="flex flex-1 flex-col gap-3 px-5 pb-5">
                   <div>
-                    <h3 className="text-base font-semibold leading-5">
-                      {course.title}
+                    <h3 className="text-base font-semibold leading-snug">
+                      <Link
+                        to="/learn/$courseId"
+                        params={{ courseId: course.courseId }}
+                        className="after:absolute after:inset-0"
+                      >
+                        {course.title}
+                      </Link>
                     </h3>
                     {course.priceAmount !== undefined &&
                     course.priceCurrency ? (
@@ -202,15 +208,9 @@ export function SignedInHome() {
                     ) : null}
                   </div>
                   <div className="mt-auto flex justify-end border-t pt-3">
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link
-                        to="/learn/$courseId"
-                        params={{ courseId: course.courseId }}
-                        aria-label={`View ${course.title}`}
-                      >
-                        View course
-                      </Link>
-                    </Button>
+                    <span className="text-sm font-medium group-hover:underline">
+                      View course
+                    </span>
                   </div>
                 </CardContent>
               </Card>

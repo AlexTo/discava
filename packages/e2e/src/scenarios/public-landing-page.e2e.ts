@@ -405,7 +405,11 @@ test('an instructor edits their profile and a signed-out visitor opens it from t
         .getByRole('region', { name: `Courses by ${displayName}` })
         .getByText(title),
     ).toBeVisible();
-    await screenshot(visitor, 'public instructor profile', { fullPage: true });
+    const avatar = await visitor
+      .locator('header [data-slot="avatar"]')
+      .boundingBox();
+    expect(avatar?.width).toBe(112);
+    await screenshot(visitor, 'instructor profile', { fullPage: true });
   });
 });
 
