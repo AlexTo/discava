@@ -24,7 +24,8 @@ export const VideoUrlOutputSchema = z.object({
   // The caller's saved position for this version, in seconds; 0 if none.
   resumeAt: z.number().int().min(0),
   // The played version's caption tracks, the default first. Never an S3 key,
-  // the track's source or the caption status.
+  // the track's source beyond whether it was machine-translated, or the
+  // caption status.
   captions: z.array(
     z.object({
       trackId: z.string(),
@@ -33,6 +34,8 @@ export const VideoUrlOutputSchema = z.object({
       // Display label, e.g. English.
       label: z.string(),
       isDefault: z.boolean(),
+      // True when the stored track's source is 'translated'.
+      machineTranslated: z.boolean(),
       // Plain CloudFront URL under the version's folder, authorised by the
       // signed cookies set with this response (S3Mock's URL in local dev).
       url: z.string(),

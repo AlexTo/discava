@@ -446,6 +446,33 @@ describe('previewVideoUrl', () => {
     expect(cookies).toEqual(['CloudFront-Policy=abc']);
   });
 
+  it('returns translated tracks to an anonymous visitor, flagged as machine-translated', async () => {
+    given(published, {
+      ...readyPreview,
+      captionTracks: [
+        ...readyPreview.captionTracks,
+        {
+          trackId: 't2',
+          language: 'es-ES',
+          label: 'Español',
+          isDefault: false,
+          source: 'translated',
+          key: `${FOLDER}captions/t2.vtt`,
+          nonce: 'nonce-2',
+        },
+      ],
+    });
+
+    const { captions } = await callPublicly().previewVideoUrl({
+      courseId: 'course-1',
+    });
+
+    expect(captions.map((c) => [c.trackId, c.machineTranslated])).toEqual([
+      ['t1', false],
+      ['t2', true],
+    ]);
+  });
+
   it('scopes the cookies to the played version folder only', async () => {
     given(published, readyPreview);
 

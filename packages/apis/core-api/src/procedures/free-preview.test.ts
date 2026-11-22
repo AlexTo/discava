@@ -340,6 +340,7 @@ describe('freePreview.videoUrl', () => {
           language: 'en-US',
           label: 'English',
           isDefault: true,
+          machineTranslated: false,
           url: `https://media.example.com/${FOLDER}captions/t1.vtt`,
         },
       ],

@@ -550,6 +550,42 @@ describe('HlsVideo captions', () => {
     expect(fetchMock).toHaveBeenCalledWith(CAPTIONS[0].url, undefined);
   });
 
+  it('labels a translated track with the suffix, on the <track> and in the failure notice', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('a.vtt')
+        ? { ok: false, status: 403, text: async () => '' }
+        : { ok: true, status: 200, text: async () => 'WEBVTT' },
+    );
+    const translated = [
+      CAPTIONS[0],
+      { ...CAPTIONS[1], machineTranslated: true },
+    ];
+    const ok = render(
+      <HlsVideo url={URL} withCredentials captions={translated} />,
+    );
+    await waitFor(() => expect(tracks(ok.container)).toHaveLength(1));
+    expect(tracks(ok.container)[0].getAttribute('label')).toBe('English');
+    await userEvent.click(await ok.findByRole('button', { name: /^Captions/ }));
+    expect(await ok.findByRole('status')).toHaveTextContent(
+      "Couldn't load captions: Spanish (auto-translated).",
+    );
+  });
+
+  it('puts the suffix on a loaded translated <track>', async () => {
+    const { container } = render(
+      <HlsVideo
+        url={URL}
+        withCredentials
+        captions={[CAPTIONS[0], { ...CAPTIONS[1], machineTranslated: true }]}
+      />,
+    );
+    await waitFor(() => expect(tracks(container)).toHaveLength(2));
+    expect(tracks(container).map((t) => t.getAttribute('label'))).toEqual([
+      'English',
+      'Spanish (auto-translated)',
+    ]);
+  });
+
   it('skips a track that fails to load, with a notice, and plays on', async () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.endsWith('a.vtt')

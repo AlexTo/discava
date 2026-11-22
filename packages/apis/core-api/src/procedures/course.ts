@@ -311,6 +311,7 @@ export const previewVideoUrl = publicCourseProcedure
           language: track.language,
           label: track.label,
           isDefault: track.isDefault,
+          machineTranslated: track.source === 'translated',
           url: await getCloudFrontVideoUrl(track.key),
         }),
       ),

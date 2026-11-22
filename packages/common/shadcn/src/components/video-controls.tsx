@@ -59,11 +59,23 @@ export interface LoadedCaption {
   language: string;
   label: string;
   isDefault: boolean;
+  // Machine-translated from another track; named so in the menu.
+  machineTranslated?: boolean;
   // A blob URL of the file.
   src: string;
   // The file's lines, for the transcript.
   cues: TranscriptCue[];
 }
+
+export const AUTO_TRANSLATED_SUFFIX = '(auto-translated)';
+
+/** A caption track's name for the viewer: its label, marked when machine-translated. */
+export const captionMenuLabel = (
+  caption: Pick<LoadedCaption, 'label' | 'machineTranslated'>,
+) =>
+  caption.machineTranslated
+    ? `${caption.label} ${AUTO_TRANSLATED_SUFFIX}`
+    : caption.label;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -603,7 +615,7 @@ export function VideoControls({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={`Captions: ${shownTrack ? shownTrack.label : 'off'}`}
+                    aria-label={`Captions: ${shownTrack ? captionMenuLabel(shownTrack) : 'off'}`}
                     className="hover:bg-white/20 hover:text-white"
                   >
                     <SubtitlesIcon />
@@ -624,7 +636,7 @@ export function VideoControls({
                         key={caption.trackId}
                         value={caption.trackId}
                       >
-                        {caption.label}
+                        {captionMenuLabel(caption)}
                         {caption.isDefault ? ' (default)' : ''}
                       </DropdownMenuRadioItem>
                     ))}
