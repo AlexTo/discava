@@ -48,7 +48,7 @@ export function PostCard({
       {(showTitle && post.title) || post.promptAnswer ? (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {showTitle && post.title ? (
-            <h4 className="break-words font-medium">{post.title}</h4>
+            <h4 className="min-w-0 break-words font-medium">{post.title}</h4>
           ) : null}
           {post.promptAnswer ? (
             <Badge variant="secondary">Answer to the course prompt</Badge>
@@ -56,7 +56,9 @@ export function PostCard({
         </div>
       ) : null}
       <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{post.authorName}</span>
+        <span className="min-w-0 break-words font-medium text-foreground">
+          {post.authorName}
+        </span>
         {post.authorIsInstructor ? (
           <Badge variant="secondary">Instructor</Badge>
         ) : null}

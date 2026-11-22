@@ -8,6 +8,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@discava/common-shadcn/components/ui/chart';
+import { useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 export interface ScoreBandFigures {
@@ -19,6 +20,9 @@ export interface ScoreBandFigures {
 const config = {
   students: { label: 'Students', color: 'var(--chart-1)' },
 } satisfies ChartConfig;
+
+// Below this container width the x-axis labels every other band.
+const NARROW_WIDTH = 480;
 
 const bandLabel = ({ from, to }: ScoreBandFigures) => `${from}-${to}`;
 
@@ -36,8 +40,22 @@ export function ScoreChart({
     students: band.students,
   }));
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setNarrow(entry.contentRect.width < NARROW_WIDTH);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div>
+    <div ref={containerRef}>
       <ChartContainer
         config={config}
         className="aspect-auto h-48 w-full"
@@ -49,7 +67,7 @@ export function ScoreChart({
             dataKey="band"
             tickLine={false}
             axisLine={false}
-            interval={0}
+            interval={narrow ? 1 : 0}
           />
           <YAxis allowDecimals={false} width={32} />
           <ChartTooltip content={<ChartTooltipContent />} />

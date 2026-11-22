@@ -68,4 +68,16 @@ describe('LessonDropOff', () => {
     );
     expect(screen.queryByText(/no questions/)).not.toBeInTheDocument();
   });
+
+  it('wraps long titles and shows the counts without hover', () => {
+    const long = 'x'.repeat(70);
+    render(<LessonDropOff lessons={[{ ...lesson('a', 50), title: long }]} />);
+    const title = screen.getByText(long);
+    expect(title).toHaveClass('break-words');
+    expect(title).not.toHaveClass('truncate');
+    expect(screen.getByText('2 started, 1 completed')).not.toHaveClass(
+      'opacity-0',
+    );
+    expect(screen.getByRole('listitem')).not.toHaveAttribute('tabindex');
+  });
 });

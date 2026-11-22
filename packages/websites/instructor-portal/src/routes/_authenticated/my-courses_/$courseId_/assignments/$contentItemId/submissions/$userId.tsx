@@ -74,7 +74,7 @@ function RouteComponent() {
     <main className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance break-words text-2xl font-bold tracking-tight sm:text-3xl">
             {student.displayName}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -84,8 +84,8 @@ function RouteComponent() {
         {back}
       </section>
       {submission ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section aria-label="Submitted file">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <section className="min-w-0" aria-label="Submitted file">
             <FilePreview
               courseId={courseId}
               contentItemId={contentItemId}
@@ -93,7 +93,7 @@ function RouteComponent() {
               file={submission.file}
             />
           </section>
-          <section className="space-y-4" aria-label="Grading">
+          <section className="min-w-0 space-y-4" aria-label="Grading">
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span>
                 Submitted {new Date(submission.submittedAt).toLocaleString()}

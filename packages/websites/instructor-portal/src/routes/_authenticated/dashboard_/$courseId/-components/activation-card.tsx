@@ -50,13 +50,13 @@ export function ActivationCard({
       : null;
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="text-base" role="heading" aria-level={2}>
           Activation
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+      <CardContent className="space-y-2 break-words text-sm">
         <p className="font-medium">
           {startedLine(
             totals.activated,

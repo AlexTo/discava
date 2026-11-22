@@ -48,7 +48,7 @@ export function DailyChart({
   } satisfies ChartConfig;
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="text-base" role="heading" aria-level={2}>
           {title}

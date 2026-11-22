@@ -118,6 +118,26 @@ describe('ReviewsScreen', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('wraps long names, reviews and responses', async () => {
+    render({
+      instructor: {
+        'review.list': () => ({
+          items: [
+            review(1, {
+              reviewerName: 'N'.repeat(70),
+              text: 'T'.repeat(500),
+              response: { ...response, text: 'R'.repeat(500) },
+            }),
+          ],
+        }),
+      },
+    });
+
+    expect(await screen.findByText('N'.repeat(70))).toHaveClass('break-words');
+    expect(screen.getByText('T'.repeat(500))).toHaveClass('break-words');
+    expect(screen.getByText('R'.repeat(500))).toHaveClass('break-words');
+  });
+
   it('shows the empty states', async () => {
     render({
       instructor: { 'review.list': () => ({ items: [] }) },

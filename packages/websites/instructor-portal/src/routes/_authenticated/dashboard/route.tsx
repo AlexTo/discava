@@ -121,15 +121,17 @@ function RouteComponent() {
               >
                 <Card className="h-full gap-4 transition-shadow hover:shadow-md">
                   <CardHeader className="px-5">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                       <CardTitle
-                        className="text-base leading-5"
+                        className="min-w-0 break-words text-base leading-5"
                         role="heading"
                         aria-level={2}
                       >
                         {course.title}
                       </CardTitle>
-                      <Badge className={courseStatusStyles[status]}>
+                      <Badge
+                        className={`shrink-0 ${courseStatusStyles[status]}`}
+                      >
                         {status}
                       </Badge>
                     </div>
