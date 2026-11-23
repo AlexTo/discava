@@ -115,82 +115,72 @@ export function CourseCertificateCriteria({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-3" aria-busy={busy}>
-        <input
-          type="checkbox"
-          id={`certificate-quiz-pass-${courseId}`}
-          checked={checked}
-          disabled={!certificatesEnabled}
-          onChange={change}
-          className="mt-1 size-4 shrink-0 accent-primary disabled:opacity-50"
-        />
-        <div className="text-sm">
-          <label
-            htmlFor={`certificate-quiz-pass-${courseId}`}
-            className="font-medium leading-5"
-          >
-            Require passing every quiz
-          </label>
-          <p className="text-muted-foreground">
-            Quizzes with a pass mark of 0% don't count. Applies to students who
-            don't have a certificate yet; certificates already issued are not
-            affected. Students who qualify after this change get their
-            certificate automatically.
-          </p>
-        </div>
+      <div className="text-sm" aria-busy={busy}>
+        <label className="flex items-start gap-3 font-medium leading-5">
+          <input
+            type="checkbox"
+            id={`certificate-quiz-pass-${courseId}`}
+            checked={checked}
+            disabled={!certificatesEnabled}
+            onChange={change}
+            className="mt-0.5 size-4 shrink-0 accent-primary disabled:opacity-50"
+          />
+          Require passing every quiz
+        </label>
+        <p className="ml-7 text-muted-foreground">
+          Quizzes with a pass mark of 0% don't count. Applies to students who
+          don't have a certificate yet; certificates already issued are not
+          affected. Students who qualify after this change get their certificate
+          automatically.
+        </p>
       </div>
-      <div className="flex items-start gap-3" aria-busy={busy}>
-        <input
-          type="checkbox"
-          id={`certificate-upload-score-${courseId}`}
-          checked={uploadChecked}
-          disabled={!certificatesEnabled}
-          onChange={toggleUpload}
-          className="mt-1 size-4 shrink-0 accent-primary disabled:opacity-50"
-        />
-        <div className="text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <label
-              htmlFor={`certificate-upload-score-${courseId}`}
-              className="font-medium leading-5"
-            >
-              Require graded assignments to be returned with at least
-            </label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={100}
-              aria-label="Minimum assignment score, percent"
-              aria-invalid={percentError !== undefined}
-              className="h-8 w-20"
-              value={percentValue}
+      <div className="text-sm" aria-busy={busy}>
+        <div className="flex flex-wrap items-center gap-x-2">
+          <label className="flex items-start gap-3 font-medium leading-5">
+            <input
+              type="checkbox"
+              id={`certificate-upload-score-${courseId}`}
+              checked={uploadChecked}
               disabled={!certificatesEnabled}
-              onChange={(event) => {
-                if (busy) return;
-                setPercentText(event.target.value);
-                setPercentError(undefined);
-              }}
-              onBlur={commitPercent}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  commitPercent();
-                }
-              }}
+              onChange={toggleUpload}
+              className="mt-0.5 size-4 shrink-0 accent-primary disabled:opacity-50"
             />
-            <span className="font-medium">% of its points</span>
-          </div>
-          {percentError && (
-            <p role="alert" className="text-destructive">
-              {percentError}
-            </p>
-          )}
-          <p className="text-muted-foreground">
-            Every assignment students can see counts. Work that is waiting to be
-            graded, or was returned with fewer points, does not meet it until it
-            is returned with enough.
-          </p>
+            Require graded assignments to be returned with at least
+          </label>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={100}
+            aria-label="Minimum assignment score, percent"
+            aria-invalid={percentError !== undefined}
+            className="h-8 w-20"
+            value={percentValue}
+            disabled={!certificatesEnabled}
+            onChange={(event) => {
+              if (busy) return;
+              setPercentText(event.target.value);
+              setPercentError(undefined);
+            }}
+            onBlur={commitPercent}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                commitPercent();
+              }
+            }}
+          />
+          <span className="font-medium">% of its points</span>
         </div>
+        {percentError && (
+          <p role="alert" className="ml-7 text-destructive">
+            {percentError}
+          </p>
+        )}
+        <p className="ml-7 text-muted-foreground">
+          Every assignment students can see counts. Work that is waiting to be
+          graded, or was returned with fewer points, does not meet it until it
+          is returned with enough.
+        </p>
       </div>
       {isError && (
         <ErrorAlert

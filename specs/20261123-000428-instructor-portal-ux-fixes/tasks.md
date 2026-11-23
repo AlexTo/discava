@@ -590,27 +590,27 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US9.
 
-- [ ] T073 [US9] Test first, then make the shared controls at least 24px (B-17, A-16, C-15, D-19, E-19). Name the shadcn-file changes in the pull request.
+- [x] T073 [US9] Test first, then make the shared controls at least 24px (B-17, A-16, C-15, D-19, E-19). Name the shadcn-file changes in the pull request.
   - **Dialog close:** in `SH/components/ui/dialog.tsx`, the close button becomes `size-6` with the 16px icon.
   - **Hit areas:** `SH/components/ui/checkbox.tsx` and `SH/components/ui/radio-group.tsx` get a 24px hit area (`relative after:absolute after:-inset-1 after:content-['']`). `SH/components/ui/switch.tsx` gets `after:-inset-y-0.5`. The visual size doesn't change.
 
   Run all three portals' tests.
-- [ ] T074 [P] [US9] Make each control's text part of its target (A-16, C-15, D-19, E-17):
+- [x] T074 [P] [US9] Make each control's text part of its target (A-16, C-15, D-19, E-17):
   - in `SH/components/notification-preferences.tsx`, each switch's name becomes a `Label htmlFor` (the switch keeps its description through `aria-describedby`);
   - in `IPC/content-items/quiz/quiz-settings-section.tsx` and `IPC/course/course-certificate-criteria.tsx`, each checkbox and its text sit in one `<label>` with no gap;
   - the grading form's Feedback label is tied to its editor through `aria-labelledby`.
-- [ ] T075 [P] [US9] Give the short links and buttons a 24px minimum height (A-18, C-15):
+- [x] T075 [P] [US9] Give the short links and buttons a 24px minimum height (A-18, C-15):
   - "Show orders" in `IP/earnings/-components/report-section.tsx` (drop `h-auto p-0` or add `min-h-6`);
   - the tag Remove buttons in `IPC/course/course-catalogue-form.tsx`;
   - the Reviews and Questions links in `IP/my-courses_/$courseId/route.tsx`.
-- [ ] T076 [P] [US9] Fix the accessible names (B-20, B-21, C-19, D-20). Change the existing assertions named in plan.md (`course-modules.test.tsx`, `lesson-content-items-row.test.tsx`, `packages/e2e/src/scenarios/video-questions.e2e.ts`), and say so in the pull request.
+- [x] T076 [P] [US9] Fix the accessible names (B-20, B-21, C-19, D-20). Change the existing assertions named in plan.md (`course-modules.test.tsx`, `lesson-content-items-row.test.tsx`, `packages/e2e/src/scenarios/video-questions.e2e.ts`), and say so in the pull request.
   - **Open course:** "Open course" links in `IP/my-courses/route.tsx` get `aria-label={`Open course: ${title}`}`.
   - **Module buttons:** in `IPC/course/course-modules.tsx` they are named by title ("Edit module <title>", "Remove module <title>").
   - **Questions button:** "Questions (N) for <title>" in `IPC/content-items/lesson-content-items-row.tsx`.
   - **Move buttons:** "Move up, question N" and "Move down, question N" in `IPC/content-items/video-questions/video-questions-editor.tsx`.
   - **Dashboard cards:** in `IP/dashboard/route.tsx`, each card's link is its title, stretched over the card (`after:absolute after:inset-0` on the link, `relative` on the card).
-- [ ] T077 [P] [US9] Turn the intros of `IPC/content-items/edit-lesson-text-dialog.tsx`, `attach-lesson-video-dialog.tsx`, `attach-lesson-file-dialog.tsx` and `video-captions-dialog.tsx` into `DialogDescription` (D-21). **Test:** each dialog has `aria-describedby`.
-- [ ] T078 [US9] Run the instructor, student and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T077 [P] [US9] Turn the intros of `IPC/content-items/edit-lesson-text-dialog.tsx`, `attach-lesson-video-dialog.tsx`, `attach-lesson-file-dialog.tsx` and `video-captions-dialog.tsx` into `DialogDescription` (D-21). **Test:** each dialog has `aria-describedby`.
+- [x] T078 [US9] Run the instructor, student and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 - [ ] T079 [US9] (human) On the local stack, measure the controls listed in quickstart US9 at 375px and 1440px, and confirm that each switch's and checkbox's text toggles it. Note any control under 24px in the pull request.
 
 ---

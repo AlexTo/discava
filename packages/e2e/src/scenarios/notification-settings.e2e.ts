@@ -32,6 +32,12 @@ test('a student switches a notification email off in settings', async ({
   await expect(page.getByText('Saved', { exact: true })).toBeVisible();
   await expect(changeable).toHaveAttribute('aria-checked', String(!wasOn));
   await screenshot(page, 'settings after a switch was saved');
+
+  // A switch's name is its label: clicking the text turns it back.
+  const switchId = await changeable.getAttribute('id');
+  await page.locator(`label[for="${switchId}"]`).click();
+  await expect(changeable).toHaveAttribute('aria-checked', String(wasOn));
+  await screenshot(page, 'settings after clicking a switch’s name');
 });
 
 test('an instructor and an admin reach settings from their user menus', async ({

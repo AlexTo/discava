@@ -19,6 +19,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -154,9 +155,9 @@ export function EditLessonTextDialog({
       <DialogContent className="sm:max-w-2xl" {...contentProps}>
         <DialogHeader>
           <DialogTitle>{contentItemId ? 'Edit text' : 'Add text'}</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Write a rich text block for students to read in this lesson.
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         {saveError && (

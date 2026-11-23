@@ -356,6 +356,7 @@ function RouteComponent() {
                     <Link
                       to="/my-courses/$courseId"
                       params={{ courseId: course.courseId }}
+                      aria-label={`Open course: ${course.title}`}
                     >
                       Open course
                     </Link>

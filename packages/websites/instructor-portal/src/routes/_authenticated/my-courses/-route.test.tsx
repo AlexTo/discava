@@ -29,13 +29,19 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       children,
       to,
       params,
+      'aria-label': ariaLabel,
     }: {
       children: React.ReactNode;
       to: string;
       params: Record<string, unknown>;
+      'aria-label'?: string;
     }) => {
       linkProps.push({ to, params });
-      return <a href="#">{children}</a>;
+      return (
+        <a href="#" aria-label={ariaLabel}>
+          {children}
+        </a>
+      );
     },
     // CreateCourseDialog navigates on save, which also needs a router this
     // test doesn't set up; not under test here (see create-course-dialog.test.tsx).
@@ -458,7 +464,9 @@ describe('My courses', () => {
       }),
     });
 
-    await screen.findByRole('link', { name: 'Open course' });
+    await screen.findByRole('link', {
+      name: 'Open course: Intro to DynamoDB',
+    });
     expect(linkProps).toContainEqual({
       to: '/my-courses/$courseId',
       params: { courseId: 'c1' },
