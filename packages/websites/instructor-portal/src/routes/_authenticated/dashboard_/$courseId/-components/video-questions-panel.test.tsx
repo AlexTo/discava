@@ -134,7 +134,7 @@ describe('VideoQuestionsPanel', () => {
     expect(await screen.findByText("Couldn't load this video")).toBeVisible();
 
     fail = false;
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(
       await screen.findByRole('table', {
         name: 'Question results for Welcome',

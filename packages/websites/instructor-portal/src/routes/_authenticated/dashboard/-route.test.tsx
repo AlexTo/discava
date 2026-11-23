@@ -142,7 +142,7 @@ describe('Dashboard', () => {
     );
   });
 
-  it('shows the error with a Retry that asks again', async () => {
+  it('shows the error with a Try again that asks again', async () => {
     let attempts = 0;
     const { user } = renderPage(() => {
       attempts++;
@@ -161,7 +161,7 @@ describe('Dashboard', () => {
       ),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(await screen.findByText('Intro to DynamoDB')).toBeInTheDocument();
     expect(attempts).toBe(2);

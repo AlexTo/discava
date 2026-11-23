@@ -71,7 +71,11 @@ function RouteComponent() {
         <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
           Submission
         </h1>
-        <ErrorAlert type="error" header="Couldn't load the submission">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the submission"
+          onRetry={() => void query.refetch()}
+        >
           {apiErrorMessage(query.error, "Couldn't load the submission.")}
         </ErrorAlert>
         {back}

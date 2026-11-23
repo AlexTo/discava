@@ -285,8 +285,13 @@ describe('the Payments page', () => {
       },
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the payment settings");
+    expect(alert).toHaveTextContent(
       'Something went wrong on our side. Try again in a moment.',
+    );
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(
+      1,
     );
     fail = false;
     await rendered.user.click(
@@ -294,6 +299,28 @@ describe('the Payments page', () => {
     );
 
     expect(await screen.findByText('Test mode')).toBeInTheDocument();
+  });
+
+  it('checks an empty key on submit, focuses the field and sends nothing', async () => {
+    const rendered = renderWithAdminApi(<PaymentsScreen />, {
+      handlers: {
+        'payment.status': () => ({ state: 'not-connected', changes: [] }),
+      },
+    });
+
+    const connectButton = await screen.findByRole('button', {
+      name: 'Connect Stripe',
+    });
+    expect(connectButton).toBeEnabled();
+    await rendered.user.click(connectButton);
+
+    const field = keyField();
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Enter a Stripe secret key.');
+    expect(rendered.calls.some((c) => c.path === 'payment.connect')).toBe(
+      false,
+    );
   });
 });
 

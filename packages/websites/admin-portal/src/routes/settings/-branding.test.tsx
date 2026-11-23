@@ -10,11 +10,6 @@ import {
   renderWithAdminApi,
 } from '../../test/render-with-admin-api';
 
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const { mockRouter } = await import('@discava/common-web-utils/testing');
-  return mockRouter(importOriginal, { useBlocker: () => undefined });
-});
-
 const { measureImage } = vi.hoisted(() => ({ measureImage: vi.fn() }));
 vi.mock('./-components/measure-image', () => ({ measureImage }));
 
@@ -73,15 +68,27 @@ beforeEach(() => {
 });
 
 describe('the Branding page', () => {
-  it('shows the default brand, with Save disabled until something changes', async () => {
+  it('shows the default brand, with Save enabled', async () => {
     open();
     expect(
       await screen.findByText('Using the default Discava brand'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Branding' }),
     ).toBeInTheDocument();
+  });
+
+  it('says there is nothing to save, and sends nothing, when nothing changed', async () => {
+    const { user, calls } = open();
+    await screen.findByText('Using the default Discava brand');
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Nothing to save: the branding is as saved.'),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.path === 'branding.save')).toBe(false);
     expect(
       screen.getByRole('img', { name: 'Discava logo' }),
     ).toBeInTheDocument();
@@ -202,7 +209,7 @@ describe('the Branding page', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
-  it('refuses a blank or 51-character name, with its message, and disables Save', async () => {
+  it('refuses a blank or 51-character name, with its message, and focuses it on Save', async () => {
     const { user } = open();
     const input = await screen.findByLabelText('Name');
     expect(input).toHaveValue('Discava');
@@ -210,10 +217,13 @@ describe('the Branding page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The name must be 1–50 characters.',
     );
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription(/1–50 characters/);
     await user.type(input, 'x'.repeat(51));
     expect(screen.getByRole('alert')).toHaveTextContent('1–50 characters');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     await user.clear(input);
     await user.type(input, 'Acme Academy');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -321,7 +331,17 @@ describe('the Branding page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /Couldn't upload the file/,
     );
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it("guards leaving with the portal's own dialog, never window.confirm", async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    const { user } = open();
+    await user.type(await screen.findByLabelText('Name'), 'Acme');
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it('saves the whole form with the loaded revision, then confirms', async () => {
@@ -364,7 +384,7 @@ describe('the Branding page', () => {
         )
       ).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('keeps the edits and offers to reload on a conflict', async () => {
@@ -511,21 +531,23 @@ describe('the Branding page', () => {
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Name')).toHaveValue('Acme');
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     });
   });
 
   describe('the brand colour', () => {
     const hex = () => screen.getByLabelText('Hex colour');
 
-    it('refuses #777777 with the message, and disables Save', async () => {
+    it('refuses #777777 with the message, and focuses it on Save', async () => {
       open();
       await screen.findByLabelText('Hex colour');
       fireEvent.change(hex(), { target: { value: '#777777' } });
       expect(screen.getByRole('alert')).toHaveTextContent(
         'Text on this colour would be hard to read. Choose a darker or lighter shade.',
       );
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      expect(hex()).toHaveFocus();
+      expect(hex()).toHaveAttribute('aria-invalid', 'true');
       fireEvent.change(hex(), { target: { value: '#1d4ed8' } });
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
@@ -597,7 +619,7 @@ describe('the Branding page', () => {
         ).toBe('#1d4ed8'),
       );
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled(),
+        expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(),
       );
       fireEvent.click(
         screen.getByRole('button', { name: 'Reset colour to default' }),

@@ -80,6 +80,8 @@ export function GradingForm({
     initial?.feedback,
   );
   const [error, setError] = useState<string>();
+  // What is wrong with the points, shown under the field.
+  const [pointsError, setPointsError] = useState<string>();
   const [status, setStatus] = useState<string | null>(null);
   // Where focus goes once the form or the summary it is in has rendered.
   const focusNext = useRef<'summary' | 'points' | 'edit' | undefined>(
@@ -144,6 +146,7 @@ export function GradingForm({
       setFeedback(undefined);
       setEditorKey((key) => key + 1);
       setEditing(false);
+      setPointsError(undefined);
       focusNext.current = 'summary';
       setStatus('Grade returned');
       await refetch();
@@ -163,9 +166,12 @@ export function GradingForm({
   const onReturn = () => {
     const parsed = parsePoints(points, maxPoints);
     if (parsed.error !== undefined) {
-      setError(parsed.error);
+      setError(undefined);
+      setPointsError(parsed.error);
+      pointsRef.current?.focus();
       return;
     }
+    setPointsError(undefined);
     const body = hasText(feedback) ? { feedback } : {};
     void send(() =>
       returned
@@ -249,12 +255,24 @@ export function GradingForm({
               min={0}
               className="w-28"
               value={points}
-              onChange={(event) => setPoints(event.target.value)}
+              onChange={(event) => {
+                setPoints(event.target.value);
+                setPointsError(undefined);
+              }}
+              aria-invalid={Boolean(pointsError)}
+              aria-describedby={
+                pointsError ? 'grading-points-error' : undefined
+              }
             />
             <span className="text-sm text-muted-foreground">
               out of {maxPoints}
             </span>
           </div>
+          {pointsError ? (
+            <p id="grading-points-error" className="text-sm text-destructive">
+              {pointsError}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2">
           <Label>Feedback</Label>
@@ -303,6 +321,7 @@ export function GradingForm({
                 setPoints('');
                 setFeedback(undefined);
                 setEditing(false);
+                setPointsError(undefined);
                 focusNext.current = 'edit';
               }}
             >

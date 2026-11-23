@@ -187,6 +187,46 @@ describe('ReviewsScreen', () => {
     expect(await screen.findByText('Review text 1')).toBeInTheDocument();
   });
 
+  it('shows one alert and one retry when both the summary and the list fail', async () => {
+    let fail = true;
+    let summaryCalls = 0;
+    const { calls, user } = render({
+      core: {
+        'review.summary': () => {
+          summaryCalls += 1;
+          if (fail) {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+          }
+          return {
+            count: 1,
+            average: 5,
+            stars: { 5: 1, 4: 0, 3: 0, 2: 0, 1: 0 },
+          };
+        },
+      },
+      instructor: {
+        'review.list': () => {
+          if (fail) {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+          }
+          return { items: [review(1)] };
+        },
+      },
+    });
+
+    await screen.findByText("Couldn't load the reviews");
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(
+      1,
+    );
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Review text 1')).toBeInTheDocument();
+    expect(summaryCalls).toBe(2);
+    expect(calls.filter((c) => c.path === 'review.list')).toHaveLength(2);
+  });
+
   it('responds with the trimmed text and refreshes the list', async () => {
     const { calls, user } = render({
       instructor: {

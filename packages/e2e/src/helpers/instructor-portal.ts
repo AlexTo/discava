@@ -16,7 +16,8 @@ export const createCourse = async (
   { title, summary }: { title: string; summary: string },
 ) => {
   await page.goto(`${PORTALS.instructor}/my-courses`);
-  await page.getByRole('button', { name: 'Create course' }).click();
+  // A brand-new instructor's empty list has a second one, in its message.
+  await page.getByRole('button', { name: 'Create course' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Create a course' });
   await dialog.getByLabel('Course title').fill(title);
   await dialog.getByLabel('Course summary').fill(summary);

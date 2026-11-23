@@ -75,19 +75,13 @@ export function QuizPanel({
       {open && (
         <CardContent>
           {query.isError ? (
-            <div className="space-y-3">
-              <ErrorAlert type="error" header="Couldn't load this quiz">
-                {apiErrorMessage(query.error)}
-              </ErrorAlert>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => query.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ErrorAlert
+              type="error"
+              header="Couldn't load this quiz"
+              onRetry={() => void query.refetch()}
+            >
+              {apiErrorMessage(query.error)}
+            </ErrorAlert>
           ) : !figures ? (
             <Skeleton
               className="h-40 w-full rounded-xl"

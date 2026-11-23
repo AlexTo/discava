@@ -196,9 +196,30 @@ test('the instructor and an administrator revoke and restore a certificate from 
   await test.step('an administrator revokes it as refunded', async () => {
     await adminPage.goto(`${PORTALS.admin}/certificates`);
     await signIn(adminPage, cara);
+    await adminPage.getByRole('button', { name: 'Look up' }).click();
+    await expect(adminPage.getByText('Enter a certificate ID.')).toBeVisible();
+    await expect(adminPage.getByLabel('Certificate ID')).toBeFocused();
+    await screenshot(adminPage, 'admin-certificate-lookup-empty');
+
+    // Same length and alphabet, one character different.
+    const last = certificateId.endsWith('0') ? '1' : '0';
+    await adminPage
+      .getByLabel('Certificate ID')
+      .fill(`${certificateId.slice(0, -1)}${last}`);
+    await adminPage.getByRole('button', { name: 'Look up' }).click();
+    await expect(
+      adminPage.getByText('No certificate has this ID'),
+    ).toBeVisible();
+    await screenshot(adminPage, 'admin-certificate-not-found');
+
     await adminPage.getByLabel('Certificate ID').fill(certificateId);
     await adminPage.getByRole('button', { name: 'Look up' }).click();
     await adminPage.getByRole('button', { name: 'Revoke' }).click();
+    await adminPage.getByLabel('Reason').selectOption('other');
+    await adminPage.getByRole('button', { name: 'Revoke certificate' }).click();
+    await expect(adminPage.getByText('Enter a note to say why.')).toBeVisible();
+    await expect(adminPage.getByLabel('Note')).toBeFocused();
+    await screenshot(adminPage, 'admin-certificate-revoke-other-needs-note');
     await adminPage.getByLabel('Reason').selectOption('refunded');
     await adminPage.getByRole('button', { name: 'Revoke certificate' }).click();
     await expect(

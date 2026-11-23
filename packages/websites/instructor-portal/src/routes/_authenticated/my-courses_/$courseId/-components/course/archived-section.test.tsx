@@ -320,11 +320,19 @@ describe('ArchivedSection', () => {
       renderSection();
 
       for (const name of [
-        'Delete video Item b permanently (not possible: students have used it)',
-        'Delete module Module Two permanently (not possible: students have used it)',
+        'Delete video Item b permanently',
+        'Delete module Module Two permanently',
       ]) {
-        expect(screen.getByRole('button', { name })).toBeDisabled();
+        const button = screen.getByRole('button', { name });
+        expect(button).toBeDisabled();
+        expect(button).toHaveAccessibleDescription(
+          'Students have used it, so it stays archived.',
+        );
       }
+      // The reason is text beside the button, not a tooltip.
+      expect(
+        screen.getAllByText('Students have used it, so it stays archived.'),
+      ).toHaveLength(2);
     });
   });
 

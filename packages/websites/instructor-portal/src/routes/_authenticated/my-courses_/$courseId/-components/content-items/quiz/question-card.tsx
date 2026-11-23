@@ -138,6 +138,15 @@ export function QuestionCard({
 
   const summary = plainText(question.prompt) || 'No question written yet';
 
+  // Which fields the problems are about, for aria-invalid. The list of
+  // problems has an id the invalid fields are described by.
+  const problemsId = `${question.questionId}-problems`;
+  const promptInvalid = problems.includes('Write the question.');
+  const correctInvalid = problems.some((problem) =>
+    problem.startsWith('Mark '),
+  );
+  const describedBy = problems.length > 0 ? problemsId : undefined;
+
   // Each option with its correct marker: a radio (inside the RadioGroup below)
   // for single choice, a checkbox for multiple.
   const options = (
@@ -148,6 +157,8 @@ export function QuestionCard({
             <RadioGroupItem
               value={option.optionId}
               aria-label={`Option ${index + 1} is correct`}
+              aria-invalid={correctInvalid}
+              aria-describedby={correctInvalid ? describedBy : undefined}
             />
           ) : (
             <Checkbox
@@ -157,6 +168,8 @@ export function QuestionCard({
               }
               disabled={readOnly}
               aria-label={`Option ${index + 1} is correct`}
+              aria-invalid={correctInvalid}
+              aria-describedby={correctInvalid ? describedBy : undefined}
             />
           )}
           <Input
@@ -165,6 +178,12 @@ export function QuestionCard({
             aria-label={`Option ${index + 1}`}
             placeholder={`Option ${index + 1}`}
             maxLength={500}
+            aria-invalid={!option.text.trim() && problems.length > 0}
+            aria-describedby={
+              !option.text.trim() && problems.length > 0
+                ? describedBy
+                : undefined
+            }
           />
           {!readOnly && (
             <>
@@ -268,7 +287,10 @@ export function QuestionCard({
           question. */}
         <CollapsibleContent className="space-y-4 border-t px-4 py-4">
           {problems.length > 0 && (
-            <ul className="list-disc space-y-0.5 pl-5 text-sm text-destructive">
+            <ul
+              id={problemsId}
+              className="list-disc space-y-0.5 pl-5 text-sm text-destructive"
+            >
               {problems.map((problem) => (
                 <li key={problem}>{problem}</li>
               ))}
@@ -284,6 +306,8 @@ export function QuestionCard({
                 value={question.prompt}
                 onChange={(prompt) => update({ prompt })}
                 ariaLabel={label}
+                invalid={promptInvalid}
+                describedBy={promptInvalid ? describedBy : undefined}
                 minHeightClass="min-h-16"
               />
             )}

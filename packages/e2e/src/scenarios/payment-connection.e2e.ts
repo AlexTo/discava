@@ -110,6 +110,13 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     if (!(await keyField.isVisible())) {
       await admin.getByRole('button', { name: 'Replace key' }).click();
     }
+    // Submitting empty explains itself beside the field and sends nothing.
+    await admin
+      .getByRole('button', { name: /Connect Stripe|Save key/ })
+      .click();
+    await expect(admin.getByText('Enter a Stripe secret key.')).toBeVisible();
+    await expect(keyField).toBeFocused();
+    await screenshot(admin, 'payments-empty-key');
     await keyField.fill('sk_test_local');
     await expect(keyField).toHaveAttribute('type', 'password');
     await admin

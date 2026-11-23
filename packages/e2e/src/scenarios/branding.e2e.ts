@@ -56,13 +56,16 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
 }) => {
   const page = await browser.newPage();
 
-  await test.step('the Branding page starts from what is saved, with Save disabled', async () => {
+  await test.step('the Branding page starts from what is saved, and Save says there is nothing to save', async () => {
     await page.goto(`${PORTALS.admin}/settings/branding`);
     await signIn(page, newUser('Cara', ['admin']));
     await expect(
       page.getByRole('heading', { level: 1, name: 'Branding' }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByText('Nothing to save: the branding is as saved.').last(),
+    ).toBeVisible();
     await screenshot(page, 'branding page before changes');
   });
 
@@ -71,7 +74,7 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
       .getByLabel('Upload icon')
       .setInputFiles(png('icon.png', 512, 256));
     await expect(page.getByRole('alert')).toContainText('wrong shape');
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
     await screenshot(page, 'refused non-square icon');
   });
 
@@ -99,7 +102,7 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
         .getByText('Branding saved. Visitors see it within 5 minutes.')
         .last(),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
     await expect(
       page.locator('header img[alt$=" logo"]').first(),
     ).toHaveAttribute('src', /brand\/logo\//);
@@ -214,14 +217,15 @@ test('an administrator sets the platform name and share image, and visitors see 
   const page = await browser.newPage();
   const name = uniqueName('Acme Academy').slice(0, 50);
 
-  await test.step('a blank name is refused, with its message, and Save is disabled', async () => {
+  await test.step('a blank name is refused, with its message beside the field on Save', async () => {
     await page.goto(`${PORTALS.admin}/settings/branding`);
     await signIn(page, newUser('Cara', ['admin']));
     await page.getByLabel('Name', { exact: true }).fill('');
     await expect(page.getByRole('alert')).toContainText(
       'The name must be 1–50 characters.',
     );
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
     await screenshot(page, 'blank platform name refused');
   });
 
@@ -309,12 +313,13 @@ test('an administrator chooses a brand colour, and a hard-to-read one is refused
   await page.goto(`${PORTALS.admin}/settings/branding`);
   await signIn(page, newUser('Cara', ['admin']));
 
-  await test.step('a colour that is hard to read is refused and Save stays disabled', async () => {
+  await test.step('a colour that is hard to read is refused beside the field on Save', async () => {
     await page.getByLabel('Hex colour').fill('#777777');
     await expect(page.getByRole('alert')).toContainText(
       'Text on this colour would be hard to read. Choose a darker or lighter shade.',
     );
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByLabel('Hex colour')).toBeFocused();
     await screenshot(page, 'brand colour refused');
   });
 

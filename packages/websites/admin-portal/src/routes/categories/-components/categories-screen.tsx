@@ -34,6 +34,8 @@ interface Category {
   courseCount: number;
 }
 
+const NAME_PROBLEM = 'Enter a name for the category.';
+
 export function CategoriesScreen() {
   usePageTitle('Categories');
   const trpc = useAdminApi();
@@ -43,6 +45,10 @@ export function CategoriesScreen() {
     queryClient.invalidateQueries({ queryKey: trpc.category.list.queryKey() });
 
   const [newName, setNewName] = useState('');
+  const [addProblem, setAddProblem] = useState<string>();
+  const [renameProblem, setRenameProblem] = useState<string>();
+  const addField = useRef<HTMLInputElement>(null);
+  const renameField = useRef<HTMLInputElement>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string }>();
   const [archiving, setArchiving] = useState<Category>();
   const [announcement, setAnnouncement] = useState('');
@@ -77,23 +83,31 @@ export function CategoriesScreen() {
         setAnnouncement(`${archiving?.name ?? 'Category'} archived.`);
         await refresh();
         archivedId.current = variables.id;
+        setArchiving(undefined);
       },
-      onSettled: () => setArchiving(undefined),
     }),
   );
 
   const onAdd = (event: FormEvent) => {
     event.preventDefault();
+    if (!newName.trim()) {
+      setAddProblem(NAME_PROBLEM);
+      addField.current?.focus();
+      return;
+    }
     create.mutate({ name: newName });
   };
   const onRename = (event: FormEvent) => {
     event.preventDefault();
+    if (renaming && !renaming.name.trim()) {
+      setRenameProblem(NAME_PROBLEM);
+      renameField.current?.focus();
+      return;
+    }
     if (renaming) {
       rename.mutate({ id: renaming.id, name: renaming.name });
     }
   };
-
-  const error = create.error ?? rename.error ?? archive.error;
 
   return (
     <div className="space-y-6">
@@ -107,41 +121,56 @@ export function CategoriesScreen() {
 
       <StatusMessage message={announcement} visuallyHidden />
 
-      {error && (
-        <ErrorAlert type="error" header="That didn't work">
-          {apiErrorMessage(error)}
-        </ErrorAlert>
-      )}
-
-      <form className="flex max-w-md items-end gap-2" onSubmit={onAdd}>
-        <div className="flex-1 space-y-1">
-          <label htmlFor="new-category" className="text-sm font-medium">
-            New category name
-          </label>
-          <Input
-            id="new-category"
-            value={newName}
-            maxLength={60}
-            onChange={(event) => {
-              setNewName(event.target.value);
-              create.reset();
-            }}
-            placeholder="e.g. Science"
-          />
+      <form className="max-w-md space-y-3" noValidate onSubmit={onAdd}>
+        <div className="flex items-end gap-2">
+          <div className="flex-1 space-y-1">
+            <label htmlFor="new-category" className="text-sm font-medium">
+              New category name
+            </label>
+            <Input
+              id="new-category"
+              ref={addField}
+              aria-invalid={Boolean(addProblem ?? create.error)}
+              aria-describedby={
+                addProblem || create.error ? 'new-category-error' : undefined
+              }
+              value={newName}
+              maxLength={60}
+              onChange={(event) => {
+                setNewName(event.target.value);
+                setAddProblem(undefined);
+                create.reset();
+              }}
+              placeholder="e.g. Science"
+            />
+          </div>
+          <PendingButton
+            type="submit"
+            pending={create.isPending}
+            pendingLabel="Adding…"
+          >
+            Add category
+          </PendingButton>
         </div>
-        <PendingButton
-          type="submit"
-          disabled={!newName.trim()}
-          pending={create.isPending}
-          pendingLabel="Adding…"
-        >
-          Add category
-        </PendingButton>
+        <div id="new-category-error">
+          {addProblem && (
+            <p className="text-sm text-destructive">{addProblem}</p>
+          )}
+          {create.isError && (
+            <ErrorAlert type="error" header="Couldn't add the category">
+              {apiErrorMessage(create.error)}
+            </ErrorAlert>
+          )}
+        </div>
       </form>
 
       {categories.isPending && <LoadingState label="Loading the categories…" />}
       {categories.isError && (
-        <ErrorAlert type="error" header="Couldn't load the categories">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the categories"
+          onRetry={() => categories.refetch()}
+        >
           {apiErrorMessage(categories.error)}
         </ErrorAlert>
       )}
@@ -174,49 +203,73 @@ export function CategoriesScreen() {
               >
                 <td className="min-w-0 break-words py-2 [overflow-wrap:anywhere] max-sm:block max-sm:py-0 max-sm:[grid-area:name]">
                   {renaming?.id === category.id ? (
-                    <form className="flex flex-wrap gap-2" onSubmit={onRename}>
-                      <Input
-                        className="min-w-0 flex-1 basis-40"
-                        aria-label={`New name for ${category.name}`}
-                        autoFocus
-                        onKeyDown={(event) => {
-                          if (event.key === 'Escape') {
+                    <form className="space-y-2" noValidate onSubmit={onRename}>
+                      <div className="flex flex-wrap gap-2">
+                        <Input
+                          ref={renameField}
+                          aria-invalid={Boolean(renameProblem ?? rename.error)}
+                          aria-describedby={
+                            renameProblem || rename.error
+                              ? 'rename-category-error'
+                              : undefined
+                          }
+                          className="min-w-0 flex-1 basis-40"
+                          aria-label={`New name for ${category.name}`}
+                          autoFocus
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                              setRenaming(undefined);
+                              rename.reset();
+                              focusRename(category.id);
+                            }
+                          }}
+                          value={renaming.name}
+                          maxLength={60}
+                          onChange={(event) => {
+                            setRenaming({
+                              id: category.id,
+                              name: event.target.value,
+                            });
+                            setRenameProblem(undefined);
+                            rename.reset();
+                          }}
+                        />
+                        <PendingButton
+                          type="submit"
+                          size="sm"
+                          pending={rename.isPending}
+                          pendingLabel="Saving…"
+                        >
+                          Save
+                        </PendingButton>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
                             setRenaming(undefined);
                             rename.reset();
                             focusRename(category.id);
-                          }
-                        }}
-                        value={renaming.name}
-                        maxLength={60}
-                        onChange={(event) => {
-                          setRenaming({
-                            id: category.id,
-                            name: event.target.value,
-                          });
-                          rename.reset();
-                        }}
-                      />
-                      <PendingButton
-                        type="submit"
-                        size="sm"
-                        disabled={!renaming.name.trim()}
-                        pending={rename.isPending}
-                        pendingLabel="Saving…"
-                      >
-                        Save
-                      </PendingButton>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setRenaming(undefined);
-                          rename.reset();
-                          focusRename(category.id);
-                        }}
-                      >
-                        Cancel
-                      </Button>
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                      <div id="rename-category-error">
+                        {renameProblem && (
+                          <p className="text-sm text-destructive">
+                            {renameProblem}
+                          </p>
+                        )}
+                        {rename.isError && (
+                          <ErrorAlert
+                            type="error"
+                            header="Couldn't rename the category"
+                          >
+                            {apiErrorMessage(rename.error)}
+                          </ErrorAlert>
+                        )}
+                      </div>
                     </form>
                   ) : (
                     category.name
@@ -253,6 +306,7 @@ export function CategoriesScreen() {
                       variant="outline"
                       onClick={() => {
                         setRenaming({ id: category.id, name: category.name });
+                        setRenameProblem(undefined);
                         rename.reset();
                       }}
                     >
@@ -277,7 +331,12 @@ export function CategoriesScreen() {
 
       <AlertDialog
         open={archiving !== undefined}
-        onOpenChange={(open) => !open && setArchiving(undefined)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setArchiving(undefined);
+            archive.reset();
+          }
+        }}
       >
         <AlertDialogContent
           onCloseAutoFocus={(event) => {
@@ -300,6 +359,11 @@ export function CategoriesScreen() {
                 : 'No course has it.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {archive.isError && (
+            <ErrorAlert type="error" header="Couldn't archive the category">
+              {apiErrorMessage(archive.error)}
+            </ErrorAlert>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <PendingButton

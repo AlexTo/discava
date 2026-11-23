@@ -481,17 +481,27 @@ describe('LessonContentItemsRow', () => {
       ).toBeInTheDocument();
     });
 
-    it('disables the Questions button, with the reason, while the video has no playable version', () => {
-      renderRow({ contentItems: [readyVideo({ status: 'pending' })] });
+    it.each([
+      ['pending', 'Processing…'],
+      ['failed', 'Processing failed'],
+    ])(
+      'disables Questions and shows a "%s" video as "%s", as text',
+      (status, badge) => {
+        renderRow({ contentItems: [readyVideo({ status })] });
 
-      const button = screen.getByRole('button', {
-        name: 'Questions for Lecture',
-      });
-      expect(button).toBeDisabled();
-      expect(button).toHaveAttribute(
-        'title',
-        expect.stringMatching(/no playable version/),
-      );
+        const button = screen.getByRole('button', {
+          name: 'Questions for Lecture',
+        });
+        expect(button).toBeDisabled();
+        expect(button).not.toHaveAttribute('title');
+        expect(screen.getByText(badge)).toBeVisible();
+      },
+    );
+
+    it('shows no processing badge for a ready video', () => {
+      renderRow({ contentItems: [readyVideo()] });
+
+      expect(screen.queryByText(/^Processing/)).not.toBeInTheDocument();
     });
 
     it('enables it for a video being replaced over a version that plays', () => {

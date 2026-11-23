@@ -32,20 +32,26 @@ export function KeyForm({
   onCancel?: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const [hasKey, setHasKey] = useState(false);
+  const [problem, setProblem] = useState<string>();
 
   return (
     <form
       className="max-w-md space-y-3"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         const field = input.current;
         const secretKey = field?.value.trim() ?? '';
-        if (!field || secretKey === '' || disabled) {
+        if (!field || disabled) {
+          return;
+        }
+        if (secretKey === '') {
+          setProblem('Enter a Stripe secret key.');
+          field.focus();
           return;
         }
         field.value = '';
-        setHasKey(false);
+        setProblem(undefined);
         onSubmit(secretKey);
       }}
     >
@@ -63,15 +69,21 @@ export function KeyForm({
           autoComplete="off"
           spellCheck={false}
           disabled={disabled}
-          onChange={(event) => setHasKey(event.target.value.trim() !== '')}
+          aria-invalid={Boolean(problem)}
+          aria-describedby={problem ? 'stripe-secret-key-error' : undefined}
+          onChange={() => setProblem(undefined)}
         />
+        {problem && (
+          <p id="stripe-secret-key-error" className="text-sm text-destructive">
+            {problem}
+          </p>
+        )}
       </div>
       <div className="flex gap-2">
         {/* The field is emptied on submit, so while the request runs the
             button relies on `pending` alone, keeping it focusable. */}
         <PendingButton
           type="submit"
-          disabled={!hasKey && !pending}
           pending={pending}
           pendingLabel={pendingLabel}
         >

@@ -449,7 +449,30 @@ describe('VideoCaptionsDialog', () => {
       within(confirm).getByRole('button', { name: 'Remove caption' }),
     );
 
-    expect(await screen.findByText('Try again')).toBeVisible();
+    expect(await within(confirm).findByText('Try again')).toBeVisible();
+    expect(
+      within(confirm).getByText("Couldn't remove the caption"),
+    ).toBeVisible();
+  });
+
+  it('loads the captions again on Try again', async () => {
+    let attempts = 0;
+    const rendered = renderDialog({
+      'contentItem.createVideoUrl': () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return videoUrl([auto], 'ready');
+      },
+    });
+    const dialog = await open(rendered);
+
+    await rendered.user.click(
+      await within(dialog).findByRole('button', { name: 'Try again' }),
+    );
+
+    expect(await within(dialog).findByText('English')).toBeInTheDocument();
   });
 
   describe('translations', () => {

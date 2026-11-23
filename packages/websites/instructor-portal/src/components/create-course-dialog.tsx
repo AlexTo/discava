@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -24,6 +25,7 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
@@ -42,6 +44,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const navigatingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const trpc = useInstructorApi();
   const createCourse = useMutation(trpc.course.create.mutationOptions());
 
@@ -111,11 +114,15 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
         </DialogHeader>
 
         <form
+          ref={formRef}
+          noValidate
           className="space-y-6"
           onSubmit={(event) => {
             event.preventDefault();
             event.stopPropagation();
-            void form.handleSubmit();
+            void form
+              .handleSubmit()
+              .then(() => focusFirstInvalid(formRef.current));
           }}
         >
           {createCourse.isError && (
@@ -157,13 +164,20 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
                         }
                         placeholder="e.g. Foundations of Environmental Science"
                         aria-invalid={Boolean(error)}
+                        aria-describedby={`${field.name}-${error ? 'error' : 'hint'}`}
                       />
                       {error ? (
-                        <p className="text-xs text-destructive">
+                        <p
+                          id={`${field.name}-error`}
+                          className="text-xs text-destructive"
+                        >
                           {error.message}
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground">
+                        <p
+                          id={`${field.name}-hint`}
+                          className="text-xs text-muted-foreground"
+                        >
                           Use a clear title that students will recognise.
                         </p>
                       )}
@@ -189,8 +203,10 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
                         className="min-h-32 resize-y"
                         placeholder="Describe what students will learn and who this course is for."
                         aria-invalid={Boolean(error)}
+                        aria-describedby={`${field.name}-note`}
                       />
                       <p
+                        id={`${field.name}-note`}
                         className={`text-right text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}
                       >
                         {error
@@ -208,13 +224,15 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
             <Button variant="outline" type="button" onClick={close}>
               Cancel
             </Button>
-            <form.Subscribe
-              selector={(state) => [state.canSubmit, state.isSubmitting]}
-            >
-              {([canSubmit, isSubmitting]) => (
-                <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                  {isSubmitting ? 'Saving…' : 'Save'}
-                </Button>
+            <form.Subscribe selector={(state) => state.isSubmitting}>
+              {(isSubmitting) => (
+                <PendingButton
+                  type="submit"
+                  pending={isSubmitting}
+                  pendingLabel="Saving…"
+                >
+                  Save
+                </PendingButton>
               )}
             </form.Subscribe>
           </footer>

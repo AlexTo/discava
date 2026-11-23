@@ -5,7 +5,6 @@
 import type { IPaymentStatus } from '@discava/admin-api';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
-import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -137,18 +136,12 @@ export function PaymentsScreen() {
         <LoadingState label="Loading the payment settings…" />
       )}
       {statusQuery.isError && (
-        <ErrorAlert type="error" header="Couldn't load the payment settings">
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the payment settings"
+          onRetry={() => statusQuery.refetch()}
+        >
           {apiErrorMessage(statusQuery.error)}
-          <PendingButton
-            variant="outline"
-            size="sm"
-            className="ml-2"
-            pending={statusQuery.isFetching}
-            pendingLabel="Trying again…"
-            onClick={() => statusQuery.refetch()}
-          >
-            Try again
-          </PendingButton>
         </ErrorAlert>
       )}
 

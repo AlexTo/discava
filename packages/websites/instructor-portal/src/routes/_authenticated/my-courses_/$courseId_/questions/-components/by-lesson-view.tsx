@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { PostCard } from '@discava/common-shadcn/discussion/post-card';
@@ -97,14 +98,13 @@ export function ByLessonView({ courseId }: { courseId: string }) {
   }
   if (course.isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p className="text-destructive">
-          {apiErrorMessage(course.error, "Couldn't load the lessons.")}
-        </p>
-        <Button variant="outline" size="sm" onClick={() => course.refetch()}>
-          Try again
-        </Button>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the lessons"
+        onRetry={() => void course.refetch()}
+      >
+        {apiErrorMessage(course.error, "Couldn't load the lessons.")}
+      </ErrorAlert>
     );
   }
   if (!course.data) {

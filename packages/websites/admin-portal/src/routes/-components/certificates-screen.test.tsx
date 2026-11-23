@@ -75,9 +75,52 @@ describe('the Certificates screen', () => {
     });
     await lookUp(rendered);
 
+    const status = (await screen.findByText('No certificate has this ID'))
+      .parentElement!;
+    expect(status).toHaveAttribute('role', 'status');
+    expect(status).toHaveTextContent(
+      "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3.",
+    );
     expect(
-      await screen.findByText('Certificate not found'),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Try again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers Try again when the lookup fails', async () => {
+    let fail = true;
+    const rendered = render({
+      'certificate.get': () => {
+        if (fail) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return valid;
+      },
+    });
+    await lookUp(rendered);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't look up the certificate",
+    );
+    fail = false;
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Try again' }),
+    );
+    expect(await screen.findByText('Sam Learner')).toBeInTheDocument();
+  });
+
+  it('checks an empty ID on submit, focuses the field and sends nothing', async () => {
+    const rendered = render();
+    const lookUpButton = screen.getByRole('button', { name: 'Look up' });
+    expect(lookUpButton).toBeEnabled();
+    await rendered.user.click(lookUpButton);
+
+    const field = screen.getByLabelText('Certificate ID');
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Enter a certificate ID.');
+    expect(rendered.calls.some((c) => c.path === 'certificate.get')).toBe(
+      false,
+    );
   });
 
   it('revokes with Order refunded', async () => {
@@ -102,7 +145,7 @@ describe('the Certificates screen', () => {
     );
   });
 
-  it('needs a note for Other', async () => {
+  it('checks for a note on submit when the reason is Other', async () => {
     const rendered = render();
     await lookUp(rendered);
     await rendered.user.click(
@@ -110,13 +153,17 @@ describe('the Certificates screen', () => {
     );
     await rendered.user.selectOptions(screen.getByLabelText('Reason'), 'other');
 
-    expect(
-      screen.getByRole('button', { name: 'Revoke certificate' }),
-    ).toBeDisabled();
-    await rendered.user.type(screen.getByLabelText('Note'), 'Why');
-    expect(
-      screen.getByRole('button', { name: 'Revoke certificate' }),
-    ).toBeEnabled();
+    const submit = screen.getByRole('button', { name: 'Revoke certificate' });
+    expect(submit).toBeEnabled();
+    await rendered.user.click(submit);
+
+    const note = screen.getByLabelText('Note');
+    expect(note).toHaveFocus();
+    expect(note).toHaveAttribute('aria-invalid', 'true');
+    expect(note).toHaveAccessibleDescription(/Enter a note to say why\./);
+    expect(rendered.calls.some((c) => c.path === 'certificate.revoke')).toBe(
+      false,
+    );
   });
 
   it('restores a revoked certificate', async () => {
@@ -181,6 +228,45 @@ describe('the Certificates screen', () => {
 describe('the Certificates screen, with the keyboard', () => {
   const statuses = () =>
     screen.getAllByRole('status').map((status) => status.textContent);
+
+  it('asks before Escape discards a typed note, and Keep editing keeps it', async () => {
+    const rendered = render();
+    await lookUp(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Revoke' }),
+    );
+    await rendered.user.type(await screen.findByLabelText('Note'), 'Why');
+
+    await rendered.user.keyboard('{Escape}');
+    expect(await screen.findByText('Discard unsaved changes?')).toBeVisible();
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Keep editing' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Discard unsaved changes?')).toBeNull(),
+    );
+    expect(screen.getByLabelText('Note')).toHaveValue('Why');
+  });
+
+  it('closes on Escape with nothing typed, and Cancel then reopen shows an empty note', async () => {
+    const rendered = render();
+    await lookUp(rendered);
+    const revoke = await screen.findByRole('button', { name: 'Revoke' });
+    await rendered.user.click(revoke);
+    await screen.findByRole('dialog');
+    await rendered.user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await rendered.user.click(revoke);
+    await rendered.user.type(await screen.findByLabelText('Note'), 'Why');
+    await rendered.user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
+
+    await rendered.user.click(revoke);
+    expect(await screen.findByLabelText('Note')).toHaveValue('');
+  });
 
   it('returns focus to Revoke when the dialog is dismissed', async () => {
     const rendered = render();

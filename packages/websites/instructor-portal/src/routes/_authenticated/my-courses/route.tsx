@@ -225,7 +225,11 @@ function RouteComponent() {
             <LoadingState label="Loading your courses…" />
           </div>
         ) : coursesQuery.isError ? (
-          <ErrorAlert type="error" header="Couldn't load your courses">
+          <ErrorAlert
+            type="error"
+            header="Couldn't load your courses"
+            onRetry={() => void coursesQuery.refetch()}
+          >
             {apiErrorMessage(coursesQuery.error)}
           </ErrorAlert>
         ) : visibleCourses.length > 0 ? (
@@ -295,6 +299,27 @@ function RouteComponent() {
               </Card>
             ))}
           </div>
+        ) : courses.length === 0 ? (
+          <Card className="border-dashed py-12 text-center">
+            <CardContent>
+              <BookOpen className="mx-auto size-8 text-muted-foreground" />
+              <h3 className="mt-4 font-semibold">
+                You don't teach any courses yet
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create your first course to start teaching.
+              </p>
+              <div className="mt-4 flex justify-center">
+                <CreateCourseDialog
+                  trigger={
+                    <Button>
+                      <CirclePlus /> Create course
+                    </Button>
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
         ) : (
           <Card className="border-dashed py-12 text-center">
             <CardContent>

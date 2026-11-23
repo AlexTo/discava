@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
@@ -108,6 +109,21 @@ describe('LandingPageChecklist', () => {
       .map((link) => link.getAttribute('aria-label'));
     expect(names).toHaveLength(5);
     expect(new Set(names).size).toBe(5);
+  });
+
+  it('says the profile could not be checked, with a Try again', async () => {
+    const onRetryProfile = vi.fn();
+    renderChecklist({ profileFailed: true, onRetryProfile });
+
+    const profile = line('Your profile (headline and photo)');
+    expect(within(profile).getByRole('alert')).toHaveTextContent(
+      "Couldn't check this.",
+    );
+    expect(within(profile).queryByText('Checking…')).not.toBeInTheDocument();
+    await userEvent.click(
+      within(profile).getByRole('button', { name: 'Try again' }),
+    );
+    expect(onRetryProfile).toHaveBeenCalledOnce();
   });
 
   it('links to the public page only when one is given', () => {

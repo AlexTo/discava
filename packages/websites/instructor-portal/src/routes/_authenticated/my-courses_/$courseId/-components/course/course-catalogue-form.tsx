@@ -7,6 +7,7 @@ import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -204,6 +205,20 @@ export function CourseCatalogueForm({
               </option>
             ))}
           </select>
+          {categories.isError && (
+            <p role="alert" className="text-sm text-destructive">
+              Couldn't load the categories.{' '}
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0"
+                onClick={() => void categories.refetch()}
+              >
+                Try again
+              </Button>
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="catalogue-level">Level</Label>

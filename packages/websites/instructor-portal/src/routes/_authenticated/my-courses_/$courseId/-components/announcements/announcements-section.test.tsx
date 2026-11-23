@@ -29,13 +29,35 @@ const item = (n: number, extra = {}) => ({
   ...extra,
 });
 
-const render = (archived: boolean, list: (input: unknown) => unknown) =>
+const render = (
+  archived: boolean,
+  list: (input: unknown) => unknown,
+  draft = false,
+) =>
   renderWithInstructorApi(
-    <AnnouncementsSection courseId="course-1" archived={archived} />,
+    <AnnouncementsSection
+      courseId="course-1"
+      archived={archived}
+      draft={draft}
+    />,
     { handlers: { 'announcement.list': list } },
   );
 
 describe('AnnouncementsSection', () => {
+  it('says to publish the course first, instead of showing the form, on a draft', async () => {
+    render(false, () => ({ items: [] }), true);
+
+    expect(
+      screen.getByText('Publish the course to post announcements.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Post announcement' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('No announcements yet.'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the empty state and the form', async () => {
     render(false, () => ({ items: [] }));
     expect(

@@ -48,6 +48,26 @@ describe('CreateAssignmentDialog', () => {
     expect(calls).toEqual([]);
   });
 
+  it('focuses the first invalid field and ties each error to its field', async () => {
+    const { user } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'New assignment' }));
+    await user.click(screen.getByRole('button', { name: 'Create assignment' }));
+
+    const title = screen.getByLabelText('Assignment title');
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(title).toBeInvalid();
+    expect(title).toHaveAccessibleDescription('Assignment title is required');
+    const instructions = screen.getByLabelText('Instructions');
+    expect(instructions).toHaveAttribute('aria-invalid', 'true');
+    expect(instructions).toHaveAccessibleDescription(
+      'Write the instructions students will follow',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Create assignment' }),
+    ).toBeEnabled();
+  });
+
   it.each(['0', '1001', '2.5'])('rejects %s max points', async (points) => {
     const { calls, user } = renderDialog();
 

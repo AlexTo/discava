@@ -28,6 +28,7 @@ export function DeleteLessonDialog({
   title,
   archive,
   usedItems = 0,
+  itemCount = 0,
   noun = 'lesson',
   trigger,
 }: {
@@ -40,6 +41,8 @@ export function DeleteLessonDialog({
   archive: boolean;
   // How many of its items students have used, for the warning on archiving.
   usedItems?: number;
+  // How many items it holds, deleted with it in a draft course.
+  itemCount?: number;
   // What the lesson is called: 'lesson', or 'assignment'.
   noun?: string;
   trigger: ReactNode;
@@ -74,7 +77,11 @@ export function DeleteLessonDialog({
           <AlertDialogDescription>
             {archive
               ? `Students will no longer see "${title}" or its content. Their progress and results are kept, and the ${noun} can be restored.`
-              : `Are you sure you want to delete "${title}"? This can't be undone.`}
+              : `Are you sure you want to delete "${title}"${
+                  itemCount > 0
+                    ? ` and its ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`
+                    : ''
+                }? This can't be undone.`}
           </AlertDialogDescription>
           {archive && studentActivityNote({ items: usedItems }) && (
             <p className="text-sm font-medium text-amber-700 dark:text-amber-400">

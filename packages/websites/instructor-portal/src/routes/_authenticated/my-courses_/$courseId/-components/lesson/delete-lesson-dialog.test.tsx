@@ -46,6 +46,16 @@ describe('DeleteLessonDialog', () => {
       expect(calls).toEqual([]);
     });
 
+    it('says how many items are deleted with the lesson', async () => {
+      const { user } = renderDialog({ itemCount: 3 });
+
+      await user.click(screen.getByRole('button', { name: 'Remove lesson' }));
+
+      expect(screen.getByRole('alertdialog')).toHaveTextContent(
+        'Are you sure you want to delete "Welcome" and its 3 items? This can\'t be undone.',
+      );
+    });
+
     it('deletes the lesson, closes, and refreshes the course view', async () => {
       const { calls, queryClient, optionsProxy, user } = renderDialog(
         {},
