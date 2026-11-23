@@ -80,6 +80,8 @@ interface Scenario {
   openIssueBodies?: string[];
   earlierPrs?: string[];
   dryRun?: boolean;
+  /** `gh pr create` fails with this error. */
+  createError?: Error;
 }
 
 const runScenario = (scenario: Scenario = {}) => {
@@ -105,6 +107,9 @@ const runScenario = (scenario: Scenario = {}) => {
         return (scenario.earlierPrs ?? []).join('\n');
       }
       if (command === 'pr' && subcommand === 'create') {
+        if (scenario.createError) {
+          throw scenario.createError;
+        }
         created.push({
           title: arg(args, '--title'),
           head: arg(args, '--head'),
@@ -172,6 +177,47 @@ describe('archive-specs', () => {
     });
     expect(created).toEqual([]);
     expect(logs.join('\n')).toContain('already has');
+  });
+
+  it('pushes the branch and links to the pull request form when the token may not open one', () => {
+    // What execFileSync throws: the CLI's stderr is on the error.
+    const createError = Object.assign(
+      new Error('Command failed: gh pr create'),
+      {
+        stderr:
+          'pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)\n',
+      },
+    );
+    const { created, logs } = runScenario({ createError });
+
+    expect(created).toEqual([]);
+    const warning = logs.find((line) => line.startsWith('::warning::'));
+    const link = new URL(warning?.split('Open it here: ')[1] ?? '');
+    expect(link.origin + link.pathname).toBe(
+      `https://github.com/o/r/compare/main...archive-spec/${DONE}`,
+    );
+    expect(link.searchParams.get('expand')).toBe('1');
+    expect(link.searchParams.get('title')).toBe(
+      'chore(specs): archive certificates',
+    );
+    expect(link.searchParams.get('body')).toContain(`specs/_archive/${DONE}/`);
+    // A maintainer's pull request starts the PR checks by itself.
+    expect(link.searchParams.get('body')).not.toContain('close and reopen');
+
+    // The branch is on the remote, and the checkout is back where it was.
+    expect(
+      execFileSync('git', ['branch', '--list', `archive-spec/${DONE}`], {
+        cwd: remote,
+        encoding: 'utf8',
+      }),
+    ).toContain(`archive-spec/${DONE}`);
+    expect(existsSync(join(root, 'specs', DONE))).toBe(true);
+  });
+
+  it('fails on any other error opening the pull request', () => {
+    expect(() =>
+      runScenario({ createError: new Error('HTTP 502: Bad Gateway') }),
+    ).toThrow('HTTP 502');
   });
 
   it('only lists what it would archive on a dry run', () => {

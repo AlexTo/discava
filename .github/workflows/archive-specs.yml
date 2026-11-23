@@ -8,8 +8,11 @@ name: Archive Specs
 # archive specs that were already finished.
 # Skips a spec with an open agent issue, and one that already had an archive
 # pull request (closing it unmerged keeps the spec live).
-# Needs the repository setting "Allow GitHub Actions to create and approve
-# pull requests". The rules are in
+# The workflow's token can push the archive branch but not open the pull
+# request: that needs the repository setting "Allow GitHub Actions to create
+# and approve pull requests", which stays off because it also lets a workflow
+# approve one. The run warns with a link that opens the pull request, filled
+# in, for a maintainer to submit. The rules are in
 # packages/tooling/agent/src/agent-issues/archive-specs.ts.
 
 on:
@@ -34,6 +37,8 @@ permissions:
   contents: write
   # To read the open agent issues.
   issues: read
+  # To find an earlier archive pull request, and to open one should the
+  # repository setting ever be turned on.
   pull-requests: write
 
 jobs:

@@ -32,6 +32,11 @@ import {
 // changes on main, or by hand. A spec is skipped while an agent issue for it
 // is open, and once an archive pull request was opened for it: closing one
 // unmerged keeps the spec live for good (move it by hand later).
+// The workflow's token may push the branch but not open the pull request: the
+// repository setting that would let it also lets a workflow approve one, so
+// it stays off. The run then warns with a link that opens the pull request,
+// already filled in, for a maintainer to submit; until someone does, each run
+// pushes the branch again and repeats the warning.
 // DRY_RUN=true only lists what it would archive.
 
 export interface Deps {
@@ -83,17 +88,48 @@ const foldersWithOpenIssues = (repository: string, gh: Deps['gh']) =>
       .filter((folder): folder is string => folder !== undefined),
   );
 
-const prBody = (folder: string): string =>
+// A pull request the workflow's token opens starts no PR checks; one a
+// maintainer opens from the link does.
+const prBody = (folder: string, openedBy: 'workflow' | 'maintainer'): string =>
   [
     `Every task in \`${livePath(folder)}/tasks.md\` is ticked, so this moves the spec to \`${archivedPath(folder)}/\` (see \`specs/README.md\`, "When to archive").`,
     '',
-    'Opened by the **Archive Specs** workflow, which also fixed the links to and from the folder: relative Markdown links, and plain mentions of its path such as the design page\'s "Spec" link and code comments.',
+    `${openedBy === 'workflow' ? 'Opened' : 'The branch was prepared'} by the **Archive Specs** workflow, which also fixed the links to and from the folder: relative Markdown links, and plain mentions of its path such as the design page\'s "Spec" link and code comments.`,
     '',
     `Before merging, look for mentions of the old path it could not fix, such as one split across two lines: \`git grep -n "${featureName(folder)}" -- ':!specs/${ARCHIVE_FOLDER}'\`.`,
     '',
-    'Pull requests opened by a workflow do not start the PR checks: close and reopen this one to run them. Close it without merging to keep the spec live; the workflow will not open another for it.',
+    `${openedBy === 'workflow' ? 'Pull requests opened by a workflow do not start the PR checks: close and reopen this one to run them. ' : ''}Close it without merging to keep the spec live; the workflow will not open another for it.`,
     '',
   ].join('\n');
+
+// What GitHub answers when the repository setting "Allow GitHub Actions to
+// create and approve pull requests" is off.
+const NOT_PERMITTED = 'not permitted to create or approve pull requests';
+
+const isNotPermitted = (error: unknown): boolean => {
+  const { message, stderr } = error as { message?: unknown; stderr?: unknown };
+  return `${String(message ?? '')}\n${String(stderr ?? '')}`.includes(
+    NOT_PERMITTED,
+  );
+};
+
+/** The page that opens the pull request with its title and body filled in. */
+export const openPullRequestUrl = ({
+  repository,
+  base,
+  branch,
+  title,
+  body,
+}: {
+  repository: string;
+  base: string;
+  branch: string;
+  title: string;
+  body: string;
+}): string =>
+  `https://github.com/${repository}/compare/${base}...${branch}?${new URLSearchParams(
+    { expand: '1', title, body },
+  )}`;
 
 export const run = ({ env, gh, git, log }: Deps): void => {
   const repository = env.GITHUB_REPOSITORY;
@@ -173,19 +209,36 @@ export const run = ({ env, gh, git, log }: Deps): void => {
       `Every task in its tasks.md is ticked. Links to and from the folder now name ${archivedPath(folder)}/.`,
     ]);
     git(['push', '--quiet', '--force', 'origin', branch]);
-    const url = gh([
-      'pr',
-      'create',
-      '--base',
-      base,
-      '--head',
-      branch,
-      '--title',
-      title,
-      '--body-file',
-      bodyFile(prBody(folder)),
-    ]).trim();
-    notice(`Opened ${url}`);
+    try {
+      const url = gh([
+        'pr',
+        'create',
+        '--base',
+        base,
+        '--head',
+        branch,
+        '--title',
+        title,
+        '--body-file',
+        bodyFile(prBody(folder, 'workflow')),
+      ]).trim();
+      notice(`Opened ${url}`);
+    } catch (error) {
+      if (!isNotPermitted(error)) {
+        throw error;
+      }
+      log(
+        `::warning::Pushed ${branch}, but this workflow may not open pull requests. Open it here: ${openPullRequestUrl(
+          {
+            repository,
+            base,
+            branch,
+            title,
+            body: prBody(folder, 'maintainer'),
+          },
+        )}`,
+      );
+    }
     git(['switch', '--quiet', '--detach', start]);
   }
 };

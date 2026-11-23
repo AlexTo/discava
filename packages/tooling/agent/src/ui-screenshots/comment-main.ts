@@ -14,11 +14,12 @@ import { addedPictures, commentBody, MARKER } from './pictures.js';
 // scenarios took. SCREENSHOTS_DIR holds the downloaded `e2e-screenshots-*`
 // artifacts, one folder each.
 //
-// The list also goes in the job summary. An agent's pull request is locked
-// (agent-lock.yml), and GitHub refuses the Actions token a comment on a
-// locked conversation whatever its permissions, so for one of those the
-// summary is the only place the list appears. Unlocking it to comment would
-// let anyone comment in between, which the lock is there to stop.
+// The list also goes in the job summary. A pull request can be locked (Post-
+// merge Verify locks the ones it hands the test agent), and GitHub refuses
+// the Actions token a comment on a locked conversation whatever its
+// permissions, so for one of those the summary is the only place the list
+// appears. Unlocking it to comment would let anyone comment in between,
+// which the lock is there to stop.
 const {
   GITHUB_REPOSITORY,
   GITHUB_STEP_SUMMARY,
