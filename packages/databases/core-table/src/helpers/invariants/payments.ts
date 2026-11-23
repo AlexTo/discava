@@ -200,7 +200,7 @@ export const checkEnrolmentOrderMatches = (
       order.courseId !== enrolment.courseId
     ) {
       problem = 'its order is for another student or course';
-    } else if (order.status === 'paid') {
+    } else if (order.status === 'paid' && enrolment.status !== 'dropped') {
       problem = undefined;
     } else if (
       order.status === 'refunded' &&

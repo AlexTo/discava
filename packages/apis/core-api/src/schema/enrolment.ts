@@ -41,8 +41,20 @@ export const MyEnrolmentInputSchema = z.object({
 
 export type IMyEnrolmentInput = z.output<typeof MyEnrolmentInputSchema>;
 
+// The enrolment as the student sees it: `paidFor` says whether it came from a
+// purchase (it names an order), without exposing the order.
+export const MyCourseEnrolmentSchema = EnrolmentSchema.extend({
+  paidFor: z.boolean(),
+});
+
 // null when the caller isn't enrolled in the course.
-export const MyEnrolmentOutputSchema = EnrolmentSchema.nullable();
+export const MyEnrolmentOutputSchema = MyCourseEnrolmentSchema.nullable();
+
+export const UnenrolInputSchema = z.object({
+  courseId: z.string(),
+});
+
+export const UnenrolOutputSchema = MyCourseEnrolmentSchema;
 
 export const MyEnrolmentsInputSchema = z.object({}).optional();
 

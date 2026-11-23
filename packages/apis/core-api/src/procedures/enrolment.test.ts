@@ -4,10 +4,15 @@
  */
 
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
-import { NotEnrolledError } from '@discava/core-table';
+import { EnrolmentPaidForError, NotEnrolledError } from '@discava/core-table';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { dismissFirstLessonPrompt, enrol, myEnrolment } from './enrolment.js';
+import {
+  dismissFirstLessonPrompt,
+  enrol,
+  myEnrolment,
+  unenrol,
+} from './enrolment.js';
 
 const {
   enrolmentGet,
@@ -18,6 +23,7 @@ const {
   transactionGo,
   courseGet,
   restoreFreeEnrolment,
+  unenrolFromCourse,
   dismissPrompt,
   mockModule,
 } = await vi.hoisted(async () => ({
@@ -26,6 +32,7 @@ const {
   courseCheckWhere: vi.fn(),
   transactionGo: vi.fn(),
   restoreFreeEnrolment: vi.fn(),
+  unenrolFromCourse: vi.fn(),
   dismissPrompt: vi.fn(),
   ...(await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     enrolment: ['get'],
@@ -37,11 +44,17 @@ const {
 vi.mock('@discava/core-table', async (importOriginal) =>
   mockModule(await importOriginal(), {
     restoreFreeEnrolment,
+    unenrolFromCourse,
     dismissFirstLessonPrompt: dismissPrompt,
   }),
 );
 
-const router = t.router({ enrol, myEnrolment, dismissFirstLessonPrompt });
+const router = t.router({
+  enrol,
+  myEnrolment,
+  unenrol,
+  dismissFirstLessonPrompt,
+});
 
 const USER_SUB = 'student-1';
 
@@ -290,7 +303,7 @@ describe('an enrolment with an orderId', () => {
   it('is returned without the orderId by myEnrolment', async () => {
     storedEnrolment(paid);
     const result = await callAsUser().myEnrolment({ courseId: 'course-1' });
-    expect(result).toEqual(enrolment);
+    expect(result).toEqual({ ...enrolment, paidFor: true });
     expect(result).not.toHaveProperty('orderId');
   });
 });
@@ -299,7 +312,7 @@ describe('myEnrolment', () => {
   it('returns the caller’s enrolment in the course', async () => {
     await expect(
       callAsUser().myEnrolment({ courseId: 'course-1' }),
-    ).resolves.toEqual(enrolment);
+    ).resolves.toEqual({ ...enrolment, paidFor: false });
     expect(enrolmentGet).toHaveBeenCalledWith({
       courseId: 'course-1',
       userId: USER_SUB,
@@ -409,5 +422,95 @@ describe('dismissFirstLessonPrompt', () => {
     await expect(
       callAsUser().dismissFirstLessonPrompt({ courseId: 'course-1' }),
     ).resolves.toMatchObject({ firstLessonPromptState: 'dismissed' });
+  });
+});
+
+describe('unenrol', () => {
+  const left = { ...enrolment, status: 'dropped' as const };
+  const reads = (...stored: unknown[]) => {
+    for (const data of stored) {
+      enrolmentGet.mockReturnValueOnce({
+        go: vi.fn().mockResolvedValue({ data }),
+      });
+    }
+  };
+
+  it('rejects unauthenticated callers', async () => {
+    await expect(
+      callAnonymously().unenrol({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('ends the caller’s own enrolment and returns it', async () => {
+    reads(enrolment, left);
+    unenrolFromCourse.mockResolvedValue(true);
+
+    await expect(
+      callAsUser().unenrol({ courseId: 'course-1' }),
+    ).resolves.toEqual({ ...left, paidFor: false });
+    expect(unenrolFromCourse).toHaveBeenCalledWith({
+      coreTable: expect.anything(),
+      userId: USER_SUB,
+      courseId: 'course-1',
+      now: expect.any(String),
+    });
+  });
+
+  it('is NOT_FOUND without an enrolment', async () => {
+    storedEnrolment(null);
+    await expect(
+      callAsUser().unenrol({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(unenrolFromCourse).not.toHaveBeenCalled();
+  });
+
+  it('returns an already dropped enrolment as it is', async () => {
+    storedEnrolment(left);
+    await expect(
+      callAsUser().unenrol({ courseId: 'course-1' }),
+    ).resolves.toEqual({ ...left, paidFor: false });
+    expect(unenrolFromCourse).not.toHaveBeenCalled();
+  });
+
+  it('refuses a paid enrolment with the refund message', async () => {
+    reads({ ...enrolment, orderId: 'order-secret' });
+    unenrolFromCourse.mockRejectedValue(new EnrolmentPaidForError());
+
+    await expect(
+      callAsUser().unenrol({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'You bought this course; request a refund instead',
+    });
+  });
+
+  it('leaving a free course then enrolling restores the same enrolment', async () => {
+    reads(enrolment, left);
+    unenrolFromCourse.mockResolvedValue(true);
+    await callAsUser().unenrol({ courseId: 'course-1' });
+
+    cancelled(undefined, 'ConditionalCheckFailed');
+    reads(left, { ...enrolment, progressPercent: 0 });
+    restoreFreeEnrolment.mockResolvedValue('restored');
+    await expect(
+      callAsUser().enrol({ courseId: 'course-1' }),
+    ).resolves.toMatchObject({ status: 'active', courseId: 'course-1' });
+  });
+
+  it('leaving a grandfathered enrolment in a now priced course, then enrolling, must be purchased', async () => {
+    reads(enrolment, left);
+    unenrolFromCourse.mockResolvedValue(true);
+    await callAsUser().unenrol({ courseId: 'course-1' });
+
+    cancelled(undefined, 'ConditionalCheckFailed');
+    reads(left);
+    restoreFreeEnrolment.mockResolvedValue('course-unavailable');
+    storedCourse({ status: 'published', priceAmount: 4900 });
+    await expect(
+      callAsUser().enrol({ courseId: 'course-1' }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This course must be purchased',
+    });
   });
 });

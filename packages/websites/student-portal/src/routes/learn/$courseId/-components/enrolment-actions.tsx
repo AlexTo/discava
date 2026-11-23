@@ -114,15 +114,33 @@ export function EnrolmentActions({
   const enrol = useMutation(
     trpc.course.enrol.mutationOptions({
       onSuccess: (enrolment) => {
+        // enrol never reports whether the enrolment was bought: keep what was
+        // known, and a new or restored enrolment is never paid for.
         queryClient.setQueryData(
           trpc.course.myEnrolment.queryKey({ courseId }),
-          enrolment,
+          (current) => ({
+            ...enrolment,
+            paidFor: current?.paidFor ?? false,
+          }),
         );
         if (continueTo) {
           setEnrolledOpen(true);
         } else {
           startLearning(false);
         }
+      },
+    }),
+  );
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const unenrol = useMutation(
+    trpc.course.unenrol.mutationOptions({
+      onSuccess: (left) => {
+        setLeaveOpen(false);
+        queryClient.setQueryData(
+          trpc.course.myEnrolment.queryKey({ courseId }),
+          left,
+        );
       },
     }),
   );
@@ -281,6 +299,18 @@ export function EnrolmentActions({
       </p>
     ) : null;
 
+  // A student who did not pay can leave; one who did can only ask for a
+  // refund, so the two are never offered together.
+  const leaveSection = enrolment?.paidFor ? null : (
+    <Button
+      className="w-full"
+      variant="outline"
+      onClick={() => setLeaveOpen(true)}
+    >
+      Leave course
+    </Button>
+  );
+
   let action: React.ReactNode;
   if (!isAuthenticated) {
     action = (
@@ -322,6 +352,7 @@ export function EnrolmentActions({
             : 'Start learning',
         )}
         {refundSection}
+        {leaveSection}
       </>
     );
   } else if (enrolment?.status === 'completed') {
@@ -338,6 +369,7 @@ export function EnrolmentActions({
         </Badge>
         {learnLink('Review course')}
         {refundSection}
+        {leaveSection}
       </>
     );
   } else if (checkoutReturn.status === 'confirming') {
@@ -365,7 +397,7 @@ export function EnrolmentActions({
       </>
     );
   } else if (enrolment?.status === 'dropped') {
-    // A refunded or dropped student can buy a priced course again, or enrol
+    // A refunded student, or one who left, can buy a priced course again, or enrol
     // again in a free one (the API restores the enrolment, progress intact).
     action = (
       <>
@@ -462,6 +494,36 @@ export function EnrolmentActions({
           </DialogContent>
         </Dialog>
       ) : null}
+
+      <Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Leave course</DialogTitle>
+            <DialogDescription>
+              Your enrolment in {courseTitle} ends. Your progress is kept.
+              {pricedCourse
+                ? ' This course now has a price. To come back you would need to buy it.'
+                : ' You can enrol again at any time.'}
+            </DialogDescription>
+          </DialogHeader>
+          {unenrol.isError ? (
+            <ErrorAlert type="error" header="Couldn't leave the course">
+              {apiErrorMessage(unenrol.error)}
+            </ErrorAlert>
+          ) : null}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button
+              disabled={unenrol.isPending}
+              onClick={() => unenrol.mutate({ courseId })}
+            >
+              {unenrol.isPending ? 'Leaving…' : 'Leave course'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={refundOpen} onOpenChange={setRefundOpen}>
         <DialogContent>

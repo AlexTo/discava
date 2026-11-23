@@ -404,6 +404,7 @@ export {
   attachCheckoutSession,
   CHECKOUT_REUSE_MARGIN_SECONDS,
   CHECKOUT_TTL_SECONDS,
+  EnrolmentPaidForError,
   expireOrder,
   findOpenOrder,
   markRefundRequested,
@@ -422,6 +423,7 @@ export {
   type SettleResult,
   settleOrderPaid,
   startOrder,
+  unenrolFromCourse,
 } from './helpers/order.js';
 export {
   type Actor,

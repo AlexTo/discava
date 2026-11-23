@@ -47,6 +47,7 @@ const enrolment = (overrides: Record<string, unknown> = {}) => ({
   userId: 'student-1',
   status: 'active',
   progressPercent: 0,
+  paidFor: false,
   createdAt: '2026-10-02T00:00:00.000Z',
   updatedAt: '2026-10-02T00:00:00.000Z',
   ...overrides,
@@ -574,7 +575,7 @@ describe('EnrolmentActions: refunds', () => {
     renderPreview(
       {
         'course.publicView': () => priced,
-        'course.myEnrolment': () => enrolment(),
+        'course.myEnrolment': () => enrolment({ paidFor: true }),
         'payment.available': () => ({ available: true }),
         'payment.myOrder': () => order(),
         ...handlers,
@@ -804,5 +805,127 @@ describe('EnrolmentActions: refunds', () => {
       document.querySelectorAll('button svg[class*="arrow"]'),
     ).toHaveLength(0);
     expect(dialog.querySelector('svg[class*="arrow"]')).toBeNull();
+  });
+});
+
+describe('EnrolmentActions: leaving a course', () => {
+  const leaveButton = () =>
+    screen.findByRole('button', { name: 'Leave course' });
+
+  const renderLeave = (
+    handlers: Record<string, Handler> = {},
+    course_: Record<string, unknown> = course,
+  ) =>
+    renderPreview({
+      'course.publicView': () => course_,
+      'payment.available': () => ({ available: true }),
+      'payment.myOrder': () => null,
+      'course.myEnrolment': () => enrolment({ progressPercent: 40 }),
+      ...handlers,
+    });
+
+  it('offers Leave course to an enrolled student who did not pay, and confirms first', async () => {
+    const { user, calls } = renderLeave({
+      'course.unenrol': () => enrolment({ status: 'dropped' }),
+    });
+
+    await user.click(await leaveButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Leave course' });
+    expect(
+      within(dialog).getByText(/Your progress is kept/),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/now has a price/)).toBeNull();
+    expect(calls.map(({ path }) => path)).not.toContain('course.unenrol');
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Leave course' }),
+    );
+
+    expect(await screen.findByText('Your enrolment has ended.')).toBeVisible();
+    expect(
+      await screen.findByRole('button', { name: 'Enrol now' }),
+    ).toBeVisible();
+    expect(calls).toContainEqual({
+      path: 'course.unenrol',
+      input: { courseId: 'course-1' },
+    });
+    expect(screen.queryByRole('button', { name: 'Leave course' })).toBeNull();
+  });
+
+  it('offers it to a completed student too', async () => {
+    renderLeave({
+      'course.myEnrolment': () =>
+        enrolment({ status: 'completed', progressPercent: 100 }),
+    });
+    expect(await leaveButton()).toBeVisible();
+  });
+
+  it('warns that a course which now has a price must be bought to come back, and then offers Buy now', async () => {
+    const { user } = renderLeave(
+      { 'course.unenrol': () => enrolment({ status: 'dropped' }) },
+      { ...course, priceAmount: 2000, priceCurrency: 'USD' },
+    );
+
+    await user.click(await leaveButton());
+    const dialog = await screen.findByRole('dialog', { name: 'Leave course' });
+    expect(
+      within(dialog).getByText(/This course now has a price/),
+    ).toBeInTheDocument();
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Leave course' }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Buy now' }),
+    ).toBeVisible();
+    expect(screen.getByText('Your enrolment has ended.')).toBeVisible();
+  });
+
+  it('makes no call when the dialog is cancelled', async () => {
+    const { user, calls } = renderLeave();
+    await user.click(await leaveButton());
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(calls.map(({ path }) => path)).not.toContain('course.unenrol');
+  });
+
+  it('never shows Leave course beside Request a refund', async () => {
+    renderLeave(
+      {
+        'course.myEnrolment': () => enrolment({ paidFor: true }),
+        'payment.myOrder': () => ({
+          status: 'paid',
+          amount: 2000,
+          currency: 'USD',
+          paidAt: '2026-11-06T10:00:00.000Z',
+          refundWindowDays: 14,
+          refundableUntil: '2026-11-20T10:00:00.000Z',
+          canRequestRefund: true,
+        }),
+      },
+      { ...course, priceAmount: 2000, priceCurrency: 'USD' },
+    );
+    await screen.findByRole('button', { name: 'Request a refund' });
+    expect(screen.queryByRole('button', { name: 'Leave course' })).toBeNull();
+  });
+
+  it('shows an API refusal as an error alert', async () => {
+    const { user } = renderLeave({
+      'course.unenrol': () => {
+        throw new ApiError(
+          'PRECONDITION_FAILED',
+          'You bought this course; request a refund instead',
+        );
+      },
+    });
+    await user.click(await leaveButton());
+    const dialog = await screen.findByRole('dialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Leave course' }),
+    );
+    expect(
+      await within(dialog).findByText(
+        'You bought this course; request a refund instead',
+      ),
+    ).toBeVisible();
   });
 });

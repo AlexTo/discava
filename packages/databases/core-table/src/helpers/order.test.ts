@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   attachCheckoutSession,
+  EnrolmentPaidForError,
   expireOrder,
   findOpenOrder,
   markRefundRequested,
@@ -20,6 +21,7 @@ import {
   restoreFreeEnrolment,
   settleOrderPaid,
   startOrder,
+  unenrolFromCourse,
 } from './order.js';
 import { createFakeCoreTable } from './payment-fake.test.js';
 
@@ -854,5 +856,47 @@ describe('markRefundRequested', () => {
     expect(
       fake.row('order', { orderId: 'order-1' })?.refundRequestedAt,
     ).toBeUndefined();
+  });
+});
+
+describe('unenrolFromCourse', () => {
+  const key = { courseId: 'course-1', userId: 'user-1' };
+  const leave = (fake: ReturnType<typeof setup>['fake']) =>
+    unenrolFromCourse({ coreTable: fake.coreTable, ...key, now: LATER });
+  const enrolled = (extra = {}) => ({
+    ...key,
+    status: 'active',
+    progressPercent: 40,
+    ...extra,
+  });
+
+  it.each([
+    [{ status: 'active' }],
+    [{ status: 'completed', completedAt: NOW, progressPercent: 100 }],
+  ])('drops an unpaid enrolment (%j), keeping its progress', async (extra) => {
+    const { fake } = setup();
+    fake.put('enrolment', enrolled(extra));
+    expect(await leave(fake)).toBe(true);
+    const row = fake.row('enrolment', key);
+    expect(row).toMatchObject({ ...extra, status: 'dropped' });
+    expect(row).not.toHaveProperty('orderId');
+  });
+
+  it('refuses an enrolment with an order and leaves it unchanged', async () => {
+    const { fake } = setup();
+    fake.put('enrolment', enrolled({ orderId: 'order-1' }));
+    await expect(leave(fake)).rejects.toBeInstanceOf(EnrolmentPaidForError);
+    expect(fake.row('enrolment', key)).toMatchObject({
+      status: 'active',
+      orderId: 'order-1',
+    });
+  });
+
+  it('does nothing for a dropped or missing enrolment', async () => {
+    const { fake } = setup();
+    expect(await leave(fake)).toBe(false);
+    fake.put('enrolment', enrolled({ status: 'dropped' }));
+    expect(await leave(fake)).toBe(false);
+    expect(fake.row('enrolment', key)?.status).toBe('dropped');
   });
 });
