@@ -421,7 +421,7 @@ export function CourseModules({
                             variant="ghost"
                             size="icon-sm"
                             type="button"
-                            aria-label={`Edit module ${moduleIndex + 1}`}
+                            aria-label={`Edit module ${module.title}`}
                             className="-ml-2"
                           >
                             <PencilLine />
@@ -444,7 +444,7 @@ export function CourseModules({
                             variant="ghost"
                             size="icon-sm"
                             type="button"
-                            aria-label={`Remove module ${moduleIndex + 1}`}
+                            aria-label={`Remove module ${module.title}`}
                             className="-ml-2"
                           >
                             <Trash2 />
