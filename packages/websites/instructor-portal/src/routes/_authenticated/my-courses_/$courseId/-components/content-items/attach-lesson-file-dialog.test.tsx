@@ -73,6 +73,13 @@ const pickFile = async (
 const title = () => screen.getByLabelText('Title');
 
 describe('AttachLessonFileDialog', () => {
+  it('describes the dialog with its intro', async () => {
+    const { user } = openDialog();
+    await user.click(screen.getByRole('button', { name: 'File' }));
+
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(/\S/);
+  });
+
   it('keeps Save enabled, and on Save with nothing chosen focuses the title and says what is missing', async () => {
     const { calls, user } = openDialog();
     await user.click(screen.getByRole('button', { name: 'File' }));

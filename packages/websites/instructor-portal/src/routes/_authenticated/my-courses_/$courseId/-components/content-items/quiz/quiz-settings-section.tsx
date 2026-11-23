@@ -110,7 +110,10 @@ export function QuizSettingsSection({
             <div className="space-y-1.5">
               <span className="text-sm font-medium">Attempts allowed</span>
               <div className="flex h-9 items-center gap-3">
-                <div className="flex items-center gap-2">
+                <Label
+                  htmlFor={`${ids}-unlimited`}
+                  className="items-center gap-2 font-normal"
+                >
                   <Checkbox
                     id={`${ids}-unlimited`}
                     checked={quiz.settings.attemptsAllowed === null}
@@ -121,10 +124,8 @@ export function QuizSettingsSection({
                     }
                     disabled={readOnly}
                   />
-                  <Label htmlFor={`${ids}-unlimited`} className="font-normal">
-                    Unlimited
-                  </Label>
-                </div>
+                  Unlimited
+                </Label>
                 {quiz.settings.attemptsAllowed !== null && (
                   <Input
                     type="number"
@@ -180,7 +181,10 @@ export function QuizSettingsSection({
                 each attempt.
               </p>
             </div>
-            <div className="flex items-center gap-2 self-end sm:h-9">
+            <Label
+              htmlFor={`${ids}-shuffle`}
+              className="items-center gap-2 self-end font-normal sm:h-9"
+            >
               <Checkbox
                 id={`${ids}-shuffle`}
                 checked={quiz.settings.shuffleOptions}
@@ -189,10 +193,8 @@ export function QuizSettingsSection({
                 }
                 disabled={readOnly}
               />
-              <Label htmlFor={`${ids}-shuffle`} className="font-normal">
-                Shuffle the options for each student
-              </Label>
-            </div>
+              Shuffle the options for each student
+            </Label>
           </fieldset>
         </CardContent>
       </Card>

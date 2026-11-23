@@ -53,6 +53,13 @@ const renderEditDialog = (handlers = {}) =>
 
 describe('EditLessonTextDialog', () => {
   describe('adding a new text item', () => {
+    it('describes the dialog with its intro', async () => {
+      const { user } = renderAddDialog();
+
+      await user.click(screen.getByRole('button', { name: 'Add text' }));
+      expect(screen.getByRole('dialog')).toHaveAccessibleDescription(/\S/);
+    });
+
     it('titles the dialog "Add text", and keeps Save enabled while saying what is missing', async () => {
       const { calls, user } = renderAddDialog();
 
