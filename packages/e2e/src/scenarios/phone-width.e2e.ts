@@ -885,6 +885,12 @@ test('the instructor pages fit a phone with long content', async ({
   await test.step('the most-missed table keeps Misses and Miss rate inside the card at desktop width', async () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    // The title's long word must not widen the page beside the sidebar.
+    await expect(
+      page.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course analytics at desktop width');
     const card = page.getByRole('article', { name: 'Long question' });
     await expect(card).toContainText('6 students', { timeout: 30_000 });
     await card.getByRole('button', { name: 'Show analysis' }).click();
