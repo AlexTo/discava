@@ -268,7 +268,11 @@ export function LessonContentItemsRow({
               variant="ghost"
               size="sm"
               type="button"
-              aria-label={`Questions for ${item.title}`}
+              aria-label={
+                item.questions?.length
+                  ? `Questions (${item.questions.length}) for ${item.title}`
+                  : `Questions for ${item.title}`
+              }
               disabled={!isPlayable(item)}
               className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
             >

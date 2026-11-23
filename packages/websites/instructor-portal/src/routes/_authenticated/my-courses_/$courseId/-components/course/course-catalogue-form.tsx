@@ -289,7 +289,7 @@ export function CourseCatalogueForm({
                   {!readOnly && (
                     <button
                       type="button"
-                      className="text-xs underline"
+                      className="inline-flex min-h-6 items-center text-xs underline"
                       aria-label={`Remove tag ${tag}`}
                       onClick={() => {
                         // Focus the next tag's Remove, else the previous one's,

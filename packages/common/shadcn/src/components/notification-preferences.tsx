@@ -6,6 +6,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useState } from 'react';
 import { ErrorAlert } from './error-alert';
 import { LoadingState } from './loading-state';
+import { Label } from './ui/label';
 import { Switch } from './ui/switch';
 
 export interface NotificationPreferenceRow {
@@ -86,16 +87,23 @@ export function NotificationPreferences({
             ? true
             : (pending[preference.type] ?? preference.emailEnabled);
           const labelId = `notification-pref-${preference.type}`;
+          const switchId = `${labelId}-switch`;
           return (
             <li
               key={preference.type}
               className="flex items-center justify-between gap-4 p-4"
             >
               <div className="min-w-0">
-                <p id={labelId} className="font-medium">
+                <Label
+                  htmlFor={switchId}
+                  className="font-medium leading-normal"
+                >
                   {preference.name}
-                </p>
-                <p className="text-sm text-muted-foreground">
+                </Label>
+                <p
+                  id={`${labelId}-description`}
+                  className="text-sm text-muted-foreground"
+                >
                   {preference.description}
                 </p>
                 {failure?.type === preference.type ? (
@@ -115,11 +123,11 @@ export function NotificationPreferences({
                   <span role="status">Saved</span>
                 ) : null}
                 <Switch
-                  aria-labelledby={labelId}
+                  id={switchId}
                   aria-describedby={
                     failure?.type === preference.type
-                      ? `${labelId}-error`
-                      : undefined
+                      ? `${labelId}-description ${labelId}-error`
+                      : `${labelId}-description`
                   }
                   checked={checked}
                   disabled={preference.required}

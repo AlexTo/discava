@@ -275,12 +275,13 @@ export function GradingForm({
           ) : null}
         </div>
         <div className="space-y-2">
-          <Label>Feedback</Label>
+          <Label id="grading-feedback-label">Feedback</Label>
           <RichTextEditor
             key={editorKey}
             value={feedback}
             onChange={setFeedback}
             ariaLabel="Feedback"
+            labelledBy="grading-feedback-label"
           />
         </div>
         {error ? (

@@ -59,7 +59,7 @@ test('an instructor manages discount codes on the Coupons screen', async ({
     await expect(instructor.getByText(code, { exact: true })).toBeVisible();
     await expect(instructor.getByText(/25% off/)).toBeVisible();
     await expect(instructor.getByText(/0 of 10 used/)).toBeVisible();
-    await expect(instructor.getByText('Active')).toBeVisible();
+    await expect(instructor.getByText('Active', { exact: true })).toBeVisible();
     await screenshot(instructor, 'coupons-list');
   });
 
@@ -88,10 +88,12 @@ test('an instructor manages discount codes on the Coupons screen', async ({
     await expect(instructor.getByText(/0 of 5 used/)).toBeVisible();
 
     await instructor.getByRole('button', { name: `Disable ${code}` }).click();
-    await expect(instructor.getByText('Disabled')).toBeVisible();
+    await expect(
+      instructor.getByText('Disabled', { exact: true }),
+    ).toBeVisible();
     await screenshot(instructor, 'coupons-disabled');
     await instructor.getByRole('button', { name: `Enable ${code}` }).click();
-    await expect(instructor.getByText('Active')).toBeVisible();
+    await expect(instructor.getByText('Active', { exact: true })).toBeVisible();
   });
 
   await test.step('an unused code is deleted after a confirmation', async () => {

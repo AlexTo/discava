@@ -436,7 +436,7 @@ describe('LessonContentItemsRow', () => {
       });
 
       expect(
-        screen.getByRole('button', { name: 'Questions for Lecture' }),
+        screen.getByRole('button', { name: 'Questions (3) for Lecture' }),
       ).toHaveTextContent('Questions (3)');
       expect(
         screen.getByRole('button', { name: 'Questions for Other' }),

@@ -347,9 +347,9 @@ describe('VideoQuestionsDialog', () => {
     await open(rendered);
     const { user } = rendered;
     const down = (n: number) =>
-      screen.getByRole('button', { name: `Move question ${n} down` });
+      screen.getByRole('button', { name: `Move down, question ${n}` });
     const up = (n: number) =>
-      screen.getByRole('button', { name: `Move question ${n} up` });
+      screen.getByRole('button', { name: `Move up, question ${n}` });
 
     expect(up(1)).toBeDisabled();
     expect(down(2)).toBeDisabled();
@@ -391,13 +391,13 @@ describe('VideoQuestionsDialog', () => {
     await open(rendered);
 
     await rendered.user.click(
-      screen.getByRole('button', { name: 'Move question 2 up' }),
+      screen.getByRole('button', { name: 'Move up, question 2' }),
     );
 
     await waitFor(() =>
       expect(
         // It is question 1 now.
-        screen.getByRole('button', { name: 'Move question 1 down' }),
+        screen.getByRole('button', { name: 'Move down, question 1' }),
       ).toHaveFocus(),
     );
   });
