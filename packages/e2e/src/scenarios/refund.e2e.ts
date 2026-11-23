@@ -67,10 +67,18 @@ test('a full refund ends the enrolment, keeps the record, and buying again resto
   ).toBeTruthy();
 
   await buy(student, course.courseId);
-  expect(
-    (await student.core.course.myEnrolment.query({ courseId: course.courseId }))
-      ?.progressPercent,
-  ).toBe(100);
+  // Progress is recalculated from the table's stream a few seconds on.
+  await expect
+    .poll(
+      async () =>
+        (
+          await student.core.course.myEnrolment.query({
+            courseId: course.courseId,
+          })
+        )?.progressPercent,
+      { timeout: 30_000 },
+    )
+    .toBe(100);
 
   await instructor.instructor.course.archive.mutate({
     courseId: course.courseId,
@@ -124,7 +132,17 @@ test('a refunded student of a course since made free enrols without paying', asy
     courseId: course.courseId,
   });
   expect(enrolment?.status).not.toBe('dropped');
-  expect(enrolment?.progressPercent).toBe(100);
+  await expect
+    .poll(
+      async () =>
+        (
+          await student.core.course.myEnrolment.query({
+            courseId: course.courseId,
+          })
+        )?.progressPercent,
+      { timeout: 30_000 },
+    )
+    .toBe(100);
 
   await instructor.instructor.course.archive.mutate({
     courseId: course.courseId,

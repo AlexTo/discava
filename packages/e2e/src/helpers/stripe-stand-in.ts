@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { apiUser } from './api.js';
+import { connectLocalStripe } from './api.js';
 
 // The local Stripe stand-in's controls, served by the event runner (see
 // specs/…/contracts/stripe-stand-in.md). Only the stand-in has them; the real
@@ -30,15 +30,13 @@ const control = async <T>(name: string, body: object): Promise<T> => {
   return (await response.json()) as T;
 };
 
-// Connects payments the way an administrator does, with the stand-in's key.
-// A no-op when already active, so every payment scenario can call it first: a
-// fresh local stack starts disconnected.
-export const connectStripeStandIn = async () => {
-  const { admin } = await apiUser('Carol', ['admin']);
-  const status = await admin.payment.status.query();
-  if (status.state === 'active') return;
-  await admin.payment.connect.mutate({ secretKey: API_KEY });
-};
+// Connects payments to the stand-in, the state every payment scenario needs
+// first: a fresh local stack starts disconnected. It registers the stand-in's
+// webhook endpoint and saves the key and signing secret itself
+// (`connectLocalStripe`) rather than asking admin-api's `payment.connect`,
+// because other scenarios leave a connection record without a key (see
+// `connectLocalPayments`), which `payment.connect` would take for connected.
+export const connectStripeStandIn = connectLocalStripe;
 
 // Pays, declines or cancels a checkout as the hosted page's buttons do,
 // without a browser. Returns the status the stand-in answered with: 303 to

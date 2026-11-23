@@ -103,11 +103,11 @@ test('the free route and a forged return grant nothing', async ({
 
   await test.step('a return that says success, with no payment, enrols no one', async () => {
     const page = await browser.newPage();
+    await page.goto(`${PORTALS.student}/my-learning`);
+    await signIn(page, newUser('Gus', ['student']));
     await page.goto(
       `${PORTALS.student}/learn/${course.courseId}?checkout=success`,
     );
-    await signIn(page, newUser('Gus', ['student']));
-    await page.waitForURL(/checkout=success/);
     await expect(page.getByText("You're enrolled in")).toHaveCount(0);
     await expect(
       page.getByText(/Confirming your payment|Buy now/).first(),
