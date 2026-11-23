@@ -358,10 +358,12 @@ describe('the Branding page', () => {
       }),
     );
     expect(
-      await screen.findByText(
-        'Branding saved. Visitors see it within 5 minutes.',
-      ),
-    ).toBeInTheDocument();
+      (
+        await screen.findAllByText(
+          'Branding saved. Visitors see it within 5 minutes.',
+        )
+      ).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
@@ -614,8 +616,83 @@ describe('the Branding page, as a page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Branding' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the branding…',
+    expect(
+      screen.getAllByRole('status').map((status) => status.textContent),
+    ).toContain('Loading the branding…');
+  });
+});
+
+describe('the Branding page, with the keyboard', () => {
+  it('returns focus to Reset all to default when its confirmation is dismissed', async () => {
+    const { user } = open();
+    await screen.findByLabelText('Upload logo');
+    const resetAll = screen.getByRole('button', {
+      name: 'Reset all to default',
+    });
+    await user.click(resetAll);
+    await screen.findByRole('alertdialog');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(resetAll).toHaveFocus());
+  });
+
+  it('announces a save once, in the status region', async () => {
+    const { user } = open({
+      'branding.save': (input) => ({ ...none, brand: input, revision: 1 }),
+    });
+    await user.type(await screen.findByLabelText('Name'), ' Academy');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').map((status) => status.textContent),
+      ).toContain('Branding saved. Visitors see it within 5 minutes.'),
     );
+    // The visible alert is not a second announcement.
+    expect(screen.queryByRole('status', { name: /saved/i })).toBeNull();
+    expect(
+      screen
+        .getAllByRole('status')
+        .filter((status) => /Branding saved/.test(status.textContent ?? '')),
+    ).toHaveLength(1);
+  });
+
+  it('keeps focus on a pending Save and sends nothing on a second press', async () => {
+    const { user, calls } = open({
+      'branding.save': () => new Promise(() => {}),
+    });
+    await user.type(await screen.findByLabelText('Name'), ' Academy');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const pending = await screen.findByRole('button', { name: 'Saving…' });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    pending.focus();
+    await user.click(pending);
+    expect(pending).toHaveFocus();
+    expect(calls.filter((c) => c.path === 'branding.save')).toHaveLength(1);
+  });
+
+  it('keeps focus on Reset to default while an upload runs', async () => {
+    const { user } = open({
+      'branding.get': () => ({
+        ...none,
+        brand: { ...none.brand, logoKey: `brand/logo/${NONCE}.png` },
+        revision: 1,
+      }),
+    });
+    await screen.findByLabelText('Upload logo');
+    put.mockReturnValue(new Promise(() => {}));
+    const reset = within(
+      screen.getByRole('region', { name: 'Logo' }),
+    ).getByRole('button', { name: 'Reset to default' });
+    reset.focus();
+    choose('Upload logo', file('logo.png', 'image/png'));
+
+    await waitFor(() => expect(reset).toHaveAttribute('aria-disabled', 'true'));
+    expect(reset).not.toBeDisabled();
+    expect(reset).toHaveFocus();
+    await user.click(reset);
+    expect(reset).toHaveFocus();
   });
 });

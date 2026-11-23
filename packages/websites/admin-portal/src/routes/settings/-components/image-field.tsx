@@ -8,7 +8,7 @@ import {
   checkBrandImage,
   checkBrandImageUpload,
 } from '@discava/common-branding/image-rules';
-import { Button } from '@discava/common-shadcn/components/ui/button';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
@@ -149,18 +149,19 @@ export function ImageField({
           />
           <p className="text-xs text-muted-foreground">{rules.description}</p>
           {onReset && (
-            <Button
+            <PendingButton
               type="button"
               variant="outline"
               size="sm"
-              disabled={uploading}
+              pending={uploading}
+              pendingLabel="Reset to default"
               onClick={() => {
                 setError(undefined);
                 onReset();
               }}
             >
               Reset to default
-            </Button>
+            </PendingButton>
           )}
           {uploading && (
             <p role="status" className="flex items-center gap-2 text-sm">

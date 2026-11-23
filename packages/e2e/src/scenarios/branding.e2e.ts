@@ -94,7 +94,10 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
   await test.step('saving confirms, and the admin portal shows the logo at once', async () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
     await expect(
@@ -246,7 +249,10 @@ test('an administrator sets the platform name and share image, and visitors see 
   await test.step('saving confirms, and the admin portal shows the name at once', async () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
     await expect(page.locator('header').first()).toContainText(name);
     await screenshot(page, 'name and share image saved');
@@ -326,7 +332,10 @@ test('an administrator chooses a brand colour, and a hard-to-read one is refused
   await test.step('saving confirms', async () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
     await screenshot(page, 'brand colour saved');
   });
@@ -432,7 +441,10 @@ test('the brand reaches every portal and public page, and the name can be hidden
     await page.getByLabel('Show the name beside the logo').click();
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
     await expect(
       page.locator('header').first().getByText(name, { exact: true }),
@@ -457,7 +469,10 @@ test('an administrator resets the brand to the default', async ({
     await page.getByLabel('Hex colour').fill('#1d4ed8');
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
   });
 
@@ -485,7 +500,10 @@ test('an administrator resets the brand to the default', async ({
   await test.step('saving makes the reset take effect', async () => {
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(
-      page.getByText('Branding saved. Visitors see it within 5 minutes.'),
+      // The last match is the visible alert; the first is the announcement.
+      page
+        .getByText('Branding saved. Visitors see it within 5 minutes.')
+        .last(),
     ).toBeVisible();
     await expect(
       page.locator('header img[alt$=" logo"]').first(),

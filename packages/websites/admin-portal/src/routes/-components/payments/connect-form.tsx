@@ -2,22 +2,32 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { useRef, useState } from 'react';
+import { type RefObject, useRef, useState } from 'react';
 
 // The secret key field. It is uncontrolled, so the key is never in a DOM
 // attribute, and it is emptied as soon as the form is submitted, whatever the
 // outcome.
 export function KeyForm({
   submitLabel,
+  pendingLabel,
+  pending,
   disabled,
+  keyFieldRef,
   onSubmit,
   onCancel,
 }: {
   submitLabel: string;
+  /** Shown on the submit button while the admin's own request runs. */
+  pendingLabel: string;
+  pending: boolean;
+  /** The field and Cancel are unavailable, whoever's request is running. */
   disabled: boolean;
+  /** So the screen can put focus in the field. */
+  keyFieldRef?: RefObject<HTMLInputElement | null>;
   onSubmit: (secretKey: string) => void;
   onCancel?: () => void;
 }) {
@@ -43,7 +53,12 @@ export function KeyForm({
         <Label htmlFor="stripe-secret-key">Stripe secret key</Label>
         <Input
           id="stripe-secret-key"
-          ref={input}
+          ref={(element) => {
+            input.current = element;
+            if (keyFieldRef) {
+              keyFieldRef.current = element;
+            }
+          }}
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -52,9 +67,14 @@ export function KeyForm({
         />
       </div>
       <div className="flex gap-2">
-        <Button type="submit" disabled={disabled || !hasKey}>
+        <PendingButton
+          type="submit"
+          disabled={!hasKey}
+          pending={pending}
+          pendingLabel={pendingLabel}
+        >
           {submitLabel}
-        </Button>
+        </PendingButton>
         {onCancel && (
           <Button
             type="button"

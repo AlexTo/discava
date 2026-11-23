@@ -5,9 +5,10 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -19,9 +20,10 @@ import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useAdminApi } from '../../../api';
 
 interface Category {
@@ -43,26 +45,39 @@ export function CategoriesScreen() {
   const [newName, setNewName] = useState('');
   const [renaming, setRenaming] = useState<{ id: string; name: string }>();
   const [archiving, setArchiving] = useState<Category>();
+  const [announcement, setAnnouncement] = useState('');
+  const returnFocus = useReturnFocus(archiving !== undefined);
+  // Each row's Rename button, so focus can land there after the row changes.
+  const renameButtons = useRef(new Map<string, HTMLButtonElement>());
+  const archivedId = useRef<string>(undefined);
+  const focusRename = (id: string) => renameButtons.current.get(id)?.focus();
 
   const create = useMutation(
     trpc.category.create.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (_data, variables) => {
         setNewName('');
+        setAnnouncement(`${variables.name.trim()} added.`);
         await refresh();
       },
     }),
   );
   const rename = useMutation(
     trpc.category.rename.mutationOptions({
-      onSuccess: async () => {
+      onSuccess: async (_data, variables) => {
         setRenaming(undefined);
+        setAnnouncement(`Renamed to ${variables.name.trim()}.`);
         await refresh();
+        focusRename(variables.id);
       },
     }),
   );
   const archive = useMutation(
     trpc.category.archive.mutationOptions({
-      onSuccess: refresh,
+      onSuccess: async (_data, variables) => {
+        setAnnouncement(`${archiving?.name ?? 'Category'} archived.`);
+        await refresh();
+        archivedId.current = variables.id;
+      },
       onSettled: () => setArchiving(undefined),
     }),
   );
@@ -90,6 +105,8 @@ export function CategoriesScreen() {
         </p>
       </header>
 
+      <StatusMessage message={announcement} visuallyHidden />
+
       {error && (
         <ErrorAlert type="error" header="That didn't work">
           {apiErrorMessage(error)}
@@ -112,9 +129,14 @@ export function CategoriesScreen() {
             placeholder="e.g. Science"
           />
         </div>
-        <Button type="submit" disabled={!newName.trim() || create.isPending}>
+        <PendingButton
+          type="submit"
+          disabled={!newName.trim()}
+          pending={create.isPending}
+          pendingLabel="Adding…"
+        >
           Add category
-        </Button>
+        </PendingButton>
       </form>
 
       {categories.isPending && <LoadingState label="Loading the categories…" />}
@@ -156,6 +178,14 @@ export function CategoriesScreen() {
                       <Input
                         className="min-w-0 flex-1 basis-40"
                         aria-label={`New name for ${category.name}`}
+                        autoFocus
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            setRenaming(undefined);
+                            rename.reset();
+                            focusRename(category.id);
+                          }
+                        }}
                         value={renaming.name}
                         maxLength={60}
                         onChange={(event) => {
@@ -166,13 +196,15 @@ export function CategoriesScreen() {
                           rename.reset();
                         }}
                       />
-                      <Button
+                      <PendingButton
                         type="submit"
                         size="sm"
-                        disabled={!renaming.name.trim() || rename.isPending}
+                        disabled={!renaming.name.trim()}
+                        pending={rename.isPending}
+                        pendingLabel="Saving…"
                       >
                         Save
-                      </Button>
+                      </PendingButton>
                       <Button
                         type="button"
                         size="sm"
@@ -180,6 +212,7 @@ export function CategoriesScreen() {
                         onClick={() => {
                           setRenaming(undefined);
                           rename.reset();
+                          focusRename(category.id);
                         }}
                       >
                         Cancel
@@ -209,6 +242,13 @@ export function CategoriesScreen() {
                 <td className="py-2 text-right max-sm:block max-sm:py-0 max-sm:text-left max-sm:[grid-area:actions]">
                   <div className="flex flex-wrap justify-end gap-2 max-sm:justify-start">
                     <Button
+                      ref={(element) => {
+                        if (element) {
+                          renameButtons.current.set(category.id, element);
+                        } else {
+                          renameButtons.current.delete(category.id);
+                        }
+                      }}
                       size="sm"
                       variant="outline"
                       onClick={() => {
@@ -239,7 +279,18 @@ export function CategoriesScreen() {
         open={archiving !== undefined}
         onOpenChange={(open) => !open && setArchiving(undefined)}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          onCloseAutoFocus={(event) => {
+            const id = archivedId.current;
+            archivedId.current = undefined;
+            if (id && renameButtons.current.has(id)) {
+              event.preventDefault();
+              focusRename(id);
+              return;
+            }
+            returnFocus.onCloseAutoFocus(event);
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Archive {archiving?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -251,16 +302,17 @@ export function CategoriesScreen() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(event) => {
-                event.preventDefault();
+            <PendingButton
+              pending={archive.isPending}
+              pendingLabel="Archiving…"
+              onClick={() => {
                 if (archiving) {
                   archive.mutate({ id: archiving.id });
                 }
               }}
             >
               Archive
-            </AlertDialogAction>
+            </PendingButton>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

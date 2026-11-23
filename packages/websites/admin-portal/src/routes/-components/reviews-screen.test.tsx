@@ -255,6 +255,140 @@ describe('the Reviews screen', () => {
   });
 });
 
+describe('the Reviews screen, with the keyboard', () => {
+  it('returns focus to Remove when the dialog is cancelled', async () => {
+    const rendered = render();
+    await pick(rendered);
+    const remove = await screen.findByRole('button', {
+      name: "Remove Sam L.'s review",
+    });
+    await rendered.user.click(remove);
+    await screen.findByRole('dialog');
+
+    await rendered.user.keyboard('{Escape}');
+
+    await waitFor(() => expect(remove).toHaveFocus());
+  });
+
+  it('focuses the removed review, announces it, and keeps the counter quiet', async () => {
+    let gone = false;
+    const rendered = render({
+      'review.list': () => ({
+        items: [
+          gone
+            ? { ...removed, reviewerId: 's1', reviewerName: 'Sam L.' }
+            : visible,
+        ],
+      }),
+      'review.remove': () => {
+        gone = true;
+        return visible;
+      },
+    });
+    await pick(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    const reason = within(dialog).getByLabelText('Reason');
+    expect(reason).toHaveAccessibleDescription('0/200');
+    expect(within(dialog).getByText('0/200')).not.toHaveAttribute('aria-live');
+    await rendered.user.type(reason, 'Spam');
+    await rendered.user.click(
+      within(dialog).getByRole('button', { name: 'Remove review' }),
+    );
+
+    const item = await screen.findByRole('listitem', {
+      name: 'Review by Sam L.',
+    });
+    await waitFor(() => expect(item).toHaveFocus());
+    expect(item).toHaveAttribute('tabindex', '-1');
+    await waitFor(() => expect(item).toHaveTextContent('Removed'));
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').map((status) => status.textContent),
+      ).toContain('Review removed.'),
+    );
+  });
+
+  it('focuses the first review that Load more adds', async () => {
+    const rendered = render({
+      'review.list': (input) =>
+        (input as { cursor?: string }).cursor
+          ? { items: [{ ...visible, reviewerId: 's9', reviewerName: 'Zed' }] }
+          : { items: [visible], cursor: 'next' },
+    });
+    await pick(rendered);
+
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Load more' }),
+    );
+
+    const added = await screen.findByRole('listitem', {
+      name: 'Review by Zed',
+    });
+    await waitFor(() => expect(added).toHaveFocus());
+  });
+
+  it('focuses the list when Load more adds nothing', async () => {
+    const rendered = render({
+      'review.list': (input) =>
+        (input as { cursor?: string }).cursor
+          ? { items: [] }
+          : { items: [visible], cursor: 'next' },
+    });
+    await pick(rendered);
+
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Load more' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('list', { name: 'Reviews' })).toHaveFocus(),
+    );
+  });
+
+  it('focuses the picker after More courses', async () => {
+    const rendered = render({
+      'review.courses': (input) =>
+        (input as { cursor?: string }).cursor
+          ? { items: [] }
+          : { ...courses, cursor: 'next' },
+    });
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'More courses' }),
+    );
+
+    await waitFor(() => expect(screen.getByLabelText('Course')).toHaveFocus());
+  });
+
+  it('keeps focus on a pending Remove review and sends nothing on a second press', async () => {
+    const rendered = render({
+      'review.remove': () => new Promise(() => {}),
+    });
+    await pick(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await rendered.user.type(within(dialog).getByLabelText('Reason'), 'Spam');
+    await rendered.user.click(
+      within(dialog).getByRole('button', { name: 'Remove review' }),
+    );
+
+    const pending = await within(dialog).findByRole('button', {
+      name: 'Removing…',
+    });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    pending.focus();
+    await rendered.user.click(pending);
+    expect(pending).toHaveFocus();
+    expect(
+      rendered.calls.filter((c) => c.path === 'review.remove'),
+    ).toHaveLength(1);
+  });
+});
+
 describe('the Reviews screen, as a page', () => {
   it('names the tab and says it is loading the courses', () => {
     render({ 'review.courses': () => new Promise(() => {}) });
@@ -263,17 +397,19 @@ describe('the Reviews screen, as a page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Reviews' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the courses…',
-    );
+    expect(
+      screen.getAllByRole('status').map((status) => status.textContent),
+    ).toContain('Loading the courses…');
   });
 
   it('says it is loading the reviews', async () => {
     const rendered = render({ 'review.list': () => new Promise(() => {}) });
     await pick(rendered);
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Loading the reviews…',
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').map((status) => status.textContent),
+      ).toContain('Loading the reviews…'),
     );
   });
 });

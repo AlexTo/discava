@@ -156,7 +156,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US4.
 
-- [ ] T019 [P] [US4] Replace `disabled={…isPending}` with `PendingButton` and the labels in research R-7's table (B-06, C-02, E-02, F-03):
+- [x] T019 [P] [US4] Replace `disabled={…isPending}` with `PendingButton` and the labels in research R-7's table (B-06, C-02, E-02, F-03):
   - categories: Add category, Rename's Save, the confirmation's Archive;
   - reviews: Remove review, Load more and More courses ("Loading more…"), and the two Try again buttons until T031 replaces them;
   - certificates: Revoke certificate, Restore certificate (Look up starts no mutation; research R-7);
@@ -164,25 +164,25 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - branding: Save (its spinner goes; the label says "Saving…"), and each image's Reset to default while its upload runs (F-09, in `R/settings/-components/image-field.tsx`).
 
   **Tests (change meaning, plan.md):** in each screen's test, a pending button has `aria-disabled="true"`, keeps focus, and a second press sends nothing. Replace `toBeDisabled()` assertions about pending buttons with these; keep `payments-screen.test.tsx`'s `toBeDisabled()` for the `changing` state, which is still `disabled`. In `packages/e2e/src/scenarios/branding.e2e.ts`, a Save that is pending is no longer `toBeDisabled()`; leave its unchanged/invalid assertions to T033.
-- [ ] T020 [US4] Test first in `categories-screen.test.tsx`, then in `categories-screen.tsx` (B-07, B-08, research R-8):
+- [x] T020 [US4] Test first in `categories-screen.test.tsx`, then in `categories-screen.tsx` (B-07, B-08, research R-8):
   - Rename focuses its field; Escape in the field cancels the rename;
   - after Save or Cancel, focus moves to that row's Rename (a `Map` of Rename buttons by id, filled by ref callbacks, focused after the list has refetched);
   - the Archive confirmation gets `useReturnFocus(open)`'s `onCloseAutoFocus`; after archiving, focus moves to the row's Rename.
-- [ ] T021 [US4] Test first in `reviews-screen.test.tsx`, then in `reviews-screen.tsx` (C-05, C-06):
+- [x] T021 [US4] Test first in `reviews-screen.test.tsx`, then in `reviews-screen.tsx` (C-05, C-06):
   - the Remove dialog gets `useReturnFocus`; after a removal, focus moves to the review's `li` (`tabIndex={-1}`, `aria-label` "Review by <name>"), which now says "Removed";
   - after Load more or More courses, focus moves to the first item it added, or, when it added none, to the list itself (`tabIndex={-1}`, named "Reviews", or the picker).
-- [ ] T022 [US4] Test first in `certificates-screen.test.tsx`, then in `certificates-screen.tsx` (D-03): both dialogs get `useReturnFocus`; after a revoke, focus moves to Restore, and after a restore, to Revoke.
-- [ ] T023 [US4] Test first in `payments-screen.test.tsx`, then in `payments-screen.tsx` and `payments/connect-form.tsx` (E-03): both dialogs get `useReturnFocus`; Replace key's Cancel focuses Replace key; Go back ("Keep the current key" after T042) and a failed save focus the key field, and a failed save's alert adds "Enter the key again to retry."; a successful connect or replace focuses the status card's Replace key; a successful disconnect focuses the key field (research R-8).
-- [ ] T024 [US4] Test first in `R/settings/-branding.test.tsx`, then in `R/settings/-components/branding-form.tsx` (F-07): the Reset-all confirmation gets `useReturnFocus`.
-- [ ] T025 [US4] Test first, then announce each result with one `StatusMessage` (`@discava/common-shadcn/components/status-message`) per screen, with the sentences in research R-9 (B-09, C-05, D-03, E-04, F-05):
+- [x] T022 [US4] Test first in `certificates-screen.test.tsx`, then in `certificates-screen.tsx` (D-03): both dialogs get `useReturnFocus`; after a revoke, focus moves to Restore, and after a restore, to Revoke.
+- [x] T023 [US4] Test first in `payments-screen.test.tsx`, then in `payments-screen.tsx` and `payments/connect-form.tsx` (E-03): both dialogs get `useReturnFocus`; Replace key's Cancel focuses Replace key; Go back ("Keep the current key" after T042) and a failed save focus the key field, and a failed save's alert adds "Enter the key again to retry."; a successful connect or replace focuses the status card's Replace key; a successful disconnect focuses the key field (research R-8).
+- [x] T024 [US4] Test first in `R/settings/-branding.test.tsx`, then in `R/settings/-components/branding-form.tsx` (F-07): the Reset-all confirmation gets `useReturnFocus`.
+- [x] T025 [US4] Test first, then announce each result with one `StatusMessage` (`@discava/common-shadcn/components/status-message`) per screen, with the sentences in research R-9 (B-09, C-05, D-03, E-04, F-05):
   - categories, reviews, certificates, payments, and branding (whose visible "Branding saved" alert stays, and is no longer the announcement);
   - the reason and note counters lose `aria-live`; each field gets `aria-describedby` with its counter's id (C-08, D-09).
 
   **Tests:** after each action the `status` region holds its sentence; the counters have no `aria-live`.
-- [ ] T052 [US4] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: with the keyboard alone, rename a category (Rename, type, Enter) and archive another; after each, assert focus is on that row's Rename. `screenshot()` the list after the archive.
-- [ ] T026 [US4] **Needs IP T040.** Test first in `AP/components/app-layout.test.ts(x)`: at a phone width (mock `useIsMobile`), choosing a page in the sidebar closes it; Escape returns focus to the sidebar button (A-03). No source change is expected.
+- [x] T052 [US4] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: with the keyboard alone, rename a category (Rename, type, Enter) and archive another; after each, assert focus is on that row's Rename. `screenshot()` the list after the archive.
+- [x] T026 [US4] **Needs IP T040.** Test first in `AP/components/app-layout.test.ts(x)`: at a phone width (mock `useIsMobile`), choosing a page in the sidebar closes it; Escape returns focus to the sidebar button (A-03). No source change is expected.
 - [ ] T027 [US4] (human) With a screen reader (NVDA or VoiceOver), do the actions in [quickstart.md](./quickstart.md) US4. Confirm each result is announced once, focus is where the table says, and the counters are quiet. Note anything else in the pull request.
-- [ ] T028 [US4] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T028 [US4] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

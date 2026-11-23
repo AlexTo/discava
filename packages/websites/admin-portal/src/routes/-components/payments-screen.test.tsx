@@ -297,6 +297,172 @@ describe('the Payments page', () => {
   });
 });
 
+describe('the Payments page, with the keyboard', () => {
+  const statuses = () =>
+    screen.getAllByRole('status').map((status) => status.textContent);
+
+  it('returns focus to Disconnect when the confirmation is declined', async () => {
+    const rendered = render(active);
+    const disconnect = await screen.findByRole('button', {
+      name: 'Disconnect',
+    });
+    await rendered.user.click(disconnect);
+    await screen.findByRole('dialog');
+
+    await rendered.user.keyboard('{Escape}');
+
+    await waitFor(() => expect(disconnect).toHaveFocus());
+  });
+
+  it('focuses the key field after a disconnect and announces it', async () => {
+    const rendered = render(active, {
+      'payment.disconnect': () => ({ state: 'disconnected', changes: [] }),
+    });
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Disconnect' }),
+    );
+    await rendered.user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Disconnect Stripe',
+      }),
+    );
+
+    await waitFor(() => expect(keyField()).toHaveFocus());
+    expect(statuses()).toContain('Stripe disconnected.');
+  });
+
+  it('shows Disconnecting… on the status card while it runs, keeping focus', async () => {
+    const rendered = render(active, {
+      'payment.disconnect': () => new Promise(() => {}),
+    });
+    const disconnect = await screen.findByRole('button', {
+      name: 'Disconnect',
+    });
+    await rendered.user.click(disconnect);
+    await rendered.user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Disconnect Stripe',
+      }),
+    );
+
+    const pending = await screen.findByRole('button', {
+      name: 'Disconnecting…',
+    });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    expect(pending).not.toBeDisabled();
+    await waitFor(() => expect(pending).toHaveFocus());
+    await rendered.user.click(pending);
+    expect(
+      rendered.calls.filter((c) => c.path === 'payment.disconnect'),
+    ).toHaveLength(1);
+  });
+
+  it('focuses Replace key after Cancel', async () => {
+    const rendered = render(active);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Replace key' }),
+    );
+    await rendered.user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Replace key' })).toHaveFocus(),
+    );
+  });
+
+  it('focuses the key field after Go back', async () => {
+    const rendered = render(active);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Replace key' }),
+    );
+    await rendered.user.type(keyField(), KEY);
+    await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
+    await rendered.user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Go back',
+      }),
+    );
+
+    await waitFor(() => expect(keyField()).toHaveFocus());
+  });
+
+  it('focuses Replace key after a replacement and announces it', async () => {
+    const rendered = render(active, { 'payment.connect': () => active });
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Replace key' }),
+    );
+    await rendered.user.type(keyField(), KEY);
+    await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
+    await rendered.user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Continue',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Replace key' })).toHaveFocus(),
+    );
+    expect(statuses()).toContain('Key replaced.');
+  });
+
+  it('focuses Replace key after connecting and announces it', async () => {
+    const rendered = render(notConnected, { 'payment.connect': () => active });
+    await rendered.user.type(
+      await screen.findByLabelText('Stripe secret key'),
+      KEY,
+    );
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Connect Stripe' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Replace key' })).toHaveFocus(),
+    );
+    expect(statuses()).toContain('Stripe connected.');
+  });
+
+  it('focuses the empty key field after a failed save and says to enter it again', async () => {
+    const rendered = render(notConnected, {
+      'payment.connect': () => {
+        throw new ApiError('BAD_REQUEST', 'Stripe rejected this key');
+      },
+    });
+    await rendered.user.type(
+      await screen.findByLabelText('Stripe secret key'),
+      KEY,
+    );
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Connect Stripe' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Enter the key again to retry.',
+    );
+    await waitFor(() => expect(keyField()).toHaveFocus());
+  });
+
+  it('keeps focus on a pending Connect Stripe and sends nothing on a second press', async () => {
+    const rendered = render(notConnected, {
+      'payment.connect': () => new Promise(() => {}),
+    });
+    await rendered.user.type(
+      await screen.findByLabelText('Stripe secret key'),
+      KEY,
+    );
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Connect Stripe' }),
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Connecting…' });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    pending.focus();
+    await rendered.user.click(pending);
+    expect(pending).toHaveFocus();
+    expect(
+      rendered.calls.filter((c) => c.path === 'payment.connect'),
+    ).toHaveLength(1);
+  });
+});
+
 describe('the Payments page, as a page', () => {
   it('names the tab and says it is loading the payment settings', () => {
     render(notConnected, { 'payment.status': () => new Promise(() => {}) });
@@ -305,8 +471,8 @@ describe('the Payments page, as a page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Payments' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the payment settings…',
-    );
+    expect(
+      screen.getAllByRole('status').map((status) => status.textContent),
+    ).toContain('Loading the payment settings…');
   });
 });

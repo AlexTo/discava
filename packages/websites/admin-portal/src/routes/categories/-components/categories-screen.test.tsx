@@ -200,6 +200,122 @@ describe('the Categories screen', () => {
   });
 });
 
+describe('the Categories screen, with the keyboard', () => {
+  it('focuses the rename field, and Escape cancels back to Rename', async () => {
+    const { user, calls } = render();
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.click(
+      within(row('Science')).getByRole('button', { name: 'Rename' }),
+    );
+    expect(screen.getByLabelText('New name for Science')).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    expect(
+      screen.queryByLabelText('New name for Science'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(row('Science')).getByRole('button', { name: 'Rename' }),
+    ).toHaveFocus();
+    expect(calls.some((c) => c.path === 'category.rename')).toBe(false);
+  });
+
+  it('moves focus to Rename after Cancel and after Save', async () => {
+    const { user } = render({ 'category.rename': () => science });
+    await screen.findByRole('row', { name: /Science/ });
+    const rename = () =>
+      within(row('Science')).getByRole('button', { name: 'Rename' });
+
+    await user.click(rename());
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(rename()).toHaveFocus();
+
+    await user.click(rename());
+    await user.keyboard('s{Enter}');
+    await waitFor(() => expect(rename()).toHaveFocus());
+  });
+
+  it('returns focus to Archive when the confirmation is cancelled', async () => {
+    const { user } = render();
+    await screen.findByRole('row', { name: /Science/ });
+    const archive = within(row('Science')).getByRole('button', {
+      name: 'Archive',
+    });
+
+    await user.click(archive);
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(archive).toHaveFocus());
+  });
+
+  it('moves focus to the row’s Rename after archiving', async () => {
+    let archived = false;
+    const { user } = render({
+      'category.list': () => [
+        { ...science, status: archived ? 'archived' : 'active' },
+      ],
+      'category.archive': () => {
+        archived = true;
+        return science;
+      },
+    });
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.click(
+      within(row('Science')).getByRole('button', { name: 'Archive' }),
+    );
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', {
+        name: 'Archive',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        within(row('Science')).getByRole('button', { name: 'Rename' }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it('announces what happened', async () => {
+    const { user } = render({ 'category.create': () => science });
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.type(screen.getByLabelText('New category name'), 'Business');
+    await user.click(screen.getByRole('button', { name: 'Add category' }));
+
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('status')
+          .some((el) => el.textContent === 'Business added.'),
+      ).toBe(true),
+    );
+  });
+
+  it('keeps focus on a pending button and sends nothing on a second press', async () => {
+    let finish: (value: unknown) => void = () => {};
+    const { user, calls } = render({
+      'category.create': () => new Promise((resolve) => (finish = resolve)),
+    });
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.type(screen.getByLabelText('New category name'), 'Business');
+    const add = screen.getByRole('button', { name: 'Add category' });
+    await user.click(add);
+
+    const adding = await screen.findByRole('button', { name: 'Adding…' });
+    expect(adding).toHaveAttribute('aria-disabled', 'true');
+    expect(adding).not.toBeDisabled();
+    adding.focus();
+    await user.click(adding);
+    expect(adding).toHaveFocus();
+    expect(calls.filter((c) => c.path === 'category.create')).toHaveLength(1);
+    finish(science);
+  });
+});
+
 describe('the Categories screen, as a page', () => {
   it('names the tab and says what it is waiting for', () => {
     render({ 'category.list': () => new Promise(() => {}) });
@@ -208,8 +324,8 @@ describe('the Categories screen, as a page', () => {
     expect(
       screen.getByRole('heading', { level: 1, name: 'Categories' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Loading the categories…',
-    );
+    expect(
+      screen.getAllByRole('status').map((status) => status.textContent),
+    ).toContain('Loading the categories…');
   });
 });
