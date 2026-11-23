@@ -254,7 +254,7 @@ describe('Course analytics', () => {
     ).toHaveAttribute('href', '/dashboard');
   });
 
-  it('shows other errors with a Retry that asks again', async () => {
+  it('shows other errors with a Try again that asks again', async () => {
     let attempts = 0;
     const { user } = renderPage(() => {
       attempts++;
@@ -268,7 +268,7 @@ describe('Course analytics', () => {
       await screen.findByText("Couldn't load the analytics"),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(await screen.findByText(/^Last updated /)).toBeInTheDocument();
   });

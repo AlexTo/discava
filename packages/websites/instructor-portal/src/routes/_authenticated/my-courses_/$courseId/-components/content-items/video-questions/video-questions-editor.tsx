@@ -8,10 +8,12 @@ import {
   HlsVideo,
   type PlayerCaption,
 } from '@discava/common-shadcn/components/hls-video';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { toCues } from '@discava/common-web-utils/video-questions';
 import { CirclePlus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -106,6 +108,9 @@ export function VideoQuestionsEditor({
   contentItemId,
   video,
   player,
+  playerLoading = false,
+  playerError,
+  onRetryPlayer,
   durationSeconds,
   studentActivityCount = 0,
   readOnlyReason,
@@ -124,6 +129,11 @@ export function VideoQuestionsEditor({
     withCredentials: boolean;
     captions?: PlayerCaption[];
   };
+  // The player's address is still loading, or failed with this sentence.
+  playerLoading?: boolean;
+  playerError?: string;
+  // Asks for the player's address again.
+  onRetryPlayer?: () => void;
   durationSeconds?: number;
   // Learners who have used the video, for the note about editing it.
   studentActivityCount?: number;
@@ -183,6 +193,34 @@ export function VideoQuestionsEditor({
           used this video. Answers already recorded are kept and aren't
           regraded.
         </ErrorAlert>
+      )}
+
+      {!player && playerLoading && <LoadingState label="Loading the video…" />}
+      {!player && playerError && (
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the video"
+          onRetry={onRetryPlayer}
+        >
+          {playerError}
+        </ErrorAlert>
+      )}
+      {/* Without the player there is no time to take, but a question can
+          still go at the end. */}
+      {!player && !readOnly && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={state.atLimit}
+            onClick={state.addAtEnd}
+          >
+            <CirclePlus /> Add an end question
+          </Button>
+          {state.atLimit && (
+            <span className="text-sm text-muted-foreground">{limitReason}</span>
+          )}
+        </div>
       )}
 
       {player && (
@@ -379,7 +417,7 @@ export function VideoQuestionsEditor({
             </ErrorAlert>
           ) : (
             <ErrorAlert type="error" header="Couldn't save the questions">
-              {state.saveError.message}
+              {apiErrorMessage(state.saveError)}
             </ErrorAlert>
           ))}
         <div className="flex flex-wrap items-center justify-end gap-3">

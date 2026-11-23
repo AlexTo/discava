@@ -4,6 +4,7 @@
  */
 
 import { apiUser, createPublishedQuizCourseViaApi } from '../helpers/api.js';
+import { lessonRow } from '../helpers/free-preview.js';
 import {
   addLesson,
   addModule,
@@ -11,7 +12,6 @@ import {
   createCourse,
   publishCourse,
 } from '../helpers/instructor-portal.js';
-import { lessonRow } from '../helpers/free-preview.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {

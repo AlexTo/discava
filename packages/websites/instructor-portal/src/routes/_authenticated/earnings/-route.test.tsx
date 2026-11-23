@@ -195,6 +195,56 @@ describe('earnings report', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
+  it('retries a failed "Load more" without losing the orders already shown', async () => {
+    let failNext = true;
+    const lines = vi.fn((input: unknown) => {
+      if (!(input as { cursor?: string }).cursor) {
+        return { lines: [line(1)], nextCursor: 'next' };
+      }
+      if (failNext) {
+        failNext = false;
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+      }
+      return { lines: [line(2)] };
+    });
+    const { user } = open({ 'earnings.lines': lines });
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    await user.click(
+      screen.getAllByRole('button', { name: 'Show orders' })[0]!,
+    );
+    const orders = await screen.findByRole('table', { name: 'Orders' });
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+
+    expect(
+      await screen.findByText("Couldn't load more orders"),
+    ).toBeInTheDocument();
+    expect(within(orders).getByText('order-1')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await within(orders).findByText('order-2')).toBeInTheDocument();
+  });
+
+  it('offers Try again when the orders fail to load', async () => {
+    let attempts = 0;
+    const { user } = open({
+      'earnings.lines': () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return { lines: [line(1)] };
+      },
+    });
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    await user.click(
+      screen.getAllByRole('button', { name: 'Show orders' })[0]!,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('order-1')).toBeInTheDocument();
+  });
+
   it("shows the API's message for an invalid range", async () => {
     const message =
       'Choose a period of at most 366 days that ends after it starts';

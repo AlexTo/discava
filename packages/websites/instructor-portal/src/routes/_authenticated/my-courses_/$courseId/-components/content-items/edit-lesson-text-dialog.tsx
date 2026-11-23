@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -27,10 +28,11 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { RichTextEditor } from '../rich-text-editor';
 import { studentActivityNote } from '../student-activity';
@@ -60,6 +62,11 @@ export function EditLessonTextDialog({
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [bodyValue, setBodyValue] = useState(body);
   const [saveError, setSaveError] = useState<string>();
+  // What is wrong with the fields, shown beside them once Save is pressed.
+  const [problems, setProblems] = useState<{ title?: string; body?: string }>(
+    {},
+  );
+  const fieldsRef = useRef<HTMLDivElement>(null);
   const { course, contentItem } = useInstructorApi();
   const queryClient = useQueryClient();
 
@@ -69,11 +76,15 @@ export function EditLessonTextDialog({
     useMutation(contentItem.updateText.mutationOptions());
   const isSaving = isCreating || isUpdating;
 
-  const canSave = titleValue.trim().length > 0 && Boolean(bodyValue);
-
   const handleSave = async () => {
     setSaveError(undefined);
-    if (!bodyValue) {
+    const found = {
+      title: titleValue.trim() ? undefined : 'Enter a title.',
+      body: bodyValue ? undefined : 'Write the text students will read.',
+    };
+    setProblems(found);
+    if (found.title || found.body || !bodyValue) {
+      focusFirstInvalid(fieldsRef.current);
       return;
     }
     try {
@@ -116,6 +127,7 @@ export function EditLessonTextDialog({
     setDescriptionValue(description ?? '');
     setBodyValue(body);
     setSaveError(undefined);
+    setProblems({});
   };
   const close = () => {
     setOpen(false);
@@ -153,48 +165,79 @@ export function EditLessonTextDialog({
           </ErrorAlert>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="lesson-text-title">Title</Label>
-          <Input
-            id="lesson-text-title"
-            value={titleValue}
-            onChange={(event) => setTitleValue(event.target.value)}
-            placeholder="e.g. Key concepts"
-            autoFocus
-          />
-        </div>
+        <div ref={fieldsRef} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="lesson-text-title">Title</Label>
+            <Input
+              id="lesson-text-title"
+              value={titleValue}
+              onChange={(event) => {
+                setTitleValue(event.target.value);
+                setProblems((current) => ({ ...current, title: undefined }));
+              }}
+              placeholder="e.g. Key concepts"
+              autoFocus
+              aria-invalid={Boolean(problems.title)}
+              aria-describedby={
+                problems.title ? 'lesson-text-title-error' : undefined
+              }
+            />
+            {problems.title && (
+              <p
+                id="lesson-text-title-error"
+                className="text-sm text-destructive"
+              >
+                {problems.title}
+              </p>
+            )}
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="lesson-text-description">Description</Label>
-          <Textarea
-            id="lesson-text-description"
-            value={descriptionValue}
-            onChange={(event) => setDescriptionValue(event.target.value)}
-            placeholder="Optional notes for students"
-            rows={2}
-          />
-        </div>
+          <div className="space-y-2">
+            <Label htmlFor="lesson-text-description">Description</Label>
+            <Textarea
+              id="lesson-text-description"
+              value={descriptionValue}
+              onChange={(event) => setDescriptionValue(event.target.value)}
+              placeholder="Optional notes for students"
+              rows={2}
+            />
+          </div>
 
-        <div className="space-y-2">
-          <span className="text-sm font-medium leading-none">Body</span>
-          <RichTextEditor
-            value={bodyValue}
-            onChange={setBodyValue}
-            ariaLabel="Body"
-          />
+          <div className="space-y-2">
+            <span className="text-sm font-medium leading-none">Body</span>
+            <RichTextEditor
+              value={bodyValue}
+              onChange={(next) => {
+                setBodyValue(next);
+                setProblems((current) => ({ ...current, body: undefined }));
+              }}
+              ariaLabel="Body"
+              invalid={Boolean(problems.body)}
+              describedBy={problems.body ? 'lesson-text-body-error' : undefined}
+            />
+            {problems.body && (
+              <p
+                id="lesson-text-body-error"
+                className="text-sm text-destructive"
+              >
+                {problems.body}
+              </p>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
+          <PendingButton
             type="button"
-            disabled={!canSave || isSaving}
+            pending={isSaving}
+            pendingLabel="Saving…"
             onClick={handleSave}
           >
-            {isSaving ? 'Saving…' : 'Save'}
-          </Button>
+            Save
+          </PendingButton>
         </DialogFooter>
         {confirmation}
       </DialogContent>

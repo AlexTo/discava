@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { move } from '@dnd-kit/helpers';
 import type { DragEndEvent } from '@dnd-kit/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../api';
 import {
   fromQuizItem,
@@ -72,6 +73,8 @@ export function useQuizBuilderState({
     initial.questions[0]?.questionId,
   );
   const [showProblems, setShowProblems] = useState(false);
+  // The builder's root, where the first problem's field is looked for.
+  const rootRef = useRef<HTMLDivElement>(null);
   // The question (or 'settings') to scroll to once it has rendered open.
   const [scrollTarget, setScrollTarget] = useState<string>();
   const [justSaved, setJustSaved] = useState(false);
@@ -133,6 +136,8 @@ export function useQuizBuilderState({
     if (firstWithProblems) {
       setExpanded(firstWithProblems.questionId);
     }
+    // The title comes first on the page, then the questions in order.
+    focusFirstInvalid(rootRef.current);
   };
 
   const preview = () => {
@@ -240,6 +245,7 @@ export function useQuizBuilderState({
     setExpanded((current) => (current === questionId ? undefined : questionId));
 
   return {
+    rootRef,
     quiz,
     errors,
     dirty,

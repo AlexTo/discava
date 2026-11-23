@@ -4,7 +4,6 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,
@@ -104,19 +103,13 @@ export function BalanceCard({
             <span className="sr-only">Loading…</span>
           </>
         ) : overview.isError ? (
-          <div className="space-y-3">
-            <ErrorAlert type="error" header="Couldn't load your balance">
-              {apiErrorMessage(overview.error)}
-            </ErrorAlert>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => overview.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
+          <ErrorAlert
+            type="error"
+            header="Couldn't load your balance"
+            onRetry={() => void overview.refetch()}
+          >
+            {apiErrorMessage(overview.error)}
+          </ErrorAlert>
         ) : overview.data.currencies.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Nothing to pay out yet.

@@ -50,6 +50,31 @@ describe('CourseCatalogueForm', () => {
     expect(screen.queryByText('python')).not.toBeInTheDocument();
   });
 
+  it('says the categories failed to load and loads them again on Try again', async () => {
+    let attempts = 0;
+    const { user } = renderForm(
+      {},
+      {
+        'category.listActive': () => {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+          }
+          return CATEGORIES;
+        },
+      },
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't load the categories.",
+    );
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText("Couldn't load the categories.")).toBeNull(),
+    );
+  });
+
   it('focuses the next tag after removing one, else the tag input', async () => {
     const { user } = renderForm({ tags: ['a', 'b'] });
 

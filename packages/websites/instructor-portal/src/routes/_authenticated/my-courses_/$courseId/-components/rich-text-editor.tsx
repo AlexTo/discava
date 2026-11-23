@@ -18,7 +18,7 @@ import {
 } from '@discava/common-tiptap';
 import { type Editor, EditorContent, useEditor } from '@tiptap/react';
 import { Bold, Heading2, Italic, List, ListOrdered, Sigma } from 'lucide-react';
-import { type ReactNode, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { MathPopover } from './math-popover';
 
 // The formula being written or edited in the maths popover: a new one at the
@@ -42,6 +42,8 @@ export function RichTextEditor({
   value,
   onChange,
   ariaLabel,
+  invalid = false,
+  describedBy,
   minHeightClass = 'min-h-32',
 }: {
   value: string | undefined;
@@ -49,6 +51,9 @@ export function RichTextEditor({
   // What the editing area is called to assistive technology, e.g. "Question 2".
   // Required: an unnamed editor is announced as just "editable" (#238).
   ariaLabel: string;
+  // The content has a problem, and the id of the text that says what it is.
+  invalid?: boolean;
+  describedBy?: string;
   minHeightClass?: string;
 }) {
   const [mathEdit, setMathEdit] = useState<MathEdit>();
@@ -88,10 +93,30 @@ export function RichTextEditor({
           minHeightClass,
         ),
         'aria-label': ariaLabel,
+        ...(invalid && { 'aria-invalid': 'true' }),
+        ...(describedBy && { 'aria-describedby': describedBy }),
       },
     },
   });
   editorRef.current = editor;
+
+  // The editor reads its attributes once; keep the problem and its text current.
+  useEffect(() => {
+    const element = editor?.view.dom;
+    if (!element) {
+      return;
+    }
+    if (invalid) {
+      element.setAttribute('aria-invalid', 'true');
+    } else {
+      element.removeAttribute('aria-invalid');
+    }
+    if (describedBy) {
+      element.setAttribute('aria-describedby', describedBy);
+    } else {
+      element.removeAttribute('aria-describedby');
+    }
+  }, [editor, invalid, describedBy]);
 
   const newFormula = (display: boolean) =>
     setMathEdit({

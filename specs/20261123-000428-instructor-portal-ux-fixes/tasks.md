@@ -489,7 +489,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US7.
 
-- [ ] T059 [P] [US7] Replace error sentences that bypass the helper (D-07, C-06, A-15, D-17):
+- [x] T059 [P] [US7] Replace error sentences that bypass the helper (D-07, C-06, A-15, D-17):
   - **`apiErrorMessage(error)`:** in `IPC/content-items/quiz/quiz-save-bar.tsx` and `IPC/content-items/video-questions/video-questions-editor.tsx`, use it in place of `.message`.
   - **Uploads:** `packages/websites/instructor-portal/src/lib/put-file-with-progress.ts` rejects with `new TypeError(failureMessage, { cause })` on `xhr.onerror`. The video and file dialogs' alert headers read "Couldn't upload the video" and "Couldn't upload the file" for upload failures.
   - **Notification settings:** in `SH/components/notification-preferences.tsx`:
@@ -500,7 +500,7 @@ At 1440px nothing changes, apart from long-content fixes.
     Run the student portal's notification settings tests.
 
   **Tests:** a `TypeError('Failed to fetch')` shows "Couldn't reach Discava…".
-- [ ] T060 [P] [US7] Add `onRetry` to the failed loads that lack Try again (A-10, B-07, C-04, D-15, D-18, E-14), wired to the query's `refetch`:
+- [x] T060 [P] [US7] Add `onRetry` to the failed loads that lack Try again (A-10, B-07, C-04, D-15, D-18, E-14), wired to the query's `refetch`:
   - `IP/my-courses/route.tsx`;
   - `IP/my-courses_/$courseId/route.tsx` (not for NOT_FOUND);
   - `IP/earnings/-components/course-lines.tsx`, which also shows a failed "Load more";
@@ -512,7 +512,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - show "Loading the video…" while the player URL loads;
   - show an `ErrorAlert` with retry when it fails;
   - render "Add an end question" without the player.
-- [ ] T061 [P] [US7] Replace the hand-built "Retry" buttons with `ErrorAlert`'s `onRetry` (A-11, B-06):
+- [x] T061 [P] [US7] Replace the hand-built "Retry" buttons with `ErrorAlert`'s `onRetry` (A-11, B-06):
   - `IP/index.tsx`;
   - `IP/dashboard/route.tsx`;
   - `IP/dashboard_/$courseId/route.tsx`;
@@ -521,10 +521,10 @@ At 1440px nothing changes, apart from long-content fixes.
   - `IP/profile.tsx`.
 
   The four tests that click "Retry" (`IP/-index.test.tsx`, `IP/dashboard/-route.test.tsx`, `IP/dashboard_/$courseId/-route.test.tsx`, `quiz-panel.test.tsx`) click "Try again" instead. Say so in the pull request.
-- [ ] T062 [P] [US7] Make each failure show once with one retry (E-15):
+- [x] T062 [P] [US7] Make each failure show once with one retry (E-15):
   - **Reviews:** `IP/my-courses_/$courseId_/-components/reviews-screen.tsx` shows one `ErrorAlert` when the summary or the list fails, whose retry refetches both.
   - **Hand-rolled blocks:** `IP/my-courses_/$courseId_/questions/-components/paged-list.tsx`, `by-lesson-view.tsx` and `.../submissions/-components/submissions-table.tsx` switch their hand-rolled error blocks to `ErrorAlert` with `onRetry`.
-- [ ] T063 [P] [US7] Tie validation to fields, and keep Save enabled (A-14, B-12, D-11, D-22, E-16). In each form:
+- [x] T063 [P] [US7] Tie validation to fields, and keep Save enabled (A-14, B-12, D-11, D-22, E-16). In each form:
   - Save is never `disabled` for an incomplete form;
   - on submit with problems, focus moves to the first invalid field;
   - each error has an `id` referenced by its field's `aria-describedby`, and the field has `aria-invalid`.
@@ -538,7 +538,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - the quiz builder's `showProblemsFirst` in `IPC/content-items/quiz/use-quiz-builder-state.ts`, which focuses the first problem's field and sets `aria-invalid` on invalid fields in `question-card.tsx`.
 
   **Tests:** in each form's test file.
-- [ ] T064 [P] [US7] Fix the silent and hidden states:
+- [x] T064 [P] [US7] Fix the silent and hidden states:
   - **Wrong file type (D-12):** `IPC/content-items/attach-lesson-video-dialog.tsx` shows the dropzone's rejections as `attach-lesson-file-dialog.tsx` does.
   - **Caption removal (D-13):** `IPC/content-items/video-captions-dialog.tsx` renders the removal error inside the open `AlertDialogContent`.
   - **Processing videos (D-05):** `IPC/content-items/lesson-content-items-row.tsx` shows a "Processing…" or "Processing failed" badge from the item's status, and drops the `title` tooltip on the disabled Questions button.
@@ -548,16 +548,16 @@ At 1440px nothing changes, apart from long-content fixes.
     - the checklist's profile line (`IPC/course/landing-page-checklist.tsx`, through `IP/my-courses_/$courseId/route.tsx`) shows an inline error with Try again when `profile.get` fails;
     - so does the category select in `IPC/course/course-catalogue-form.tsx` when `category.listActive` fails.
   - **Deleting a lesson:** `IPC/lesson/delete-lesson-dialog.tsx` says how many items are deleted with the lesson in a draft.
-- [ ] T065 [P] [US7] Fix the My Courses empty states in `IP/my-courses/route.tsx` (B-08):
+- [x] T065 [P] [US7] Fix the My Courses empty states in `IP/my-courses/route.tsx` (B-08):
   - with no courses at all, show "You don't teach any courses yet" with Create course;
   - keep "No courses found" and Clear filters for a filter that hides every course.
-- [ ] T066 [US7] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s instructor section, or add `packages/e2e/src/scenarios/instructor-errors.e2e.ts`. As a new instructor:
+- [x] T066 [US7] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s instructor section, or add `packages/e2e/src/scenarios/instructor-errors.e2e.ts`. As a new instructor:
   - with `page.route` aborting the API, open `/my-courses`, the course editor and the quiz builder's Save. Assert no "Failed to fetch" text, and a "Try again" that recovers once the route is released;
   - open My Courses as a brand-new instructor and assert "You don't teach any courses yet";
   - on a draft course, assert the announcements line.
 
   Screenshots: `'my courses error with try again'`, `'new instructor my courses'`.
-- [ ] T067 [US7] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T067 [US7] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

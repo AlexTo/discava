@@ -20,6 +20,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -63,15 +64,24 @@ function RevokeDialog({
   const revoke = useMutation(trpc.certificate.revoke.mutationOptions());
   const [reason, setReason] = useState<Reason>('academic-integrity');
   const [note, setNote] = useState('');
+  const [problem, setProblem] = useState<string>();
+  const noteField = useRef<HTMLTextAreaElement>(null);
 
   const close = () => {
     setReason('academic-integrity');
     setNote('');
+    setProblem(undefined);
     revoke.reset();
     onClose();
   };
+  const guard = useDiscardGuard({ dirty: note.trim() !== '', discard: close });
   const submit = async () => {
     if (revoke.isPending) {
+      return;
+    }
+    if (reason === 'other' && note.trim() === '') {
+      setProblem('Enter a note to say why.');
+      noteField.current?.focus();
       return;
     }
     try {
@@ -89,7 +99,7 @@ function RevokeDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && close()}>
+    <Dialog open={open} onOpenChange={(next) => !next && guard.requestClose()}>
       <DialogContent
         className="sm:max-w-lg"
         onCloseAutoFocus={(event) => {
@@ -97,9 +107,11 @@ function RevokeDialog({
             returnFocus.onCloseAutoFocus(event);
           }
         }}
+        {...guard.contentProps}
       >
         <form
           className="space-y-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -123,7 +135,10 @@ function RevokeDialog({
               id="revoke-reason"
               className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               value={reason}
-              onChange={(event) => setReason(event.target.value as Reason)}
+              onChange={(event) => {
+                setReason(event.target.value as Reason);
+                setProblem(undefined);
+              }}
             >
               {REASONS.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -142,12 +157,22 @@ function RevokeDialog({
             </div>
             <Textarea
               id="revoke-note"
-              aria-describedby="revoke-note-count"
+              ref={noteField}
+              aria-invalid={Boolean(problem)}
+              aria-describedby={`revoke-note-count${problem ? ' revoke-note-error' : ''}`}
               value={note}
               maxLength={NOTE_MAX}
               rows={3}
-              onChange={(event) => setNote(event.target.value)}
+              onChange={(event) => {
+                setNote(event.target.value);
+                setProblem(undefined);
+              }}
             />
+            {problem && (
+              <p id="revoke-note-error" className="text-sm text-destructive">
+                {problem}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
@@ -156,7 +181,6 @@ function RevokeDialog({
             <PendingButton
               type="submit"
               variant="destructive"
-              disabled={reason === 'other' && note.trim() === ''}
               pending={revoke.isPending}
               pendingLabel="Revoking…"
             >
@@ -164,6 +188,7 @@ function RevokeDialog({
             </PendingButton>
           </DialogFooter>
         </form>
+        {guard.confirmation}
       </DialogContent>
     </Dialog>
   );
@@ -289,12 +314,22 @@ function Certificate({
   }
   if (query.isError) {
     const notFound = query.error.data?.code === 'NOT_FOUND';
+    if (notFound) {
+      return (
+        <ErrorAlert type="info" header="No certificate has this ID">
+          Check the ID against the certificate's page or PDF. IDs look like
+          7V0Y-TKB5-6T6K-RPB3.
+        </ErrorAlert>
+      );
+    }
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {notFound
-          ? 'Certificate not found'
-          : apiErrorMessage(query.error, "Couldn't look up the certificate.")}
-      </p>
+      <ErrorAlert
+        type="error"
+        header="Couldn't look up the certificate"
+        onRetry={() => query.refetch()}
+      >
+        {apiErrorMessage(query.error)}
+      </ErrorAlert>
     );
   }
   const cert = query.data;
@@ -409,6 +444,8 @@ export function CertificatesScreen() {
   const [input, setInput] = useState('');
   const [lookedUp, setLookedUp] = useState<string>();
   const [announcement, setAnnouncement] = useState('');
+  const [problem, setProblem] = useState<string>();
+  const idField = useRef<HTMLInputElement>(null);
 
   return (
     <div className="space-y-6">
@@ -419,26 +456,41 @@ export function CertificatesScreen() {
         </p>
       </header>
       <form
-        className="flex max-w-xl items-end gap-2"
+        className="max-w-xl space-y-2"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          if (input.trim() !== '') {
-            setLookedUp(input.trim());
+          if (input.trim() === '') {
+            setProblem('Enter a certificate ID.');
+            idField.current?.focus();
+            return;
           }
+          setLookedUp(input.trim());
         }}
       >
-        <div className="flex-1 space-y-1">
-          <Label htmlFor="certificate-id">Certificate ID</Label>
-          <Input
-            id="certificate-id"
-            value={input}
-            maxLength={100}
-            onChange={(event) => setInput(event.target.value)}
-          />
+        <div className="flex items-end gap-2">
+          <div className="flex-1 space-y-1">
+            <Label htmlFor="certificate-id">Certificate ID</Label>
+            <Input
+              id="certificate-id"
+              ref={idField}
+              aria-invalid={Boolean(problem)}
+              aria-describedby={problem ? 'certificate-id-error' : undefined}
+              value={input}
+              maxLength={100}
+              onChange={(event) => {
+                setInput(event.target.value);
+                setProblem(undefined);
+              }}
+            />
+          </div>
+          <Button type="submit">Look up</Button>
         </div>
-        <Button type="submit" disabled={input.trim() === ''}>
-          Look up
-        </Button>
+        {problem && (
+          <p id="certificate-id-error" className="text-sm text-destructive">
+            {problem}
+          </p>
+        )}
       </form>
       <StatusMessage message={announcement} visuallyHidden />
       {lookedUp && (

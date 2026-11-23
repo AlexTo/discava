@@ -258,6 +258,40 @@ describe('My courses', () => {
     ).toBeInTheDocument();
   });
 
+  it('retries a failed load with Try again', async () => {
+    let attempts = 0;
+    const { user } = renderPage({
+      'course.listByInstructor': () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Something went wrong');
+        }
+        return {
+          items: [course('c1', 'Intro to DynamoDB', 'published')],
+          cursor: null,
+        };
+      },
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Intro to DynamoDB')).toBeInTheDocument();
+  });
+
+  it('invites a brand-new instructor to create their first course, not to clear filters', async () => {
+    renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+
+    expect(
+      await screen.findByText("You don't teach any courses yet"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No courses found')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /Create course/ }),
+    ).toHaveLength(2);
+  });
+
   it('links each course to its course page', async () => {
     renderPage({
       'course.listByInstructor': () => ({

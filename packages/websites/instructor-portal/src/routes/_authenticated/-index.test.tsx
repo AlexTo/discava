@@ -334,7 +334,7 @@ describe('Instructor home: loading and failure', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows an error with Retry, not the empty state, when the request fails, and recovers on retry', async () => {
+  it('shows an error with Try again, not the empty state, when the request fails, and recovers on retry', async () => {
     const user = userEvent.setup();
     let fail = true;
     const { calls } = renderPage({
@@ -359,7 +359,7 @@ describe('Instructor home: loading and failure', () => {
     expect(calls).toHaveLength(1);
 
     fail = false;
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
 
     expect(await screen.findByText('Back again')).toBeVisible();
     expect(calls).toHaveLength(2);

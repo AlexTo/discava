@@ -161,7 +161,7 @@ describe('QuizPanel', () => {
     expect(screen.queryByRole('table', { name: /Most-missed/ })).toBeNull();
   });
 
-  it('shows an error with a Retry that asks again', async () => {
+  it('shows an error with a Try again that asks again', async () => {
     let attempt = 0;
     const { user } = renderPanel(() => {
       if (++attempt === 1) {
@@ -176,7 +176,7 @@ describe('QuizPanel', () => {
         'Something went wrong on our side. Try again in a moment.',
       ),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(
       await screen.findByRole('table', {
         name: 'Most-missed questions for Checkpoint',

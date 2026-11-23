@@ -35,15 +35,19 @@ describe('CreateCourseDialog', () => {
     expect(calls).toEqual([]);
   });
 
-  it('requires a title and disables Save until the error clears', async () => {
+  it('keeps Save enabled, and on submit with no title focuses the title and ties the error to it', async () => {
     const { calls, user } = renderDialog();
 
     await user.click(screen.getByRole('button', { name: 'New course' }));
-    await user.type(screen.getByLabelText('Course title'), 'x');
-    await user.clear(screen.getByLabelText('Course title'));
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
+    const title = screen.getByLabelText('Course title');
     expect(screen.getByText('Course title is required')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(title).toBeInvalid();
+    expect(title).toHaveAccessibleDescription('Course title is required');
     expect(calls).toEqual([]);
   });
 

@@ -185,9 +185,12 @@ test('an instructor reviews, returns and amends submitted work', async ({
     await page.getByRole('button', { name: 'Edit grade' }).click();
     await page.getByLabel('Points').fill('25');
     await page.getByRole('button', { name: 'Save grade' }).click();
-    await expect(page.getByRole('alert')).toHaveText(
-      'Points must be between 0 and 20',
-    );
+    const points = page.getByLabel('Points');
+    await expect(
+      page.getByText('Points must be between 0 and 20'),
+    ).toBeVisible();
+    await expect(points).toBeFocused();
+    await expect(points).toHaveAttribute('aria-invalid', 'true');
   });
 
   await studentContext.close();

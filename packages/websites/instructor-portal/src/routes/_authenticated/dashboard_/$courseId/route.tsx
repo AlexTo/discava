@@ -109,23 +109,15 @@ function RouteComponent() {
             header={
               notFound ? 'Course not found' : "Couldn't load the analytics"
             }
+            onRetry={notFound ? undefined : () => void analyticsQuery.refetch()}
           >
             {notFound
               ? "This course doesn't exist, or you don't have access to it."
               : apiErrorMessage(analyticsQuery.error)}
           </ErrorAlert>
-          {notFound ? (
+          {notFound && (
             <Button asChild variant="outline" size="sm">
               <Link to="/dashboard">Back to the dashboard</Link>
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={() => analyticsQuery.refetch()}
-            >
-              Retry
             </Button>
           )}
         </div>

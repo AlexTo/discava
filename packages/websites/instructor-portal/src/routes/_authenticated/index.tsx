@@ -191,19 +191,13 @@ function RouteComponent() {
             <LoadingState label="Loading your courses…" />
           </div>
         ) : coursesQuery.isError ? (
-          <div className="space-y-3">
-            <ErrorAlert type="error" header="Couldn't load your courses">
-              {apiErrorMessage(coursesQuery.error)}
-            </ErrorAlert>
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={() => coursesQuery.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
+          <ErrorAlert
+            type="error"
+            header="Couldn't load your courses"
+            onRetry={() => void coursesQuery.refetch()}
+          >
+            {apiErrorMessage(coursesQuery.error)}
+          </ErrorAlert>
         ) : activeCourses.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {activeCourses.slice(0, HOME_COURSE_LIMIT).map((course) => {

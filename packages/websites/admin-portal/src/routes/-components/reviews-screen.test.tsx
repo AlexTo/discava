@@ -132,7 +132,7 @@ describe('the Reviews screen', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps Remove disabled until a reason is entered, then removes with it', async () => {
+  it('checks for a reason on submit, then removes with it', async () => {
     const rendered = render({ 'review.remove': () => ({ ...visible }) });
     await pick(rendered);
     await rendered.user.click(
@@ -143,7 +143,15 @@ describe('the Reviews screen', () => {
     const submit = within(dialog).getByRole('button', {
       name: 'Remove review',
     });
-    expect(submit).toBeDisabled();
+    expect(submit).toBeEnabled();
+    await rendered.user.click(submit);
+    const field = within(dialog).getByLabelText('Reason');
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(
+      /Enter a reason\. It's kept on record with the removal\./,
+    );
+    expect(rendered.calls.some((c) => c.path === 'review.remove')).toBe(false);
 
     await rendered.user.type(
       within(dialog).getByLabelText('Reason'),
@@ -192,6 +200,48 @@ describe('the Reviews screen', () => {
     expect(within(dialog).getByLabelText('Reason')).toHaveValue('Spam');
   });
 
+  it('asks before Escape discards a typed reason, and Keep editing keeps it', async () => {
+    const rendered = render();
+    await pick(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Remove review' });
+    await rendered.user.type(within(dialog).getByLabelText('Reason'), 'Spam');
+
+    await rendered.user.keyboard('{Escape}');
+    expect(await screen.findByText('Discard unsaved changes?')).toBeVisible();
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Keep editing' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Discard unsaved changes?')).toBeNull(),
+    );
+    expect(screen.getByLabelText('Reason')).toHaveValue('Spam');
+  });
+
+  it('closes on Escape with nothing typed, and Cancel then reopen shows an empty reason', async () => {
+    const rendered = render();
+    await pick(rendered);
+    const remove = await screen.findByRole('button', {
+      name: "Remove Sam L.'s review",
+    });
+    await rendered.user.click(remove);
+    await screen.findByRole('dialog');
+    await rendered.user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await rendered.user.click(remove);
+    await rendered.user.type(await screen.findByLabelText('Reason'), 'Spam');
+    await rendered.user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
+
+    await rendered.user.click(remove);
+    expect(await screen.findByLabelText('Reason')).toHaveValue('');
+  });
+
   it('says so when the course has no reviews', async () => {
     const rendered = render({ 'review.list': () => ({ items: [] }) });
     await pick(rendered);
@@ -211,8 +261,13 @@ describe('the Reviews screen', () => {
     });
     await pick(rendered);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the reviews");
+    expect(alert).toHaveTextContent(
       'Something went wrong on our side. Try again in a moment.',
+    );
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(
+      1,
     );
     fail = false;
     await rendered.user.click(
@@ -235,7 +290,9 @@ describe('the Reviews screen', () => {
       },
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the courses");
+    expect(alert).toHaveTextContent(
       'Something went wrong on our side. Try again in a moment.',
     );
     fail = false;
