@@ -123,7 +123,7 @@ Stripe needs **no deploy-time configuration**: no secret to create and no webhoo
 
 The webhook API can have its own domain, `…_INFRA_PAYMENTS_DOMAIN_NAME` in the table above. If you add or change it after connecting Stripe, save the key again on the Payments page so the new address is registered.
 
-To pay instructors, the Stripe account must have Connect enabled. A restricted key also needs write access to Accounts, Account Links, Login Links and Transfers (the calls payouts make). Switching the connected Stripe account or mode holds every instructor's unpaid earnings: they show as Held, and the payout run sends nothing for them. <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> has the instructor's view.
+To pay instructors, the Stripe account must have Connect enabled. A restricted key is expected to need write access to Accounts, Account Links, Login Links and Transfers (the calls payouts make); this list has not yet been confirmed against a real restricted key, so use a secret key if onboarding or payouts are refused. Switching the connected Stripe account or mode holds every instructor's unpaid earnings: they show as Held, and the payout run sends nothing for them. <Link path="guides/earnings-and-payouts">Earnings and payouts</Link> has the instructor's view.
 
 ### Payout settings
 
