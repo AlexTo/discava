@@ -200,14 +200,14 @@ function RouteComponent() {
               <Link
                 to="/my-courses/$courseId/reviews"
                 params={{ courseId: course.courseId }}
-                className="font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex min-h-6 items-center font-medium text-primary underline-offset-4 hover:underline"
               >
                 Reviews
               </Link>
               <Link
                 to="/my-courses/$courseId/questions"
                 params={{ courseId: course.courseId }}
-                className="font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex min-h-6 items-center font-medium text-primary underline-offset-4 hover:underline"
               >
                 Questions
               </Link>

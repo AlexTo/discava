@@ -115,7 +115,7 @@ export function ReportSection({ period }: { period: Period }) {
                               type="button"
                               variant="link"
                               size="sm"
-                              className="h-auto p-0"
+                              className="h-auto min-h-6 p-0"
                               aria-expanded={open.has(key)}
                               onClick={() => toggle(key)}
                             >

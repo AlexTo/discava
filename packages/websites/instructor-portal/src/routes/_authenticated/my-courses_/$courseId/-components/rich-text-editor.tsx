@@ -42,6 +42,7 @@ export function RichTextEditor({
   value,
   onChange,
   ariaLabel,
+  labelledBy,
   invalid = false,
   describedBy,
   minHeightClass = 'min-h-32',
@@ -51,6 +52,8 @@ export function RichTextEditor({
   // What the editing area is called to assistive technology, e.g. "Question 2".
   // Required: an unnamed editor is announced as just "editable" (#238).
   ariaLabel: string;
+  // The id of a visible label that names the editor; it wins over `ariaLabel`.
+  labelledBy?: string;
   // The content has a problem, and the id of the text that says what it is.
   invalid?: boolean;
   describedBy?: string;
@@ -93,6 +96,7 @@ export function RichTextEditor({
           minHeightClass,
         ),
         'aria-label': ariaLabel,
+        ...(labelledBy && { 'aria-labelledby': labelledBy }),
         ...(invalid && { 'aria-invalid': 'true' }),
         ...(describedBy && { 'aria-describedby': describedBy }),
       },
