@@ -242,9 +242,11 @@ test('the admin breadcrumb names each step, and a missing page leads home', asyn
   await test.step('Branding sits under Home and Settings, which is not a link', async () => {
     await expect(breadcrumb.getByText('Branding')).toBeVisible();
     await expect(breadcrumb.getByText('Settings')).toBeVisible();
-    await expect(
-      breadcrumb.getByRole('link', { name: 'Settings' }),
-    ).toHaveCount(0);
+    // The shell draws a crumb with no page of its own as a disabled link
+    // with no address.
+    const settings = breadcrumb.getByRole('link', { name: 'Settings' });
+    await expect(settings).toBeDisabled();
+    await expect(settings).not.toHaveAttribute('href');
     await expect(breadcrumb.getByRole('link', { name: 'Home' })).toBeVisible();
   });
 
