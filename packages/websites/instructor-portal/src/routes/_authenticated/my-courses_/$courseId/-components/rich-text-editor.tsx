@@ -226,6 +226,7 @@ export function RichTextEditor({
           onConfirm={confirmFormula}
           onDelete={mathEdit.pos === undefined ? undefined : deleteFormula}
           onClose={() => setMathEdit(undefined)}
+          focus={() => editor?.commands.focus()}
         />
       ) : null}
     </div>

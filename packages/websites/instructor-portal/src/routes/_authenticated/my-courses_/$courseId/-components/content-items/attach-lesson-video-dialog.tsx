@@ -332,7 +332,10 @@ export function AttachLessonVideoDialog({
           ))}
 
         <div
-          {...getRootProps()}
+          {...getRootProps({
+            role: 'button',
+            'aria-label': 'Choose a video file',
+          })}
           className={cn(
             'cursor-pointer rounded-lg border border-dashed bg-muted/50 px-4 py-4 transition hover:border-primary hover:bg-primary/5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30',
             isUploading && 'pointer-events-none opacity-60',
@@ -344,7 +347,7 @@ export function AttachLessonVideoDialog({
               <Upload className="size-4" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium">
+              <p className="text-sm font-medium" role="status">
                 {isUploading
                   ? `Uploading… ${uploadProgress}%`
                   : pendingUpload

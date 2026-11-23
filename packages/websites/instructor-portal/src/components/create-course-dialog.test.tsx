@@ -89,6 +89,10 @@ describe('CreateCourseDialog', () => {
       to: '/my-courses/$courseId',
       params: { courseId: 'course-42' },
     });
+    // The new page takes focus, not the trigger.
+    expect(document.activeElement).not.toBe(
+      screen.getByRole('button', { name: 'New course' }),
+    );
   });
 
   it('omits an empty summary', async () => {

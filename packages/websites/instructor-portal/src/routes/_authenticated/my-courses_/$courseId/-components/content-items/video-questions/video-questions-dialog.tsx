@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../api';
@@ -66,6 +67,7 @@ export function VideoQuestionsDialog({
   const [session, setSession] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const discardFocus = useReturnFocus(confirmDiscard);
 
   const view = courseQuery.data;
   const module = view?.modules.find((m) => m.moduleId === moduleId);
@@ -164,7 +166,10 @@ export function VideoQuestionsDialog({
         )}
 
         <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-          <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogContent
+            className="sm:max-w-md"
+            onCloseAutoFocus={discardFocus.onCloseAutoFocus}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
               <AlertDialogDescription>

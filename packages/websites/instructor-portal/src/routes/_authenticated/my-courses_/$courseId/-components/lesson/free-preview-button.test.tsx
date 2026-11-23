@@ -55,6 +55,25 @@ describe('FreePreviewButton', () => {
     );
   });
 
+  it('keeps focus on the button after marking', async () => {
+    const { user } = renderButton(false, {
+      handlers: { 'lesson.setFreePreview': () => ({}) },
+    });
+    const button = screen.getByRole('button', { name: 'Make free preview' });
+
+    await user.click(button);
+    await user.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Make free preview',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
+    expect(button).toHaveFocus();
+  });
+
   it('sends nothing when the confirmation is cancelled', async () => {
     const { calls, user } = renderButton(false);
 
@@ -72,11 +91,11 @@ describe('FreePreviewButton', () => {
       handlers: { 'lesson.setFreePreview': () => ({}) },
     });
 
-    await user.click(
-      screen.getByRole('button', { name: 'Remove free preview' }),
-    );
+    const button = screen.getByRole('button', { name: 'Remove free preview' });
+    await user.click(button);
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
     await waitFor(() =>
       expect(calls).toEqual([
         {

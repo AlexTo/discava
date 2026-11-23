@@ -4,12 +4,14 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import type { ICoursePreviewSummary } from '@discava/instructor-api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { PreviewVideoArea } from './preview-video-area';
 
@@ -40,21 +42,52 @@ function ItemList({
   onChange: (items: Item[]) => void;
   nextId: () => number;
 }) {
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
+  // Where focus goes once the change has rendered; the control that had it is
+  // gone or disabled by then.
+  const focusAfter = useRef<(() => HTMLElement | null | undefined) | null>(
+    null,
+  );
+  useEffect(() => {
+    const find = focusAfter.current;
+    focusAfter.current = null;
+    find?.()?.focus();
+  });
+  const inRow = (id: number, selector: string) =>
+    fieldsetRef.current?.querySelector<HTMLElement>(
+      `[data-item-id="${id}"] ${selector}`,
+    );
+
   const move = (index: number, by: -1 | 1) => {
     const next = [...items];
     [next[index], next[index + by]] = [next[index + by], next[index]];
+    // Keep focus on the button just used, or on the other one when moving to an
+    // end disables it.
+    const id = items[index].id;
+    focusAfter.current = () =>
+      inRow(id, `[data-move="${by === -1 ? 'up' : 'down'}"]:not(:disabled)`) ??
+      inRow(id, '[data-move]:not(:disabled)');
     onChange(next);
   };
 
+  const remove = (index: number) => {
+    const neighbour = items[index + 1] ?? items[index - 1];
+    focusAfter.current = () =>
+      neighbour
+        ? inRow(neighbour.id, 'input')
+        : fieldsetRef.current?.querySelector<HTMLElement>('[data-add]');
+    onChange(items.filter((_, other) => other !== index));
+  };
+
   return (
-    <fieldset className="space-y-3">
+    <fieldset ref={fieldsetRef} className="space-y-3">
       <legend className="text-sm font-medium">{label}</legend>
       {items.length === 0 && (
         <p className="text-sm text-muted-foreground">No {noun} yet.</p>
       )}
       <ul className="space-y-3">
         {items.map((item, index) => (
-          <li key={item.id} className="space-y-1">
+          <li key={item.id} data-item-id={item.id} className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <Input
                 className="min-w-0 flex-1"
@@ -82,6 +115,7 @@ function ItemList({
                     variant="outline"
                     size="sm"
                     disabled={index === 0}
+                    data-move="up"
                     aria-label={`Move up ${label} item ${index + 1}`}
                     onClick={() => move(index, -1)}
                   >
@@ -92,6 +126,7 @@ function ItemList({
                     variant="outline"
                     size="sm"
                     disabled={index === items.length - 1}
+                    data-move="down"
                     aria-label={`Move down ${label} item ${index + 1}`}
                     onClick={() => move(index, 1)}
                   >
@@ -102,9 +137,7 @@ function ItemList({
                     variant="outline"
                     size="sm"
                     aria-label={`Remove ${label} item ${index + 1}`}
-                    onClick={() =>
-                      onChange(items.filter((other) => other.id !== item.id))
-                    }
+                    onClick={() => remove(index)}
                   >
                     Remove
                   </Button>
@@ -120,6 +153,7 @@ function ItemList({
             type="button"
             variant="secondary"
             size="sm"
+            data-add
             aria-label={`Add ${label} item`}
             disabled={items.length >= MAX_ITEMS}
             onClick={() => onChange([...items, { id: nextId(), text: '' }])}
@@ -238,17 +272,17 @@ export function LandingPageCard({
       />
       {!readOnly && (
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? 'Saving' : 'Save landing page'}
-          </Button>
+          <PendingButton
+            type="submit"
+            pending={save.isPending}
+            pendingLabel="Saving…"
+          >
+            Save landing page
+          </PendingButton>
           <Button type="button" variant="outline" onClick={cancel}>
             Cancel
           </Button>
-          {saved && (
-            <span role="status" className="text-sm text-muted-foreground">
-              Saved
-            </span>
-          )}
+          <StatusMessage message={saved ? 'Saved' : null} />
         </div>
       )}
     </form>

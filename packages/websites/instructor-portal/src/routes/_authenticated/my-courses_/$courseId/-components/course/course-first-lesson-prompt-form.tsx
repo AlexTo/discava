@@ -4,6 +4,8 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
@@ -104,9 +106,14 @@ export function CourseFirstLessonPromptForm({
         </p>
       )}
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isPending || unchanged}>
-          {isPending ? 'Saving' : 'Save prompt'}
-        </Button>
+        <PendingButton
+          type="submit"
+          pending={isPending}
+          pendingLabel="Saving…"
+          disabled={unchanged}
+        >
+          Save prompt
+        </PendingButton>
         {firstLessonPrompt !== undefined && (
           <Button
             type="button"
@@ -117,11 +124,7 @@ export function CourseFirstLessonPromptForm({
             Use default
           </Button>
         )}
-        {saved && (
-          <span role="status" className="text-sm text-muted-foreground">
-            Saved
-          </span>
-        )}
+        <StatusMessage message={saved ? 'Saved' : null} />
       </div>
     </form>
   );

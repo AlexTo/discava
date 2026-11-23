@@ -17,22 +17,27 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../api';
+
+export const respondButtonId = (reviewerId: string) => `respond-${reviewerId}`;
 
 export function DeleteResponseDialog({
   courseId,
   reviewerId,
   trigger,
+  onDeleted,
 }: {
   courseId: string;
   reviewerId: string;
   trigger: ReactNode;
+  onDeleted?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const trpc = useInstructorApi();
   const queryClient = useQueryClient();
   const remove = useMutation(trpc.review.deleteResponse.mutationOptions());
+  const deleted = useRef(false);
 
   return (
     <AlertDialog
@@ -45,7 +50,18 @@ export function DeleteResponseDialog({
       }}
     >
       <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
-      <AlertDialogContent className="sm:max-w-md">
+      <AlertDialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(event) => {
+          // This trigger goes with the response; the row's Respond button
+          // takes its place.
+          if (deleted.current) {
+            deleted.current = false;
+            event.preventDefault();
+            document.getElementById(respondButtonId(reviewerId))?.focus();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Delete response</AlertDialogTitle>
           <AlertDialogDescription>
@@ -72,7 +88,9 @@ export function DeleteResponseDialog({
                 // Shown above.
                 return;
               }
+              deleted.current = true;
               setOpen(false);
+              onDeleted?.();
               void queryClient.invalidateQueries(trpc.review.list.pathFilter());
             }}
           >

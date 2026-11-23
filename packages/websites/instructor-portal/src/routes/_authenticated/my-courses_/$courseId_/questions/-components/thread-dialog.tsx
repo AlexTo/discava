@@ -4,6 +4,8 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -24,7 +26,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useCoreApi } from '../../../../../../api';
 import type { LessonRef, LessonState } from './lessons';
 import { DeletePostButton, useModeration } from './moderation';
@@ -65,10 +67,14 @@ function ReplyForm({
   const queryClient = useQueryClient();
   const [postId, renewPostId] = usePostId();
   const [body, setBody] = useState('');
+  const [status, setStatus] = useState<string | null>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
   const reply = useMutation(
     trpc.discussion.reply.mutationOptions({
       onSuccess: () => {
         setBody('');
+        setStatus('Reply posted');
+        textarea.current?.focus();
         renewPostId();
         void queryClient.invalidateQueries({
           queryKey: trpc.discussion.pathKey(),
@@ -91,24 +97,35 @@ function ReplyForm({
       <div className="space-y-2">
         <Label htmlFor="instructor-reply-body">Your reply</Label>
         <Textarea
+          ref={textarea}
           id="instructor-reply-body"
+          aria-describedby="instructor-reply-count"
           value={body}
           rows={3}
           maxLength={DISCUSSION_BODY_MAX}
           onChange={(event) => setBody(event.target.value)}
         />
-        <p className="text-xs text-muted-foreground" aria-live="polite">
+        <p
+          id="instructor-reply-count"
+          className="text-xs text-muted-foreground"
+        >
           {body.length} / {DISCUSSION_BODY_MAX.toLocaleString('en-US')}
         </p>
       </div>
+      <StatusMessage message={status} />
       {reply.isError ? (
         <ErrorAlert type="error" header="Couldn't post your reply">
           {apiErrorMessage(reply.error)}
         </ErrorAlert>
       ) : null}
-      <Button type="submit" disabled={empty || reply.isPending}>
+      <PendingButton
+        type="submit"
+        pending={reply.isPending}
+        pendingLabel="Posting…"
+        disabled={empty}
+      >
         Post reply
-      </Button>
+      </PendingButton>
     </form>
   );
 }
@@ -121,14 +138,26 @@ export function ThreadDialog({
   threadId,
   lessonState,
   courseArchived,
+  headingId,
   onClose,
 }: {
   lesson: LessonRef;
   threadId: string;
   lessonState: LessonState | undefined;
   courseArchived: boolean;
+  /** The list's heading, where focus lands when its rows are gone. */
+  headingId: string;
   onClose: () => void;
 }) {
+  // The row's open button, and the next row's, read before the dialog takes
+  // focus.
+  const [opener] = useState(() => {
+    const button = document.activeElement;
+    return {
+      button,
+      next: button?.closest('li')?.nextElementSibling ?? null,
+    };
+  });
   const coreApi = useCoreApi();
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState<unknown>();
@@ -165,11 +194,13 @@ export function ThreadDialog({
         {post.state === 'deleted' ? null : (
           <div className="flex flex-wrap gap-2">
             {post.kind === 'reply' && !reason && post.state === 'shown' ? (
-              <Button
+              <PendingButton
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={busy}
+                pending={accept.isPending}
+                pendingLabel="Marking…"
+                disabled={moderation.busy}
                 onClick={() =>
                   accept.mutate({
                     ...lesson,
@@ -179,13 +210,23 @@ export function ThreadDialog({
                 }
               >
                 {isAccepted ? 'Remove answer' : 'Mark as answer'}
-              </Button>
+              </PendingButton>
             ) : null}
-            <Button
+            <PendingButton
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy}
+              pending={
+                hidden ? moderation.unhide.isPending : moderation.hide.isPending
+              }
+              pendingLabel={hidden ? 'Unhiding…' : 'Hiding…'}
+              disabled={
+                moderation.remove.isPending ||
+                accept.isPending ||
+                (hidden
+                  ? moderation.hide.isPending
+                  : moderation.unhide.isPending)
+              }
               onClick={() =>
                 hidden
                   ? moderation.unhide.mutate(ref)
@@ -193,7 +234,7 @@ export function ThreadDialog({
               }
             >
               {hidden ? 'Unhide' : 'Hide'}
-            </Button>
+            </PendingButton>
             <DeletePostButton
               kind={post.kind}
               disabled={busy}
@@ -207,19 +248,8 @@ export function ThreadDialog({
 
   let content: React.ReactNode;
   if (query.isPending) {
-    return (
-      <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Question</DialogTitle>
-            <DialogDescription>Loading the question.</DialogDescription>
-          </DialogHeader>
-          <Skeleton className="h-14 w-full" />
-        </DialogContent>
-      </Dialog>
-    );
-  }
-  if (query.isError) {
+    content = <Skeleton className="h-14 w-full" />;
+  } else if (query.isError) {
     content = (
       <ErrorAlert type="error" header="Couldn't load the question">
         {apiErrorMessage(query.error)}
@@ -278,11 +308,26 @@ export function ThreadDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto sm:max-w-2xl"
+        onCloseAutoFocus={(event) => {
+          const target =
+            opener.button?.isConnected && opener.button instanceof HTMLElement
+              ? opener.button
+              : (opener.next?.querySelector('button') ??
+                document.getElementById(headingId));
+          if (target instanceof HTMLElement) {
+            event.preventDefault();
+            target.focus();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Question</DialogTitle>
           <DialogDescription>
-            Reply, mark an answer, or moderate the posts.
+            {query.isPending
+              ? 'Loading the question.'
+              : 'Reply, mark an answer, or moderate the posts.'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">{content}</div>

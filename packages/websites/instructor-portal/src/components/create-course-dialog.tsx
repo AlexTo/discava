@@ -28,7 +28,7 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { FileText } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { z } from 'zod';
 import { useInstructorApi } from '../api';
 
@@ -40,6 +40,7 @@ const courseFormSchema = z.object({
 export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const navigatingRef = useRef(false);
   const trpc = useInstructorApi();
   const createCourse = useMutation(trpc.course.create.mutationOptions());
 
@@ -52,6 +53,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
           title: value.title.trim(),
           description: value.description.trim() || undefined,
         });
+        navigatingRef.current = true;
         setOpen(false);
         void navigate({
           to: '/my-courses/$courseId',
@@ -67,14 +69,24 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
       open={open}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
-        if (!nextOpen) {
+        if (nextOpen) {
+          navigatingRef.current = false;
+        } else {
           form.reset();
           createCourse.reset();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        onCloseAutoFocus={(event) => {
+          // Closing to navigate: the new page takes focus, not the trigger.
+          if (navigatingRef.current) {
+            event.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle className="text-xl">Create a course</DialogTitle>

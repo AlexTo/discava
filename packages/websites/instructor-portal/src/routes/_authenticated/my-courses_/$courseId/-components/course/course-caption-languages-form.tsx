@@ -4,6 +4,8 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Checkbox } from '@discava/common-shadcn/components/ui/checkbox';
 import { Label } from '@discava/common-shadcn/components/ui/label';
@@ -146,14 +148,15 @@ export function CourseCaptionLanguagesForm({
       )}
       {!locked && (
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={save.isPending || draft === null}>
-            {save.isPending ? 'Saving…' : 'Save'}
-          </Button>
-          {saved && (
-            <span role="status" className="text-sm text-muted-foreground">
-              Saved
-            </span>
-          )}
+          <PendingButton
+            type="submit"
+            pending={save.isPending}
+            pendingLabel="Saving…"
+            disabled={draft === null}
+          >
+            Save
+          </PendingButton>
+          <StatusMessage message={saved ? 'Saved' : null} />
         </div>
       )}
       {!readOnly && enabled && savedLanguages.length > 0 && (

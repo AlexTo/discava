@@ -25,6 +25,7 @@ export interface PostRef extends LessonRef {
 
 interface PostAction {
   mutate: (ref: PostRef) => void;
+  isPending: boolean;
 }
 
 // Spelled out so the declaration emit doesn't have to name the API router's
@@ -39,33 +40,43 @@ export interface Moderation {
 
 // Hide, unhide, delete and dismiss reports. Whatever changes refreshes the
 // queues and the open threads and lists, which are core-api's.
-export function useModeration(onError: (error: unknown) => void): Moderation {
+export type ModerationAction = 'hide' | 'unhide' | 'remove' | 'dismissReports';
+
+// `onDone` runs once an action and the refresh it triggers have finished.
+export function useModeration(
+  onError: (error: unknown) => void,
+  onDone?: (action: ModerationAction, ref: PostRef) => void,
+): Moderation {
   const instructorApi = useInstructorApi();
   const coreApi = useCoreApi();
   const queryClient = useQueryClient();
-  const settings = {
-    onSuccess: () =>
-      Promise.all([
+  const settings = (action: ModerationAction) => ({
+    onSuccess: async (_data: unknown, ref: PostRef) => {
+      await Promise.all([
         queryClient.invalidateQueries({
           queryKey: instructorApi.discussion.pathKey(),
         }),
         queryClient.invalidateQueries({
           queryKey: coreApi.discussion.pathKey(),
         }),
-      ]),
+      ]);
+      onDone?.(action, ref);
+    },
     onError,
-  };
+  });
   const hide = useMutation(
-    instructorApi.discussion.hide.mutationOptions(settings),
+    instructorApi.discussion.hide.mutationOptions(settings('hide')),
   );
   const unhide = useMutation(
-    instructorApi.discussion.unhide.mutationOptions(settings),
+    instructorApi.discussion.unhide.mutationOptions(settings('unhide')),
   );
   const remove = useMutation(
-    instructorApi.discussion.remove.mutationOptions(settings),
+    instructorApi.discussion.remove.mutationOptions(settings('remove')),
   );
   const dismissReports = useMutation(
-    instructorApi.discussion.dismissReports.mutationOptions(settings),
+    instructorApi.discussion.dismissReports.mutationOptions(
+      settings('dismissReports'),
+    ),
   );
   return {
     hide,

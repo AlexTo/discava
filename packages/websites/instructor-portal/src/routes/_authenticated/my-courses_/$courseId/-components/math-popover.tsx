@@ -48,6 +48,8 @@ export interface MathPopoverProps {
   // Only offered when editing an existing formula.
   onDelete?: () => void;
   onClose: () => void;
+  // Returns focus to the editor when the popover is cancelled.
+  focus?: () => void;
 }
 
 // Writing or editing one formula: its LaTeX, buttons for common snippets,
@@ -62,6 +64,7 @@ export function MathPopover({
   onConfirm,
   onDelete,
   onClose,
+  focus,
 }: MathPopoverProps) {
   const [latex, setLatex] = useState(initialLatex ?? '');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -182,7 +185,10 @@ export function MathPopover({
             variant="outline"
             size="sm"
             className="ml-auto"
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+              focus?.();
+            }}
           >
             Cancel
           </Button>

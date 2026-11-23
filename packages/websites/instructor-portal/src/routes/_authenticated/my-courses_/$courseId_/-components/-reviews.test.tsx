@@ -266,10 +266,16 @@ describe('ReviewsScreen', () => {
   });
 
   it('deletes a response after confirming', async () => {
+    let deleted = false;
     const { calls, user } = render({
       instructor: {
-        'review.list': () => ({ items: [review(2, { response })] }),
-        'review.deleteResponse': () => review(2),
+        'review.list': () => ({
+          items: [review(2, deleted ? {} : { response })],
+        }),
+        'review.deleteResponse': () => {
+          deleted = true;
+          return review(2);
+        },
       },
     });
 
@@ -293,6 +299,15 @@ describe('ReviewsScreen', () => {
         },
       ]),
     );
+    // The Delete button goes with the response; focus moves to Respond.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: "Respond to Student 2's review",
+        }),
+      ).toHaveFocus(),
+    );
+    expect(await screen.findByText('Response deleted')).toBeVisible();
   });
 
   it('shows a failed delete and keeps the dialog', async () => {

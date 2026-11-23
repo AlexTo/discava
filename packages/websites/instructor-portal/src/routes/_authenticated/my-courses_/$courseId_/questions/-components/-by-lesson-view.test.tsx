@@ -131,6 +131,35 @@ describe('ByLessonView', () => {
     expect(screen.getAllByText(/· Answered/)).toHaveLength(1);
   });
 
+  it('focuses the reply box and says "Reply posted" after posting', async () => {
+    const rendered = render({
+      core: { 'discussion.reply': () => post({ authorIsInstructor: true }) },
+    });
+    await openThread(rendered);
+
+    await rendered.user.type(screen.getByLabelText('Your reply'), 'Hello');
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Post reply' }),
+    );
+
+    expect(await screen.findByText('Reply posted')).toBeVisible();
+    expect(screen.getByLabelText('Your reply')).toHaveFocus();
+    expect(screen.getByLabelText('Your reply')).toHaveAccessibleDescription(
+      /4,000/,
+    );
+  });
+
+  it('returns focus to the Open thread button when the thread closes', async () => {
+    const rendered = render();
+    await openThread(rendered);
+
+    await rendered.user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Open thread' })).toHaveFocus(),
+    );
+  });
+
   it('replies with the lesson ref, and the same id after a failure', async () => {
     let fail = true;
     const rendered = render({

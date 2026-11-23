@@ -26,6 +26,11 @@ export type SaveError = { message: string; data?: { code?: string } | null };
 // The element id a contents link scrolls to.
 export const sectionId = (target: string) => `quiz-section-${target}`;
 
+// The id of a question's expand/collapse control, which takes focus when a
+// neighbouring question is removed.
+export const questionHeaderId = (questionId: string) =>
+  `quiz-question-header-${questionId}`;
+
 // The builder's state: the quiz being edited, what is saved, the save and
 // conflict mutations, the unsaved-changes guard and scroll-to.
 export function useQuizBuilderState({
@@ -222,12 +227,24 @@ export function useQuizBuilderState({
     jumpTo(question.questionId);
   };
 
-  const removeQuestion = (questionId: string) =>
-    change({
-      questions: quiz.questions.filter(
-        (current) => current.questionId !== questionId,
-      ),
-    });
+  const removeQuestion = (questionId: string) => {
+    const index = quiz.questions.findIndex(
+      (current) => current.questionId === questionId,
+    );
+    const remaining = quiz.questions.filter(
+      (current) => current.questionId !== questionId,
+    );
+    change({ questions: remaining });
+    // Focus the question that took its place, else the one before it.
+    const neighbour = remaining[index] ?? remaining[index - 1];
+    if (neighbour) {
+      setTimeout(() =>
+        document
+          .getElementById(questionHeaderId(neighbour.questionId))
+          ?.focus(),
+      );
+    }
+  };
 
   const toggleQuestion = (questionId: string) =>
     setExpanded((current) => (current === questionId ? undefined : questionId));

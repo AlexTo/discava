@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import {
   gradeQuiz,
   type QuizAnswers,
@@ -37,6 +38,7 @@ export function QuizPreviewDialog({
     [quiz],
   );
   const [summary, setSummary] = useState<QuizSummary | null>(null);
+  const { onCloseAutoFocus } = useReturnFocus(open);
 
   const onSubmit = async (answers: QuizAnswers) => {
     const graded = gradeQuiz(
@@ -74,7 +76,10 @@ export function QuizPreviewDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogHeader>
           <DialogTitle>Preview as student: {title}</DialogTitle>
           <DialogDescription>

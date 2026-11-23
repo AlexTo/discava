@@ -373,7 +373,11 @@ function RouteComponent() {
         <div>
           <div className="flex items-center gap-2">
             <BookOpen className="size-5 text-primary" />
-            <h2 id="content-heading" className="text-xl font-semibold">
+            <h2
+              id="content-heading"
+              tabIndex={-1}
+              className="text-xl font-semibold"
+            >
               Course content
             </h2>
           </div>
@@ -395,7 +399,11 @@ function RouteComponent() {
         <div>
           <div className="flex items-center gap-2">
             <Megaphone className="size-5 text-primary" />
-            <h2 id="announcements-heading" className="text-xl font-semibold">
+            <h2
+              id="announcements-heading"
+              tabIndex={-1}
+              className="text-xl font-semibold"
+            >
               Announcements
             </h2>
           </div>

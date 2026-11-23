@@ -102,12 +102,13 @@ export function ResponseDialog({
             <div className="flex items-baseline justify-between">
               <Label htmlFor={textId}>Response</Label>
               <span
+                id={`${textId}-count`}
                 className="text-xs text-muted-foreground"
-                aria-live="polite"
               >{`${text.length}/${RESPONSE_MAX}`}</span>
             </div>
             <Textarea
               id={textId}
+              aria-describedby={`${textId}-count`}
               value={text}
               maxLength={RESPONSE_MAX}
               rows={5}

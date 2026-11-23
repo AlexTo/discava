@@ -179,4 +179,20 @@ describe('AnnouncementForm', () => {
         .querySelector('svg'),
     ).toBeNull();
   });
+
+  it('has a status region before posting, then announces and refocuses the title', async () => {
+    const { user } = renderWithInstructorApi(
+      <AnnouncementForm courseId={COURSE_ID} />,
+      { handlers: { 'announcement.create': () => posted } },
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('');
+    await typeAnnouncement(user);
+    await user.click(screen.getByRole('button', { name: 'Post announcement' }));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Announcement posted',
+      ),
+    );
+    expect(document.activeElement).toBe(screen.getByLabelText('Title'));
+  });
 });

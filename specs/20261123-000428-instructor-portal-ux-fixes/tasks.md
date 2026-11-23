@@ -342,12 +342,12 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US5.
 
-- [ ] T040 [US5] Test first in the portal-shell test, then change `SH/components/portal-shell.tsx` (A-03):
+- [x] T040 [US5] Test first in the portal-shell test, then change `SH/components/portal-shell.tsx` (A-03):
   - close the phone sidebar when the pathname changes (`useSidebar().setOpenMobile(false)` in an effect on `pathname`);
   - give the sidebar's `SheetContent` an `onCloseAutoFocus` that focuses the `SidebarTrigger` (a ref), unless navigation is under way (then `RouteAnnouncer` moves focus).
 
   The shared `ui/sidebar.tsx` may need a prop to pass `onCloseAutoFocus` through; if so, name it in the pull request.
-- [ ] T041 [P] [US5] Replace `disabled={…isPending…}` with `PendingButton` (T001) on every save, post and submit button (C-07, A-13, A-24, E-18). Each file's existing tests that assert `toBeDisabled()` while pending change to `aria-disabled` (plan, "Tests that change meaning"). The pending labels:
+- [x] T041 [P] [US5] Replace `disabled={…isPending…}` with `PendingButton` (T001) on every save, post and submit button (C-07, A-13, A-24, E-18). Each file's existing tests that assert `toBeDisabled()` while pending change to `aria-disabled` (plan, "Tests that change meaning"). The pending labels:
 
   | File | Pending label |
   |------|---------------|
@@ -366,14 +366,14 @@ At 1440px nothing changes, apart from long-content fixes.
   The "Saved" note of the price, catalogue, first-lesson prompt, landing page and caption languages forms becomes a `StatusMessage` (T003) set on success, in place of a `role="status"` span mounted together with its text (C-17, research R-14). **Test:** in each form's test, the region exists before saving and reads "Saved" after.
 
   The certificates switch (`IPC/course/course-certificates-switch.tsx`) and the criteria checkbox (`IPC/course/course-certificate-criteria.tsx`) stay enabled while saving, ignore changes until the save settles, and set `aria-busy` on their row.
-- [ ] T042 [P] [US5] Make the course editor's lists keep focus when an item goes or changes (research R-6; C-08, C-06).
+- [x] T042 [P] [US5] Make the course editor's lists keep focus when an item goes or changes (research R-6; C-08, C-06).
   - **In `IPC/course/course-modules.tsx`:** keep a ref map of each module's and lesson's first control by id. After delete or archive succeeds, focus the next item's, else the previous one's, else the "Course content" heading (`tabIndex={-1}`). Do the same in `IPC/course/archived-section.tsx` after Restore or Delete.
   - **Free preview:** make `IPC/lesson/free-preview-button.tsx` one button whose label switches between "Make free preview" and "Remove free preview", so focus never moves. In `free-preview-button.test.tsx`, update the assertions that the button is replaced; the names stay.
   - **Tags and landing items:** after removing a tag (`IPC/course/course-catalogue-form.tsx`) or a landing item, or moving one to an end (`IPC/course/landing-page-card.tsx`), focus the neighbouring item's control.
   - **Failed reorder (`IPC/sortable-list.tsx`):** show `apiErrorMessage(cause)` for non-conflict errors, and after the rollback remount, focus the moved item's handle by id.
 
   **Tests:** in each component's test file, after the action `document.activeElement` is the expected element.
-- [ ] T043 [P] [US5] Announcements, maths popover and Create course (C-08, B-13, B-14):
+- [x] T043 [P] [US5] Announcements, maths popover and Create course (C-08, B-13, B-14):
   - **Announcements:** in `IPC/announcements/announcements-section.tsx` and `announcement-form.tsx`:
     - Edit focuses the title field;
     - Cancel and Save focus the item's Edit button;
@@ -382,7 +382,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - **Maths popover:** Cancel in `IPC/math-popover.tsx` returns focus to the editor (`IPC/rich-text-editor.tsx` passes a `focus` callback).
   - **Create course:** in `packages/websites/instructor-portal/src/components/create-course-dialog.tsx`, when closing to navigate, call `event.preventDefault()` in `onCloseAutoFocus`.
   - **Clear filters:** in `IP/my-courses/route.tsx`, it focuses the search box.
-- [ ] T044 [P] [US5] Quiz and video questions (D-08, D-09, D-10, D-16):
+- [x] T044 [P] [US5] Quiz and video questions (D-08, D-09, D-10, D-16):
   - **Return focus:** use `useReturnFocus` (T002) in `IPC/content-items/quiz/quiz-builder-dialog.tsx`, for its discard confirmation and the preview, in `IPC/content-items/quiz/quiz-preview-dialog.tsx`, and in `IPC/content-items/video-questions/video-questions-dialog.tsx`.
   - **Reorder announcements:** in `IPC/content-items/quiz/sortable-question-list.tsx`, pass `accessibility={{ announcements, screenReaderInstructions }}` naming "Question N" and the prompt's first 40 characters, and the new position "of M", phrased like `IPC/sortable-list.tsx`. Refocus the moved handle by id after the drop.
   - **Remove and move:** after `removeQuestion` (`IPC/content-items/quiz/use-quiz-builder-state.ts`), and after `remove` or `move` (`IPC/content-items/video-questions/use-video-questions-editor.ts`), focus the neighbouring question's header control, or the other move button when one becomes disabled.
@@ -390,12 +390,12 @@ At 1440px nothing changes, apart from long-content fixes.
   - **First or last item:** for a question that can't move further, its Move up (or Move down) control is disabled and skipped by Tab (spec Edge Cases). Focus never rests on it after a move, because the other move button takes it. **Test:** after moving question 2 up to first place, focus is on its "Move down".
 
   **Tests** in the existing test files.
-- [ ] T045 [P] [US5] Captions and uploads (D-14, D-23):
+- [x] T045 [P] [US5] Captions and uploads (D-14, D-23):
   - **Captions:** in `IPC/content-items/video-captions-dialog.tsx`, the upload button is a `PendingButton`. After an upload, `StatusMessage` says "<Language> captions added", and focus moves to the new track's row (its Remove button). The dialog opens on its Language select (`onOpenAutoFocus`).
   - **Uploads:** in `IPC/content-items/attach-lesson-video-dialog.tsx` and `attach-lesson-file-dialog.tsx`:
     - put "Uploading… n%" and "uploaded" in `role="status"`;
     - give the drop zone `role="button"` and `aria-label="Choose a video file"` / `"Choose a file"`, instead of `role="presentation"`.
-- [ ] T046 [P] [US5] Questions, reviews and grading (E-05 to E-09, E-20):
+- [x] T046 [P] [US5] Questions, reviews and grading (E-05 to E-09, E-20):
   - **Thread dialog:** `IP/my-courses_/$courseId_/questions/-components/thread-dialog.tsx` renders one `Dialog`, and swaps only its body between loading, error and loaded. Its `onCloseAutoFocus` focuses the row's open button if it is still there, else the next row's, else the list's heading.
     - After Post reply, focus the reply textarea and show `StatusMessage` "Reply posted".
     - The counter drops `aria-live`, and is referenced by `aria-describedby`.
@@ -406,7 +406,7 @@ At 1440px nothing changes, apart from long-content fixes.
     - after Return or Save grade, focus the "Returned" summary (`tabIndex={-1}`, in a `StatusMessage` "Grade returned");
     - Edit grade focuses Points;
     - Cancel focuses Edit grade.
-- [ ] T047 [P] [US5] Earnings and profile (A-13, A-17):
+- [x] T047 [P] [US5] Earnings and profile (A-13, A-17):
   - **Period picker:** in `IP/earnings/-components/period-picker.tsx`, after "Custom range" focus the From field, and after "Choose a month" focus the Month field.
   - **Profile:** in `IP/profile.tsx`, after Save the button keeps focus (T041), "Profile saved." stays in its status region, and on failure the alert is announced and focus stays on Save.
 - [ ] T048 [US5] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`. As a new instructor, build a quiz with three questions, reorder one with Space, ArrowDown and Space, and assert that:
@@ -419,7 +419,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - toggle free preview with Enter and assert focus is on the same button.
 
   Screenshot: `'quiz reorder by keyboard'`.
-- [ ] T049 [US5] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T049 [US5] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 - [ ] T050 [US5] (human) With a screen reader (NVDA or VoiceOver), do the actions in [quickstart.md](./quickstart.md) US5. Confirm:
   - each result is announced once;
   - the reply counter and video clock are silent;

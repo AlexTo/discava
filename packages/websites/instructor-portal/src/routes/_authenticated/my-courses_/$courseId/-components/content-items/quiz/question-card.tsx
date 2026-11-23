@@ -52,6 +52,7 @@ import {
   type QuestionKind,
   type QuestionState,
 } from './quiz-form';
+import { questionHeaderId } from './use-quiz-builder-state';
 
 const move = <T,>(items: T[], from: number, to: number) => {
   const next = items.slice();
@@ -251,6 +252,7 @@ export function QuestionCard({
             )}
             <CollapsibleTrigger asChild>
               <Button
+                id={questionHeaderId(question.questionId)}
                 type="button"
                 variant="ghost"
                 size="icon-sm"
@@ -442,16 +444,19 @@ export function QuestionCard({
 // The grip that reorders questions by drag (or the keyboard), used by the
 // builder through dnd-kit.
 export function QuestionHandle({
+  id,
   label,
   handleRef,
   disabled,
 }: {
+  id: string;
   label: string;
   handleRef: (element: Element | null) => void;
   disabled: boolean;
 }) {
   return (
     <Button
+      id={id}
       ref={handleRef}
       type="button"
       variant="ghost"

@@ -6,8 +6,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../api';
-import type { SaveError } from '../quiz/use-quiz-builder-state';
 import {
+  questionHeaderId,
+  type SaveError,
+} from '../quiz/use-quiz-builder-state';
+import {
+  canMove,
   fromVideoItem,
   hasErrors,
   MAX_VIDEO_QUESTIONS,
@@ -23,6 +27,14 @@ import {
 // The element id a marker or contents link scrolls to.
 export const questionElementId = (questionId: string) =>
   `video-question-${questionId}`;
+
+// The id of a question's Move up or Move down button.
+export const moveButtonId = (questionId: string, direction: 'up' | 'down') =>
+  `video-question-move-${direction}-${questionId}`;
+
+// Focuses an element once the list has re-rendered.
+const focusLater = (id: string) =>
+  setTimeout(() => document.getElementById(id)?.focus());
 
 // The editor's state: the questions being edited, what is saved, the save
 // mutation and its version, the unsaved-changes guard and scroll-to.
@@ -124,11 +136,30 @@ export function useVideoQuestionsEditor({
     );
   };
 
-  const remove = (questionId: string) =>
-    change(questions.filter((q) => q.questionId !== questionId));
+  const remove = (questionId: string) => {
+    const index = questions.findIndex((q) => q.questionId === questionId);
+    const remaining = questions.filter((q) => q.questionId !== questionId);
+    change(remaining);
+    // Focus the question that took its place, else the one before it.
+    const neighbour = remaining[index] ?? remaining[index - 1];
+    if (neighbour) {
+      focusLater(questionHeaderId(neighbour.questionId));
+    }
+  };
 
-  const move = (questionId: string, direction: 'up' | 'down') =>
-    change(moveWithinMoment(questions, questionId, direction));
+  const move = (questionId: string, direction: 'up' | 'down') => {
+    const next = moveWithinMoment(questions, questionId, direction);
+    change(next);
+    // The button just used keeps focus unless it is now disabled, when the
+    // other one takes it.
+    const other = direction === 'up' ? 'down' : 'up';
+    focusLater(
+      moveButtonId(
+        questionId,
+        canMove(next, questionId, direction) ? direction : other,
+      ),
+    );
+  };
 
   const toggle = (questionId: string) =>
     setExpanded((current) => (current === questionId ? undefined : questionId));

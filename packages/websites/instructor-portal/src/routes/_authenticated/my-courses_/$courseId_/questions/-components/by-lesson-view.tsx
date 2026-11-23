@@ -79,6 +79,7 @@ function LessonQuestions({
           threadId={open}
           lessonState={lessonState}
           courseArchived={courseArchived}
+          headingId="by-lesson-heading"
           onClose={() => setOpen(undefined)}
         />
       ) : null}
@@ -114,6 +115,9 @@ export function ByLessonView({ courseId }: { courseId: string }) {
 
   return (
     <div className="space-y-4">
+      <h2 id="by-lesson-heading" tabIndex={-1} className="sr-only">
+        Questions by lesson
+      </h2>
       <div className="space-y-2">
         <Label htmlFor="questions-lesson">Lesson</Label>
         <select

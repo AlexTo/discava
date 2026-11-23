@@ -11,9 +11,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@discava/common-shadcn/components/ui/alert-dialog';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -41,6 +41,7 @@ export function FreePreviewButton({
   const queryClient = useQueryClient();
   const mutation = useMutation(lesson.setFreePreview.mutationOptions());
   const [open, setOpen] = useState(false);
+  const { onCloseAutoFocus } = useReturnFocus(open);
 
   const set = async (next: boolean) => {
     await mutation.mutateAsync({
@@ -54,77 +55,74 @@ export function FreePreviewButton({
     });
   };
 
-  if (freePreview) {
-    return (
-      <>
-        <Button
-          variant="ghost"
-          size="sm"
-          type="button"
-          className={className}
-          disabled={mutation.isPending}
-          onClick={() => void set(false).catch(() => {})}
-        >
-          Remove free preview
-        </Button>
-        {mutation.isError && (
-          <ErrorAlert type="error" header="Couldn't remove the free preview">
-            {apiErrorMessage(mutation.error)}
-          </ErrorAlert>
-        )}
-      </>
-    );
-  }
-
+  // One button for both states, so focus never moves when the mark changes:
+  // marking asks first, removing the mark is immediate.
   return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          mutation.reset();
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        type="button"
+        className={className}
+        disabled={freePreview && mutation.isPending}
+        onClick={() =>
+          freePreview ? void set(false).catch(() => {}) : setOpen(true)
         }
-      }}
-    >
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="sm" type="button" className={className}>
-          Make free preview
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent className="sm:max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Make free preview</AlertDialogTitle>
-          <AlertDialogDescription>
-            Anyone will be able to open this lesson without enrolling or paying:
-            its videos, text and files. Quizzes stay locked.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
+      >
+        {freePreview ? 'Remove free preview' : 'Make free preview'}
+      </Button>
+      {freePreview && mutation.isError && (
+        <ErrorAlert type="error" header="Couldn't remove the free preview">
+          {apiErrorMessage(mutation.error)}
+        </ErrorAlert>
+      )}
+      <AlertDialog
+        open={open && !freePreview}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            mutation.reset();
+          }
+        }}
+      >
+        <AlertDialogContent
+          className="sm:max-w-md"
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make free preview</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anyone will be able to open this lesson without enrolling or
+              paying: its videos, text and files. Quizzes stay locked.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-        {mutation.isError && (
-          <ErrorAlert type="error" header="Couldn't make the free preview">
-            {apiErrorMessage(mutation.error)}
-          </ErrorAlert>
-        )}
+          {mutation.isError && (
+            <ErrorAlert type="error" header="Couldn't make the free preview">
+              {apiErrorMessage(mutation.error)}
+            </ErrorAlert>
+          )}
 
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button
-            type="button"
-            disabled={mutation.isPending}
-            onClick={async () => {
-              try {
-                await set(true);
-              } catch {
-                // Surfaced via the error above; keep the dialog open.
-                return;
-              }
-              setOpen(false);
-            }}
-          >
-            {mutation.isPending ? 'Saving…' : 'Make free preview'}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              disabled={mutation.isPending}
+              onClick={async () => {
+                try {
+                  await set(true);
+                } catch {
+                  // Surfaced via the error above; keep the dialog open.
+                  return;
+                }
+                setOpen(false);
+              }}
+            >
+              {mutation.isPending ? 'Saving…' : 'Make free preview'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useCoreApi, useInstructorApi } from '../../../../../api';
-import { DeleteResponseDialog } from './delete-response-dialog';
+import {
+  DeleteResponseDialog,
+  respondButtonId,
+} from './delete-response-dialog';
 import { ResponseDialog } from './response-dialog';
 
 const STARS = [5, 4, 3, 2, 1] as const;
@@ -75,9 +80,11 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
     ),
   );
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const [status, setStatus] = useState<string | null>(null);
 
   return (
     <div className="space-y-6">
+      <StatusMessage message={status} />
       <Summary courseId={courseId} />
 
       {query.isPending ? (
@@ -127,6 +134,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
                       existing={item.response?.text}
                       trigger={
                         <Button
+                          id={respondButtonId(item.reviewerId)}
                           type="button"
                           variant="outline"
                           size="sm"
@@ -140,6 +148,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
                       <DeleteResponseDialog
                         courseId={courseId}
                         reviewerId={item.reviewerId}
+                        onDeleted={() => setStatus('Response deleted')}
                         trigger={
                           <Button
                             type="button"

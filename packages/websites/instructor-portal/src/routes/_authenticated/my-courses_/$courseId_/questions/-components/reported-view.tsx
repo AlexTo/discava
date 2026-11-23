@@ -4,15 +4,27 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { PostText } from '@discava/common-shadcn/discussion/post-text';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { lessonStateLabel, useCourseLessons } from './lessons';
-import { DeletePostButton, useModeration } from './moderation';
+import {
+  DeletePostButton,
+  type ModerationAction,
+  useModeration,
+} from './moderation';
 import { PagedList } from './paged-list';
+
+const DONE: Record<ModerationAction, string> = {
+  dismissReports: 'Report dismissed',
+  hide: 'Post hidden',
+  unhide: 'Post unhidden',
+  remove: 'Post deleted',
+};
 
 // Reported questions and replies, oldest first, each with the moderation
 // actions. Never who reported.
@@ -20,7 +32,21 @@ export function ReportedView({ courseId }: { courseId: string }) {
   const trpc = useInstructorApi();
   const lessons = useCourseLessons(courseId);
   const [actionError, setActionError] = useState<unknown>();
-  const moderation = useModeration(setActionError);
+  const [status, setStatus] = useState<string | null>(null);
+  // The row acted on, and the one after it: focus goes there once the first
+  // has left the list.
+  const [moved, setMoved] = useState<{ removed: string; next?: string }>();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const rowsRef = useRef<{ postId: string }[]>([]);
+  const moderation = useModeration(setActionError, (action, ref) => {
+    setActionError(undefined);
+    setStatus(DONE[action]);
+    const i = rowsRef.current.findIndex((r) => r.postId === ref.postId);
+    setMoved({
+      removed: ref.postId,
+      next: rowsRef.current[i + 1]?.postId ?? rowsRef.current[i - 1]?.postId,
+    });
+  });
   const query = useInfiniteQuery(
     trpc.discussion.reported.infiniteQueryOptions(
       { courseId },
@@ -28,9 +54,25 @@ export function ReportedView({ courseId }: { courseId: string }) {
     ),
   );
   const rows = query.data?.pages.flatMap((page) => page.items) ?? [];
+  rowsRef.current = rows;
+
+  useEffect(() => {
+    if (!moved || rows.some((row) => row.postId === moved.removed)) {
+      return;
+    }
+    const next = moved.next
+      ? document.getElementById(`reported-${moved.next}`)
+      : null;
+    (next?.querySelector('button') ?? heading.current)?.focus();
+    setMoved(undefined);
+  }, [moved, rows]);
 
   return (
     <div className="space-y-4">
+      <h2 ref={heading} tabIndex={-1} className="sr-only">
+        Reported posts
+      </h2>
+      <StatusMessage message={status} visuallyHidden />
       {actionError ? (
         <ErrorAlert type="error" header="That didn't work">
           {apiErrorMessage(actionError)}
@@ -55,7 +97,11 @@ export function ReportedView({ courseId }: { courseId: string }) {
               ?.state,
           );
           return (
-            <li key={row.postId} className="space-y-2 p-4">
+            <li
+              key={row.postId}
+              id={`reported-${row.postId}`}
+              className="space-y-2 p-4"
+            >
               <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {row.kind === 'question' ? 'Question' : 'Reply'} ·{' '}
                 {row.authorName} · {row.lessonTitle}

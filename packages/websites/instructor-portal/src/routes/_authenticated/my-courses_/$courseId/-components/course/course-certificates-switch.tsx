@@ -32,6 +32,7 @@ export function CourseCertificatesSwitch({
   const checked = pending ?? certificatesEnabled;
 
   const change = async () => {
+    if (pending !== undefined) return;
     reset();
     setPending(!checked);
     try {
@@ -48,16 +49,16 @@ export function CourseCertificatesSwitch({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3" aria-busy={pending !== undefined}>
         <button
           type="button"
           role="switch"
           id={`certificates-${courseId}`}
           aria-checked={checked}
-          disabled={pending !== undefined}
           onClick={change}
           className={cn(
-            'mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors disabled:opacity-50',
+            'mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
+            pending !== undefined && 'opacity-50',
             checked ? 'bg-primary' : 'bg-input',
           )}
         >

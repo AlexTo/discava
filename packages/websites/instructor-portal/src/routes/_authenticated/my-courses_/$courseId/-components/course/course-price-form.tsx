@@ -4,7 +4,8 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { Button } from '@discava/common-shadcn/components/ui/button';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -145,14 +146,10 @@ export function CoursePriceForm({
           'Students who are already enrolled keep their access; the new price applies to new purchases.'}
       </p>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={isPending}>
-          {isPending ? 'Saving' : 'Save price'}
-        </Button>
-        {saved && (
-          <span role="status" className="text-sm text-muted-foreground">
-            Saved
-          </span>
-        )}
+        <PendingButton type="submit" pending={isPending} pendingLabel="Saving…">
+          Save price
+        </PendingButton>
+        <StatusMessage message={saved ? 'Saved' : null} />
       </div>
     </form>
   );

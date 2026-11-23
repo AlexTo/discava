@@ -4,7 +4,7 @@
  */
 
 import { ApiError } from '@discava/common-web-utils/testing';
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   lessonsView,
@@ -122,6 +122,43 @@ describe('ReportedView', () => {
     expect(
       calls.filter((c) => c.path === 'discussion.reported').length,
     ).toBeGreaterThan(1);
+  });
+
+  it('announces the result and moves focus to the next row, then the heading', async () => {
+    const dismissed: string[] = [];
+    const { user } = render({
+      'discussion.reported': () => ({
+        items: [
+          post({ postId: 'r1', body: 'First post' }),
+          post({ postId: 'r2', body: 'Second post' }),
+        ].filter((p) => !dismissed.includes(p.postId)),
+      }),
+      'discussion.dismissReports': (input) => {
+        dismissed.push((input as { postId: string }).postId);
+        return post();
+      },
+    });
+
+    const rows = await screen.findAllByRole('listitem');
+    await user.click(
+      within(rows[0]).getByRole('button', { name: 'Dismiss reports' }),
+    );
+
+    expect(await screen.findByText('Report dismissed')).toBeVisible();
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole('listitem')).getByRole('button', {
+          name: 'Hide',
+        }),
+      ).toHaveFocus(),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Dismiss reports' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { name: 'Reported posts' }),
+      ).toHaveFocus(),
+    );
   });
 
   it('shows the message of a failing action', async () => {

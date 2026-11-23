@@ -21,6 +21,7 @@ import { Archive, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { studentActivityNote, usedItemCount } from '../student-activity';
+import { useFocusAfterRemoval } from '../use-focus-after-removal';
 
 type ArchivedItem = {
   contentItemId: string;
@@ -136,6 +137,12 @@ export function ArchivedSection({
   readOnly: boolean;
 }) {
   const entries = archivedEntries(modules);
+  const { register } = useFocusAfterRemoval(
+    entries.map((entry) => entry.key),
+    () =>
+      document.getElementById('archived-heading') ??
+      document.getElementById('content-heading'),
+  );
   if (entries.length === 0) {
     return null;
   }
@@ -145,7 +152,11 @@ export function ArchivedSection({
       <div>
         <div className="flex items-center gap-2">
           <Archive className="size-5 text-muted-foreground" />
-          <h2 id="archived-heading" className="text-xl font-semibold">
+          <h2
+            id="archived-heading"
+            tabIndex={-1}
+            className="text-xl font-semibold"
+          >
             Archived
           </h2>
         </div>
@@ -162,6 +173,7 @@ export function ArchivedSection({
             courseId={courseId}
             entry={entry}
             readOnly={readOnly}
+            rowRef={register(entry.key)}
           />
         ))}
       </ul>
@@ -219,17 +231,19 @@ function ArchivedRow({
   courseId,
   entry,
   readOnly,
+  rowRef,
 }: {
   courseId: string;
   entry: Entry;
   readOnly: boolean;
+  rowRef: (element: Element | null) => void;
 }) {
   const { restore, remove, run } = useArchivedActions(courseId, entry);
   const note = studentActivityNote(entry.activity);
   const used = Boolean(entry.activity.students || entry.activity.items);
 
   return (
-    <li className="space-y-2 px-4 py-3">
+    <li ref={rowRef} className="space-y-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="min-w-0 basis-full break-words sm:basis-0 sm:flex-1">
           <p className="text-sm font-medium">
