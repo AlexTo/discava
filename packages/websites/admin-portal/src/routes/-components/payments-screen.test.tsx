@@ -481,9 +481,35 @@ describe('the Payments page, with the keyboard', () => {
 
     const pending = await screen.findByRole('button', { name: 'Connecting…' });
     expect(pending).toHaveAttribute('aria-disabled', 'true');
-    pending.focus();
+    expect(pending).not.toBeDisabled();
+    await waitFor(() => expect(pending).toHaveFocus());
     await rendered.user.click(pending);
     expect(pending).toHaveFocus();
+    expect(
+      rendered.calls.filter((c) => c.path === 'payment.connect'),
+    ).toHaveLength(1);
+  });
+
+  it('keeps a pending Save key focusable, though the key field is emptied', async () => {
+    const rendered = render(active, {
+      'payment.connect': () => new Promise(() => {}),
+    });
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Replace key' }),
+    );
+    await rendered.user.type(keyField(), KEY);
+    await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
+    await rendered.user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Continue',
+      }),
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Saving…' });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    expect(pending).not.toBeDisabled();
+    await waitFor(() => expect(pending).toHaveFocus());
+    await rendered.user.click(pending);
     expect(
       rendered.calls.filter((c) => c.path === 'payment.connect'),
     ).toHaveLength(1);
