@@ -88,7 +88,7 @@ function RouteComponent() {
   return (
     <main className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
             <BarChart3 className="size-4" /> Course analytics
           </div>

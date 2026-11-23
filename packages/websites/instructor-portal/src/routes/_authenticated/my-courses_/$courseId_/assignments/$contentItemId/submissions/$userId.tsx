@@ -73,7 +73,7 @@ function RouteComponent() {
   return (
     <main className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
             {student.displayName}
           </h1>
