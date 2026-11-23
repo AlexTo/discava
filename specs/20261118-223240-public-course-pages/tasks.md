@@ -363,7 +363,7 @@ Paths are relative to the repository root. Only the last PR closes #287. Earlier
   - a draft course gives 404;
   - `/sitemap.xml` lists the course and profile;
   - `/robots.txt` is `Disallow: /`.
-- [ ] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the Data-owned policy on the renderer role works on a first deploy (plan risk P2). Redeploy the student portal with a changed bundle and, within a minute, load a landing page: it must reference the new `/assets/*` files. Time a landing page with `curl -o /dev/null -s -w '%{time_starttransfer}\n'` on a cache miss (first request after an edit) and on a hit, and check the miss against the plan's p95 goal (under 500 ms) and SC-004 (title and header within 2 seconds on an ordinary connection, checked in a browser with network throttling set to "Fast 4G"). Record the results in the PR.
+- [x] T040 (human) On a deployed `discava-development`, follow [quickstart.md](./quickstart.md) "Deployed stage" steps 1, 2 and 5. Confirm that AppConfig resolves by application name and that the Data-owned policy on the renderer role works on a first deploy (plan risk P2). Redeploy the student portal with a changed bundle and, within a minute, load a landing page: it must reference the new `/assets/*` files. Time a landing page with `curl -o /dev/null -s -w '%{time_starttransfer}\n'` on a cache miss (first request after an edit) and on a hit, and check the miss against the plan's p95 goal (under 500 ms) and SC-004 (title and header within 2 seconds on an ordinary connection, checked in a browser with network throttling set to "Fast 4G"). Record the results in the PR.
 
 ---
 
