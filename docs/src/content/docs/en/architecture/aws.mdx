@@ -25,7 +25,7 @@ router: "StreamRouter"
 payouts: "Payouts"
 instr: "InstructorApi"
 admin: "AdminApi"
-rc: "RuntimeConfig"
+rc: "PortalConfig"
 
 data -> websites
 payments -> data
@@ -53,13 +53,13 @@ rc -> admin
 They deploy in this order:
 
 ```
-Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → RuntimeConfig
+Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter → Payouts → InstructorApi → AdminApi → PortalConfig
 ```
 
 | Stack | Contains | Why it is separate |
 | --- | --- | --- |
 | **Websites** | The three portals: an S3 bucket and CloudFront distribution each | Depends on nothing. Others need the portals' addresses for CORS and sign-in redirects |
-| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the unsubscribe-link and Stripe secrets, the AppConfig application | Everything stateful. Changes rarely, and every other backend stack depends on it |
+| **Data** | Cognito user pool and its triggers, the core table, lesson media, upload and public media buckets with their CloudFront distributions, the search collection, the unsubscribe-link and Stripe secrets | Everything stateful. Changes rarely, and every other backend stack depends on it |
 | **Payments** | The Stripe webhook API: its API Gateway and function | Called by Stripe, not by signed-in users, so its firewall, request limits and domain are set apart from the other APIs |
 | **MediaPipeline** | MediaConvert pipeline, the functions reacting to finished transcodes and transcriptions, cleanup schedules, failure queues | Video processing, used by both core-api and instructor-api |
 | **CoreApi** | core-api's API Gateway and functions, the search re-index function, the email unsubscribe route | The API every user calls |
@@ -67,7 +67,7 @@ Websites → Data → Payments → MediaPipeline → CoreApi → StreamRouter �
 | **Payouts** | The daily payout run and its schedule | Kept apart so no stack nears the resource limit. It reads the table and the Stripe key only |
 | **InstructorApi** | instructor-api's API Gateway and function, with its media and transcoding permissions | The instructors' API |
 | **AdminApi** | admin-api's API Gateway and functions, including the one that saves the Stripe key | The admins' API |
-| **RuntimeConfig** | AppConfig content and each portal's `runtime-config.json` | Reads values from every other stack, so it deploys last |
+| **PortalConfig** | Each portal's `runtime-config.json` | Reads values from every other stack, so it deploys last |
 
 When a portal or media distribution has WAF on, its web ACL is an extra small stack in `us-east-1`, where CloudFront requires it.
 
@@ -100,7 +100,7 @@ All code runs in Lambda on Node.js 24.
 | Search | OpenSearch Serverless | Can scale to zero on a development stage |
 | Media | S3 | Three buckets: lesson media, uploads, public media |
 | Users | Cognito user pool | Groups: `student`, `instructor`, `admin` |
-| Configuration | AppConfig | Resource names and addresses that functions read at runtime |
+| Configuration | Lambda environment variables | Resource names and addresses, set at deploy time and read by functions from their environment. The page renderer reads one Systems Manager parameter |
 | Secrets | Secrets Manager | The video signing key, the key that signs unsubscribe links, and the Stripe secret key and webhook signing secret an administrator saves |
 
 ### Messaging and scheduling
@@ -117,10 +117,10 @@ All code runs in Lambda on Node.js 24.
 
 Deployed code never has resource names hardcoded.
 
-- **Backend functions** read table names, bucket names and endpoints from **AppConfig** at runtime. A function is given only the AppConfig application id.
+- **Backend functions** read table names, bucket names and endpoints from their own **environment variables** (`DISCAVA_*`), set when the stack is deployed. Nothing is fetched at runtime, and a function is given only the settings its code reads. The page renderer is the exception: it reads one Systems Manager parameter.
 - **Portals** fetch `runtime-config.json` from their own origin when they load. It carries the API addresses and Cognito ids.
 
-Both are written by the `RuntimeConfig` stack from values the other stacks export, which is why it deploys last.
+The portals' file is written by the `PortalConfig` stack from values the other stacks export, which is why it deploys last.
 
 ## Stages sharing an account
 

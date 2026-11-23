@@ -45,7 +45,7 @@ On a development stage with WAF off, the request limits, function concurrency an
 - The Stripe key and webhook signing secret are in Secrets Manager. One admin-api function may write them, the checkout, webhook and payout functions read only what they need, and no response, log line or audit record carries either.
 - The Stripe webhook accepts a message only if its signature verifies against the stored signing secret. A payment is never trusted from the browser.
 - No S3 bucket is public. Each is reachable only through its CloudFront distribution.
-- Functions read resource names from AppConfig, and credentials never appear in code or environment files.
+- Functions get resource names from deploy-time environment variables, and credentials never appear in code or environment files.
 
 ## Checks before code is deployed
 
