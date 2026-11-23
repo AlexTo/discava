@@ -107,6 +107,18 @@ A dropped enrolment keeps its progress and completions. The student can come bac
 - **By buying again.** Settling the new order restores the enrolment, as `completed` if they had finished the course, with their progress.
 - **By enrolling, if the course is now free.** `course.enrol` calls `restoreFreeEnrolment`, which restores the enrolment and removes its `orderId`. No order is written.
 
+### Leaving a course
+
+`course.unenrol` ends an enrolment that was not paid for: `unenrolFromCourse` sets it to `dropped` only while it has no `orderId`, and refuses with `EnrolmentPaidForError` otherwise. A bought enrolment ends only by a refund, so a paid course cannot be left without one. Progress and completions are kept, and `course.enrol` restores the enrolment while the course is free. The course's status and price are not checked, so a student can leave an archived or since-priced course.
+
+### Terms
+
+The 14-day period is `REFUND_WINDOW_DAYS` in `helpers/order.ts` of core-table, and `payment.myOrder` returns it as `refundWindowDays` so the course page quotes the same number. A student's request is refused after completion; an operator's refund in Stripe is not subject to either term. Requests are refunded automatically, with no review. Certificates survive refunds.
+
+### A refund for a payment that doesn't match
+
+A paid session whose student, course, amount or currency differs from its order's is refunded in full with reason `mismatch` and no enrolment is given. The student has already been refunded by the time the log line appears.
+
 ## The Stripe connection
 
 Stripe isn't configured at deploy time. An administrator pastes a secret key on the admin portal's **Payments** page.
@@ -137,8 +149,6 @@ Controls under `/stripe/test/` drive what a real Stripe account would: `refund`,
 
 ## Limitations
 
-- The student portal has no refund button yet. `payment.requestRefund` and `payment.myOrder` are live in core-api, but until the portal calls them, refunds are made in the Stripe dashboard.
-- A student can't leave a course. It is specified and not built yet.
 - No coupons at checkout. The coupon records and price function exist in core-table, and nothing uses them yet.
 - Card payments only, with no tax handling and no currency conversion.
 
