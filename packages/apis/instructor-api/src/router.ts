@@ -70,7 +70,12 @@ import {
   updateContentItemVideo,
 } from './procedures/content-item-video.js';
 import { updateContentItemVideoQuestions } from './procedures/content-item-video-questions.js';
-import { createCoupon, listCoupons } from './procedures/coupon.js';
+import {
+  createCoupon,
+  deleteCoupon,
+  listCoupons,
+  updateCoupon,
+} from './procedures/coupon.js';
 import {
   archiveCourse,
   createCourse,
@@ -210,6 +215,8 @@ export const appRouter = router({
   coupon: router({
     create: createCoupon,
     list: listCoupons,
+    update: updateCoupon,
+    delete: deleteCoupon,
   }),
   coursePreview: router({
     createUploadUrl: coursePreview.createUploadUrl,

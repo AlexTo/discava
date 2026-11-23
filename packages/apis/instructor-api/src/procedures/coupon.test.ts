@@ -5,20 +5,28 @@
 import { callerFor } from '@discava/common-server-utils/trpc-testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { t } from '../init.js';
-import { createCoupon, listCoupons } from './coupon.js';
+import {
+  createCoupon,
+  deleteCoupon,
+  listCoupons,
+  updateCoupon,
+} from './coupon.js';
 
 const {
   courseGet,
   coursePatch,
   courseInstructorGet,
   couponCreate,
+  couponGet,
+  couponPatch,
+  couponDelete,
   couponQueryPrimary,
   mockModule,
 } = await vi.hoisted(async () =>
   (await import('@discava/common-server-utils/trpc-testing')).mockCoreTable({
     course: ['get', 'patch'],
     courseInstructor: ['get'],
-    coupon: ['create', 'query.primary'],
+    coupon: ['create', 'get', 'patch', 'delete', 'query.primary'],
   }),
 );
 
@@ -26,7 +34,12 @@ vi.mock('@discava/core-table', async (importActual) =>
   mockModule(await importActual()),
 );
 
-const router = t.router({ createCoupon, listCoupons });
+const router = t.router({
+  createCoupon,
+  listCoupons,
+  updateCoupon,
+  deleteCoupon,
+});
 
 const INSTRUCTOR_SUB = 'instructor-1';
 const callAs = (sub = INSTRUCTOR_SUB, groups = ['instructor']) =>
@@ -367,5 +380,372 @@ describe('coupon.list', () => {
       callAs().listCoupons({ courseId: 'course-1' }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(couponQueryPrimary).not.toHaveBeenCalled();
+  });
+});
+
+// A stored coupon the fake enforces conditions against, as DynamoDB does: the
+// `where` callback is run with attribute and operator stand-ins that build the
+// condition as text, and the write fails unless the stored item meets it.
+const storedCoupon = (overrides: Record<string, unknown> = {}) => ({
+  courseId: 'course-1',
+  code: 'SPRING-25',
+  type: 'percent',
+  value: 10,
+  redeemedCount: 0,
+  enabled: true,
+  createdBy: INSTRUCTOR_SUB,
+  createdAt: '2026-11-01T00:00:00.000Z',
+  ...overrides,
+});
+
+type Stored = ReturnType<typeof storedCoupon>;
+
+const conditionHolds = (
+  where: ((attr: any, op: any) => string) | undefined,
+  item: Stored | undefined,
+) => {
+  if (!item) {
+    return false;
+  }
+  if (!where) {
+    return true;
+  }
+  const attr = new Proxy({}, { get: (_, name) => name });
+  const op = {
+    exists: (name: string) => `exists:${name}`,
+    eq: (name: string, value: unknown) => `eq:${name}:${value}`,
+    lte: (name: string, value: unknown) => `lte:${name}:${value}`,
+  };
+  return where(attr, op)
+    .split(' AND ')
+    .every((clause) => {
+      const [kind, name, value] = clause.split(':') as [string, string, string];
+      const actual = (item as Record<string, unknown>)[name];
+      if (kind === 'exists') {
+        return actual !== undefined;
+      }
+      if (kind === 'eq') {
+        return actual === Number(value);
+      }
+      return (actual as number) <= Number(value);
+    });
+};
+
+// `store.item` is what the table holds; a test changes it to model a claim
+// landing between the procedure's read and its write.
+const store: { item: Stored | undefined } = { item: undefined };
+
+const installFakeTable = (item: Stored | undefined) => {
+  store.item = item;
+  couponGet.mockImplementation(() => ({
+    go: vi.fn(async () => ({ data: store.item ?? null })),
+  }));
+  couponPatch.mockImplementation(() => {
+    let set: Record<string, unknown> = {};
+    let removed: string[] = [];
+    let where: ((attr: any, op: any) => string) | undefined;
+    const chain = {
+      set: (values: Record<string, unknown>) => {
+        set = values;
+        return chain;
+      },
+      remove: (names: string[]) => {
+        removed = names;
+        return chain;
+      },
+      where: (callback: typeof where) => {
+        where = callback;
+        return chain;
+      },
+      go: vi.fn(async () => {
+        if (!conditionHolds(where, store.item)) {
+          throw conditionalCheckFailed();
+        }
+        const next: Record<string, unknown> = { ...store.item, ...set };
+        for (const name of removed) {
+          delete next[name];
+        }
+        store.item = next as Stored;
+        return { data: store.item };
+      }),
+    };
+    return chain;
+  });
+  couponDelete.mockImplementation(() => {
+    let where: ((attr: any, op: any) => string) | undefined;
+    const chain = {
+      where: (callback: typeof where) => {
+        where = callback;
+        return chain;
+      },
+      go: vi.fn(async () => {
+        if (!conditionHolds(where, store.item)) {
+          throw conditionalCheckFailed();
+        }
+        store.item = undefined;
+        return { data: null };
+      }),
+    };
+    return chain;
+  });
+};
+
+const patched = () => couponPatch.mock.calls[0]![0];
+
+describe('coupon.update', () => {
+  const key = { courseId: 'course-1', code: 'SPRING-25' };
+
+  it('disables and enables a code', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs().updateCoupon({ ...key, enabled: false }),
+    ).resolves.toMatchObject({ enabled: false, status: 'disabled' });
+    await expect(
+      callAs().updateCoupon({ ...key, enabled: true }),
+    ).resolves.toMatchObject({ enabled: true, status: 'active' });
+  });
+
+  it('writes the key with the code normalised', async () => {
+    installFakeTable(storedCoupon());
+
+    await callAs().updateCoupon({
+      ...key,
+      code: ' spring-25 ',
+      enabled: false,
+    });
+
+    expect(patched()).toEqual(key);
+  });
+
+  it('sets the end of the expiry day, UTC, and clears it with null', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs().updateCoupon({ ...key, expiresOn: '2026-12-01' }),
+    ).resolves.toMatchObject({ expiresAt: '2026-12-01T23:59:59.999Z' });
+    const cleared = await callAs().updateCoupon({ ...key, expiresOn: null });
+
+    expect(cleared).not.toHaveProperty('expiresAt');
+    expect(store.item).not.toHaveProperty('expiresAt');
+  });
+
+  it('accepts an expiry of today', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs().updateCoupon({ ...key, expiresOn: '2026-11-20' }),
+    ).resolves.toMatchObject({ expiresAt: '2026-11-20T23:59:59.999Z' });
+  });
+
+  it('sets the limit and clears it with null', async () => {
+    installFakeTable(storedCoupon({ redeemedCount: 2 }));
+
+    await expect(
+      callAs().updateCoupon({ ...key, maxRedemptions: 2 }),
+    ).resolves.toMatchObject({ maxRedemptions: 2, status: 'used up' });
+    const cleared = await callAs().updateCoupon({
+      ...key,
+      maxRedemptions: null,
+    });
+
+    expect(cleared).not.toHaveProperty('maxRedemptions');
+    expect(cleared.status).toBe('active');
+  });
+
+  it('leaves what the call does not mention alone', async () => {
+    installFakeTable(
+      storedCoupon({
+        expiresAt: '2026-12-01T23:59:59.999Z',
+        maxRedemptions: 5,
+      }),
+    );
+
+    await callAs().updateCoupon({ ...key, enabled: false });
+
+    expect(store.item).toMatchObject({
+      expiresAt: '2026-12-01T23:59:59.999Z',
+      maxRedemptions: 5,
+    });
+  });
+
+  it('refuses a limit below the redemptions held, with the count', async () => {
+    installFakeTable(storedCoupon({ redeemedCount: 4, maxRedemptions: 10 }));
+
+    await expect(
+      callAs().updateCoupon({ ...key, maxRedemptions: 3 }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'The limit cannot be below the 4 redemptions already held',
+    });
+    expect(store.item).toMatchObject({ maxRedemptions: 10 });
+  });
+
+  it('refuses a limit a claim undercuts between the read and the write', async () => {
+    installFakeTable(storedCoupon({ redeemedCount: 2, maxRedemptions: 10 }));
+    // The claim lands as the update is built, after any read it might do.
+    const realPatch = couponPatch.getMockImplementation()!;
+    couponPatch.mockImplementationOnce((...args: unknown[]) => {
+      store.item = { ...store.item!, redeemedCount: 5 };
+      return realPatch(...args);
+    });
+
+    await expect(
+      callAs().updateCoupon({ ...key, maxRedemptions: 3 }),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'The limit cannot be below the 5 redemptions already held',
+    });
+    expect(store.item).toMatchObject({ maxRedemptions: 10 });
+  });
+
+  it('allows a limit equal to the redemptions held', async () => {
+    installFakeTable(storedCoupon({ redeemedCount: 4 }));
+
+    await expect(
+      callAs().updateCoupon({ ...key, maxRedemptions: 4 }),
+    ).resolves.toMatchObject({ maxRedemptions: 4 });
+  });
+
+  it('reports a missing code as not found, and creates nothing', async () => {
+    installFakeTable(undefined);
+
+    await expect(
+      callAs().updateCoupon({ ...key, enabled: false }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(store.item).toBeUndefined();
+  });
+
+  it('reports a malformed code as not found without writing', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs().updateCoupon({ ...key, code: 'no', enabled: false }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(couponPatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['yesterday', { expiresOn: '2026-11-19' }],
+    ['a malformed date', { expiresOn: '20/11/2026' }],
+    ['a limit of 0', { maxRedemptions: 0 }],
+    ['a fractional limit', { maxRedemptions: 1.5 }],
+    ['nothing to change', {}],
+  ])('refuses %s without writing', async (_, extra) => {
+    installFakeTable(storedCoupon());
+
+    await expect(callAs().updateCoupon({ ...key, ...extra })).rejects.toThrow();
+    expect(couponPatch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['type', { type: 'fixed' }],
+    ['value', { value: 99 }],
+  ])('rejects %s, which a code never changes', async (_, extra) => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs().updateCoupon({ ...key, enabled: false, ...extra } as never),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(couponPatch).not.toHaveBeenCalled();
+  });
+
+  it('refuses an instructor who does not teach the course', async () => {
+    installFakeTable(storedCoupon());
+    courseInstructorGet.mockReturnValue(resolves(null));
+
+    await expect(
+      callAs().updateCoupon({ ...key, enabled: false }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(couponPatch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller outside the instructor group', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs('student-1', ['student']).updateCoupon({ ...key, enabled: false }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(couponPatch).not.toHaveBeenCalled();
+  });
+
+  it('never writes the course', async () => {
+    installFakeTable(storedCoupon());
+
+    await callAs().updateCoupon({ ...key, enabled: false });
+
+    expect(coursePatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('coupon.delete', () => {
+  const key = { courseId: 'course-1', code: 'SPRING-25' };
+
+  it('deletes an unused code', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(callAs().deleteCoupon(key)).resolves.toEqual({
+      success: true,
+    });
+    expect(store.item).toBeUndefined();
+  });
+
+  it('normalises the code it deletes', async () => {
+    installFakeTable(storedCoupon());
+
+    await callAs().deleteCoupon({ ...key, code: ' spring-25 ' });
+
+    expect(couponDelete).toHaveBeenCalledWith(key);
+  });
+
+  it('refuses a code with a redemption and keeps it', async () => {
+    installFakeTable(storedCoupon({ redeemedCount: 1 }));
+
+    await expect(callAs().deleteCoupon(key)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: 'This code has redemptions; disable it instead',
+    });
+    expect(store.item).toBeDefined();
+  });
+
+  it('keeps a code a claim reached between the read and the delete', async () => {
+    installFakeTable(storedCoupon());
+    const realDelete = couponDelete.getMockImplementation()!;
+    couponDelete.mockImplementationOnce((...args: unknown[]) => {
+      store.item = { ...store.item!, redeemedCount: 1 };
+      return realDelete(...args);
+    });
+
+    await expect(callAs().deleteCoupon(key)).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+    });
+    expect(store.item).toBeDefined();
+  });
+
+  it('reports a missing code as not found', async () => {
+    installFakeTable(undefined);
+
+    await expect(callAs().deleteCoupon(key)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('refuses an instructor who does not teach the course', async () => {
+    installFakeTable(storedCoupon());
+    courseInstructorGet.mockReturnValue(resolves(null));
+
+    await expect(callAs().deleteCoupon(key)).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(store.item).toBeDefined();
+  });
+
+  it('refuses a caller outside the instructor group', async () => {
+    installFakeTable(storedCoupon());
+
+    await expect(
+      callAs('student-1', ['student']).deleteCoupon(key),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(store.item).toBeDefined();
   });
 });
