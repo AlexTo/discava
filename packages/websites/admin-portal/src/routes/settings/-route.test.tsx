@@ -120,3 +120,13 @@ describe('notification settings', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('the notification settings page, as a page', () => {
+  it('names the tab', () => {
+    renderWithCoreApi(<NotificationSettings />, {
+      handlers: { 'notification.preferences': () => preferences },
+    });
+
+    expect(document.title).toBe('Notification settings · Settings · Discava');
+  });
+});

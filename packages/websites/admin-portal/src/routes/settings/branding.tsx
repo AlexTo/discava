@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
@@ -19,7 +19,7 @@ export const Route = createFileRoute('/settings/branding')({
 });
 
 function BrandingSettings() {
-  usePageTitle('Branding');
+  usePageTitle('Branding', 'Settings');
   const trpc = useAdminApi();
   const query = useQuery(trpc.branding.get.queryOptions());
   // Outside the form, which starts again from the saved brand after a save.
@@ -36,11 +36,7 @@ function BrandingSettings() {
         Set how the platform looks to everyone who visits it. Changes reach
         visitors within 5 minutes of saving.
       </p>
-      {query.isPending && (
-        <p role="status" className="flex items-center gap-2 text-sm">
-          <Spinner /> Loading…
-        </p>
-      )}
+      {query.isPending && <LoadingState label="Loading the branding…" />}
       {query.isError && (
         <ErrorAlert
           type="error"

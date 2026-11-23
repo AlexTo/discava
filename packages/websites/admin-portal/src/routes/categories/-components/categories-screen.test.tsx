@@ -199,3 +199,17 @@ describe('the Categories screen', () => {
     expect(calls.some((c) => c.path === 'category.archive')).toBe(false);
   });
 });
+
+describe('the Categories screen, as a page', () => {
+  it('names the tab and says what it is waiting for', () => {
+    render({ 'category.list': () => new Promise(() => {}) });
+
+    expect(document.title).toBe('Categories · Discava');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Categories' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading the categories…',
+    );
+  });
+});

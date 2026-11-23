@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useAdminApi } from '../api';
@@ -19,6 +20,7 @@ export const Route = createFileRoute('/')({
 const areaId = (to: string) => `area${to.replace(/\//g, '-')}`;
 
 function AdminHome() {
+  usePageTitle('Home');
   const trpc = useAdminApi();
   const categories = useQuery(trpc.category.list.queryOptions());
 

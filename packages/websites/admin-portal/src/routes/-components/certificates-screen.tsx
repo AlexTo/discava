@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -16,8 +17,8 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -221,7 +222,7 @@ function Certificate({ certificateId }: { certificateId: string }) {
   );
 
   if (query.isPending) {
-    return <Spinner />;
+    return <LoadingState label="Looking up the certificate…" />;
   }
   if (query.isError) {
     const notFound = query.error.data?.code === 'NOT_FOUND';
@@ -329,6 +330,7 @@ function Certificate({ certificateId }: { certificateId: string }) {
  * revocation, with its history.
  */
 export function CertificatesScreen() {
+  usePageTitle('Certificates');
   const [input, setInput] = useState('');
   const [lookedUp, setLookedUp] = useState<string>();
 

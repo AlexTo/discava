@@ -109,3 +109,11 @@ describe('the admin home page', () => {
     expect(screen.queryByText(/active categor/)).not.toBeInTheDocument();
   });
 });
+
+describe('the admin home page, as a page', () => {
+  it('names the tab', () => {
+    render();
+
+    expect(document.title).toBe('Home · Discava');
+  });
+});

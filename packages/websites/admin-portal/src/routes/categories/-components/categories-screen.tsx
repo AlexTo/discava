@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +18,7 @@ import {
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
@@ -32,6 +33,7 @@ interface Category {
 }
 
 export function CategoriesScreen() {
+  usePageTitle('Categories');
   const trpc = useAdminApi();
   const queryClient = useQueryClient();
   const categories = useQuery(trpc.category.list.queryOptions());
@@ -115,7 +117,7 @@ export function CategoriesScreen() {
         </Button>
       </form>
 
-      {categories.isPending && <Spinner />}
+      {categories.isPending && <LoadingState label="Loading the categories…" />}
       {categories.isError && (
         <ErrorAlert type="error" header="Couldn't load the categories">
           {apiErrorMessage(categories.error)}
