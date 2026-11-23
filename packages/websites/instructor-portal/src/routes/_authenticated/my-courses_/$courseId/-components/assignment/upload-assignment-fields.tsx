@@ -27,9 +27,15 @@ export function UploadAssignmentFields({
   withTitle: boolean;
   onChange: (next: Partial<UploadAssignmentValues>) => void;
 }) {
+  const invalid = (field: keyof UploadAssignmentValues) =>
+    showErrors && Boolean(errors[field]);
+  const errorId = (field: keyof UploadAssignmentValues) =>
+    invalid(field) ? `assignment-${field}-error` : undefined;
   const problem = (field: keyof UploadAssignmentValues) =>
-    showErrors && errors[field] ? (
-      <p className="text-xs text-destructive">{errors[field]}</p>
+    invalid(field) ? (
+      <p id={errorId(field)} className="text-xs text-destructive">
+        {errors[field]}
+      </p>
     ) : null;
 
   return (
@@ -42,7 +48,8 @@ export function UploadAssignmentFields({
             value={values.title}
             onChange={(event) => onChange({ title: event.target.value })}
             placeholder="e.g. Essay: the causes of the war"
-            aria-invalid={showErrors && Boolean(errors.title)}
+            aria-invalid={invalid('title')}
+            aria-describedby={errorId('title')}
             autoFocus
           />
           {problem('title')}
@@ -55,6 +62,8 @@ export function UploadAssignmentFields({
           value={values.body}
           onChange={(body) => onChange({ body })}
           ariaLabel="Instructions"
+          invalid={invalid('body')}
+          describedBy={errorId('body')}
         />
         {problem('body')}
       </div>
@@ -71,7 +80,8 @@ export function UploadAssignmentFields({
             step={1}
             value={values.maxPoints}
             onChange={(event) => onChange({ maxPoints: event.target.value })}
-            aria-invalid={showErrors && Boolean(errors.maxPoints)}
+            aria-invalid={invalid('maxPoints')}
+            aria-describedby={errorId('maxPoints')}
           />
           {problem('maxPoints')}
         </div>
@@ -82,7 +92,8 @@ export function UploadAssignmentFields({
             type="datetime-local"
             value={values.dueAt}
             onChange={(event) => onChange({ dueAt: event.target.value })}
-            aria-invalid={showErrors && Boolean(errors.dueAt)}
+            aria-invalid={invalid('dueAt')}
+            aria-describedby={errorId('dueAt')}
           />
           {problem('dueAt')}
         </div>

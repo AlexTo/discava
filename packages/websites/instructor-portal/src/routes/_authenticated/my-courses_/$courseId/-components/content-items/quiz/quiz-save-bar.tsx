@@ -10,6 +10,9 @@ import { Eye, Save } from 'lucide-react';
 import type { QuizErrors } from './quiz-form';
 import type { SaveError } from './use-quiz-builder-state';
 
+// The list of the quiz's own problems, which the fields it names point at.
+export const QUIZ_PROBLEMS_ID = 'quiz-problems';
+
 export function QuizSaveBar({
   errors,
   showProblems,
@@ -39,7 +42,7 @@ export function QuizSaveBar({
     <div className="sticky bottom-0 space-y-3 border-t bg-background/95 py-4 backdrop-blur">
       {showProblems && errors.quiz.length > 0 && (
         <ErrorAlert type="error" header="Fix these before saving">
-          <ul className="list-disc pl-5">
+          <ul id={QUIZ_PROBLEMS_ID} className="list-disc pl-5">
             {errors.quiz.map((problem) => (
               <li key={problem}>{problem}</li>
             ))}

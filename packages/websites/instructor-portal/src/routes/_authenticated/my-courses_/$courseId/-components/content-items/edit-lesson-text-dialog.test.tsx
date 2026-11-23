@@ -53,18 +53,37 @@ const renderEditDialog = (handlers = {}) =>
 
 describe('EditLessonTextDialog', () => {
   describe('adding a new text item', () => {
-    it('titles the dialog "Add text" and disables Save until there is a title and a body', async () => {
-      const { user } = renderAddDialog();
+    it('titles the dialog "Add text", and keeps Save enabled while saying what is missing', async () => {
+      const { calls, user } = renderAddDialog();
 
       await user.click(screen.getByRole('button', { name: 'Add text' }));
       expect(screen.getByRole('dialog')).toHaveTextContent('Add text');
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-
-      await user.type(screen.getByLabelText('Title'), 'Key concepts');
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-
-      await user.type(screen.getByLabelText('Body'), 'Some body text');
       expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      const title = screen.getByLabelText('Title');
+      await waitFor(() => expect(title).toHaveFocus());
+      expect(title).toBeInvalid();
+      expect(title).toHaveAccessibleDescription('Enter a title.');
+      const body = screen.getByLabelText('Body');
+      expect(body).toHaveAttribute('aria-invalid', 'true');
+      expect(body).toHaveAccessibleDescription(
+        'Write the text students will read.',
+      );
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      expect(calls).toEqual([]);
+    });
+
+    it('focuses the body when only it is missing', async () => {
+      const { user } = renderAddDialog();
+
+      await user.click(screen.getByRole('button', { name: 'Add text' }));
+      await user.type(screen.getByLabelText('Title'), 'Key concepts');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Body')).toHaveFocus());
+      expect(screen.getByLabelText('Title')).toBeValid();
     });
 
     it('creates the text item, closes, and refreshes the course view', async () => {

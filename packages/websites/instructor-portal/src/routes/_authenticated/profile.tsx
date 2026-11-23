@@ -16,13 +16,14 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useForm } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { z } from 'zod';
 import { useInstructorApi } from '../../api';
 import { ImageCropDialog } from '../../components/image-crop-dialog';
@@ -154,6 +155,7 @@ function ProfileForm({
   );
   const updatePhoto = useMutation(trpc.profile.updatePhoto.mutationOptions());
   const [handleError, setHandleError] = useState<string>();
+  const formRef = useRef<HTMLFormElement>(null);
   const isNew = profile.version === 0;
 
   const refresh = () =>
@@ -278,11 +280,15 @@ function ProfileForm({
       </div>
 
       <form
+        ref={formRef}
+        noValidate
         className="space-y-5"
         onSubmit={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          void form.handleSubmit();
+          void form
+            .handleSubmit()
+            .then(() => focusFirstInvalid(formRef.current));
         }}
       >
         {update.isError && !handleError && (
@@ -315,9 +321,15 @@ function ProfileForm({
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   aria-invalid={Boolean(error)}
+                  aria-describedby={error ? `${field.name}-error` : undefined}
                 />
                 {error ? (
-                  <p className="text-xs text-destructive">{error.message}</p>
+                  <p
+                    id={`${field.name}-error`}
+                    className="text-xs text-destructive"
+                  >
+                    {error.message}
+                  </p>
                 ) : null}
               </div>
             );
@@ -340,7 +352,11 @@ function ProfileForm({
                     field.handleChange(event.target.value);
                   }}
                   aria-invalid={Boolean(error)}
-                  aria-describedby="handle-address"
+                  aria-describedby={
+                    error
+                      ? `handle-address ${field.name}-error`
+                      : 'handle-address'
+                  }
                 />
                 <p
                   id="handle-address"
@@ -349,7 +365,12 @@ function ProfileForm({
                   Your address: {publicPath(shown)}
                 </p>
                 {error ? (
-                  <p className="text-xs text-destructive">{error}</p>
+                  <p
+                    id={`${field.name}-error`}
+                    className="text-xs text-destructive"
+                  >
+                    {error}
+                  </p>
                 ) : null}
               </div>
             );
@@ -369,8 +390,10 @@ function ProfileForm({
                   onChange={(event) => field.handleChange(event.target.value)}
                   placeholder="e.g. Professor of mathematics"
                   aria-invalid={Boolean(error)}
+                  aria-describedby={`${field.name}-note`}
                 />
                 <p
+                  id={`${field.name}-note`}
                   className={`text-right text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}
                 >
                   {error
@@ -396,8 +419,10 @@ function ProfileForm({
                   className="min-h-40 resize-y"
                   placeholder="Tell students about yourself. A blank line starts a new paragraph."
                   aria-invalid={Boolean(error)}
+                  aria-describedby={`${field.name}-note`}
                 />
                 <p
+                  id={`${field.name}-note`}
                   className={`text-right text-xs ${error ? 'text-destructive' : 'text-muted-foreground'}`}
                 >
                   {error
@@ -410,17 +435,12 @@ function ProfileForm({
         </form.Field>
 
         <div className="flex justify-end border-t pt-4">
-          <form.Subscribe
-            selector={(state) => [state.canSubmit, state.isSubmitting]}
-          >
-            {([canSubmit, isSubmitting]) => (
+          <form.Subscribe selector={(state) => state.isSubmitting}>
+            {(isSubmitting) => (
               <PendingButton
                 type="submit"
                 pending={isSubmitting}
                 pendingLabel="Saving…"
-                // canSubmit is false while submitting too; only a form that
-                // can't be sent disables Save, so focus stays on it.
-                disabled={!canSubmit && !isSubmitting}
               >
                 Save
               </PendingButton>

@@ -5,6 +5,7 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -30,11 +31,12 @@ import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trash2, Upload } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useInstructorApi } from '../../../../../../api';
 import { putFileWithProgress } from '../../../../../../lib/put-file-with-progress';
@@ -96,6 +98,11 @@ export function AttachLessonVideoDialog({
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
   const [uploadError, setUploadError] = useState<string>();
+  // What is missing, shown beside the field once Save is pressed.
+  const [problems, setProblems] = useState<{ title?: string; file?: string }>(
+    {},
+  );
+  const contentRef = useRef<HTMLDivElement>(null);
   // Which step failed, for the alert's header.
   const [failedStep, setFailedStep] = useState<'upload' | 'save'>('save');
   const [uploadProgress, setUploadProgress] = useState<number>();
@@ -150,6 +157,7 @@ export function AttachLessonVideoDialog({
   const uploadFile = async (file: File) => {
     setUploadError(undefined);
     setUploadProgress(0);
+    setProblems((current) => ({ ...current, file: undefined }));
     try {
       const {
         contentItemId: newContentItemId,
@@ -205,13 +213,21 @@ export function AttachLessonVideoDialog({
     accept: ACCEPTED_VIDEO_TYPES,
   });
 
-  const canSave =
-    titleValue.trim().length > 0 &&
-    !isUploading &&
-    (contentItemId || pendingUpload);
-
   const handleSave = async () => {
     setUploadError(undefined);
+    const found = {
+      title: titleValue.trim() ? undefined : 'Enter a title.',
+      file: isUploading
+        ? 'Wait for the upload to finish.'
+        : contentItemId || pendingUpload
+          ? undefined
+          : 'Choose a video file.',
+    };
+    setProblems(found);
+    if (found.title || found.file) {
+      focusFirstInvalid(contentRef.current);
+      return;
+    }
     try {
       if (contentItemId) {
         await updateLessonContentItem({
@@ -257,6 +273,7 @@ export function AttachLessonVideoDialog({
     setDescriptionValue(description ?? '');
     setPendingUpload(undefined);
     setUploadError(undefined);
+    setProblems({});
   };
   const close = () => {
     setOpen(false);
@@ -280,7 +297,11 @@ export function AttachLessonVideoDialog({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl" {...contentProps}>
+      <DialogContent
+        ref={contentRef}
+        className="sm:max-w-2xl"
+        {...contentProps}
+      >
         <DialogHeader>
           <DialogTitle>
             {contentItemId ? 'Edit video' : 'Add video'}
@@ -318,10 +339,25 @@ export function AttachLessonVideoDialog({
           <Input
             id="lesson-video-title"
             value={titleValue}
-            onChange={(event) => setTitleValue(event.target.value)}
+            onChange={(event) => {
+              setTitleValue(event.target.value);
+              setProblems((current) => ({ ...current, title: undefined }));
+            }}
             placeholder="e.g. Course overview"
             autoFocus
+            aria-invalid={Boolean(problems.title)}
+            aria-describedby={
+              problems.title ? 'lesson-video-title-error' : undefined
+            }
           />
+          {problems.title && (
+            <p
+              id="lesson-video-title-error"
+              className="text-sm text-destructive"
+            >
+              {problems.title}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -378,6 +414,10 @@ export function AttachLessonVideoDialog({
           {...getRootProps({
             role: 'button',
             'aria-label': 'Choose a video file',
+            'aria-describedby': problems.file
+              ? 'lesson-video-file-error'
+              : undefined,
+            'data-invalid': problems.file ? 'true' : undefined,
           })}
           className={cn(
             'cursor-pointer rounded-lg border border-dashed bg-muted/50 px-4 py-4 transition hover:border-primary hover:bg-primary/5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30',
@@ -414,18 +454,27 @@ export function AttachLessonVideoDialog({
             </div>
           </div>
         </div>
+        {problems.file && (
+          <p
+            id="lesson-video-file-error"
+            className="-mt-2 text-sm text-destructive"
+          >
+            {problems.file}
+          </p>
+        )}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
+          <PendingButton
             type="button"
-            disabled={!canSave || isSaving}
+            pending={isSaving}
+            pendingLabel="Saving…"
             onClick={handleSave}
           >
-            {isSaving ? 'Saving…' : 'Save'}
-          </Button>
+            Save
+          </PendingButton>
         </DialogFooter>
         {confirmation}
       </DialogContent>

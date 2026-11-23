@@ -5,6 +5,7 @@
 
 import { DiscardChangesDialog } from '@discava/common-shadcn/components/discard-changes-dialog';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -16,9 +17,10 @@ import {
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { QuizBuilder } from '../content-items/quiz/quiz-builder';
 import {
@@ -71,6 +73,7 @@ export function CreateAssignmentDialog({
   const [switchTo, setSwitchTo] = useState<Kind>();
   // Bumped on each open, so the quiz builder starts empty again.
   const [session, setSession] = useState(0);
+  const formRef = useRef<HTMLFormElement>(null);
   const { course, lesson } = useInstructorApi();
   const queryClient = useQueryClient();
   const {
@@ -113,6 +116,7 @@ export function CreateAssignmentDialog({
   const saveUpload = async () => {
     setShowErrors(true);
     if (hasErrors || !values.body) {
+      focusFirstInvalid(formRef.current);
       return;
     }
     try {
@@ -191,6 +195,7 @@ export function CreateAssignmentDialog({
 
         {kind === 'upload' ? (
           <form
+            ref={formRef}
             className="space-y-4"
             noValidate
             onSubmit={(event) => {
@@ -216,9 +221,13 @@ export function CreateAssignmentDialog({
               <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Creating…' : 'Create assignment'}
-              </Button>
+              <PendingButton
+                type="submit"
+                pending={isPending}
+                pendingLabel="Creating…"
+              >
+                Create assignment
+              </PendingButton>
             </DialogFooter>
           </form>
         ) : (

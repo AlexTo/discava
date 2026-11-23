@@ -200,7 +200,13 @@ describe('Review page', () => {
     await user.type(await screen.findByLabelText('Points'), '25');
     await user.click(screen.getByRole('button', { name: 'Return' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const points = screen.getByLabelText('Points');
+    expect(
+      await screen.findByText('Points must be between 0 and 20'),
+    ).toBeVisible();
+    expect(points).toHaveFocus();
+    expect(points).toBeInvalid();
+    expect(points).toHaveAccessibleDescription(
       'Points must be between 0 and 20',
     );
     expect(calls.some((c) => c.path === 'assignmentSubmission.return')).toBe(

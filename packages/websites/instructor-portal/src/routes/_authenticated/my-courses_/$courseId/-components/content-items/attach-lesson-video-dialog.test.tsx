@@ -116,19 +116,44 @@ describe('AttachLessonVideoDialog', () => {
       expect(alert).not.toHaveTextContent('Failed to upload');
     });
 
-    it('titles the dialog "Add video" and disables Save until uploaded and titled', async () => {
-      const { user } = openDialog();
+    it('titles the dialog "Add video", and keeps Save enabled while saying what is missing', async () => {
+      const { calls, user } = openDialog();
 
       await user.click(screen.getByRole('button', { name: 'Video' }));
       expect(screen.getByRole('dialog')).toHaveTextContent('Add video');
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(title()).toHaveFocus());
+      expect(title()).toBeInvalid();
+      expect(title()).toHaveAccessibleDescription('Enter a title.');
+      const dropzone = screen.getByRole('button', {
+        name: 'Choose a video file',
+      });
+      expect(dropzone).toHaveAccessibleDescription('Choose a video file.');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      expect(calls).toEqual([]);
+    });
+
+    it('focuses the drop zone when only the video is missing, and saves once it is uploaded', async () => {
+      const { user } = openDialog();
+      await user.click(screen.getByRole('button', { name: 'Video' }));
+      await user.type(title(), 'Lecture 1');
+
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Choose a video file' }),
+        ).toHaveFocus(),
+      );
 
       await pickFile(user);
       uploads[0].finish();
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-
-      await user.type(title(), 'Lecture 1');
-      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+      );
     });
 
     it('shows upload progress while uploading, and the uploaded state once done', async () => {
