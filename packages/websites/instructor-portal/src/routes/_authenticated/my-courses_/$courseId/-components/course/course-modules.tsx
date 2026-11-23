@@ -446,7 +446,7 @@ export function CourseModules({
                   <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                     <FileText className="size-5" />
                   </div>
-                  <h4 className="mt-1 text-sm font-semibold">No lessons yet</h4>
+                  <h3 className="mt-1 text-sm font-semibold">No lessons yet</h3>
                   <p className="mx-auto max-w-sm text-sm leading-6 text-muted-foreground">
                     Lessons hold the content students work through inside this
                     module.

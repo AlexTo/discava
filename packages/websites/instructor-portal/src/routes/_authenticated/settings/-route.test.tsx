@@ -39,6 +39,11 @@ const open = (handlers: Record<string, Handler> = {}) =>
   });
 
 describe('notification settings', () => {
+  it('sets the page title', () => {
+    open();
+    expect(document.title).toBe('Notification settings · Discava');
+  });
+
   it('lists the types from the API', async () => {
     open();
 

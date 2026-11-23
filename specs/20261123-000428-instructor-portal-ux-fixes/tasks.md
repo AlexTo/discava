@@ -273,8 +273,8 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US4.
 
-- [ ] T032 [US4] Test first in `SH/components/portal-shell.test.ts` (or a new `portal-shell.test.tsx`), then render `<RouteAnnouncer containerId={MAIN_CONTENT_ID} pathname={pathname} />` in `SH/components/portal-shell.tsx` (A-02). **Test:** after a pathname change, the new `h1` in the content area is focused. Run the admin portal's tests.
-- [ ] T033 [P] [US4] Call `usePageTitle` (`@discava/common-shadcn/hooks/use-page-title`) in every instructor route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
+- [x] T032 [US4] Test first in `SH/components/portal-shell.test.ts` (or a new `portal-shell.test.tsx`), then render `<RouteAnnouncer containerId={MAIN_CONTENT_ID} pathname={pathname} />` in `SH/components/portal-shell.tsx` (A-02). **Test:** after a pathname change, the new `h1` in the content area is focused. Run the admin portal's tests.
+- [x] T033 [P] [US4] Call `usePageTitle` (`@discava/common-shadcn/hooks/use-page-title`) in every instructor route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
   - `packages/websites/instructor-portal/src/routes/signin.tsx`;
   - the restricted page in `IP/route.tsx`;
   - `IP/index.tsx`;
@@ -291,14 +291,14 @@ At 1440px nothing changes, apart from long-content fixes.
   - the not-found component (if Phase 3 has merged; otherwise Phase 3 adds it).
 
   **Tests:** each route's test file asserts `document.title`, loaded and while loading.
-- [ ] T034 [P] [US4] Keep the `h1` in every state (A-12, B-05, C-04, E-14). Move each page's `h1` (and its header) outside the loading and error branches, with the fallback names of [contracts/page-titles.md](./contracts/page-titles.md):
+- [x] T034 [P] [US4] Keep the `h1` in every state (A-12, B-05, C-04, E-14). Move each page's `h1` (and its header) outside the loading and error branches, with the fallback names of [contracts/page-titles.md](./contracts/page-titles.md):
   - `IP/dashboard_/$courseId/route.tsx`: "Course analytics";
   - `IP/my-courses_/$courseId/route.tsx`: "Course";
   - `IP/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId.tsx`: "Submission";
   - `IP/profile.tsx`: "Profile". Move the heading and intro out of `ProfileForm`.
 
   For a not-found error, add a link back to the list (Dashboard, My Courses, or the submissions list). **Tests:** in each route's test file, with the query failing and pending, exactly one `h1` is present.
-- [ ] T035 [P] [US4] Replace each route's own `<main>` with a `<div>` (A-23) in these files:
+- [x] T035 [P] [US4] Replace each route's own `<main>` with a `<div>` (A-23) in these files:
   - `IP/index.tsx`;
   - `IP/dashboard/route.tsx`;
   - `IP/dashboard_/$courseId/route.tsx`;
@@ -310,13 +310,13 @@ At 1440px nothing changes, apart from long-content fixes.
   - `IP/earnings/route.tsx`.
 
   Update any test that finds the page by `getByRole('main')`, so it renders inside the shell or uses another landmark.
-- [ ] T036 [P] [US4] Fix the heading levels (A-19, C-16, E-13):
+- [x] T036 [P] [US4] Fix the heading levels (A-19, C-16, E-13):
   - **Course editor:** add an `h2` "Course settings" before the settings sections in `IP/my-courses_/$courseId/route.tsx`. Make `IPC/course/course-first-lesson-prompt-form.tsx`'s heading an `h3` under it, and "No lessons yet" in `IPC/course/course-modules.tsx` an `h3`.
   - **Earnings:** make the card titles in `IP/earnings/-components/payout-account-card.tsx`, `balance-card.tsx` and `payouts-list.tsx` `h2`s, and the currency headings `h3`s.
   - **Discussion:** add `headingLevel?: 2 | 3 | 4` (default 4) to `SH/discussion/post-card.tsx`. Pass 2 from the questions lists (`IP/my-courses_/$courseId_/questions/-components/paged-list.tsx`, `by-lesson-view.tsx`, `reported-view.tsx`) and 3 inside `thread-dialog.tsx`.
 
   **Tests:** heading order.
-- [ ] T037 [P] [US4] Use `LoadingState` (T004) for every whole-page or whole-section wait (A-07, A-22, B-19, C-05, E-14):
+- [x] T037 [P] [US4] Use `LoadingState` (T004) for every whole-page or whole-section wait (A-07, A-22, B-19, C-05, E-14):
   - `packages/websites/instructor-portal/src/routes/signin.tsx`: "Signing you in…", `size="page"`, under a visually hidden `h1` "Signing in", so the page has its one main heading (FR-012, A-07);
   - the `RuntimeConfigProvider` and `CognitoAuth` fallbacks in `packages/websites/instructor-portal/src/main.tsx`: "Loading Discava…";
   - `IP/my-courses_/$courseId/route.tsx`: "Loading the course…";
@@ -326,13 +326,13 @@ At 1440px nothing changes, apart from long-content fixes.
   - the submission review: "Loading the submission…".
 
   `IP/earnings/-components/*`'s skeletons gain `aria-busy="true"` on their card and a visually hidden "Loading…" text.
-- [ ] T038 [US4] Extend `packages/e2e/src/scenarios/breadcrumbs.e2e.ts`, or add `packages/e2e/src/scenarios/instructor-pages.e2e.ts`. As a new instructor, visit each route in [contracts/page-titles.md](./contracts/page-titles.md) and assert:
+- [x] T038 [US4] Extend `packages/e2e/src/scenarios/breadcrumbs.e2e.ts`, or add `packages/e2e/src/scenarios/instructor-pages.e2e.ts`. As a new instructor, visit each route in [contracts/page-titles.md](./contracts/page-titles.md) and assert:
   - its title;
   - exactly one `h1`;
   - exactly one `main`.
 
   Then press Enter on the sidebar's "Earnings" link and assert the focused element is the Earnings `h1`. With `page.route` aborting `course.view`, open the course editor and assert one `h1`. Screenshot: `'course editor load error'`.
-- [ ] T039 [US4] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T039 [US4] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

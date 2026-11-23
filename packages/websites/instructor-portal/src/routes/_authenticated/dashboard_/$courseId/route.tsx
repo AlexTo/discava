@@ -8,6 +8,7 @@ import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card, CardContent } from '@discava/common-shadcn/components/ui/card';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -57,36 +58,14 @@ function RouteComponent() {
   )?.title;
   useBreadcrumbLabel(title);
 
-  if (analyticsQuery.isError) {
-    const notFound = analyticsQuery.error.data?.code === 'NOT_FOUND';
-    return (
-      <div className="space-y-3">
-        <ErrorAlert
-          type="error"
-          header={notFound ? 'Course not found' : "Couldn't load the analytics"}
-        >
-          {notFound
-            ? "This course doesn't exist, or you don't have access to it."
-            : apiErrorMessage(analyticsQuery.error)}
-        </ErrorAlert>
-        {!notFound && (
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={() => analyticsQuery.refetch()}
-          >
-            Retry
-          </Button>
-        )}
-      </div>
-    );
-  }
+  const notFound =
+    analyticsQuery.isError && analyticsQuery.error.data?.code === 'NOT_FOUND';
+  usePageTitle(title ?? 'Course analytics', title && 'Dashboard');
 
   const analytics = analyticsQuery.data;
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
@@ -123,8 +102,40 @@ function RouteComponent() {
         </div>
       </section>
 
-      {!analytics ? (
-        <div className="space-y-4" aria-label="Loading the analytics">
+      {analyticsQuery.isError ? (
+        <div className="space-y-3">
+          <ErrorAlert
+            type="error"
+            header={
+              notFound ? 'Course not found' : "Couldn't load the analytics"
+            }
+          >
+            {notFound
+              ? "This course doesn't exist, or you don't have access to it."
+              : apiErrorMessage(analyticsQuery.error)}
+          </ErrorAlert>
+          {notFound ? (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/dashboard">Back to the dashboard</Link>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => analyticsQuery.refetch()}
+            >
+              Retry
+            </Button>
+          )}
+        </div>
+      ) : !analytics ? (
+        <div
+          className="space-y-4"
+          role="status"
+          aria-busy="true"
+          aria-label="Loading the analytics"
+        >
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-56 w-full rounded-xl" />
         </div>
@@ -200,6 +211,6 @@ function RouteComponent() {
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }

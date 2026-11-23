@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { Wallet } from 'lucide-react';
@@ -24,13 +25,14 @@ export const Route = createFileRoute('/_authenticated/earnings')({
 });
 
 function RouteComponent() {
+  usePageTitle('Earnings');
   const trpc = useInstructorApi();
   const overview = useQuery(trpc.payout.overview.queryOptions());
   const [month, setMonth] = useState(currentUtcMonth);
   const [period, setPeriod] = useState<Period>(() => monthPeriod(month));
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section>
         <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
           <Wallet className="size-4" /> Money
@@ -62,6 +64,6 @@ function RouteComponent() {
       </section>
 
       <PayoutsList overview={overview} />
-    </main>
+    </div>
   );
 }

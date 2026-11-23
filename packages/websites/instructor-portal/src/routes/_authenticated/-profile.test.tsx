@@ -62,6 +62,22 @@ const open = (handlers: Record<string, Handler> = {}) =>
 const field = (name: string) => screen.findByLabelText(name);
 
 describe('profile editor', () => {
+  it('sets the title and keeps one h1 while loading and on failure', async () => {
+    const { unmount } = open({ 'profile.get': () => new Promise(() => {}) });
+    expect(document.title).toBe('Profile · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByText('Loading your profile…')).toBeVisible();
+    unmount();
+
+    open({
+      'profile.get': () => {
+        throw new Error('boom');
+      },
+    });
+    expect(await screen.findByText("Couldn't load your profile")).toBeVisible();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
   it('shows the saved profile and the public status', async () => {
     open();
 

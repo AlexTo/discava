@@ -90,6 +90,12 @@ const open = (handlers: Record<string, Handler> = {}) =>
   });
 
 describe('earnings report', () => {
+  it('sets the page title and keeps one h1', () => {
+    open();
+    expect(document.title).toBe('Earnings · Discava');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
   it('shows a table per currency whose figures match the report', async () => {
     open();
 

@@ -91,13 +91,18 @@ export function BalanceCard({
   overview: UseQueryResult<{ currencies: CurrencyBalance[] }, unknown>;
 }) {
   return (
-    <Card className="gap-4">
+    <Card className="gap-4" aria-busy={overview.isPending}>
       <CardHeader>
-        <CardTitle className="text-base">Balance</CardTitle>
+        <CardTitle className="text-base" role="heading" aria-level={2}>
+          Balance
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {overview.isPending ? (
-          <Skeleton data-testid="balance-skeleton" className="h-16 w-full" />
+          <>
+            <Skeleton data-testid="balance-skeleton" className="h-16 w-full" />
+            <span className="sr-only">Loading…</span>
+          </>
         ) : overview.isError ? (
           <div className="space-y-3">
             <ErrorAlert type="error" header="Couldn't load your balance">

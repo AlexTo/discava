@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -42,6 +43,7 @@ const lastUpdated = new Intl.DateTimeFormat('en-AU', {
 // which trail the records by a few seconds (see instructor-api's
 // analytics.courseSummaries): the card says when they last changed.
 function RouteComponent() {
+  usePageTitle('Dashboard');
   const trpc = useInstructorApi();
   const summariesQuery = useQuery(
     trpc.analytics.courseSummaries.queryOptions(),
@@ -49,7 +51,7 @@ function RouteComponent() {
   const courses = summariesQuery.data ?? [];
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section>
         <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
           <BarChart3 className="size-4" /> Insights
@@ -164,7 +166,7 @@ function RouteComponent() {
           })}
         </section>
       )}
-    </main>
+    </div>
   );
 }
 

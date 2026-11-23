@@ -158,6 +158,7 @@ export function ThreadDialog({
       <PostCard
         post={hidden ? { ...post, state: 'shown' } : post}
         showTitle
+        headingLevel={3}
         action={post.kind === 'question' ? 'asked' : 'replied'}
       >
         {hidden ? <Badge variant="outline">Hidden</Badge> : null}

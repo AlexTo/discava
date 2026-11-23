@@ -25,15 +25,19 @@ export interface PostCardPost {
 export function PostCard({
   post,
   showTitle = false,
+  headingLevel = 4,
   action = 'posted',
   children,
 }: {
   post: PostCardPost;
   showTitle?: boolean;
+  // The level of the post's title, so it sits one below the heading above it.
+  headingLevel?: 2 | 3 | 4;
   // The verb before the time: "asked" for a question, "replied" for a reply.
   action?: string;
   children?: ReactNode;
 }) {
+  const Heading = `h${headingLevel}` as const;
   if (post.state === 'hidden' || post.state === 'deleted') {
     return (
       <p className="text-sm italic text-muted-foreground">
@@ -48,9 +52,9 @@ export function PostCard({
       {(showTitle && post.title) || post.promptAnswer ? (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {showTitle && post.title ? (
-            <h4 className="min-w-0 break-words [overflow-wrap:anywhere] font-medium">
+            <Heading className="min-w-0 break-words [overflow-wrap:anywhere] font-medium">
               {post.title}
-            </h4>
+            </Heading>
           ) : null}
           {post.promptAnswer ? (
             <Badge variant="secondary">Answer to the course prompt</Badge>

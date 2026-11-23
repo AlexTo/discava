@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import {
   Avatar,
   AvatarFallback,
@@ -11,8 +12,8 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
@@ -69,6 +70,7 @@ const initialsOf = (name: string) =>
     .toUpperCase() || '?';
 
 function ProfilePage() {
+  usePageTitle('Profile');
   const trpc = useInstructorApi();
   const profileQuery = useQuery(trpc.profile.get.queryOptions());
   // The form keeps what was typed when a photo change bumps the version; it
@@ -76,32 +78,50 @@ function ProfilePage() {
   const [generation, setGeneration] = useState(0);
   const [saved, setSaved] = useState(false);
 
+  const heading = (
+    <div>
+      <h1 className="text-balance text-2xl font-bold tracking-tight">
+        Profile
+      </h1>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Shown to students on your courses' pages and at your own address.
+      </p>
+    </div>
+  );
+
   if (profileQuery.isPending) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
+      <section className="max-w-3xl space-y-6">
+        {heading}
+        <div className="py-12">
+          <LoadingState label="Loading your profile…" size="page" />
+        </div>
+      </section>
     );
   }
   if (profileQuery.isError) {
     return (
-      <ErrorAlert type="error" header="Couldn't load your profile">
-        <p>{apiErrorMessage(profileQuery.error)}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-3"
-          onClick={() => profileQuery.refetch()}
-        >
-          Try again
-        </Button>
-      </ErrorAlert>
+      <section className="max-w-3xl space-y-6">
+        {heading}
+        <ErrorAlert type="error" header="Couldn't load your profile">
+          <p>{apiErrorMessage(profileQuery.error)}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => profileQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </ErrorAlert>
+      </section>
     );
   }
   return (
     <ProfileForm
       key={generation}
+      heading={heading}
       profile={profileQuery.data}
       saved={saved}
       onSaved={setSaved}
@@ -115,11 +135,13 @@ function ProfilePage() {
 }
 
 function ProfileForm({
+  heading,
   profile,
   saved,
   onSaved,
   reload,
 }: {
+  heading: React.ReactNode;
   profile: ProfileData;
   saved: boolean;
   onSaved: (saved: boolean) => void;
@@ -177,14 +199,7 @@ function ProfileForm({
 
   return (
     <section className="max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-balance text-2xl font-bold tracking-tight">
-          Public profile
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Shown to students on your courses' pages and at your own address.
-        </p>
-      </div>
+      {heading}
 
       <p className="text-sm" data-testid="profile-status">
         {profile.isPublic ? (

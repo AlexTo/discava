@@ -49,6 +49,7 @@ describe('NotFound', () => {
       screen.getByRole('link', { name: 'Go to the home page' }),
     ).toHaveAttribute('href', '/');
     expect(screen.queryByTestId('shell')).not.toBeInTheDocument();
+    expect(document.title).toBe('Page not found · Discava');
   });
 });
 

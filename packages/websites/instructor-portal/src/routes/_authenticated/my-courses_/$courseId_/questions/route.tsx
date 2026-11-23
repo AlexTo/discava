@@ -10,7 +10,10 @@ import {
   TabsList,
   TabsTrigger,
 } from '@discava/common-shadcn/components/ui/tabs';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { useInstructorApi } from '../../../../../api';
 import { ByLessonView } from './-components/by-lesson-view';
 import { ReportedView } from './-components/reported-view';
 import { UnansweredView } from './-components/unanswered-view';
@@ -26,9 +29,14 @@ export const Route = createFileRoute(
 function RouteComponent() {
   const { courseId } = Route.useParams();
   useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  // Shares the course editor's cached answer.
+  const courseQuery = useQuery(
+    useInstructorApi().course.view.queryOptions({ courseId }),
+  );
+  usePageTitle('Questions', courseQuery.data?.title);
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
@@ -61,6 +69,6 @@ function RouteComponent() {
           <ByLessonView courseId={courseId} />
         </TabsContent>
       </Tabs>
-    </main>
+    </div>
   );
 }

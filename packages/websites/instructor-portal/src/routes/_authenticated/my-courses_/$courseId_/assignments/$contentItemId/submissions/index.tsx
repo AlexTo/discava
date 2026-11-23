@@ -5,6 +5,7 @@
 import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useInstructorApi } from '../../../../../../../api';
@@ -29,13 +30,14 @@ function RouteComponent() {
   const first = query.data?.pages[0];
   const rows = query.data?.pages.flatMap((page) => page.rows) ?? [];
   useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
+  usePageTitle(first?.assignment.title, 'Submissions');
   useBreadcrumbLabel(
     first?.assignment.title,
     `/my-courses/${courseId}/assignments/${contentItemId}`,
   );
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
@@ -82,6 +84,6 @@ function RouteComponent() {
         rows={rows}
         query={query}
       />
-    </main>
+    </div>
   );
 }

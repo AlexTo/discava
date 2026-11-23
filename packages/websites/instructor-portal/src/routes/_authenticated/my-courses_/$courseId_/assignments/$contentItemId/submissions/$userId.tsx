@@ -4,9 +4,10 @@
  */
 import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
@@ -38,6 +39,10 @@ function RouteComponent() {
     `/my-courses/${courseId}/assignments/${contentItemId}`,
   );
   useBreadcrumbLabel(data?.student.displayName);
+  usePageTitle(
+    data ? data.student.displayName : 'Submission',
+    data?.assignment.title,
+  );
 
   const back = (
     <Button asChild variant="outline" size="sm">
@@ -52,26 +57,31 @@ function RouteComponent() {
 
   if (query.isPending) {
     return (
-      <main className="space-y-4" role="status" aria-label="Loading submission">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-64 w-full" />
-      </main>
+      <div className="space-y-4">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          Submission
+        </h1>
+        <LoadingState label="Loading the submission…" />
+      </div>
     );
   }
   if (query.isError) {
     return (
-      <main className="space-y-4">
+      <div className="space-y-4">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          Submission
+        </h1>
         <ErrorAlert type="error" header="Couldn't load the submission">
           {apiErrorMessage(query.error, "Couldn't load the submission.")}
         </ErrorAlert>
         {back}
-      </main>
+      </div>
     );
   }
 
   const { assignment, student, submission, feedback } = query.data;
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
@@ -123,6 +133,6 @@ function RouteComponent() {
         </p>
       )}
       <FeedbackHistory rounds={feedback} />
-    </main>
+    </div>
   );
 }

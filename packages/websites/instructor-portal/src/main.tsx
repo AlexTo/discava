@@ -4,7 +4,7 @@
  */
 
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { BrandProvider } from '@discava/common-web-utils/brand';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
@@ -32,9 +32,11 @@ root &&
     <React.StrictMode>
       <RuntimeConfigProvider
         localDevConfig={LOCAL_DEV_CONFIG}
-        fallback={<Spinner />}
+        fallback={<LoadingState label="Loading Discava…" size="page" />}
       >
-        <BrandProvider fallback={<Spinner />}>
+        <BrandProvider
+          fallback={<LoadingState label="Loading Discava…" size="page" />}
+        >
           <CognitoAuth
             // Runs above <RouterProvider>, so useNavigate isn't available: the
             // router instance navigates without a full page reload.

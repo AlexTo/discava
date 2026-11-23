@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -22,10 +22,10 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
       children,
       ...props
     }: {
-      search: { days: number };
+      search?: { days: number };
       children: React.ReactNode;
     } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-      <a href={`?days=${search.days}`} {...props}>
+      <a href={search ? `?days=${search.days}` : '/dashboard'} {...props}>
         {children}
       </a>
     ),
@@ -212,6 +212,31 @@ describe('Course analytics', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Enrolments')).toBeNull();
+  });
+
+  it('keeps one h1 and the fallback title while loading', async () => {
+    renderPage(() => new Promise(() => {}) as never);
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(document.title).toBe('Course analytics · Discava');
+  });
+
+  it('titles the page with the course once the summaries answer', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(document.title).toBe('Intro to DynamoDB · Dashboard · Discava'),
+    );
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+  });
+
+  it('keeps one h1, and links back to the dashboard, when the course is not found', async () => {
+    renderPage(() => {
+      throw new ApiError('NOT_FOUND', 'NOT_FOUND');
+    });
+    expect(await screen.findByText('Course not found')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(
+      screen.getByRole('link', { name: 'Back to the dashboard' }),
+    ).toHaveAttribute('href', '/dashboard');
   });
 
   it('shows other errors with a Retry that asks again', async () => {

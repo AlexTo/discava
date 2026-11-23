@@ -34,13 +34,18 @@ export function PayoutsList({
   overview: UseQueryResult<{ payouts: Payout[] }, unknown>;
 }) {
   return (
-    <Card className="gap-4">
+    <Card className="gap-4" aria-busy={overview.isPending}>
       <CardHeader>
-        <CardTitle className="text-base">Payouts</CardTitle>
+        <CardTitle className="text-base" role="heading" aria-level={2}>
+          Payouts
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {overview.isPending ? (
-          <Skeleton data-testid="payouts-skeleton" className="h-16 w-full" />
+          <>
+            <Skeleton data-testid="payouts-skeleton" className="h-16 w-full" />
+            <span className="sr-only">Loading…</span>
+          </>
         ) : overview.isError ? (
           <div className="space-y-3">
             <ErrorAlert type="error" header="Couldn't load your payouts">

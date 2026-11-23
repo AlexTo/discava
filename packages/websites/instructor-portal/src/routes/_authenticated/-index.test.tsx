@@ -307,14 +307,17 @@ describe('Instructor home: nothing invented', () => {
 });
 
 describe('Instructor home: loading and failure', () => {
+  it('sets the page title', () => {
+    renderPage(listing([]));
+    expect(document.title).toBe('Home · Discava');
+  });
+
   it('shows a spinner, and neither the empty state nor courses, while the list loads', async () => {
     renderPage({
       'course.listByInstructor': () => new Promise(() => {}),
     });
 
-    expect(
-      await screen.findByRole('status', { name: 'Loading' }),
-    ).toBeVisible();
+    expect(await screen.findByText('Loading your courses…')).toBeVisible();
     expect(
       screen.queryByText("You don't teach any courses yet"),
     ).not.toBeInTheDocument();
@@ -325,7 +328,7 @@ describe('Instructor home: loading and failure', () => {
     authProfile.current = {};
     renderPage(listing([]));
 
-    expect(screen.getByRole('status', { name: 'Loading' })).toBeVisible();
+    expect(screen.getByText('Loading your courses…')).toBeVisible();
     expect(
       screen.queryByText("You don't teach any courses yet"),
     ).not.toBeInTheDocument();
