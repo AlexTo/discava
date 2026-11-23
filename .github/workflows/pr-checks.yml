@@ -234,9 +234,9 @@ jobs:
   # the e2e scenarios took (and where to download them). Images can't be
   # embedded: an artifact has no public URL. Only for a pull request from this
   # repository, whose token can write; a fork's can't. The list also goes in
-  # the job summary, the only place it appears for an agent's pull request:
-  # that one is locked (agent-lock.yml), and the Actions token can't comment
-  # on a locked conversation whatever its permissions.
+  # the job summary, the only place it appears for a locked pull request (Post-
+  # merge Verify locks the ones it hands the test agent): the Actions token
+  # can't comment on a locked conversation whatever its permissions.
   e2e-screenshots:
     name: E2E screenshots
     needs: e2e
@@ -250,7 +250,7 @@ jobs:
     steps:
       # The default branch's code, not the pull request's: this job can write
       # to the pull request, so it never runs anything the pull request wrote
-      # (it only reads the diff from the API, like ui-screenshots.yml).
+      # (it only reads the diff from the API, as the UI Screenshots job does).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
