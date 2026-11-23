@@ -147,6 +147,10 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
   await test.step('replacing the key with the same key mid-checkout is allowed', async () => {
     await admin.getByRole('button', { name: 'Replace key' }).click();
     await keyField.fill('sk_test_local');
+    await expect(
+      admin.getByRole('button', { name: 'Save key' }),
+    ).toBeEnabled();
+    await screenshot(admin, 'payments-replace-key-filled');
     await admin.getByRole('button', { name: 'Save key' }).click();
     await admin
       .getByRole('dialog')
