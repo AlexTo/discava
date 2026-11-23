@@ -59,9 +59,12 @@ function RemoveDialog({
   const queryClient = useQueryClient();
   const remove = useMutation(trpc.review.remove.mutationOptions());
   const [reason, setReason] = useState('');
+  const [problem, setProblem] = useState<string>();
+  const reasonField = useRef<HTMLTextAreaElement>(null);
 
   const close = () => {
     setReason('');
+    setProblem(undefined);
     remove.reset();
     onClose();
   };
@@ -71,6 +74,11 @@ function RemoveDialog({
   });
   const submit = async () => {
     if (!review || remove.isPending) {
+      return;
+    }
+    if (reason.trim() === '') {
+      setProblem("Enter a reason. It's kept on record with the removal.");
+      reasonField.current?.focus();
       return;
     }
     try {
@@ -100,6 +108,7 @@ function RemoveDialog({
       >
         <form
           className="space-y-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -128,12 +137,22 @@ function RemoveDialog({
             </div>
             <Textarea
               id="removal-reason"
-              aria-describedby="removal-reason-count"
+              ref={reasonField}
+              aria-invalid={Boolean(problem)}
+              aria-describedby={`removal-reason-count${problem ? ' removal-reason-error' : ''}`}
               value={reason}
               maxLength={REASON_MAX}
               rows={4}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setProblem(undefined);
+              }}
             />
+            {problem && (
+              <p id="removal-reason-error" className="text-sm text-destructive">
+                {problem}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -143,7 +162,6 @@ function RemoveDialog({
             <PendingButton
               type="submit"
               variant="destructive"
-              disabled={reason.trim() === ''}
               pending={remove.isPending}
               pendingLabel="Removing…"
             >
@@ -206,20 +224,13 @@ function CourseReviews({
   }
   if (query.isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p className="text-destructive">
-          {apiErrorMessage(query.error, "Couldn't load the reviews.")}
-        </p>
-        <PendingButton
-          variant="outline"
-          size="sm"
-          onClick={() => query.refetch()}
-          pending={query.isFetching}
-          pendingLabel="Trying again…"
-        >
-          Try again
-        </PendingButton>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the reviews"
+        onRetry={() => query.refetch()}
+      >
+        {apiErrorMessage(query.error)}
+      </ErrorAlert>
     );
   }
   if (items.length === 0) {
@@ -381,20 +392,13 @@ export function ReviewsScreen() {
 
       {courses.isPending && <LoadingState label="Loading the courses…" />}
       {courses.isError && (
-        <div role="alert" className="space-y-3 text-sm">
-          <p className="text-destructive">
-            {apiErrorMessage(courses.error, "Couldn't load the courses.")}
-          </p>
-          <PendingButton
-            variant="outline"
-            size="sm"
-            onClick={() => courses.refetch()}
-            pending={courses.isFetching}
-            pendingLabel="Trying again…"
-          >
-            Try again
-          </PendingButton>
-        </div>
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the courses"
+          onRetry={() => courses.refetch()}
+        >
+          {apiErrorMessage(courses.error)}
+        </ErrorAlert>
       )}
       {courses.data && items.length === 0 && (
         <p className="text-sm text-muted-foreground">

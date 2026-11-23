@@ -75,9 +75,52 @@ describe('the Certificates screen', () => {
     });
     await lookUp(rendered);
 
+    const status = (await screen.findByText('No certificate has this ID'))
+      .parentElement!;
+    expect(status).toHaveAttribute('role', 'status');
+    expect(status).toHaveTextContent(
+      "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3.",
+    );
     expect(
-      await screen.findByText('Certificate not found'),
-    ).toBeInTheDocument();
+      screen.queryByRole('button', { name: 'Try again' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers Try again when the lookup fails', async () => {
+    let fail = true;
+    const rendered = render({
+      'certificate.get': () => {
+        if (fail) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return valid;
+      },
+    });
+    await lookUp(rendered);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Couldn't look up the certificate",
+    );
+    fail = false;
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Try again' }),
+    );
+    expect(await screen.findByText('Sam Learner')).toBeInTheDocument();
+  });
+
+  it('checks an empty ID on submit, focuses the field and sends nothing', async () => {
+    const rendered = render();
+    const lookUpButton = screen.getByRole('button', { name: 'Look up' });
+    expect(lookUpButton).toBeEnabled();
+    await rendered.user.click(lookUpButton);
+
+    const field = screen.getByLabelText('Certificate ID');
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Enter a certificate ID.');
+    expect(rendered.calls.some((c) => c.path === 'certificate.get')).toBe(
+      false,
+    );
   });
 
   it('revokes with Order refunded', async () => {
@@ -102,7 +145,7 @@ describe('the Certificates screen', () => {
     );
   });
 
-  it('needs a note for Other', async () => {
+  it('checks for a note on submit when the reason is Other', async () => {
     const rendered = render();
     await lookUp(rendered);
     await rendered.user.click(
@@ -110,13 +153,17 @@ describe('the Certificates screen', () => {
     );
     await rendered.user.selectOptions(screen.getByLabelText('Reason'), 'other');
 
-    expect(
-      screen.getByRole('button', { name: 'Revoke certificate' }),
-    ).toBeDisabled();
-    await rendered.user.type(screen.getByLabelText('Note'), 'Why');
-    expect(
-      screen.getByRole('button', { name: 'Revoke certificate' }),
-    ).toBeEnabled();
+    const submit = screen.getByRole('button', { name: 'Revoke certificate' });
+    expect(submit).toBeEnabled();
+    await rendered.user.click(submit);
+
+    const note = screen.getByLabelText('Note');
+    expect(note).toHaveFocus();
+    expect(note).toHaveAttribute('aria-invalid', 'true');
+    expect(note).toHaveAccessibleDescription(/Enter a note to say why\./);
+    expect(rendered.calls.some((c) => c.path === 'certificate.revoke')).toBe(
+      false,
+    );
   });
 
   it('restores a revoked certificate', async () => {

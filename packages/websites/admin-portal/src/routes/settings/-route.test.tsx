@@ -108,6 +108,22 @@ describe('notification settings', () => {
     await waitFor(() => expect(toggle).toBeChecked());
   });
 
+  it('says what happened, never "Failed to fetch", when a toggle cannot reach the server', async () => {
+    const { user } = open({
+      'notification.setPreference': () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('switch', { name: 'Graded work' }),
+    );
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't save.");
+    expect(alert).not.toHaveTextContent('Failed to fetch');
+  });
+
   it('offers to try again when the list cannot be loaded', async () => {
     open({
       'notification.preferences': () => {
