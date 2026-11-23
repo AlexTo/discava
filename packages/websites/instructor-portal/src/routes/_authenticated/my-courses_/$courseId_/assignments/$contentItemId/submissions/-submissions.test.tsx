@@ -98,6 +98,20 @@ describe('Submissions list', () => {
     expect(screen.getAllByText('Late')).toHaveLength(1);
   });
 
+  it('wraps a long word in the assignment title anywhere', async () => {
+    render(() => page([row(1)]));
+
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Essay',
+    });
+    expect(heading).toHaveClass('[overflow-wrap:anywhere]');
+    // `break-words` comes later in the stylesheet and would win, and
+    // `overflow-wrap: break-word` doesn't lower the heading's min-content
+    // width, so a long word would widen the page beside the sidebar.
+    expect(heading).not.toHaveClass('break-words');
+  });
+
   it('shows points, and the badge for a student who left', async () => {
     render(() =>
       page([

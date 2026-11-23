@@ -120,6 +120,20 @@ describe('Review page', () => {
     expect(screen.getByText(/by Ines/)).toBeVisible();
   });
 
+  it('wraps a long word in the student name anywhere', async () => {
+    render(() => view());
+
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: 'Sam Student',
+    });
+    expect(heading).toHaveClass('[overflow-wrap:anywhere]');
+    // `break-words` comes later in the stylesheet and would win, and
+    // `overflow-wrap: break-word` doesn't lower the heading's min-content
+    // width, so a long word would widen the page beside the sidebar.
+    expect(heading).not.toHaveClass('break-words');
+  });
+
   it('returns with the version and revision it rendered, then clears the draft', async () => {
     const { calls, user } = render(() => view(), {
       'assignmentSubmission.return': () => ({ reviewRevision: 6 }),

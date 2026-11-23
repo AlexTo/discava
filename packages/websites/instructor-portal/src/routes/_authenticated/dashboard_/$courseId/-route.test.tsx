@@ -110,6 +110,21 @@ describe('Course analytics', () => {
     expect(validate({ days: 7 })).toEqual({ days: 90 });
   });
 
+  it('wraps a long word in the title anywhere', async () => {
+    renderPage();
+
+    const heading = await screen.findByRole(
+      'heading',
+      { level: 1, name: 'Intro to DynamoDB' },
+      { timeout: 5_000 },
+    );
+    expect(heading).toHaveClass('[overflow-wrap:anywhere]');
+    // `break-words` comes later in the stylesheet and would win, and
+    // `overflow-wrap: break-word` doesn't lower the heading's min-content
+    // width, so a long word would widen the page beside the sidebar.
+    expect(heading).not.toHaveClass('break-words');
+  });
+
   it('shows the title, when the figures last changed and the totals', async () => {
     renderPage();
 

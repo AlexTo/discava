@@ -71,7 +71,7 @@ function RouteComponent() {
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
             <BarChart3 className="size-4" /> Course analytics
           </div>
-          <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
             {title ?? 'Course analytics'}
           </h1>
           {analytics && (
