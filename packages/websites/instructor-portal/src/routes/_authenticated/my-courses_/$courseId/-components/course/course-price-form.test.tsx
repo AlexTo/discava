@@ -132,7 +132,7 @@ describe('CoursePriceForm', () => {
     expect(calls).toEqual([]);
   });
 
-  it('shows the API message and restores the field when saving fails', async () => {
+  it('shows the API message and keeps what was typed when saving fails', async () => {
     const { user } = renderForm(1999, 'GBP', {
       'course.setPrice': () => {
         throw new ApiError(
@@ -152,8 +152,30 @@ describe('CoursePriceForm', () => {
     expect(
       screen.getByText("Payments aren't set up yet; ask an administrator"),
     ).toBeInTheDocument();
-    expect(priceField()).toHaveValue('19.99');
-    expect(currencyField()).toHaveValue('GBP');
+    expect(priceField()).toHaveValue('25');
+    expect(currencyField()).toHaveValue('EUR');
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('sends the typed price again on Save after a failure', async () => {
+    const sent: unknown[] = [];
+    const { user } = renderForm(1999, 'GBP', {
+      'course.setPrice': (input: unknown) => {
+        sent.push(input);
+        if (sent.length === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Try again');
+        }
+        return {};
+      },
+    });
+
+    await typePrice(user, '25');
+    await user.click(save());
+    await screen.findByText("Couldn't save the price");
+    await user.click(save());
+
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]).toEqual(sent[0]);
+    expect(sent[1]).toMatchObject({ priceAmount: 2500 });
   });
 });

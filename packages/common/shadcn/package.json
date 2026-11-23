@@ -46,6 +46,8 @@
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
     "./hooks/use-video-questions": "./src/hooks/use-video-questions.tsx",
+    "./hooks/use-discard-guard": "./src/hooks/use-discard-guard.tsx",
+    "./hooks/use-unsaved-changes-guard": "./src/hooks/use-unsaved-changes-guard.tsx",
     "./hooks/*": "./src/hooks/*.ts",
     "./discussion/*": "./src/discussion/*.tsx"
   },

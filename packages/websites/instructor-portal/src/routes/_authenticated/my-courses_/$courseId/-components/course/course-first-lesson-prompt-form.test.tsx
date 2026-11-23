@@ -122,7 +122,7 @@ describe('CourseFirstLessonPromptForm', () => {
     expect(screen.getByText('200 / 200')).toBeInTheDocument();
   });
 
-  it('shows the API message and restores the text when saving fails', async () => {
+  it('shows the API message and keeps the typed text when saving fails', async () => {
     const { user } = renderForm(OWN_PROMPT, {
       'course.setFirstLessonPrompt': () => {
         throw new ApiError(
@@ -142,8 +142,30 @@ describe('CourseFirstLessonPromptForm', () => {
     expect(
       screen.getByText('The prompt must be at most 200 characters'),
     ).toBeInTheDocument();
-    expect(field()).toHaveValue(OWN_PROMPT);
+    expect(field()).toHaveValue('Something else');
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('sends the typed text again on Save after a failure', async () => {
+    const sent: unknown[] = [];
+    const { user } = renderForm(OWN_PROMPT, {
+      'course.setFirstLessonPrompt': (input: unknown) => {
+        sent.push(input);
+        if (sent.length === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Try again');
+        }
+        return {};
+      },
+    });
+
+    await user.clear(field());
+    await user.type(field(), 'Something else');
+    await user.click(save());
+    await screen.findByText("Couldn't save the prompt");
+    await user.click(save());
+
+    await waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent[1]).toEqual({ courseId: COURSE_ID, prompt: 'Something else' });
   });
 
   it('sends null from Use default and clears the field', async () => {

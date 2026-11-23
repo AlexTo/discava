@@ -20,7 +20,7 @@ const PROMPT_MAX = 200;
 /**
  * The question new learners are asked in the first lesson's Questions. It
  * shows the course's own text, or is empty with the default as its
- * placeholder; a failed save puts the saved text back.
+ * placeholder; a failed save keeps what was typed.
  */
 export function CourseFirstLessonPromptForm({
   courseId,
@@ -48,8 +48,7 @@ export function CourseFirstLessonPromptForm({
     try {
       await mutateAsync({ courseId, prompt });
     } catch {
-      // Surfaced via the error below; the field goes back to what's saved.
-      setText(firstLessonPrompt ?? '');
+      // Surfaced via the error below; what was typed stays, to send again.
       return;
     }
     setText(prompt ?? '');

@@ -32,7 +32,7 @@ const toFieldValue = (amount: number) =>
     : `${Math.floor(amount / 100)}.${String(amount % 100).padStart(2, '0')}`;
 
 /**
- * What the course costs. It shows the saved price; a failed save puts it back.
+ * What the course costs. It shows the saved price; a failed save keeps what was typed.
  * A change applies to new purchases only: enrolled students keep their access.
  */
 export function CoursePriceForm({
@@ -74,9 +74,7 @@ export function CoursePriceForm({
         priceCurrency: currency,
       });
     } catch {
-      // Surfaced via the error below; the fields go back to what's saved.
-      setPrice(toFieldValue(priceAmount));
-      setCurrency(priceCurrency);
+      // Surfaced via the error below; what was typed stays, to send again.
       return;
     }
     setSaved(true);

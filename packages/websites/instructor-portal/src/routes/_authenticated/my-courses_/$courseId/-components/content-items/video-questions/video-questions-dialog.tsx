@@ -4,16 +4,6 @@
  */
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@discava/common-shadcn/components/ui/alert-dialog';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -22,7 +12,8 @@ import {
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
-import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { useUnsavedChangesGuard } from '@discava/common-shadcn/hooks/use-unsaved-changes-guard';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../api';
@@ -66,8 +57,6 @@ export function VideoQuestionsDialog({
   // CONFLICT.
   const [session, setSession] = useState(0);
   const [dirty, setDirty] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const discardFocus = useReturnFocus(confirmDiscard);
 
   const view = courseQuery.data;
   const module = view?.modules.find((m) => m.moduleId === moduleId);
@@ -94,18 +83,14 @@ export function VideoQuestionsDialog({
             : undefined;
 
   const close = () => {
-    setConfirmDiscard(false);
     setDirty(false);
     setOpen(false);
   };
-
-  const requestClose = () => {
-    if (dirty) {
-      setConfirmDiscard(true);
-    } else {
-      close();
-    }
-  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+  const unsavedChanges = useUnsavedChangesGuard(dirty);
 
   const loading = courseQuery.isPending;
 
@@ -124,6 +109,7 @@ export function VideoQuestionsDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         showCloseButton={false}
+        {...contentProps}
         className="max-h-[90vh] overflow-y-auto pb-0 sm:max-w-5xl"
       >
         <DialogHeader>
@@ -165,25 +151,8 @@ export function VideoQuestionsDialog({
           />
         )}
 
-        <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
-          <AlertDialogContent
-            className="sm:max-w-md"
-            onCloseAutoFocus={discardFocus.onCloseAutoFocus}
-          >
-            <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The changes you made since the last save will be lost.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep editing</AlertDialogCancel>
-              <AlertDialogAction variant="destructive" onClick={close}>
-                Discard changes
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {confirmation}
+        {unsavedChanges.confirmation}
       </DialogContent>
     </Dialog>
   );

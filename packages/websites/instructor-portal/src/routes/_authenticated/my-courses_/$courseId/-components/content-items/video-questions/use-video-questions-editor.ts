@@ -80,16 +80,6 @@ export function useVideoQuestionsEditor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  // Leaving with unsaved changes asks first.
-  useEffect(() => {
-    if (!dirty || readOnly) {
-      return;
-    }
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty, readOnly]);
-
   useEffect(() => {
     if (!scrollTarget) {
       return;
