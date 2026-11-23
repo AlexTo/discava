@@ -52,6 +52,8 @@ Output: `{ refundRequestedAt: string }`
 - `refundEligibility` decides, with the server's clock. Refusals are `PRECONDITION_FAILED` and write nothing:
   - `window-ended`: "The 14-day refund period for this course has ended"
   - `completed`: "A course can't be refunded after you have completed it"
+  - `progress-limit` (amendment 2026-11-23): "A course can't be refunded after you have completed half of it"
+  - `refunded-before` (amendment 2026-11-23): "You were refunded for this course before, so this purchase can't be refunded"
   - `other-account`, or payments not connected: "This purchase can't be refunded here right now"
   - `not-current-order`, `not-paid`: "No purchase to refund"
 - `already-requested` is not an error: the stored `refundRequestedAt` is returned and Stripe is not called.
@@ -65,7 +67,9 @@ Input: `{ courseId: string }`
 
 Output: `null` when the caller has no paid or refunded order for the course, otherwise their most recent one as:
 
-`{ status: 'paid' | 'refunded', amount: number, currency: string, paidAt: string, refundWindowDays: number, refundableUntil: string, canRequestRefund: boolean, refundBlockedBy?: 'window-ended' | 'completed' | 'other-account', refundRequestedAt?: string, refundedAt?: string }`
+`{ status: 'paid' | 'refunded', amount: number, currency: string, paidAt: string, refundWindowDays: number, refundableUntil: string, canRequestRefund: boolean, refundBlockedBy?: 'window-ended' | 'completed' | 'progress-limit' | 'refunded-before' | 'other-account', refundProgressLimitPercent: number, refundRequestedAt?: string, refundedAt?: string }`
+
+Amendment 2026-11-23: `refundBlockedBy` gains `progress-limit` and `refunded-before`, and `refundProgressLimitPercent` is the limit (50) from `core-table`. `myOrder` and `requestRefund` decide with the same inputs: progress computed from the caller's completions and the current curriculum (`computeProgress`), and whether an earlier order of theirs for the course has `refundRequestedAt` and is `refunded`.
 
 Reads only; needs no Stripe key, so it runs on the shared function. This is the one output that exposes order fields, and only to the order's own student.
 
@@ -81,7 +85,8 @@ Input: `{ courseId: string }`. Output: the enrolment, as `course.myEnrolment` re
 ### Changed
 
 - `course.myEnrolment` gains `paidFor: boolean` (the enrolment has an `orderId`). `orderId` itself is still never exposed.
-- `course.publicView` gains `refundWindowDays: number` for a priced course, so the terms line and the API cannot disagree.
+- `course.publicView` gains `refundWindowDays: number` for a priced course, so the terms line and the API cannot disagree. Amendment 2026-11-23: also `refundProgressLimitPercent: number`.
+- `course.myEnrolment` (amendment 2026-11-23) gains `refundedBefore: boolean` for a signed-in caller who has an earlier own-request refunded order for the course, so the page can warn before a second purchase (FR-043). No order field is exposed.
 - `course.enrol`: its text above says only a full refund writes `dropped`. That no longer holds: leaving writes it too. The behaviour is unchanged and is what brings back a student who left: a `dropped` enrolment in a free course is restored, and in a priced course it is "This course must be purchased".
 
 ### Tests

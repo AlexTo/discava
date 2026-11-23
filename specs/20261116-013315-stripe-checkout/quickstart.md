@@ -27,11 +27,12 @@ pnpm build                      # includes synth and checkov for the Payments st
 
 Added by the 2026-11-19 amendment. Continue from the steps above, connected, with Alice's course priced at 20.00 USD and holding at least two items.
 
-1. Signed out, open the course page: under the price it says "14-day refund if you haven't completed the course."
+1. Signed out, open the course page: under the price it says "14-day refund while you've completed less than half of the course. One refund per course." (amended 2026-11-23)
 2. As a new student (the local sign-in page's "Someone else" form), buy the course and complete one item. The course page says "You can request a refund until <date>" and offers **Request a refund**; **Leave course** is not shown.
 3. Choose **Request a refund**: the dialog shows $20.00 and says access ends and progress is kept. Confirm. The page says "Refund requested", then within seconds "Your enrolment has ended. Refunded on <date>." with **Buy now**. The notification bell has one "refunded" notification, and the local inbox (`http://localhost:2024/inbox`) has one email.
 4. Check `POST /stripe/test/refunds` on the stand-in shows exactly one refund of 2000 for that payment. Replay the refund notice (`POST /stripe/test/replay`): nothing changes and no second notification appears.
-5. Buy again and pay: the completed item is back, and a new refund date is shown.
+5. The page beside **Buy now** says that buying again can't be refunded. Buy again and pay: the completed item is back, no refund action is offered, and the page says "You were refunded for this course before, so this purchase can't be refunded." (amended 2026-11-23)
+5a. With a course of four items: as one new student, buy it and complete one item (25%), then request a refund: it is accepted. As another, buy it and complete two items (50%). The page says "Refunds end once you've completed half of the course." Call `payment.requestRefund` by hand straight after the last completion: refused, even before the progress figure updates.
 6. Complete every item. The page now says "A course can't be refunded after you have completed it." and offers no button. Call `payment.requestRefund` by hand if you like: refused.
 7. As Dan (partly refunded in step 7 above, 5.00), request a refund: the stand-in shows a second refund of 1500, and his order is fully refunded.
 8. As Alice, create and publish a free course with two items. As Bob, enrol, complete one item, and choose **Leave course**: the dialog says progress is kept. Confirm: "Your enrolment has ended." with **Enrol now**, and the course is gone from My Learning. Enrol again: the completed item is back.
