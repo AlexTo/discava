@@ -3,9 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { getBreadcrumbs } from '@discava/common-shadcn/components/portal-shell';
-import { describe, expect, it } from 'vitest';
+import { RuntimeConfigContext } from '@discava/common-web-utils/runtime-config';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { AuthContext, type AuthContextProps } from 'react-oidc-context';
+import { describe, expect, it, vi } from 'vitest';
 import { router } from '../router';
-import { segmentLabels } from './app-layout';
+import AppLayout, { segmentLabels } from './app-layout';
+
+// The bell reads notifications from the core API, which this test has no
+// need of.
+vi.mock(
+  '@discava/common-shadcn/components/notification-bell-container',
+  () => ({
+    NotificationBell: () => null,
+  }),
+);
 
 // The routes the admin portal really has, as PortalShell checks them.
 const adminPaths = new Set(Object.keys(router.routesByPath));
@@ -61,5 +83,58 @@ describe('the admin breadcrumb links', () => {
     )) {
       if (href) expect(adminPaths.has(href)).toBe(true);
     }
+  });
+});
+
+describe('the admin layout', () => {
+  it('focuses the new page heading after navigating from / to /payments', async () => {
+    const root = createRootRoute({
+      component: () => (
+        <AppLayout>
+          <Outlet />
+        </AppLayout>
+      ),
+    });
+    const routeTree = root.addChildren([
+      createRoute({
+        getParentRoute: () => root,
+        path: '/',
+        component: () => <h1>Home</h1>,
+      }),
+      createRoute({
+        getParentRoute: () => root,
+        path: '/payments',
+        component: () => <h1>Payments</h1>,
+      }),
+    ]);
+    const testRouter = createRouter({
+      routeTree,
+      history: createMemoryHistory({ initialEntries: ['/'] }),
+    });
+    const auth = {
+      isLoading: false,
+      isAuthenticated: true,
+      user: {
+        access_token: 'test-token',
+        profile: { sub: 'admin-1', 'cognito:groups': ['admin'] },
+      },
+    } as unknown as AuthContextProps;
+    const user = userEvent.setup();
+    render(
+      <RuntimeConfigContext.Provider value={{ portals: {} }}>
+        <AuthContext.Provider value={auth}>
+          <QueryClientProvider client={new QueryClient()}>
+            <RouterProvider router={testRouter} />
+          </QueryClientProvider>
+        </AuthContext.Provider>
+      </RuntimeConfigContext.Provider>,
+    );
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+
+    await user.click(screen.getByRole('link', { name: 'Payments' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Payments' }),
+    ).toHaveFocus();
   });
 });
