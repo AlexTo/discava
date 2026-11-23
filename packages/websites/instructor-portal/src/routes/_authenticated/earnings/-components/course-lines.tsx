@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -31,11 +32,15 @@ export function CourseLines({
   const lines = query.data?.pages.flatMap((page) => page.lines) ?? [];
 
   if (query.isPending) {
-    return <p className="text-sm text-muted-foreground">Loading orders…</p>;
+    return <LoadingState label="Loading orders…" />;
   }
-  if (query.isError) {
+  if (query.isError && !query.isFetchNextPageError) {
     return (
-      <ErrorAlert type="error" header="Couldn't load the orders">
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the orders"
+        onRetry={() => void query.refetch()}
+      >
         {apiErrorMessage(query.error)}
       </ErrorAlert>
     );
@@ -86,7 +91,16 @@ export function CourseLines({
           </tbody>
         </table>
       </div>
-      {query.hasNextPage ? (
+      {query.isFetchNextPageError ? (
+        <ErrorAlert
+          type="error"
+          header="Couldn't load more orders"
+          onRetry={() => void query.fetchNextPage()}
+        >
+          {apiErrorMessage(query.error)}
+        </ErrorAlert>
+      ) : null}
+      {query.hasNextPage && !query.isFetchNextPageError ? (
         <Button
           type="button"
           variant="outline"

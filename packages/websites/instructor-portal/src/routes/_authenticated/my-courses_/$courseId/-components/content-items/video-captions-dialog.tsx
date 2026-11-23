@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import {
@@ -92,6 +93,8 @@ export function VideoCaptionsDialog({
   const [file, setFile] = useState<File>();
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string>();
+  // A failed removal shows inside the confirmation that is open.
+  const [removeError, setRemoveError] = useState<string>();
   const [isUploading, setIsUploading] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const { course, contentItem } = useInstructorApi();
@@ -212,8 +215,16 @@ export function VideoCaptionsDialog({
           </ErrorAlert>
         )}
 
+        {videoUrlQuery.isPending && videoUrlQuery.fetchStatus !== 'idle' && (
+          <LoadingState label="Loading captions…" />
+        )}
+
         {videoUrlQuery.isError && (
-          <ErrorAlert type="error" header="Couldn't load the captions">
+          <ErrorAlert
+            type="error"
+            header="Couldn't load the captions"
+            onRetry={() => void videoUrlQuery.refetch()}
+          >
             {apiErrorMessage(videoUrlQuery.error, 'Try again in a moment.')}
           </ErrorAlert>
         )}
@@ -243,7 +254,14 @@ export function VideoCaptionsDialog({
                     From the course's caption languages
                   </span>
                 ) : (
-                  <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
+                  <AlertDialog
+                    onOpenChange={(next) => {
+                      if (!next) {
+                        resetRemove();
+                      }
+                      setRemoveError(undefined);
+                    }}
+                  >
                     <AlertDialogTrigger asChild>
                       <Button
                         id={`caption-remove-${track.language}`}
@@ -265,6 +283,14 @@ export function VideoCaptionsDialog({
                             ' The next track becomes the default.'}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
+                      {removeError && (
+                        <ErrorAlert
+                          type="error"
+                          header="Couldn't remove the caption"
+                        >
+                          {removeError}
+                        </ErrorAlert>
+                      )}
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <Button
@@ -272,7 +298,7 @@ export function VideoCaptionsDialog({
                           variant="destructive"
                           disabled={isRemoving}
                           onClick={async () => {
-                            setError(undefined);
+                            setRemoveError(undefined);
                             try {
                               await removeCaption({
                                 ...keys,
@@ -280,7 +306,7 @@ export function VideoCaptionsDialog({
                               });
                               await refresh();
                             } catch (failure) {
-                              setError(
+                              setRemoveError(
                                 apiErrorMessage(
                                   failure,
                                   "Couldn't remove the caption",

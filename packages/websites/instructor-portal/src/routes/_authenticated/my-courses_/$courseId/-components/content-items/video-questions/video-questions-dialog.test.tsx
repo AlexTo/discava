@@ -203,6 +203,45 @@ describe('VideoQuestionsDialog', () => {
     ).toBeEnabled();
   });
 
+  it('says the video is loading, and still lets an end question be added', async () => {
+    const rendered = renderDialog(courseView(), {
+      'contentItem.createVideoUrl': () => new Promise(() => {}),
+    });
+    await open(rendered);
+
+    expect(screen.getByText('Loading the video…')).toBeInTheDocument();
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Add an end question' }),
+    );
+    expect(
+      screen.getByRole('textbox', { name: 'Question 1' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a failed video with Try again, and plays it once it loads', async () => {
+    let attempts = 0;
+    const rendered = renderDialog(courseView(), {
+      'contentItem.createVideoUrl': () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return videoUrl();
+      },
+    });
+    await open(rendered);
+
+    expect(await screen.findByText("Couldn't load the video")).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Add an end question' }),
+    ).toBeEnabled();
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Try again' }),
+    );
+
+    expect(await screen.findByTestId('player')).toBeInTheDocument();
+  });
+
   it('shows a second player for Preview as student, and sends nothing', async () => {
     const rendered = renderDialog();
     await open(rendered);

@@ -500,7 +500,7 @@ At 1440px nothing changes, apart from long-content fixes.
     Run the student portal's notification settings tests.
 
   **Tests:** a `TypeError('Failed to fetch')` shows "Couldn't reach Discava…".
-- [ ] T060 [P] [US7] Add `onRetry` to the failed loads that lack Try again (A-10, B-07, C-04, D-15, D-18, E-14), wired to the query's `refetch`:
+- [x] T060 [P] [US7] Add `onRetry` to the failed loads that lack Try again (A-10, B-07, C-04, D-15, D-18, E-14), wired to the query's `refetch`:
   - `IP/my-courses/route.tsx`;
   - `IP/my-courses_/$courseId/route.tsx` (not for NOT_FOUND);
   - `IP/earnings/-components/course-lines.tsx`, which also shows a failed "Load more";
@@ -548,7 +548,7 @@ At 1440px nothing changes, apart from long-content fixes.
     - the checklist's profile line (`IPC/course/landing-page-checklist.tsx`, through `IP/my-courses_/$courseId/route.tsx`) shows an inline error with Try again when `profile.get` fails;
     - so does the category select in `IPC/course/course-catalogue-form.tsx` when `category.listActive` fails.
   - **Deleting a lesson:** `IPC/lesson/delete-lesson-dialog.tsx` says how many items are deleted with the lesson in a draft.
-- [ ] T065 [P] [US7] Fix the My Courses empty states in `IP/my-courses/route.tsx` (B-08):
+- [x] T065 [P] [US7] Fix the My Courses empty states in `IP/my-courses/route.tsx` (B-08):
   - with no courses at all, show "You don't teach any courses yet" with Create course;
   - keep "No courses found" and Clear filters for a filter that hides every course.
 - [ ] T066 [US7] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s instructor section, or add `packages/e2e/src/scenarios/instructor-errors.e2e.ts`. As a new instructor:

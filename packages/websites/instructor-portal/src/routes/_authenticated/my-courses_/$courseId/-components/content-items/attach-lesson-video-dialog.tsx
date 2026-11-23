@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -118,6 +119,7 @@ export function AttachLessonVideoDialog({
     data: video,
     isPending: isLoadingVideo,
     isError: isVideoError,
+    refetch: refetchVideo,
   } = useQuery({
     ...contentItem.createVideoUrl.queryOptions({
       courseId,
@@ -295,7 +297,11 @@ export function AttachLessonVideoDialog({
           </ErrorAlert>
         )}
         {isVideoError && (
-          <ErrorAlert type="error" header="Couldn't load the video">
+          <ErrorAlert
+            type="error"
+            header="Couldn't load the video"
+            onRetry={() => void refetchVideo()}
+          >
             The attached video couldn't be loaded for playback.
           </ErrorAlert>
         )}
@@ -346,8 +352,8 @@ export function AttachLessonVideoDialog({
               Drop a new file below to retry.
             </ErrorAlert>
           ) : isLoadingVideo ? (
-            <div className="flex justify-center py-6">
-              <Spinner />
+            <div className="py-6">
+              <LoadingState label="Loading the video…" />
             </div>
           ) : (
             video && (

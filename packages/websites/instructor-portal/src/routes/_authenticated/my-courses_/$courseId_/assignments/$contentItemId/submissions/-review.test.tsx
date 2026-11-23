@@ -120,6 +120,23 @@ describe('Review page', () => {
     expect(screen.getByText(/by Ines/)).toBeVisible();
   });
 
+  it('offers Try again when the submission fails to load', async () => {
+    let attempts = 0;
+    const { user } = render(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+      }
+      return view();
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sam Student' }),
+    ).toBeVisible();
+  });
+
   it('wraps a long word in the student name anywhere', async () => {
     render(() => view());
 
