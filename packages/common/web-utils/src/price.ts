@@ -75,3 +75,8 @@ export const formatPrice = (amount: number, currency: string): string =>
     : new Intl.NumberFormat('en', { style: 'currency', currency }).format(
         amount / 100,
       );
+
+// The refund terms shown beside a price. One string, so every page that shows
+// the terms says the same thing as the API's refund window.
+export const refundTerms = (days: number): string =>
+  `${days}-day refund if you haven't completed the course.`;

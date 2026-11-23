@@ -10,6 +10,7 @@ import {
   PRICE_MAX,
   PRICE_MIN,
   parsePriceInput,
+  refundTerms,
   SUPPORTED_CURRENCIES,
   validatePrice,
 } from './price';
@@ -113,5 +114,16 @@ describe('formatPrice', () => {
     expect(formatPrice(1999, 'GBP')).toContain('£');
     expect(formatPrice(1999, 'AUD')).toContain('19.99');
     expect(formatPrice(1999, 'CAD')).toContain('19.99');
+  });
+});
+
+describe('refundTerms', () => {
+  it('takes the number of days', () => {
+    expect(refundTerms(14)).toBe(
+      "14-day refund if you haven't completed the course.",
+    );
+    expect(refundTerms(30)).toBe(
+      "30-day refund if you haven't completed the course.",
+    );
   });
 });

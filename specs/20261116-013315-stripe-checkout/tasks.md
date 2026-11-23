@@ -297,13 +297,13 @@ description: "Task list for Stripe checkout for paid courses"
 
 ### Tests for this phase (write first, see them fail)
 
-- [ ] T098 [P] [US7] Extend `enrolment-actions.test.tsx` for every new row of [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) (amendment 2026-11-19): the refund terms line on a priced course for signed-out and signed-in visitors and never on a free one; **Request a refund** with the date the period ends, its confirmation dialog, the call to `payment.requestRefund`, "Refund requested" afterwards and no second button; the period-ended and completed states with their text and no button; an API refusal shown as an error alert; no arrow icons in any button.
+- [x] T098 [P] [US7] Extend `enrolment-actions.test.tsx` for every new row of [contracts/student-portal-ui.md](./contracts/student-portal-ui.md) (amendment 2026-11-19): the refund terms line on a priced course for signed-out and signed-in visitors and never on a free one; **Request a refund** with the date the period ends, its confirmation dialog, the call to `payment.requestRefund`, "Refund requested" afterwards and no second button; the period-ended and completed states with their text and no button; an API refusal shown as an error alert; no arrow icons in any button.
 
 ### Implementation
 
-- [ ] T099 [US7] Show the refund terms beside the price in `enrolment-actions.tsx`, from one shared string that takes the number of days.
-- [ ] T100 [US7] In the enrolled state, call `payment.myOrder` for a priced or paid-for course and render the purchase states of the contract: the refund action with its confirmation dialog (shared shadcn dialog), the requested state, and the reasons a refund is not offered. Poll `course.myEnrolment` after a request as the `?checkout=success` state does, so the page moves to "Your enrolment has ended." by itself.
-- [ ] T101 [US7] Run the phase's tests plus lint and typecheck locally and fix until green.
+- [x] T099 [US7] Show the refund terms beside the price in `enrolment-actions.tsx`, from one shared string that takes the number of days.
+- [x] T100 [US7] In the enrolled state, call `payment.myOrder` for a priced or paid-for course and render the purchase states of the contract: the refund action with its confirmation dialog (shared shadcn dialog), the requested state, and the reasons a refund is not offered. Poll `course.myEnrolment` after a request as the `?checkout=success` state does, so the page moves to "Your enrolment has ended." by itself.
+- [x] T101 [US7] Run the phase's tests plus lint and typecheck locally and fix until green.
 
 **Checkpoint**: a student can get a refund from the course page with no operator.
 

@@ -541,3 +541,268 @@ describe('EnrolmentActions: paid courses', () => {
     expect((await buyButton()).querySelector('svg')).toBeNull();
   });
 });
+
+describe('EnrolmentActions: refunds', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const date = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  const TERMS = "14-day refund if you haven't completed the course.";
+  const UNTIL = '2026-11-20T10:00:00.000Z';
+
+  const order = (overrides: Record<string, unknown> = {}) => ({
+    status: 'paid',
+    amount: 2000,
+    currency: 'USD',
+    paidAt: '2026-11-06T10:00:00.000Z',
+    refundWindowDays: 14,
+    refundableUntil: UNTIL,
+    canRequestRefund: true,
+    ...overrides,
+  });
+
+  const renderRefund = (
+    handlers: Record<string, Handler> = {},
+    options: { signedIn?: boolean; path?: string } = {},
+  ) =>
+    renderPreview(
+      {
+        'course.publicView': () => priced,
+        'course.myEnrolment': () => enrolment(),
+        'payment.available': () => ({ available: true }),
+        'payment.myOrder': () => order(),
+        ...handlers,
+      },
+      options,
+    );
+
+  it('shows the refund terms beside the price of a priced course, signed out', async () => {
+    renderRefund({}, { signedIn: false });
+
+    expect(await screen.findByText('$20.00')).toBeInTheDocument();
+    expect(screen.getByText(TERMS)).toBeInTheDocument();
+  });
+
+  it('shows the refund terms to a signed-in visitor who has not bought', async () => {
+    renderRefund({
+      'course.myEnrolment': () => null,
+      'payment.myOrder': () => null,
+    });
+
+    expect(await screen.findByText(TERMS)).toBeInTheDocument();
+  });
+
+  it('never shows the refund terms on a free course', async () => {
+    renderPreview({ 'course.myEnrolment': () => null });
+
+    await enrolButton();
+    expect(screen.queryByText(/refund/i)).toBeNull();
+  });
+
+  it('offers a refund until the date, and asks before requesting it', async () => {
+    const { user, calls } = renderRefund({
+      'payment.requestRefund': () => ({
+        refundRequestedAt: '2026-11-10T10:00:00.000Z',
+      }),
+    });
+
+    expect(
+      await screen.findByText(`You can request a refund until ${date(UNTIL)}.`),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Request a refund' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('$20.00');
+    expect(dialog).toHaveTextContent('access');
+    expect(dialog).toHaveTextContent('progress is kept');
+    expect(calls.map(({ path }) => path)).not.toContain(
+      'payment.requestRefund',
+    );
+
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Request refund' }),
+    );
+
+    await vi.waitFor(() =>
+      expect(calls).toContainEqual({
+        path: 'payment.requestRefund',
+        input: { courseId: 'course-1' },
+      }),
+    );
+    expect(
+      await screen.findByText(
+        `Refund requested on ${date('2026-11-10T10:00:00.000Z')}. Your access ends when it is confirmed.`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Request a refund' }),
+    ).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('makes no call when the dialog is cancelled', async () => {
+    const { user, calls } = renderRefund();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Request a refund' }),
+    );
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Cancel',
+      }),
+    );
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(calls.map(({ path }) => path)).not.toContain(
+      'payment.requestRefund',
+    );
+  });
+
+  it('shows an API refusal as an error alert', async () => {
+    const { user } = renderRefund({
+      'payment.requestRefund': () => {
+        throw new ApiError(
+          'PRECONDITION_FAILED',
+          'The 14-day refund period for this course has ended',
+        );
+      },
+    });
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Request a refund' }),
+    );
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Request refund',
+      }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The 14-day refund period for this course has ended',
+    );
+  });
+
+  it('shows a requested refund without a button, and moves to the ended state by itself', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let refunded = false;
+    renderRefund({
+      'course.myEnrolment': () =>
+        enrolment({ status: refunded ? 'dropped' : 'active' }),
+      'payment.myOrder': () =>
+        refunded
+          ? order({
+              status: 'refunded',
+              canRequestRefund: false,
+              refundRequestedAt: '2026-11-10T10:00:00.000Z',
+              refundedAt: '2026-11-11T10:00:00.000Z',
+            })
+          : order({
+              canRequestRefund: false,
+              refundRequestedAt: '2026-11-10T10:00:00.000Z',
+            }),
+    });
+
+    expect(
+      await screen.findByText(
+        `Refund requested on ${date('2026-11-10T10:00:00.000Z')}. Your access ends when it is confirmed.`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Request a refund' }),
+    ).toBeNull();
+
+    refunded = true;
+    await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+    expect(
+      await screen.findByText(
+        `Your enrolment has ended. Refunded on ${date('2026-11-11T10:00:00.000Z')}.`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Buy now' }),
+    ).toBeEnabled();
+    expect(screen.queryByText(/Refund requested on/)).toBeNull();
+  });
+
+  it('says the refund period ended, with no button', async () => {
+    renderRefund({
+      'payment.myOrder': () =>
+        order({ canRequestRefund: false, refundBlockedBy: 'window-ended' }),
+    });
+
+    expect(
+      await screen.findByText(
+        `The refund period for this course ended on ${date(UNTIL)}.`,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('says a completed course cannot be refunded, with no button', async () => {
+    renderRefund({
+      'course.myEnrolment': () =>
+        enrolment({ status: 'completed', progressPercent: 100 }),
+      'payment.myOrder': () =>
+        order({ canRequestRefund: false, refundBlockedBy: 'completed' }),
+    });
+
+    expect(
+      await screen.findByText(
+        "A course can't be refunded after you have completed it.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it("says a purchase from another account can't be refunded here", async () => {
+    renderRefund({
+      'payment.myOrder': () =>
+        order({ canRequestRefund: false, refundBlockedBy: 'other-account' }),
+    });
+
+    expect(
+      await screen.findByText(
+        "This purchase can't be refunded here right now.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('shows nothing about refunds to a student with no order', async () => {
+    renderRefund({ 'payment.myOrder': () => null });
+
+    await screen.findByRole('link', { name: 'Start learning' });
+    await vi.waitFor(() => expect(screen.queryByText(/refund/i)).toBeNull());
+  });
+
+  it('tells an ended enrolment without a refund only that it ended', async () => {
+    renderRefund({
+      'course.myEnrolment': () => enrolment({ status: 'dropped' }),
+      'payment.myOrder': () => null,
+    });
+
+    expect(await screen.findByText('Your enrolment has ended.')).toBeVisible();
+    expect(screen.queryByText(/Refunded on/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /refund/i })).toBeNull();
+  });
+
+  it('renders no arrow icon in any button', async () => {
+    const { user } = renderRefund();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Request a refund' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      document.querySelectorAll('button svg[class*="arrow"]'),
+    ).toHaveLength(0);
+    expect(dialog.querySelector('svg[class*="arrow"]')).toBeNull();
+  });
+});
