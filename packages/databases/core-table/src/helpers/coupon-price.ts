@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Prices are integers in a currency's minor units (cents, or whole yen for a
-// zero-decimal currency). Nothing here knows of orders or Stripe.
+// Prices are integers in a currency's minor units (cents or pence: every
+// supported currency has two decimals, so no rounding depends on the
+// currency). Nothing here knows of orders or Stripe.
 
 export interface PricedCoupon {
   type: 'percent' | 'fixed';
@@ -20,9 +21,10 @@ export interface CouponPrice {
 }
 
 /**
- * Stripe's documented minimum charge per currency, in minor units. A total
- * above zero and under this can't be paid for. Currencies not listed use the
- * USD figure.
+ * Stripe's documented minimum charge, in minor units, for each currency a
+ * course can be priced in (`SUPPORTED_CURRENCIES` in common-web-utils, all
+ * two-decimal). A total above zero and under this can't be paid for. Keys are
+ * lower case; a currency a course can't be priced in has no entry.
  */
 export const MIN_CHARGE_MINOR: Record<string, number> = {
   usd: 50,
@@ -30,16 +32,16 @@ export const MIN_CHARGE_MINOR: Record<string, number> = {
   gbp: 30,
   aud: 50,
   cad: 50,
-  nzd: 50,
-  chf: 50,
-  sgd: 50,
-  jpy: 50,
 };
 
-const DEFAULT_MIN_CHARGE_MINOR = 50;
-
-export const minimumCharge = (currency: string): number =>
-  MIN_CHARGE_MINOR[currency.toLowerCase()] ?? DEFAULT_MIN_CHARGE_MINOR;
+/** The minimum charge for a currency; throws for one a course can't be priced in. */
+export const minimumCharge = (currency: string): number => {
+  const minimum = MIN_CHARGE_MINOR[currency.toLowerCase()];
+  if (minimum === undefined) {
+    throw new RangeError(`No minimum charge is known for ${currency}`);
+  }
+  return minimum;
+};
 
 /**
  * What a student pays for a course with a coupon. A percent discount is
@@ -51,7 +53,6 @@ export const priceWithCoupon = ({
   coupon,
 }: {
   listAmount: number;
-  currency: string;
   coupon: PricedCoupon;
 }): CouponPrice => {
   const discount =

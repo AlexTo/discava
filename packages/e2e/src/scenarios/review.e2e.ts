@@ -165,9 +165,14 @@ test.describe('course reviews in the admin portal', () => {
 
     await page.getByRole('button', { name: /^Remove .* review$/ }).click();
     const dialog = page.getByRole('dialog');
+    const submit = dialog.getByRole('button', { name: 'Remove review' });
+    await expect(submit).toBeEnabled();
+    await submit.click();
+    await expect(dialog.getByLabel('Reason')).toBeFocused();
     await expect(
-      dialog.getByRole('button', { name: 'Remove review' }),
-    ).toBeDisabled();
+      dialog.getByText("Enter a reason. It's kept on record"),
+    ).toBeVisible();
+    await screenshot(page, 'the removal dialog asking for a reason');
     await dialog.getByLabel('Reason').fill('Abusive language');
     await screenshot(page, 'the removal dialog with a reason');
     await dialog.getByRole('button', { name: 'Remove review' }).click();

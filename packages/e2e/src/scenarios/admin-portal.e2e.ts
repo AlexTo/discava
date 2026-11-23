@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { apiUser, createPublishedCourseViaApi } from '../helpers/api.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import { expect, test } from '../helpers/table-invariants.js';
@@ -147,4 +148,71 @@ test('renaming and archiving a category keep focus on that row', async ({
     ).toBeFocused();
     await screenshot(page, 'categories after keyboard rename and archive');
   });
+});
+
+// A problem with the add form is shown under its field, and the field has focus.
+test('adding a category with an empty or taken name explains it beside the field', async ({
+  page,
+}) => {
+  const name = uniqueName('Duplicate category');
+  const field = page.getByLabel('New category name');
+
+  await page.goto(`${PORTALS.admin}/categories`);
+  await signIn(page, newUser('Dee', ['admin']));
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Categories' }),
+  ).toBeVisible();
+
+  await test.step('an empty name is refused on submit', async () => {
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(
+      page.getByText('Enter a name for the category.'),
+    ).toBeVisible();
+    await expect(field).toBeFocused();
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  await test.step('a name that exists is refused under the field', async () => {
+    await field.fill(name);
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
+    await field.fill(name);
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: "Couldn't add the category" }),
+    ).toBeVisible();
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await screenshot(page, 'duplicate category name beside the add field');
+  });
+});
+
+// A typed reason is lost only by Cancel: Escape asks first.
+test('Escape on Remove review with a reason typed asks before discarding', async ({
+  page,
+}) => {
+  const title = uniqueName('E2E discard guard');
+  const instructor = await apiUser('Ivy', ['instructor']);
+  const { courseId } = await createPublishedCourseViaApi(instructor, title);
+  const student = await apiUser('Sam', ['student']);
+  await student.core.course.enrol.mutate({ courseId });
+  await student.core.review.post.mutate({
+    courseId,
+    rating: 1,
+    text: 'Rude words about the instructor.',
+  });
+
+  await page.goto(`${PORTALS.admin}/reviews`);
+  await signIn(page, newUser('Cara', ['admin']));
+  await page
+    .getByLabel('Course')
+    .selectOption({ label: `${title} · 1 rating` });
+  await page.getByRole('button', { name: /^Remove .* review$/ }).click();
+  await page.getByLabel('Reason').fill('Abusive language');
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('Discard unsaved changes?')).toBeVisible();
+  await screenshot(page, 'Escape on Remove review asks to discard the reason');
+
+  await page.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page.getByLabel('Reason')).toHaveValue('Abusive language');
 });
