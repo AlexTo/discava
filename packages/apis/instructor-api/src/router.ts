@@ -71,6 +71,12 @@ import {
 } from './procedures/content-item-video.js';
 import { updateContentItemVideoQuestions } from './procedures/content-item-video-questions.js';
 import {
+  createCoupon,
+  deleteCoupon,
+  listCoupons,
+  updateCoupon,
+} from './procedures/coupon.js';
+import {
   archiveCourse,
   createCourse,
   publishCourse,
@@ -205,6 +211,12 @@ export const appRouter = router({
     updateCaptionLanguages: updateCourseCaptionLanguages,
     retryCaptionTranslations: retryCourseCaptionTranslations,
     updateLanding: updateCourseLanding,
+  }),
+  coupon: router({
+    create: createCoupon,
+    list: listCoupons,
+    update: updateCoupon,
+    delete: deleteCoupon,
   }),
   coursePreview: router({
     createUploadUrl: coursePreview.createUploadUrl,

@@ -71,6 +71,14 @@ const lookUp = async (rendered: Awaited<ReturnType<typeof render>>) => {
 };
 
 describe('the Certificates screen', () => {
+  it('treats the ID field as a code, not prose', async () => {
+    await render();
+    const field = await screen.findByLabelText('Certificate ID');
+    expect(field).toHaveAttribute('spellcheck', 'false');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveAttribute('autocapitalize', 'characters');
+  });
+
   it('finds a certificate by ID', async () => {
     const rendered = await render();
     await lookUp(rendered);

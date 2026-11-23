@@ -54,7 +54,8 @@
   "coupon": {
     "core-table": [
       "packages/databases/core-table/src/helpers/coupon-redemption.ts"
-    ]
+    ],
+    "instructor-api": ["packages/apis/instructor-api/src/procedures/coupon.ts"]
   },
   "couponRedemption": {
     "core-table": [

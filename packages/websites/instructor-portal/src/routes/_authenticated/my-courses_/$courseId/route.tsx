@@ -211,6 +211,13 @@ function RouteComponent() {
               >
                 Questions
               </Link>
+              <Link
+                to="/my-courses/$courseId/coupons"
+                params={{ courseId: course.courseId }}
+                className="font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Coupons
+              </Link>
             </div>
             <div className="mt-4 border-t pt-4">
               <h2 className="mb-3 text-lg font-semibold">Course settings</h2>

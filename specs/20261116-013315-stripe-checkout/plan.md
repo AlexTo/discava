@@ -82,6 +82,8 @@ No violations, so Complexity Tracking is empty.
 
 ## Design Decisions (detail in [research.md](./research.md))
 
+- **Refund limits (amendment 2026-11-23, R-24)**: `refundEligibility` gains `progress-limit` (50% or more completed, computed at request time with `computeProgress`) and `refunded-before` (an earlier own-request refund of the same course). No new attribute or index; `course.myEnrolment` gains `refundedBefore` and `course.publicView` the limit.
+
 1. **State-based idempotence, no event log.** Every order move is conditioned on the status it comes from. A replayed, duplicated or concurrent confirmation finds the work done and does nothing; the handler still answers success (research R-1).
 2. **Fulfilment is one transaction.** `settleOrderPaid` writes the order (`pending` to `paid`), the enrolment (create, or restore from `dropped`) and checks the course is `published`, together. A transaction cancelled by a failed condition is re-read and decided again, up to three times (R-2).
 3. **Refund ends the enrolment with `dropped`**, keeps `completedAt`, progress and certificates; re-purchase restores it, and so does a free `enrol` once the course is free. `orderId` on the enrolment names the order that currently entitles it (R-3).

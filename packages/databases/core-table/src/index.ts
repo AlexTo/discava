@@ -219,6 +219,7 @@ export {
   generateCouponCode,
   normaliseCouponCode,
 } from './helpers/coupon-code.js';
+export { couponValueProblem } from './helpers/coupon-input.js';
 export {
   belowMinimumCharge,
   type CouponPrice,

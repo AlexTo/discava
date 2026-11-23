@@ -497,6 +497,9 @@ export function CertificatesScreen() {
               aria-describedby={problem ? 'certificate-id-error' : undefined}
               value={input}
               maxLength={100}
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="characters"
               onChange={(event) => {
                 setInput(event.target.value);
                 setProblem(undefined);

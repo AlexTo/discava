@@ -310,7 +310,7 @@ describe('the Branding page', () => {
     await user.click(
       within(screen.getByRole('region', { name: 'Share image' })).getByRole(
         'button',
-        { name: 'Reset to default' },
+        { name: 'Reset the share image to default' },
       ),
     );
     expect(
@@ -483,7 +483,7 @@ describe('the Branding page', () => {
       await user.click(
         within(screen.getByRole('region', { name: 'Logo' })).getByRole(
           'button',
-          { name: 'Reset to default' },
+          { name: 'Reset the logo to default' },
         ),
       );
       await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -695,7 +695,7 @@ describe('the Branding page, with the keyboard', () => {
     expect(calls.filter((c) => c.path === 'branding.save')).toHaveLength(1);
   });
 
-  it('keeps focus on Reset to default while an upload runs', async () => {
+  it('keeps focus on the logo reset button while an upload runs', async () => {
     const { user } = open({
       'branding.get': () => ({
         ...none,
@@ -707,7 +707,7 @@ describe('the Branding page, with the keyboard', () => {
     put.mockReturnValue(new Promise(() => {}));
     const reset = within(
       screen.getByRole('region', { name: 'Logo' }),
-    ).getByRole('button', { name: 'Reset to default' });
+    ).getByRole('button', { name: 'Reset the logo to default' });
     reset.focus();
     choose('Upload logo', file('logo.png', 'image/png'));
 

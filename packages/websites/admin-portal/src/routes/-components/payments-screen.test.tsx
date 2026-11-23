@@ -240,7 +240,7 @@ describe('the Payments page', () => {
     );
     expect(keyField()).toHaveValue('');
     await rendered.user.click(
-      within(dialog).getByRole('button', { name: 'Continue' }),
+      within(dialog).getByRole('button', { name: 'Replace the key' }),
     );
 
     await waitFor(() =>
@@ -267,7 +267,7 @@ describe('the Payments page', () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
     await rendered.user.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Continue',
+        name: 'Replace the key',
       }),
     );
 
@@ -396,7 +396,7 @@ describe('the Payments page, with the keyboard', () => {
     );
   });
 
-  it('focuses the key field after Go back', async () => {
+  it('focuses the key field after Keep the current key', async () => {
     const rendered = render(active);
     await rendered.user.click(
       await screen.findByRole('button', { name: 'Replace key' }),
@@ -405,7 +405,7 @@ describe('the Payments page, with the keyboard', () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
     await rendered.user.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Go back',
+        name: 'Keep the current key',
       }),
     );
 
@@ -421,7 +421,7 @@ describe('the Payments page, with the keyboard', () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
     await rendered.user.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Continue',
+        name: 'Replace the key',
       }),
     );
 
@@ -501,7 +501,7 @@ describe('the Payments page, with the keyboard', () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
     await rendered.user.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Continue',
+        name: 'Replace the key',
       }),
     );
 

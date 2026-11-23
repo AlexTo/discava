@@ -12,6 +12,8 @@
 
 **Amendment (2026-11-19)**: "Ship the learner's refund and unenrol path in the same release as checkout" (#284's scope update). A student can ask for a refund themselves within a stated period, and can leave a course they did not pay for; see User Stories 7 and 8 and FR-031 to FR-040.
 
+**Amendment (2026-11-23)**: limits on a student's own refund, set by the maintainer. No refund once half of the course is completed, and one refund per student per course: a second purchase of a course the student was refunded for at their own request is not refundable by them. Requests stay automatic, with no review. See the 2026-11-23 clarifications session, User Story 7 scenarios 1, 2 and 10 to 13, and FR-041 to FR-043.
+
 **Design page**: [`design/payments`](../../docs/src/content/docs/en/design/payments.mdx)
 
 **Parent issue**: #284
@@ -63,6 +65,16 @@ Amendment from #284's scope update. Resolved without asking, using the recommend
 - Q: Is the student told when a refund goes through? → A: Yes, by an in-app notification and an email, through the notifications pipeline (#281), once per refunded order. This replaces the earlier statement that this feature sends no notices of its own. A refund made automatically for an undeliverable payment sends none here, as before.
 - Q: Does a refund now revoke a certificate? → A: No change: issued certificates stay verifiable. A student who has completed the course can no longer ask for a refund themselves, which removes the common case. Revocation is proposed separately in #594.
 - Q: Is a support contact shown where a refund is refused? → A: No. The platform has no support contact setting, and adding one is left to a follow-up. A refusal says why.
+
+### Session 2026-11-23 (refund limits)
+
+Set by the maintainer after comparing Coursera (14 days, no refund once the certificate is earned) and Udemy (30 days; may refuse when a notable amount was consumed, or for repeated refunds of the same course). Replaces "only while they have not completed the course" in the 2026-11-19 session; the other answers there stand.
+
+- Q: Should a person review refund requests, to stop abuse? → A: No. Reviewing would not scale and nobody watches a queue. Requests stay automatic; the rules below are checked by the system and stated before paying.
+- Q: How much of a course may a student complete and still be refunded? → A: Less than half. A student who has completed 50% or more of the course cannot request a refund. "Completed" is the same share the course page shows as their progress (the effectively visible items they completed, rounded down), worked out when the request is made, not read from a stored figure that may lag behind. Completing the course is above the limit, so the earlier rule is kept as a special case with its own message.
+- Q: What about buying, refunding and buying again? → A: One refund per student per course at their own request. If an earlier order of the same course was refunded because that student asked, a later purchase cannot be refunded by them. Refunds an operator made in the provider's dashboard, and automatic refunds of undeliverable payments, do not count. The course page says so before the second purchase.
+- Q: Why fixed numbers rather than "a notable amount" as Udemy does? → A: Nobody reviews requests here, so the rule has to be decided by the system, and a published number is fairer to a student than a vague one. Both appear in the terms beside the price.
+- Q: An instructor adds content after the purchase, so the share drops below half again. Refundable? → A: Yes, if the 14 days have not passed: the share is always of the course as it is now, the same figure the student sees.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -181,16 +193,16 @@ An administrator opens the Payments page of the admin portal, pastes the Stripe 
 
 ### User Story 7 - A student asks for a refund (Priority: P1)
 
-A student who bought a course and changed their mind can get their money back without contacting anyone: the course page says before they pay how long they have, and within that period, if they have not completed the course, one confirmed action refunds them. Their access then ends as it does for any refund (User Story 4).
+A student who bought a course and changed their mind can get their money back without contacting anyone: the course page says before they pay how long they have, and within that period, if they have completed less than half of the course and have not been refunded for it before, one confirmed action refunds them. Their access then ends as it does for any refund (User Story 4).
 
 **Why this priority**: Added by the 2026-11-19 amendment and required for the same release as the purchase. A student asked to pay an instructor they do not know needs to see how they get their money back, and must not depend on reaching an operator to get it.
 
-**Independent Test**: Buy a course in the stand-in, ask for a refund from the course page, and check that the payment is refunded once, the order becomes refunded, the enrolment ends with its progress kept, and the student is told. Then check a request is refused after 14 days and after completing the course.
+**Independent Test**: Buy a course in the stand-in, ask for a refund from the course page, and check that the payment is refunded once, the order becomes refunded, the enrolment ends with its progress kept, and the student is told. Then check a request is refused after 14 days, after completing half of the course, and for a second purchase after a refund.
 
 **Acceptance Scenarios**:
 
-1. **Given** a published course with a price, **When** anyone views its page, **Then** beside the price it states the refund terms: 14 days from purchase, unless the course has been completed.
-2. **Given** a student whose purchase was paid less than 14 days ago and who has not completed the course, **When** they choose Request a refund and confirm, **Then** the provider is asked to refund everything not already refunded, and the page says the refund has been requested.
+1. **Given** a published course with a price, **When** anyone views its page, **Then** beside the price it states the refund terms: 14 days from purchase, while less than half of the course is completed, once per course (amended 2026-11-23).
+2. **Given** a student whose purchase was paid less than 14 days ago, who has completed less than half of the course and was not refunded for it before, **When** they choose Request a refund and confirm, **Then** the provider is asked to refund everything not already refunded, and the page says the refund has been requested.
 3. **Given** a requested refund, **When** the provider confirms it, **Then** the order becomes refunded and the enrolment ends exactly as in User Story 4, and the student receives one in-app notification and one email saying so.
 4. **Given** a student whose purchase was paid more than 14 days ago, **When** they view the course page, **Then** no refund action is offered and the page says the refund period ended on its date; a request sent anyway is refused and nothing is refunded.
 5. **Given** a student who has completed the course, **When** they view the course page within the 14 days, **Then** no refund action is offered and the page says why; a request sent anyway is refused.
@@ -198,7 +210,10 @@ A student who bought a course and changed their mind can get their money back wi
 7. **Given** a purchase an operator has partly refunded, **When** the student asks for a refund within the period, **Then** the remainder is refunded and the order becomes fully refunded.
 8. **Given** a student, **When** they ask for a refund of another student's purchase, or of a course they did not pay for, **Then** it is refused and nothing is revealed about the other purchase.
 9. **Given** a purchase taken under a payment connection that has since been replaced by another account or removed, **When** the student asks for a refund, **Then** it is refused with a message that it cannot be refunded here right now, and nothing changes.
-10. **Given** a student who was refunded at their own request, **When** they buy the course again, **Then** it works as in User Story 4 scenario 2, and the new purchase has its own 14 days.
+10. **Given** a student who was refunded at their own request, **When** they view the course page, **Then** beside **Buy now** it says that buying again cannot be refunded; **When** they buy again, **Then** it works as in User Story 4 scenario 2, but the new purchase offers no refund action and the page says why; a request sent anyway is refused (amended 2026-11-23).
+11. **Given** a student within the 14 days who has completed half or more of the course, **When** they view the course page, **Then** no refund action is offered and the page says refunds end once half the course is completed; a request sent anyway is refused and nothing is refunded.
+12. **Given** a student at 40% who completes enough items to reach 50% and then asks for a refund straight away, **When** the request is processed, **Then** it is refused: the share is worked out at the moment of the request, not read from a figure that may not have caught up.
+13. **Given** a student whose earlier purchase of the course was refunded by an operator, or automatically because the payment could not be delivered, **When** they buy again and ask for a refund within the period, **Then** the request is judged on the other rules only: those refunds do not count against them.
 
 ---
 
@@ -247,6 +262,9 @@ A student enrolled without paying can leave the course. It no longer counts them
 - A student asks for a refund and the provider's confirmation is delayed: the page keeps saying the refund has been requested, access continues until the confirmation arrives, and asking again changes nothing.
 - A student asks for a refund in the last minute of the 14 days: the decision is made by the server's clock at the moment of the request; a confirmation that arrives after the period still ends the enrolment.
 - A student completes the course between loading the page and confirming the request: the request is refused, because completion is checked when the request is made.
+- A student reaches half the course between loading the page and confirming, or completes items faster than the stored progress is recalculated: the request is refused, because the share is computed from their completions when the request is made (FR-041).
+- An instructor hides or adds items after a purchase: the share is of the course as it is now, so it can rise or fall; the 14 days still apply.
+- A student was refunded at their own request, bought again and was refunded by an operator: a third purchase is still not refundable at their request, since an earlier own-request refund exists.
 - The provider refuses the refund (the payment is disputed, or already fully refunded there): the student is told it could not be refunded here, nothing is recorded as requested, and an error is logged for an operator.
 - An operator refunds by hand while a student's request is in flight: one refund results, and the student is notified once.
 - A student who was refunded leaves nothing further to leave: Leave course is not offered on an ended enrolment.
@@ -287,8 +305,8 @@ A student enrolled without paying can leave the course. It no longer counts them
 - **FR-029**: The ability to write the key and signing secret MUST belong to one administrator-only function. The functions that start checkouts and handle confirmations MUST hold read access only, and no function open to students or instructors MUST be able to write them. Each change MUST be recorded (who, when, what kind: saved, replaced, removed), without the values.
 - **FR-030**: In local development the Payments page MUST work against the local stand-in with no payment provider account: the stand-in MUST accept a documented local key, register the confirmation address, and sign confirmations with the secret it returns. The connection MUST be made through the same page or API a deployed stage uses, and the quickstart MUST say so. Local data MUST NOT start pre-connected by a path a deployed stage lacks.
 
-- **FR-031**: The public course page MUST state the refund terms beside the price of every priced course, before a student pays: the length of the refund period and the condition that the course has not been completed. The period MUST be 14 days from the time the payment was confirmed, defined in one place and the same for every course.
-- **FR-032**: A signed-in student MUST be able to request a refund of their own paid order from the course page, with a confirmation step, when all of these hold at the moment of the request: the order is paid and is the order their enrolment rests on; it was paid no more than 14 days ago; their enrolment is not completed; no refund of it has been requested already; and the order was paid under the payment account that is connected now. Otherwise the request MUST be refused with a message that says which condition failed, and MUST change nothing.
+- **FR-031**: The public course page MUST state the refund terms beside the price of every priced course, before a student pays: the length of the refund period, the progress limit (FR-041) and that a course can be refunded once (FR-042). *(Amended 2026-11-23; it said: "and the condition that the course has not been completed".)* The period MUST be 14 days from the time the payment was confirmed, defined in one place and the same for every course.
+- **FR-032**: A signed-in student MUST be able to request a refund of their own paid order from the course page, with a confirmation step, when all of these hold at the moment of the request: the order is paid and is the order their enrolment rests on; it was paid no more than 14 days ago; their enrolment is not completed; they have completed less than half of the course (FR-041); no earlier order of theirs for the course was refunded at their own request (FR-042); no refund of it has been requested already; and the order was paid under the payment account that is connected now. Otherwise the request MUST be refused with a message that says which condition failed, and MUST change nothing. *(Amended 2026-11-23: the progress and earlier-refund conditions were added.)*
 - **FR-033**: An accepted request MUST ask the payment provider to refund everything of the amount charged that has not been refunded already, exactly once however many times or however concurrently the request is made, and MUST record on the order the time the refund was requested. No administrator review is involved.
 - **FR-034**: A refund request MUST NOT itself change the order's status or the enrolment. Only the payment provider's confirmation of the refund does, through the same step as any full refund (FR-015), so a refund requested by a student and one made by an operator have the same outcome.
 - **FR-035**: A student MUST be able to see, on the course page, the state of their own purchase of that course: the date the refund period ends while a refund can still be requested, why it cannot be requested when it cannot, that a refund has been requested, and that it has been refunded and when. No student MUST be able to see or act on another student's order, and no order or provider identifier is shown.
@@ -296,6 +314,9 @@ A student enrolled without paying can leave the course. It no longer counts them
 - **FR-037**: A student whose enrolment is not ended and has no order (a free enrolment, including one made before the course had a price) MUST be able to leave the course from the course page, with a confirmation step. Leaving MUST end the enrolment with the existing ended state, keeping completions, progress, the completion date and any issued certificate, exactly as a refund does.
 - **FR-038**: Leaving MUST be refused for an enrolment that rests on an order, with a message that says to request a refund instead. The system MUST NOT end a paid enrolment by any means other than a full refund.
 - **FR-039**: A student who left MUST be able to come back the way a refunded student does: by enrolling again while the course is free, which restores the same enrolment with its progress (FR-004), or by buying it when it has a price. The confirmation for leaving a course that now has a price MUST say that coming back means buying it.
+- **FR-041** *(2026-11-23)*: A refund request MUST be refused when the student has completed 50% or more of the course. The share MUST be the student's progress as the course page shows it (the effectively visible items they completed, rounded down), computed from their completions and the current curriculum when the request is made, and the same computation MUST decide what `payment.myOrder` reports. The limit MUST be defined in one place, beside the refund period, and reach the portal from the API, not from a copy.
+- **FR-042** *(2026-11-23)*: A refund request MUST be refused when an earlier order by the same student for the same course was refunded at that student's own request. Refunds an operator made and automatic refunds of undeliverable payments MUST NOT count.
+- **FR-043** *(2026-11-23)*: The course page MUST tell a student before they buy a course again that the purchase cannot be refunded when FR-042 applies, and MUST say which rule blocks a refund whenever none can be requested, with no support contact needed to find out.
 - **FR-040**: The refund request and the leave-course write MUST go through shared `core-table` helpers with the other order and enrolment writes (FR-019), the consistency checks MUST still pass after every test, and the whole of User Stories 7 and 8 MUST work in local development against the stand-in (FR-018).
 
 ### Key Entities
@@ -323,6 +344,7 @@ A student enrolled without paying can leave the course. It no longer counts them
 
 - **SC-011**: A student within the refund period can go from the course page to a confirmed refund request in under a minute without contacting anyone, and in 100% of runs, however many times and however concurrently they ask, the payment is refunded exactly once and they are notified exactly once.
 - **SC-012**: 0 refunds are made at a student's request outside the 14 days, after completion, or for an order that is not theirs; and 0 paid enrolments are ended by leaving.
+- **SC-014** *(2026-11-23)*: 0 refunds at a student's request when they had completed half or more of the course at the moment of the request, or when they had already been refunded for that course at their own request; and 100% of refused requests tell the student which rule applied.
 - **SC-013**: 100% of students who leave a free course and enrol again have the progress they had, and the data-consistency check passes after every test of leaving, including leaving at the same moment as a refund.
 
 ## Assumptions
