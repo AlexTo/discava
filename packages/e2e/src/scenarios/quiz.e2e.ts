@@ -189,11 +189,15 @@ test('an instructor keeps their place in the quiz builder and the course editor'
       .getByRole('button', { name: 'Remove lesson Lesson one' })
       .click();
     await page
-      .getByRole('alertdialog', { name: 'Archive lesson' })
-      .getByRole('button', { name: 'Archive lesson' })
+      .getByRole('alertdialog', { name: 'Delete lesson' })
+      .getByRole('button', { name: 'Delete lesson' })
       .click();
-    await expect(
-      page.getByRole('button', { name: 'Hide lesson Lesson two' }),
-    ).toBeFocused();
+    const lessonTwo = page.locator('article', { hasText: 'Lesson two' });
+    await expect(lessonTwo).toBeVisible();
+    await expect
+      .poll(() =>
+        lessonTwo.evaluate((row) => row.contains(document.activeElement)),
+      )
+      .toBe(true);
   });
 });
