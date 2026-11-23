@@ -34,6 +34,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi, useInstructorApi } from '../../../api';
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
+import { correctSearch } from '../../../lib/canonical-search';
 import {
   type CourseStatus,
   courseStatusStyles,
@@ -44,6 +45,8 @@ type StatusFilter = (typeof statuses)[number];
 const defaultSearch = { status: 'all' as StatusFilter, q: '' };
 const MAX_QUERY_LENGTH = 200;
 const SEARCH_DEBOUNCE_MS = 250;
+const normaliseQuery = (text: string) =>
+  text.trim().slice(0, MAX_QUERY_LENGTH).trim();
 
 // The filter and the search live in the address, so a view survives a reload
 // and can be shared. A value at its default is left out of the address.
@@ -54,12 +57,15 @@ export const Route = createFileRoute('/_authenticated/my-courses')({
     status: statuses.includes(search.status as StatusFilter)
       ? (search.status as StatusFilter)
       : 'all',
-    q:
-      typeof search.q === 'string'
-        ? search.q.trim().slice(0, MAX_QUERY_LENGTH).trim()
-        : '',
+    q: typeof search.q === 'string' ? normaliseQuery(search.q) : '',
   }),
   search: { middlewares: [stripSearchParams(defaultSearch)] },
+  // An invalid value in the address is replaced by the one it fell back to.
+  beforeLoad: ({ search, location }) =>
+    correctSearch(location.search, {
+      status: search.status === 'all' ? undefined : search.status,
+      q: search.q || undefined,
+    }),
   component: RouteComponent,
 });
 
@@ -90,19 +96,25 @@ function RouteComponent() {
   const searchRef = useRef<HTMLInputElement>(null);
   const normalisedQuery = query.trim().toLocaleLowerCase();
 
-  // Back and Forward change the address, and the box follows.
-  useEffect(() => setQuery(q), [q]);
+  // Back and Forward change the address, and the box follows. What this page
+  // wrote itself is not copied back: the box may hold more than the address
+  // does (a trailing space, a key typed since).
+  const written = useRef(q);
   useEffect(() => {
-    const typed = query.trim().slice(0, MAX_QUERY_LENGTH).trim();
+    if (q === written.current) return;
+    written.current = q;
+    setQuery(q);
+  }, [q]);
+  useEffect(() => {
+    const typed = normaliseQuery(query);
     if (typed === q) return;
-    const timer = setTimeout(
-      () =>
-        void navigate({
-          search: (prev) => ({ ...prev, q: typed }),
-          replace: true,
-        }),
-      SEARCH_DEBOUNCE_MS,
-    );
+    const timer = setTimeout(() => {
+      written.current = typed;
+      void navigate({
+        search: (prev) => ({ ...prev, q: typed }),
+        replace: true,
+      });
+    }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [query, q, navigate]);
 

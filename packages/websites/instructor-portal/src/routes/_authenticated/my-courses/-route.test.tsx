@@ -8,7 +8,7 @@ import { ApiError, fakeTrpcFetch } from '@discava/common-web-utils/testing';
 import type { AppRouter as CoreApiRouter } from '@discava/core-api';
 import type { AppRouter as InstructorApiRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
@@ -134,6 +134,27 @@ const renderPage = (coreHandlers = {}, instructorHandlers = {}) => {
   return { ...result, calls, user };
 };
 
+// What a route's beforeLoad does with the address as typed: nothing when it is
+// already what the validated values would write, else a replace redirect.
+const correction = (raw: Record<string, unknown>) => {
+  const beforeLoad = Route.options.beforeLoad as (ctx: {
+    search: unknown;
+    location: { search: Record<string, unknown> };
+  }) => void;
+  try {
+    beforeLoad({ search: validate(raw), location: { search: raw } });
+  } catch (thrown) {
+    return thrown as { options: { replace?: boolean; search: unknown } };
+  }
+};
+const correctedTo = (raw: Record<string, unknown>) => {
+  const redirect = correction(raw);
+  expect(redirect?.options.replace).toBe(true);
+  return (
+    redirect?.options.search as (prev: Record<string, unknown>) => unknown
+  )(raw);
+};
+
 beforeEach(() => {
   linkProps.length = 0;
   navigations.length = 0;
@@ -177,6 +198,47 @@ describe('My courses', () => {
       q: '',
     });
     expect(validate({ q: 'a'.repeat(300) }).q).toHaveLength(200);
+  });
+
+  it('replaces an invalid or redundant address with the value it fell back to', () => {
+    expect(correction({})).toBeUndefined();
+    expect(correction({ status: 'draft', q: 'react' })).toBeUndefined();
+    expect(correctedTo({ status: 'deleted' })).toEqual({
+      status: undefined,
+      q: undefined,
+    });
+    expect(correctedTo({ status: 'all', q: ' react ' })).toEqual({
+      status: undefined,
+      q: 'react',
+    });
+  });
+
+  it('keeps a space typed in the search box after the address catches up', async () => {
+    const { user } = renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+    const box = screen.getByLabelText('Search courses');
+
+    await user.type(box, 'intro ');
+    await waitFor(() =>
+      expect(navigations).toEqual([
+        { search: { status: 'all', q: 'intro' }, replace: true },
+      ]),
+    );
+    await user.type(box, 'dyn');
+
+    expect(box).toHaveValue('intro dyn');
+  });
+
+  it('follows the address when Back or a link changes the search', async () => {
+    renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+    const box = screen.getByLabelText('Search courses');
+
+    act(() => setSearch({ status: 'all', q: 'streams' }));
+
+    expect(box).toHaveValue('streams');
   });
 
   it('shows the view the address names', async () => {

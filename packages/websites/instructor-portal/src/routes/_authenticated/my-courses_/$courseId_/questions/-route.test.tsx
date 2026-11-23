@@ -42,6 +42,27 @@ const validate = Route.options.validateSearch as (
   search: Record<string, unknown>,
 ) => Search;
 
+// What a route's beforeLoad does with the address as typed: nothing when it is
+// already what the validated values would write, else a replace redirect.
+const correction = (raw: Record<string, unknown>) => {
+  const beforeLoad = Route.options.beforeLoad as (ctx: {
+    search: unknown;
+    location: { search: Record<string, unknown> };
+  }) => void;
+  try {
+    beforeLoad({ search: validate(raw), location: { search: raw } });
+  } catch (thrown) {
+    return thrown as { options: { replace?: boolean; search: unknown } };
+  }
+};
+const correctedTo = (raw: Record<string, unknown>) => {
+  const redirect = correction(raw);
+  expect(redirect?.options.replace).toBe(true);
+  return (
+    redirect?.options.search as (prev: Record<string, unknown>) => unknown
+  )(raw);
+};
+
 beforeEach(() => {
   navigate.mockReset();
   vi.spyOn(Route, 'useParams').mockReturnValue({ courseId: 'c1' });
@@ -65,6 +86,18 @@ describe('Questions route', () => {
     });
     expect(validate({ tab: 'by-lesson', lesson: 5 })).toEqual({
       tab: 'by-lesson',
+    });
+  });
+
+  it('replaces an invalid address with the value it fell back to', () => {
+    expect(correction({})).toBeUndefined();
+    expect(correction({ tab: 'by-lesson', lesson: 'l1' })).toBeUndefined();
+    expect(correctedTo({ tab: 'bogus' })).toEqual({
+      tab: undefined,
+      lesson: undefined,
+    });
+    expect(correctedTo({ tab: 'unanswered' })).toMatchObject({
+      tab: undefined,
     });
   });
 

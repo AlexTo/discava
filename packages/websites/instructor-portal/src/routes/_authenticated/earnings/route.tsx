@@ -9,6 +9,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../api';
+import { correctSearch } from '../../../lib/canonical-search';
 import { BalanceCard } from './-components/balance-card';
 import { PayoutAccountCard } from './-components/payout-account-card';
 import { PayoutsList } from './-components/payouts-list';
@@ -39,6 +40,13 @@ export const Route = createFileRoute('/_authenticated/earnings')({
     }
     return isMonth(search.month) ? { month: search.month } : {};
   },
+  // An invalid value in the address is replaced by the one it fell back to.
+  beforeLoad: ({ search, location }) =>
+    correctSearch(location.search, {
+      month: search.month,
+      from: search.from,
+      to: search.to,
+    }),
   component: RouteComponent,
 });
 

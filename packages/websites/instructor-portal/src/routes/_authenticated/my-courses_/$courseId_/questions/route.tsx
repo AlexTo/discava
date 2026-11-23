@@ -19,6 +19,7 @@ import {
   stripSearchParams,
 } from '@tanstack/react-router';
 import { useInstructorApi } from '../../../../../api';
+import { correctSearch } from '../../../../../lib/canonical-search';
 import { ByLessonView } from './-components/by-lesson-view';
 import { ReportedView } from './-components/reported-view';
 import { UnansweredView } from './-components/unanswered-view';
@@ -44,6 +45,12 @@ export const Route = createFileRoute(
       : {}),
   }),
   search: { middlewares: [stripSearchParams({ tab: 'unanswered' })] },
+  // An invalid value in the address is replaced by the one it fell back to.
+  beforeLoad: ({ search, location }) =>
+    correctSearch(location.search, {
+      tab: search.tab === 'unanswered' ? undefined : search.tab,
+      lesson: search.lesson,
+    }),
   component: RouteComponent,
 });
 

@@ -28,6 +28,27 @@ const validate = Route.options.validateSearch as (
   search: Record<string, unknown>,
 ) => Search;
 
+// What a route's beforeLoad does with the address as typed: nothing when it is
+// already what the validated values would write, else a replace redirect.
+const correction = (raw: Record<string, unknown>) => {
+  const beforeLoad = Route.options.beforeLoad as (ctx: {
+    search: unknown;
+    location: { search: Record<string, unknown> };
+  }) => void;
+  try {
+    beforeLoad({ search: validate(raw), location: { search: raw } });
+  } catch (thrown) {
+    return thrown as { options: { replace?: boolean; search: unknown } };
+  }
+};
+const correctedTo = (raw: Record<string, unknown>) => {
+  const redirect = correction(raw);
+  expect(redirect?.options.replace).toBe(true);
+  return (
+    redirect?.options.search as (prev: Record<string, unknown>) => unknown
+  )(raw);
+};
+
 beforeEach(() => {
   search = {};
   navigations.length = 0;
@@ -139,6 +160,19 @@ describe('earnings period in the address', () => {
     expect(
       validate({ month: '2026-10', from: '2026-10-09', to: '2026-10-05' }),
     ).toEqual({ month: '2026-10' });
+  });
+
+  it('replaces an invalid address with the value it fell back to', () => {
+    expect(correction({})).toBeUndefined();
+    expect(correction({ month: '2026-10' })).toBeUndefined();
+    expect(correctedTo({ month: '2026-13' })).toEqual({
+      month: undefined,
+      from: undefined,
+      to: undefined,
+    });
+    expect(
+      correctedTo({ month: '2026-10', from: '2026-10-05', to: '2026-10-09' }),
+    ).toMatchObject({ month: undefined, from: '2026-10-05' });
   });
 
   it('asks for the month the address names', async () => {
