@@ -16,6 +16,8 @@ export const Route = createFileRoute('/')({
   component: AdminHome,
 });
 
+const areaId = (to: string) => `area${to.replace(/\//g, '-')}`;
+
 function AdminHome() {
   const trpc = useAdminApi();
   const categories = useQuery(trpc.category.list.queryOptions());
@@ -43,6 +45,24 @@ function AdminHome() {
       figure: undefined,
     },
     {
+      to: '/certificates',
+      title: 'Certificates',
+      description: 'Look up a certificate to revoke or restore it.',
+      figure: undefined,
+    },
+    {
+      to: '/payments',
+      title: 'Payments',
+      description: 'Connect the Stripe account students pay into.',
+      figure: undefined,
+    },
+    {
+      to: '/settings/branding',
+      title: 'Branding',
+      description: "Set the platform's name, logo, icon and colour.",
+      figure: undefined,
+    },
+    {
       to: '/settings/notifications',
       title: 'Notification settings',
       description: 'Choose which notifications also reach you by email.',
@@ -59,11 +79,20 @@ function AdminHome() {
       <ul className="grid gap-4 sm:grid-cols-2">
         {areas.map((area) => (
           <li key={area.to}>
-            <Link to={area.to} className="block h-full">
+            <Link
+              to={area.to}
+              className="block h-full"
+              aria-labelledby={`${areaId(area.to)}-title`}
+              aria-describedby={`${areaId(area.to)}-description`}
+            >
               <Card className="h-full transition-colors hover:bg-accent">
                 <CardHeader>
-                  <CardTitle>{area.title}</CardTitle>
-                  <CardDescription>{area.description}</CardDescription>
+                  <CardTitle id={`${areaId(area.to)}-title`}>
+                    {area.title}
+                  </CardTitle>
+                  <CardDescription id={`${areaId(area.to)}-description`}>
+                    {area.description}
+                  </CardDescription>
                   {area.figure ? (
                     <p className="pt-2 text-sm font-medium">{area.figure}</p>
                   ) : null}

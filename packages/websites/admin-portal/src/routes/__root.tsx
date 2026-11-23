@@ -9,10 +9,12 @@ import { signOut } from '@discava/common-web-utils/sign-out';
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
 import { useAuth } from 'react-oidc-context';
 import AppLayout from '../components/app-layout';
+import { NotFoundPage } from '../components/not-found-page';
 import type { RouterProviderContext } from '../router-context';
 
 export const Route = createRootRouteWithContext<RouterProviderContext>()({
   component: AdminsOnly,
+  notFoundComponent: NotFoundPage,
 });
 
 // The portal is for the `admin` group; anyone else signed in gets a page

@@ -229,3 +229,42 @@ test('the instructor portal breadcrumbs and links lead somewhere real', async ({
     }
   });
 });
+
+// The admin portal's trail: Settings has no page of its own, so it is text.
+test('the admin breadcrumb names each step, and a missing page leads home', async ({
+  page,
+}) => {
+  await page.goto(`${PORTALS.admin}/settings/branding`);
+  await signIn(page, newUser('Bea', ['admin']));
+
+  const breadcrumb = page.getByRole('navigation', { name: 'breadcrumb' });
+
+  await test.step('Branding sits under Home and Settings, which is not a link', async () => {
+    await expect(breadcrumb.getByText('Branding')).toBeVisible();
+    await expect(breadcrumb.getByText('Settings')).toBeVisible();
+    // The shell draws a crumb with no page of its own as a disabled link
+    // with no address.
+    const settings = breadcrumb.getByRole('link', { name: 'Settings' });
+    await expect(settings).toBeDisabled();
+    await expect(settings).not.toHaveAttribute('href');
+    await expect(breadcrumb.getByRole('link', { name: 'Home' })).toBeVisible();
+  });
+
+  await test.step('Home leads to the admin home page', async () => {
+    await breadcrumb.getByRole('link', { name: 'Home' }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Admin' }),
+    ).toBeVisible();
+  });
+
+  await test.step('an address with no page shows the not-found page', async () => {
+    await page.goto(`${PORTALS.admin}/no-such-page`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Page not found' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('link', { name: 'Go to the home page' }),
+    ).toBeVisible();
+    await screenshot(page, 'admin not found page with breadcrumb');
+  });
+});
