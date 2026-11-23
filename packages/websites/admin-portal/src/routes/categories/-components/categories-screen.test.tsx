@@ -106,9 +106,85 @@ describe('the Categories screen', () => {
     await user.type(screen.getByLabelText('New category name'), 'science');
     await user.click(screen.getByRole('button', { name: 'Add category' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't add the category");
+    expect(alert).toHaveTextContent(
       'A category named "Science" already exists',
     );
+    // Beside the add field, not above the form.
+    const field = screen.getByLabelText('New category name');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(/already exists/);
+  });
+
+  it('checks an empty name on submit, focuses the field and sends nothing', async () => {
+    const { user, calls } = render();
+    await screen.findByRole('row', { name: /Science/ });
+
+    const add = screen.getByRole('button', { name: 'Add category' });
+    expect(add).toBeEnabled();
+    await user.click(add);
+
+    const field = screen.getByLabelText('New category name');
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Enter a name for the category.');
+    expect(calls.some((c) => c.path === 'category.create')).toBe(false);
+  });
+
+  it('checks an empty rename on submit and sends nothing', async () => {
+    const { user, calls } = render();
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.click(
+      within(row('Science')).getByRole('button', { name: 'Rename' }),
+    );
+    const input = screen.getByLabelText('New name for Science');
+    await user.clear(input);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(input).toHaveFocus();
+    expect(input).toHaveAccessibleDescription('Enter a name for the category.');
+    expect(calls.some((c) => c.path === 'category.rename')).toBe(false);
+  });
+
+  it('offers Try again when the categories cannot be loaded', async () => {
+    let fail = true;
+    const { user } = render({
+      'category.list': () => {
+        if (fail) {
+          throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+        }
+        return [science];
+      },
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the categories");
+    fail = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('row', { name: /Science/ })).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the archive confirmation open with the error inside it', async () => {
+    const { user } = render({
+      'category.archive': () => {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
+      },
+    });
+    await screen.findByRole('row', { name: /Science/ });
+
+    await user.click(
+      within(row('Science')).getByRole('button', { name: 'Archive' }),
+    );
+    const dialog = await screen.findByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    expect(
+      await within(dialog).findByText("Couldn't archive the category"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
   });
 
   it('renames a category inline', async () => {
@@ -155,10 +231,12 @@ describe('the Categories screen', () => {
     await user.type(input, 'Maths');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'already exists',
-    );
-    expect(screen.getByLabelText('New name for Science')).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't rename the category");
+    expect(alert).toHaveTextContent('already exists');
+    expect(
+      screen.getByLabelText('New name for Science'),
+    ).toHaveAccessibleDescription(/already exists/);
   });
 
   it('asks before archiving, and archives on confirmation', async () => {

@@ -132,7 +132,7 @@ describe('the Reviews screen', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps Remove disabled until a reason is entered, then removes with it', async () => {
+  it('checks for a reason on submit, then removes with it', async () => {
     const rendered = render({ 'review.remove': () => ({ ...visible }) });
     await pick(rendered);
     await rendered.user.click(
@@ -143,7 +143,15 @@ describe('the Reviews screen', () => {
     const submit = within(dialog).getByRole('button', {
       name: 'Remove review',
     });
-    expect(submit).toBeDisabled();
+    expect(submit).toBeEnabled();
+    await rendered.user.click(submit);
+    const field = within(dialog).getByLabelText('Reason');
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(
+      /Enter a reason\. It's kept on record with the removal\./,
+    );
+    expect(rendered.calls.some((c) => c.path === 'review.remove')).toBe(false);
 
     await rendered.user.type(
       within(dialog).getByLabelText('Reason'),
@@ -253,8 +261,13 @@ describe('the Reviews screen', () => {
     });
     await pick(rendered);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the reviews");
+    expect(alert).toHaveTextContent(
       'Something went wrong on our side. Try again in a moment.',
+    );
+    expect(screen.getAllByRole('button', { name: 'Try again' })).toHaveLength(
+      1,
     );
     fail = false;
     await rendered.user.click(
@@ -277,7 +290,9 @@ describe('the Reviews screen', () => {
       },
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load the courses");
+    expect(alert).toHaveTextContent(
       'Something went wrong on our side. Try again in a moment.',
     );
     fail = false;
