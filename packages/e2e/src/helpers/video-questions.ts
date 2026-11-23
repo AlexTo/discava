@@ -15,7 +15,10 @@ export const openVideoQuestions = async (
   videoTitle: string,
 ): Promise<Locator> => {
   const button = page.getByRole('button', {
-    name: `Questions for ${videoTitle}`,
+    // "Questions for <title>", or "Questions (N) for <title>" once it has some.
+    name: new RegExp(
+      `^Questions( \\(\\d+\\))? for ${videoTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+    ),
   });
   await expect(async () => {
     if (!(await button.isEnabled())) {

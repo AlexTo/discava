@@ -108,54 +108,54 @@ function RouteComponent() {
           {courses.map((course) => {
             const status = courseStatusLabels[course.status] ?? 'Draft';
             return (
-              <Link
+              <Card
                 key={course.courseId}
-                to="/dashboard/$courseId"
-                params={{ courseId: course.courseId }}
-                search={{ days: 90 }}
-                className="block h-full min-w-0"
+                className="relative h-full min-w-0 gap-4 transition-shadow focus-within:ring-2 focus-within:ring-ring hover:shadow-md"
               >
-                <Card className="h-full gap-4 transition-shadow hover:shadow-md">
-                  <CardHeader className="px-5">
-                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                      <CardTitle
-                        className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
-                        role="heading"
-                        aria-level={2}
+                <CardHeader className="px-5">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <CardTitle
+                      className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
+                      role="heading"
+                      aria-level={2}
+                    >
+                      <Link
+                        to="/dashboard/$courseId"
+                        params={{ courseId: course.courseId }}
+                        search={{ days: 90 }}
+                        className="outline-none after:absolute after:inset-0 after:content-['']"
                       >
                         {course.title}
-                      </CardTitle>
-                      <Badge
-                        className={`shrink-0 ${courseStatusStyles[status]}`}
-                      >
-                        {status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4 px-5">
-                    <dl className="grid grid-cols-3 gap-3">
-                      <Figure label="Enrolments" value={course.enrolments} />
-                      <Figure
-                        label="Active this week"
-                        value={course.activeThisWeek}
-                      />
-                      <Figure
-                        label="Completion rate"
-                        value={
-                          course.completionRate === null
-                            ? 'No data'
-                            : `${course.completionRate}%`
-                        }
-                      />
-                    </dl>
-                    <p className="text-xs text-muted-foreground">
-                      {course.updatedAt
-                        ? `Last updated ${lastUpdated.format(new Date(course.updatedAt))}`
-                        : 'No activity yet'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
+                      </Link>
+                    </CardTitle>
+                    <Badge className={`shrink-0 ${courseStatusStyles[status]}`}>
+                      {status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4 px-5">
+                  <dl className="grid grid-cols-3 gap-3">
+                    <Figure label="Enrolments" value={course.enrolments} />
+                    <Figure
+                      label="Active this week"
+                      value={course.activeThisWeek}
+                    />
+                    <Figure
+                      label="Completion rate"
+                      value={
+                        course.completionRate === null
+                          ? 'No data'
+                          : `${course.completionRate}%`
+                      }
+                    />
+                  </dl>
+                  <p className="text-xs text-muted-foreground">
+                    {course.updatedAt
+                      ? `Last updated ${lastUpdated.format(new Date(course.updatedAt))}`
+                      : 'No activity yet'}
+                  </p>
+                </CardContent>
+              </Card>
             );
           })}
         </section>

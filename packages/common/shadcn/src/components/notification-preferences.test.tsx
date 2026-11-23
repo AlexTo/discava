@@ -106,6 +106,21 @@ describe('NotificationPreferences', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("toggles a switch from its name's text and keeps the description", async () => {
+    const onChange = vi.fn(async () => {});
+    renderPreferences({ onChange });
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Name of assignment.graded',
+    });
+    expect(toggle).toHaveAccessibleDescription(
+      'Description of assignment.graded',
+    );
+    await userEvent.click(screen.getByText('Name of assignment.graded'));
+
+    expect(onChange).toHaveBeenCalledWith('assignment.graded', false);
+  });
+
   it('reverts the switch and shows an error when saving fails', async () => {
     const onChange = vi.fn(async () => {
       throw new Error('Could not reach the server');
