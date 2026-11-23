@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   claimCouponWrites,
   reclaimExpiredReservations,
@@ -1189,6 +1189,51 @@ describe('orders with a coupon', () => {
       expect(results.reduce((a, b) => a + b, 0)).toBe(1);
       expect(await reclaim(fake, PAST_RESERVATION)).toBe(0);
       expect(fake.rows('coupon')[0]?.redeemedCount).toBe(0);
+    });
+
+    it('keeps a reservation whose session is still payable, so a late paid event settles it', async () => {
+      const { fake, startWithCode } = couponSetup(0, { maxRedemptions: 1 });
+      const created = await startWithCode();
+      const canRelease = vi.fn(async () => false);
+      expect(
+        await reclaimExpiredReservations({
+          coreTable: fake.coreTable,
+          courseId: 'course-1',
+          code: 'SPRING-20',
+          now: PAST_RESERVATION,
+          canRelease,
+        }),
+      ).toBe(0);
+      expect(canRelease).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: created.orderId }),
+      );
+      expect(fake.row('order', created)?.status).toBe('pending');
+      // The delayed checkout.session.completed now finds a pending order.
+      expect(
+        await settleOrderPaid({
+          coreTable: fake.coreTable,
+          order: created,
+          now: LATER,
+        }),
+      ).toEqual({ result: 'fulfilled' });
+      expect(fake.rows('couponRedemption')[0]).toMatchObject({
+        status: 'redeemed',
+      });
+      expect(fake.rows('enrolment')).toHaveLength(1);
+    });
+
+    it('releases when the session is confirmed ended', async () => {
+      const { fake, startWithCode } = couponSetup();
+      await startWithCode();
+      expect(
+        await reclaimExpiredReservations({
+          coreTable: fake.coreTable,
+          courseId: 'course-1',
+          code: 'SPRING-20',
+          now: PAST_RESERVATION,
+          canRelease: async () => true,
+        }),
+      ).toBe(1);
     });
 
     it('never touches a redeemed redemption', async () => {

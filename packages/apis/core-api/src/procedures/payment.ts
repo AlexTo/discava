@@ -95,7 +95,26 @@ export const checkout = courseProcedure
 
     const now = new Date().toISOString();
     const open = await findOpenOrder({ coreTable, userId, courseId, now });
-    if (open?.checkoutUrl) return { checkoutUrl: open.checkoutUrl };
+    // An open checkout that carries a code is not this request's: the student
+    // took the code off, so it is replaced, releasing the code.
+    if (open?.checkoutUrl && open.couponCode === undefined) {
+      return { checkoutUrl: open.checkoutUrl };
+    }
+    const { data: earlierOrders } = await coreTable.entities.order.query
+      .byStudentCourse({ userId, courseId })
+      .go({ pages: 'all' });
+    const pendingOrders = (earlierOrders as OrderRecord[]).filter(
+      (o) => o.status === 'pending',
+    );
+    if (pendingOrders.some((o) => o.couponCode !== undefined)) {
+      return checkoutReplacingCouponOrder({
+        coreTable,
+        course,
+        userId,
+        courseId,
+        origin,
+      });
+    }
 
     let order: Awaited<ReturnType<typeof startOrder>>;
     try {
@@ -134,6 +153,23 @@ const refuse = (message: string) =>
 
 type StripeSessionState = 'expired' | 'complete' | 'open';
 
+// Ends a session at Stripe and says how it stands: `expired` (now, or
+// already), `complete` (paid) or `open` (Stripe could not say or would not).
+const expireSession = async (
+  sessionId: string,
+): Promise<StripeSessionState> => {
+  try {
+    await withStripe((stripe) => stripe.checkout.sessions.expire(sessionId));
+    return 'expired';
+  } catch {
+    return withStripe(
+      async (stripe): Promise<StripeSessionState> =>
+        (await stripe.checkout.sessions.retrieve(sessionId))
+          .status as StripeSessionState,
+    ).catch(() => 'open' as const);
+  }
+};
+
 // Expires every earlier unpaid order's session, so a student has one live
 // checkout and a replaced one can never be paid. Nothing is written. "Already
 // expired" is success; "already complete" means the student has paid (the
@@ -151,24 +187,87 @@ const expireEarlierSessions = async (orders: OrderRecord[], now: string) => {
       }
       continue;
     }
-    const sessionId = earlier.checkoutSessionId;
+    const state = await expireSession(earlier.checkoutSessionId);
+    if (state === 'complete') throw refuse(COUPON_REFUSALS.alreadyEnrolled);
+    if (state !== 'expired') {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: "Couldn't replace your earlier checkout; try again",
+      });
+    }
+  }
+};
+
+// Whether a reservation past its time may be released: only when its order's
+// session has ended at Stripe. A session that is complete may still have its
+// paid event on the way, and that event must find the order pending.
+const sessionHasEnded = async (order: OrderRecord) =>
+  !order.checkoutSessionId ||
+  (await expireSession(order.checkoutSessionId)) === 'expired';
+
+// A checkout without a code, from a student whose earlier unpaid order holds
+// a code: that order is replaced the way a different code replaces it (its
+// session expired first, then its order moved to `expired` and its
+// reservation released in the new order's transaction).
+const checkoutReplacingCouponOrder = async ({
+  coreTable,
+  course,
+  userId,
+  courseId,
+  origin,
+}: {
+  coreTable: CoreTable;
+  course: Parameters<typeof startOrder>[0]['course'];
+  userId: string;
+  courseId: string;
+  origin: string;
+}) => {
+  for (let conflicts = 1; ; conflicts++) {
+    const now = new Date().toISOString();
+    const { data: enrolment } = await coreTable.entities.enrolment
+      .get({ courseId, userId })
+      .go();
+    if (enrolment && enrolment.status !== 'dropped') {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'You are already enrolled in this course',
+      });
+    }
+    const { data: orders } = await coreTable.entities.order.query
+      .byStudentCourse({ userId, courseId })
+      .go({ pages: 'all' });
+    const pending = (orders as OrderRecord[]).filter(
+      (o) => o.status === 'pending',
+    );
+    await expireEarlierSessions(pending, now);
+
     try {
-      await withStripe((stripe) => stripe.checkout.sessions.expire(sessionId));
-    } catch {
-      const state = await withStripe(
-        async (stripe): Promise<StripeSessionState> =>
-          (await stripe.checkout.sessions.retrieve(sessionId))
-            .status as StripeSessionState,
-      ).catch(() => 'open' as const);
-      if (state === 'complete') {
-        throw refuse(COUPON_REFUSALS.alreadyEnrolled);
-      }
-      if (state !== 'expired') {
+      const order = await startOrder({
+        coreTable,
+        course,
+        userId,
+        now,
+        getConnection: () => getConnection(coreTable),
+        ttlSeconds: localCheckoutTtlSeconds(),
+        extraWrites: (entities) =>
+          pending.flatMap((earlier) => expireOrderWrites(entities, earlier)),
+      });
+      return createSession({ coreTable, order, userId, courseId, origin });
+    } catch (error) {
+      if (error instanceof PaymentsUnavailableError) {
         throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: "Couldn't replace your earlier checkout; try again",
+          code: 'PRECONDITION_FAILED',
+          message: 'Payments are unavailable right now',
         });
       }
+      if (!(error instanceof CheckoutStartCancelledError)) throw error;
+      if (conflicts >= CONFLICT_ATTEMPTS) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Too many people are checking out; try again',
+        });
+      }
+      await sleep(50 + Math.floor(Math.random() * 100));
     }
   }
 };
@@ -221,6 +320,7 @@ const checkoutWithCoupon = async ({
             courseId,
             code: coupon.code,
             now,
+            canRelease: sessionHasEnded,
           });
         }
         continue;

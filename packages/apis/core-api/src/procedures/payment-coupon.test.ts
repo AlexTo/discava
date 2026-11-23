@@ -347,11 +347,81 @@ describe('payment.checkout with a code', () => {
     expect(mocks.startOrder).toHaveBeenCalledTimes(3);
   });
 
+  it('hands the reclaim a check that keeps a session that is paid or unknown', async () => {
+    mocks.db.coupon = { ...coupon, maxRedemptions: 1, redeemedCount: 1 };
+    await start().catch(() => undefined);
+    const { canRelease } = mocks.reclaim.mock.calls[0]?.[0];
+    const withSession = { orderId: 'x', checkoutSessionId: 'cs_x' };
+
+    expect(await canRelease({ orderId: 'x' })).toBe(true);
+    expect(await canRelease(withSession)).toBe(true);
+    expect(mocks.expireSession).toHaveBeenCalledWith('cs_x');
+
+    mocks.expireSession.mockRejectedValue(new Error('not open'));
+    mocks.retrieveSession.mockResolvedValue({ status: 'complete' });
+    expect(await canRelease(withSession)).toBe(false);
+    mocks.retrieveSession.mockResolvedValue({ status: 'expired' });
+    expect(await canRelease(withSession)).toBe(true);
+    mocks.retrieveSession.mockRejectedValue(new Error('network'));
+    expect(await canRelease(withSession)).toBe(false);
+  });
+
   it('says payments are unavailable when the connection is not active', async () => {
     const { PaymentsUnavailableError } = await import('@discava/core-table');
     mocks.startOrder.mockRejectedValue(new PaymentsUnavailableError());
     await expect(start()).rejects.toEqual(
       refused('Payments are unavailable right now'),
     );
+  });
+});
+
+describe('payment.checkout without a code after one with a code', () => {
+  const plain = () => caller.checkout({ courseId: 'c1' });
+
+  it('replaces the open coupon checkout instead of reusing it', async () => {
+    mocks.orders = [earlier({ couponCode: 'SPRING-20' })];
+    mocks.open = mocks.orders[0];
+    expect(await plain()).toEqual({ checkoutUrl: 'https://pay/cs_new' });
+
+    expect(mocks.expireSession).toHaveBeenCalledWith('cs_old');
+    expect(mocks.calls).toEqual(['expireSession', 'startOrder']);
+    const args = mocks.startOrder.mock.calls[0]?.[0];
+    expect(args.discount).toBeUndefined();
+    expect(mocks.expireWrites).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ orderId: 'old', couponCode: 'SPRING-20' }),
+    );
+    expect(mocks.claim).not.toHaveBeenCalled();
+    // The session is for the list price, not the old discounted one.
+    expect(
+      mocks.create.mock.calls[0]?.[0].line_items[0].price_data,
+    ).toMatchObject({ unit_amount: created.amount });
+  });
+
+  it('still reuses an open checkout that has no code', async () => {
+    mocks.orders = [earlier()];
+    mocks.open = mocks.orders[0];
+    expect(await plain()).toEqual({ checkoutUrl: 'https://pay/cs_old' });
+    expect(mocks.startOrder).not.toHaveBeenCalled();
+  });
+
+  it('answers "already enrolled" and replaces nothing when the old session turns out paid', async () => {
+    mocks.orders = [earlier({ couponCode: 'SPRING-20' })];
+    mocks.open = mocks.orders[0];
+    mocks.expireSession.mockRejectedValue(new Error('not open'));
+    mocks.retrieveSession.mockResolvedValue({ status: 'complete' });
+    await expect(plain()).rejects.toEqual(
+      refused('You are already enrolled in this course'),
+    );
+    expect(mocks.startOrder).not.toHaveBeenCalled();
+  });
+
+  it('retries a conflict, then surfaces CONFLICT', async () => {
+    mocks.orders = [earlier({ couponCode: 'SPRING-20' })];
+    mocks.open = mocks.orders[0];
+    mocks.startOrder.mockReset();
+    mocks.startOrder.mockRejectedValue(new CheckoutStartCancelledError());
+    await expect(plain()).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(mocks.startOrder).toHaveBeenCalledTimes(3);
   });
 });

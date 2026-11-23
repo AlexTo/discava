@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
-import { expireOrderWrites } from './order.js';
+import { expireOrderWrites, type OrderRecord } from './order.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -145,17 +145,25 @@ export const releaseCouponWrites = (
  * each, in one transaction, the order's move from `pending` to `expired` and
  * the release, so a replayed or racing call changes nothing. A redeemed
  * redemption is never touched. Returns how many it released.
+ *
+ * The clock alone does not say the order cannot be paid: a student can pay
+ * just before the session ends while Stripe's paid event is still on its way.
+ * `canRelease` is asked, with the order, before each release, and the
+ * reservation is kept when it answers false (the caller checks the session
+ * with Stripe), so the late event still finds a pending order to settle.
  */
 export const reclaimExpiredReservations = async ({
   coreTable,
   courseId,
   code,
   now,
+  canRelease,
 }: {
   coreTable: CoreTable;
   courseId: string;
   code: string;
   now: string;
+  canRelease?: (order: OrderRecord) => Promise<boolean>;
 }): Promise<number> => {
   const { data } = await coreTable.entities.couponRedemption.query
     .primary({ courseId, code })
@@ -168,6 +176,12 @@ export const reclaimExpiredReservations = async ({
       redemption.reservedUntil > now
     ) {
       continue;
+    }
+    if (canRelease) {
+      const { data: order } = await coreTable.entities.order
+        .get({ orderId: redemption.orderId })
+        .go();
+      if (order && !(await canRelease(order as OrderRecord))) continue;
     }
     const { canceled } = await coreTable.transaction
       .write((entities) =>
