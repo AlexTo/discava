@@ -409,7 +409,7 @@ At 1440px nothing changes, apart from long-content fixes.
 - [x] T047 [P] [US5] Earnings and profile (A-13, A-17):
   - **Period picker:** in `IP/earnings/-components/period-picker.tsx`, after "Custom range" focus the From field, and after "Choose a month" focus the Month field.
   - **Profile:** in `IP/profile.tsx`, after Save the button keeps focus (T041), "Profile saved." stays in its status region, and on failure the alert is announced and focus stays on Save.
-- [ ] T048 [US5] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`. As a new instructor, build a quiz with three questions, reorder one with Space, ArrowDown and Space, and assert that:
+- [x] T048 [US5] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`. As a new instructor, build a quiz with three questions, reorder one with Space, ArrowDown and Space, and assert that:
   - focus is on its handle;
   - the live region names "Question";
   - no raw id appears.
