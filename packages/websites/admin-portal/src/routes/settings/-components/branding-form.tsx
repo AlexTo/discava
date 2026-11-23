@@ -14,6 +14,7 @@ import {
 } from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,12 +30,12 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
+import { useUnsavedChangesGuard } from '@discava/common-shadcn/hooks/use-unsaved-changes-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useSetBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useAdminApi } from '../../../api';
 import { BrandPreview } from './brand-preview';
 import { ImageField } from './image-field';
@@ -52,8 +53,6 @@ export interface SavedBrand {
   revision: number;
   changed: { by: string; byName: string; at: string } | null;
 }
-
-const UNSAVED_MESSAGE = 'You have unsaved branding changes. Leave this page?';
 
 const relativeTime = (iso: string): string => {
   const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
@@ -123,6 +122,10 @@ export function BrandingForm({
   const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
   const [confirmingReset, setConfirmingReset] = useState(false);
+  // Counts presses of Save with nothing to save, so each one is announced.
+  const [nothingToSave, setNothingToSave] = useState(0);
+  const nameField = useRef<HTMLInputElement>(null);
+  const colourField = useRef<HTMLInputElement>(null);
   const resetFocus = useReturnFocus(confirmingReset);
 
   const typedColour = colourText.trim();
@@ -150,10 +153,7 @@ export function BrandingForm({
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
 
-  useBlocker({
-    shouldBlockFn: () => dirty && !window.confirm(UNSAVED_MESSAGE),
-    enableBeforeUnload: dirty,
-  });
+  const leaveGuard = useUnsavedChangesGuard(dirty);
   useEffect(() => {
     if (dirty) {
       onEdited();
@@ -190,6 +190,14 @@ export function BrandingForm({
   };
 
   const submit = async () => {
+    if (nameInvalid || colourInvalid) {
+      (nameInvalid ? nameField : colourField).current?.focus();
+      return;
+    }
+    if (!dirty) {
+      setNothingToSave((count) => count + 1);
+      return;
+    }
     setServerError(undefined);
     try {
       const result = await save.mutateAsync({
@@ -216,6 +224,7 @@ export function BrandingForm({
   return (
     <form
       className="space-y-8"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -233,6 +242,7 @@ export function BrandingForm({
           <Label htmlFor={nameId}>Name</Label>
           <Input
             id={nameId}
+            ref={nameField}
             value={nameText}
             aria-invalid={nameMessage ? true : undefined}
             aria-describedby={nameMessage ? nameMessageId : undefined}
@@ -354,6 +364,7 @@ export function BrandingForm({
             <Label htmlFor={colourId}>Hex colour</Label>
             <Input
               id={colourId}
+              ref={colourField}
               className="w-36"
               placeholder="#1d4ed8"
               value={colourText}
@@ -417,6 +428,14 @@ export function BrandingForm({
           {apiErrorMessage(save.error)}
         </ErrorAlert>
       )}
+      <StatusMessage
+        key={nothingToSave}
+        message={
+          nothingToSave > 0
+            ? 'Nothing to save: the branding is as saved.'
+            : null
+        }
+      />
       <footer className="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
         <p className="min-w-0 break-words text-sm text-muted-foreground">
           {[
@@ -438,7 +457,6 @@ export function BrandingForm({
           </Button>
           <PendingButton
             type="submit"
-            disabled={!dirty || nameInvalid || colourInvalid}
             pending={save.isPending}
             pendingLabel="Saving…"
           >
@@ -462,6 +480,7 @@ export function BrandingForm({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {leaveGuard.confirmation}
     </form>
   );
 }

@@ -19,6 +19,7 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -27,8 +28,10 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
+import { useNavigate, useRouterState, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
+import { reviewsSearch } from '../-search';
 
 export const REASON_MAX = 200;
 
@@ -58,14 +61,26 @@ function RemoveDialog({
   const queryClient = useQueryClient();
   const remove = useMutation(trpc.review.remove.mutationOptions());
   const [reason, setReason] = useState('');
+  const [problem, setProblem] = useState<string>();
+  const reasonField = useRef<HTMLTextAreaElement>(null);
 
   const close = () => {
     setReason('');
+    setProblem(undefined);
     remove.reset();
     onClose();
   };
+  const guard = useDiscardGuard({
+    dirty: reason.trim() !== '',
+    discard: close,
+  });
   const submit = async () => {
     if (!review || remove.isPending) {
+      return;
+    }
+    if (reason.trim() === '') {
+      setProblem("Enter a reason. It's kept on record with the removal.");
+      reasonField.current?.focus();
       return;
     }
     try {
@@ -86,14 +101,16 @@ function RemoveDialog({
   return (
     <Dialog
       open={review !== undefined}
-      onOpenChange={(open) => !open && close()}
+      onOpenChange={(open) => !open && guard.requestClose()}
     >
       <DialogContent
         className="sm:max-w-lg"
         onCloseAutoFocus={onCloseAutoFocus}
+        {...guard.contentProps}
       >
         <form
           className="space-y-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
@@ -122,12 +139,22 @@ function RemoveDialog({
             </div>
             <Textarea
               id="removal-reason"
-              aria-describedby="removal-reason-count"
+              ref={reasonField}
+              aria-invalid={Boolean(problem)}
+              aria-describedby={`removal-reason-count${problem ? ' removal-reason-error' : ''}`}
               value={reason}
               maxLength={REASON_MAX}
               rows={4}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setProblem(undefined);
+              }}
             />
+            {problem && (
+              <p id="removal-reason-error" className="text-sm text-destructive">
+                {problem}
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -137,7 +164,6 @@ function RemoveDialog({
             <PendingButton
               type="submit"
               variant="destructive"
-              disabled={reason.trim() === ''}
               pending={remove.isPending}
               pendingLabel="Removing…"
             >
@@ -145,6 +171,7 @@ function RemoveDialog({
             </PendingButton>
           </DialogFooter>
         </form>
+        {guard.confirmation}
       </DialogContent>
     </Dialog>
   );
@@ -199,20 +226,13 @@ function CourseReviews({
   }
   if (query.isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p className="text-destructive">
-          {apiErrorMessage(query.error, "Couldn't load the reviews.")}
-        </p>
-        <PendingButton
-          variant="outline"
-          size="sm"
-          onClick={() => query.refetch()}
-          pending={query.isFetching}
-          pendingLabel="Trying again…"
-        >
-          Try again
-        </PendingButton>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the reviews"
+        onRetry={() => query.refetch()}
+      >
+        {apiErrorMessage(query.error)}
+      </ErrorAlert>
     );
   }
   if (items.length === 0) {
@@ -342,7 +362,17 @@ function CourseReviews({
 export function ReviewsScreen() {
   usePageTitle('Reviews');
   const trpc = useAdminApi();
-  const [courseId, setCourseId] = useState('');
+  const courseId = useSearch({ from: '/reviews' }).course ?? '';
+  const navigate = useNavigate({ from: '/reviews' });
+  const address = useRouterState({ select: (state) => state.location.search });
+
+  // An empty or over-long course is dropped from the address, without adding
+  // a step to Back.
+  useEffect(() => {
+    if ('course' in address && reviewsSearch(address).course === undefined) {
+      void navigate({ search: { course: undefined }, replace: true });
+    }
+  }, [address, navigate]);
   const [announcement, setAnnouncement] = useState('');
   const picker = useRef<HTMLSelectElement>(null);
   const courses = useInfiniteQuery(
@@ -374,20 +404,13 @@ export function ReviewsScreen() {
 
       {courses.isPending && <LoadingState label="Loading the courses…" />}
       {courses.isError && (
-        <div role="alert" className="space-y-3 text-sm">
-          <p className="text-destructive">
-            {apiErrorMessage(courses.error, "Couldn't load the courses.")}
-          </p>
-          <PendingButton
-            variant="outline"
-            size="sm"
-            onClick={() => courses.refetch()}
-            pending={courses.isFetching}
-            pendingLabel="Trying again…"
-          >
-            Try again
-          </PendingButton>
-        </div>
+        <ErrorAlert
+          type="error"
+          header="Couldn't load the courses"
+          onRetry={() => courses.refetch()}
+        >
+          {apiErrorMessage(courses.error)}
+        </ErrorAlert>
       )}
       {courses.data && items.length === 0 && (
         <p className="text-sm text-muted-foreground">
@@ -404,9 +427,17 @@ export function ReviewsScreen() {
               className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               value={courseId}
               aria-busy={courses.isFetchingNextPage}
-              onChange={(event) => setCourseId(event.target.value)}
+              onChange={(event) =>
+                void navigate({
+                  search: { course: event.target.value || undefined },
+                })
+              }
             >
               <option value="">Choose a course</option>
+              {courseId !== '' &&
+                !items.some((course) => course.courseId === courseId) && (
+                  <option value={courseId}>The course from the link</option>
+                )}
               {items.map((course) => (
                 <option key={course.courseId} value={course.courseId}>
                   {`${course.title}${course.status === 'archived' ? ' (archived)' : ''} · ${course.ratingCount} ${course.ratingCount === 1 ? 'rating' : 'ratings'}`}

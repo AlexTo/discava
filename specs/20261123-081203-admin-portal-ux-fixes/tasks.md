@@ -192,14 +192,14 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US5.
 
-- [ ] T029 [US5] **Needs IP T051 and IP T052.** Test first, then (C-04, D-04, F-04, research R-10):
+- [x] T029 [US5] **Needs IP T051 and IP T052.** Test first, then (C-04, D-04, F-04, research R-10):
   - in `reviews-screen.tsx` and `certificates-screen.tsx`, use `useDiscardGuard({ dirty, discard: close })` in the Remove review and Revoke dialogs, `dirty` being a non-empty trimmed reason or note. Spread `contentProps` on `DialogContent`, use `requestClose` for the Close button, render `confirmation` once inside the dialog; Cancel keeps calling `close`;
   - in `branding-form.tsx`, replace the `useBlocker` call with `useUnsavedChangesGuard(dirty)` and render its `confirmation` once.
 
   **Tests (change meaning for branding, plan.md):** Escape with a reason typed opens "Discard unsaved changes?"; Keep editing returns to the field with the text; with nothing typed Escape closes; Cancel then reopen shows an empty field; branding with a change asks "Leave without saving?" on a link, and doesn't call `window.confirm`.
 
   Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: type a reason in Remove review, press Escape, and `screenshot()` the question.
-- [ ] T030 [US5] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T030 [US5] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
@@ -209,28 +209,28 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US6.
 
-- [ ] T031 [US6] Use `ErrorAlert type="error"` with a `header` and `onRetry={() => query.refetch()}` for every failed load (B-03, C-02, D-02, E-05, research R-11):
+- [x] T031 [US6] Use `ErrorAlert type="error"` with a `header` and `onRetry={() => query.refetch()}` for every failed load (B-03, C-02, D-02, E-05, research R-11):
   - categories: "Couldn't load the categories";
   - reviews: "Couldn't load the courses" and "Couldn't load the reviews", replacing both hand-built blocks;
   - payments: move the hand-built Try again from the alert's text to `onRetry`;
   - certificates: a failed lookup (not "not found") is "Couldn't look up the certificate", with Try again.
 
   **Tests (change meaning, plan.md):** each failed load shows one alert with its header and one Try again, which refetches.
-- [ ] T032 [US6] Test first, then split the categories screen's single alert by action (B-04, research R-11):
+- [x] T032 [US6] Test first, then split the categories screen's single alert by action (B-04, research R-11):
   - Add's error shows under the add form, headed "Couldn't add the category", tied to the field (`aria-describedby`, `aria-invalid`);
   - Rename's shows under the row's rename form, headed "Couldn't rename the category", tied to its field;
   - Archive's shows inside the confirmation: `onSettled` no longer closes it; `onSuccess` does.
 
   **Tests (change meaning):** a duplicate name's message is beside the add field, not above the form; a failed archive keeps the confirmation open with the error inside.
-- [ ] T033 [US6] Test first, then make every submit button enabled and check on submit, as research R-12's table says (B-05, C-03, D-05, E-06, F-03):
+- [x] T033 [US6] Test first, then make every submit button enabled and check on submit, as research R-12's table says (B-05, C-03, D-05, E-06, F-03):
   - categories (Add, Rename), certificates (Look up, Revoke with "Other"), reviews (Remove review), payments (`KeyForm`), branding (invalid name or colour; nothing changed announces "Nothing to save: the branding is as saved.");
   - each problem is shown beside its field with an `id`, tied with `aria-describedby` and `aria-invalid`, and focus moves to the field. Nothing is sent.
 
   **Tests (change meaning, plan.md):** each button is enabled; submitting empty shows the message, focuses the field, and the fake API records no call. Update `packages/e2e/src/scenarios/branding.e2e.ts` (Save `toBeDisabled()` at lines 54, 63, 88, 210, 300) and `review.e2e.ts` (Remove review `toBeDisabled()` at lines 169-170) to submit and assert the message instead.
-- [ ] T034 [US6] Test first, then show a certificate that isn't found as `ErrorAlert type="info"` headed "No certificate has this ID", with "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3." and no Try again (D-02). **Test (changes meaning):** replaces the "Certificate not found" assertion.
-- [ ] T035 [US6] **Needs IP T059.** Test first in `R/settings/-route.test.tsx`: a failed toggle shows `apiErrorMessage`'s sentence, never "Failed to fetch", and a failed load has Try again (F-01). No admin source change is expected.
-- [ ] T053 [US6] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: add a category with an empty name, then one whose name exists; assert each message is under the add field, which has focus. `screenshot()` the duplicate-name message.
-- [ ] T036 [US6] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T034 [US6] Test first, then show a certificate that isn't found as `ErrorAlert type="info"` headed "No certificate has this ID", with "Check the ID against the certificate's page or PDF. IDs look like 7V0Y-TKB5-6T6K-RPB3." and no Try again (D-02). **Test (changes meaning):** replaces the "Certificate not found" assertion.
+- [x] T035 [US6] **Needs IP T059.** Test first in `R/settings/-route.test.tsx`: a failed toggle shows `apiErrorMessage`'s sentence, never "Failed to fetch", and a failed load has Try again (F-01). No admin source change is expected.
+- [x] T053 [US6] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: add a category with an empty name, then one whose name exists; assert each message is under the add field, which has focus. `screenshot()` the duplicate-name message.
+- [x] T036 [US6] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
@@ -240,10 +240,10 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US7.
 
-- [ ] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option; an empty or 101-character `course` is dropped from the address with `replace`.
-- [ ] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id; an empty or 101-character `id` is dropped from the address with `replace`.
-- [ ] T039 [US7] Add a case to `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, or a new `admin-views.e2e.ts` if it reads better: choose a course on Reviews and look up a certificate, reload each, and check the same view shows; press Back and check the previous one. Then change T008's admin cases to open `?course=` and `?id=` directly. `screenshot()` each restored view.
-- [ ] T040 [US7] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option; an empty or 101-character `course` is dropped from the address with `replace`.
+- [x] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id; an empty or 101-character `id` is dropped from the address with `replace`.
+- [x] T039 [US7] Add a case to `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, or a new `admin-views.e2e.ts` if it reads better: choose a course on Reviews and look up a certificate, reload each, and check the same view shows; press Back and check the previous one. Then change T008's admin cases to open `?course=` and `?id=` directly. `screenshot()` each restored view.
+- [x] T040 [US7] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

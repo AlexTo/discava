@@ -719,26 +719,58 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
   });
 
   await test.step('reviews wrap, with every Remove on screen', async () => {
-    await page.goto(`${PORTALS.admin}/reviews`);
-    await page
-      .getByLabel('Course')
-      .selectOption({ label: `${title} · 2 ratings` });
+    await page.goto(`${PORTALS.admin}/reviews?course=${courseId}`);
+    await expect(page.getByLabel('Course')).toHaveValue(courseId);
     await expect(page.getByText('Clear and well paced.')).toBeVisible();
     await expectNoSidewaysScroll(page);
     await expectOnScreen(page.getByRole('button', { name: /^Remove / }));
     await screenshot(page, 'admin reviews at phone width');
   });
 
+  await test.step('the chosen course comes back on reload, and Back returns to the one before', async () => {
+    await page.goto(`${PORTALS.admin}/reviews`);
+    await expect(page.getByLabel('Course')).toHaveValue('');
+    await page
+      .getByLabel('Course')
+      .selectOption({ label: `${title} · 2 ratings` });
+    await expect(page).toHaveURL(`${PORTALS.admin}/reviews?course=${courseId}`);
+    await expect(page.getByText('Clear and well paced.')).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Course')).toHaveValue(courseId);
+    await expect(page.getByText('Clear and well paced.')).toBeVisible();
+    await screenshot(page, 'admin reviews restored after a reload');
+    await page.goBack();
+    await expect(page.getByLabel('Course')).toHaveValue('');
+    await expect(page.getByText('Clear and well paced.')).toBeHidden();
+    await screenshot(page, 'admin reviews after Back, no course chosen');
+  });
+
   await test.step('a certificate with long names and notes fits, with Revoke on screen', async () => {
-    await page.goto(`${PORTALS.admin}/certificates`);
-    await page.getByLabel('Certificate ID').fill(certificateId);
-    await page.getByRole('button', { name: 'Look up' }).click();
+    await page.goto(`${PORTALS.admin}/certificates?id=${certificateId}`);
+    await expect(page.getByLabel('Certificate ID')).toHaveValue(certificateId);
     await expect(page.getByText(courseTitle, { exact: false })).toBeVisible();
     await expectNoSidewaysScroll(page);
     await expectOnScreen(page.getByRole('button', { name: 'Revoke' }));
     await screenshot(page, 'admin certificate at phone width', {
       fullPage: true,
     });
+  });
+
+  await test.step('the certificate looked up comes back on reload, and Back returns to the one before', async () => {
+    await page.goto(`${PORTALS.admin}/certificates`);
+    await page.getByLabel('Certificate ID').fill(certificateId);
+    await page.getByRole('button', { name: 'Look up' }).click();
+    await expect(page).toHaveURL(
+      `${PORTALS.admin}/certificates?id=${certificateId}`,
+    );
+    await page.reload();
+    await expect(page.getByLabel('Certificate ID')).toHaveValue(certificateId);
+    await expect(page.getByText(courseTitle, { exact: false })).toBeVisible();
+    await screenshot(page, 'admin certificate restored after a reload');
+    await page.goBack();
+    await expect(page.getByLabel('Certificate ID')).toHaveValue('');
+    await expect(page.getByText(courseTitle, { exact: false })).toBeHidden();
+    await screenshot(page, 'admin certificates after Back, nothing looked up');
   });
 
   await test.step('payments fit, the recent changes scrolling inside themselves', async () => {
