@@ -956,6 +956,6 @@ test('the instructor pages fit a phone with long content', async ({
       page.getByRole('table', { name: 'Earnings in USD' }),
     ).toBeVisible({ timeout: 30_000 });
     await expectNoSidewaysScroll(page);
-    await screenshot(page, 'earnings at phone width');
+    await screenshot(page, 'earnings at phone width', { fullPage: true });
   });
 });
