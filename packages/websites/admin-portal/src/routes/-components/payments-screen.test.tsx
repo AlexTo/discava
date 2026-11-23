@@ -501,7 +501,7 @@ describe('the Payments page, with the keyboard', () => {
     await rendered.user.click(screen.getByRole('button', { name: 'Save key' }));
     await rendered.user.click(
       within(await screen.findByRole('dialog')).getByRole('button', {
-        name: 'Continue',
+        name: 'Replace the key',
       }),
     );
 
