@@ -10,11 +10,6 @@ import {
   renderWithAdminApi,
 } from '../../test/render-with-admin-api';
 
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const { mockRouter } = await import('@discava/common-web-utils/testing');
-  return mockRouter(importOriginal, { useBlocker: () => undefined });
-});
-
 const { measureImage } = vi.hoisted(() => ({ measureImage: vi.fn() }));
 vi.mock('./-components/measure-image', () => ({ measureImage }));
 
@@ -322,6 +317,16 @@ describe('the Branding page', () => {
       /Couldn't upload the file/,
     );
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it("guards leaving with the portal's own dialog, never window.confirm", async () => {
+    const confirm = vi.spyOn(window, 'confirm');
+    const { user } = open();
+    await user.type(await screen.findByLabelText('Name'), 'Acme');
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it('saves the whole form with the loaded revision, then confirms', async () => {

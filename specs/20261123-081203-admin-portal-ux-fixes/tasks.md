@@ -192,14 +192,14 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US5.
 
-- [ ] T029 [US5] **Needs IP T051 and IP T052.** Test first, then (C-04, D-04, F-04, research R-10):
+- [x] T029 [US5] **Needs IP T051 and IP T052.** Test first, then (C-04, D-04, F-04, research R-10):
   - in `reviews-screen.tsx` and `certificates-screen.tsx`, use `useDiscardGuard({ dirty, discard: close })` in the Remove review and Revoke dialogs, `dirty` being a non-empty trimmed reason or note. Spread `contentProps` on `DialogContent`, use `requestClose` for the Close button, render `confirmation` once inside the dialog; Cancel keeps calling `close`;
   - in `branding-form.tsx`, replace the `useBlocker` call with `useUnsavedChangesGuard(dirty)` and render its `confirmation` once.
 
   **Tests (change meaning for branding, plan.md):** Escape with a reason typed opens "Discard unsaved changes?"; Keep editing returns to the field with the text; with nothing typed Escape closes; Cancel then reopen shows an empty field; branding with a change asks "Leave without saving?" on a link, and doesn't call `window.confirm`.
 
   Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: type a reason in Remove review, press Escape, and `screenshot()` the question.
-- [ ] T030 [US5] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T030 [US5] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

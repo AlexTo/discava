@@ -182,6 +182,45 @@ describe('the Certificates screen, with the keyboard', () => {
   const statuses = () =>
     screen.getAllByRole('status').map((status) => status.textContent);
 
+  it('asks before Escape discards a typed note, and Keep editing keeps it', async () => {
+    const rendered = render();
+    await lookUp(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Revoke' }),
+    );
+    await rendered.user.type(await screen.findByLabelText('Note'), 'Why');
+
+    await rendered.user.keyboard('{Escape}');
+    expect(await screen.findByText('Discard unsaved changes?')).toBeVisible();
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Keep editing' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Discard unsaved changes?')).toBeNull(),
+    );
+    expect(screen.getByLabelText('Note')).toHaveValue('Why');
+  });
+
+  it('closes on Escape with nothing typed, and Cancel then reopen shows an empty note', async () => {
+    const rendered = render();
+    await lookUp(rendered);
+    const revoke = await screen.findByRole('button', { name: 'Revoke' });
+    await rendered.user.click(revoke);
+    await screen.findByRole('dialog');
+    await rendered.user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await rendered.user.click(revoke);
+    await rendered.user.type(await screen.findByLabelText('Note'), 'Why');
+    await rendered.user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
+
+    await rendered.user.click(revoke);
+    expect(await screen.findByLabelText('Note')).toHaveValue('');
+  });
+
   it('returns focus to Revoke when the dialog is dismissed', async () => {
     const rendered = render();
     await lookUp(rendered);

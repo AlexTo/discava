@@ -20,6 +20,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -70,6 +71,7 @@ function RevokeDialog({
     revoke.reset();
     onClose();
   };
+  const guard = useDiscardGuard({ dirty: note.trim() !== '', discard: close });
   const submit = async () => {
     if (revoke.isPending) {
       return;
@@ -89,7 +91,7 @@ function RevokeDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && close()}>
+    <Dialog open={open} onOpenChange={(next) => !next && guard.requestClose()}>
       <DialogContent
         className="sm:max-w-lg"
         onCloseAutoFocus={(event) => {
@@ -97,6 +99,7 @@ function RevokeDialog({
             returnFocus.onCloseAutoFocus(event);
           }
         }}
+        {...guard.contentProps}
       >
         <form
           className="space-y-4"
@@ -164,6 +167,7 @@ function RevokeDialog({
             </PendingButton>
           </DialogFooter>
         </form>
+        {guard.confirmation}
       </DialogContent>
     </Dialog>
   );
