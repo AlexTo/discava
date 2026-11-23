@@ -192,6 +192,48 @@ describe('the Reviews screen', () => {
     expect(within(dialog).getByLabelText('Reason')).toHaveValue('Spam');
   });
 
+  it('asks before Escape discards a typed reason, and Keep editing keeps it', async () => {
+    const rendered = render();
+    await pick(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Remove review' });
+    await rendered.user.type(within(dialog).getByLabelText('Reason'), 'Spam');
+
+    await rendered.user.keyboard('{Escape}');
+    expect(await screen.findByText('Discard unsaved changes?')).toBeVisible();
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Keep editing' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText('Discard unsaved changes?')).toBeNull(),
+    );
+    expect(screen.getByLabelText('Reason')).toHaveValue('Spam');
+  });
+
+  it('closes on Escape with nothing typed, and Cancel then reopen shows an empty reason', async () => {
+    const rendered = render();
+    await pick(rendered);
+    const remove = await screen.findByRole('button', {
+      name: "Remove Sam L.'s review",
+    });
+    await rendered.user.click(remove);
+    await screen.findByRole('dialog');
+    await rendered.user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await rendered.user.click(remove);
+    await rendered.user.type(await screen.findByLabelText('Reason'), 'Spam');
+    await rendered.user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Discard unsaved changes?')).toBeNull();
+
+    await rendered.user.click(remove);
+    expect(await screen.findByLabelText('Reason')).toHaveValue('');
+  });
+
   it('says so when the course has no reviews', async () => {
     const rendered = render({ 'review.list': () => ({ items: [] }) });
     await pick(rendered);

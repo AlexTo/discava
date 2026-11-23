@@ -19,6 +19,7 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -64,6 +65,10 @@ function RemoveDialog({
     remove.reset();
     onClose();
   };
+  const guard = useDiscardGuard({
+    dirty: reason.trim() !== '',
+    discard: close,
+  });
   const submit = async () => {
     if (!review || remove.isPending) {
       return;
@@ -86,11 +91,12 @@ function RemoveDialog({
   return (
     <Dialog
       open={review !== undefined}
-      onOpenChange={(open) => !open && close()}
+      onOpenChange={(open) => !open && guard.requestClose()}
     >
       <DialogContent
         className="sm:max-w-lg"
         onCloseAutoFocus={onCloseAutoFocus}
+        {...guard.contentProps}
       >
         <form
           className="space-y-4"
@@ -145,6 +151,7 @@ function RemoveDialog({
             </PendingButton>
           </DialogFooter>
         </form>
+        {guard.confirmation}
       </DialogContent>
     </Dialog>
   );

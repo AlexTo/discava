@@ -29,11 +29,11 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
+import { useUnsavedChangesGuard } from '@discava/common-shadcn/hooks/use-unsaved-changes-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useSetBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useId, useState } from 'react';
 import { useAdminApi } from '../../../api';
 import { BrandPreview } from './brand-preview';
@@ -52,8 +52,6 @@ export interface SavedBrand {
   revision: number;
   changed: { by: string; byName: string; at: string } | null;
 }
-
-const UNSAVED_MESSAGE = 'You have unsaved branding changes. Leave this page?';
 
 const relativeTime = (iso: string): string => {
   const seconds = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
@@ -150,10 +148,7 @@ export function BrandingForm({
   const nameLength = nameText.trim().length;
   const nameInvalid = nameLength < 1 || nameLength > BRAND_NAME_MAX_LENGTH;
 
-  useBlocker({
-    shouldBlockFn: () => dirty && !window.confirm(UNSAVED_MESSAGE),
-    enableBeforeUnload: dirty,
-  });
+  const leaveGuard = useUnsavedChangesGuard(dirty);
   useEffect(() => {
     if (dirty) {
       onEdited();
@@ -462,6 +457,7 @@ export function BrandingForm({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {leaveGuard.confirmation}
     </form>
   );
 }
