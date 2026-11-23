@@ -22,6 +22,8 @@ Each kind of notification is one entry in `NOTIFICATION_TYPES` (`packages/databa
 
 Two types are for certificates: `certificate.issued` (its `link` is the certificate's page and its `action` is "Add to LinkedIn profile") and `certificate.reminder` (the same link and action, with `emailPreferenceType: 'certificate.issued'`). See <Link path="design/certificates">Certificates</Link>.
 
+`order.refunded` tells a student that a full refund of their purchase is complete (its `link` is the course page). It is sent for every full refund recorded from Stripe, whether the student requested it or an operator made it in the dashboard, and its dedupe key is the order ID, so a repeated delivery sends one. See <Link path="design/payments">Payments</Link>.
+
 Add a test for the entry in `notification-types.test.ts`. Nothing else changes: settings, the bell and the email pick it up.
 
 ## Publish

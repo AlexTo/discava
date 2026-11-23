@@ -26,7 +26,7 @@ const REDIRECT_URI = 'http://localhost/e2e';
 
 // Signs in on the local OIDC server as a new user, the way its "Someone else"
 // form does, and returns their access token.
-const accessTokenFor = async (roles: Role[], givenName: string) => {
+export const accessTokenFor = async (roles: Role[], givenName: string) => {
   const user = newUser(givenName, roles);
   return accessTokenForClaims(user.username, {
     sub: randomUUID(),
