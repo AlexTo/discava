@@ -124,6 +124,22 @@ describe('earnings report', () => {
     ]);
   });
 
+  it('spaces its columns and keeps each amount on one line', async () => {
+    open();
+
+    const table = await screen.findByRole('table', { name: 'Earnings in USD' });
+    for (const cell of [
+      ...within(table).getAllByRole('columnheader'),
+      ...within(table).getAllByRole('cell'),
+    ]) {
+      expect(cell).toHaveClass('px-2');
+    }
+    const first = within(table).getByText('Intro to DynamoDB').closest('tr')!;
+    for (const amount of within(first).getAllByRole('cell').slice(1)) {
+      expect(amount).toHaveClass('whitespace-nowrap');
+    }
+  });
+
   it('asks for the current UTC month by default', async () => {
     const { calls } = open();
 

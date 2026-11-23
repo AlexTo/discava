@@ -44,7 +44,7 @@ export function UnansweredView({ courseId }: { courseId: string }) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <PostText>{row.title ?? ''}</PostText>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                     {row.lessonTitle}
                     {state ? ` (${state})` : ''} · {row.authorName} ·{' '}
                     {relativeTime(row.createdAt)} ·{' '}

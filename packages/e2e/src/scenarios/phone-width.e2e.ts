@@ -814,6 +814,11 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
 
   await test.step('questions and the open thread', async () => {
     await page.goto(`${PORTALS.instructor}/my-courses/${courseId}/questions`);
+    await expect(
+      page.getByRole('button', { name: /^Open question/ }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'questions at phone width');
     await page.getByRole('button', { name: /^Open question/ }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('b'.repeat(500))).toBeVisible();
@@ -843,5 +848,6 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
       page.getByRole('heading', { level: 1, name: 'Earnings' }),
     ).toBeVisible();
     await expectNoSidewaysScroll(page);
+    await screenshot(page, 'earnings at phone width');
   });
 });

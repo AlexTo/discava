@@ -89,6 +89,20 @@ describe('QuizPanel', () => {
     expect(cells[1]).toEqual(['2', 'Question q1', '5', '1', '20%']);
   });
 
+  it('wraps a question with a long word anywhere, so the table keeps its columns', async () => {
+    const long = 'x'.repeat(80);
+    const { user } = renderPanel(() =>
+      figures({ questions: [{ ...question('q1', 5, 1), text: long }] }),
+    );
+    await open(user);
+
+    const cell = await screen.findByRole('cell', { name: long });
+    expect(cell).toHaveClass('[overflow-wrap:anywhere]');
+    // `break-words` comes later in the stylesheet and would win, and
+    // `overflow-wrap: break-word` doesn't narrow a table column.
+    expect(cell).not.toHaveClass('break-words');
+  });
+
   it('says "Not enough attempts" for a question under 5 attempts, with no rank or rate', async () => {
     const { user } = renderPanel();
     await open(user);

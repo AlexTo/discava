@@ -54,6 +54,19 @@ describe('UnansweredView', () => {
     expect(screen.getByText(/2 replies/)).toBeVisible();
   });
 
+  it('wraps a lesson title with a long word', async () => {
+    const long = 'w'.repeat(70);
+    render({
+      'discussion.unanswered': () => ({
+        items: [row(1, { lessonTitle: `Lesson ${long}` })],
+      }),
+    });
+
+    expect(await screen.findByText(new RegExp(long))).toHaveClass(
+      '[overflow-wrap:anywhere]',
+    );
+  });
+
   it('labels the lesson when it is archived', async () => {
     render({
       'discussion.unanswered': () => ({
