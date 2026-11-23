@@ -218,12 +218,12 @@ Paths are relative to the repository root. Only the last PR says "Closes #777". 
 
 ## Phase 5: Polish - docs, deployed checks and owner confirmation
 
-- [ ] T039 [P] Update the docs that describe AppConfig to describe deploy-time settings. Note translations as pending in the PR if the docs have translated copies.
+- [x] T039 [P] Update the docs that describe AppConfig to describe deploy-time settings. Note translations as pending in the PR if the docs have translated copies.
   - `docs/src/content/docs/en/architecture/aws.mdx`: the stack table's `RuntimeConfig` row becomes `PortalConfig`; the services table's "Configuration | AppConfig" row; the "Backend functions read … from AppConfig" bullet.
   - `architecture/security.mdx`: "Functions read resource names from AppConfig".
   - `design/public-pages.mdx`: the 503 cases, and the renderer's settings parameter.
   - `design/stream-event-router.mdx`: step 4's `grantAppConfig`.
-- [ ] T040 [P] Update `packages/infra/CLAUDE.md`, `packages/common/constructs/CLAUDE.md` and `packages/apis/CLAUDE.md` where they mention `RuntimeConfig`, AppConfig or `RUNTIME_CONFIG_APP_ID`. Add a short "How a function gets a setting" note to `packages/common/constructs/CLAUDE.md`: call the resource's `bindSettings(fn)` next to its grant, or `addSetting` for a stack-level value; read it with `readSetting`; never fetch settings at runtime. Add a matching line to `CONTRIBUTING.md` where backend Lambdas are described.
+- [x] T040 [P] Update `packages/infra/CLAUDE.md`, `packages/common/constructs/CLAUDE.md` and `packages/apis/CLAUDE.md` where they mention `RuntimeConfig`, AppConfig or `RUNTIME_CONFIG_APP_ID`. Add a short "How a function gets a setting" note to `packages/common/constructs/CLAUDE.md`: call the resource's `bindSettings(fn)` next to its grant, or `addSetting` for a stack-level value; read it with `readSetting`; never fetch settings at runtime. Add a matching line to `CONTRIBUTING.md` where backend Lambdas are described.
 - [ ] T041 (human) After Phase 4 is deployed, walk every flow in [quickstart.md](./quickstart.md) step 7 on `discava-development`, checking each function's logs for `deploy-time setting` or `AccessDenied` errors. Then compare cold starts as in step 9 (SC-005).
 - [ ] T042 (human) The day after Phase 3 is deployed and used, run [quickstart.md](./quickstart.md) step 10 and record in the PR that AppConfig usage is zero from that date (SC-001). Also check whether credits were what kept October and November at $0 (research R-1), and note it.
 - [ ] T043 (human) The owner confirms the defaults this spec took without asking (spec, Clarifications):
