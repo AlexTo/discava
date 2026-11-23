@@ -512,7 +512,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - show "Loading the video…" while the player URL loads;
   - show an `ErrorAlert` with retry when it fails;
   - render "Add an end question" without the player.
-- [ ] T061 [P] [US7] Replace the hand-built "Retry" buttons with `ErrorAlert`'s `onRetry` (A-11, B-06):
+- [x] T061 [P] [US7] Replace the hand-built "Retry" buttons with `ErrorAlert`'s `onRetry` (A-11, B-06):
   - `IP/index.tsx`;
   - `IP/dashboard/route.tsx`;
   - `IP/dashboard_/$courseId/route.tsx`;

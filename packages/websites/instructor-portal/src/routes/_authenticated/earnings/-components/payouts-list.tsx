@@ -47,19 +47,13 @@ export function PayoutsList({
             <span className="sr-only">Loading…</span>
           </>
         ) : overview.isError ? (
-          <div className="space-y-3">
-            <ErrorAlert type="error" header="Couldn't load your payouts">
-              {apiErrorMessage(overview.error)}
-            </ErrorAlert>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => overview.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
+          <ErrorAlert
+            type="error"
+            header="Couldn't load your payouts"
+            onRetry={() => void overview.refetch()}
+          >
+            {apiErrorMessage(overview.error)}
+          </ErrorAlert>
         ) : overview.data.payouts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No payouts yet.</p>
         ) : (

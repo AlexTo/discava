@@ -68,19 +68,13 @@ export function PayoutAccountCard() {
             <span className="sr-only">Loading…</span>
           </>
         ) : account.isError ? (
-          <div className="space-y-3">
-            <ErrorAlert type="error" header="Couldn't load your payout account">
-              {apiErrorMessage(account.error)}
-            </ErrorAlert>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => account.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
+          <ErrorAlert
+            type="error"
+            header="Couldn't load your payout account"
+            onRetry={() => void account.refetch()}
+          >
+            {apiErrorMessage(account.error)}
+          </ErrorAlert>
         ) : account.data.status === 'unavailable' ? (
           <p className="text-sm text-muted-foreground">
             Payouts aren't available yet

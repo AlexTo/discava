@@ -105,17 +105,12 @@ function ProfilePage() {
     return (
       <section className="max-w-3xl space-y-6">
         {heading}
-        <ErrorAlert type="error" header="Couldn't load your profile">
-          <p>{apiErrorMessage(profileQuery.error)}</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => profileQuery.refetch()}
-          >
-            Try again
-          </Button>
+        <ErrorAlert
+          type="error"
+          header="Couldn't load your profile"
+          onRetry={() => void profileQuery.refetch()}
+        >
+          {apiErrorMessage(profileQuery.error)}
         </ErrorAlert>
       </section>
     );
