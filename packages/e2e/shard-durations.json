@@ -23,6 +23,7 @@
   "scenarios/certificate-criteria.e2e.ts": 42,
   "scenarios/certificate-revocation.e2e.ts": 33,
   "scenarios/certificate.e2e.ts": 195,
+  "scenarios/coupons.e2e.ts": 20,
   "scenarios/course-image.e2e.ts": 14,
   "scenarios/course-lifecycle.e2e.ts": 32,
   "scenarios/course-price.e2e.ts": 13,

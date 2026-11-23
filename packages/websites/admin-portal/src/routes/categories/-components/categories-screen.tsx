@@ -141,7 +141,7 @@ export function CategoriesScreen() {
                 setAddProblem(undefined);
                 create.reset();
               }}
-              placeholder="e.g. Science"
+              placeholder="Science…"
             />
           </div>
           <PendingButton
@@ -304,6 +304,7 @@ export function CategoriesScreen() {
                       }}
                       size="sm"
                       variant="outline"
+                      aria-label={`Rename ${category.name}`}
                       onClick={() => {
                         setRenaming({ id: category.id, name: category.name });
                         setRenameProblem(undefined);
@@ -316,6 +317,7 @@ export function CategoriesScreen() {
                       <Button
                         size="sm"
                         variant="outline"
+                        aria-label={`Archive ${category.name}`}
                         onClick={() => setArchiving(category)}
                       >
                         Archive

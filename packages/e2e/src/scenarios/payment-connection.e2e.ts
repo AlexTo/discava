@@ -123,7 +123,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
       .getByRole('button', { name: /Connect Stripe|Save key/ })
       .click();
     const confirm = admin.getByRole('dialog').getByRole('button', {
-      name: 'Continue',
+      name: 'Replace the key',
     });
     if (await confirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await confirm.click();
@@ -165,9 +165,15 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
       await route.continue();
     });
     await admin.getByRole('button', { name: 'Save key' }).click();
+    await expect(
+      admin
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Replace the key' }),
+    ).toBeVisible();
+    await screenshot(admin, 'payments-replace-confirmation');
     await admin
       .getByRole('dialog')
-      .getByRole('button', { name: 'Continue' })
+      .getByRole('button', { name: 'Replace the key' })
       .click();
     const saving = admin.getByRole('button', { name: 'Saving…' });
     await expect(saving).toHaveAttribute('aria-disabled', 'true');
@@ -201,7 +207,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await admin.getByRole('button', { name: 'Save key' }).click();
     await admin
       .getByRole('dialog')
-      .getByRole('button', { name: 'Continue' })
+      .getByRole('button', { name: 'Replace the key' })
       .click();
     await expect(admin.getByRole('alert')).toContainText(
       'Checkouts are open until',

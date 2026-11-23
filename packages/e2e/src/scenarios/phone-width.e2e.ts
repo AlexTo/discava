@@ -711,7 +711,7 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
     await expectNoSidewaysScroll(page);
     await expectOnScreen(row.getByRole('button'));
     await screenshot(page, 'admin categories at phone width');
-    await row.getByRole('button', { name: 'Rename' }).click();
+    await row.getByRole('button', { name: `Rename ${categoryName}` }).click();
     await expectNoSidewaysScroll(page);
     await expectOnScreen(row.getByRole('button'));
     await expectOnScreen(row.getByRole('textbox'));

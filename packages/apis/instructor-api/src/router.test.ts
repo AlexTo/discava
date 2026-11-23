@@ -17,7 +17,7 @@ vi.mock('@discava/core-table', async (importOriginal) => ({
 
 const codeOf = async (
   options: Parameters<typeof callerFor>[1],
-  path: 'coupon.create' | 'coupon.list',
+  path: 'coupon.create' | 'coupon.list' | 'coupon.update' | 'coupon.delete',
   input: object,
 ) => {
   const call = path
@@ -36,11 +36,15 @@ const codeOf = async (
 
 const createInput = { courseId: 'course-1', type: 'percent', value: 10 };
 const listInput = { courseId: 'course-1' };
+const updateInput = { courseId: 'course-1', code: 'SPRING-25', enabled: false };
+const deleteInput = { courseId: 'course-1', code: 'SPRING-25' };
 
 describe('coupon router', () => {
   it.each([
     ['coupon.create', createInput],
     ['coupon.list', listInput],
+    ['coupon.update', updateInput],
+    ['coupon.delete', deleteInput],
   ] as const)('%s refuses an anonymous caller', async (path, input) => {
     expect(await codeOf(undefined, path, input)).toBe('UNAUTHORIZED');
   });
@@ -48,6 +52,8 @@ describe('coupon router', () => {
   it.each([
     ['coupon.create', createInput],
     ['coupon.list', listInput],
+    ['coupon.update', updateInput],
+    ['coupon.delete', deleteInput],
   ] as const)(
     '%s refuses a caller outside the instructor group',
     async (path, input) => {
@@ -59,7 +65,12 @@ describe('coupon router', () => {
 
   it('mounts the coupon procedures', () => {
     expect(Object.keys(appRouter._def.procedures)).toEqual(
-      expect.arrayContaining(['coupon.create', 'coupon.list']),
+      expect.arrayContaining([
+        'coupon.create',
+        'coupon.list',
+        'coupon.update',
+        'coupon.delete',
+      ]),
     );
   });
 });

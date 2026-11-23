@@ -47,7 +47,9 @@ describe('the Categories screen', () => {
     ).toBeInTheDocument();
     // An archived category can't be archived again.
     expect(
-      within(row('Mathematics')).queryByRole('button', { name: 'Archive' }),
+      within(row('Mathematics')).queryByRole('button', {
+        name: 'Archive Mathematics',
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -68,11 +70,24 @@ describe('the Categories screen', () => {
     );
     expect(within(long).getByText('Slug:')).toHaveClass('sm:sr-only');
     expect(within(long).getByText('Courses:')).toHaveClass('sm:sr-only');
-    const rename = within(long).getByRole('button', { name: 'Rename' });
+    const rename = within(long).getByRole('button', {
+      name: `Rename ${longName}`,
+    });
     expect(rename.parentElement).toHaveClass('flex-wrap');
     expect(
-      within(long).getByRole('button', { name: 'Archive' }),
+      within(long).getByRole('button', {
+        name: `Archive ${longName}`,
+      }),
     ).toBeInTheDocument();
+  });
+
+  it('shows an example name with an ellipsis as the placeholder', async () => {
+    render();
+    await screen.findByRole('row', { name: /Science/ });
+    expect(screen.getByLabelText('New category name')).toHaveAttribute(
+      'placeholder',
+      'Science…',
+    );
   });
 
   it('adds a category and reloads the table', async () => {
@@ -137,7 +152,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Rename' }),
+      within(row('Science')).getByRole('button', { name: 'Rename Science' }),
     );
     const input = screen.getByLabelText('New name for Science');
     await user.clear(input);
@@ -176,7 +191,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Archive' }),
+      within(row('Science')).getByRole('button', { name: 'Archive Science' }),
     );
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
@@ -192,7 +207,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Rename' }),
+      within(row('Science')).getByRole('button', { name: 'Rename Science' }),
     );
     const input = screen.getByLabelText('New name for Science');
     await user.clear(input);
@@ -224,7 +239,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Rename' }),
+      within(row('Science')).getByRole('button', { name: 'Rename Science' }),
     );
     const input = screen.getByLabelText('New name for Science');
     await user.clear(input);
@@ -244,7 +259,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Archive' }),
+      within(row('Science')).getByRole('button', { name: 'Archive Science' }),
     );
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Archive Science?');
@@ -266,7 +281,7 @@ describe('the Categories screen', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Archive' }),
+      within(row('Science')).getByRole('button', { name: 'Archive Science' }),
     );
     await user.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', {
@@ -284,7 +299,7 @@ describe('the Categories screen, with the keyboard', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Rename' }),
+      within(row('Science')).getByRole('button', { name: 'Rename Science' }),
     );
     expect(screen.getByLabelText('New name for Science')).toHaveFocus();
 
@@ -294,7 +309,7 @@ describe('the Categories screen, with the keyboard', () => {
       screen.queryByLabelText('New name for Science'),
     ).not.toBeInTheDocument();
     expect(
-      within(row('Science')).getByRole('button', { name: 'Rename' }),
+      within(row('Science')).getByRole('button', { name: 'Rename Science' }),
     ).toHaveFocus();
     expect(calls.some((c) => c.path === 'category.rename')).toBe(false);
   });
@@ -303,7 +318,7 @@ describe('the Categories screen, with the keyboard', () => {
     const { user } = render({ 'category.rename': () => science });
     await screen.findByRole('row', { name: /Science/ });
     const rename = () =>
-      within(row('Science')).getByRole('button', { name: 'Rename' });
+      within(row('Science')).getByRole('button', { name: 'Rename Science' });
 
     await user.click(rename());
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -318,7 +333,7 @@ describe('the Categories screen, with the keyboard', () => {
     const { user } = render();
     await screen.findByRole('row', { name: /Science/ });
     const archive = within(row('Science')).getByRole('button', {
-      name: 'Archive',
+      name: 'Archive Science',
     });
 
     await user.click(archive);
@@ -341,7 +356,7 @@ describe('the Categories screen, with the keyboard', () => {
     await screen.findByRole('row', { name: /Science/ });
 
     await user.click(
-      within(row('Science')).getByRole('button', { name: 'Archive' }),
+      within(row('Science')).getByRole('button', { name: 'Archive Science' }),
     );
     await user.click(
       within(await screen.findByRole('alertdialog')).getByRole('button', {
@@ -351,7 +366,7 @@ describe('the Categories screen, with the keyboard', () => {
 
     await waitFor(() =>
       expect(
-        within(row('Science')).getByRole('button', { name: 'Rename' }),
+        within(row('Science')).getByRole('button', { name: 'Rename Science' }),
       ).toHaveFocus(),
     );
   });
