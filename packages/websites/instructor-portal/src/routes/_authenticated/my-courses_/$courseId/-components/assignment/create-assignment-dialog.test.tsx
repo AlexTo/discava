@@ -150,4 +150,54 @@ describe('CreateAssignmentDialog', () => {
     await user.click(screen.getByRole('button', { name: /Save quiz/ }));
     expect(calls).toEqual([]);
   });
+
+  it('Cancel resets what was typed, and Escape asks before discarding it', async () => {
+    const { user } = renderDialog();
+    const open = () =>
+      user.click(screen.getByRole('button', { name: 'New assignment' }));
+
+    await open();
+    await user.type(screen.getByLabelText('Assignment title'), 'Typed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await open();
+    expect(screen.getByLabelText('Assignment title')).toHaveValue('');
+
+    await user.type(screen.getByLabelText('Assignment title'), 'Typed');
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Assignment title')).toHaveValue('Typed');
+  });
+
+  it('asks before switching away from a quiz with changes', async () => {
+    const { user } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'New assignment' }));
+    await user.click(screen.getByRole('radio', { name: /Quiz/ }));
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Quiz');
+    await user.click(screen.getByRole('radio', { name: /Upload/ }));
+
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('radio', { name: /Quiz/ })).toBeChecked();
+
+    await user.click(screen.getByRole('radio', { name: /Upload/ }));
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.getByRole('radio', { name: /Upload/ })).toBeChecked();
+  });
+
+  it('asks on Escape with a dirty quiz, and closes at once on a clean one', async () => {
+    const { user } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'New assignment' }));
+    await user.click(screen.getByRole('radio', { name: /Quiz/ }));
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'New assignment' }));
+    await user.click(screen.getByRole('radio', { name: /Quiz/ }));
+    await user.type(screen.getByRole('textbox', { name: 'Title' }), 'Quiz');
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+  });
 });

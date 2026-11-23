@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -95,21 +96,36 @@ export function EditAssignmentDialog({
     });
   };
 
+  const dirty = JSON.stringify(values) !== JSON.stringify(initial());
+  const close = () => {
+    setOpen(false);
+    setValues(initial());
+    setShowErrors(false);
+    resetUpdateAssignment();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
           setValues(initial());
           setShowErrors(false);
+          setOpen(true);
         } else {
-          resetUpdateAssignment();
+          requestClose();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        {...contentProps}
+      >
         <DialogHeader>
           <DialogTitle>Edit assignment</DialogTitle>
           <DialogDescription>{title}</DialogDescription>
@@ -137,11 +153,7 @@ export function EditAssignmentDialog({
             }
           />
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -149,6 +161,7 @@ export function EditAssignmentDialog({
             </Button>
           </DialogFooter>
         </form>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

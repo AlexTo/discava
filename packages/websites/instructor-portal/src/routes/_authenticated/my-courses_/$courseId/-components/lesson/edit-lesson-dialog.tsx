@@ -16,8 +16,9 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useForm } from '@tanstack/react-form';
+import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { z } from 'zod';
@@ -70,25 +71,31 @@ export function EditLessonDialog({
         return;
       }
       setOpen(false);
+      form.reset({ ...value, title: value.title.trim() });
       void queryClient.invalidateQueries({
         queryKey: course.view.queryKey({ courseId }),
       });
     },
   });
 
+  const dirty = useStore(form.store, (state) => state.isDirty);
+  const close = () => {
+    setOpen(false);
+    form.reset();
+    resetUpdateLesson();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) {
-          form.reset();
-          resetUpdateLesson();
-        }
-      }}
+      onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : requestClose())}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" {...contentProps}>
         <DialogHeader>
           <DialogTitle>Edit lesson</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -152,11 +159,7 @@ export function EditLessonDialog({
           </form.Field>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
             <form.Subscribe
@@ -170,6 +173,7 @@ export function EditLessonDialog({
             </form.Subscribe>
           </DialogFooter>
         </form>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

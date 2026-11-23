@@ -26,6 +26,7 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
@@ -105,23 +106,40 @@ export function EditLessonTextDialog({
     }
   };
 
+  const dirty =
+    titleValue !== (title ?? '') ||
+    descriptionValue !== (description ?? '') ||
+    bodyValue !== body;
+  // Starts from what is saved, so each open begins fresh.
+  const reset = () => {
+    setTitleValue(title ?? '');
+    setDescriptionValue(description ?? '');
+    setBodyValue(body);
+    setSaveError(undefined);
+  };
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
-          setTitleValue(title ?? '');
-          setDescriptionValue(description ?? '');
-          setBodyValue(body);
-        }
-        if (!nextOpen) {
-          setSaveError(undefined);
+          reset();
+          setOpen(true);
+        } else {
+          requestClose();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" {...contentProps}>
         <DialogHeader>
           <DialogTitle>{contentItemId ? 'Edit text' : 'Add text'}</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -167,11 +185,7 @@ export function EditLessonTextDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setOpen(false)}
-          >
+          <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
           <Button
@@ -182,6 +196,7 @@ export function EditLessonTextDialog({
             {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

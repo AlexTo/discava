@@ -23,8 +23,9 @@ import {
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useForm } from '@tanstack/react-form';
+import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { FileText } from 'lucide-react';
@@ -64,22 +65,33 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
       }
     },
   });
+  const dirty = useStore(form.store, (state) => state.isDirty);
+  const close = () => {
+    setOpen(false);
+    form.reset();
+    createCourse.reset();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
           navigatingRef.current = false;
+          setOpen(true);
         } else {
-          form.reset();
-          createCourse.reset();
+          requestClose();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        {...contentProps}
         onCloseAutoFocus={(event) => {
           // Closing to navigate: the new page takes focus, not the trigger.
           if (navigatingRef.current) {
@@ -193,11 +205,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
           </Card>
 
           <footer className="flex items-center justify-end gap-3 border-t pt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={() => setOpen(false)}
-            >
+            <Button variant="outline" type="button" onClick={close}>
               Cancel
             </Button>
             <form.Subscribe
@@ -211,6 +219,7 @@ export function CreateCourseDialog({ trigger }: { trigger: ReactNode }) {
             </form.Subscribe>
           </footer>
         </form>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

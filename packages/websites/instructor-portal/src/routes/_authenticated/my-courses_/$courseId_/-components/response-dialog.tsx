@@ -16,6 +16,7 @@ import {
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -62,20 +63,31 @@ export function ResponseDialog({
     void queryClient.invalidateQueries(trpc.review.list.pathFilter());
   };
 
+  const dirty = text !== (existing ?? '');
+  const close = () => {
+    setOpen(false);
+    setText(existing ?? '');
+    respond.reset();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
           setText(existing ?? '');
+          setOpen(true);
         } else {
-          respond.reset();
+          requestClose();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" {...contentProps}>
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -117,11 +129,7 @@ export function ResponseDialog({
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setOpen(false)}
-            >
+            <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
             <Button
@@ -132,6 +140,7 @@ export function ResponseDialog({
             </Button>
           </DialogFooter>
         </form>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

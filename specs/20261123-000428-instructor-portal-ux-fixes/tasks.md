@@ -446,7 +446,7 @@ At 1440px nothing changes, apart from long-content fixes.
     - Stay cancels and Leave navigates.
   - **Callers:** move the `beforeunload` listeners in `IPC/content-items/quiz/use-quiz-builder-state.ts` and `IPC/content-items/video-questions/use-video-questions-editor.ts` onto it. Their dialogs (`quiz-builder-dialog.tsx`, `video-questions-dialog.tsx`) render its `confirmation`.
 - [x] T053 [P] [US6] Keep input after a failed save (C-09). Remove the `catch`-block resets in `IPC/course/course-first-lesson-prompt-form.tsx` and `IPC/course/course-price-form.tsx`. **Tests:** after a mocked failure, the field holds the typed value, and Save sends it again. Change any existing assertion that the field resets, and say so in the pull request.
-- [ ] T054 [P] [US6] Make Cancel reset (B-11, C-10). In each dialog, close through the same handler as Escape (the one that resets the form), or wrap Cancel in `DialogClose asChild`:
+- [x] T054 [P] [US6] Make Cancel reset (B-11, C-10). In each dialog, close through the same handler as Escape (the one that resets the form), or wrap Cancel in `DialogClose asChild`:
   - `packages/websites/instructor-portal/src/components/create-course-dialog.tsx`;
   - `IPC/module/create-module-dialog.tsx` and `edit-module-dialog.tsx`;
   - `IPC/lesson/create-lesson-dialog.tsx` and `edit-lesson-dialog.tsx`;
@@ -456,7 +456,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - `IP/my-courses_/$courseId_/-components/response-dialog.tsx`.
 
   **Tests:** type, Cancel, reopen, and the saved value shows.
-- [ ] T055 [US6] Guard the dialogs in T054 with `useDiscardGuard` (T051), with `dirty` from the form's dirty state (C-11, D-06):
+- [x] T055 [US6] Guard the dialogs in T054 with `useDiscardGuard` (T051), with `dirty` from the form's dirty state (C-11, D-06):
   - for the video and file dialogs, `dirty` is also true once an upload has finished and isn't yet saved;
   - in `IPC/assignment/create-assignment-dialog.tsx`, wire `QuizBuilder`'s `onDirtyChange`, and ask before switching the kind radio away from a dirty quiz.
 

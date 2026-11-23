@@ -130,4 +130,26 @@ describe('AttachLessonFileDialog', () => {
       'break-words',
     );
   });
+
+  it('asks before closing once a file has uploaded but is not saved', async () => {
+    const { user } = openDialog();
+
+    await pickFile(user);
+    uploads[0].finish();
+    await waitFor(() => expect(title()).toHaveValue('worksheet'));
+    await user.keyboard('{Escape}');
+
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes at once on Escape when nothing was typed or uploaded', async () => {
+    const { user } = openDialog();
+
+    await user.click(screen.getByRole('button', { name: 'File' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

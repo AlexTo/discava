@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DiscardChangesDialog } from '@discava/common-shadcn/components/discard-changes-dialog';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -14,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
@@ -63,6 +65,10 @@ export function CreateAssignmentDialog({
   const [kind, setKind] = useState<Kind>('upload');
   const [values, setValues] = useState(EMPTY);
   const [showErrors, setShowErrors] = useState(false);
+  // Whether the quiz builder holds unsaved changes.
+  const [quizDirty, setQuizDirty] = useState(false);
+  // The kind asked for while a dirty quiz is open, until the instructor says.
+  const [switchTo, setSwitchTo] = useState<Kind>();
   // Bumped on each open, so the quiz builder starts empty again.
   const [session, setSession] = useState(0);
   const { course, lesson } = useInstructorApi();
@@ -83,7 +89,26 @@ export function CreateAssignmentDialog({
       queryKey: course.view.queryKey({ courseId }),
     });
 
-  const close = () => setOpen(false);
+  const close = () => {
+    setOpen(false);
+    resetCreateUpload();
+  };
+  const dirty =
+    kind === 'quiz'
+      ? quizDirty
+      : JSON.stringify(values) !== JSON.stringify(EMPTY);
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
+  const chooseKind = (next: Kind) => {
+    if (kind === 'quiz' && quizDirty) {
+      setSwitchTo(next);
+    } else {
+      setKind(next);
+    }
+  };
 
   const saveUpload = async () => {
     setShowErrors(true);
@@ -111,14 +136,15 @@ export function CreateAssignmentDialog({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
           setKind('upload');
           setValues(EMPTY);
           setShowErrors(false);
+          setQuizDirty(false);
           setSession((count) => count + 1);
+          setOpen(true);
         } else {
-          resetCreateUpload();
+          requestClose();
         }
       }}
     >
@@ -129,6 +155,7 @@ export function CreateAssignmentDialog({
             ? 'max-h-[90vh] overflow-y-auto pb-0 sm:max-w-5xl'
             : 'max-h-[90vh] overflow-y-auto sm:max-w-2xl'
         }
+        {...contentProps}
       >
         <DialogHeader>
           <DialogTitle>New assignment</DialogTitle>
@@ -151,7 +178,7 @@ export function CreateAssignmentDialog({
                   name="assignment-kind"
                   value={option.kind}
                   checked={kind === option.kind}
-                  onChange={() => setKind(option.kind)}
+                  onChange={() => chooseKind(option.kind)}
                 />
                 {option.label}
               </span>
@@ -201,10 +228,23 @@ export function CreateAssignmentDialog({
             moduleId={moduleId}
             readOnlyReason={undefined}
             onAssignmentCreated={close}
-            onClose={close}
+            onDirtyChange={setQuizDirty}
+            onClose={requestClose}
             onReload={() => undefined}
           />
         )}
+        {confirmation}
+        <DiscardChangesDialog
+          open={switchTo !== undefined}
+          onOpenChange={(next) => !next && setSwitchTo(undefined)}
+          onDiscard={() => {
+            if (switchTo) {
+              setKind(switchTo);
+              setQuizDirty(false);
+            }
+            setSwitchTo(undefined);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
