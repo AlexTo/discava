@@ -4,6 +4,7 @@
  */
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
+import { COUPON_TYPES } from './coupon.js';
 import { PAYMENT_MODES } from './payment-connection.js';
 
 export const ORDER_STATUSES = [
@@ -25,6 +26,25 @@ export const ORDER_REFUND_REASONS = [
   'mismatch',
 ] as const;
 export type OrderRefundReason = (typeof ORDER_REFUND_REASONS)[number];
+
+const COUPON_SNAPSHOT_FIELDS = [
+  'couponCode',
+  'couponType',
+  'couponValue',
+] as const;
+
+// A partial snapshot (a code without its type, a discount without a code) is
+// refused at write time; a record cannot say what it was discounted by.
+const assertWholeCouponSnapshot = (item: Record<string, unknown>) => {
+  const present = ['discountAmount', ...COUPON_SNAPSHOT_FIELDS].filter(
+    (field) => item[field] !== undefined,
+  );
+  if (present.length !== 0 && present.length !== 4) {
+    throw new Error(
+      'discountAmount, couponCode, couponType and couponValue are all set or all absent',
+    );
+  }
+};
 
 // One checkout attempt by one student for one course. Written only by the
 // helpers in ../helpers/order.ts.
@@ -90,6 +110,31 @@ export const createOrderEntity = async () =>
         currency: {
           type: 'string',
           required: true,
+          readOnly: true,
+        },
+        // The coupon snapshot, written once with the order: what the code took
+        // off `listAmount`, and the code and its type and value as they were
+        // when it was used. All four are present or all absent, so an order
+        // without a code writes none of them.
+        discountAmount: {
+          type: 'number',
+          readOnly: true,
+          watch: COUPON_SNAPSHOT_FIELDS,
+          set: (value, item) => {
+            assertWholeCouponSnapshot(item);
+            return value;
+          },
+        },
+        couponCode: {
+          type: 'string',
+          readOnly: true,
+        },
+        couponType: {
+          type: COUPON_TYPES,
+          readOnly: true,
+        },
+        couponValue: {
+          type: 'number',
           readOnly: true,
         },
         status: {

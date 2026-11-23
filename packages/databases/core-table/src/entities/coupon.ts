@@ -5,6 +5,9 @@
 import { Entity } from 'electrodb';
 import { getDynamoDBClient, resolveTableName } from '../client.js';
 
+export const COUPON_TYPES = ['percent', 'fixed'] as const;
+export type CouponType = (typeof COUPON_TYPES)[number];
+
 // A discount code an instructor makes for one course. `redeemedCount` counts
 // reserved plus redeemed redemptions and is written only by the builders in
 // ../helpers/coupon-redemption.ts, together with the couponRedemption record.
@@ -29,7 +32,7 @@ export const createCouponEntity = async () =>
           readOnly: true,
         },
         type: {
-          type: ['percent', 'fixed'] as const,
+          type: COUPON_TYPES,
           required: true,
           readOnly: true,
         },

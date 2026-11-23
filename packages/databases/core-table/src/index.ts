@@ -235,6 +235,7 @@ export {
   claimCouponWrites,
   confirmCouponWrites,
   couponStatus,
+  reclaimExpiredReservations,
   releaseCouponWrites,
 } from './helpers/coupon-redemption.js';
 export {
@@ -405,12 +406,15 @@ export {
   attachCheckoutSession,
   CHECKOUT_REUSE_MARGIN_SECONDS,
   CHECKOUT_TTL_SECONDS,
+  CheckoutStartCancelledError,
   EnrolmentPaidForError,
   expireOrder,
+  expireOrderWrites,
   findOpenOrder,
   markRefundRequested,
   type OrderConnection,
   type OrderCourse,
+  type OrderDiscount,
   type OrderRecord,
   PaymentsUnavailableError,
   REFUND_WINDOW_DAYS,

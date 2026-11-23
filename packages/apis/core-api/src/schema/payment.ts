@@ -6,6 +6,8 @@ import { z } from 'zod';
 
 export const CheckoutInputSchema = z.object({
   courseId: z.string(),
+  // A discount code as typed; the server validates it and prices the order.
+  couponCode: z.string().max(100).optional(),
 });
 
 export type ICheckoutInput = z.output<typeof CheckoutInputSchema>;

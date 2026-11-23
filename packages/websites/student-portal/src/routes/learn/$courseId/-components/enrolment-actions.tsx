@@ -24,6 +24,7 @@ import { CircleCheck, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi } from '../../../../api';
+import { type AppliedCoupon, CouponField } from './coupon-field';
 import { useCheckoutReturn } from './use-checkout-return';
 
 // The refund period core-api applies (REFUND_WINDOW_DAYS), for the terms line
@@ -215,9 +216,22 @@ export function EnrolmentActions({
       enabled: isAuthenticated && priced && !enrolled,
     }),
   );
+  // The code the student applied, shown in the price summary and passed to
+  // the checkout. The server validates and prices it again at checkout.
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
   const checkout = useMutation(
     trpc.payment.checkout.mutationOptions({
       onSuccess: ({ checkoutUrl }) => window.location.assign(checkoutUrl),
+      // A refusal of the code at this point (it expired since it was applied)
+      // shows its message and goes back to the list price.
+      onError: (error) => {
+        if (
+          errorCode(error) === 'PRECONDITION_FAILED' &&
+          !isPaymentsUnavailable(error)
+        ) {
+          setCoupon(null);
+        }
+      },
     }),
   );
   const paymentsUnavailable =
@@ -245,16 +259,31 @@ export function EnrolmentActions({
         Checking payment…
       </Button>
     ) : (
-      <Button
-        className="w-full"
-        size="lg"
-        disabled={checkout.isPending || checkout.isSuccess}
-        onClick={() => checkout.mutate({ courseId })}
-      >
-        {checkout.isPending || checkout.isSuccess
-          ? 'Starting payment…'
-          : 'Buy now'}
-      </Button>
+      <>
+        <CouponField
+          courseId={courseId}
+          applied={coupon}
+          onApply={setCoupon}
+          onRemove={() => setCoupon(null)}
+        />
+        <Button
+          className="w-full"
+          size="lg"
+          disabled={checkout.isPending || checkout.isSuccess}
+          onClick={() =>
+            checkout.mutate({
+              courseId,
+              ...(coupon && { couponCode: coupon.code }),
+            })
+          }
+        >
+          {checkout.isPending || checkout.isSuccess
+            ? 'Starting payment…'
+            : coupon
+              ? `Pay ${formatPrice(coupon.totalAmount, coupon.currency)}`
+              : 'Buy now'}
+        </Button>
+      </>
     );
   const learnLink = (label: string) => (
     <Button className="w-full" size="lg" asChild>

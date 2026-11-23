@@ -87,6 +87,49 @@ export const checkCouponRedemptionShape = (
   });
 };
 
+// A redemption belongs to one order of that student for that course, which
+// carries the same code: pending while the redemption is reserved, paid once
+// it is redeemed (a refund after delivery keeps it redeemed, so a refunded
+// order is fine too).
+export const checkCouponRedemptionHasOrder = (
+  snapshot: TableSnapshot,
+): Violation[] => {
+  const orders = new Map(snapshot.orders.map((o) => [o.orderId, o]));
+  return snapshot.couponRedemptions.flatMap((r) => {
+    const order = orders.get(r.orderId);
+    const problems: string[] = [];
+    if (!order) {
+      problems.push('its order does not exist');
+    } else {
+      if (order.userId !== r.userId || order.courseId !== r.courseId) {
+        problems.push("its order is another student's or course's");
+      }
+      if (order.couponCode !== r.code) {
+        problems.push(
+          `its order carries code ${order.couponCode}, not ${r.code}`,
+        );
+      }
+      if (r.status === 'reserved' && order.status !== 'pending') {
+        problems.push(`it is reserved but its order is ${order.status}`);
+      }
+      if (
+        r.status === 'redeemed' &&
+        order.status !== 'paid' &&
+        order.status !== 'refunded'
+      ) {
+        problems.push(`it is redeemed but its order is ${order.status}`);
+      }
+    }
+    return problems.map((problem) =>
+      violation(
+        'coupon-redemption-has-order',
+        { courseId: r.courseId, code: r.code, userId: r.userId },
+        problem,
+      ),
+    );
+  });
+};
+
 export const COUPONS_CHECKS = [
   {
     name: 'coupon-count-matches-redemptions',
@@ -94,4 +137,5 @@ export const COUPONS_CHECKS = [
   },
   { name: 'coupon-within-limit', check: checkCouponWithinLimit },
   { name: 'coupon-redemption-shape', check: checkCouponRedemptionShape },
+  { name: 'coupon-redemption-has-order', check: checkCouponRedemptionHasOrder },
 ] as const satisfies readonly Check[];

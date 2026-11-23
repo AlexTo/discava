@@ -92,6 +92,60 @@ describe('payments: price, orders and the connection', () => {
     });
   });
 
+  describe('order-discount-adds-up', () => {
+    const coupon = {
+      discountAmount: 500,
+      couponCode: 'SPRING-20',
+      couponType: 'fixed' as const,
+      couponValue: 500,
+    };
+    it('accepts an order without a code and one that adds up', () => {
+      paidTable();
+      expect(violationsOf('order-discount-adds-up')).toEqual([]);
+      Object.assign(table.orders[0], coupon, { amount: 1499 });
+      expect(violationsOf('order-discount-adds-up')).toEqual([]);
+    });
+
+    it.each([
+      [
+        'a sum that does not add up',
+        { ...coupon, amount: 1999 },
+        /is not amount/,
+      ],
+      [
+        'a negative discount',
+        { ...coupon, discountAmount: -5, amount: 2004 },
+        /negative/,
+      ],
+      [
+        'a negative amount',
+        { ...coupon, discountAmount: 2000, amount: -1 },
+        /negative/,
+      ],
+      [
+        'a code without type or value',
+        {
+          ...coupon,
+          couponType: undefined,
+          couponValue: undefined,
+          amount: 1499,
+        },
+        /all set or all absent/,
+      ],
+      [
+        'a discount without a code',
+        { discountAmount: 500, amount: 1499 },
+        /all set or all absent/,
+      ],
+    ])('reports %s', (_name, overrides, message) => {
+      paidTable();
+      Object.assign(table.orders[0], overrides);
+      expect(
+        violationsOf('order-discount-adds-up').map((v) => v.message),
+      ).toContainEqual(expect.stringMatching(message));
+    });
+  });
+
   describe('order-shape', () => {
     it.each([
       [{ listAmount: 99 }, /listAmount 99/],

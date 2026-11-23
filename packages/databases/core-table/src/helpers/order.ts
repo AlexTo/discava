@@ -3,12 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { v7 as uuidv7 } from 'uuid';
+import type { CouponType } from '../entities/coupon.js';
 import type { OrderRefundReason, OrderStatus } from '../entities/order.js';
 import type { PaymentMode } from '../entities/payment-connection.js';
 import type { createCoreTableService } from '../service.js';
+import {
+  confirmCouponWrites,
+  releaseCouponWrites,
+} from './coupon-redemption.js';
 import { InvalidRequestError, NotFoundError } from './errors.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
+type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
+type TransactionEntities = Parameters<TransactionWrites>[0];
+type TransactionItems = ReturnType<TransactionWrites>;
 
 // The only writer of `order`, and of `enrolment.orderId` and the paid-restore,
 // free-restore and refund-end enrolment writes. Every move is a conditional
@@ -35,6 +43,10 @@ export interface OrderRecord {
   listAmount: number;
   amount: number;
   currency: string;
+  discountAmount?: number;
+  couponCode?: string;
+  couponType?: CouponType;
+  couponValue?: number;
   status: OrderStatus;
   expiresAt: string;
   checkoutSessionId?: string;
@@ -45,6 +57,14 @@ export interface OrderRecord {
   refundedAmount?: number;
   refundReason?: OrderRefundReason;
   refundRequestedAt?: string;
+}
+
+/** The coupon snapshot an order carries: all four fields, or none. */
+export interface OrderDiscount {
+  discountAmount: number;
+  couponCode: string;
+  couponType: CouponType;
+  couponValue: number;
 }
 
 export interface OrderCourse {
@@ -71,6 +91,14 @@ export class PaymentsUnavailableError extends Error {
   }
 }
 
+/** A start with extra writes was cancelled; the caller reads again to see why. */
+export class CheckoutStartCancelledError extends Error {
+  constructor() {
+    super('checkout-start-cancelled');
+    this.name = 'checkout-start-cancelled';
+  }
+}
+
 const plusSeconds = (iso: string, seconds: number) =>
   new Date(new Date(iso).getTime() + seconds * 1000).toISOString();
 
@@ -91,6 +119,11 @@ const get = async (coreTable: CoreTable, orderId: string) =>
  * condition that the connection is `active` and that value is still the one
  * read. Refuses a free or unpublished course (nothing written) and throws
  * `payments-unavailable` when the connection isn't active.
+ *
+ * With a `discount` the order is charged `listAmount - discountAmount` and
+ * carries the coupon snapshot. With `extraWrites` (the coupon claim, or the
+ * release of an earlier unpaid order) they join the same transaction, which
+ * then also checks the course is published and the student not enrolled.
  */
 export const startOrder = async ({
   coreTable,
@@ -99,6 +132,8 @@ export const startOrder = async ({
   now,
   getConnection,
   ttlSeconds = CHECKOUT_TTL_SECONDS,
+  discount,
+  extraWrites,
 }: {
   coreTable: CoreTable;
   course: OrderCourse;
@@ -108,11 +143,23 @@ export const startOrder = async ({
   getConnection: () => Promise<OrderConnection | undefined>;
   /** Local development shortens a checkout's life; nothing else does. */
   ttlSeconds?: number;
+  discount?: OrderDiscount;
+  extraWrites?: (
+    entities: TransactionEntities,
+    order: OrderRecord,
+  ) => TransactionItems;
 }): Promise<OrderRecord> => {
   if (course.priceAmount === 0) {
     throw new InvalidRequestError('This course is free');
   }
   if (course.status !== 'published') throw new NotFoundError();
+  const amount = course.priceAmount - (discount?.discountAmount ?? 0);
+  if (
+    discount &&
+    !(discount.discountAmount > 0 && amount > 0 && amount < course.priceAmount)
+  ) {
+    throw new InvalidRequestError('The discount leaves nothing to charge');
+  }
 
   const expiresAt = plusSeconds(now, ttlSeconds);
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
@@ -134,31 +181,60 @@ export const startOrder = async ({
       mode: connection.mode,
       courseTitle: course.title,
       listAmount: course.priceAmount,
-      amount: course.priceAmount,
+      amount,
       currency: course.priceCurrency,
+      ...discount,
       status: 'pending',
       expiresAt,
     };
     // `revision` is left alone: it orders the administrator's own writes, and
     // every checkout bumping it would make each key rotation lose.
     const { canceled } = await coreTable.transaction
-      .write(({ order: orders, paymentConnection }) => [
-        orders.create(order).commit(),
-        paymentConnection
-          .patch({})
-          .set({ latestCheckoutExpiresAt: later(read, expiresAt) })
-          .where((attr, op) =>
-            read === undefined
-              ? `${op.eq(attr.status, 'active')} AND ${op.notExists(attr.latestCheckoutExpiresAt)}`
-              : `${op.eq(attr.status, 'active')} AND ${op.eq(attr.latestCheckoutExpiresAt, read)}`,
-          )
-          .commit(),
+      .write((entities) => [
+        ...startWrites(entities, order, read, expiresAt),
+        ...(extraWrites
+          ? [
+              entities.course
+                .check({ courseId: course.courseId })
+                .where((attr, op) => op.eq(attr.status, 'published'))
+                .commit(),
+              entities.enrolment
+                .check({ courseId: course.courseId, userId })
+                .where(
+                  (attr, op) =>
+                    `${op.notExists(attr.status)} OR ${op.eq(attr.status, 'dropped')}`,
+                )
+                .commit(),
+              ...extraWrites(entities, order),
+            ]
+          : []),
       ])
       .go();
     if (!canceled) return order;
+    // The extra writes carry conditions of their own (the coupon's limit, the
+    // earlier order's status), so the caller reads again to say which failed.
+    if (extraWrites) throw new CheckoutStartCancelledError();
   }
   throw new Error('Could not start the checkout; try again');
 };
+
+const startWrites = (
+  { order: orders, paymentConnection }: TransactionEntities,
+  order: OrderRecord,
+  read: string | undefined,
+  expiresAt: string,
+) => [
+  orders.create(order).commit(),
+  paymentConnection
+    .patch({})
+    .set({ latestCheckoutExpiresAt: later(read, expiresAt) })
+    .where((attr, op) =>
+      read === undefined
+        ? `${op.eq(attr.status, 'active')} AND ${op.notExists(attr.latestCheckoutExpiresAt)}`
+        : `${op.eq(attr.status, 'active')} AND ${op.eq(attr.latestCheckoutExpiresAt, read)}`,
+    )
+    .commit(),
+];
 
 /** Records the Stripe session on a `pending` order; false if it is no longer pending. */
 export const attachCheckoutSession = async (
@@ -256,32 +332,15 @@ export const settleOrderPaid = async ({
     }
 
     const { canceled } = await coreTable.transaction
-      .write(({ order: orders, course: courses, enrolment: enrolments }) => [
-        orders
-          .patch({ orderId: order.orderId })
-          .set({
-            status: 'paid',
-            paidAt: now,
-            ...(paymentIntentId ? { paymentIntentId } : {}),
-          })
-          .where((attr, op) => op.eq(attr.status, 'pending'))
-          .commit(),
-        courses
-          .check({ courseId })
-          .where((attr, op) => op.eq(attr.status, 'published'))
-          .commit(),
-        enrolment
-          ? enrolments
-              .patch({ courseId, userId })
-              .set({
-                status: enrolment.completedAt ? 'completed' : 'active',
-                orderId: order.orderId,
-              })
-              .where((attr, op) => op.eq(attr.status, 'dropped'))
-              .commit()
-          : enrolments
-              .create({ courseId, userId, orderId: order.orderId })
-              .commit(),
+      .write((entities) => [
+        ...settleWrites(entities, order, enrolment, now, paymentIntentId),
+        ...(order.couponCode
+          ? confirmCouponWrites(entities, {
+              courseId,
+              code: order.couponCode,
+              userId,
+            })
+          : []),
       ])
       .go();
     if (!canceled) return { result: 'fulfilled' };
@@ -289,18 +348,88 @@ export const settleOrderPaid = async ({
   throw new Error('Could not settle the order; try again');
 };
 
-/** `pending` to `expired`; a no-op for any other status. */
+const settleWrites = (
+  {
+    order: orders,
+    course: courses,
+    enrolment: enrolments,
+  }: TransactionEntities,
+  order: OrderRecord,
+  enrolment: { completedAt?: string } | null,
+  now: string,
+  paymentIntentId: string | undefined,
+) => {
+  const { courseId, userId } = order;
+  return [
+    orders
+      .patch({ orderId: order.orderId })
+      .set({
+        status: 'paid',
+        paidAt: now,
+        ...(paymentIntentId ? { paymentIntentId } : {}),
+      })
+      .where((attr, op) => op.eq(attr.status, 'pending'))
+      .commit(),
+    courses
+      .check({ courseId })
+      .where((attr, op) => op.eq(attr.status, 'published'))
+      .commit(),
+    enrolment
+      ? enrolments
+          .patch({ courseId, userId })
+          .set({
+            status: enrolment.completedAt ? 'completed' : 'active',
+            orderId: order.orderId,
+          })
+          .where((attr, op) => op.eq(attr.status, 'dropped'))
+          .commit()
+      : enrolments
+          .create({ courseId, userId, orderId: order.orderId })
+          .commit(),
+  ];
+};
+
+/**
+ * The writes that move a `pending` order to `expired`, and release its
+ * coupon redemption when it has one. Both are conditional, so a replayed or
+ * racing call cancels the transaction and changes nothing.
+ */
+export const expireOrderWrites = (
+  entities: TransactionEntities,
+  order: Pick<OrderRecord, 'orderId' | 'courseId' | 'userId' | 'couponCode'>,
+): TransactionItems => [
+  entities.order
+    .patch({ orderId: order.orderId })
+    .set({ status: 'expired' })
+    .where((attr, op) => op.eq(attr.status, 'pending'))
+    .commit(),
+  ...(order.couponCode
+    ? releaseCouponWrites(entities, {
+        courseId: order.courseId,
+        code: order.couponCode,
+        userId: order.userId,
+      })
+    : []),
+];
+
+/** `pending` to `expired`, releasing the coupon; a no-op for any other status. */
 export const expireOrder = async (
   coreTable: CoreTable,
   order: Pick<OrderRecord, 'orderId'>,
 ): Promise<void> => {
-  await moveFromPending(coreTable, order.orderId, { status: 'expired' });
+  const current = await get(coreTable, order.orderId);
+  if (!current || current.status !== 'pending') return;
+  // A cancelled transaction means another writer moved the order first.
+  await coreTable.transaction
+    .write((entities) => expireOrderWrites(entities, current))
+    .go();
 };
 
 /**
  * `pending` to `refunded` for an order whose payment can't be delivered; the
  * caller has refunded in Stripe. Keeps `paidAt`, setting it from `now` if the
- * order never got one.
+ * order never got one. Releases the order's coupon redemption, since the
+ * student got the money back and no enrolment.
  */
 export const refundUndeliverable = async (
   coreTable: CoreTable,
@@ -310,31 +439,28 @@ export const refundUndeliverable = async (
 ): Promise<void> => {
   const current = await get(coreTable, order.orderId);
   if (!current) throw new NotFoundError();
-  await moveFromPending(coreTable, order.orderId, {
-    status: 'refunded',
-    refundReason: reason,
-    refundedAt: now,
-    refundedAmount: current.amount,
-    paidAt: current.paidAt ?? now,
-  });
-};
-
-const moveFromPending = async (
-  coreTable: CoreTable,
-  orderId: string,
-  values: Parameters<
-    ReturnType<CoreTable['entities']['order']['patch']>['set']
-  >[0],
-) => {
-  try {
-    await coreTable.entities.order
-      .patch({ orderId })
-      .set(values)
-      .where((attr, op) => op.eq(attr.status, 'pending'))
-      .go();
-  } catch (error) {
-    if (!isConditionalFailure(error)) throw error;
-  }
+  await coreTable.transaction
+    .write((entities) => [
+      entities.order
+        .patch({ orderId: order.orderId })
+        .set({
+          status: 'refunded',
+          refundReason: reason,
+          refundedAt: now,
+          refundedAmount: current.amount,
+          paidAt: current.paidAt ?? now,
+        })
+        .where((attr, op) => op.eq(attr.status, 'pending'))
+        .commit(),
+      ...(current.couponCode
+        ? releaseCouponWrites(entities, {
+            courseId: current.courseId,
+            code: current.couponCode,
+            userId: current.userId,
+          })
+        : []),
+    ])
+    .go();
 };
 
 /**

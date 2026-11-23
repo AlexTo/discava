@@ -7,17 +7,25 @@ import { localCheckoutTtlSeconds } from '@discava/common-server-utils/local-dev'
 import { withStripe } from '@discava/common-server-utils/stripe/client';
 import {
   attachCheckoutSession,
+  CheckoutStartCancelledError,
+  COUPON_REFUSALS,
+  claimCouponWrites,
   expireOrder,
+  expireOrderWrites,
   findOpenOrder,
   getConnection,
   markRefundRequested,
+  normaliseCouponCode,
+  type OrderRecord,
   PaymentsUnavailableError,
   REFUND_WINDOW_DAYS,
+  reclaimExpiredReservations,
   refundDeadline,
   refundEligibility,
   startOrder,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
+import { checkCoupon } from '../helpers/coupon-check.js';
 import { courseProcedure } from '../init.js';
 import {
   CheckoutInputSchema,
@@ -46,11 +54,21 @@ export const checkout = courseProcedure
   .output(CheckoutOutputSchema)
   .mutation(async ({ ctx, input }) => {
     const { coreTable } = ctx;
-    const { courseId } = input;
+    const { courseId, couponCode } = input;
     const userId = ctx.user.sub;
 
     const origin = getAllowedOrigin(ctx.event);
     if (!origin) throw new TRPCError({ code: 'FORBIDDEN' });
+
+    if (couponCode !== undefined) {
+      return checkoutWithCoupon({
+        coreTable,
+        userId,
+        courseId,
+        couponCode,
+        origin,
+      });
+    }
 
     const { data: course } = await coreTable.entities.course
       .get({ courseId })
@@ -99,53 +117,262 @@ export const checkout = courseProcedure
       throw error;
     }
 
+    return createSession({ coreTable, order, userId, courseId, origin });
+  });
+
+type CoreTable = Parameters<typeof findOpenOrder>[0]['coreTable'];
+
+// A reservation outlives its session by this long, so it is never released
+// while the session can still be paid.
+const RESERVATION_GRACE_MS = 5 * 60 * 1000;
+const CONFLICT_ATTEMPTS = 3;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const refuse = (message: string) =>
+  new TRPCError({ code: 'PRECONDITION_FAILED', message });
+
+type StripeSessionState = 'expired' | 'complete' | 'open';
+
+// Expires every earlier unpaid order's session, so a student has one live
+// checkout and a replaced one can never be paid. Nothing is written. "Already
+// expired" is success; "already complete" means the student has paid (the
+// caller answers "already enrolled"); any other failure is retryable and
+// leaves everything as it was.
+const expireEarlierSessions = async (orders: OrderRecord[], now: string) => {
+  for (const earlier of orders) {
+    if (!earlier.checkoutSessionId) {
+      // It may be mid-creation in another request.
+      if (earlier.expiresAt > now) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Your earlier checkout is still starting; try again',
+        });
+      }
+      continue;
+    }
+    const sessionId = earlier.checkoutSessionId;
     try {
-      const session = await withStripe((stripe) =>
-        stripe.checkout.sessions.create(
-          {
-            mode: 'payment',
-            allowed_payment_method_types: ['card'],
-            adaptive_pricing: { enabled: false },
-            line_items: [
-              {
-                quantity: 1,
-                price_data: {
-                  currency: order.currency,
-                  unit_amount: order.amount,
-                  product_data: { name: order.courseTitle },
-                },
-              },
-            ],
-            client_reference_id: order.orderId,
-            metadata: { orderId: order.orderId, userId, courseId },
-            payment_intent_data: {
-              metadata: { orderId: order.orderId, userId, courseId },
-            },
-            expires_at: Math.floor(new Date(order.expiresAt).getTime() / 1000),
-            success_url: `${origin}/learn/${courseId}?checkout=success`,
-            cancel_url: `${origin}/learn/${courseId}?checkout=cancelled`,
-          },
-          { idempotencyKey: order.orderId },
-        ),
-      );
-      if (!session.url) throw new Error('Stripe returned no checkout address');
-      await attachCheckoutSession(coreTable, order, {
-        sessionId: session.id,
-        url: session.url,
+      await withStripe((stripe) => stripe.checkout.sessions.expire(sessionId));
+    } catch {
+      const state = await withStripe(
+        async (stripe): Promise<StripeSessionState> =>
+          (await stripe.checkout.sessions.retrieve(sessionId))
+            .status as StripeSessionState,
+      ).catch(() => 'open' as const);
+      if (state === 'complete') {
+        throw refuse(COUPON_REFUSALS.alreadyEnrolled);
+      }
+      if (state !== 'expired') {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: "Couldn't replace your earlier checkout; try again",
+        });
+      }
+    }
+  }
+};
+
+// A checkout with a discount code (total above zero). The code is validated
+// as `coupon.preview` does and the amount is the server's own, never the
+// browser's. The claim on the code and the order are one transaction; an
+// earlier unpaid order's session is expired first, and the order, and its
+// reservation, are only replaced after that succeeded.
+const checkoutWithCoupon = async ({
+  coreTable,
+  userId,
+  courseId,
+  couponCode,
+  origin,
+}: {
+  coreTable: CoreTable;
+  userId: string;
+  courseId: string;
+  couponCode: string;
+  origin: string;
+}) => {
+  let reclaimed = false;
+  let conflicts = 0;
+  for (;;) {
+    const now = new Date().toISOString();
+    let check: Awaited<ReturnType<typeof checkCoupon>>;
+    try {
+      check = await checkCoupon({
+        coreTable,
+        courseId,
+        userId,
+        input: couponCode,
+        now,
       });
-      return { checkoutUrl: session.url };
     } catch (error) {
-      console.error('Could not create the checkout session', {
-        orderId: order.orderId,
-        error: error instanceof Error ? error.name : 'unknown',
-      });
-      await expireOrder(coreTable, order).catch(() => undefined);
+      // Reservations whose checkout ended may be what fills the code.
+      if (
+        !reclaimed &&
+        error instanceof TRPCError &&
+        error.message === COUPON_REFUSALS.usedUp
+      ) {
+        reclaimed = true;
+        const { data: coupon } = await coreTable.entities.coupon
+          .get({ courseId, code: normaliseCouponCode(couponCode) as string })
+          .go();
+        if (coupon) {
+          await reclaimExpiredReservations({
+            coreTable,
+            courseId,
+            code: coupon.code,
+            now,
+          });
+        }
+        continue;
+      }
+      throw error;
+    }
+    if (check.price.isFree) {
       throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: "Couldn't start the payment",
+        code: 'BAD_REQUEST',
+        message: 'A code that makes the course free is not supported here yet',
       });
     }
-  });
+
+    const { data: orders } = await coreTable.entities.order.query
+      .byStudentCourse({ userId, courseId })
+      .go({ pages: 'all' });
+    const pending = (orders as OrderRecord[]).filter(
+      (o) => o.status === 'pending',
+    );
+    const open = await findOpenOrder({ coreTable, userId, courseId, now });
+    if (open?.checkoutUrl && open.couponCode === check.code) {
+      return { checkoutUrl: open.checkoutUrl };
+    }
+
+    await expireEarlierSessions(pending, now);
+
+    // An earlier order on the same code holds the very redemption this one
+    // claims, which one transaction cannot both release and create: end it
+    // first. Another order on a different (or no) code is replaced inside the
+    // new order's transaction.
+    const sameCode = pending.filter((o) => o.couponCode === check.code);
+    for (const earlier of sameCode) {
+      await coreTable.transaction
+        .write((entities) => expireOrderWrites(entities, earlier))
+        .go();
+    }
+    const others = pending.filter((o) => o.couponCode !== check.code);
+
+    let order: OrderRecord;
+    try {
+      order = await startOrder({
+        coreTable,
+        course: check.course,
+        userId,
+        now,
+        getConnection: () => getConnection(coreTable),
+        ttlSeconds: localCheckoutTtlSeconds(),
+        discount: {
+          discountAmount: check.price.discountAmount,
+          couponCode: check.code,
+          couponType: check.coupon.type,
+          couponValue: check.coupon.value,
+        },
+        extraWrites: (entities, created) => [
+          ...claimCouponWrites(entities, {
+            coupon: check.coupon,
+            userId,
+            orderId: created.orderId,
+            status: 'reserved',
+            now,
+            reservedUntil: new Date(
+              new Date(created.expiresAt).getTime() + RESERVATION_GRACE_MS,
+            ).toISOString(),
+          }),
+          ...others.flatMap((earlier) => expireOrderWrites(entities, earlier)),
+        ],
+      });
+    } catch (error) {
+      if (error instanceof PaymentsUnavailableError) {
+        throw refuse('Payments are unavailable right now');
+      }
+      if (!(error instanceof CheckoutStartCancelledError)) throw error;
+      // Nothing was written. The next pass validates again, which answers
+      // with the matching refusal if the code was taken in the meantime; if it
+      // still passes, another writer got in the way.
+      if (++conflicts >= CONFLICT_ATTEMPTS) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Too many people are checking out; try again',
+        });
+      }
+      await sleep(50 + Math.floor(Math.random() * 100));
+      continue;
+    }
+
+    return createSession({ coreTable, order, userId, courseId, origin });
+  }
+};
+
+// Creates Stripe's hosted page for an order at the order's own amount and
+// stores it on the order. If Stripe fails the order is expired, which also
+// releases any coupon claim it holds.
+const createSession = async ({
+  coreTable,
+  order,
+  userId,
+  courseId,
+  origin,
+}: {
+  coreTable: CoreTable;
+  order: OrderRecord;
+  userId: string;
+  courseId: string;
+  origin: string;
+}) => {
+  try {
+    const session = await withStripe((stripe) =>
+      stripe.checkout.sessions.create(
+        {
+          mode: 'payment',
+          allowed_payment_method_types: ['card'],
+          adaptive_pricing: { enabled: false },
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: order.currency,
+                unit_amount: order.amount,
+                product_data: { name: order.courseTitle },
+              },
+            },
+          ],
+          client_reference_id: order.orderId,
+          metadata: { orderId: order.orderId, userId, courseId },
+          payment_intent_data: {
+            metadata: { orderId: order.orderId, userId, courseId },
+          },
+          expires_at: Math.floor(new Date(order.expiresAt).getTime() / 1000),
+          success_url: `${origin}/learn/${courseId}?checkout=success`,
+          cancel_url: `${origin}/learn/${courseId}?checkout=cancelled`,
+        },
+        { idempotencyKey: order.orderId },
+      ),
+    );
+    if (!session.url) throw new Error('Stripe returned no checkout address');
+    await attachCheckoutSession(coreTable, order, {
+      sessionId: session.id,
+      url: session.url,
+    });
+    return { checkoutUrl: session.url };
+  } catch (error) {
+    console.error('Could not create the checkout session', {
+      orderId: order.orderId,
+      error: error instanceof Error ? error.name : 'unknown',
+    });
+    await expireOrder(coreTable, order).catch(() => undefined);
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: "Couldn't start the payment",
+    });
+  }
+};
 
 const NO_PURCHASE = 'No purchase to refund';
 

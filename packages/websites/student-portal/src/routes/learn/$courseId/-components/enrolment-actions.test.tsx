@@ -929,3 +929,140 @@ describe('EnrolmentActions: leaving a course', () => {
     ).toBeVisible();
   });
 });
+
+describe('EnrolmentActions: a discount code', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const preview = {
+    code: 'SPRING-20',
+    listAmount: 2000,
+    discountAmount: 400,
+    totalAmount: 1600,
+    currency: 'USD',
+    isFree: false,
+  };
+  const renderPriced = (handlers: Record<string, Handler> = {}) =>
+    renderPreview({
+      'course.publicView': () => priced,
+      'course.myEnrolment': () => null,
+      'payment.available': () => ({ available: true }),
+      ...handlers,
+    });
+  const apply = async (
+    user: ReturnType<typeof renderPriced>['user'],
+    code = 'spring-20',
+  ) => {
+    await user.click(
+      await screen.findByRole('button', { name: 'Have a code?' }),
+    );
+    await user.type(screen.getByLabelText('Discount code'), code);
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+  };
+
+  it('applying a code shows the summary and the total on the pay button', async () => {
+    const { user, calls } = renderPriced({ 'coupon.preview': () => preview });
+    await apply(user);
+
+    const summary = await screen.findByLabelText('Price with code');
+    expect(within(summary).getByText('List price')).toBeInTheDocument();
+    expect(within(summary).getByText('$20.00')).toBeInTheDocument();
+    expect(
+      within(summary).getByText('Discount (SPRING-20)'),
+    ).toBeInTheDocument();
+    expect(within(summary).getByText('−$4.00')).toBeInTheDocument();
+    expect(within(summary).getByText('$16.00')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pay $16.00' })).toBeEnabled();
+    expect(calls).toContainEqual({
+      path: 'coupon.preview',
+      input: { courseId: 'course-1', code: 'spring-20' },
+    });
+  });
+
+  it('shows the message of a refused code and leaves the price', async () => {
+    const { user } = renderPriced({
+      'coupon.preview': () => {
+        throw new ApiError('PRECONDITION_FAILED', 'This code has expired');
+      },
+    });
+    await apply(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This code has expired',
+    );
+    expect(screen.queryByLabelText('Price with code')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Buy now' })).toBeEnabled();
+    expect(screen.getByText('$20.00')).toBeInTheDocument();
+  });
+
+  it('Remove code restores the list price', async () => {
+    const { user } = renderPriced({ 'coupon.preview': () => preview });
+    await apply(user);
+    await user.click(
+      await screen.findByRole('button', { name: 'Remove code' }),
+    );
+
+    expect(screen.queryByLabelText('Price with code')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Buy now' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Have a code?' })).toBeVisible();
+  });
+
+  it('the pay button passes the code and the browser goes to the checkout', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    const { user, calls } = renderPriced({
+      'coupon.preview': () => preview,
+      'payment.checkout': () => ({ checkoutUrl: 'https://pay.test/s-2' }),
+    });
+    await apply(user);
+    await user.click(await screen.findByRole('button', { name: 'Pay $16.00' }));
+
+    await vi.waitFor(() =>
+      expect(assign).toHaveBeenCalledWith('https://pay.test/s-2'),
+    );
+    expect(calls).toContainEqual({
+      path: 'payment.checkout',
+      input: { courseId: 'course-1', couponCode: 'SPRING-20' },
+    });
+  });
+
+  it('a late refusal shows its message and clears the code', async () => {
+    const { user } = renderPriced({
+      'coupon.preview': () => preview,
+      'payment.checkout': () => {
+        throw new ApiError('PRECONDITION_FAILED', 'This code has expired');
+      },
+    });
+    await apply(user);
+    await user.click(await screen.findByRole('button', { name: 'Pay $16.00' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This code has expired',
+    );
+    expect(screen.queryByLabelText('Price with code')).toBeNull();
+    expect(
+      await screen.findByRole('button', { name: 'Buy now' }),
+    ).toBeEnabled();
+  });
+
+  it('a start without a code sends no couponCode', async () => {
+    vi.stubGlobal('location', { ...window.location, assign: vi.fn() });
+    const { user, calls } = renderPriced({
+      'payment.checkout': () => ({ checkoutUrl: 'https://pay.test/s-1' }),
+    });
+    await user.click(await screen.findByRole('button', { name: 'Buy now' }));
+    await vi.waitFor(() =>
+      expect(calls.map(({ path }) => path)).toContain('payment.checkout'),
+    );
+    expect(
+      calls.find(({ path }) => path === 'payment.checkout')?.input,
+    ).toEqual({ courseId: 'course-1' });
+  });
+
+  it('shows no code field for a course without a price', async () => {
+    renderPreview({ 'course.myEnrolment': () => null });
+    await enrolButton();
+    expect(screen.queryByRole('button', { name: 'Have a code?' })).toBeNull();
+  });
+});

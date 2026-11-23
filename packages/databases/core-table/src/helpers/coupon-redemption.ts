@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { createCoreTableService } from '../service.js';
+import { expireOrderWrites } from './order.js';
 
 type CoreTable = Awaited<ReturnType<typeof createCoreTableService>>;
 type TransactionWrites = Parameters<CoreTable['transaction']['write']>[0];
@@ -138,3 +139,47 @@ export const releaseCouponWrites = (
     .where((attr, op) => op.gt(attr.redeemedCount, 0))
     .commit(),
 ];
+
+/**
+ * Frees the reservations of one code whose `reservedUntil` has passed: for
+ * each, in one transaction, the order's move from `pending` to `expired` and
+ * the release, so a replayed or racing call changes nothing. A redeemed
+ * redemption is never touched. Returns how many it released.
+ */
+export const reclaimExpiredReservations = async ({
+  coreTable,
+  courseId,
+  code,
+  now,
+}: {
+  coreTable: CoreTable;
+  courseId: string;
+  code: string;
+  now: string;
+}): Promise<number> => {
+  const { data } = await coreTable.entities.couponRedemption.query
+    .primary({ courseId, code })
+    .go({ pages: 'all' });
+  let released = 0;
+  for (const redemption of data) {
+    if (
+      redemption.status !== 'reserved' ||
+      redemption.reservedUntil === undefined ||
+      redemption.reservedUntil > now
+    ) {
+      continue;
+    }
+    const { canceled } = await coreTable.transaction
+      .write((entities) =>
+        expireOrderWrites(entities, {
+          orderId: redemption.orderId,
+          courseId,
+          userId: redemption.userId,
+          couponCode: code,
+        }),
+      )
+      .go();
+    if (!canceled) released++;
+  }
+  return released;
+};
