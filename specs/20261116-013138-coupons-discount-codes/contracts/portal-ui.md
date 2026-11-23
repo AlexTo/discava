@@ -19,5 +19,5 @@ In `enrolment-actions.tsx`'s paid state (from #284), above the pay button:
 - A "Have a code?" link reveals a text field and an Apply button.
 - **Applied**: a summary: List price, Discount (with the code), Total, and a Remove code button; the pay button label shows the total ("Pay $12.00"). A zero total changes the button to "Enrol for free" and notes that no payment is needed.
 - **Refused**: the API's message under the field, price unchanged.
-- **Checkout**: pressing the button calls checkout start with the code; a refusal at that point (the code expired since) shows its message and refreshes the summary without the code.
+- **Checkout**: pressing the button calls `payment.checkout` with the code (the free total returns `{ enrolled: true }`, not a URL); a refusal at that point (the code expired since) shows its message and refreshes the summary without the code.
 - Loading state while applying; the field is cleared when the student removes the code.
