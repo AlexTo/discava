@@ -144,7 +144,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
   - The courses list and the reviews list get `aria-busy` while `isFetchingNextPage`.
 
   **Tests:** each screen's loading state shows its sentence in a `status` region, under the page's `h1`.
-- [ ] T017 [US3] **Needs IP T032.** Test first in `AP/components/app-layout.test.ts(x)`: after navigating from `/` to `/payments`, the "Payments" `h1` has focus (A-02). No source change is expected.
+- [x] T017 [US3] **Needs IP T032.** Test first in `AP/components/app-layout.test.ts(x)`: after navigating from `/` to `/payments`, the "Payments" `h1` has focus (A-02). No source change is expected.
 - [x] T051 [US3] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: visit each admin page and assert its tab title ([contracts/page-titles.md](./contracts/page-titles.md)); `screenshot()` Categories while its list request is held (`page.route` delaying `localhost:2025`), showing "Loading the categories…".
 - [x] T018 [US3] Run the admin portal's and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
