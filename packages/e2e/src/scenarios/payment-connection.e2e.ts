@@ -164,7 +164,9 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
       .click();
     const saving = admin.getByRole('button', { name: 'Saving…' });
     await expect(saving).toHaveAttribute('aria-disabled', 'true');
-    await expect(saving).not.toBeDisabled();
+    // Playwright's toBeDisabled() also counts aria-disabled, so check the
+    // native attribute itself.
+    await expect(saving).not.toHaveAttribute('disabled');
     await expect(saving).toBeFocused();
     await screenshot(admin, 'payments-saving-key-keeps-focus');
     release();
