@@ -170,7 +170,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await expect(saving).toBeFocused();
     await screenshot(admin, 'payments-saving-key-keeps-focus');
     release();
-    await admin.unroute('**/payment.connect*');
+    await admin.unrouteAll({ behavior: 'wait' });
     await expect(keyField).toHaveCount(0);
     await expect(admin.getByRole('alert')).toHaveCount(0);
   });
