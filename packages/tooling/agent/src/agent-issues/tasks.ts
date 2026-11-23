@@ -39,8 +39,8 @@ export interface TaskGroup {
 // - a story's phase is titled `User Story <n> - <what it delivers>`.
 const PHASE_HEADING = /^## Phase (\d+): (.+?)\s*$/;
 // "(human)", bold or not: the constitution and the tasks template write it
-// differently.
-const HUMAN_MARK = /\(human\)/i;
+// differently. A note may follow the word, as in "(human, before merge)".
+const HUMAN_MARK = /\(human\b[^)]*\)/i;
 const TASK_LINE = /^- \[([ xX])\] (T\d{3})\b(.*)$/;
 // What was probably meant as a phase heading or a task, to catch the ones
 // the two patterns above would silently skip.

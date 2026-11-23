@@ -61,6 +61,18 @@ describe('parsePhases', () => {
     expect(phase.tasks.map((task) => task.human)).toEqual([true, true, false]);
   });
 
+  it('recognises a human task with a note after the mark', () => {
+    const [phase] = parsePhases(
+      '## Phase 1: A\n\n- [ ] T001 (human, before merge) delete\n- [ ] T002 **(Human, after deploy)** look\n- [ ] T003 (humans, welcome) no\n- [ ] T004 (humane) no\n',
+    );
+    expect(phase.tasks.map((task) => task.human)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+  });
+
   it('ignores tasks before the first phase heading', () => {
     expect(parsePhases('- [ ] T001 stray\n')).toEqual([]);
   });
