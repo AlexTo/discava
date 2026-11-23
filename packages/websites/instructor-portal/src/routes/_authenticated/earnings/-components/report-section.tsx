@@ -86,15 +86,25 @@ export function ReportSection({ period }: { period: Period }) {
               >
                 <thead className="border-b text-muted-foreground">
                   <tr>
-                    <th className="py-2 font-medium">Course</th>
-                    <th className="py-2 text-right font-medium">Orders</th>
-                    <th className="py-2 text-right font-medium">Gross</th>
-                    <th className="py-2 text-right font-medium">Discounts</th>
-                    <th className="py-2 text-right font-medium">Refunds</th>
-                    <th className="py-2 text-right font-medium">
+                    <th className="px-2 py-2 font-medium">Course</th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                      Orders
+                    </th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                      Gross
+                    </th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                      Discounts
+                    </th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                      Refunds
+                    </th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
                       Platform fee
                     </th>
-                    <th className="py-2 text-right font-medium">Net</th>
+                    <th className="whitespace-nowrap px-2 py-2 text-right font-medium">
+                      Net
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,7 +113,7 @@ export function ReportSection({ period }: { period: Period }) {
                     return (
                       <Fragment key={key}>
                         <tr className="border-b">
-                          <td className="py-2">
+                          <td className="px-2 py-2">
                             <div className="font-medium">
                               {course.courseTitle}
                             </div>
@@ -118,22 +128,22 @@ export function ReportSection({ period }: { period: Period }) {
                               {open.has(key) ? 'Hide orders' : 'Show orders'}
                             </Button>
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {course.orders}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {money(course.grossMinor)}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {money(course.discountMinor)}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {money(course.refundMinor)}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {money(course.feeMinor)}
                           </td>
-                          <td className="py-2 text-right tabular-nums">
+                          <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                             {money(course.netMinor)}
                           </td>
                         </tr>
@@ -153,23 +163,23 @@ export function ReportSection({ period }: { period: Period }) {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td className="py-2">Total</td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="px-2 py-2">Total</td>
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {totals.orders}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {money(totals.grossMinor)}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {money(totals.discountMinor)}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {money(totals.refundMinor)}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {money(totals.feeMinor)}
                     </td>
-                    <td className="py-2 text-right tabular-nums">
+                    <td className="whitespace-nowrap px-2 py-2 text-right tabular-nums">
                       {money(totals.netMinor)}
                     </td>
                   </tr>

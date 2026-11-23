@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import {
   apiUser,
   connectLocalPayments,
+  connectLocalStripe,
   createCaptionedVideoViaApi,
   createLongTitledCourseViaApi,
   createPublishedCourseViaApi,
@@ -724,13 +725,61 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
 // The instructor portal's pages outside the course editor, with long content:
 // course analytics, the course cards, questions, reviews, a submission and
 // earnings fit a phone.
-test('the instructor pages fit a phone with long content', async ({ page }) => {
+test('the instructor pages fit a phone with long content', async ({
+  page,
+  browser,
+}) => {
+  await connectLocalStripe();
   const ivy = newUser('Ivy', ['instructor']);
   const instructor = await apiUserFor(ivy);
   const longWord = 'w'.repeat(70);
   const title = `${uniqueName('E2E phone pages')} ${longWord}`;
   const course = await createPublishedCourseViaApi(instructor, title);
   const { courseId } = course;
+
+  // A lesson title and a quiz question with a 70-character word, the content
+  // that widens the questions list's meta line and the most-missed table.
+  const lessonTitle = `Lesson ${longWord}`;
+  const longQuestion = `Why ${longWord}?`;
+  await instructor.instructor.lesson.update.mutate({
+    courseId,
+    moduleId: course.moduleId,
+    lessonId: course.lessonId,
+    title: lessonTitle,
+  });
+  const { contentItemId: longQuizId } =
+    await instructor.instructor.contentItem.createQuiz.mutate({
+      courseId,
+      moduleId: course.moduleId,
+      lessonId: course.lessonId,
+      title: 'Long question',
+      questions: [
+        {
+          questionId: 'q1',
+          kind: 'single',
+          prompt: textBody(longQuestion),
+          options: [
+            { optionId: 'a', text: 'Right' },
+            { optionId: 'b', text: 'Wrong' },
+          ],
+        },
+      ],
+      answerKey: { q1: { correctOptionIds: ['a'] } },
+      settings: {
+        passMarkPercent: 100,
+        attemptsAllowed: 2,
+        shuffleOptions: false,
+        revealAnswers: 'never',
+      },
+    });
+  const longQuiz = {
+    courseId,
+    moduleId: course.moduleId,
+    lessonId: course.lessonId,
+    contentItemId: longQuizId,
+  };
+  // An item added to a published course starts hidden.
+  await instructor.instructor.contentItem.publish.mutate(longQuiz);
 
   const students = [];
   for (const [index, name] of [
@@ -751,6 +800,12 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
       ...course.quiz,
       questionsHash,
       answers: { q1: [index % 2 === 0 ? 'a' : 'b'] },
+    });
+    const long = await student.core.quiz.view.query(longQuiz);
+    await student.core.quiz.submitAttempt.mutate({
+      ...longQuiz,
+      questionsHash: long.questionsHash,
+      answers: { q1: ['b'] },
     });
     await student.core.review.post.mutate({
       courseId,
@@ -789,6 +844,29 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
     ),
   );
 
+  // A sale, so the earnings report draws its table: a student buys a priced
+  // course of the instructor's on the local Stripe stand-in's hosted page.
+  const paidTitle = uniqueName('E2E phone paid');
+  const paid = await createPublishedCourseViaApi(instructor, paidTitle);
+  await instructor.instructor.course.setPrice.mutate({
+    courseId: paid.courseId,
+    priceAmount: 1999,
+    priceCurrency: 'USD',
+  });
+  const buyer = await browser.newPage();
+  await openCourse(buyer, paidTitle);
+  await buyer.getByRole('button', { name: 'Sign in to buy' }).click();
+  await buyer
+    .getByRole('dialog', { name: 'Sign in to buy' })
+    .getByRole('link', { name: 'Continue to sign in' })
+    .click();
+  await signIn(buyer, newUser('Sam', ['student']));
+  await buyer.getByRole('button', { name: 'Buy now' }).click();
+  await buyer.waitForURL(/\/stripe\/pay\//);
+  await buyer.getByRole('button', { name: 'Pay', exact: true }).click();
+  await buyer.waitForURL(/checkout=success/);
+  await buyer.close();
+
   await waitForAnalytics();
   await page.goto(`${PORTALS.instructor}/dashboard`);
   await signIn(page, ivy);
@@ -804,6 +882,32 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
     await screenshot(page, 'course analytics at phone width');
   });
 
+  await test.step('the most-missed table keeps Misses and Miss rate inside the card at desktop width', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    const card = page.getByRole('article', { name: 'Long question' });
+    await expect(card).toContainText('6 students', { timeout: 30_000 });
+    await card.getByRole('button', { name: 'Show analysis' }).click();
+    const table = card.getByRole('table', {
+      name: 'Most-missed questions for Long question',
+    });
+    await expect(table.getByText(longQuestion)).toBeVisible();
+    for (const name of ['Misses', 'Miss rate']) {
+      const header = table.getByRole('columnheader', { name });
+      const [inner, outer] = await Promise.all([
+        header.boundingBox(),
+        card.boundingBox(),
+      ]);
+      expect((inner?.x ?? 0) + (inner?.width ?? 0)).toBeLessThanOrEqual(
+        (outer?.x ?? 0) + (outer?.width ?? 0),
+      );
+    }
+    await screenshot(page, 'most-missed table at desktop width', {
+      fullPage: true,
+    });
+    await page.setViewportSize(PHONE);
+  });
+
   await test.step('the course cards', async () => {
     for (const path of ['/my-courses', '/']) {
       await page.goto(`${PORTALS.instructor}${path}`);
@@ -814,6 +918,12 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
 
   await test.step('questions and the open thread', async () => {
     await page.goto(`${PORTALS.instructor}/my-courses/${courseId}/questions`);
+    await expect(
+      page.getByRole('button', { name: /^Open question/ }),
+    ).toBeVisible();
+    await expect(page.getByText(lessonTitle).first()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'questions at phone width');
     await page.getByRole('button', { name: /^Open question/ }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('b'.repeat(500))).toBeVisible();
@@ -842,6 +952,10 @@ test('the instructor pages fit a phone with long content', async ({ page }) => {
     await expect(
       page.getByRole('heading', { level: 1, name: 'Earnings' }),
     ).toBeVisible();
+    await expect(
+      page.getByRole('table', { name: 'Earnings in USD' }),
+    ).toBeVisible({ timeout: 30_000 });
     await expectNoSidewaysScroll(page);
+    await screenshot(page, 'earnings at phone width', { fullPage: true });
   });
 });

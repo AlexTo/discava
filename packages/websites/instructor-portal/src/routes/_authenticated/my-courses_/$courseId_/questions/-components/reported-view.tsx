@@ -56,7 +56,7 @@ export function ReportedView({ courseId }: { courseId: string }) {
           );
           return (
             <li key={row.postId} className="space-y-2 p-4">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {row.kind === 'question' ? 'Question' : 'Reply'} ·{' '}
                 {row.authorName} · {row.lessonTitle}
                 {state ? ` (${state})` : ''} ·{' '}

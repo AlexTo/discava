@@ -58,6 +58,22 @@ describe('ReportedView', () => {
     expect(screen.getByText(/3 reports/)).toBeVisible();
   });
 
+  it('wraps a lesson title with a long word', async () => {
+    const long = 'w'.repeat(70);
+    renderQuestions(<ReportedView courseId="c1" />, {
+      instructor: {
+        'course.view': () => lessonsView([{ lessonId: 'l1' }]),
+        'discussion.reported': () => ({
+          items: [post({ lessonTitle: `Lesson ${long}` })],
+        }),
+      },
+    });
+
+    expect(await screen.findByText(new RegExp(long))).toHaveClass(
+      '[overflow-wrap:anywhere]',
+    );
+  });
+
   it('names no reporter', async () => {
     const { container } = render({
       'discussion.reported': () => ({
