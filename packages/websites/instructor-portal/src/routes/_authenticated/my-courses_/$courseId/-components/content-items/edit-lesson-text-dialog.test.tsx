@@ -310,4 +310,33 @@ describe('RemoveLessonTextButton', () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe('EditLessonTextDialog unsaved changes', () => {
+    it('Cancel resets what was typed, and Escape asks before discarding it', async () => {
+      const { user } = renderEditDialog();
+      const open = () =>
+        user.click(screen.getByRole('button', { name: 'Edit text' }));
+
+      await open();
+      await user.type(screen.getByLabelText('Title'), ' typed');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await open();
+      expect(screen.getByLabelText('Title')).toHaveValue('Key concepts');
+
+      await user.type(screen.getByLabelText('Title'), ' typed');
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      expect(screen.getByLabelText('Title')).toHaveValue('Key concepts typed');
+    });
+
+    it('closes at once on Escape when nothing changed', async () => {
+      const { user } = renderEditDialog();
+
+      await user.click(screen.getByRole('button', { name: 'Edit text' }));
+      await user.keyboard('{Escape}');
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
 });

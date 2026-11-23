@@ -13,6 +13,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type KeyboardEvent, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 const SELECT_CLASS =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50';
@@ -80,6 +81,17 @@ export function CourseCatalogueForm({
   const [languageValue, setLanguageValue] = useState(language ?? '');
   const [duration, setDuration] = useState(durationHours?.toString() ?? '');
   const [saved, setSaved] = useState(false);
+
+  useReportUnsavedChanges(
+    'catalogue',
+    !readOnly &&
+      (category !== (savedCategory?.id ?? '') ||
+        JSON.stringify(tags) !== JSON.stringify(savedTags ?? []) ||
+        tagInput.trim() !== '' ||
+        levelValue !== (level ?? '') ||
+        languageValue !== (language ?? '') ||
+        duration !== (durationHours?.toString() ?? '')),
+  );
 
   const options = categories.data ?? [];
   // A course can stay in a category that has since been archived: it isn't in

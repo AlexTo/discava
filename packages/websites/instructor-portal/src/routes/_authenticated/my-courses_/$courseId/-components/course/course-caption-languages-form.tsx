@@ -13,6 +13,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 /**
  * The languages every video of the course is translated into. Ticked ones are
@@ -40,6 +41,16 @@ export function CourseCaptionLanguagesForm({
   const [saved, setSaved] = useState(false);
   const retry = useMutation(
     trpc.course.retryCaptionTranslations.mutationOptions(),
+  );
+
+  const savedTags = current.data?.languages;
+  useReportUnsavedChanges(
+    'caption-languages',
+    !readOnly &&
+      draft !== null &&
+      savedTags !== undefined &&
+      (draft.length !== savedTags.length ||
+        draft.some((tag) => !savedTags.includes(tag))),
   );
 
   if (current.isError) {

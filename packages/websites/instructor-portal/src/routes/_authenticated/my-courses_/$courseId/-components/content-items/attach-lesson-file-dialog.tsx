@@ -26,6 +26,7 @@ import {
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
@@ -237,23 +238,42 @@ export function AttachLessonFileDialog({
 
   const shownFile = pendingUpload ?? (fileName ? { fileName, fileSize } : null);
 
+  // Typed, or an upload finished that Save hasn't attached yet.
+  const dirty =
+    titleValue !== (title ?? '') ||
+    descriptionValue !== (description ?? '') ||
+    pendingUpload !== undefined;
+  // Starts from what is saved, so each open begins fresh.
+  const reset = () => {
+    titleTyped.current = false;
+    setTitleValue(title ?? '');
+    setDescriptionValue(description ?? '');
+    setPendingUpload(undefined);
+    setError(undefined);
+  };
+  const close = () => {
+    setOpen(false);
+    reset();
+  };
+  const { contentProps, requestClose, confirmation } = useDiscardGuard({
+    dirty,
+    discard: close,
+  });
+
   return (
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
         if (nextOpen) {
-          titleTyped.current = false;
-          setTitleValue(title ?? '');
-          setDescriptionValue(description ?? '');
-          setPendingUpload(undefined);
+          reset();
+          setOpen(true);
         } else {
-          setError(undefined);
+          requestClose();
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl" {...contentProps}>
         <DialogHeader>
           <DialogTitle>{contentItemId ? 'Edit file' : 'Add file'}</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -364,11 +384,7 @@ export function AttachLessonFileDialog({
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setOpen(false)}
-          >
+          <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
           <Button
@@ -379,6 +395,7 @@ export function AttachLessonFileDialog({
             {isSaving ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>
+        {confirmation}
       </DialogContent>
     </Dialog>
   );

@@ -13,6 +13,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 // The most the API accepts (core-table's FIRST_LESSON_PROMPT_MAX).
 const PROMPT_MAX = 200;
@@ -20,7 +21,7 @@ const PROMPT_MAX = 200;
 /**
  * The question new learners are asked in the first lesson's Questions. It
  * shows the course's own text, or is empty with the default as its
- * placeholder; a failed save puts the saved text back.
+ * placeholder; a failed save keeps what was typed.
  */
 export function CourseFirstLessonPromptForm({
   courseId,
@@ -40,6 +41,7 @@ export function CourseFirstLessonPromptForm({
   );
 
   const unchanged = text.trim() === (firstLessonPrompt ?? '');
+  useReportUnsavedChanges('first-lesson-prompt', !unchanged);
 
   // The text to store, or null to go back to the default.
   const save = async (prompt: string | null) => {
@@ -48,8 +50,7 @@ export function CourseFirstLessonPromptForm({
     try {
       await mutateAsync({ courseId, prompt });
     } catch {
-      // Surfaced via the error below; the field goes back to what's saved.
-      setText(firstLessonPrompt ?? '');
+      // Surfaced via the error below; what was typed stays, to send again.
       return;
     }
     setText(prompt ?? '');

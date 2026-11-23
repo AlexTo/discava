@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { PreviewVideoArea } from './preview-video-area';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 // The limits core-table's courseLandingWrites enforces.
 const MAX_ITEMS = 10;
@@ -202,6 +203,14 @@ export function LandingPageCard({
   const [outcomes, setOutcomes] = useState(() => toItems(learningOutcomes));
   const [needs, setNeeds] = useState(() => toItems(requirements));
   const [saved, setSaved] = useState(false);
+
+  useReportUnsavedChanges(
+    'landing-page',
+    !readOnly &&
+      (JSON.stringify(toText(outcomes)) !==
+        JSON.stringify(learningOutcomes ?? []) ||
+        JSON.stringify(toText(needs)) !== JSON.stringify(requirements ?? [])),
+  );
 
   const edited = (set: (items: Item[]) => void) => (items: Item[]) => {
     set(items);

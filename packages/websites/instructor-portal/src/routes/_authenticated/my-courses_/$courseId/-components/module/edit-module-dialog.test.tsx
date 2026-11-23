@@ -100,4 +100,34 @@ describe('EditModuleDialog', () => {
     );
     expect(dialog).toHaveTextContent('A module with this title exists');
   });
+
+  it('Cancel resets what was typed, and Escape asks before discarding it', async () => {
+    const { user } = renderDialog();
+    const open = () =>
+      user.click(screen.getByRole('button', { name: 'Edit module' }));
+
+    await open();
+    await user.type(screen.getByLabelText('Module title'), ' typed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await open();
+    expect(screen.getByLabelText('Module title')).toHaveValue('Intro');
+
+    await user.type(screen.getByLabelText('Module title'), ' typed');
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Module title')).toHaveValue('Intro typed');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('closes at once on Escape when nothing was typed', async () => {
+    const { user } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'Edit module' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });

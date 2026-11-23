@@ -17,6 +17,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 const SELECT_CLASS =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50';
@@ -32,7 +33,7 @@ const toFieldValue = (amount: number) =>
     : `${Math.floor(amount / 100)}.${String(amount % 100).padStart(2, '0')}`;
 
 /**
- * What the course costs. It shows the saved price; a failed save puts it back.
+ * What the course costs. It shows the saved price; a failed save keeps what was typed.
  * A change applies to new purchases only: enrolled students keep their access.
  */
 export function CoursePriceForm({
@@ -52,6 +53,11 @@ export function CoursePriceForm({
   const [saved, setSaved] = useState(false);
   const { mutateAsync, reset, isPending, isError, error } = useMutation(
     course.setPrice.mutationOptions(),
+  );
+
+  useReportUnsavedChanges(
+    'price',
+    parsePriceInput(price) !== priceAmount || currency !== priceCurrency,
   );
 
   const handleSave = async () => {
@@ -74,9 +80,7 @@ export function CoursePriceForm({
         priceCurrency: currency,
       });
     } catch {
-      // Surfaced via the error below; the fields go back to what's saved.
-      setPrice(toFieldValue(priceAmount));
-      setCurrency(priceCurrency);
+      // Surfaced via the error below; what was typed stays, to send again.
       return;
     }
     setSaved(true);

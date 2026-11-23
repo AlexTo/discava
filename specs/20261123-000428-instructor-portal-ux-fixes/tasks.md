@@ -435,18 +435,18 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US6.
 
-- [ ] T051 [US6] Test first, then move the quiz builder's discard confirmation into shared code (research R-8, [contracts/shared-components.md](./contracts/shared-components.md)).
+- [x] T051 [US6] Test first, then move the quiz builder's discard confirmation into shared code (research R-8, [contracts/shared-components.md](./contracts/shared-components.md)).
   - **New files:** `SH/components/discard-changes-dialog.tsx` and `SH/hooks/use-discard-guard.tsx` (`.tsx`: it returns JSX), returning `contentProps` (`onEscapeKeyDown`, `onInteractOutside`), `requestClose` and `confirmation`. The wording is unchanged: "Discard unsaved changes?", "Keep editing", "Discard changes". Keep editing returns focus through `useReturnFocus`.
   - **Callers:** switch `IPC/content-items/quiz/quiz-builder-dialog.tsx` and `IPC/content-items/video-questions/video-questions-dialog.tsx` to it. Their tests must pass unchanged.
-- [ ] T052 [US6] Test first, then add `useUnsavedChangesGuard(dirty)` in `SH/hooks/use-unsaved-changes-guard.tsx`. It returns `{ confirmation }` for the caller to render once, as [contracts/shared-components.md](./contracts/shared-components.md) says.
+- [x] T052 [US6] Test first, then add `useUnsavedChangesGuard(dirty)` in `SH/hooks/use-unsaved-changes-guard.tsx`. It returns `{ confirmation }` for the caller to render once, as [contracts/shared-components.md](./contracts/shared-components.md) says.
   - **Mechanism:** it uses TanStack Router's `useBlocker` with `shouldBlockFn: () => dirty`, `withResolver: true` and `enableBeforeUnload: () => dirty`. The blocker's state drives the `AlertDialog` returned as `confirmation`: "Leave without saving?", with **Stay** (first, which calls `reset`) and **Leave** (which calls `proceed`).
   - **Tests:**
     - with `dirty` false, navigation proceeds;
     - with `dirty` true, it shows the dialog;
     - Stay cancels and Leave navigates.
   - **Callers:** move the `beforeunload` listeners in `IPC/content-items/quiz/use-quiz-builder-state.ts` and `IPC/content-items/video-questions/use-video-questions-editor.ts` onto it. Their dialogs (`quiz-builder-dialog.tsx`, `video-questions-dialog.tsx`) render its `confirmation`.
-- [ ] T053 [P] [US6] Keep input after a failed save (C-09). Remove the `catch`-block resets in `IPC/course/course-first-lesson-prompt-form.tsx` and `IPC/course/course-price-form.tsx`. **Tests:** after a mocked failure, the field holds the typed value, and Save sends it again. Change any existing assertion that the field resets, and say so in the pull request.
-- [ ] T054 [P] [US6] Make Cancel reset (B-11, C-10). In each dialog, close through the same handler as Escape (the one that resets the form), or wrap Cancel in `DialogClose asChild`:
+- [x] T053 [P] [US6] Keep input after a failed save (C-09). Remove the `catch`-block resets in `IPC/course/course-first-lesson-prompt-form.tsx` and `IPC/course/course-price-form.tsx`. **Tests:** after a mocked failure, the field holds the typed value, and Save sends it again. Change any existing assertion that the field resets, and say so in the pull request.
+- [x] T054 [P] [US6] Make Cancel reset (B-11, C-10). In each dialog, close through the same handler as Escape (the one that resets the form), or wrap Cancel in `DialogClose asChild`:
   - `packages/websites/instructor-portal/src/components/create-course-dialog.tsx`;
   - `IPC/module/create-module-dialog.tsx` and `edit-module-dialog.tsx`;
   - `IPC/lesson/create-lesson-dialog.tsx` and `edit-lesson-dialog.tsx`;
@@ -456,12 +456,12 @@ At 1440px nothing changes, apart from long-content fixes.
   - `IP/my-courses_/$courseId_/-components/response-dialog.tsx`.
 
   **Tests:** type, Cancel, reopen, and the saved value shows.
-- [ ] T055 [US6] Guard the dialogs in T054 with `useDiscardGuard` (T051), with `dirty` from the form's dirty state (C-11, D-06):
+- [x] T055 [US6] Guard the dialogs in T054 with `useDiscardGuard` (T051), with `dirty` from the form's dirty state (C-11, D-06):
   - for the video and file dialogs, `dirty` is also true once an upload has finished and isn't yet saved;
   - in `IPC/assignment/create-assignment-dialog.tsx`, wire `QuizBuilder`'s `onDirtyChange`, and ask before switching the kind radio away from a dirty quiz.
 
   **Tests:** Escape on a dirty dialog shows the confirmation; Keep editing returns to the field; on a clean dialog Escape closes.
-- [ ] T056 [US6] Guard the course editor's settings (C-11).
+- [x] T056 [US6] Guard the course editor's settings (C-11).
   - **Context:** add `IPC/course/unsaved-changes-context.tsx` with a provider in `IP/my-courses_/$courseId/route.tsx` that collects dirty flags by section key. The route calls `useUnsavedChangesGuard(anyDirty)` and renders its `confirmation`.
   - **Reporters:** these report their dirty state through the context:
     - `course-catalogue-form.tsx`;
@@ -473,13 +473,13 @@ At 1440px nothing changes, apart from long-content fixes.
   - **Archived course:** an archived course reports nothing.
 
   **Test:** a dirty price form, then a navigation to `/my-courses`, shows "Leave without saving?".
-- [ ] T057 [US6] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`, or add `packages/e2e/src/scenarios/unsaved-work.e2e.ts`. As a new instructor:
+- [x] T057 [US6] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`, or add `packages/e2e/src/scenarios/unsaved-work.e2e.ts`. As a new instructor:
   - type a lesson title in New lesson and press Escape: assert the confirmation, then Keep editing, and the title is still there;
   - change the price and click "My Courses" in the sidebar: assert "Leave without saving?", then Stay;
   - with `page.route` aborting `course.setFirstLessonPrompt` (or the prompt's mutation), save a new prompt: assert the field still holds it.
 
   Screenshot: `'discard unsaved changes'`.
-- [ ] T058 [US6] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T058 [US6] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

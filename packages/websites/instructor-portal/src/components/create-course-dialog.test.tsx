@@ -132,4 +132,31 @@ describe('CreateCourseDialog', () => {
     expect(dialog).toHaveTextContent('A course with this title exists');
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  it('Cancel resets what was typed, and Escape asks before discarding it', async () => {
+    const { user } = renderDialog();
+    const open = () =>
+      user.click(screen.getByRole('button', { name: 'New course' }));
+
+    await open();
+    await user.type(screen.getByLabelText('Course title'), 'Typed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await open();
+    expect(screen.getByLabelText('Course title')).toHaveValue('');
+
+    await user.type(screen.getByLabelText('Course title'), 'Typed');
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Discard unsaved changes?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Course title')).toHaveValue('Typed');
+  });
+
+  it('closes at once on Escape when nothing was typed', async () => {
+    const { user } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'New course' }));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
 });
