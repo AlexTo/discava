@@ -469,6 +469,33 @@ test('the grading queue on the instructor home page fits a phone with long names
   await screenshot(page, 'grading queue at phone width');
 });
 
+// A 70-character word in an assignment title wraps in the review page's
+// subtitle instead of widening the page (#960).
+test('the submission review subtitle wraps a long assignment title', async ({
+  page,
+}) => {
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const tess = await apiUser('Tess', ['student']);
+  const assignmentTitle = 'y'.repeat(70);
+  const ref = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('E2E phone subtitle course'),
+    assignmentTitle,
+  });
+  await tess.core.course.enrol.mutate({ courseId: ref.courseId });
+  await tess.core.assignment.submit.mutate(
+    await uploadSubmissionFile(tess, ref, 'a.txt', Buffer.from('a')),
+  );
+
+  await page.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(page, ivy);
+  await openSubmissions(page, ref, assignmentTitle);
+  await openSubmissionReview(page, 'Tess');
+  await expect(page.getByText(assignmentTitle).first()).toBeVisible();
+  await expectNoSidewaysScroll(page);
+  await screenshot(page, 'submission review with a long assignment title');
+});
+
 // The instructor portal's course editor on a small phone: every control in
 // the module, lesson and item rows is on screen, however long the titles, and
 // the lesson-item dialogs fit with their Save in reach.
