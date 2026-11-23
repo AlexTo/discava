@@ -12,6 +12,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { toCues } from '@discava/common-web-utils/video-questions';
 import { CirclePlus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -379,7 +380,7 @@ export function VideoQuestionsEditor({
             </ErrorAlert>
           ) : (
             <ErrorAlert type="error" header="Couldn't save the questions">
-              {state.saveError.message}
+              {apiErrorMessage(state.saveError)}
             </ErrorAlert>
           ))}
         <div className="flex flex-wrap items-center justify-end gap-3">

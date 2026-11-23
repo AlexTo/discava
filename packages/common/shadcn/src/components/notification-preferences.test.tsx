@@ -123,12 +123,31 @@ describe('NotificationPreferences', () => {
     await waitFor(() => expect(toggle).toBeChecked());
   });
 
-  it('shows skeleton rows while loading and no switches', () => {
+  it('says it could not reach Discava when the request fails to fetch', async () => {
+    const onChange = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    renderPreferences({ onChange });
+
+    const toggle = screen.getByRole('switch', {
+      name: /Name of assignment\.graded/,
+    });
+    await userEvent.click(toggle);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't reach Discava.");
+    expect(alert).not.toHaveTextContent('Failed to fetch');
+    expect(toggle).toHaveAccessibleDescription(/Couldn't reach Discava/);
+  });
+
+  it('says what is loading and shows no switches', () => {
     renderPreferences({ preferences: [], isLoading: true });
 
     expect(
-      screen.getByLabelText('Loading notification settings'),
-    ).toBeInTheDocument();
+      screen.getByRole('status', {
+        name: '',
+      }),
+    ).toHaveTextContent('Loading your notification settings…');
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 

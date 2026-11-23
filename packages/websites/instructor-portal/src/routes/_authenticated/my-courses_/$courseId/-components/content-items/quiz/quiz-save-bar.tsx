@@ -5,6 +5,7 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { Eye, Save } from 'lucide-react';
 import type { QuizErrors } from './quiz-form';
 import type { SaveError } from './use-quiz-builder-state';
@@ -75,7 +76,7 @@ export function QuizSaveBar({
           </ErrorAlert>
         ) : (
           <ErrorAlert type="error" header="Couldn't save the quiz">
-            {saveError.message}
+            {apiErrorMessage(saveError)}
           </ErrorAlert>
         ))}
       <div className="flex flex-wrap items-center justify-end gap-3">

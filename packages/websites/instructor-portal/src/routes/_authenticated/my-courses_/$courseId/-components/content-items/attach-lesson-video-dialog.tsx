@@ -95,6 +95,8 @@ export function AttachLessonVideoDialog({
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
   const [uploadError, setUploadError] = useState<string>();
+  // Which step failed, for the alert's header.
+  const [failedStep, setFailedStep] = useState<'upload' | 'save'>('save');
   const [uploadProgress, setUploadProgress] = useState<number>();
   const isUploading = uploadProgress !== undefined;
   const { course, contentItem } = useInstructorApi();
@@ -175,6 +177,7 @@ export function AttachLessonVideoDialog({
         mimeType: file.type,
       });
     } catch (error) {
+      setFailedStep('upload');
       setUploadError(apiErrorMessage(error, 'Failed to upload the video'));
     } finally {
       setUploadProgress(undefined);
@@ -229,6 +232,7 @@ export function AttachLessonVideoDialog({
       await invalidateCourse();
       setOpen(false);
     } catch (error) {
+      setFailedStep('save');
       setUploadError(apiErrorMessage(error, "Couldn't save the video"));
     }
   };
@@ -279,7 +283,14 @@ export function AttachLessonVideoDialog({
         </DialogHeader>
 
         {uploadError && (
-          <ErrorAlert type="error" header="Couldn't save the video">
+          <ErrorAlert
+            type="error"
+            header={
+              failedStep === 'upload'
+                ? "Couldn't upload the video"
+                : "Couldn't save the video"
+            }
+          >
             {uploadError}
           </ErrorAlert>
         )}

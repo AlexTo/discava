@@ -116,6 +116,8 @@ export function AttachLessonFileDialog({
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
   const [error, setError] = useState<string>();
+  // Which step failed, for the alert's header.
+  const [failedStep, setFailedStep] = useState<'upload' | 'save'>('save');
   const [uploadProgress, setUploadProgress] = useState<number>();
   const isUploading = uploadProgress !== undefined;
   const { course, contentItem } = useInstructorApi();
@@ -171,6 +173,7 @@ export function AttachLessonFileDialog({
         );
       }
     } catch (failure) {
+      setFailedStep('upload');
       setError(apiErrorMessage(failure, 'Failed to upload the file'));
     } finally {
       setUploadProgress(undefined);
@@ -180,6 +183,7 @@ export function AttachLessonFileDialog({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (accepted, rejected) => {
       if (rejected.length > 0) {
+        setFailedStep('upload');
         setError(rejectionMessage(rejected));
         return;
       }
@@ -232,6 +236,7 @@ export function AttachLessonFileDialog({
       });
       setOpen(false);
     } catch (failure) {
+      setFailedStep('save');
       setError(apiErrorMessage(failure, "Couldn't save the file"));
     }
   };
@@ -283,7 +288,14 @@ export function AttachLessonFileDialog({
         </DialogHeader>
 
         {error && (
-          <ErrorAlert type="error" header="Couldn't save the file">
+          <ErrorAlert
+            type="error"
+            header={
+              failedStep === 'upload'
+                ? "Couldn't upload the file"
+                : "Couldn't save the file"
+            }
+          >
             {error}
           </ErrorAlert>
         )}

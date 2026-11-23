@@ -489,7 +489,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US7.
 
-- [ ] T059 [P] [US7] Replace error sentences that bypass the helper (D-07, C-06, A-15, D-17):
+- [x] T059 [P] [US7] Replace error sentences that bypass the helper (D-07, C-06, A-15, D-17):
   - **`apiErrorMessage(error)`:** in `IPC/content-items/quiz/quiz-save-bar.tsx` and `IPC/content-items/video-questions/video-questions-editor.tsx`, use it in place of `.message`.
   - **Uploads:** `packages/websites/instructor-portal/src/lib/put-file-with-progress.ts` rejects with `new TypeError(failureMessage, { cause })` on `xhr.onerror`. The video and file dialogs' alert headers read "Couldn't upload the video" and "Couldn't upload the file" for upload failures.
   - **Notification settings:** in `SH/components/notification-preferences.tsx`:
