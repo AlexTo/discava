@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -80,6 +86,35 @@ describe('AttachLessonVideoDialog', () => {
           },
         },
       );
+
+    it('names the accepted types when a file of another type is chosen', async () => {
+      const { user } = openDialog();
+      await user.click(screen.getByRole('button', { name: 'Video' }));
+
+      fireEvent.change(fileInput(), {
+        target: {
+          files: [new File(['%PDF'], 'notes.pdf', { type: 'application/pdf' })],
+        },
+      });
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent("Couldn't upload the video");
+      expect(alert).toHaveTextContent('MP4, WebM or MOV');
+      expect(uploads).toHaveLength(0);
+    });
+
+    it('says it could not reach Discava when the upload fails to connect', async () => {
+      const { user } = openDialog();
+      await user.click(screen.getByRole('button', { name: 'Video' }));
+
+      await pickFile(user);
+      uploads[0].onerror?.();
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent("Couldn't upload the video");
+      expect(alert).toHaveTextContent("Couldn't reach Discava");
+      expect(alert).not.toHaveTextContent('Failed to upload');
+    });
 
     it('titles the dialog "Add video" and disables Save until uploaded and titled', async () => {
       const { user } = openDialog();

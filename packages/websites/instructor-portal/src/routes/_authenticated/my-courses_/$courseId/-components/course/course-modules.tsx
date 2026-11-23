@@ -270,6 +270,7 @@ function ModuleLessons({
                       lessonId={lesson.lessonId}
                       title={lesson.title}
                       usedItems={usedItemCount(lesson.contentItems)}
+                      itemCount={lesson.contentItems.length}
                       archive={archive}
                       noun={noun}
                       trigger={

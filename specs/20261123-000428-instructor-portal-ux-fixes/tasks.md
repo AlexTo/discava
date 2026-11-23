@@ -538,7 +538,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - the quiz builder's `showProblemsFirst` in `IPC/content-items/quiz/use-quiz-builder-state.ts`, which focuses the first problem's field and sets `aria-invalid` on invalid fields in `question-card.tsx`.
 
   **Tests:** in each form's test file.
-- [ ] T064 [P] [US7] Fix the silent and hidden states:
+- [x] T064 [P] [US7] Fix the silent and hidden states:
   - **Wrong file type (D-12):** `IPC/content-items/attach-lesson-video-dialog.tsx` shows the dropzone's rejections as `attach-lesson-file-dialog.tsx` does.
   - **Caption removal (D-13):** `IPC/content-items/video-captions-dialog.tsx` renders the removal error inside the open `AlertDialogContent`.
   - **Processing videos (D-05):** `IPC/content-items/lesson-content-items-row.tsx` shows a "Processing…" or "Processing failed" badge from the item's status, and drops the `title` tooltip on the disabled Questions button.

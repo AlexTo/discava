@@ -187,7 +187,14 @@ export function AttachLessonVideoDialog({
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
+    onDrop: (acceptedFiles, rejected) => {
+      if (rejected.length > 0) {
+        setFailedStep('upload');
+        setUploadError(
+          "That type of file can't be added as a video. Choose an MP4, WebM or MOV file.",
+        );
+        return;
+      }
       const file = acceptedFiles[0];
       if (file) {
         void uploadFile(file);

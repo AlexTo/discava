@@ -421,6 +421,7 @@ function RouteComponent() {
           <AnnouncementsSection
             courseId={course.courseId}
             archived={readOnly}
+            draft={draft}
           />
         </section>
 
