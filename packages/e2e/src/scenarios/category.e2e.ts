@@ -63,7 +63,9 @@ test('an admin creates, renames and archives a category', async ({
 
   await test.step('the admin renames it, and the slug stays', async () => {
     const slug = await row(name).locator('td').nth(1).innerText();
-    await row(name).getByRole('button', { name: 'Rename' }).click();
+    await row(name)
+      .getByRole('button', { name: `Rename ${name}` })
+      .click();
     await admin.getByLabel(`New name for ${name}`).fill(renamed);
     await admin.getByRole('button', { name: 'Save' }).click();
     await expect(row(renamed)).toBeVisible();
@@ -72,7 +74,9 @@ test('an admin creates, renames and archives a category', async ({
   });
 
   await test.step('the admin archives it after confirming', async () => {
-    await row(renamed).getByRole('button', { name: 'Archive' }).click();
+    await row(renamed)
+      .getByRole('button', { name: `Archive ${renamed}` })
+      .click();
     await screenshot(admin, 'category-archive-confirmation');
     await admin
       .getByRole('alertdialog')
