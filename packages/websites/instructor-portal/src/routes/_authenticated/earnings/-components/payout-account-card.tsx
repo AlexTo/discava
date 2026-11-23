@@ -5,7 +5,6 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { PendingButton } from '@discava/common-shadcn/components/pending-button';
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,

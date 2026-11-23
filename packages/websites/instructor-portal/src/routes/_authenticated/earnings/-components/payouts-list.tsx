@@ -4,7 +4,6 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,

@@ -8,11 +8,7 @@ import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import {
-  type UseQueryResult,
-  useInfiniteQuery,
-  useQuery,
-} from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useCoreApi, useInstructorApi } from '../../../../../api';
 import {
@@ -26,21 +22,23 @@ const STARS = [5, 4, 3, 2, 1] as const;
 const date = (iso: string) => new Date(iso).toLocaleDateString();
 
 function Summary({
-  query,
+  isPending,
+  data,
 }: {
-  query: UseQueryResult<{
+  isPending: boolean;
+  data?: {
     count: number;
     average?: number;
     stars: Record<number, number>;
-  }>;
+  };
 }) {
-  if (query.isPending) {
+  if (isPending) {
     return <LoadingState label="Loading ratings…" />;
   }
-  if (!query.data) {
+  if (!data) {
     return null;
   }
-  const { count, average, stars } = query.data;
+  const { count, average, stars } = data;
   if (count === 0 || average === undefined) {
     return <p className="text-sm text-muted-foreground">No ratings yet.</p>;
   }
@@ -119,7 +117,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
   return (
     <div className="space-y-6">
       <StatusMessage message={status} />
-      <Summary query={summaryQuery} />
+      <Summary isPending={summaryQuery.isPending} data={summaryQuery.data} />
 
       {query.isPending ? (
         <LoadingState label="Loading reviews…" />

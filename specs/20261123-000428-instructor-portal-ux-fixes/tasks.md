@@ -551,13 +551,13 @@ At 1440px nothing changes, apart from long-content fixes.
 - [x] T065 [P] [US7] Fix the My Courses empty states in `IP/my-courses/route.tsx` (B-08):
   - with no courses at all, show "You don't teach any courses yet" with Create course;
   - keep "No courses found" and Clear filters for a filter that hides every course.
-- [ ] T066 [US7] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s instructor section, or add `packages/e2e/src/scenarios/instructor-errors.e2e.ts`. As a new instructor:
+- [x] T066 [US7] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`'s instructor section, or add `packages/e2e/src/scenarios/instructor-errors.e2e.ts`. As a new instructor:
   - with `page.route` aborting the API, open `/my-courses`, the course editor and the quiz builder's Save. Assert no "Failed to fetch" text, and a "Try again" that recovers once the route is released;
   - open My Courses as a brand-new instructor and assert "You don't teach any courses yet";
   - on a draft course, assert the announcements line.
 
   Screenshots: `'my courses error with try again'`, `'new instructor my courses'`.
-- [ ] T067 [US7] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T067 [US7] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
