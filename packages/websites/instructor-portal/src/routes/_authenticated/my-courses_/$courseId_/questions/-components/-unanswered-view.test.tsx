@@ -130,6 +130,9 @@ describe('UnansweredView', () => {
     expect(
       calls.filter((c) => c.path === 'discussion.unanswered'),
     ).toHaveLength(2);
+    // The button went with the last page; the first new row has focus.
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(screen.getAllByRole('listitem')[1]).toHaveFocus();
   });
 
   it('shows an error with a retry', async () => {

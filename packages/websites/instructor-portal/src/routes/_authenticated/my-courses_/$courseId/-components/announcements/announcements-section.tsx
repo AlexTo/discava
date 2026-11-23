@@ -7,7 +7,7 @@ import { RichTextView } from '@discava/common-shadcn/components/rich-text-view';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { AnnouncementForm } from './announcement-form';
 import { DeleteAnnouncementDialog } from './delete-announcement-dialog';
@@ -28,6 +28,9 @@ export function AnnouncementsSection({
 }) {
   const trpc = useInstructorApi();
   const [editingId, setEditingId] = useState<string>();
+  // The item whose Edit button takes focus once its edit form has closed.
+  const [focusEditId, setFocusEditId] = useState<string>();
+  const editButtons = useRef(new Map<string, HTMLButtonElement>());
   const query = useInfiniteQuery(
     trpc.announcement.list.infiniteQueryOptions(
       { courseId },
@@ -35,6 +38,25 @@ export function AnnouncementsSection({
     ),
   );
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+
+  useEffect(() => {
+    if (focusEditId && !editingId) {
+      editButtons.current.get(focusEditId)?.focus();
+      setFocusEditId(undefined);
+    }
+  }, [focusEditId, editingId]);
+
+  const focusAfterDelete = (announcementId: string) => {
+    const index = items.findIndex(
+      (item) => item.announcementId === announcementId,
+    );
+    const next = items[index + 1];
+    if (next) {
+      editButtons.current.get(next.announcementId)?.focus();
+    } else {
+      document.getElementById('announcements-heading')?.focus();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -73,7 +95,10 @@ export function AnnouncementsSection({
                   <AnnouncementForm
                     courseId={courseId}
                     announcement={item}
-                    onDone={() => setEditingId(undefined)}
+                    onDone={() => {
+                      setEditingId(undefined);
+                      setFocusEditId(item.announcementId);
+                    }}
                   />
                 ) : (
                   <>
@@ -109,6 +134,16 @@ export function AnnouncementsSection({
                           variant="outline"
                           size="sm"
                           aria-label={`Edit ${item.title}`}
+                          ref={(element) => {
+                            if (element) {
+                              editButtons.current.set(
+                                item.announcementId,
+                                element,
+                              );
+                            } else {
+                              editButtons.current.delete(item.announcementId);
+                            }
+                          }}
                           onClick={() => setEditingId(item.announcementId)}
                         >
                           Edit
@@ -117,6 +152,9 @@ export function AnnouncementsSection({
                           courseId={courseId}
                           announcementId={item.announcementId}
                           title={item.title}
+                          onDeleted={() =>
+                            focusAfterDelete(item.announcementId)
+                          }
                           trigger={
                             <Button
                               type="button"

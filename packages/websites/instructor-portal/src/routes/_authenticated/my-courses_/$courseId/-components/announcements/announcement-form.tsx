@@ -4,12 +4,13 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 import { useInstructorApi } from '../../../../../../api';
 import { RichTextEditor } from '../rich-text-editor';
@@ -45,6 +46,16 @@ export function AnnouncementForm({
   // Remounts the editor, which reads its value only once, after a post.
   const [editorKey, setEditorKey] = useState(0);
   const [conflict, setConflict] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const editing = Boolean(announcement);
+
+  // Edit opens on its title field.
+  useEffect(() => {
+    if (editing) {
+      titleRef.current?.focus();
+    }
+  }, [editing]);
   const trpc = useInstructorApi();
   const queryClient = useQueryClient();
   const create = useMutation(trpc.announcement.create.mutationOptions());
@@ -82,6 +93,8 @@ export function AnnouncementForm({
         setEditorKey((key) => key + 1);
         setAnnouncementId(uuidv7());
         create.reset();
+        setStatus('Announcement posted');
+        titleRef.current?.focus();
       }
     } catch (error) {
       const code = (error as { data?: { code?: string } }).data?.code;
@@ -139,6 +152,7 @@ export function AnnouncementForm({
           >{`${title.length}/${TITLE_MAX}`}</span>
         </div>
         <Input
+          ref={titleRef}
           id={`${idPrefix}-announcement-title`}
           value={title}
           maxLength={TITLE_MAX}
@@ -159,6 +173,8 @@ export function AnnouncementForm({
           </p>
         )}
       </div>
+
+      {!announcement && <StatusMessage message={status} />}
 
       <div className="flex justify-end gap-2">
         {announcement && (

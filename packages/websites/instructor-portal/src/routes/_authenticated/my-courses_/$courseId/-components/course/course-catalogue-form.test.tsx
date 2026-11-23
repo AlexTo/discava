@@ -50,6 +50,20 @@ describe('CourseCatalogueForm', () => {
     expect(screen.queryByText('python')).not.toBeInTheDocument();
   });
 
+  it('focuses the next tag after removing one, else the tag input', async () => {
+    const { user } = renderForm({ tags: ['a', 'b'] });
+
+    await user.click(screen.getByRole('button', { name: 'Remove tag a' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Remove tag b' }),
+      ).toHaveFocus(),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Remove tag b' }));
+    await waitFor(() => expect(tagsInput()).toHaveFocus());
+  });
+
   it('refuses a ninth tag with a message', async () => {
     const tags = Array.from({ length: 8 }, (_, i) => `tag${i}`);
     const { user } = renderForm({ tags });

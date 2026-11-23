@@ -32,6 +32,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from './ui/sidebar';
 import { UserMenu, type UserMenuItem } from './user-menu';
 
@@ -98,6 +99,44 @@ export interface PortalShellProps {
   children: React.ReactNode;
 }
 
+// The sidebar. On a phone it closes when the page changes, and when it closes
+// otherwise (Escape, its close button) focus returns to the menu button; after
+// a navigation RouteAnnouncer moves focus instead.
+const ShellSidebar = ({
+  pathname,
+  triggerRef,
+  children,
+}: {
+  pathname: string;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  children: React.ReactNode;
+}) => {
+  const { setOpenMobile } = useSidebar();
+  const previous = React.useRef(pathname);
+  const navigating = React.useRef(false);
+
+  React.useEffect(() => {
+    if (previous.current === pathname) return;
+    previous.current = pathname;
+    navigating.current = true;
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+
+  const onCloseAutoFocus = React.useCallback(
+    (event: Event) => {
+      event.preventDefault();
+      if (navigating.current) {
+        navigating.current = false;
+        return;
+      }
+      triggerRef.current?.focus();
+    },
+    [triggerRef],
+  );
+
+  return <Sidebar onCloseAutoFocus={onCloseAutoFocus}>{children}</Sidebar>;
+};
+
 // A portal's signed-in layout: the sidebar, a header with the notification
 // bell and user menu, and breadcrumbs above the page.
 export const PortalShell = ({
@@ -115,6 +154,7 @@ export const PortalShell = ({
   const brand = useBrand();
   const router = useRouter();
   const { pathname } = useLocation();
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [overrides, setOverrides] = React.useState<Record<string, string>>({});
 
   const setOverride = React.useCallback(
@@ -173,7 +213,7 @@ export const PortalShell = ({
       <SidebarProvider>
         <SkipLink />
         <RouteAnnouncer containerId={MAIN_CONTENT_ID} pathname={pathname} />
-        <Sidebar>
+        <ShellSidebar pathname={pathname} triggerRef={triggerRef}>
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupLabel>{label}</SidebarGroupLabel>
@@ -193,11 +233,11 @@ export const PortalShell = ({
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
-        </Sidebar>
+        </ShellSidebar>
         <SidebarInset>
           <header className="supports-backdrop-blur:bg-background/60 sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
             <div className="flex min-w-0 items-center gap-3">
-              <SidebarTrigger className="-ml-1" />
+              <SidebarTrigger ref={triggerRef} className="-ml-1" />
               <Separator orientation="vertical" className="h-6" />
               <div className="flex min-w-0 items-center gap-2">
                 <img

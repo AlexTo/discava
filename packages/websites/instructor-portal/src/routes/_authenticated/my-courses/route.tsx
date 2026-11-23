@@ -25,7 +25,7 @@ import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Search, Users } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi, useInstructorApi } from '../../../api';
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
@@ -56,6 +56,7 @@ function RouteComponent() {
   usePageTitle('My Courses');
   const [filter, setFilter] = useState<CourseFilter>('All');
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const normalisedQuery = query.trim().toLocaleLowerCase();
 
   const auth = useAuth();
@@ -186,6 +187,7 @@ function RouteComponent() {
             <div className="relative w-full sm:w-64">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={searchRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search by title"
@@ -308,6 +310,7 @@ function RouteComponent() {
                 onClick={() => {
                   setQuery('');
                   setFilter('All');
+                  searchRef.current?.focus();
                 }}
               >
                 Clear filters

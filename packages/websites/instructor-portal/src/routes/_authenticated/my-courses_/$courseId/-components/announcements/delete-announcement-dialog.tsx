@@ -17,7 +17,7 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 
 export function DeleteAnnouncementDialog({
@@ -25,13 +25,17 @@ export function DeleteAnnouncementDialog({
   announcementId,
   title,
   trigger,
+  onDeleted,
 }: {
   courseId: string;
   announcementId: string;
   title: string;
   trigger: ReactNode;
+  /** Called once the dialog has closed after a delete, to place focus. */
+  onDeleted?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const deletedRef = useRef(false);
   const trpc = useInstructorApi();
   const queryClient = useQueryClient();
   const {
@@ -53,7 +57,17 @@ export function DeleteAnnouncementDialog({
       }}
     >
       <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
-      <AlertDialogContent className="sm:max-w-md">
+      <AlertDialogContent
+        className="sm:max-w-md"
+        onCloseAutoFocus={(event) => {
+          // The trigger is gone: the caller says where focus goes.
+          if (deletedRef.current) {
+            deletedRef.current = false;
+            event.preventDefault();
+            onDeleted?.();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Delete announcement</AlertDialogTitle>
           <AlertDialogDescription>
@@ -84,6 +98,7 @@ export function DeleteAnnouncementDialog({
                   return;
                 }
               }
+              deletedRef.current = true;
               setOpen(false);
               void queryClient.invalidateQueries(
                 trpc.announcement.list.pathFilter(),

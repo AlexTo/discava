@@ -5,7 +5,7 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import type { ReactNode } from 'react';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
 
 // The loading, empty, error, rows and "Load more" states every view shares.
 export function PagedList<T>({
@@ -32,6 +32,23 @@ export function PagedList<T>({
   label: string;
   renderRow: (row: T) => ReactNode;
 }) {
+  const list = useRef<HTMLUListElement>(null);
+  // The row count when Load more was pressed: the first new row is at that
+  // index, and takes focus once it renders, even when the button goes with
+  // the last page.
+  const loadedFrom = useRef<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (loadedFrom.current === undefined || rows.length <= loadedFrom.current) {
+      return;
+    }
+    const row = list.current?.children[loadedFrom.current];
+    loadedFrom.current = undefined;
+    if (row instanceof HTMLElement) {
+      row.tabIndex = -1;
+      row.focus();
+    }
+  }, [rows.length]);
+
   if (query.isPending) {
     return (
       <div className="space-y-3" role="status" aria-label={`Loading ${label}`}>
@@ -62,13 +79,16 @@ export function PagedList<T>({
   }
   return (
     <div className="space-y-4">
-      <ul aria-label={label} className="divide-y rounded-xl border">
+      <ul ref={list} aria-label={label} className="divide-y rounded-xl border">
         {rows.map((row) => renderRow(row))}
       </ul>
       {query.hasNextPage ? (
         <Button
           variant="outline"
-          onClick={() => query.fetchNextPage()}
+          onClick={() => {
+            loadedFrom.current = rows.length;
+            void query.fetchNextPage();
+          }}
           disabled={query.isFetchingNextPage}
         >
           Load more

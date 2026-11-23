@@ -2,13 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { plainTextExcerpt } from '@discava/common-tiptap';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../../api';
 import {
   clearGradingDraft,
@@ -77,6 +80,14 @@ export function GradingForm({
     initial?.feedback,
   );
   const [error, setError] = useState<string>();
+  const [status, setStatus] = useState<string | null>(null);
+  // Where focus goes once the form or the summary it is in has rendered.
+  const focusNext = useRef<'summary' | 'points' | 'edit' | undefined>(
+    undefined,
+  );
+  const summaryRef = useRef<HTMLParagraphElement>(null);
+  const pointsRef = useRef<HTMLInputElement>(null);
+  const editRef = useRef<HTMLButtonElement>(null);
   // Remounts the editor, which reads its value only once, after a send.
   const [editorKey, setEditorKey] = useState(0);
 
@@ -103,6 +114,18 @@ export function GradingForm({
     return () => clearTimeout(timer);
   }, [points, feedback, courseId, contentItemId, userId]);
 
+  useEffect(() => {
+    const target = {
+      summary: returned && !editing ? summaryRef.current : null,
+      edit: returned && !editing ? editRef.current : null,
+      points: editing ? pointsRef.current : null,
+    }[focusNext.current ?? 'summary'];
+    if (focusNext.current && target) {
+      focusNext.current = undefined;
+      target.focus();
+    }
+  });
+
   const refetch = () =>
     Promise.all([
       queryClient.invalidateQueries(trpc.assignmentSubmission.get.pathFilter()),
@@ -121,6 +144,8 @@ export function GradingForm({
       setFeedback(undefined);
       setEditorKey((key) => key + 1);
       setEditing(false);
+      focusNext.current = 'summary';
+      setStatus('Grade returned');
       await refetch();
     } catch (failure) {
       const code = (failure as { data?: { code?: string } }).data?.code;
@@ -174,10 +199,11 @@ export function GradingForm({
     );
   };
 
+  let content: React.ReactNode;
   if (returned && !editing) {
-    return (
+    content = (
       <div className="space-y-3">
-        <p className="text-sm">
+        <p ref={summaryRef} tabIndex={-1} className="text-sm">
           <span className="font-medium">
             Returned: {submission.points} / {submission.pointsOutOf}
           </span>
@@ -186,9 +212,11 @@ export function GradingForm({
             : ''}
         </p>
         <Button
+          ref={editRef}
           type="button"
           variant="outline"
           onClick={() => {
+            focusNext.current = 'points';
             // Points were emptied after the last send; start from the grade.
             setPoints(
               submission.points !== undefined ? String(submission.points) : '',
@@ -200,79 +228,97 @@ export function GradingForm({
         </Button>
       </div>
     );
+  } else {
+    content = (
+      <form
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onReturn();
+        }}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="grading-points">Points</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="grading-points"
+              ref={pointsRef}
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              className="w-28"
+              value={points}
+              onChange={(event) => setPoints(event.target.value)}
+            />
+            <span className="text-sm text-muted-foreground">
+              out of {maxPoints}
+            </span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>Feedback</Label>
+          <RichTextEditor
+            key={editorKey}
+            value={feedback}
+            onChange={setFeedback}
+            ariaLabel="Feedback"
+          />
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <PendingButton
+            type="submit"
+            pending={returnWork.isPending || amend.isPending}
+            pendingLabel={returned ? 'Saving…' : 'Returning…'}
+            disabled={requestResubmission.isPending}
+          >
+            {returned ? 'Save grade' : 'Return'}
+          </PendingButton>
+          {submission.state === 'submitted' ? (
+            <PendingButton
+              type="button"
+              variant="outline"
+              pending={requestResubmission.isPending}
+              pendingLabel="Requesting…"
+              disabled={
+                returnWork.isPending || amend.isPending || !hasText(feedback)
+              }
+              onClick={onRequestResubmission}
+            >
+              Request resubmission
+            </PendingButton>
+          ) : null}
+          {returned ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                clearGradingDraft(draftRef);
+                setPoints('');
+                setFeedback(undefined);
+                setEditing(false);
+                focusNext.current = 'edit';
+              }}
+            >
+              Cancel
+            </Button>
+          ) : null}
+        </div>
+      </form>
+    );
   }
 
   return (
-    <form
-      className="space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onReturn();
-      }}
-    >
-      <div className="space-y-2">
-        <Label htmlFor="grading-points">Points</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="grading-points"
-            type="number"
-            inputMode="decimal"
-            step="0.01"
-            min={0}
-            className="w-28"
-            value={points}
-            onChange={(event) => setPoints(event.target.value)}
-          />
-          <span className="text-sm text-muted-foreground">
-            out of {maxPoints}
-          </span>
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Feedback</Label>
-        <RichTextEditor
-          key={editorKey}
-          value={feedback}
-          onChange={setFeedback}
-          ariaLabel="Feedback"
-        />
-      </div>
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy}>
-          {returned ? 'Save grade' : 'Return'}
-        </Button>
-        {submission.state === 'submitted' ? (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={busy || !hasText(feedback)}
-            onClick={onRequestResubmission}
-          >
-            Request resubmission
-          </Button>
-        ) : null}
-        {returned ? (
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy}
-            onClick={() => {
-              clearGradingDraft(draftRef);
-              setPoints('');
-              setFeedback(undefined);
-              setEditing(false);
-            }}
-          >
-            Cancel
-          </Button>
-        ) : null}
-      </div>
-    </form>
+    <>
+      <StatusMessage message={status} />
+      {content}
+    </>
   );
 }
 

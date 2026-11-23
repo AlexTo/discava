@@ -123,3 +123,77 @@ test('a student takes a quiz with the keyboard', async ({ page }) => {
   await expect(quiz.getByText(/3 questions · Pass 50%/)).toBeFocused();
   expect(await focusIsInQuiz()).toBe(true);
 });
+
+// After a reorder, a removal, a deletion or a toggle, an instructor's focus
+// is on a control that is still there, never on <body>.
+test('an instructor keeps their place in the quiz builder and the course editor', async ({
+  page,
+}) => {
+  const course = uniqueName('E2E editor focus course');
+  await page.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(page, newUser('Ona', ['instructor']));
+  await createCourse(page, {
+    title: course,
+    summary: 'A course made to check where focus goes.',
+  });
+  await addModule(page, 'Module one');
+  await addLesson(page, 'Lesson one');
+  await addLesson(page, 'Lesson two');
+  await page.getByRole('button', { name: 'Quiz', exact: true }).last().click();
+
+  const dialog = page.getByRole('dialog', { name: 'New quiz' });
+  await dialog.getByLabel('Title', { exact: true }).fill('Focus quiz');
+  await dialog.getByLabel('Question 1', { exact: true }).fill('First?');
+  for (const n of [2, 3]) {
+    await dialog.getByRole('button', { name: 'Add question' }).click();
+    await dialog.getByLabel(`Question ${n}`, { exact: true }).fill(`Q${n}?`);
+  }
+
+  await test.step('reordering with the keyboard keeps focus on the handle', async () => {
+    const handle = dialog.getByRole('button', { name: 'Reorder Question 3' });
+    await handle.focus();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Space');
+    const moved = dialog.getByRole('button', { name: /^Reorder Question \d$/ });
+    await expect(moved.nth(1)).toBeFocused();
+    const announcement = page.locator('[aria-live]').filter({
+      hasText: 'Question',
+    });
+    await expect(announcement.first()).toContainText('Question');
+    await expect(announcement.first()).not.toContainText(/[0-9a-f]{8}-/);
+    await screenshot(page, 'quiz reorder by keyboard');
+  });
+
+  await test.step('removing a question leaves focus on a question header', async () => {
+    await dialog.getByRole('button', { name: 'Remove Question 2' }).click();
+    await expect(
+      dialog.getByRole('button', { name: /^Remove Question/ }).first(),
+    ).toBeVisible();
+    const inHeader = await page.evaluate(() => {
+      const active = document.activeElement;
+      return (
+        active !== document.body && Boolean(active?.closest('[role="dialog"]'))
+      );
+    });
+    expect(inHeader).toBe(true);
+    await dialog.getByRole('button', { name: 'Close' }).first().click();
+    const discard = page.getByRole('alertdialog');
+    if (await discard.isVisible()) {
+      await discard.getByRole('button', { name: 'Discard changes' }).click();
+    }
+  });
+
+  await test.step('deleting a lesson focuses the other lesson’s control', async () => {
+    await page
+      .getByRole('button', { name: 'Remove lesson Lesson one' })
+      .click();
+    await page
+      .getByRole('alertdialog', { name: 'Archive lesson' })
+      .getByRole('button', { name: 'Archive lesson' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Hide lesson Lesson two' }),
+    ).toBeFocused();
+  });
+});

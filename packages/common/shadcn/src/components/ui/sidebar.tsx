@@ -160,11 +160,14 @@ function Sidebar({
   collapsible = 'offcanvas',
   className,
   children,
+  onCloseAutoFocus,
   ...props
 }: React.ComponentProps<'div'> & {
   side?: 'left' | 'right';
   variant?: 'sidebar' | 'floating' | 'inset';
   collapsible?: 'offcanvas' | 'icon' | 'none';
+  /** Called when the phone sidebar's sheet has closed and focus returns. */
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
@@ -197,6 +200,7 @@ function Sidebar({
             } as React.CSSProperties
           }
           side={side}
+          onCloseAutoFocus={onCloseAutoFocus}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Sidebar</SheetTitle>

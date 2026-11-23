@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -92,9 +93,10 @@ function PublishCourseDialog({
 
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <Button
+          <PendingButton
             type="button"
-            disabled={isPending}
+            pending={isPending}
+            pendingLabel="Publishing…"
             onClick={async () => {
               try {
                 await publishCourse({ courseId });
@@ -108,8 +110,8 @@ function PublishCourseDialog({
               });
             }}
           >
-            {isPending ? 'Publishing…' : 'Publish'}
-          </Button>
+            Publish
+          </PendingButton>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -128,10 +130,11 @@ function RestoreCourseButton({ courseId }: { courseId: string }) {
 
   return (
     <div className="space-y-2">
-      <Button
+      <PendingButton
         type="button"
         variant="outline"
-        disabled={isPending}
+        pending={isPending}
+        pendingLabel="Restoring…"
         onClick={async () => {
           try {
             await restoreCourse({ courseId });
@@ -144,8 +147,8 @@ function RestoreCourseButton({ courseId }: { courseId: string }) {
           });
         }}
       >
-        <RotateCcw /> {isPending ? 'Restoring…' : 'Restore'}
-      </Button>
+        <RotateCcw /> Restore
+      </PendingButton>
       {isError && (
         <ErrorAlert type="error" header="Couldn't restore the course">
           {apiErrorMessage(error)}

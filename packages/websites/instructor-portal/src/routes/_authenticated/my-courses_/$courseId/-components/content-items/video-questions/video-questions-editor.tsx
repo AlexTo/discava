@@ -17,6 +17,7 @@ import { CirclePlus, Save } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { QuestionCard } from '../quiz/question-card';
 import {
+  moveButtonId,
   questionElementId,
   useVideoQuestionsEditor,
 } from './use-video-questions-editor';
@@ -201,7 +202,7 @@ export function VideoQuestionsEditor({
           />
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-3">
-              <span className="text-sm text-muted-foreground" role="status">
+              <span className="text-sm text-muted-foreground">
                 Current time {formatTime(state.currentTime)}
               </span>
               <Button
@@ -301,6 +302,7 @@ export function VideoQuestionsEditor({
                 {!readOnly && (
                   <div className="flex gap-1">
                     <Button
+                      id={moveButtonId(question.questionId, 'up')}
                       type="button"
                       variant="ghost"
                       size="sm"
@@ -311,6 +313,7 @@ export function VideoQuestionsEditor({
                       Move up
                     </Button>
                     <Button
+                      id={moveButtonId(question.questionId, 'down')}
                       type="button"
                       variant="ghost"
                       size="sm"

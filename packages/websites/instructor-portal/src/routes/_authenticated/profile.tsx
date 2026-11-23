@@ -4,6 +4,8 @@
  */
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import {
   Avatar,
   AvatarFallback,
@@ -304,11 +306,7 @@ function ProfileForm({
             )}
           </ErrorAlert>
         )}
-        {saved && (
-          <p role="status" className="text-sm text-muted-foreground">
-            Profile saved.
-          </p>
-        )}
+        <StatusMessage message={saved ? 'Profile saved.' : null} />
 
         <form.Field name="displayName">
           {(field) => {
@@ -421,9 +419,14 @@ function ProfileForm({
             selector={(state) => [state.canSubmit, state.isSubmitting]}
           >
             {([canSubmit, isSubmitting]) => (
-              <Button type="submit" disabled={!canSubmit || isSubmitting}>
-                {isSubmitting ? 'Saving…' : 'Save'}
-              </Button>
+              <PendingButton
+                type="submit"
+                pending={isSubmitting}
+                pendingLabel="Saving…"
+                disabled={!canSubmit}
+              >
+                Save
+              </PendingButton>
             )}
           </form.Subscribe>
         </div>

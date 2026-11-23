@@ -342,6 +342,59 @@ describe('VideoQuestionsDialog', () => {
     expect(timeField(1)).toHaveValue('0:10');
   });
 
+  it('focuses the other move button when a question reaches the edge', async () => {
+    const rendered = renderDialog(
+      courseView({
+        questions: [stored('q1', 'First?', 5), stored('q2', 'Second?', 5)],
+        quizVersion: 1,
+      }),
+    );
+    await open(rendered);
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Move question 2 up' }),
+    );
+
+    await waitFor(() =>
+      expect(
+        // It is question 1 now.
+        screen.getByRole('button', { name: 'Move question 1 down' }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it('focuses the next question header after removing one, else the previous', async () => {
+    const rendered = renderDialog(
+      courseView({
+        questions: [
+          stored('q1', 'First?', 5),
+          stored('q2', 'Second?', 10),
+          stored('q3', 'Third?', 15),
+        ],
+        quizVersion: 1,
+      }),
+    );
+    await open(rendered);
+
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Remove Question 3' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /(Expand|Collapse) Question 2/ }),
+      ).toHaveFocus(),
+    );
+  });
+
+  it('does not announce the current time', async () => {
+    const rendered = renderDialog(
+      courseView({ questions: [], quizVersion: 0 }),
+    );
+    await open(rendered);
+
+    expect(screen.getByText(/^Current time/)).not.toHaveAttribute('role');
+  });
+
   it('notes a question timed at or past the end of the video', async () => {
     const rendered = renderDialog(
       courseView({

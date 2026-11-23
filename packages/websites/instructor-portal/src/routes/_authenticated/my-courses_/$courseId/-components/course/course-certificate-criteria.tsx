@@ -52,6 +52,7 @@ export function CourseCertificateCriteria({
       : undefined;
   };
   const saveUpload = async (value: number | null) => {
+    if (busy) return;
     reset();
     setPercentError(undefined);
     setUploadPending(value !== null);
@@ -72,6 +73,7 @@ export function CourseCertificateCriteria({
     }
   };
   const toggleUpload = async () => {
+    if (busy) return;
     const value = uploadChecked ? null : parsePercent(percentValue);
     if (!uploadChecked && value === undefined) {
       setPercentError('Enter a whole number from 1 to 100.');
@@ -80,7 +82,7 @@ export function CourseCertificateCriteria({
     await saveUpload(value ?? null);
   };
   const commitPercent = async () => {
-    if (!uploadChecked || percentText === undefined) {
+    if (busy || !uploadChecked || percentText === undefined) {
       return;
     }
     const value = parsePercent(percentText);
@@ -96,6 +98,7 @@ export function CourseCertificateCriteria({
   const busy = pending !== undefined || uploadPending !== undefined;
 
   const change = async () => {
+    if (busy) return;
     reset();
     setPending(!checked);
     try {
@@ -112,12 +115,12 @@ export function CourseCertificateCriteria({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3" aria-busy={busy}>
         <input
           type="checkbox"
           id={`certificate-quiz-pass-${courseId}`}
           checked={checked}
-          disabled={!certificatesEnabled || busy}
+          disabled={!certificatesEnabled}
           onChange={change}
           className="mt-1 size-4 shrink-0 accent-primary disabled:opacity-50"
         />
@@ -136,12 +139,12 @@ export function CourseCertificateCriteria({
           </p>
         </div>
       </div>
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3" aria-busy={busy}>
         <input
           type="checkbox"
           id={`certificate-upload-score-${courseId}`}
           checked={uploadChecked}
-          disabled={!certificatesEnabled || busy}
+          disabled={!certificatesEnabled}
           onChange={toggleUpload}
           className="mt-1 size-4 shrink-0 accent-primary disabled:opacity-50"
         />
@@ -162,8 +165,9 @@ export function CourseCertificateCriteria({
               aria-invalid={percentError !== undefined}
               className="h-8 w-20"
               value={percentValue}
-              disabled={!certificatesEnabled || busy}
+              disabled={!certificatesEnabled}
               onChange={(event) => {
+                if (busy) return;
                 setPercentText(event.target.value);
                 setPercentError(undefined);
               }}

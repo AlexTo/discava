@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { act, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -152,6 +153,49 @@ describe('CourseModules', () => {
       'Reorder Module B',
       'Reorder Module C',
     ]);
+  });
+
+  it('moves focus to the next lesson when the focused one goes, else the previous', async () => {
+    let drop: (...ids: string[]) => void = () => {};
+    function Harness() {
+      const [gone, setGone] = useState<string[]>([]);
+      drop = (...ids) => setGone(ids);
+      return (
+        <CourseModules
+          courseId={COURSE_ID}
+          archive={false}
+          readOnly={false}
+          draft={false}
+          modules={[
+            module(
+              'm1',
+              'Module A',
+              modules[0].lessons.filter(
+                (item) => !gone.includes(item.lessonId),
+              ),
+            ),
+            modules[1],
+            modules[2],
+          ]}
+        />
+      );
+    }
+    renderWithInstructorApi(<Harness />, { handlers: {} });
+    const rowOf = (title: string) =>
+      screen.getByText(title).closest('article') as HTMLElement;
+
+    screen.getByRole('button', { name: 'Remove lesson Lesson A2' }).focus();
+    (document.activeElement as HTMLElement).blur();
+    act(() => drop('l2'));
+    await waitFor(() =>
+      expect(rowOf('Lesson A3').contains(document.activeElement)).toBe(true),
+    );
+
+    (document.activeElement as HTMLElement).blur();
+    act(() => drop('l2', 'l3'));
+    await waitFor(() =>
+      expect(rowOf('Lesson A1').contains(document.activeElement)).toBe(true),
+    );
   });
 
   it('has no module handle when there is only one module', () => {

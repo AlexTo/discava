@@ -4,8 +4,9 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -254,7 +255,7 @@ export function CourseCatalogueForm({
         <Label htmlFor="catalogue-tags">Tags</Label>
         {tags.length > 0 && (
           <ul className="flex flex-wrap gap-2">
-            {tags.map((tag) => (
+            {tags.map((tag, index) => (
               <li key={tag}>
                 <Badge variant="secondary" className="gap-1.5">
                   {tag}
@@ -264,9 +265,21 @@ export function CourseCatalogueForm({
                       className="text-xs underline"
                       aria-label={`Remove tag ${tag}`}
                       onClick={() => {
+                        // Focus the next tag's Remove, else the previous one's,
+                        // else the tag input.
+                        const neighbour = tags[index + 1] ?? tags[index - 1];
                         setTags(tags.filter((other) => other !== tag));
                         setTagMessage(undefined);
                         edited();
+                        setTimeout(() => {
+                          const target =
+                            neighbour === undefined
+                              ? document.getElementById('catalogue-tags')
+                              : document.querySelector<HTMLElement>(
+                                  `[aria-label="Remove tag ${CSS.escape(neighbour)}"]`,
+                                );
+                          target?.focus();
+                        });
                       }}
                     >
                       Remove
@@ -297,14 +310,14 @@ export function CourseCatalogueForm({
 
       {!readOnly && (
         <div className="flex items-center gap-3">
-          <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? 'Saving' : 'Save catalogue details'}
-          </Button>
-          {saved && (
-            <span role="status" className="text-sm text-muted-foreground">
-              Saved
-            </span>
-          )}
+          <PendingButton
+            type="submit"
+            pending={save.isPending}
+            pendingLabel="Saving…"
+          >
+            Save catalogue details
+          </PendingButton>
+          <StatusMessage message={saved ? 'Saved' : null} />
         </div>
       )}
     </form>

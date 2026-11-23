@@ -66,6 +66,7 @@ describe('CoursePriceForm', () => {
     const { calls, user } = renderForm(0, 'USD', {
       'course.setPrice': () => ({}),
     });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
 
     await typePrice(user, '19.99');
     await user.selectOptions(currencyField(), 'EUR');
@@ -153,6 +154,6 @@ describe('CoursePriceForm', () => {
     ).toBeInTheDocument();
     expect(priceField()).toHaveValue('19.99');
     expect(currencyField()).toHaveValue('GBP');
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 });

@@ -39,6 +39,7 @@ import { DeleteModuleDialog } from '../module/delete-module-dialog';
 import { EditModuleDialog } from '../module/edit-module-dialog';
 import { DragHandle, SortableList } from '../sortable-list';
 import { usedItemCount } from '../student-activity';
+import { useFocusAfterRemoval } from '../use-focus-after-removal';
 import {
   LessonVisibilityButton,
   ModuleVisibilityButton,
@@ -98,6 +99,10 @@ function ModuleLessons({
   const refreshCourse = useRefreshCourse(courseId);
   // Marked lessons are open to anyone only in a published course.
   const published = !draft && !readOnly;
+  const { register } = useFocusAfterRemoval(
+    module.lessons.map((lesson) => lesson.lessonId),
+    () => document.getElementById('content-heading'),
+  );
 
   return (
     <SortableList
@@ -122,7 +127,10 @@ function ModuleLessons({
         const item = lesson.contentItems[0];
         return (
           <article
-            ref={row?.ref}
+            ref={(element) => {
+              row?.ref(element);
+              register(lesson.lessonId)(element);
+            }}
             className={cn(
               'border-t first:border-t-0',
               row?.isDragging && 'relative z-10 bg-background shadow-md',
@@ -308,6 +316,10 @@ export function CourseModules({
   const { module: moduleApi } = useInstructorApi();
   const reorder = useMutation(moduleApi.reorder.mutationOptions());
   const refreshCourse = useRefreshCourse(courseId);
+  const { register } = useFocusAfterRemoval(
+    modules.map((module) => module.moduleId),
+    () => document.getElementById('content-heading'),
+  );
 
   if (modules.length === 0) {
     return (
@@ -356,7 +368,10 @@ export function CourseModules({
         conflictMessage="This course changed while you were reordering its modules. It has been reloaded, so try again."
         renderItem={(module, moduleIndex, row) => (
           <Card
-            ref={row?.ref}
+            ref={(element) => {
+              row?.ref(element);
+              register(module.moduleId)(element);
+            }}
             className={cn(
               'gap-0 overflow-hidden py-0',
               row?.isDragging && 'relative z-10 shadow-lg',

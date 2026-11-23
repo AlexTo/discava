@@ -235,6 +235,9 @@ describe('My courses', () => {
     expect(screen.getByText('No courses found')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(document.activeElement).toBe(
+      screen.getByLabelText('Search courses'),
+    );
     expect(screen.getByText('Intro to DynamoDB')).toBeInTheDocument();
   });
 

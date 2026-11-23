@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -80,6 +80,42 @@ describe('LandingPageCard', () => {
         name: 'Move down What students will learn item 3',
       }),
     ).toBeDisabled();
+  });
+
+  it('focuses the next item after removing one, else the previous', async () => {
+    const { user } = renderCard({ learningOutcomes: ['A', 'B'] });
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remove What students will learn item 1',
+      }),
+    );
+    await waitFor(() => expect(outcomeInputs()[0]).toHaveFocus());
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remove What students will learn item 1',
+      }),
+    );
+    await waitFor(() => expect(addOutcome()).toHaveFocus());
+  });
+
+  it('keeps focus on a Move button after moving an item to an end', async () => {
+    const { user } = renderCard({ learningOutcomes: ['A', 'B'] });
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Move down What students will learn item 1',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', {
+          name: 'Move up What students will learn item 2',
+        }),
+      ).toHaveFocus(),
+    );
   });
 
   it('counts characters and stops at 160', async () => {

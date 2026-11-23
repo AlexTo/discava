@@ -6,6 +6,7 @@
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { cn } from '@discava/common-shadcn/lib/utils';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { Accessibility, defaultPreset } from '@dnd-kit/dom';
 import { move } from '@dnd-kit/helpers';
 import {
@@ -28,6 +29,7 @@ import {
 // What a sortable row hands its renderer: `ref` goes on the element that moves,
 // `handleRef` on the grip that picks it up (see DragHandle).
 export type SortableRow = {
+  id: string;
   ref: (element: Element | null) => void;
   handleRef: (element: Element | null) => void;
   isDragging: boolean;
@@ -46,7 +48,7 @@ function SortableItem({
   children: (row: SortableRow) => ReactNode;
 }) {
   const { ref, handleRef, isDragging } = useSortable({ id, index, disabled });
-  return children({ ref, handleRef, isDragging, disabled });
+  return children({ id, ref, handleRef, isDragging, disabled });
 }
 
 // The grip a row is dragged by. Being the handle, rather than the whole row,
@@ -67,6 +69,7 @@ export function DragHandle({
   return (
     <Button
       ref={row.handleRef}
+      data-drag-handle={row.id}
       type="button"
       variant="ghost"
       size={size === 'xs' ? 'icon-xs' : 'icon-sm'}
@@ -136,6 +139,19 @@ export function SortableList<T>({
   // believes the nodes are where it last put them. Bumping this key rebuilds
   // the list from state instead.
   const [listKey, setListKey] = useState(0);
+  // The row whose drop failed; its handle takes focus once the list is rebuilt.
+  const [refocusId, setRefocusId] = useState<string>();
+  useEffect(() => {
+    if (refocusId === undefined) {
+      return;
+    }
+    document
+      .querySelector<HTMLElement>(
+        `[data-drag-handle="${CSS.escape(refocusId)}"]`,
+      )
+      ?.focus();
+    setRefocusId(undefined);
+  }, [refocusId, listKey]);
 
   // The order shown, which moves as soon as a row is dropped and follows the
   // course view whenever that changes.
@@ -187,6 +203,7 @@ export function SortableList<T>({
       return;
     }
     const previous = order;
+    const movedId = String(event.operation.source?.id);
     const next = droppedOrder(order, event);
     if (next.join(',') === previous.join(',')) {
       return;
@@ -197,12 +214,11 @@ export function SortableList<T>({
       .catch((cause: unknown) => {
         setOrder(previous);
         setListKey((key) => key + 1);
+        setRefocusId(movedId);
         setError(
           errorCode(cause) === 'CONFLICT'
             ? conflictMessage
-            : cause instanceof Error
-              ? cause.message
-              : String(cause),
+            : apiErrorMessage(cause),
         );
       })
       .finally(() => setSaving(false));

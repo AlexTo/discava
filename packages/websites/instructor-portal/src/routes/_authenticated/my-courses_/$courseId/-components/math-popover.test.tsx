@@ -100,6 +100,15 @@ describe('MathPopover', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('calls focus after Cancel so the editor gets focus back', async () => {
+    const focus = vi.fn();
+    const { user, onClose } = renderPopover({ focus });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalled();
+    expect(focus).toHaveBeenCalled();
+  });
+
   it('never grows wider than the screen', () => {
     renderPopover();
 

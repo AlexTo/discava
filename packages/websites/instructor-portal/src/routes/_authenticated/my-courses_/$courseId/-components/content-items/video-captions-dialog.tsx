@@ -4,6 +4,8 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -91,6 +93,7 @@ export function VideoCaptionsDialog({
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string>();
   const [isUploading, setIsUploading] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
   const { course, contentItem } = useInstructorApi();
   const queryClient = useQueryClient();
 
@@ -134,6 +137,7 @@ export function VideoCaptionsDialog({
 
   const handleUpload = async () => {
     setError(undefined);
+    setAdded(null);
     if (!file || !/\.vtt$/i.test(file.name)) {
       setError('Choose a WebVTT file (.vtt).');
       return;
@@ -148,6 +152,14 @@ export function VideoCaptionsDialog({
         fileInput.current.value = '';
       }
       await refresh();
+      const label =
+        CAPTION_LANGUAGES.find(({ tag }) => tag === language)?.label ??
+        language;
+      setAdded(`${label} captions added`);
+      // Once the list shows the new track.
+      setTimeout(() =>
+        document.getElementById(`caption-remove-${language}`)?.focus(),
+      );
     } catch (failure) {
       setError(apiErrorMessage(failure, "Couldn't upload the caption file"));
     } finally {
@@ -177,7 +189,13 @@ export function VideoCaptionsDialog({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="sm:max-w-2xl"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          document.getElementById('caption-language')?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Captions</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -185,6 +203,8 @@ export function VideoCaptionsDialog({
             language, including auto-translated ones.
           </p>
         </DialogHeader>
+
+        <StatusMessage message={added} />
 
         {error && (
           <ErrorAlert type="error" header="Couldn't change the captions">
@@ -226,6 +246,7 @@ export function VideoCaptionsDialog({
                   <AlertDialog onOpenChange={(next) => !next && resetRemove()}>
                     <AlertDialogTrigger asChild>
                       <Button
+                        id={`caption-remove-${track.language}`}
                         type="button"
                         variant="ghost"
                         size="sm"
@@ -334,17 +355,15 @@ export function VideoCaptionsDialog({
           >
             Close
           </Button>
-          <Button
+          <PendingButton
             type="button"
-            disabled={isUploading || !file}
+            pending={isUploading}
+            pendingLabel="Uploading…"
+            disabled={!file}
             onClick={handleUpload}
           >
-            {isUploading
-              ? 'Uploading…'
-              : replacing
-                ? 'Replace caption'
-                : 'Upload caption'}
-          </Button>
+            {replacing ? 'Replace caption' : 'Upload caption'}
+          </PendingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>

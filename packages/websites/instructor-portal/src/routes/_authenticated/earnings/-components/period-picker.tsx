@@ -6,7 +6,7 @@
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { monthPeriod, type Period } from './period';
 
 /**
@@ -25,6 +25,17 @@ export function PeriodPicker({
   const [custom, setCustom] = useState(false);
   const [range, setRange] = useState<Period>(() => monthPeriod(month));
 
+  const fromRef = useRef<HTMLInputElement>(null);
+  const monthRef = useRef<HTMLInputElement>(null);
+  const moved = useRef(false);
+
+  // After either button swaps the fields, focus the first new one.
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    (custom ? fromRef : monthRef).current?.focus();
+  }, [custom]);
+
   const changeRange = (next: Period) => {
     setRange(next);
     if (next.from && next.to) onPeriodChange(next);
@@ -37,6 +48,7 @@ export function PeriodPicker({
           <div className="space-y-1">
             <Label htmlFor="earnings-from">From</Label>
             <Input
+              ref={fromRef}
               id="earnings-from"
               type="date"
               value={range.from}
@@ -60,6 +72,7 @@ export function PeriodPicker({
             type="button"
             variant="outline"
             onClick={() => {
+              moved.current = true;
               setCustom(false);
               onPeriodChange(monthPeriod(month));
             }}
@@ -72,6 +85,7 @@ export function PeriodPicker({
           <div className="space-y-1">
             <Label htmlFor="earnings-month">Month (UTC)</Label>
             <Input
+              ref={monthRef}
               id="earnings-month"
               type="month"
               value={month}
@@ -85,6 +99,7 @@ export function PeriodPicker({
             variant="outline"
             onClick={() => {
               setRange(monthPeriod(month));
+              moved.current = true;
               setCustom(true);
             }}
           >

@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -125,5 +125,86 @@ describe('AnnouncementsSection', () => {
     expect(
       await screen.findByRole('heading', { name: 'x'.repeat(80) }),
     ).toHaveClass('break-words');
+  });
+
+  it('focuses the title on Edit, and the Edit button on Cancel', async () => {
+    const { user } = render(true, () => ({ items: [item(1)] }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Title 1' }),
+    );
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: 'Title' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Edit Title 1' }),
+      ),
+    );
+  });
+
+  it('focuses the Edit button after Save', async () => {
+    const { user } = renderWithInstructorApi(
+      <AnnouncementsSection courseId="course-1" archived />,
+      {
+        handlers: {
+          'announcement.list': () => ({ items: [item(1)] }),
+          'announcement.update': () => item(1),
+        },
+      },
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit Title 1' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Edit Title 1' }),
+      ),
+    );
+  });
+
+  it("focuses the next item's Edit after a delete, else the heading", async () => {
+    let items = [item(1), item(2)];
+    const { user } = renderWithInstructorApi(
+      <>
+        <h2 id="announcements-heading" tabIndex={-1}>
+          Announcements
+        </h2>
+        <AnnouncementsSection courseId="course-1" archived />
+      </>,
+      {
+        handlers: {
+          'announcement.list': () => ({ items }),
+          'announcement.delete': (input: unknown) => {
+            const { announcementId } = input as { announcementId: string };
+            items = items.filter((i) => i.announcementId !== announcementId);
+            return { announcementId };
+          },
+        },
+      },
+    );
+    const remove = async (title: string) => {
+      await user.click(
+        await screen.findByRole('button', { name: `Delete ${title}` }),
+      );
+      await user.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', {
+          name: 'Delete announcement',
+        }),
+      );
+    };
+    await remove('Title 1');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Edit Title 2' }),
+      ),
+    );
+    await remove('Title 2');
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('heading', { name: 'Announcements' }),
+      ),
+    );
   });
 });

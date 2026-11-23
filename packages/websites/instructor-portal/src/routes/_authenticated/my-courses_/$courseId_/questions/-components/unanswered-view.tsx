@@ -31,6 +31,9 @@ export function UnansweredView({ courseId }: { courseId: string }) {
 
   return (
     <>
+      <h2 id="unanswered-heading" tabIndex={-1} className="sr-only">
+        Unanswered questions
+      </h2>
       <PagedList
         query={query}
         rows={rows}
@@ -77,6 +80,7 @@ export function UnansweredView({ courseId }: { courseId: string }) {
           threadId={opened.threadId}
           lessonState={stateOf(opened.lessonId)}
           courseArchived={lessons.data?.courseArchived ?? false}
+          headingId="unanswered-heading"
           onClose={() => setOpened(undefined)}
         />
       ) : null}

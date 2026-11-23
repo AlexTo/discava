@@ -222,6 +222,54 @@ describe('VideoCaptionsDialog', () => {
     );
   });
 
+  it('opens on the Language select', async () => {
+    const rendered = renderDialog({});
+    const dialog = await open(rendered);
+
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText('Language')).toHaveFocus(),
+    );
+  });
+
+  it('announces the added captions and focuses the new track', async () => {
+    let tracks: Array<typeof auto | typeof uploaded> = [auto];
+    const rendered = renderDialog({
+      'contentItem.captionUploadUrl': () => ({
+        uploadId: 'up-1',
+        url: 'https://upload.test/put',
+        headers: {},
+      }),
+      'contentItem.attachCaption': () => {
+        tracks = [
+          auto,
+          { ...uploaded, trackId: 't-fr', language: 'fr-FR', label: 'French' },
+        ];
+        return { captions: tracks };
+      },
+      'contentItem.createVideoUrl': () => videoUrl(tracks),
+    });
+    const dialog = await open(rendered);
+    await rendered.user.selectOptions(
+      within(dialog).getByLabelText('Language'),
+      'fr-FR',
+    );
+    fireEvent.change(within(dialog).getByLabelText('Caption file (.vtt)'), {
+      target: { files: [vttFile('french.vtt')] },
+    });
+    await rendered.user.click(
+      within(dialog).getByRole('button', { name: 'Upload caption' }),
+    );
+
+    expect(
+      await within(dialog).findByText('French captions added'),
+    ).toBeVisible();
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Remove French' }),
+      ).toHaveFocus(),
+    );
+  });
+
   it('replaces a track by uploading the same language, and says so', async () => {
     const attach = vi.fn(() => ({ captions: [] }));
     const rendered = renderDialog({

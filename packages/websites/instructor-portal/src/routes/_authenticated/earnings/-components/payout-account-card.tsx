@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
@@ -93,9 +94,10 @@ export function PayoutAccountCard() {
               </span>
             </p>
             {ONBOARDING_ACTIONS[account.data.status] ? (
-              <Button
+              <PendingButton
                 type="button"
-                disabled={busy}
+                pending={busy}
+                pendingLabel="Opening Stripe…"
                 onClick={() =>
                   startOnboarding.mutate(
                     { returnPath: '/earnings' },
@@ -104,18 +106,19 @@ export function PayoutAccountCard() {
                 }
               >
                 {ONBOARDING_ACTIONS[account.data.status]}
-              </Button>
+              </PendingButton>
             ) : (
-              <Button
+              <PendingButton
                 type="button"
                 variant="outline"
-                disabled={busy}
+                pending={busy}
+                pendingLabel="Opening Stripe…"
                 onClick={() =>
                   dashboardLink.mutate(undefined, { onSuccess: leave })
                 }
               >
                 Open Stripe dashboard
-              </Button>
+              </PendingButton>
             )}
           </div>
         )}

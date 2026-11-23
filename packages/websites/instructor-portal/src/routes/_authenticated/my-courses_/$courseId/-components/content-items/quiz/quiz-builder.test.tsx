@@ -406,6 +406,19 @@ describe('QuizBuilder', () => {
     ).toBeInTheDocument();
   });
 
+  it('focuses the remaining question header after removing one', async () => {
+    const { user } = renderBuilder();
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await user.click(screen.getByRole('button', { name: 'Remove Question 2' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /(Expand|Collapse) Question 1/ }),
+      ).toHaveFocus(),
+    );
+  });
+
   it('saves the settings chosen', async () => {
     const { user, calls } = renderExisting({
       'contentItem.updateQuiz': () => ({

@@ -78,6 +78,7 @@ describe('CourseFirstLessonPromptForm', () => {
       'course.setFirstLessonPrompt': () => ({}),
     });
 
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
     await user.type(field(), `  ${OWN_PROMPT}  `);
     await user.click(save());
 
@@ -142,7 +143,7 @@ describe('CourseFirstLessonPromptForm', () => {
       screen.getByText('The prompt must be at most 200 characters'),
     ).toBeInTheDocument();
     expect(field()).toHaveValue(OWN_PROMPT);
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
   it('sends null from Use default and clears the field', async () => {
