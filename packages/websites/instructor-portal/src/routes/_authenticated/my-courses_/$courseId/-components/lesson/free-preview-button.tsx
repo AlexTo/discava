@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -59,18 +60,19 @@ export function FreePreviewButton({
   // marking asks first, removing the mark is immediate.
   return (
     <>
-      <Button
+      <PendingButton
         variant="ghost"
         size="sm"
         type="button"
         className={className}
-        disabled={freePreview && mutation.isPending}
+        pending={freePreview && mutation.isPending}
+        pendingLabel="Removing…"
         onClick={() =>
           freePreview ? void set(false).catch(() => {}) : setOpen(true)
         }
       >
         {freePreview ? 'Remove free preview' : 'Make free preview'}
-      </Button>
+      </PendingButton>
       {freePreview && mutation.isError && (
         <ErrorAlert type="error" header="Couldn't remove the free preview">
           {apiErrorMessage(mutation.error)}

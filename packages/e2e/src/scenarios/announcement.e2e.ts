@@ -68,6 +68,7 @@ test('an announcement is posted, read by the enrolled students, edited and delet
   await editor.click();
   await page.keyboard.press('ControlOrMeta+b');
   await page.keyboard.type('Welcome to the course.');
+  await screenshot(page, 'the announcement form filled in');
   await page.getByRole('button', { name: 'Post announcement' }).click();
   await expect(page.getByRole('heading', { name: title })).toBeVisible();
   await screenshot(page, 'the instructor after posting');

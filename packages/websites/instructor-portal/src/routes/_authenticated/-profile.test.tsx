@@ -184,6 +184,18 @@ describe('profile editor', () => {
     ).toMatchObject({ version: 3, bio: 'Hello unsaved' });
   });
 
+  it('keeps Save focusable while saving', async () => {
+    const { user } = open({ 'profile.update': () => new Promise(() => {}) });
+    await field('Display name');
+    const save = screen.getByRole('button', { name: 'Save' });
+    await user.click(save);
+
+    await waitFor(() => expect(save).toHaveTextContent('Saving…'));
+    expect(save).not.toBeDisabled();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(save).toHaveFocus();
+  });
+
   it('keeps "Profile saved." once the refetch brings the new version', async () => {
     let saved = false;
     const { user } = open({

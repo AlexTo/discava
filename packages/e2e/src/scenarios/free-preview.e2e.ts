@@ -95,6 +95,7 @@ test.describe('an instructor marks a lesson as a free preview', () => {
       await expect(
         lessonRow(page, 'Welcome').getByText(/^Free preview/),
       ).toHaveCount(0);
+      await screenshot(page, 'badge-removed');
     });
   });
 });
