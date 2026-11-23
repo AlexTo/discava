@@ -129,7 +129,7 @@ export function QuizPanel({
                         <td className="py-2 pr-2 tabular-nums">
                           {question.ranked ? ++rank : '–'}
                         </td>
-                        <td className="py-2 pr-2">
+                        <td className="break-words [overflow-wrap:anywhere] py-2 pr-2 [overflow-wrap:anywhere]">
                           {question.text || question.questionId}
                         </td>
                         <td className="py-2 pr-2 tabular-nums">

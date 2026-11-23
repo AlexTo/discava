@@ -257,20 +257,19 @@ describe('Course analytics', () => {
       expect(rows[2]).toHaveTextContent('No data');
     });
 
-    it('gives the numbers of a lesson, which can be focused', async () => {
-      const { user } = renderPage(() => analytics({ lessons }));
+    it('always shows the numbers of a lesson, and keeps rows out of the tab order', async () => {
+      renderPage(() => analytics({ lessons }));
 
       const list = await screen.findByRole('list', {
         name: 'Lessons in course order',
       });
-      const [first, second, third] = within(list).getAllByRole('listitem');
-      expect(second).toHaveTextContent('4 started, 1 completed');
-      expect(third).toHaveTextContent('Nobody has started this lesson');
-      await user.tab();
-      await user.tab();
-      await user.tab();
-      await user.tab();
-      expect([first, second, third]).toContain(document.activeElement);
+      const rows = within(list).getAllByRole('listitem');
+      expect(rows[1]).toHaveTextContent('4 started, 1 completed');
+      expect(rows[2]).toHaveTextContent('Nobody has started this lesson');
+      for (const row of rows) {
+        expect(row).not.toHaveAttribute('tabindex');
+        expect(row.querySelector('p')?.className).not.toContain('opacity-0');
+      }
     });
 
     it('marks the lowest share, and only that', async () => {

@@ -45,8 +45,7 @@ const lowestShare = (lessons: LessonFigures[]): Set<string> => {
 };
 
 // One bar per lesson, in course order, of the share of those who started it
-// who completed it. The numbers show on hover or focus, and are always there
-// for assistive technology.
+// who completed it. The numbers are always shown.
 export function LessonDropOff({
   lessons,
   modulesWithoutQuestions = [],
@@ -57,7 +56,7 @@ export function LessonDropOff({
   const lowest = lowestShare(lessons);
 
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="text-base" role="heading" aria-level={2}>
           Lesson drop-off
@@ -85,11 +84,10 @@ export function LessonDropOff({
               return (
                 <li
                   key={lesson.lessonId}
-                  tabIndex={0}
-                  className="group rounded-md p-2 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group rounded-md p-2 hover:bg-muted"
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate font-medium">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere] font-medium">
                       {lesson.title}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
@@ -110,7 +108,7 @@ export function LessonDropOff({
                       style={{ width: `${share ?? 0}%` }}
                     />
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {lesson.started === 0
                       ? 'Nobody has started this lesson'
                       : `${lesson.started} started, ${lesson.completed} completed`}

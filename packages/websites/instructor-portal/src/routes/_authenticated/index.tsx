@@ -143,7 +143,7 @@ function RouteComponent() {
                     }}
                     className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3 text-sm hover:bg-muted/50"
                   >
-                    <span className="min-w-0 break-words">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                       <span className="font-medium">{entry.displayName}</span>
                       <span className="text-muted-foreground">
                         {' · '}
@@ -212,7 +212,7 @@ function RouteComponent() {
                   key={course.courseId}
                   to="/my-courses/$courseId"
                   params={{ courseId: course.courseId }}
-                  className="block h-full"
+                  className="block h-full min-w-0"
                 >
                   <Card className="h-full gap-4 overflow-hidden py-0 transition-shadow hover:shadow-md">
                     {imageUrl ? (
@@ -235,16 +235,18 @@ function RouteComponent() {
                       </div>
                     )}
                     <CardHeader className="px-5 pb-5">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
                         <CardTitle
-                          className="text-base leading-5"
+                          className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
                           // biome-ignore lint/a11y/useSemanticElements: CardTitle renders a div; the page's course titles are level-3 headings
                           role="heading"
                           aria-level={3}
                         >
                           {course.title}
                         </CardTitle>
-                        <Badge className={courseStatusStyles[status]}>
+                        <Badge
+                          className={`shrink-0 ${courseStatusStyles[status]}`}
+                        >
                           {status}
                         </Badge>
                       </div>

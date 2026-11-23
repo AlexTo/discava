@@ -227,7 +227,7 @@ function RouteComponent() {
             {visibleCourses.map((course) => (
               <Card
                 key={course.courseId}
-                className="h-full gap-4 overflow-hidden py-0 transition-shadow hover:shadow-md"
+                className="h-full min-w-0 gap-4 overflow-hidden py-0 transition-shadow hover:shadow-md"
               >
                 {course.imageUrl ? (
                   <img
@@ -248,17 +248,21 @@ function RouteComponent() {
                   </div>
                 )}
                 <CardHeader className="gap-3 px-5">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <div className="min-w-0">
-                      <CardTitle className="text-base leading-5">
+                      <CardTitle className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5">
                         {course.title}
                       </CardTitle>
                     </div>
-                    <Badge className={courseStatusStyles[course.status]}>
+                    <Badge
+                      className={`shrink-0 ${courseStatusStyles[course.status]}`}
+                    >
                       {course.status}
                     </Badge>
                   </div>
-                  <CardDescription>{course.description}</CardDescription>
+                  <CardDescription className="line-clamp-3 break-words [overflow-wrap:anywhere]">
+                    {course.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="mt-auto space-y-4 px-5 pb-5">
                   <div className="rounded-lg border bg-muted/20 py-3 text-center">

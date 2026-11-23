@@ -88,11 +88,11 @@ function RouteComponent() {
   return (
     <main className="w-full space-y-6 pb-8">
       <section className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
             <BarChart3 className="size-4" /> Course analytics
           </div>
-          <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          <h1 className="text-balance break-words [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
             {title ?? 'Course analytics'}
           </h1>
           {analytics && (
@@ -145,7 +145,7 @@ function RouteComponent() {
             </Card>
           ) : (
             <section
-              className="grid gap-4 xl:grid-cols-2"
+              className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
               aria-label="Over time"
             >
               <DailyChart
@@ -165,7 +165,7 @@ function RouteComponent() {
           {analytics.totals.enrolments > 0 && (
             <section
               aria-label="Lesson drop-off and activation"
-              className="grid gap-4 xl:grid-cols-2"
+              className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
             >
               <LessonDropOff
                 lessons={analytics.lessons}

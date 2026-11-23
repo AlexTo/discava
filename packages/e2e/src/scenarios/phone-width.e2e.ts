@@ -15,11 +15,14 @@ import {
 import {
   apiUserFor,
   createUploadAssignmentCourse,
+  openSubmissionReview,
+  openSubmissions,
   uploadSubmissionFile,
 } from '../helpers/assignment.js';
 import { chooseCaptionLanguages, webVttOf } from '../helpers/captions.js';
 import { createCategory, setCourseCatalogue } from '../helpers/catalogue.js';
 import { createRevokableCertificateViaApi } from '../helpers/certificate.js';
+import { newPostId } from '../helpers/discussion.js';
 import { WORKSHEET_PDF } from '../helpers/files.js';
 import { createFreePreviewCourseViaApi } from '../helpers/free-preview.js';
 import { createCourse } from '../helpers/instructor-portal.js';
@@ -46,6 +49,7 @@ import {
   expectOnScreen,
   PHONE,
 } from '../helpers/viewport.js';
+import { waitForAnalytics } from '../helpers/wait-for-analytics.js';
 
 // The student portal on a small phone: pages fit the width, and nothing needed
 // is pushed below the first screen.
@@ -714,5 +718,130 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Payments' })).toBeVisible();
     await expectNoSidewaysScroll(page);
     await screenshot(page, 'admin payments at phone width');
+  });
+});
+
+// The instructor portal's pages outside the course editor, with long content:
+// course analytics, the course cards, questions, reviews, a submission and
+// earnings fit a phone.
+test('the instructor pages fit a phone with long content', async ({ page }) => {
+  const ivy = newUser('Ivy', ['instructor']);
+  const instructor = await apiUserFor(ivy);
+  const longWord = 'w'.repeat(70);
+  const title = `${uniqueName('E2E phone pages')} ${longWord}`;
+  const course = await createPublishedCourseViaApi(instructor, title);
+  const { courseId } = course;
+
+  const students = [];
+  for (const [index, name] of [
+    'Ann',
+    'Ben',
+    'Cat',
+    'Dan',
+    'Eve',
+    'Fay',
+  ].entries()) {
+    const student = await apiUser(name, ['student']);
+    await student.core.course.enrol.mutate({ courseId });
+    for (const item of course.texts) {
+      await student.core.contentItem.complete.mutate(item);
+    }
+    const { questionsHash } = await student.core.quiz.view.query(course.quiz);
+    await student.core.quiz.submitAttempt.mutate({
+      ...course.quiz,
+      questionsHash,
+      answers: { q1: [index % 2 === 0 ? 'a' : 'b'] },
+    });
+    await student.core.review.post.mutate({
+      courseId,
+      rating: 4,
+      text: `${'Long review text '.repeat(30)}`.slice(0, 500),
+    });
+    students.push(student);
+  }
+
+  const lesson = {
+    courseId,
+    moduleId: course.moduleId,
+    lessonId: course.lessonId,
+  };
+  await students[0].core.discussion.ask.mutate({
+    ...lesson,
+    postId: newPostId(),
+    title: `Question ${longWord}`,
+    body: 'b'.repeat(500),
+  });
+
+  const grader = await createUploadAssignmentCourse(instructor, {
+    courseTitle: uniqueName('E2E phone submissions'),
+    assignmentTitle: 'Phone assignment',
+  });
+  const submitter = await apiUserFor(
+    newUser(`G${'g'.repeat(39)}`, ['student']),
+  );
+  await submitter.core.course.enrol.mutate({ courseId: grader.courseId });
+  await submitter.core.assignment.submit.mutate(
+    await uploadSubmissionFile(
+      submitter,
+      grader,
+      'work.pdf',
+      await readFile(WORKSHEET_PDF),
+    ),
+  );
+
+  await waitForAnalytics();
+  await page.goto(`${PORTALS.instructor}/dashboard`);
+  await signIn(page, ivy);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expectNoSidewaysScroll(page);
+
+  await test.step('course analytics', async () => {
+    await page.goto(`${PORTALS.instructor}/dashboard/${courseId}`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: title }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'course analytics at phone width');
+  });
+
+  await test.step('the course cards', async () => {
+    for (const path of ['/my-courses', '/']) {
+      await page.goto(`${PORTALS.instructor}${path}`);
+      await expect(page.getByText(title).first()).toBeVisible();
+      await expectNoSidewaysScroll(page);
+    }
+  });
+
+  await test.step('questions and the open thread', async () => {
+    await page.goto(`${PORTALS.instructor}/my-courses/${courseId}/questions`);
+    await page.getByRole('button', { name: /^Open question/ }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('b'.repeat(500))).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await expectDialogFits(dialog);
+    await screenshot(page, 'thread at phone width');
+    await page.keyboard.press('Escape');
+  });
+
+  await test.step('reviews', async () => {
+    await page.goto(`${PORTALS.instructor}/my-courses/${courseId}/reviews`);
+    await expect(page.getByRole('list').last()).toBeVisible();
+    await expectNoSidewaysScroll(page);
+  });
+
+  await test.step('the submissions list and a submission', async () => {
+    await openSubmissions(page, grader, 'Phone assignment');
+    await expectNoSidewaysScroll(page);
+    await openSubmissionReview(page, `G${'g'.repeat(39)}`);
+    await expectNoSidewaysScroll(page);
+    await screenshot(page, 'submission at phone width');
+  });
+
+  await test.step('earnings', async () => {
+    await page.goto(`${PORTALS.instructor}/earnings`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Earnings' }),
+    ).toBeVisible();
+    await expectNoSidewaysScroll(page);
   });
 });

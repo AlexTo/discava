@@ -226,14 +226,16 @@ export const PortalShell = ({
               <BreadcrumbList className="break-words">
                 {activeBreadcrumbs.map((crumb, index) => (
                   <React.Fragment key={crumb.href ?? `${index}-${crumb.text}`}>
-                    <BreadcrumbItem>
+                    <BreadcrumbItem className="min-w-0 max-w-full">
                       {index === activeBreadcrumbs.length - 1 || !crumb.href ? (
-                        <BreadcrumbPage>{crumb.text}</BreadcrumbPage>
+                        <BreadcrumbPage className="min-w-0 [overflow-wrap:anywhere]">
+                          {crumb.text}
+                        </BreadcrumbPage>
                       ) : (
                         <BreadcrumbLink asChild>
                           <Link
                             to={crumb.href}
-                            className="inline-flex min-h-6 items-center"
+                            className="inline-flex min-h-6 min-w-0 items-center [overflow-wrap:anywhere]"
                           >
                             {crumb.text}
                           </Link>

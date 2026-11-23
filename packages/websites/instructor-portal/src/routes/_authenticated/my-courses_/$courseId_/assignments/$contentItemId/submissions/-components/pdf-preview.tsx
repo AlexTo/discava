@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { Button } from '@discava/common-shadcn/components/ui/button';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -16,6 +16,9 @@ const OPTIONS = { isEvalSupported: false } as NonNullable<
   React.ComponentProps<typeof Document>['options']
 >;
 
+// The page's width until the container has been measured.
+const DEFAULT_WIDTH = 560;
+
 // A PDF rendered in the page, one page at a time. Loaded lazily by
 // FilePreview so pdf.js stays in a chunk of its own.
 export function PdfPreview({
@@ -27,10 +30,27 @@ export function PdfPreview({
 }) {
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(DEFAULT_WIDTH);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="space-y-3">
-      <div className="overflow-auto rounded-lg border bg-muted/30">
+      <div
+        ref={containerRef}
+        className="overflow-auto rounded-lg border bg-muted/30"
+      >
         <Document
           file={url}
           options={OPTIONS}
@@ -43,7 +63,7 @@ export function PdfPreview({
               CSS, and without it print the page's text again below it. */}
           <Page
             pageNumber={page}
-            width={560}
+            width={Math.min(DEFAULT_WIDTH, containerWidth)}
             renderTextLayer={false}
             renderAnnotationLayer={false}
             onRenderError={onError}

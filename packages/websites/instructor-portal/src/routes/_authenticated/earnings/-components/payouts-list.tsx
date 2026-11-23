@@ -58,31 +58,35 @@ export function PayoutsList({
         ) : overview.data.payouts.length === 0 ? (
           <p className="text-sm text-muted-foreground">No payouts yet.</p>
         ) : (
-          <table aria-label="Payouts" className="w-full text-left text-sm">
-            <thead className="border-b text-muted-foreground">
-              <tr>
-                <th className="py-2 font-medium">Date</th>
-                <th className="py-2 text-right font-medium">Amount</th>
-                <th className="py-2 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.data.payouts.map((payout) => (
-                <tr key={payout.payoutId} className="border-b last:border-0">
-                  <td className="py-2">{formatDate(payout.createdAt)}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {formatMoney(payout.amountMinor, payout.currency)}
-                  </td>
-                  <td className="py-2">
-                    {STATUS_LABELS[payout.status]}
-                    {payout.status === 'failed' && payout.failureReason
-                      ? `: ${payout.failureReason}`
-                      : ''}
-                  </td>
+          <div className="overflow-x-auto">
+            <table aria-label="Payouts" className="w-full text-left text-sm">
+              <thead className="border-b text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2 font-medium">Date</th>
+                  <th className="px-2 py-2 text-right font-medium">Amount</th>
+                  <th className="px-2 py-2 font-medium">Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {overview.data.payouts.map((payout) => (
+                  <tr key={payout.payoutId} className="border-b last:border-0">
+                    <td className="whitespace-nowrap px-2 py-2">
+                      {formatDate(payout.createdAt)}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">
+                      {formatMoney(payout.amountMinor, payout.currency)}
+                    </td>
+                    <td className="px-2 py-2">
+                      {STATUS_LABELS[payout.status]}
+                      {payout.status === 'failed' && payout.failureReason
+                        ? `: ${payout.failureReason}`
+                        : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </CardContent>
     </Card>

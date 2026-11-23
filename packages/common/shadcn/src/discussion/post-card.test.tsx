@@ -29,6 +29,23 @@ describe('PostCard', () => {
     expect(screen.getByText('Instructor')).toBeInTheDocument();
   });
 
+  it('wraps a long title and author name', () => {
+    render(
+      <PostCard
+        post={{ ...shown, title: 'T'.repeat(70), authorName: 'A'.repeat(40) }}
+        showTitle
+      />,
+    );
+    expect(screen.getByText('T'.repeat(70))).toHaveClass(
+      'min-w-0',
+      'break-words',
+    );
+    expect(screen.getByText('A'.repeat(40))).toHaveClass(
+      'min-w-0',
+      'break-words',
+    );
+  });
+
   it('labels an answer to the course prompt, beside the title', () => {
     render(
       <PostCard

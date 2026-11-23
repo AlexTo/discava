@@ -214,7 +214,7 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US3.
 
-- [ ] T023 [P] [US3] Test first in `IP/dashboard_/$courseId/-route.test.tsx` and `-components/lesson-drop-off.test.tsx`, then make course analytics fit (B-01, B-02, B-18).
+- [x] T023 [P] [US3] Test first in `IP/dashboard_/$courseId/-route.test.tsx` and `-components/lesson-drop-off.test.tsx`, then make course analytics fit (B-01, B-02, B-18).
   - **`IP/dashboard_/$courseId/route.tsx`:**
     - the cards' grid tracks become `xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]`, and each card wrapper `min-w-0`;
     - the `h1` gets `break-words`.
@@ -223,27 +223,27 @@ At 1440px nothing changes, apart from long-content fixes.
     - the started and completed counts are always visible (remove the hover and focus opacity);
     - the `li`s lose `tabIndex`.
   - **`-components/activation-card.tsx`:** text gets `break-words`.
-- [ ] T024 [P] [US3] Test first, then fix the quiz panel's chart and table (B-03, B-04):
+- [x] T024 [P] [US3] Test first, then fix the quiz panel's chart and table (B-03, B-04):
   - in `IP/dashboard_/$courseId/-components/score-chart.tsx`, below 480px of container width, label every other band. Take the width from recharts' `ResponsiveContainer` (`onResize`, or a render prop), never read it during render;
   - in `-components/quiz-panel.tsx`, the question cells get `break-words [overflow-wrap:anywhere]`.
-- [ ] T025 [P] [US3] Test first, then fix the course cards (A-09, B-02, B-10) in `IP/index.tsx`, `IP/dashboard/route.tsx` and `IP/my-courses/route.tsx`:
+- [x] T025 [P] [US3] Test first, then fix the course cards (A-09, B-02, B-10) in `IP/index.tsx`, `IP/dashboard/route.tsx` and `IP/my-courses/route.tsx`:
   - `CardTitle` gets `min-w-0 break-words`;
   - `CardDescription` gets `line-clamp-3 break-words`;
   - the status `Badge` gets `shrink-0`;
   - the title-and-badge row wraps.
 
   **Tests:** the classes, in each page's test file.
-- [ ] T026 [P] [US3] Test first in `SH/discussion/post-card.test.tsx` (create it if absent), then in `SH/discussion/post-card.tsx` give the title and the author name `min-w-0 break-words` (E-01). Run the student portal's discussion tests too.
-- [ ] T027 [P] [US3] Test first in `IP/my-courses_/$courseId_/assignments/$contentItemId/submissions/-review.test.tsx`, then make the submission review fit (E-02):
+- [x] T026 [P] [US3] Test first in `SH/discussion/post-card.test.tsx` (create it if absent), then in `SH/discussion/post-card.tsx` give the title and the author name `min-w-0 break-words` (E-01). Run the student portal's discussion tests too.
+- [x] T027 [P] [US3] Test first in `IP/my-courses_/$courseId_/assignments/$contentItemId/submissions/-review.test.tsx`, then make the submission review fit (E-02):
   - **`.../submissions/$userId.tsx`:** the grid becomes `lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]`, with `min-w-0` on both sections, and the `h1` gets `break-words`.
   - **`.../submissions/-components/pdf-preview.tsx`:** the page's `width` is `Math.min(560, containerWidth)`, with `containerWidth` read by a `ResizeObserver` in an effect (start at 560 until measured).
 
   Extend `-pdf-preview.test.tsx` with a mocked `ResizeObserver` reporting 300px, and assert the page width is 300.
-- [ ] T028 [P] [US3] Test first in `IP/my-courses_/$courseId_/-components/-reviews.test.tsx`, then in `IP/my-courses_/$courseId_/-components/reviews-screen.tsx` give the reviewer name, the review text and the response text `break-words` (E-03).
-- [ ] T029 [P] [US3] Test first, then fix the earnings tables (A-20):
+- [x] T028 [P] [US3] Test first in `IP/my-courses_/$courseId_/-components/-reviews.test.tsx`, then in `IP/my-courses_/$courseId_/-components/reviews-screen.tsx` give the reviewer name, the review text and the response text `break-words` (E-03).
+- [x] T029 [P] [US3] Test first, then fix the earnings tables (A-20):
   - in `IP/earnings/-components/course-lines.tsx` and `IP/earnings/-components/payouts-list.tsx`, cells get `px-2`, and dates and amounts get `whitespace-nowrap`;
   - the payouts table is wrapped in `overflow-x-auto`.
-- [ ] T030 [US3] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`. As a new instructor, set up:
+- [x] T030 [US3] Extend `packages/e2e/src/scenarios/phone-width.e2e.ts`. As a new instructor, set up:
   - a published course whose title has a 70-character word;
   - six students enrolled through `helpers/review.ts`, with quiz attempts (`helpers/student-portal.ts` `takeQuiz`) and 500-character reviews;
   - a question thread with a 500-character body (`helpers/discussion.ts`);
@@ -263,7 +263,7 @@ At 1440px nothing changes, apart from long-content fixes.
   Then `expectDialogFits` on the open thread dialog. Wait for analytics with `helpers/wait-for-analytics.ts` before the analytics page.
 
   Screenshots: `'course analytics at phone width'`, `'submission at phone width'`, `'thread at phone width'`.
-- [ ] T031 [US3] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T031 [US3] Run the instructor and student portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
