@@ -2,13 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { RouterProvider } from '@tanstack/react-router';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
   type Handler,
   renderWithAdminApi,
 } from '../../test/render-with-admin-api';
+import { routerFor } from '../../test/router-for';
+import { certificatesSearch } from '../-search';
 import { CertificatesScreen } from './certificates-screen';
 
 const valid = {
@@ -40,12 +43,26 @@ const revoked = {
   ],
 };
 
-const render = (handlers: Record<string, Handler> = {}) =>
-  renderWithAdminApi(<CertificatesScreen />, {
+const render = async (
+  handlers: Record<string, Handler> = {},
+  entry = '/certificates',
+) => {
+  const router = routerFor(
+    '/certificates',
+    {
+      component: CertificatesScreen,
+      validateSearch: certificatesSearch,
+    },
+    entry,
+  );
+  await router.load();
+  const rendered = renderWithAdminApi(<RouterProvider router={router} />, {
     handlers: { 'certificate.get': () => valid, ...handlers },
   });
+  return { ...rendered, router };
+};
 
-const lookUp = async (rendered: ReturnType<typeof render>) => {
+const lookUp = async (rendered: Awaited<ReturnType<typeof render>>) => {
   await rendered.user.type(
     screen.getByLabelText('Certificate ID'),
     'AAAA-BBBB-CCCC',
@@ -54,8 +71,16 @@ const lookUp = async (rendered: ReturnType<typeof render>) => {
 };
 
 describe('the Certificates screen', () => {
+  it('treats the ID field as a code, not prose', async () => {
+    await render();
+    const field = await screen.findByLabelText('Certificate ID');
+    expect(field).toHaveAttribute('spellcheck', 'false');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveAttribute('autocapitalize', 'characters');
+  });
+
   it('finds a certificate by ID', async () => {
-    const rendered = render();
+    const rendered = await render();
     await lookUp(rendered);
 
     expect(await screen.findByText('Sam Learner')).toBeInTheDocument();
@@ -68,7 +93,7 @@ describe('the Certificates screen', () => {
   });
 
   it('says when it is not found', async () => {
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => {
         throw new ApiError('NOT_FOUND', 'nope');
       },
@@ -88,7 +113,7 @@ describe('the Certificates screen', () => {
 
   it('offers Try again when the lookup fails', async () => {
     let fail = true;
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => {
         if (fail) {
           throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
@@ -109,7 +134,7 @@ describe('the Certificates screen', () => {
   });
 
   it('checks an empty ID on submit, focuses the field and sends nothing', async () => {
-    const rendered = render();
+    const rendered = await render();
     const lookUpButton = screen.getByRole('button', { name: 'Look up' });
     expect(lookUpButton).toBeEnabled();
     await rendered.user.click(lookUpButton);
@@ -124,7 +149,7 @@ describe('the Certificates screen', () => {
   });
 
   it('revokes with Order refunded', async () => {
-    const rendered = render({ 'certificate.revoke': () => revoked });
+    const rendered = await render({ 'certificate.revoke': () => revoked });
     await lookUp(rendered);
     await rendered.user.click(
       await screen.findByRole('button', { name: 'Revoke' }),
@@ -146,7 +171,7 @@ describe('the Certificates screen', () => {
   });
 
   it('checks for a note on submit when the reason is Other', async () => {
-    const rendered = render();
+    const rendered = await render();
     await lookUp(rendered);
     await rendered.user.click(
       await screen.findByRole('button', { name: 'Revoke' }),
@@ -167,7 +192,7 @@ describe('the Certificates screen', () => {
   });
 
   it('restores a revoked certificate', async () => {
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => revoked,
       'certificate.restore': () => valid,
     });
@@ -188,7 +213,7 @@ describe('the Certificates screen', () => {
   });
 
   it('shows the history with notes', async () => {
-    const rendered = render({ 'certificate.get': () => revoked });
+    const rendered = await render({ 'certificate.get': () => revoked });
     await lookUp(rendered);
 
     const note = await screen.findByText('Note: Chargeback');
@@ -198,7 +223,7 @@ describe('the Certificates screen', () => {
 
   it('wraps a long learner name, course title and note', async () => {
     const word = 'x'.repeat(70);
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => ({
         ...revoked,
         learnerName: 'Bartholomew-Maximilian Featherstonehaugh-Wolfeschlegel',
@@ -230,7 +255,7 @@ describe('the Certificates screen, with the keyboard', () => {
     screen.getAllByRole('status').map((status) => status.textContent);
 
   it('asks before Escape discards a typed note, and Keep editing keeps it', async () => {
-    const rendered = render();
+    const rendered = await render();
     await lookUp(rendered);
     await rendered.user.click(
       await screen.findByRole('button', { name: 'Revoke' }),
@@ -250,7 +275,7 @@ describe('the Certificates screen, with the keyboard', () => {
   });
 
   it('closes on Escape with nothing typed, and Cancel then reopen shows an empty note', async () => {
-    const rendered = render();
+    const rendered = await render();
     await lookUp(rendered);
     const revoke = await screen.findByRole('button', { name: 'Revoke' });
     await rendered.user.click(revoke);
@@ -269,7 +294,7 @@ describe('the Certificates screen, with the keyboard', () => {
   });
 
   it('returns focus to Revoke when the dialog is dismissed', async () => {
-    const rendered = render();
+    const rendered = await render();
     await lookUp(rendered);
     const revoke = await screen.findByRole('button', { name: 'Revoke' });
     await rendered.user.click(revoke);
@@ -281,7 +306,7 @@ describe('the Certificates screen, with the keyboard', () => {
   });
 
   it('returns focus to Restore when its dialog is dismissed', async () => {
-    const rendered = render({ 'certificate.get': () => revoked });
+    const rendered = await render({ 'certificate.get': () => revoked });
     await lookUp(rendered);
     const restore = await screen.findByRole('button', { name: 'Restore' });
     await rendered.user.click(restore);
@@ -294,7 +319,7 @@ describe('the Certificates screen, with the keyboard', () => {
 
   it('focuses Restore after a revoke and announces it', async () => {
     let current = valid;
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => current,
       'certificate.revoke': () => {
         current = revoked;
@@ -322,7 +347,7 @@ describe('the Certificates screen, with the keyboard', () => {
 
   it('focuses Revoke after a restore and announces it', async () => {
     let current = revoked;
-    const rendered = render({
+    const rendered = await render({
       'certificate.get': () => current,
       'certificate.restore': () => {
         current = valid;
@@ -344,7 +369,7 @@ describe('the Certificates screen, with the keyboard', () => {
   });
 
   it('keeps focus on a pending Revoke certificate and sends nothing on a second press', async () => {
-    const rendered = render({
+    const rendered = await render({
       'certificate.revoke': () => new Promise(() => {}),
     });
     await lookUp(rendered);
@@ -367,8 +392,8 @@ describe('the Certificates screen, with the keyboard', () => {
 });
 
 describe('the Certificates screen, as a page', () => {
-  it('names the tab', () => {
-    render();
+  it('names the tab', async () => {
+    await render();
 
     expect(document.title).toBe('Certificates · Discava');
     expect(
@@ -377,7 +402,9 @@ describe('the Certificates screen, as a page', () => {
   });
 
   it('says it is looking up the certificate', async () => {
-    const rendered = render({ 'certificate.get': () => new Promise(() => {}) });
+    const rendered = await render({
+      'certificate.get': () => new Promise(() => {}),
+    });
     await lookUp(rendered);
 
     await waitFor(() =>
@@ -385,5 +412,51 @@ describe('the Certificates screen, as a page', () => {
         screen.getAllByRole('status').map((status) => status.textContent),
       ).toContain('Looking up the certificate…'),
     );
+  });
+});
+
+describe('the Certificates screen, with the ID in the address', () => {
+  const getCalls = (rendered: Awaited<ReturnType<typeof render>>) =>
+    rendered.calls.filter((c) => c.path === 'certificate.get');
+
+  it('opens on the ID in the address, fills the field and looks it up once', async () => {
+    const rendered = await render({}, '/certificates?id=ABCD');
+
+    expect(await screen.findByText('Sam Learner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Certificate ID')).toHaveValue('ABCD');
+    expect(getCalls(rendered)).toEqual([
+      { path: 'certificate.get', input: { certificateId: 'ABCD' } },
+    ]);
+  });
+
+  it('pushes the trimmed ID on Look up, and Back restores the earlier one with the field', async () => {
+    const rendered = await render({}, '/certificates?id=ABCD');
+    await screen.findByText('Sam Learner');
+
+    const field = screen.getByLabelText('Certificate ID');
+    await rendered.user.clear(field);
+    await rendered.user.type(field, '  WXYZ  ');
+    await rendered.user.click(screen.getByRole('button', { name: 'Look up' }));
+    await waitFor(() =>
+      expect(rendered.router.state.location.search).toEqual({ id: 'WXYZ' }),
+    );
+
+    act(() => rendered.router.history.back());
+    await waitFor(() => expect(field).toHaveValue('ABCD'));
+    expect(rendered.router.state.location.search).toEqual({ id: 'ABCD' });
+  });
+
+  it.each([
+    ['empty', '/certificates?id='],
+    ['101 characters long', `/certificates?id=${'a'.repeat(101)}`],
+  ])('drops a %s ID from the address', async (_, entry) => {
+    const rendered = await render({}, entry);
+
+    await screen.findByLabelText('Certificate ID');
+    await waitFor(() =>
+      expect(rendered.router.state.location.search).toEqual({}),
+    );
+    expect(rendered.router.state.location.href).toBe('/certificates');
+    expect(getCalls(rendered)).toHaveLength(0);
   });
 });

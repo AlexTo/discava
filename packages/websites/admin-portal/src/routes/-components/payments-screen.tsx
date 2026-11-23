@@ -275,7 +275,7 @@ export function PaymentsScreen() {
                 setFocusTarget('key');
               }}
             >
-              Go back
+              Keep the current key
             </Button>
             <Button
               onClick={() => {
@@ -284,7 +284,7 @@ export function PaymentsScreen() {
                 if (key) void save(key);
               }}
             >
-              Continue
+              Replace the key
             </Button>
           </DialogFooter>
         </DialogContent>

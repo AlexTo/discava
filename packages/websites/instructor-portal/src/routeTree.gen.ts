@@ -19,6 +19,7 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardCourseIdRouteRouteImport } from './routes/_authenticated/dashboard_/$courseId/route'
 import { Route as AuthenticatedMyCoursesCourseIdRouteRouteImport } from './routes/_authenticated/my-courses_/$courseId/route'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
+import { Route as AuthenticatedMyCoursesCourseIdCouponsRouteImport } from './routes/_authenticated/my-courses_/$courseId_/coupons'
 import { Route as AuthenticatedMyCoursesCourseIdQuestionsRouteRouteImport } from './routes/_authenticated/my-courses_/$courseId_/questions/route'
 import { Route as AuthenticatedMyCoursesCourseIdReviewsRouteImport } from './routes/_authenticated/my-courses_/$courseId_/reviews'
 import { Route as AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRouteImport } from './routes/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/index'
@@ -79,6 +80,12 @@ const AuthenticatedSettingsNotificationsRoute =
     path: '/settings/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedMyCoursesCourseIdCouponsRoute =
+  AuthenticatedMyCoursesCourseIdCouponsRouteImport.update({
+    id: '/my-courses_/$courseId_/coupons',
+    path: '/my-courses/$courseId/coupons',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedMyCoursesCourseIdQuestionsRouteRoute =
   AuthenticatedMyCoursesCourseIdQuestionsRouteRouteImport.update({
     id: '/my-courses_/$courseId_/questions',
@@ -119,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
+  '/my-courses/$courseId/coupons': typeof AuthenticatedMyCoursesCourseIdCouponsRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
   '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
   '/my-courses/$courseId/assignments/$contentItemId/submissions/': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
@@ -134,6 +142,7 @@ export interface FileRoutesByTo {
   '/my-courses/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/my-courses/$courseId/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
+  '/my-courses/$courseId/coupons': typeof AuthenticatedMyCoursesCourseIdCouponsRoute
   '/my-courses/$courseId/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
   '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
   '/my-courses/$courseId/assignments/$contentItemId/submissions': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
@@ -151,6 +160,7 @@ export interface FileRoutesById {
   '/_authenticated/my-courses_/$courseId': typeof AuthenticatedMyCoursesCourseIdRouteRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
   '/_authenticated/my-courses_/$courseId_/questions': typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
+  '/_authenticated/my-courses_/$courseId_/coupons': typeof AuthenticatedMyCoursesCourseIdCouponsRoute
   '/_authenticated/my-courses_/$courseId_/reviews': typeof AuthenticatedMyCoursesCourseIdReviewsRoute
   '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
   '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/': typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
@@ -168,6 +178,7 @@ export interface FileRouteTypes {
     | '/my-courses/$courseId'
     | '/settings/notifications'
     | '/my-courses/$courseId/questions'
+    | '/my-courses/$courseId/coupons'
     | '/my-courses/$courseId/reviews'
     | '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
     | '/my-courses/$courseId/assignments/$contentItemId/submissions/'
@@ -183,6 +194,7 @@ export interface FileRouteTypes {
     | '/my-courses/$courseId'
     | '/settings/notifications'
     | '/my-courses/$courseId/questions'
+    | '/my-courses/$courseId/coupons'
     | '/my-courses/$courseId/reviews'
     | '/my-courses/$courseId/assignments/$contentItemId/submissions/$userId'
     | '/my-courses/$courseId/assignments/$contentItemId/submissions'
@@ -199,6 +211,7 @@ export interface FileRouteTypes {
     | '/_authenticated/my-courses_/$courseId'
     | '/_authenticated/settings/notifications'
     | '/_authenticated/my-courses_/$courseId_/questions'
+    | '/_authenticated/my-courses_/$courseId_/coupons'
     | '/_authenticated/my-courses_/$courseId_/reviews'
     | '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/$userId'
     | '/_authenticated/my-courses_/$courseId_/assignments/$contentItemId/submissions/'
@@ -281,6 +294,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/my-courses_/$courseId_/coupons': {
+      id: '/_authenticated/my-courses_/$courseId_/coupons'
+      path: '/my-courses/$courseId/coupons'
+      fullPath: '/my-courses/$courseId/coupons'
+      preLoaderRoute: typeof AuthenticatedMyCoursesCourseIdCouponsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/my-courses_/$courseId_/questions': {
       id: '/_authenticated/my-courses_/$courseId_/questions'
       path: '/my-courses/$courseId/questions'
@@ -322,6 +342,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMyCoursesCourseIdRouteRoute: typeof AuthenticatedMyCoursesCourseIdRouteRoute
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
   AuthenticatedMyCoursesCourseIdQuestionsRouteRoute: typeof AuthenticatedMyCoursesCourseIdQuestionsRouteRoute
+  AuthenticatedMyCoursesCourseIdCouponsRoute: typeof AuthenticatedMyCoursesCourseIdCouponsRoute
   AuthenticatedMyCoursesCourseIdReviewsRoute: typeof AuthenticatedMyCoursesCourseIdReviewsRoute
   AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute
   AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute: typeof AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsIndexRoute
@@ -341,6 +362,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
     AuthenticatedSettingsNotificationsRoute,
   AuthenticatedMyCoursesCourseIdQuestionsRouteRoute:
     AuthenticatedMyCoursesCourseIdQuestionsRouteRoute,
+  AuthenticatedMyCoursesCourseIdCouponsRoute:
+    AuthenticatedMyCoursesCourseIdCouponsRoute,
   AuthenticatedMyCoursesCourseIdReviewsRoute:
     AuthenticatedMyCoursesCourseIdReviewsRoute,
   AuthenticatedMyCoursesCourseIdAssignmentsContentItemIdSubmissionsUserIdRoute:

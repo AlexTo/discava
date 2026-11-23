@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
 import {
   lessonsView,
@@ -42,7 +43,20 @@ const lessonRef = {
   lessonId: 'l1',
 };
 
+// The page holds the chosen lesson in its address; this holds it here.
+function Picked({ initial }: { initial?: string }) {
+  const [lessonId, setLessonId] = useState(initial);
+  return (
+    <ByLessonView
+      courseId="c1"
+      lessonId={lessonId}
+      onLessonChange={setLessonId}
+    />
+  );
+}
+
 const render = ({
+  initial,
   lessons = lessonsView([{ lessonId: 'l1' }]),
   thread = { question: question(), replies: [post()] } as Record<
     string,
@@ -51,12 +65,13 @@ const render = ({
   instructor = {},
   core = {},
 }: {
+  initial?: string;
   lessons?: unknown;
   thread?: Record<string, unknown>;
   instructor?: Record<string, (input: unknown) => unknown>;
   core?: Record<string, (input: unknown) => unknown>;
 } = {}) =>
-  renderQuestions(<ByLessonView courseId="c1" />, {
+  renderQuestions(<Picked initial={initial} />, {
     instructor: { 'course.view': () => lessons, ...instructor },
     core: {
       'discussion.listQuestions': () => ({ items: [question()] }),
@@ -77,6 +92,17 @@ const openThread = async (rendered: ReturnType<typeof render>) => {
 };
 
 describe('ByLessonView', () => {
+  it('shows the lesson it is given, and nothing chosen for one not in the course', async () => {
+    const chosen = render({ initial: 'l1' });
+    expect(await screen.findByText('What is a basis?')).toBeVisible();
+    expect(screen.getByLabelText('Lesson')).toHaveValue('l1');
+    chosen.unmount();
+
+    render({ initial: 'gone' });
+    expect(await screen.findByLabelText('Lesson')).toHaveValue('');
+    expect(screen.queryByText('What is a basis?')).not.toBeInTheDocument();
+  });
+
   it("lists the lessons with their state and then the picked lesson's questions", async () => {
     const rendered = render({
       lessons: lessonsView([

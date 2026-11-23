@@ -123,7 +123,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
       .getByRole('button', { name: /Connect Stripe|Save key/ })
       .click();
     const confirm = admin.getByRole('dialog').getByRole('button', {
-      name: 'Continue',
+      name: 'Replace the key',
     });
     if (await confirm.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await confirm.click();
@@ -154,11 +154,36 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
   await test.step('replacing the key with the same key mid-checkout is allowed', async () => {
     await admin.getByRole('button', { name: 'Replace key' }).click();
     await keyField.fill('sk_test_local');
+    // Hold the request back so the "Saving…" button stays on screen: the form
+    // empties the key field on submit, and the button must keep focus anyway.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await admin.route('**/payment.connect*', async (route) => {
+      await held;
+      await route.continue();
+    });
     await admin.getByRole('button', { name: 'Save key' }).click();
+    await expect(
+      admin
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Replace the key' }),
+    ).toBeVisible();
+    await screenshot(admin, 'payments-replace-confirmation');
     await admin
       .getByRole('dialog')
-      .getByRole('button', { name: 'Continue' })
+      .getByRole('button', { name: 'Replace the key' })
       .click();
+    const saving = admin.getByRole('button', { name: 'Saving…' });
+    await expect(saving).toHaveAttribute('aria-disabled', 'true');
+    // Playwright's toBeDisabled() also counts aria-disabled, so check the
+    // native attribute itself.
+    await expect(saving).not.toHaveAttribute('disabled');
+    await expect(saving).toBeFocused();
+    await screenshot(admin, 'payments-saving-key-keeps-focus');
+    release();
+    await admin.unrouteAll({ behavior: 'wait' });
     await expect(keyField).toHaveCount(0);
     await expect(admin.getByRole('alert')).toHaveCount(0);
   });
@@ -182,7 +207,7 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
     await admin.getByRole('button', { name: 'Save key' }).click();
     await admin
       .getByRole('dialog')
-      .getByRole('button', { name: 'Continue' })
+      .getByRole('button', { name: 'Replace the key' })
       .click();
     await expect(admin.getByRole('alert')).toContainText(
       'Checkouts are open until',

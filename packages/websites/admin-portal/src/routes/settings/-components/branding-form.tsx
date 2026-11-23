@@ -291,6 +291,7 @@ export function BrandingForm({
       </section>
       <ImageField
         kind="logo"
+        resetLabel="Reset the logo to default"
         title="Logo"
         help="Shown in the header of every portal and on public pages."
         imageUrl={logoUrl}
@@ -308,6 +309,7 @@ export function BrandingForm({
       />
       <ImageField
         kind="icon"
+        resetLabel="Reset the icon to default"
         title="Icon"
         help="Shown in browser tabs and on home screens. 512 × 512 is a good size."
         imageUrl={iconUrl}
@@ -325,6 +327,7 @@ export function BrandingForm({
       />
       <ImageField
         kind="share-image"
+        resetLabel="Reset the share image to default"
         title="Share image"
         help="Shown when a link to the platform is shared, for pages with no image of their own."
         imageUrl={shareImageUrl}

@@ -28,8 +28,10 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
+import { useNavigate, useRouterState, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
+import { reviewsSearch } from '../-search';
 
 export const REASON_MAX = 200;
 
@@ -360,7 +362,17 @@ function CourseReviews({
 export function ReviewsScreen() {
   usePageTitle('Reviews');
   const trpc = useAdminApi();
-  const [courseId, setCourseId] = useState('');
+  const courseId = useSearch({ from: '/reviews' }).course ?? '';
+  const navigate = useNavigate({ from: '/reviews' });
+  const address = useRouterState({ select: (state) => state.location.search });
+
+  // An empty or over-long course is dropped from the address, without adding
+  // a step to Back.
+  useEffect(() => {
+    if ('course' in address && reviewsSearch(address).course === undefined) {
+      void navigate({ search: { course: undefined }, replace: true });
+    }
+  }, [address, navigate]);
   const [announcement, setAnnouncement] = useState('');
   const picker = useRef<HTMLSelectElement>(null);
   const courses = useInfiniteQuery(
@@ -415,9 +427,17 @@ export function ReviewsScreen() {
               className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               value={courseId}
               aria-busy={courses.isFetchingNextPage}
-              onChange={(event) => setCourseId(event.target.value)}
+              onChange={(event) =>
+                void navigate({
+                  search: { course: event.target.value || undefined },
+                })
+              }
             >
               <option value="">Choose a course</option>
+              {courseId !== '' &&
+                !items.some((course) => course.courseId === courseId) && (
+                  <option value={courseId}>The course from the link</option>
+                )}
               {items.map((course) => (
                 <option key={course.courseId} value={course.courseId}>
                   {`${course.title}${course.status === 'archived' ? ' (archived)' : ''} · ${course.ratingCount} ${course.ratingCount === 1 ? 'rating' : 'ratings'}`}

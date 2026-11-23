@@ -240,10 +240,10 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US7.
 
-- [ ] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option; an empty or 101-character `course` is dropped from the address with `replace`.
-- [ ] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id; an empty or 101-character `id` is dropped from the address with `replace`.
-- [ ] T039 [US7] Add a case to `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, or a new `admin-views.e2e.ts` if it reads better: choose a course on Reviews and look up a certificate, reload each, and check the same view shows; press Back and check the previous one. Then change T008's admin cases to open `?course=` and `?id=` directly. `screenshot()` each restored view.
-- [ ] T040 [US7] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T037 [P] [US7] Test first, then add `validateSearch` for `course` to `R/reviews.tsx`, as [contracts/url-state.md](./contracts/url-state.md) says, and make `ReviewsScreen` read and write it in place of `useState` (C-07, research R-13). When the id isn't among the loaded courses, the picker shows one selected option, "The course from the link". **Tests:** opening `/reviews?course=c1` requests `review.list` for `c1` once; choosing another course pushes its id; Back restores the first; an unknown id shows the extra option; an empty or 101-character `course` is dropped from the address with `replace`.
+- [x] T038 [P] [US7] Test first, then add `validateSearch` for `id` to `R/certificates.tsx`, and make `CertificatesScreen` read it in place of `lookedUp`, with the field kept in step, Back included (D-06). **Tests:** opening `/certificates?id=ABCD` requests `certificate.get` for it once and fills the field; Look up pushes the trimmed id; an empty or 101-character `id` is dropped from the address with `replace`.
+- [x] T039 [US7] Add a case to `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, or a new `admin-views.e2e.ts` if it reads better: choose a course on Reviews and look up a certificate, reload each, and check the same view shows; press Back and check the previous one. Then change T008's admin cases to open `?course=` and `?id=` directly. `screenshot()` each restored view.
+- [x] T040 [US7] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 
@@ -253,16 +253,16 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US8.
 
-- [ ] T041 [P] [US8] Test first, then name the controls (B-10, B-11, D-07, F-06, A-09, research R-14, R-15):
+- [x] T041 [P] [US8] Test first, then name the controls (B-10, B-11, D-07, F-06, A-09, research R-14, R-15):
   - categories: `aria-label` "Rename <name>" and "Archive <name>"; the placeholder becomes "Science…";
   - branding: `ImageField` takes a `resetLabel`, and `branding-form.tsx` passes "Reset the logo to default", "Reset the icon to default", "Reset the share image to default" (visible text too);
   - certificates: the ID field gets `spellCheck={false}`, `autoComplete="off"`, `autoCapitalize="characters"`;
   - home: each card's `Link` is `aria-labelledby` its title and `aria-describedby` its description and figure.
 
   **Tests (change meaning, plan.md):** the new names; each contains its visible text.
-- [ ] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
+- [x] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
 - [ ] T043 [US8] **Needs IP T073 and IP T074.** In `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, measure the Remove review dialog's close button and Branding's "Show the name beside the logo" switch: each at least 24×24px; clicking the switch's text toggles it (C-09, F-02, F-08). No admin source change is expected.
-- [ ] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

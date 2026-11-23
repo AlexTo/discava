@@ -89,9 +89,18 @@ function LessonQuestions({
 }
 
 // Pick a lesson of the course, then read and answer all of its questions.
-export function ByLessonView({ courseId }: { courseId: string }) {
+// `lessonId` and `onLessonChange` are the page's address; a `lessonId` that
+// isn't in the course leaves nothing chosen.
+export function ByLessonView({
+  courseId,
+  lessonId,
+  onLessonChange,
+}: {
+  courseId: string;
+  lessonId?: string;
+  onLessonChange: (lessonId: string) => void;
+}) {
   const course = useCourseLessons(courseId);
-  const [picked, setPicked] = useState('');
 
   if (course.isPending) {
     return <p className="text-sm text-muted-foreground">Loading lessons…</p>;
@@ -111,7 +120,7 @@ export function ByLessonView({ courseId }: { courseId: string }) {
     return null;
   }
   const { lessons, courseArchived } = course.data;
-  const lesson = lessons.find((l) => l.lessonId === picked);
+  const lesson = lessons.find((l) => l.lessonId === lessonId);
 
   return (
     <div className="space-y-4">
@@ -123,8 +132,8 @@ export function ByLessonView({ courseId }: { courseId: string }) {
         <select
           id="questions-lesson"
           className="block w-full max-w-md rounded-md border bg-background px-3 py-2 text-sm"
-          value={picked}
-          onChange={(event) => setPicked(event.target.value)}
+          value={lesson?.lessonId ?? ''}
+          onChange={(event) => onLessonChange(event.target.value)}
         >
           <option value="">Choose a lesson</option>
           {lessons.map((l) => {

@@ -80,6 +80,8 @@ export function KeyForm({
         )}
       </div>
       <div className="flex gap-2">
+        {/* The field is emptied on submit, so while the request runs the
+            button relies on `pending` alone, keeping it focusable. */}
         <PendingButton
           type="submit"
           pending={pending}

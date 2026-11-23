@@ -2,13 +2,16 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { RouterProvider } from '@tanstack/react-router';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
   type Handler,
   renderWithAdminApi,
 } from '../../test/render-with-admin-api';
+import { routerFor } from '../../test/router-for';
+import { reviewsSearch } from '../-search';
 import { ReviewsScreen } from './reviews-screen';
 
 const courses = {
@@ -37,16 +40,33 @@ const removed = {
   removedReason: 'Abusive language',
 };
 
-const render = (handlers: Record<string, Handler> = {}) =>
-  renderWithAdminApi(<ReviewsScreen />, {
+const render = async (
+  handlers: Record<string, Handler> = {},
+  entry = '/reviews',
+) => {
+  const router = routerFor(
+    '/reviews',
+    {
+      component: ReviewsScreen,
+      validateSearch: reviewsSearch,
+    },
+    entry,
+  );
+  await router.load();
+  const rendered = renderWithAdminApi(<RouterProvider router={router} />, {
     handlers: {
       'review.courses': () => courses,
       'review.list': () => ({ items: [visible, removed] }),
       ...handlers,
     },
   });
+  return { ...rendered, router };
+};
 
-const pick = async (rendered: ReturnType<typeof render>, name = /Physics/) => {
+const pick = async (
+  rendered: Awaited<ReturnType<typeof render>>,
+  name = /Physics/,
+) => {
   const select = await screen.findByLabelText('Course');
   await rendered.user.selectOptions(
     select,
@@ -56,7 +76,7 @@ const pick = async (rendered: ReturnType<typeof render>, name = /Physics/) => {
 
 describe('the Reviews screen', () => {
   it('offers published and archived courses with their rating counts', async () => {
-    render();
+    await render();
 
     expect(
       await screen.findByRole('option', { name: 'Physics · 2 ratings' }),
@@ -67,7 +87,7 @@ describe('the Reviews screen', () => {
   });
 
   it('lists the course reviews, marking removed ones with their reason', async () => {
-    const rendered = render();
+    const rendered = await render();
     await pick(rendered);
 
     expect(
@@ -90,7 +110,7 @@ describe('the Reviews screen', () => {
 
   it('wraps long review text, responses and removal reasons', async () => {
     const word = 'y'.repeat(70);
-    const rendered = render({
+    const rendered = await render({
       'review.list': () => ({
         items: [
           {
@@ -133,7 +153,7 @@ describe('the Reviews screen', () => {
   });
 
   it('checks for a reason on submit, then removes with it', async () => {
-    const rendered = render({ 'review.remove': () => ({ ...visible }) });
+    const rendered = await render({ 'review.remove': () => ({ ...visible }) });
     await pick(rendered);
     await rendered.user.click(
       await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
@@ -181,7 +201,7 @@ describe('the Reviews screen', () => {
   });
 
   it('shows a failed removal in the dialog and keeps the reason', async () => {
-    const rendered = render({
+    const rendered = await render({
       'review.remove': () => {
         throw new ApiError('CONFLICT', 'Please retry');
       },
@@ -201,7 +221,7 @@ describe('the Reviews screen', () => {
   });
 
   it('asks before Escape discards a typed reason, and Keep editing keeps it', async () => {
-    const rendered = render();
+    const rendered = await render();
     await pick(rendered);
     await rendered.user.click(
       await screen.findByRole('button', { name: "Remove Sam L.'s review" }),
@@ -222,7 +242,7 @@ describe('the Reviews screen', () => {
   });
 
   it('closes on Escape with nothing typed, and Cancel then reopen shows an empty reason', async () => {
-    const rendered = render();
+    const rendered = await render();
     await pick(rendered);
     const remove = await screen.findByRole('button', {
       name: "Remove Sam L.'s review",
@@ -243,7 +263,7 @@ describe('the Reviews screen', () => {
   });
 
   it('says so when the course has no reviews', async () => {
-    const rendered = render({ 'review.list': () => ({ items: [] }) });
+    const rendered = await render({ 'review.list': () => ({ items: [] }) });
     await pick(rendered);
 
     expect(await screen.findByText('No reviews yet.')).toBeInTheDocument();
@@ -251,7 +271,7 @@ describe('the Reviews screen', () => {
 
   it('shows an error with a retry when the reviews fail to load', async () => {
     let fail = true;
-    const rendered = render({
+    const rendered = await render({
       'review.list': () => {
         if (fail) {
           throw new ApiError('INTERNAL_SERVER_ERROR', 'Boom');
@@ -281,7 +301,7 @@ describe('the Reviews screen', () => {
 
   it('shows an error with a retry when the courses fail to load', async () => {
     let fail = true;
-    const rendered = render({
+    const rendered = await render({
       'review.courses': () => {
         if (fail) {
           throw new ApiError('INTERNAL_SERVER_ERROR', 'No courses for you');
@@ -304,7 +324,7 @@ describe('the Reviews screen', () => {
   });
 
   it('says so when there are no courses to review', async () => {
-    render({ 'review.courses': () => ({ items: [] }) });
+    await render({ 'review.courses': () => ({ items: [] }) });
 
     expect(
       await screen.findByText('No published or archived courses yet.'),
@@ -314,7 +334,7 @@ describe('the Reviews screen', () => {
 
 describe('the Reviews screen, with the keyboard', () => {
   it('returns focus to Remove when the dialog is cancelled', async () => {
-    const rendered = render();
+    const rendered = await render();
     await pick(rendered);
     const remove = await screen.findByRole('button', {
       name: "Remove Sam L.'s review",
@@ -329,7 +349,7 @@ describe('the Reviews screen, with the keyboard', () => {
 
   it('focuses the removed review, announces it, and keeps the counter quiet', async () => {
     let gone = false;
-    const rendered = render({
+    const rendered = await render({
       'review.list': () => ({
         items: [
           gone
@@ -369,7 +389,7 @@ describe('the Reviews screen, with the keyboard', () => {
   });
 
   it('focuses the first review that Load more adds', async () => {
-    const rendered = render({
+    const rendered = await render({
       'review.list': (input) =>
         (input as { cursor?: string }).cursor
           ? { items: [{ ...visible, reviewerId: 's9', reviewerName: 'Zed' }] }
@@ -388,7 +408,7 @@ describe('the Reviews screen, with the keyboard', () => {
   });
 
   it('focuses the list when Load more adds nothing', async () => {
-    const rendered = render({
+    const rendered = await render({
       'review.list': (input) =>
         (input as { cursor?: string }).cursor
           ? { items: [] }
@@ -406,7 +426,7 @@ describe('the Reviews screen, with the keyboard', () => {
   });
 
   it('focuses the picker after More courses', async () => {
-    const rendered = render({
+    const rendered = await render({
       'review.courses': (input) =>
         (input as { cursor?: string }).cursor
           ? { items: [] }
@@ -420,7 +440,7 @@ describe('the Reviews screen, with the keyboard', () => {
   });
 
   it('keeps focus on a pending Remove review and sends nothing on a second press', async () => {
-    const rendered = render({
+    const rendered = await render({
       'review.remove': () => new Promise(() => {}),
     });
     await pick(rendered);
@@ -447,8 +467,8 @@ describe('the Reviews screen, with the keyboard', () => {
 });
 
 describe('the Reviews screen, as a page', () => {
-  it('names the tab and says it is loading the courses', () => {
-    render({ 'review.courses': () => new Promise(() => {}) });
+  it('names the tab and says it is loading the courses', async () => {
+    await render({ 'review.courses': () => new Promise(() => {}) });
 
     expect(document.title).toBe('Reviews · Discava');
     expect(
@@ -460,7 +480,9 @@ describe('the Reviews screen, as a page', () => {
   });
 
   it('says it is loading the reviews', async () => {
-    const rendered = render({ 'review.list': () => new Promise(() => {}) });
+    const rendered = await render({
+      'review.list': () => new Promise(() => {}),
+    });
     await pick(rendered);
 
     await waitFor(() =>
@@ -468,5 +490,79 @@ describe('the Reviews screen, as a page', () => {
         screen.getAllByRole('status').map((status) => status.textContent),
       ).toContain('Loading the reviews…'),
     );
+  });
+});
+
+describe('the Reviews screen, with the course in the address', () => {
+  const listCalls = (
+    rendered: Awaited<ReturnType<typeof render>>,
+    courseId: string,
+  ) =>
+    rendered.calls.filter(
+      (c) =>
+        c.path === 'review.list' &&
+        (c.input as { courseId: string }).courseId === courseId,
+    );
+
+  it('opens on the course in the address and requests its reviews once', async () => {
+    const rendered = await render({}, '/reviews?course=c1');
+
+    expect(await screen.findByText('Clear and well paced.')).toBeVisible();
+    expect(await screen.findByLabelText('Course')).toHaveValue('c1');
+    expect(listCalls(rendered, 'c1')).toHaveLength(1);
+  });
+
+  it('pushes the chosen course, and Back restores the one before', async () => {
+    const rendered = await render({}, '/reviews?course=c1');
+    await screen.findByText('Clear and well paced.');
+
+    await pick(rendered, /Old Maths/);
+    await waitFor(() =>
+      expect(rendered.router.state.location.search).toEqual({ course: 'c2' }),
+    );
+
+    act(() => rendered.router.history.back());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Course')).toHaveValue('c1'),
+    );
+    expect(rendered.router.state.location.search).toEqual({ course: 'c1' });
+  });
+
+  it('removes the course from the address when "Choose a course" is chosen', async () => {
+    const rendered = await render({}, '/reviews?course=c1');
+    await screen.findByText('Clear and well paced.');
+
+    await rendered.user.selectOptions(
+      screen.getByLabelText('Course'),
+      'Choose a course',
+    );
+
+    await waitFor(() =>
+      expect(rendered.router.state.location.search).toEqual({}),
+    );
+  });
+
+  it('shows "The course from the link" for an id that is not loaded', async () => {
+    await render({}, '/reviews?course=gone');
+
+    const picker = await screen.findByLabelText('Course');
+    expect(picker).toHaveValue('gone');
+    expect(
+      within(picker).getByRole('option', { name: 'The course from the link' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each([
+    ['empty', '/reviews?course='],
+    ['101 characters long', `/reviews?course=${'a'.repeat(101)}`],
+  ])('drops a %s course from the address', async (_, entry) => {
+    const rendered = await render({}, entry);
+
+    await screen.findByLabelText('Course');
+    await waitFor(() =>
+      expect(rendered.router.state.location.search).toEqual({}),
+    );
+    expect(rendered.router.state.location.href).toBe('/reviews');
+    expect(screen.getByLabelText('Course')).toHaveValue('');
   });
 });

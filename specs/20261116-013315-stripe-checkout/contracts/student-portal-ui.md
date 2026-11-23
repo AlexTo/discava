@@ -43,10 +43,15 @@ Student portal, with the `renderWithCoreApi`-style helper: every row of the tabl
 | Enrolled, paid for, refund requested | "Refund requested on <date>. Your access ends when it is confirmed." No button. The page polls `course.myEnrolment` as the `?checkout=success` state does and moves to the ended state by itself |
 | Enrolled, paid for, `refundBlockedBy: window-ended` | "The refund period for this course ended on <date>." No button |
 | Completed, paid for, within the 14 days | "A course can't be refunded after you have completed it." No button |
+| Enrolled, paid for, `refundBlockedBy: progress-limit` (amendment 2026-11-23) | "Refunds end once you've completed half of the course." No button |
+| Enrolled, paid for, `refundBlockedBy: refunded-before` (amendment 2026-11-23) | "You were refunded for this course before, so this purchase can't be refunded." No button |
+| `dropped` or not enrolled, `refundedBefore`, course priced (amendment 2026-11-23) | beside **Buy now**: "You were refunded for this course before. If you buy it again, it can't be refunded." |
 | Enrolled, paid for, `refundBlockedBy: other-account` | "This purchase can't be refunded here right now." No button |
 | Enrolled or completed, not paid for | **Leave course**. The dialog says the enrolment ends and progress is kept; if the course now has a price it adds "This course now has a price. To come back you would need to buy it." **Leave course** and **Cancel** |
 | `dropped`, with a refunded order (`payment.myOrder` is `refunded`) | "Your enrolment has ended. Refunded on <date>." and **Buy now** or, if the course is free, **Enrol now** |
 | `dropped`, otherwise (the student left) | "Your enrolment has ended." and **Enrol now** or, if the course is priced, **Buy now** |
+
+Amendment 2026-11-23: the terms line under the price becomes "14-day refund while you've completed less than half of the course. One refund per course.", built by `refundTerms(days, percent)` in `@discava/common-web-utils/price` from `course.publicView`'s `refundWindowDays` and `refundProgressLimitPercent`.
 
 **Request a refund** and **Leave course** are never shown together: the first needs `paidFor`, the second its absence. Neither is shown on an ended enrolment. A refusal from the API is shown as an error alert with the API's message.
 

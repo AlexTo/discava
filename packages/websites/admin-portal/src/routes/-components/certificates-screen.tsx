@@ -25,8 +25,10 @@ import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useRouterState, useSearch } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
+import { certificatesSearch } from '../-search';
 
 export const NOTE_MAX = 500;
 
@@ -441,11 +443,28 @@ function Certificate({
  */
 export function CertificatesScreen() {
   usePageTitle('Certificates');
-  const [input, setInput] = useState('');
-  const [lookedUp, setLookedUp] = useState<string>();
+  const lookedUp = useSearch({ from: '/certificates' }).id;
+  const navigate = useNavigate({ from: '/certificates' });
+  const address = useRouterState({ select: (state) => state.location.search });
+  const [input, setInput] = useState(lookedUp ?? '');
   const [announcement, setAnnouncement] = useState('');
   const [problem, setProblem] = useState<string>();
   const idField = useRef<HTMLInputElement>(null);
+
+  // An empty or over-long id, or one with spaces round it, is corrected in the
+  // address, without adding a step to Back.
+  useEffect(() => {
+    const id = certificatesSearch(address).id;
+    if ('id' in address && address.id !== id) {
+      void navigate({ search: { id }, replace: true });
+    }
+  }, [address, navigate]);
+
+  // Back and Forward change the id in the address; the field follows.
+  useEffect(() => {
+    setInput(lookedUp ?? '');
+    setProblem(undefined);
+  }, [lookedUp]);
 
   return (
     <div className="space-y-6">
@@ -465,7 +484,7 @@ export function CertificatesScreen() {
             idField.current?.focus();
             return;
           }
-          setLookedUp(input.trim());
+          void navigate({ search: { id: input.trim() } });
         }}
       >
         <div className="flex items-end gap-2">
@@ -478,6 +497,9 @@ export function CertificatesScreen() {
               aria-describedby={problem ? 'certificate-id-error' : undefined}
               value={input}
               maxLength={100}
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="characters"
               onChange={(event) => {
                 setInput(event.target.value);
                 setProblem(undefined);

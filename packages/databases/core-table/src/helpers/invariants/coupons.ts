@@ -30,7 +30,9 @@ export const checkCouponCountMatchesRedemptions = (
 };
 
 // A coupon is within its limit and its value fits its type. A disabled or
-// expired coupon with redemptions is fine.
+// expired coupon with redemptions is fine. Every writer that creates a coupon
+// (core-table's helpers and instructor-api's coupon.create) checks the value
+// with couponValueProblem, so snapshot.coupons never holds a value it refuses.
 export const checkCouponWithinLimit = (snapshot: TableSnapshot): Violation[] =>
   snapshot.coupons.flatMap((c) => {
     const problems: string[] = [];
