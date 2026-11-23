@@ -15,15 +15,32 @@ import { monthPeriod, type Period } from './period';
  */
 export function PeriodPicker({
   month,
+  range: addressRange,
   onMonthChange,
   onPeriodChange,
 }: {
   month: string;
+  /** The custom range the address holds, if it holds one. */
+  range?: Period;
   onMonthChange: (month: string) => void;
   onPeriodChange: (period: Period) => void;
 }) {
-  const [custom, setCustom] = useState(false);
-  const [range, setRange] = useState<Period>(() => monthPeriod(month));
+  const [custom, setCustom] = useState(Boolean(addressRange));
+  const [range, setRange] = useState<Period>(
+    () => addressRange ?? monthPeriod(month),
+  );
+
+  // Back and Forward change the address; the fields follow it.
+  const addressFrom = addressRange?.from;
+  const addressTo = addressRange?.to;
+  useEffect(() => {
+    if (addressFrom && addressTo) {
+      setRange({ from: addressFrom, to: addressTo });
+      setCustom(true);
+    } else {
+      setCustom(false);
+    }
+  }, [addressFrom, addressTo]);
 
   const fromRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
@@ -74,7 +91,7 @@ export function PeriodPicker({
             onClick={() => {
               moved.current = true;
               setCustom(false);
-              onPeriodChange(monthPeriod(month));
+              onMonthChange(month);
             }}
           >
             Choose a month

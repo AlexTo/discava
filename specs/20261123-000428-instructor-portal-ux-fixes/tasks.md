@@ -567,20 +567,20 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: quickstart, US8.
 
-- [ ] T068 [P] [US8] Test first in `IP/my-courses/-route.test.tsx`, then add `validateSearch` to `IP/my-courses/route.tsx` as [contracts/url-state.md](./contracts/url-state.md) says (B-09):
+- [x] T068 [P] [US8] Test first in `IP/my-courses/-route.test.tsx`, then add `validateSearch` to `IP/my-courses/route.tsx` as [contracts/url-state.md](./contracts/url-state.md) says (B-09):
   - `status`: `all` | `published` | `draft` | `archived`, default `all`;
   - `q`: trimmed, at most 200 characters.
 
   The filter pushes, and the search box replaces (debounced as today). Defaults are left out, and invalid values fall back with `replace`.
-- [ ] T069 [P] [US8] Test first in `IP/my-courses_/$courseId_/questions/-route.test.tsx`, then add `validateSearch` with `tab` (`unanswered` | `reported` | `by-lesson`) and `lesson` to `IP/my-courses_/$courseId_/questions/route.tsx` (E-10). The `Tabs` become controlled from `tab`, and `-components/by-lesson-view.tsx`'s select from `lesson`. A `lesson` not in the course shows By lesson with nothing chosen.
-- [ ] T070 [P] [US8] Test first in `IP/earnings/-route.test.tsx`, then add `validateSearch` with `month` (`YYYY-MM`) or `from` and `to` (`YYYY-MM-DD`, `from` ≤ `to`) to `IP/earnings/route.tsx`, and drive `-components/period-picker.tsx` from it (A-21). If both are present the range wins. The report's request gets the same `from` and `to` the picker computes today.
-- [ ] T071 [US8] Add `packages/e2e/src/scenarios/instructor-views.e2e.ts`. As a new instructor with draft and published courses:
+- [x] T069 [P] [US8] Test first in `IP/my-courses_/$courseId_/questions/-route.test.tsx`, then add `validateSearch` with `tab` (`unanswered` | `reported` | `by-lesson`) and `lesson` to `IP/my-courses_/$courseId_/questions/route.tsx` (E-10). The `Tabs` become controlled from `tab`, and `-components/by-lesson-view.tsx`'s select from `lesson`. A `lesson` not in the course shows By lesson with nothing chosen.
+- [x] T070 [P] [US8] Test first in `IP/earnings/-route.test.tsx`, then add `validateSearch` with `month` (`YYYY-MM`) or `from` and `to` (`YYYY-MM-DD`, `from` ≤ `to`) to `IP/earnings/route.tsx`, and drive `-components/period-picker.tsx` from it (A-21). If both are present the range wins. The report's request gets the same `from` and `to` the picker computes today.
+- [x] T071 [US8] Add `packages/e2e/src/scenarios/instructor-views.e2e.ts`. As a new instructor with draft and published courses:
   - filter My Courses to Draft, search, reload, and assert the same view. Go Back and assert "All";
   - open a course's questions on Reported, reload, and assert Reported;
   - open earnings, choose the previous month, reload, and assert that month.
 
   Screenshot: `'my courses filtered from the address'`.
-- [ ] T072 [US8] Run the instructor portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T072 [US8] Run the instructor portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

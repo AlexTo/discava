@@ -2,7 +2,8 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { useSyncExternalStore } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
@@ -12,6 +13,35 @@ import {
 import { Route } from './route';
 
 const EarningsPage = Route.options.component!;
+
+// The address stands in for the router's: a small store the page reads and
+// writes through useSearch and useNavigate, with each write recorded.
+type Search = { month?: string; from?: string; to?: string };
+let search: Search = {};
+const listeners = new Set<() => void>();
+const navigations: Search[] = [];
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+};
+const validate = Route.options.validateSearch as (
+  search: Record<string, unknown>,
+) => Search;
+
+beforeEach(() => {
+  search = {};
+  navigations.length = 0;
+  vi.spyOn(Route, 'useSearch').mockImplementation(() =>
+    useSyncExternalStore(subscribe, () => search),
+  );
+  vi.spyOn(Route, 'useNavigate').mockReturnValue(((opts: {
+    search: Search;
+  }) => {
+    navigations.push(opts.search);
+    search = validate(opts.search);
+    for (const listener of listeners) listener();
+  }) as never);
+});
 
 const totals = {
   orders: 3,
@@ -88,6 +118,82 @@ const open = (handlers: Record<string, Handler> = {}) =>
       ...handlers,
     },
   });
+
+describe('earnings period in the address', () => {
+  it('validates the month, or a range that wins over it', () => {
+    expect(validate({})).toEqual({});
+    expect(validate({ month: '2026-10' })).toEqual({ month: '2026-10' });
+    expect(validate({ month: '2026-13' })).toEqual({});
+    expect(validate({ month: 'soon' })).toEqual({});
+    expect(
+      validate({ month: '2026-10', from: '2026-10-05', to: '2026-10-09' }),
+    ).toEqual({ from: '2026-10-05', to: '2026-10-09' });
+    expect(validate({ from: '2026-10-05', to: '2026-10-05' })).toEqual({
+      from: '2026-10-05',
+      to: '2026-10-05',
+    });
+    // Both or neither, in order, and real days.
+    expect(validate({ from: '2026-10-05' })).toEqual({});
+    expect(validate({ from: '2026-10-09', to: '2026-10-05' })).toEqual({});
+    expect(validate({ from: '2026-02-30', to: '2026-03-05' })).toEqual({});
+    expect(
+      validate({ month: '2026-10', from: '2026-10-09', to: '2026-10-05' }),
+    ).toEqual({ month: '2026-10' });
+  });
+
+  it('asks for the month the address names', async () => {
+    search = { month: '2026-02' };
+    const { calls } = open();
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    expect(screen.getByLabelText('Month (UTC)')).toHaveValue('2026-02');
+    expect(calls.find((c) => c.path === 'earnings.report')?.input).toEqual({
+      from: '2026-02-01',
+      to: '2026-02-28',
+    });
+  });
+
+  it('asks for the range the address names, in Custom range mode', async () => {
+    search = { from: '2026-10-05', to: '2026-10-09' };
+    const { calls } = open();
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    expect(screen.getByLabelText('From')).toHaveValue('2026-10-05');
+    expect(screen.getByLabelText('To')).toHaveValue('2026-10-09');
+    expect(calls.find((c) => c.path === 'earnings.report')?.input).toEqual({
+      from: '2026-10-05',
+      to: '2026-10-09',
+    });
+  });
+
+  it('writes a chosen month to the address', async () => {
+    open();
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    fireEvent.change(screen.getByLabelText('Month (UTC)'), {
+      target: { value: '2026-02' },
+    });
+
+    expect(navigations.at(-1)).toEqual({ month: '2026-02' });
+  });
+
+  it('writes a custom range to the address, and a month again when chosen', async () => {
+    const { user } = open();
+
+    await screen.findByRole('table', { name: 'Earnings in USD' });
+    await user.click(screen.getByRole('button', { name: 'Custom range' }));
+    const to = screen.getByLabelText('To');
+    await user.clear(to);
+    await user.type(to, '2026-11-20');
+    expect(navigations.at(-1)).toMatchObject({ to: '2026-11-20' });
+    expect(search.to).toBe('2026-11-20');
+
+    await user.click(screen.getByRole('button', { name: 'Choose a month' }));
+    expect(navigations.at(-1)).toEqual({ month: undefined });
+    expect(search).toEqual({});
+    expect(await screen.findByLabelText('Month (UTC)')).toBeVisible();
+  });
+});
 
 describe('earnings report', () => {
   it('sets the page title and keeps one h1', () => {

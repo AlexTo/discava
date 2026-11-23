@@ -12,22 +12,45 @@ import {
 } from '@discava/common-shadcn/components/ui/tabs';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  Link,
+  type SearchSchemaInput,
+  stripSearchParams,
+} from '@tanstack/react-router';
 import { useInstructorApi } from '../../../../../api';
 import { ByLessonView } from './-components/by-lesson-view';
 import { ReportedView } from './-components/reported-view';
 import { UnansweredView } from './-components/unanswered-view';
+
+const tabs = ['unanswered', 'reported', 'by-lesson'] as const;
+type QuestionsTab = (typeof tabs)[number];
 
 // `$courseId_` keeps this route out of the course page's layout, like
 // reviews.
 export const Route = createFileRoute(
   '/_authenticated/my-courses_/$courseId_/questions',
 )({
+  // The tab and the lesson are kept in the URL so the view survives a reload
+  // and can be shared. A tab at its default is left out of the address.
+  validateSearch: (
+    search: Record<string, unknown> & SearchSchemaInput,
+  ): { tab: QuestionsTab; lesson?: string } => ({
+    tab: tabs.includes(search.tab as QuestionsTab)
+      ? (search.tab as QuestionsTab)
+      : 'unanswered',
+    ...(typeof search.lesson === 'string' && search.lesson
+      ? { lesson: search.lesson }
+      : {}),
+  }),
+  search: { middlewares: [stripSearchParams({ tab: 'unanswered' })] },
   component: RouteComponent,
 });
 
 function RouteComponent() {
   const { courseId } = Route.useParams();
+  const { tab, lesson } = Route.useSearch();
+  const navigate = Route.useNavigate();
   useBreadcrumbLabel('Course', `/my-courses/${courseId}`);
   // Shares the course editor's cached answer.
   const courseQuery = useQuery(
@@ -53,7 +76,14 @@ function RouteComponent() {
           </Link>
         </Button>
       </section>
-      <Tabs defaultValue="unanswered">
+      <Tabs
+        value={tab}
+        onValueChange={(next) =>
+          void navigate({
+            search: { tab: next as QuestionsTab },
+          })
+        }
+      >
         <TabsList>
           <TabsTrigger value="unanswered">Unanswered</TabsTrigger>
           <TabsTrigger value="reported">Reported</TabsTrigger>
@@ -66,7 +96,18 @@ function RouteComponent() {
           <ReportedView courseId={courseId} />
         </TabsContent>
         <TabsContent value="by-lesson" className="pt-4">
-          <ByLessonView courseId={courseId} />
+          <ByLessonView
+            courseId={courseId}
+            lessonId={tab === 'by-lesson' ? lesson : undefined}
+            onLessonChange={(next) =>
+              void navigate({
+                search: (prev) => ({
+                  ...prev,
+                  lesson: next || undefined,
+                }),
+              })
+            }
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -23,9 +23,14 @@ import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  Link,
+  type SearchSchemaInput,
+  stripSearchParams,
+} from '@tanstack/react-router';
 import { BookOpen, CirclePlus, Search, Users } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useCoreApi, useInstructorApi } from '../../../api';
 import { CreateCourseDialog } from '../../../components/create-course-dialog';
@@ -34,7 +39,27 @@ import {
   courseStatusStyles,
 } from '../../../lib/course-status';
 
+const statuses = ['all', 'published', 'draft', 'archived'] as const;
+type StatusFilter = (typeof statuses)[number];
+const defaultSearch = { status: 'all' as StatusFilter, q: '' };
+const MAX_QUERY_LENGTH = 200;
+const SEARCH_DEBOUNCE_MS = 250;
+
+// The filter and the search live in the address, so a view survives a reload
+// and can be shared. A value at its default is left out of the address.
 export const Route = createFileRoute('/_authenticated/my-courses')({
+  validateSearch: (
+    search: Record<string, unknown> & SearchSchemaInput,
+  ): { status: StatusFilter; q: string } => ({
+    status: statuses.includes(search.status as StatusFilter)
+      ? (search.status as StatusFilter)
+      : 'all',
+    q:
+      typeof search.q === 'string'
+        ? search.q.trim().slice(0, MAX_QUERY_LENGTH).trim()
+        : '',
+  }),
+  search: { middlewares: [stripSearchParams(defaultSearch)] },
   component: RouteComponent,
 });
 
@@ -49,15 +74,37 @@ const courseStatusLabels: Record<string, CourseStatus> = {
   archived: 'Archived',
 };
 
-const filters = ['All', 'Published', 'Draft', 'Archived'] as const;
-type CourseFilter = (typeof filters)[number];
+const filterLabels: Record<StatusFilter, string> = {
+  all: 'All',
+  published: 'Published',
+  draft: 'Draft',
+  archived: 'Archived',
+};
 
 function RouteComponent() {
   usePageTitle('My Courses');
-  const [filter, setFilter] = useState<CourseFilter>('All');
-  const [query, setQuery] = useState('');
+  const { status, q } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  // The box keeps what's typed; the address follows once typing pauses.
+  const [query, setQuery] = useState(q);
   const searchRef = useRef<HTMLInputElement>(null);
   const normalisedQuery = query.trim().toLocaleLowerCase();
+
+  // Back and Forward change the address, and the box follows.
+  useEffect(() => setQuery(q), [q]);
+  useEffect(() => {
+    const typed = query.trim().slice(0, MAX_QUERY_LENGTH).trim();
+    if (typed === q) return;
+    const timer = setTimeout(
+      () =>
+        void navigate({
+          search: (prev) => ({ ...prev, q: typed }),
+          replace: true,
+        }),
+      SEARCH_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [query, q, navigate]);
 
   const auth = useAuth();
   const instructorId = auth.user?.profile.sub;
@@ -110,7 +157,7 @@ function RouteComponent() {
 
   const visibleCourses = courses.filter(
     (course) =>
-      (filter === 'All' || course.status === filter) &&
+      (status === 'all' || course.status.toLocaleLowerCase() === status) &&
       (!normalisedQuery ||
         course.title.toLocaleLowerCase().includes(normalisedQuery)),
   );
@@ -198,22 +245,28 @@ function RouteComponent() {
             </div>
             <ToggleGroup
               type="single"
-              value={filter}
+              value={status}
               onValueChange={(value) => {
-                if (value) setFilter(value as CourseFilter);
+                if (value)
+                  void navigate({
+                    search: (prev) => ({
+                      ...prev,
+                      status: value as StatusFilter,
+                    }),
+                  });
               }}
               variant="outline"
               size="sm"
               className="max-w-full overflow-x-auto"
               aria-label="Filter courses by status"
             >
-              {filters.map((item) => (
+              {statuses.map((item) => (
                 <ToggleGroupItem
                   key={item}
                   value={item}
-                  aria-label={`Show ${item.toLocaleLowerCase()} courses`}
+                  aria-label={`Show ${item} courses`}
                 >
-                  {item}
+                  {filterLabels[item]}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -334,7 +387,10 @@ function RouteComponent() {
                 type="button"
                 onClick={() => {
                   setQuery('');
-                  setFilter('All');
+                  void navigate({
+                    search: (prev) => ({ ...prev, status: 'all', q: '' }),
+                    replace: true,
+                  });
                   searchRef.current?.focus();
                 }}
               >
