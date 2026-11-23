@@ -74,4 +74,19 @@ describe('PortalShell’s phone sidebar', () => {
       ).toHaveFocus(),
     );
   });
+
+  it('still returns focus to the trigger after a navigation made with the sidebar closed', async () => {
+    location.pathname = '/a';
+    const { rerender } = render(shell());
+    location.pathname = '/b';
+    rerender(shell());
+    const dialog = await openSidebar();
+    fireEvent.keyDown(within(dialog).getByText('Admin'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /toggle sidebar/i }),
+      ).toHaveFocus(),
+    );
+  });
 });

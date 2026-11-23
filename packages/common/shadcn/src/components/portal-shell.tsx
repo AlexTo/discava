@@ -111,13 +111,18 @@ const ShellSidebar = ({
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   children: React.ReactNode;
 }) => {
-  const { setOpenMobile } = useSidebar();
+  const { openMobile, setOpenMobile } = useSidebar();
+  const openRef = React.useRef(openMobile);
+  openRef.current = openMobile;
   const previous = React.useRef(pathname);
   const navigating = React.useRef(false);
 
   React.useEffect(() => {
     if (previous.current === pathname) return;
     previous.current = pathname;
+    // Only a sheet that is open closes, and so only then does
+    // onCloseAutoFocus follow to clear this.
+    if (!openRef.current) return;
     navigating.current = true;
     setOpenMobile(false);
   }, [pathname, setOpenMobile]);
