@@ -71,7 +71,13 @@ export function CourseFirstLessonPromptForm({
       }}
     >
       <div>
-        <h3 className="font-medium">First-lesson prompt</h3>
+        <h2
+          id="first-lesson-prompt"
+          tabIndex={-1}
+          className="text-xl font-semibold"
+        >
+          First-lesson prompt
+        </h2>
         <p id={`${fieldId}-help`} className="text-xs text-muted-foreground">
           New learners see this in the first lesson's Questions, once. Ask about
           the course's content, not about themselves.
