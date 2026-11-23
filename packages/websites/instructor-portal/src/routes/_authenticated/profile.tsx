@@ -423,7 +423,9 @@ function ProfileForm({
                 type="submit"
                 pending={isSubmitting}
                 pendingLabel="Saving…"
-                disabled={!canSubmit}
+                // canSubmit is false while submitting too; only a form that
+                // can't be sent disables Save, so focus stays on it.
+                disabled={!canSubmit && !isSubmitting}
               >
                 Save
               </PendingButton>

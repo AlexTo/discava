@@ -106,6 +106,20 @@ describe('FreePreviewButton', () => {
     );
   });
 
+  it('keeps the button focusable while the mark is being removed', async () => {
+    const { user } = renderButton(true, {
+      handlers: { 'lesson.setFreePreview': () => new Promise(() => {}) },
+    });
+
+    const button = screen.getByRole('button', { name: 'Remove free preview' });
+    await user.click(button);
+
+    await waitFor(() => expect(button).toHaveTextContent('Removing…'));
+    expect(button).not.toBeDisabled();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveFocus();
+  });
+
   it("shows the API's message when marking fails, keeping the dialog open", async () => {
     const { user } = renderButton(false, {
       handlers: {

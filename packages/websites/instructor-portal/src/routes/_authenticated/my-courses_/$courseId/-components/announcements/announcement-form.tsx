@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
@@ -182,15 +183,14 @@ export function AnnouncementForm({
             Cancel
           </Button>
         )}
-        <Button type="submit" disabled={!canSave || mutation.isPending}>
-          {announcement
-            ? mutation.isPending
-              ? 'Saving…'
-              : 'Save changes'
-            : mutation.isPending
-              ? 'Posting…'
-              : 'Post announcement'}
-        </Button>
+        <PendingButton
+          type="submit"
+          disabled={!canSave}
+          pending={mutation.isPending}
+          pendingLabel={announcement ? 'Saving…' : 'Posting…'}
+        >
+          {announcement ? 'Save changes' : 'Post announcement'}
+        </PendingButton>
       </div>
     </form>
   );

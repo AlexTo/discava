@@ -71,6 +71,22 @@ describe('AnnouncementForm', () => {
     });
   });
 
+  it('keeps Post focusable while posting', async () => {
+    const { user } = renderWithInstructorApi(
+      <AnnouncementForm courseId={COURSE_ID} />,
+      { handlers: { 'announcement.create': () => new Promise(() => {}) } },
+    );
+
+    await typeAnnouncement(user);
+    const post = screen.getByRole('button', { name: 'Post announcement' });
+    await user.click(post);
+
+    await waitFor(() => expect(post).toHaveTextContent('Posting…'));
+    expect(post).not.toBeDisabled();
+    expect(post).toHaveAttribute('aria-disabled', 'true');
+    expect(post).toHaveFocus();
+  });
+
   it('keeps what was typed and the same id when a post fails, so a retry is the same post', async () => {
     let attempt = 0;
     const { calls, user } = renderWithInstructorApi(
