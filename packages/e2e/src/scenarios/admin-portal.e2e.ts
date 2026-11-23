@@ -67,6 +67,9 @@ test('the admin home page leads to every area, and a missing page leads home', a
     );
     await screenshot(page, 'admin categories loading');
     release();
+    // Unrouting while the held request is in flight would make its
+    // `route.continue()` fail, so wait for the list to arrive first.
+    await expect(page.getByRole('status')).toHaveCount(0);
     await page.unroute(/localhost:2025\/.*category\.list/);
   });
 
