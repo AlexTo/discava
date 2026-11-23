@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useId } from 'react';
 import type { QuizState, RevealAnswers } from './quiz-form';
+import { QUIZ_PROBLEMS_ID } from './quiz-save-bar';
 import { sectionId } from './use-quiz-builder-state';
 
 const REVEAL_LABELS: Record<RevealAnswers, string> = {
@@ -35,11 +36,14 @@ export function QuizSettingsSection({
   readOnly,
   onChange,
   onChangeSettings,
+  titleInvalid = false,
 }: {
   quiz: QuizState;
   readOnly: boolean;
   onChange: (next: Partial<QuizState>) => void;
   onChangeSettings: (next: Partial<QuizState['settings']>) => void;
+  // The title is one of the problems listed in the save bar.
+  titleInvalid?: boolean;
 }) {
   // Prefix for the settings fields' ids, which their labels point at.
   const ids = useId();
@@ -66,6 +70,8 @@ export function QuizSettingsSection({
                 value={quiz.title}
                 onChange={(event) => onChange({ title: event.target.value })}
                 maxLength={200}
+                aria-invalid={titleInvalid}
+                aria-describedby={titleInvalid ? QUIZ_PROBLEMS_ID : undefined}
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">

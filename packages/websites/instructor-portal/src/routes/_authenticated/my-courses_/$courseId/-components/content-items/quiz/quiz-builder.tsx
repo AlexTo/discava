@@ -67,7 +67,7 @@ export function QuizBuilder({
   const { quiz, errors, expanded, showProblems } = state;
 
   return (
-    <div className="space-y-6">
+    <div ref={state.rootRef} className="space-y-6">
       {readOnlyReason && (
         <ErrorAlert header="This quiz can't be edited">
           {readOnlyReason}
@@ -99,6 +99,10 @@ export function QuizBuilder({
             readOnly={readOnly}
             onChange={state.change}
             onChangeSettings={state.changeSettings}
+            titleInvalid={
+              showProblems &&
+              errors.quiz.some((problem) => /title/i.test(problem))
+            }
           />
           <SortableQuestionList
             quiz={quiz}

@@ -18,7 +18,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Archive, RotateCcw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
 import { studentActivityNote, usedItemCount } from '../student-activity';
 import { useFocusAfterRemoval } from '../use-focus-after-removal';
@@ -320,19 +320,25 @@ function DeletePermanentlyDialog({
   reset: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const reasonId = useId();
 
   if (used) {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        disabled
-        title="Students have used it, so it can stay archived but can't be deleted permanently"
-        aria-label={`Delete ${entry.noun} ${entry.title} permanently (not possible: students have used it)`}
-      >
-        <Trash2 /> Delete permanently
-      </Button>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled
+          aria-describedby={reasonId}
+          aria-label={`Delete ${entry.noun} ${entry.title} permanently`}
+        >
+          <Trash2 /> Delete permanently
+        </Button>
+        <span id={reasonId} className="text-xs text-muted-foreground">
+          Students have used it, so it stays archived.
+        </span>
+      </div>
     );
   }
 

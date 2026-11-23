@@ -73,6 +73,35 @@ const pickFile = async (
 const title = () => screen.getByLabelText('Title');
 
 describe('AttachLessonFileDialog', () => {
+  it('keeps Save enabled, and on Save with nothing chosen focuses the title and says what is missing', async () => {
+    const { calls, user } = openDialog();
+    await user.click(screen.getByRole('button', { name: 'File' }));
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(title()).toHaveFocus());
+    expect(title()).toBeInvalid();
+    expect(title()).toHaveAccessibleDescription('Enter a title.');
+    expect(
+      screen.getByRole('button', { name: 'Choose a file' }),
+    ).toHaveAccessibleDescription('Choose a file.');
+    expect(calls).toEqual([]);
+  });
+
+  it('says to wait while a file is still uploading', async () => {
+    const { user } = openDialog();
+    await pickFile(user);
+    await user.type(title(), 'Worksheet one');
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Wait for the upload to finish.'),
+    ).toBeVisible();
+    uploads[0].finish();
+  });
+
   it('starts the title from the file’s name, once uploaded', async () => {
     const { user } = openDialog();
 

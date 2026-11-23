@@ -28,6 +28,9 @@ export const putFileWithProgress = (
       xhr.status >= 200 && xhr.status < 300
         ? resolve()
         : reject(new Error(failureMessage));
-    xhr.onerror = () => reject(new Error(failureMessage));
+    // A network fault is a TypeError, as fetch's is, so apiErrorMessage says
+    // "Couldn't reach Discava…" rather than the technical failure.
+    xhr.onerror = (cause) =>
+      reject(Object.assign(new TypeError(failureMessage), { cause }));
     xhr.send(file);
   });

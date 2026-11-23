@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Link } from '@tanstack/react-router';
 
 interface Line {
@@ -11,6 +12,8 @@ interface Line {
   // The id of the section on this page that fixes it, or the profile page.
   hash?: string;
   to?: '/profile';
+  // The line's data failed to load; shown with a Try again.
+  failed?: boolean;
 }
 
 const LINK_CLASS =
@@ -27,6 +30,8 @@ export function LandingPageChecklist({
   hasPreview,
   hasImage,
   hasProfile,
+  profileFailed = false,
+  onRetryProfile,
 }: {
   /** The public page's address; given only while the course is published. */
   publicPageUrl?: string;
@@ -37,6 +42,10 @@ export function LandingPageChecklist({
   hasImage: boolean;
   /** The instructor's profile has a headline and a photo; undefined until it has loaded. */
   hasProfile?: boolean;
+  /** The profile could not be loaded. */
+  profileFailed?: boolean;
+  /** Loads the profile again. */
+  onRetryProfile?: () => void;
 }) {
   const lines: Line[] = [
     {
@@ -55,15 +64,34 @@ export function LandingPageChecklist({
       label: 'Your profile (headline and photo)',
       done: hasProfile,
       to: '/profile',
+      failed: profileFailed,
     },
   ];
 
   return (
     <div className="space-y-3">
       <ul className="space-y-2 text-sm">
-        {lines.map(({ label, done, hash, to }) => (
+        {lines.map(({ label, done, hash, to, failed }) => (
           <li key={label} className="flex flex-wrap items-center gap-2">
-            {done === undefined ? (
+            {failed ? (
+              <>
+                <span aria-hidden="true">–</span>
+                <span>{label}</span>
+                <span role="alert" className="text-destructive">
+                  Couldn't check this.
+                </span>
+                {onRetryProfile && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onRetryProfile}
+                  >
+                    Try again
+                  </Button>
+                )}
+              </>
+            ) : done === undefined ? (
               <>
                 <span aria-hidden="true">–</span>
                 <span>{label}</span>

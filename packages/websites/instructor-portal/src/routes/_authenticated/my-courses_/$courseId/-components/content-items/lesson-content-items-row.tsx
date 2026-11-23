@@ -247,6 +247,16 @@ export function LessonContentItemsRow({
             {captionsLabel(item)}
           </Badge>
         )}
+        {item.status === 'pending' && (
+          <Badge variant="outline" className="font-normal">
+            Processing…
+          </Badge>
+        )}
+        {item.status === 'failed' && (
+          <Badge variant="destructive" className="font-normal">
+            Processing failed
+          </Badge>
+        )}
         <VideoQuestionsDialog
           courseId={courseId}
           moduleId={moduleId}
@@ -260,11 +270,6 @@ export function LessonContentItemsRow({
               type="button"
               aria-label={`Questions for ${item.title}`}
               disabled={!isPlayable(item)}
-              title={
-                isPlayable(item)
-                  ? undefined
-                  : 'The video has no playable version yet. Questions can be added once it has finished processing.'
-              }
               className="transition-opacity sm:opacity-0 sm:group-hover/resource:opacity-100 focus-visible:opacity-100"
             >
               {item.questions?.length

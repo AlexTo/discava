@@ -120,6 +120,23 @@ describe('Review page', () => {
     expect(screen.getByText(/by Ines/)).toBeVisible();
   });
 
+  it('offers Try again when the submission fails to load', async () => {
+    let attempts = 0;
+    const { user } = render(() => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new ApiError('INTERNAL_SERVER_ERROR', 'Down');
+      }
+      return view();
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sam Student' }),
+    ).toBeVisible();
+  });
+
   it('wraps a long word in the student name anywhere', async () => {
     render(() => view());
 
@@ -183,7 +200,13 @@ describe('Review page', () => {
     await user.type(await screen.findByLabelText('Points'), '25');
     await user.click(screen.getByRole('button', { name: 'Return' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const points = screen.getByLabelText('Points');
+    expect(
+      await screen.findByText('Points must be between 0 and 20'),
+    ).toBeVisible();
+    expect(points).toHaveFocus();
+    expect(points).toBeInvalid();
+    expect(points).toHaveAccessibleDescription(
       'Points must be between 0 and 20',
     );
     expect(calls.some((c) => c.path === 'assignmentSubmission.return')).toBe(

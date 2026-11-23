@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -27,6 +28,7 @@ import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Progress } from '@discava/common-shadcn/components/ui/progress';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
+import { focusFirstInvalid } from '@discava/common-shadcn/lib/focus-first-invalid';
 import { cn } from '@discava/common-shadcn/lib/utils';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { fileKind, formatFileSize } from '@discava/common-web-utils/file-size';
@@ -116,6 +118,13 @@ export function AttachLessonFileDialog({
   const [descriptionValue, setDescriptionValue] = useState(description ?? '');
   const [pendingUpload, setPendingUpload] = useState<PendingUpload>();
   const [error, setError] = useState<string>();
+  // What is missing, shown beside the field once Save is pressed.
+  const [problems, setProblems] = useState<{ title?: string; file?: string }>(
+    {},
+  );
+  const contentRef = useRef<HTMLDivElement>(null);
+  // Which step failed, for the alert's header.
+  const [failedStep, setFailedStep] = useState<'upload' | 'save'>('save');
   const [uploadProgress, setUploadProgress] = useState<number>();
   const isUploading = uploadProgress !== undefined;
   const { course, contentItem } = useInstructorApi();
@@ -135,6 +144,7 @@ export function AttachLessonFileDialog({
   const uploadFile = async (file: File) => {
     setError(undefined);
     setUploadProgress(0);
+    setProblems((current) => ({ ...current, file: undefined }));
     try {
       const {
         contentItemId: newContentItemId,
@@ -171,6 +181,7 @@ export function AttachLessonFileDialog({
         );
       }
     } catch (failure) {
+      setFailedStep('upload');
       setError(apiErrorMessage(failure, 'Failed to upload the file'));
     } finally {
       setUploadProgress(undefined);
@@ -180,6 +191,7 @@ export function AttachLessonFileDialog({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (accepted, rejected) => {
       if (rejected.length > 0) {
+        setFailedStep('upload');
         setError(rejectionMessage(rejected));
         return;
       }
@@ -194,13 +206,21 @@ export function AttachLessonFileDialog({
     maxSize: MAX_FILE_BYTES,
   });
 
-  const canSave =
-    titleValue.trim().length > 0 &&
-    !isUploading &&
-    (contentItemId || pendingUpload);
-
   const handleSave = async () => {
     setError(undefined);
+    const found = {
+      title: titleValue.trim() ? undefined : 'Enter a title.',
+      file: isUploading
+        ? 'Wait for the upload to finish.'
+        : contentItemId || pendingUpload
+          ? undefined
+          : 'Choose a file.',
+    };
+    setProblems(found);
+    if (found.title || found.file) {
+      focusFirstInvalid(contentRef.current);
+      return;
+    }
     try {
       if (contentItemId) {
         await updateFileItem({
@@ -232,6 +252,7 @@ export function AttachLessonFileDialog({
       });
       setOpen(false);
     } catch (failure) {
+      setFailedStep('save');
       setError(apiErrorMessage(failure, "Couldn't save the file"));
     }
   };
@@ -250,6 +271,7 @@ export function AttachLessonFileDialog({
     setDescriptionValue(description ?? '');
     setPendingUpload(undefined);
     setError(undefined);
+    setProblems({});
   };
   const close = () => {
     setOpen(false);
@@ -273,7 +295,11 @@ export function AttachLessonFileDialog({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl" {...contentProps}>
+      <DialogContent
+        ref={contentRef}
+        className="sm:max-w-2xl"
+        {...contentProps}
+      >
         <DialogHeader>
           <DialogTitle>{contentItemId ? 'Edit file' : 'Add file'}</DialogTitle>
           <p className="text-sm text-muted-foreground">
@@ -283,7 +309,14 @@ export function AttachLessonFileDialog({
         </DialogHeader>
 
         {error && (
-          <ErrorAlert type="error" header="Couldn't save the file">
+          <ErrorAlert
+            type="error"
+            header={
+              failedStep === 'upload'
+                ? "Couldn't upload the file"
+                : "Couldn't save the file"
+            }
+          >
             {error}
           </ErrorAlert>
         )}
@@ -296,10 +329,23 @@ export function AttachLessonFileDialog({
             onChange={(event) => {
               titleTyped.current = true;
               setTitleValue(event.target.value);
+              setProblems((current) => ({ ...current, title: undefined }));
             }}
             placeholder="e.g. Week 1 slides"
             autoFocus
+            aria-invalid={Boolean(problems.title)}
+            aria-describedby={
+              problems.title ? 'lesson-file-title-error' : undefined
+            }
           />
+          {problems.title && (
+            <p
+              id="lesson-file-title-error"
+              className="text-sm text-destructive"
+            >
+              {problems.title}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -348,7 +394,14 @@ export function AttachLessonFileDialog({
         />
 
         <div
-          {...getRootProps({ role: 'button', 'aria-label': 'Choose a file' })}
+          {...getRootProps({
+            role: 'button',
+            'aria-label': 'Choose a file',
+            'aria-describedby': problems.file
+              ? 'lesson-file-file-error'
+              : undefined,
+            'data-invalid': problems.file ? 'true' : undefined,
+          })}
           className={cn(
             'cursor-pointer rounded-lg border border-dashed bg-muted/50 px-4 py-4 transition hover:border-primary hover:bg-primary/5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30',
             isUploading && 'pointer-events-none opacity-60',
@@ -382,18 +435,27 @@ export function AttachLessonFileDialog({
             </div>
           </div>
         </div>
+        {problems.file && (
+          <p
+            id="lesson-file-file-error"
+            className="-mt-2 text-sm text-destructive"
+          >
+            {problems.file}
+          </p>
+        )}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
+          <PendingButton
             type="button"
-            disabled={!canSave || isSaving}
+            pending={isSaving}
+            pendingLabel="Saving…"
             onClick={handleSave}
           >
-            {isSaving ? 'Saving…' : 'Save'}
-          </Button>
+            Save
+          </PendingButton>
         </DialogFooter>
         {confirmation}
       </DialogContent>

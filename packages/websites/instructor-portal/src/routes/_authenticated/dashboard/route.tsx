@@ -78,19 +78,13 @@ function RouteComponent() {
           ))}
         </section>
       ) : summariesQuery.isError ? (
-        <div className="space-y-3">
-          <ErrorAlert type="error" header="Couldn't load your courses">
-            {apiErrorMessage(summariesQuery.error)}
-          </ErrorAlert>
-          <Button
-            variant="outline"
-            size="sm"
-            type="button"
-            onClick={() => summariesQuery.refetch()}
-          >
-            Retry
-          </Button>
-        </div>
+        <ErrorAlert
+          type="error"
+          header="Couldn't load your courses"
+          onRetry={() => void summariesQuery.refetch()}
+        >
+          {apiErrorMessage(summariesQuery.error)}
+        </ErrorAlert>
       ) : courses.length === 0 ? (
         <Card className="border-dashed py-12 text-center">
           <CardContent>

@@ -224,7 +224,22 @@ describe('profile editor', () => {
         'Use lower-case letters, numbers and single hyphens',
       ),
     ).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(calls.some(({ path }) => path === 'profile.update')).toBe(false);
+  });
+
+  it('on Save with a problem, focuses the first invalid field and ties its error to it', async () => {
+    const { calls, user } = open();
+    const handle = await field('Handle');
+    await user.clear(handle);
+    await user.type(handle, 'a--b');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(handle).toHaveFocus());
+    expect(handle).toBeInvalid();
+    expect(handle).toHaveAccessibleDescription(
+      /Your address: .*Use lower-case letters, numbers and single hyphens/,
+    );
     expect(calls.some(({ path }) => path === 'profile.update')).toBe(false);
   });
 

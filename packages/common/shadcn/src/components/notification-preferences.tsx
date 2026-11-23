@@ -2,9 +2,10 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useState } from 'react';
-import { Button } from './ui/button';
-import { Skeleton } from './ui/skeleton';
+import { ErrorAlert } from './error-alert';
+import { LoadingState } from './loading-state';
 import { Switch } from './ui/switch';
 
 export interface NotificationPreferenceRow {
@@ -25,9 +26,6 @@ export interface NotificationPreferencesProps {
   onChange: (type: string, emailEnabled: boolean) => Promise<unknown>;
 }
 
-const messageOf = (error: unknown) =>
-  error instanceof Error && error.message ? ` ${error.message}` : '';
-
 // The settings list: a row per notification type with an email switch. The
 // portal supplies the rows and the save call; a switch shows its new value at
 // once and goes back if the save fails.
@@ -41,7 +39,8 @@ export function NotificationPreferences({
   // Values the user has just chosen, until the portal's rows catch up.
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState<string>();
-  const [failure, setFailure] = useState<string>();
+  // The type whose save failed, with the sentence to show beside its switch.
+  const [failure, setFailure] = useState<{ type: string; message: string }>();
 
   const change = async (type: string, emailEnabled: boolean) => {
     setSaved(undefined);
@@ -51,7 +50,10 @@ export function NotificationPreferences({
       await onChange(type, emailEnabled);
       setSaved(type);
     } catch (error) {
-      setFailure(`Couldn't save.${messageOf(error)}`);
+      setFailure({
+        type,
+        message: `Couldn't save. ${apiErrorMessage(error)}`,
+      });
     } finally {
       setPending((p) => {
         const { [type]: _done, ...rest } = p;
@@ -61,33 +63,23 @@ export function NotificationPreferences({
   };
 
   if (isLoading) {
-    return (
-      <div aria-label="Loading notification settings" className="space-y-4">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-14 w-full" />
-        ))}
-      </div>
-    );
+    return <LoadingState label="Loading your notification settings…" />;
   }
 
   if (isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p>Couldn't load your notification settings.</p>
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          Try again
-        </Button>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load your notification settings"
+        onRetry={onRetry}
+      >
+        Check your connection and try again.
+      </ErrorAlert>
     );
   }
 
   return (
     <div className="space-y-4">
-      {failure ? (
-        <p role="alert" className="text-sm text-destructive">
-          {failure}
-        </p>
-      ) : null}
       <ul className="divide-y rounded-lg border">
         {preferences.map((preference) => {
           const checked = preference.required
@@ -106,6 +98,15 @@ export function NotificationPreferences({
                 <p className="text-sm text-muted-foreground">
                   {preference.description}
                 </p>
+                {failure?.type === preference.type ? (
+                  <p
+                    id={`${labelId}-error`}
+                    role="alert"
+                    className="mt-1 text-sm text-destructive"
+                  >
+                    {failure.message}
+                  </p>
+                ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-3 text-sm text-muted-foreground">
                 {preference.required ? (
@@ -115,6 +116,11 @@ export function NotificationPreferences({
                 ) : null}
                 <Switch
                   aria-labelledby={labelId}
+                  aria-describedby={
+                    failure?.type === preference.type
+                      ? `${labelId}-error`
+                      : undefined
+                  }
                   checked={checked}
                   disabled={preference.required}
                   onCheckedChange={(next) => change(preference.type, next)}

@@ -103,6 +103,13 @@ describe('EditAssignmentDialog', () => {
       screen.getByText('Max points is a whole number from 1 to 1000'),
     ).toBeVisible();
     expect(calls).toEqual([]);
+
+    const points = screen.getByLabelText('Max points');
+    await waitFor(() => expect(points).toHaveFocus());
+    expect(points).toBeInvalid();
+    expect(points).toHaveAccessibleDescription(
+      'Max points is a whole number from 1 to 1000',
+    );
   });
 
   it("shows the API's refusal, and stays open", async () => {

@@ -22,7 +22,7 @@ test('an instructor signs in to the instructor portal', async ({ page }) => {
   ).toBeVisible();
   // Instructor-only: the course list came from instructor-api.
   await expect(
-    page.getByRole('button', { name: 'Create course' }),
+    page.getByRole('button', { name: 'Create course' }).first(),
   ).toBeVisible();
 });
 

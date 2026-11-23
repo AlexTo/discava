@@ -98,6 +98,7 @@ function RouteComponent() {
     isError,
     error,
     data: fullCourse,
+    refetch,
   } = useQuery(trpc.course.view.queryOptions({ courseId }));
 
   const profileQuery = useQuery(trpc.profile.get.queryOptions());
@@ -134,6 +135,7 @@ function RouteComponent() {
         <ErrorAlert
           type="error"
           header={notFound ? 'Course not found' : "Couldn't load this course"}
+          onRetry={notFound ? undefined : () => void refetch()}
         >
           {notFound
             ? "This course doesn't exist, or you don't have access to it."
@@ -278,6 +280,8 @@ function RouteComponent() {
               hasPreview={course.preview?.status === 'ready'}
               hasImage={Boolean(course.imageKey)}
               hasProfile={hasProfile}
+              profileFailed={profileQuery.isError}
+              onRetryProfile={() => void profileQuery.refetch()}
             />
           </Card>
         </section>
@@ -417,6 +421,7 @@ function RouteComponent() {
           <AnnouncementsSection
             courseId={course.courseId}
             archived={readOnly}
+            draft={draft}
           />
         </section>
 

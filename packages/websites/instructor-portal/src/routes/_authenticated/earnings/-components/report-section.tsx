@@ -38,19 +38,13 @@ export function ReportSection({ period }: { period: Period }) {
   }
   if (query.isError) {
     return (
-      <div className="space-y-3">
-        <ErrorAlert type="error" header="Couldn't load the report">
-          {apiErrorMessage(query.error)}
-        </ErrorAlert>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => query.refetch()}
-        >
-          Retry
-        </Button>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the report"
+        onRetry={() => void query.refetch()}
+      >
+        {apiErrorMessage(query.error)}
+      </ErrorAlert>
     );
   }
   if (query.data.currencies.length === 0) {

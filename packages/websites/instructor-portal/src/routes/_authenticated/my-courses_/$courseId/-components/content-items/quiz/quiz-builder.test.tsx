@@ -261,6 +261,36 @@ describe('QuizBuilder', () => {
     expect(calls).toEqual([]);
   });
 
+  it('focuses the title, marks it invalid, and ties it to the list of problems', async () => {
+    const { user } = renderBuilder();
+
+    await user.click(save());
+
+    const title = screen.getByLabelText('Title');
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(title).toBeInvalid();
+    expect(title).toHaveAccessibleDescription(/Give the quiz a title\./);
+  });
+
+  it('focuses the first invalid field of the first question with problems', async () => {
+    const quiz = {
+      ...existing,
+      answerKey: { ...existing.answerKey, q2: { correctOptionIds: [] } },
+    };
+    const { user } = renderExisting({}, { quiz });
+
+    await user.click(save());
+
+    const correct = await screen.findByRole('radio', {
+      name: 'Option 1 is correct',
+    });
+    await waitFor(() => expect(correct).toHaveFocus());
+    expect(correct).toBeInvalid();
+    expect(correct).toHaveAccessibleDescription(
+      'Mark exactly 1 correct option.',
+    );
+  });
+
   it('opens the first question with problems when saving', async () => {
     const quiz = {
       ...existing,

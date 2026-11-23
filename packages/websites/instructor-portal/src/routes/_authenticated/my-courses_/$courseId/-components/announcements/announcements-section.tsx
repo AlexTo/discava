@@ -16,15 +16,18 @@ const absoluteTime = (iso: string) => new Date(iso).toLocaleString();
 
 /**
  * A course's announcements: the form to post one, and the list with edit and
- * delete on each. Not read-only for an archived course, which only loses the
+ * delete on each. A draft course has no form until it is published. Not read-only for an archived course, which only loses the
  * form: its announcements can still be corrected or removed.
  */
 export function AnnouncementsSection({
   courseId,
   archived,
+  draft = false,
 }: {
   courseId: string;
   archived: boolean;
+  // Not published yet: no one is enrolled to read an announcement.
+  draft?: boolean;
 }) {
   const trpc = useInstructorApi();
   const [editingId, setEditingId] = useState<string>();
@@ -63,6 +66,10 @@ export function AnnouncementsSection({
       {archived ? (
         <p className="text-sm text-muted-foreground">
           Archived courses can't have new announcements.
+        </p>
+      ) : draft ? (
+        <p className="text-sm text-muted-foreground">
+          Publish the course to post announcements.
         </p>
       ) : (
         <AnnouncementForm courseId={courseId} />

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +13,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@discava/common-shadcn/components/ui/dialog';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { useDiscardGuard } from '@discava/common-shadcn/hooks/use-discard-guard';
 import { useUnsavedChangesGuard } from '@discava/common-shadcn/hooks/use-unsaved-changes-guard';
+import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useInstructorApi } from '../../../../../../../api';
@@ -122,8 +124,18 @@ export function VideoQuestionsDialog({
         </DialogHeader>
         {!video ? (
           loading ? (
-            <div className="flex justify-center pb-10 pt-4">
-              <Spinner />
+            <div className="pb-10 pt-4">
+              <LoadingState label="Loading the questions…" />
+            </div>
+          ) : courseQuery.isError ? (
+            <div className="pb-6">
+              <ErrorAlert
+                type="error"
+                header="Couldn't load the questions"
+                onRetry={() => void courseQuery.refetch()}
+              >
+                {apiErrorMessage(courseQuery.error)}
+              </ErrorAlert>
             </div>
           ) : (
             <p className="pb-6 text-sm text-muted-foreground">
@@ -139,6 +151,13 @@ export function VideoQuestionsDialog({
             contentItemId={contentItemId}
             video={video}
             player={videoUrlQuery.data}
+            playerLoading={videoUrlQuery.isPending}
+            playerError={
+              videoUrlQuery.isError
+                ? apiErrorMessage(videoUrlQuery.error)
+                : undefined
+            }
+            onRetryPlayer={() => void videoUrlQuery.refetch()}
             durationSeconds={durationSeconds}
             studentActivityCount={item?.studentActivityCount ?? 0}
             readOnlyReason={readOnlyReason}

@@ -106,19 +106,13 @@ export function VideoQuestionsPanel({
         )}
         {video &&
           (query.isError ? (
-            <div className="space-y-3">
-              <ErrorAlert type="error" header="Couldn't load this video">
-                {apiErrorMessage(query.error)}
-              </ErrorAlert>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => query.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
+            <ErrorAlert
+              type="error"
+              header="Couldn't load this video"
+              onRetry={() => void query.refetch()}
+            >
+              {apiErrorMessage(query.error)}
+            </ErrorAlert>
           ) : !figures ? (
             <Skeleton
               className="h-40 w-full rounded-xl"
