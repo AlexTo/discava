@@ -778,6 +778,8 @@ test('the instructor pages fit a phone with long content', async ({
     lessonId: course.lessonId,
     contentItemId: longQuizId,
   };
+  // An item added to a published course starts hidden.
+  await instructor.instructor.contentItem.publish.mutate(longQuiz);
 
   const students = [];
   for (const [index, name] of [
