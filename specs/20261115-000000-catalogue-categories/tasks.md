@@ -163,7 +163,7 @@ description: "Task list for catalogue categories, tags and richer filters"
 ## Phase 8: Polish and cross-cutting
 
 - [x] T043 [P] Update the docs site (`docs/`) where it describes courses, the instructor flow or the admin portal (categories, tags and the course fields), and `CONTRIBUTING.md` or `CLAUDE.md` architecture notes to mention `admin-api`; translate changed English docs pages locally or note pending translations in the PR description.
-- [ ] T044 Run `pnpm lint`, `pnpm test` and `pnpm build`; fix every failure in the code, not the tests. Run `pnpm tsx packages/common/scripts/src/agent-issues/validate-main.ts` and `graphify update .`.
+- [x] T044 Run `pnpm lint`, `pnpm test` and `pnpm build`; fix every failure in the code, not the tests. Run `pnpm tsx packages/common/scripts/src/agent-issues/validate-main.ts` and `graphify update .`.
 - [ ] T045 **(human)** Run [quickstart.md](./quickstart.md) by hand against `pnpm dev`, saving numbered screenshots of the key steps, including any failure, to `tmp/screenshots/pr-<number>/`. Also check SC-002 (narrow 100 courses to one in under 30 seconds) and SC-008 (95% of requests under 2 seconds once search is awake).
 - [ ] T046 **(human)** After deploying to `discava-development`, invoke the re-index Lambda once, confirm published courses appear under the facets, and confirm the OpenSearch Serverless collection returns the facet aggregations (plan risk R1); flag on the PR if it does not.
 
