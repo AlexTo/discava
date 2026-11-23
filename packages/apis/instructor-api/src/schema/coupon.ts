@@ -7,7 +7,7 @@ import { z } from 'zod';
 // Discount codes for a course (specs/20261116-013138-coupons-discount-codes/
 // contracts/instructor-api-coupon.md). The code's own format and the fixed
 // value's bound by the list price are checked in the procedure, which has the
-// code helpers and the course.
+// code helpers and the course, as is the value's range (couponValueProblem).
 
 export const CouponSchema = z.object({
   code: z.string(),
@@ -23,46 +23,28 @@ export const CouponSchema = z.object({
 
 export type ICoupon = z.output<typeof CouponSchema>;
 
-export const CreateCouponInputSchema = z
-  .object({
-    courseId: z.string().min(1),
-    code: z.string().optional(),
-    type: z.enum(['percent', 'fixed']),
-    value: z.number().int('value must be a whole number'),
-    // A calendar date, UTC.
-    expiresOn: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'expiresOn must be YYYY-MM-DD')
-      .refine((date) => {
-        const parsed = new Date(`${date}T00:00:00.000Z`);
-        return (
-          !Number.isNaN(parsed.getTime()) &&
-          parsed.toISOString().startsWith(date)
-        );
-      }, 'expiresOn must be a real date')
-      .optional(),
-    maxRedemptions: z
-      .number()
-      .int('maxRedemptions must be a whole number')
-      .min(1, 'maxRedemptions must be at least 1')
-      .optional(),
-  })
-  .superRefine((input, ctx) => {
-    if (input.type === 'percent' && (input.value < 1 || input.value > 100)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['value'],
-        message: 'value must be between 1 and 100 for a percentage',
-      });
-    }
-    if (input.type === 'fixed' && input.value < 1) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['value'],
-        message: 'value must be above 0 for a fixed amount',
-      });
-    }
-  });
+export const CreateCouponInputSchema = z.object({
+  courseId: z.string().min(1),
+  code: z.string().optional(),
+  type: z.enum(['percent', 'fixed']),
+  value: z.number(),
+  // A calendar date, UTC.
+  expiresOn: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'expiresOn must be YYYY-MM-DD')
+    .refine((date) => {
+      const parsed = new Date(`${date}T00:00:00.000Z`);
+      return (
+        !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(date)
+      );
+    }, 'expiresOn must be a real date')
+    .optional(),
+  maxRedemptions: z
+    .number()
+    .int('maxRedemptions must be a whole number')
+    .min(1, 'maxRedemptions must be at least 1')
+    .optional(),
+});
 
 export type ICreateCouponInput = z.output<typeof CreateCouponInputSchema>;
 

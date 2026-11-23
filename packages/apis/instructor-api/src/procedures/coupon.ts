@@ -4,6 +4,7 @@
  */
 import {
   couponStatus,
+  couponValueProblem,
   generateCouponCode,
   isConditionalCheckFailed,
   normaliseCouponCode,
@@ -84,8 +85,15 @@ export const createCoupon = courseInstructorProcedure(CreateCouponInputSchema)
         message: 'Coupons need a paid course',
       });
     }
-    if (type === 'fixed' && value > course.priceAmount) {
-      throw badRequest("value must not be above the course's price");
+    const currency = type === 'fixed' ? course.priceCurrency : undefined;
+    const valueProblem = couponValueProblem({
+      type,
+      value,
+      currency,
+      listAmount: course.priceAmount,
+    });
+    if (valueProblem) {
+      throw badRequest(valueProblem);
     }
 
     for (let attempt = 0; attempt < MAX_GENERATED_CODE_TRIES; attempt++) {
@@ -97,7 +105,7 @@ export const createCoupon = courseInstructorProcedure(CreateCouponInputSchema)
             code,
             type,
             value,
-            ...(type === 'fixed' && { currency: course.priceCurrency }),
+            ...(currency !== undefined && { currency }),
             ...(expiresOn !== undefined && {
               expiresAt: `${expiresOn}T23:59:59.999Z`,
             }),
