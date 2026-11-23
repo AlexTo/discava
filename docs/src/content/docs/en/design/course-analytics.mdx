@@ -17,15 +17,17 @@ The instructor portal's dashboard shows one summary card per course, and each ca
 |---|---|
 | **Enrolments** | Every enrolment the course has had, including students who dropped. The history chart counts each on the UTC day the student enrolled |
 | **Dropped** | Enrolments whose status is dropped. They stay in the enrolment history but leave every other figure below |
-| **Active learner** | An enrolled student who completed an item (which includes submitting an assignment) or submitted a quiz attempt. Signing in or opening a page doesn't count, because neither is recorded |
+| **Active learner** | An enrolled student who completed an item (which includes submitting an assignment), submitted a quiz attempt or answered a video question. Signing in or opening a page doesn't count, because neither is recorded |
 | **Active this week** | Distinct active learners in the current calendar week, Monday to Sunday, UTC. The analytics page also shows distinct active learners per UTC day, for the last 30 or 90 days |
 | **Completion rate** | Completed enrolments divided by all enrolments that haven't dropped. A course with no such enrolments shows "No data", not 0% |
-| **Activated** | Enrolments that have done a first thing in the course: the enrolment has a last-activity time, which is set by the first completed item, quiz attempt or assignment submission. Every enrolment counts, ended ones included. It is counted from the enrolment's last-activity time, so no new marker is kept, and it is "so far": a learner who hasn't started yet may still become activated. The history chart attributes it to the UTC day the student enrolled |
+| **Activated** | Enrolments that have done a first thing in the course: the enrolment has a last-activity time, which is set by the first completed item, quiz attempt, assignment submission or video question answer. Every enrolment counts, ended ones included. It is counted from the enrolment's last-activity time, so no new marker is kept, and it is "so far": a learner who hasn't started yet may still become activated. The history chart attributes it to the UTC day the student enrolled |
 | **Activation rate** | Activated enrolments divided by all enrolments, ended ones included in both. It is shown for all time and for learners who enrolled in the last 30 or 90 days. A course with no enrolments shows "No data", not 0% |
 | **Prompt answers and dismissals** | How many learners answered the first-lesson prompt, and how many pressed **Not now**. Each learner counts once per course. How often the prompt was shown isn't recorded, so there is no rate |
 | **Drop-off** | For each lesson currently shown to students, in course order: how many learners started it, how many completed it, and the completed share of those who started. Hidden or archived lessons, and lessons of hidden or archived modules, are left out |
 | **Score bands** | Each student's best score per quiz, in ten-point bands (0-9, 10-19, ... 90-100), so a student counts once however many attempts they made |
 | **Most-missed questions** | Ranked by miss rate across every attempt. A question needs at least 5 attempts to be ranked, so one bad attempt can't put it first |
+| **Video question results** | For each video shown to students that has questions, and per current question: its moment (or "End of video"), the start of its prompt, how many learners answered, how many were wrong, and the miss rate, ranked like quiz questions with the same 5-answer minimum. Only each learner's first recorded answer counts: **Try again** and skips are not recorded. Removed questions aren't listed. The results hold no learner identifier |
+| **Modules without questions** | The lesson drop-off view also names each module shown to students that has a shown video and no shown quiz and no shown video with questions, suggesting the instructor add some. It is read from the current curriculum, so it isn't a count and can't drift |
 
 ## Freshness
 

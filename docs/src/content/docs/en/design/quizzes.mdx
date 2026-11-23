@@ -7,6 +7,8 @@ sidebar:
 
 import Link from '@components/link.astro';
 
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/) (questions in videos)
+
 A quiz is a content item (`type: 'quiz'`) placed in a lesson's sequence alongside video and text. It has one or more questions, each **single choice** or **multiple choice**.
 
 ## Data model
@@ -188,3 +190,30 @@ landed -> done: no
   - Questions and answer key together are at most 300 KB, well under DynamoDB's 400 KB item limit.
   - Switching Multiple → Single with more than one correct asks which to keep.
 - Editing a quiz that has attempts warns "N students have attempted this quiz".
+
+## Questions in videos
+
+An instructor can put up to 20 questions on a video item, each at a moment in the video or at the end. They are low-stakes: no pass mark, no attempt limit, no stored score, and they never block progress. How the player asks them is in <Link path="design/video-player">Video player and captions</Link>.
+
+- **Where they are stored:** on the video's own `contentItem`, in the `questions`, `answerKey` and `quizVersion` attributes a quiz uses. Each question is a quiz question plus `atSeconds` (whole seconds, or `null` for an end question) and a server-set `contentHash`. A video has no `settings` or `questionsHash`.
+- **The versioned save:** `contentItem.updateVideoQuestions` replaces the whole set against the `quizVersion` the editor loaded, as `updateQuiz` does. Version 0 means never saved. Of two saves from the same version exactly one lands and the other gets `CONFLICT`. It is separate from `contentItem.updateVideo`, so questions can change without touching the media. Authoring is limited to the course's instructors, and refused under an archived video, lesson, module or course.
+- **The per-question hash:** the `contentHash` covers one question's id, kind, prompt and options, not its moment or key. It plays the part `questionsHash` plays for a quiz, per question, so editing one question never disturbs a learner answering another, and moving a question changes nothing.
+- **The answer sheet:** a learner's answers to one video are one `videoAnswerSheet` record (pk `userId`, sk `courseId / contentItemId`) holding, for each question answered, the options chosen, whether that was correct against the key at the time, and when. `answerCount` conditions every write, so two tabs can't both land. The sheet only ever gains entries.
+- **First answer only:** the first answer to a question is recorded and never changed, replaced or regraded. Submitting again returns the recorded answer. The key and explanation reach the learner only once their answer is on record. **Try again** is practice, graded in the browser against the key already shown, and records nothing. A skip records nothing.
+- **Low stakes:** an answer creates no `itemCompletion` and changes no progress, quiz result or certificate. It does count the learner as having used the video (see <Link path="design/live-course-editing">Live course editing</Link>) and as active that day.
+
+### Video question edited mid-answer
+
+With each answer the client sends the `contentHash` of the question it showed.
+
+| What the instructor changed | Result of submitting |
+|---|---|
+| Only the correct options or the explanation (hash matches) | Accepted and graded against the **current** key. The learner notices nothing |
+| The prompt, kind, or an option's wording, count or order (hash differs) | `CONFLICT` and nothing is recorded. The learner is told the question was updated and is shown the updated question |
+| The question's moment | Accepted. Recorded answers are unaffected, and a learner who hasn't answered it is asked at the new moment |
+| The question removed | Rejected as not found and nothing is recorded. The video resumes. Answers already recorded are kept, but the question is no longer asked or listed in results |
+| Video, lesson, module or course archived or hidden | Rejected with "no longer available" |
+
+Recorded answers are never regraded: a learner who answered wrongly stays "incorrect" after the key is corrected. A learner who reopens an answered question sees the current key and explanation beside their recorded result.
+
+The editor warns an instructor who opens the questions of a video that learners have already used: their answers are kept and not regraded. The preview in the editor grades in the browser with the instructor's own key and records nothing.

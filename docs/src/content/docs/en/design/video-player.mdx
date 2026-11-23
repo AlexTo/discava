@@ -11,6 +11,8 @@ import Link from '@components/link.astro';
 
 **Spec:** [`specs/20261120-002950-transcript-search/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002950-transcript-search/)
 
+**Spec:** [`specs/20261120-002940-in-video-questions/`](https://github.com/AlexTo/discava/tree/main/specs/20261120-002940-in-video-questions/)
+
 **Spec:** [`specs/20261120-154712-caption-translation/spec.md`](https://github.com/AlexTo/discava/blob/main/specs/20261120-154712-caption-translation/spec.md) (translated captions)
 
 Both portals play lesson videos with the same player, with its own control bar in place of the browser's.
@@ -135,3 +137,19 @@ There is no transcript API. The player already fetches each track's WebVTT file 
 ### Opening a lesson at a moment
 
 A lesson's address takes two optional parameters: `?item=<contentItemId>&t=<seconds>`. With `item` naming a video in the lesson, the lesson scrolls to it, moves focus to its player, seeks to `t`, stays paused, and shows "Starting at m:ss" with no **Start over** button. `t` takes the place of the saved position for that visit, and the seek saves nothing. Anything else in the parameters is ignored and the lesson opens as usual. The parameters grant nothing: the lesson still loads through the usual enrolment and visibility checks. A transcript search result links this way.
+
+## Questions
+
+An instructor can put questions on a video (see <Link path="design/quizzes">Quizzes</Link> for how they are stored and saved). A video without questions plays exactly as above and makes no question request.
+
+- **When a question is asked:** when normal playback reaches the moment of a question the learner hasn't answered or skipped on this visit, the video pauses and the question appears over it inside the player, so fullscreen is kept. Keyboard focus moves to the question and its heading is announced. Several questions at one moment are asked one after another, in the instructor's order. A question at 0:00 is asked when playback starts.
+- **Answering:** the learner chooses an option and presses **Submit answer**, then sees whether it was right (an icon and words, not colour alone), the correct options and the explanation when there is one, announced when it arrives. **Continue** resumes the video from where it stopped, playing again if it was playing. **Skip** (or Escape) closes the question, records nothing and doesn't ask it again on this visit. A multiple choice question says "Select all that apply" and is graded all-or-nothing. If saving fails, the question stays open with the choice kept and **Skip** still works.
+- **Shortcuts while a question is open:** the control bar is inert and the player shortcuts (Space, arrows, number keys and the rest) don't act on the video underneath. In picture-in-picture the video returns to the page so the question can be seen.
+- **Seeking:** seeking never opens a question, by dragging, a shortcut or resuming at a saved position, including on a first viewing. A question is asked only when playback reaches its moment, or when the learner chooses its marker.
+- **Markers:** the seek bar has one marker per timed question and one at the end when there is an end check. Each is a button that names its time and state ("Question at 1:30, not answered"), and answered and unanswered differ by a tick and a dot as well as colour. Choosing a marker moves to that moment, pauses and opens the question: an unanswered one to answer, an answered one to review with the recorded answer, the key and the explanation. **Try again** there is practice, graded in the browser and not recorded.
+- **The end check:** when the video ends and has unanswered end questions, the first appears by itself ("Question 1 of 2"), then the next, and a summary says how many end questions the learner has answered correctly. Each can be skipped and the check can be closed. Once every end question is answered it doesn't start by itself again, and the end marker opens the answers. A question timed after the end of the video that is playing is asked with the end check.
+- **Resuming before an open question:** a learner who leaves with a question open comes back just before it, so it is asked again. A learner whose saved position is after an unanswered question isn't asked it on resume; its marker shows it unanswered.
+- **Recorded, and not:** the first answer to each question is recorded, and nothing else. Skips and **Try again** are not. An answer never changes whether the video is complete (that is still **Mark as done**), progress or certificates.
+- **Failures:** if the questions fail to load, the video plays as if it had none. In an archived course videos play without their questions.
+- **Small screens and motion:** a question taller than the video extends below it and scrolls with the page, with no sideways scroll at 375 px. With reduced motion set, it appears without animation.
+
