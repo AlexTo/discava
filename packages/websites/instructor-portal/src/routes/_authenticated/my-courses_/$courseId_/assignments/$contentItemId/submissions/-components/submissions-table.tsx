@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
@@ -60,19 +61,13 @@ export function SubmissionsTable({
   }
   if (query.isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p className="text-destructive">
-          {apiErrorMessage(query.error, "Couldn't load the submissions.")}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => query.refetch()}
-          disabled={query.isFetching}
-        >
-          Try again
-        </Button>
-      </div>
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the submissions"
+        onRetry={() => void query.refetch()}
+      >
+        {apiErrorMessage(query.error, "Couldn't load the submissions.")}
+      </ErrorAlert>
     );
   }
   if (rows.length === 0) {

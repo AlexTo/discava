@@ -521,7 +521,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - `IP/profile.tsx`.
 
   The four tests that click "Retry" (`IP/-index.test.tsx`, `IP/dashboard/-route.test.tsx`, `IP/dashboard_/$courseId/-route.test.tsx`, `quiz-panel.test.tsx`) click "Try again" instead. Say so in the pull request.
-- [ ] T062 [P] [US7] Make each failure show once with one retry (E-15):
+- [x] T062 [P] [US7] Make each failure show once with one retry (E-15):
   - **Reviews:** `IP/my-courses_/$courseId_/-components/reviews-screen.tsx` shows one `ErrorAlert` when the summary or the list fails, whose retry refetches both.
   - **Hand-rolled blocks:** `IP/my-courses_/$courseId_/questions/-components/paged-list.tsx`, `by-lesson-view.tsx` and `.../submissions/-components/submissions-table.tsx` switch their hand-rolled error blocks to `ErrorAlert` with `onRetry`.
 - [ ] T063 [P] [US7] Tie validation to fields, and keep Save enabled (A-14, B-12, D-11, D-22, E-16). In each form:

@@ -3,10 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  type UseQueryResult,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query';
 import { useState } from 'react';
 import { useCoreApi, useInstructorApi } from '../../../../../api';
 import {
@@ -19,19 +25,20 @@ const STARS = [5, 4, 3, 2, 1] as const;
 
 const date = (iso: string) => new Date(iso).toLocaleDateString();
 
-function Summary({ courseId }: { courseId: string }) {
-  const coreApi = useCoreApi();
-  const query = useQuery(coreApi.review.summary.queryOptions({ courseId }));
-
+function Summary({
+  query,
+}: {
+  query: UseQueryResult<{
+    count: number;
+    average?: number;
+    stars: Record<number, number>;
+  }>;
+}) {
   if (query.isPending) {
-    return <p className="text-sm text-muted-foreground">Loading ratings…</p>;
+    return <LoadingState label="Loading ratings…" />;
   }
-  if (query.isError) {
-    return (
-      <p role="alert" className="text-sm text-destructive">
-        {apiErrorMessage(query.error, "Couldn't load the ratings.")}
-      </p>
-    );
+  if (!query.data) {
+    return null;
   }
   const { count, average, stars } = query.data;
   if (count === 0 || average === undefined) {
@@ -79,30 +86,43 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
       { getNextPageParam: (lastPage) => lastPage.cursor },
     ),
   );
+  const coreApi = useCoreApi();
+  const summaryQuery = useQuery(
+    coreApi.review.summary.queryOptions({ courseId }),
+  );
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const [status, setStatus] = useState<string | null>(null);
+
+  // One alert and one retry for the page, whichever of the two failed.
+  const listFailed = query.isError && !query.isFetchNextPageError;
+  if (summaryQuery.isError || listFailed) {
+    return (
+      <ErrorAlert
+        type="error"
+        header="Couldn't load the reviews"
+        onRetry={() => {
+          if (summaryQuery.isError) {
+            void summaryQuery.refetch();
+          }
+          if (listFailed) {
+            void query.refetch();
+          }
+        }}
+      >
+        {apiErrorMessage(
+          summaryQuery.isError ? summaryQuery.error : query.error,
+        )}
+      </ErrorAlert>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <StatusMessage message={status} />
-      <Summary courseId={courseId} />
+      <Summary query={summaryQuery} />
 
       {query.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading reviews…</p>
-      ) : query.isError ? (
-        <div role="alert" className="space-y-3 text-sm">
-          <p className="text-destructive">
-            {apiErrorMessage(query.error, "Couldn't load the reviews.")}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-          >
-            Try again
-          </Button>
-        </div>
+        <LoadingState label="Loading reviews…" />
       ) : items.length === 0 ? (
         <p className="text-sm text-muted-foreground">No reviews yet.</p>
       ) : (
@@ -181,7 +201,15 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
               </li>
             ))}
           </ul>
-          {query.hasNextPage ? (
+          {query.isFetchNextPageError ? (
+            <ErrorAlert
+              type="error"
+              header="Couldn't load more reviews"
+              onRetry={() => void query.fetchNextPage()}
+            >
+              {apiErrorMessage(query.error)}
+            </ErrorAlert>
+          ) : query.hasNextPage ? (
             <Button
               variant="outline"
               onClick={() => query.fetchNextPage()}

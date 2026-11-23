@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Skeleton } from '@discava/common-shadcn/components/ui/skeleton';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
@@ -59,19 +60,13 @@ export function PagedList<T>({
   }
   if (query.isError) {
     return (
-      <div role="alert" className="space-y-3 text-sm">
-        <p className="text-destructive">
-          {apiErrorMessage(query.error, errorText)}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => query.refetch()}
-          disabled={query.isFetching}
-        >
-          Try again
-        </Button>
-      </div>
+      <ErrorAlert
+        type="error"
+        header={errorText.replace(/\.$/, '')}
+        onRetry={() => void query.refetch()}
+      >
+        {apiErrorMessage(query.error, errorText)}
+      </ErrorAlert>
     );
   }
   if (rows.length === 0) {
