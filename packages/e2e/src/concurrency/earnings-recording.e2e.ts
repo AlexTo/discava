@@ -9,12 +9,11 @@ import {
   openEarnings,
   PRICE_MINOR,
   publishPricedCourse,
-  refundPayment,
-  replayEvent,
   reportRow,
   showOrders,
 } from '../helpers/earnings.js';
 import { routerQueues, waitForQueuesToDrain } from '../helpers/router.js';
+import { refundSession, replayEvent } from '../helpers/stripe-stand-in.js';
 import { expect, test } from '../helpers/table-invariants.js';
 
 // An order is recorded in the ledger once however often its paid and refund
@@ -43,9 +42,9 @@ test('replayed paid and refund events record each sale and refund once', async (
   const { coreTable, instructorId } = await instructorOf(orderId);
 
   // A partial refund, then the rest, each delivered several times at once.
-  await refundPayment(session, PARTIAL);
+  await refundSession(session, PARTIAL);
   await replayEvent(session, REPLAYS);
-  await refundPayment(session);
+  await refundSession(session);
   await replayEvent(session, REPLAYS);
   await waitForQueuesToDrain();
 

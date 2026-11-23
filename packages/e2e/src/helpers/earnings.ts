@@ -81,27 +81,6 @@ export const buyCourse = async (
   return sessionId;
 };
 
-/** Refunds `amountMinor` of the payment, or all of it, as in Stripe's dashboard. */
-export const refundPayment = async (
-  sessionId: string,
-  amountMinor?: number,
-) => {
-  const response = await stripe('/stripe/test/refund', {
-    method: 'POST',
-    body: JSON.stringify({ sessionId, amount: amountMinor }),
-  });
-  expect(response.status).toBe(200);
-};
-
-/** Replays the session's last event `times` times at the same moment. */
-export const replayEvent = async (sessionId: string, times: number) => {
-  const response = await stripe('/stripe/test/replay', {
-    method: 'POST',
-    body: JSON.stringify({ sessionId, times }),
-  });
-  expect(response.status).toBe(200);
-};
-
 /** Runs the payout run once, as the daily schedule does. */
 export const triggerPayoutRun = async (body: object = {}) => {
   const response = await fetch(`${RUNNER}/payout-run`, {

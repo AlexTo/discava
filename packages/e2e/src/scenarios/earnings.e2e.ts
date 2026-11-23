@@ -12,7 +12,6 @@ import {
   PRICE_MINOR,
   parseMoney,
   publishPricedCourse,
-  refundPayment,
   releaseEarnings,
   reportRow,
   showOrders,
@@ -21,6 +20,7 @@ import {
 } from '../helpers/earnings.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
+import { refundSession } from '../helpers/stripe-stand-in.js';
 import { expect, test } from '../helpers/table-invariants.js';
 import { newUser, signIn } from '../helpers/users.js';
 
@@ -123,7 +123,7 @@ test('the Earnings page follows sales and refunds, and shows them to their instr
 
   await test.step('a partial refund adds a refund line and changes Refunds and Net', async () => {
     const before = await reportRow(page, title);
-    await refundPayment(first, 500);
+    await refundSession(first, 500);
     await expectAfterEarningsReload(page, async () => {
       expect((await reportRow(page, title)).refunds).toBe(500);
     });
@@ -139,7 +139,7 @@ test('the Earnings page follows sales and refunds, and shows them to their instr
   });
 
   await test.step('refunding the rest brings the order to zero', async () => {
-    await refundPayment(first);
+    await refundSession(first);
     await expectAfterEarningsReload(page, async () => {
       expect((await reportRow(page, title)).refunds).toBe(PRICE_MINOR);
     });
@@ -211,7 +211,7 @@ test('payout account, payout run, refund after sending and a failed transfer', a
   });
 
   await test.step('a refund after sending shows a negative balance', async () => {
-    await refundPayment(first, 500);
+    await refundSession(first, 500);
     await expectAfterEarningsReload(page, async () => {
       await expect(
         page.getByText(/deducted from your next payout/),
