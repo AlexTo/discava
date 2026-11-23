@@ -117,11 +117,11 @@ function RouteComponent() {
                 to="/dashboard/$courseId"
                 params={{ courseId: course.courseId }}
                 search={{ days: 90 }}
-                className="block h-full"
+                className="block h-full min-w-0"
               >
                 <Card className="h-full gap-4 transition-shadow hover:shadow-md">
                   <CardHeader className="px-5">
-                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                    <div className="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
                       <CardTitle
                         className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
                         role="heading"
