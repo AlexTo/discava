@@ -62,14 +62,16 @@ test('the admin home page leads to every area, and a missing page leads home', a
       await route.continue();
     });
     await page.goto(`${PORTALS.admin}/categories`);
-    await expect(page.getByRole('status')).toContainText(
-      'Loading the categories…',
-    );
+    // The screen's own announcement region is empty and always present.
+    const loading = page
+      .getByRole('status')
+      .filter({ hasText: 'Loading the categories…' });
+    await expect(loading).toBeVisible();
     await screenshot(page, 'admin categories loading');
     release();
     // Unrouting while the held request is in flight would make its
     // `route.continue()` fail, so wait for the list to arrive first.
-    await expect(page.getByRole('status')).toHaveCount(0);
+    await expect(loading).toHaveCount(0);
     await page.unroute(/localhost:2025\/.*category\.list/);
   });
 
