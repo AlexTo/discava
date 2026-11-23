@@ -13,6 +13,7 @@ import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 // The most the API accepts (core-table's FIRST_LESSON_PROMPT_MAX).
 const PROMPT_MAX = 200;
@@ -40,6 +41,7 @@ export function CourseFirstLessonPromptForm({
   );
 
   const unchanged = text.trim() === (firstLessonPrompt ?? '');
+  useReportUnsavedChanges('first-lesson-prompt', !unchanged);
 
   // The text to store, or null to go back to the default.
   const save = async (prompt: string | null) => {

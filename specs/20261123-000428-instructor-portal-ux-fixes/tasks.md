@@ -461,7 +461,7 @@ At 1440px nothing changes, apart from long-content fixes.
   - in `IPC/assignment/create-assignment-dialog.tsx`, wire `QuizBuilder`'s `onDirtyChange`, and ask before switching the kind radio away from a dirty quiz.
 
   **Tests:** Escape on a dirty dialog shows the confirmation; Keep editing returns to the field; on a clean dialog Escape closes.
-- [ ] T056 [US6] Guard the course editor's settings (C-11).
+- [x] T056 [US6] Guard the course editor's settings (C-11).
   - **Context:** add `IPC/course/unsaved-changes-context.tsx` with a provider in `IP/my-courses_/$courseId/route.tsx` that collects dirty flags by section key. The route calls `useUnsavedChangesGuard(anyDirty)` and renders its `confirmation`.
   - **Reporters:** these report their dirty state through the context:
     - `course-catalogue-form.tsx`;
@@ -473,13 +473,13 @@ At 1440px nothing changes, apart from long-content fixes.
   - **Archived course:** an archived course reports nothing.
 
   **Test:** a dirty price form, then a navigation to `/my-courses`, shows "Leave without saving?".
-- [ ] T057 [US6] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`, or add `packages/e2e/src/scenarios/unsaved-work.e2e.ts`. As a new instructor:
+- [x] T057 [US6] Extend `packages/e2e/src/scenarios/quiz.e2e.ts`, or add `packages/e2e/src/scenarios/unsaved-work.e2e.ts`. As a new instructor:
   - type a lesson title in New lesson and press Escape: assert the confirmation, then Keep editing, and the title is still there;
   - change the price and click "My Courses" in the sidebar: assert "Leave without saving?", then Stay;
   - with `page.route` aborting `course.setFirstLessonPrompt` (or the prompt's mutation), save a new prompt: assert the field still holds it.
 
   Screenshot: `'discard unsaved changes'`.
-- [ ] T058 [US6] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T058 [US6] Run the instructor and admin portals' and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

@@ -17,6 +17,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from './unsaved-changes-context';
 
 const SELECT_CLASS =
   'h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs disabled:opacity-50';
@@ -52,6 +53,11 @@ export function CoursePriceForm({
   const [saved, setSaved] = useState(false);
   const { mutateAsync, reset, isPending, isError, error } = useMutation(
     course.setPrice.mutationOptions(),
+  );
+
+  useReportUnsavedChanges(
+    'price',
+    parsePriceInput(price) !== priceAmount || currency !== priceCurrency,
   );
 
   const handleSave = async () => {

@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { v7 as uuidv7 } from 'uuid';
 import { useInstructorApi } from '../../../../../../api';
+import { useReportUnsavedChanges } from '../course/unsaved-changes-context';
 import { RichTextEditor } from '../rich-text-editor';
 
 const TITLE_MAX = 120;
@@ -62,6 +63,13 @@ export function AnnouncementForm({
   const create = useMutation(trpc.announcement.create.mutationOptions());
   const update = useMutation(trpc.announcement.update.mutationOptions());
   const mutation = announcement ? update : create;
+
+  useReportUnsavedChanges(
+    announcement
+      ? `announcement-${announcement.announcementId}`
+      : 'announcement-new',
+    title.trim() !== (announcement?.title ?? '') || body !== announcement?.body,
+  );
 
   const canSave = title.trim().length > 0 && Boolean(body);
 
