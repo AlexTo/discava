@@ -296,3 +296,17 @@ describe('the Payments page', () => {
     expect(await screen.findByText('Test mode')).toBeInTheDocument();
   });
 });
+
+describe('the Payments page, as a page', () => {
+  it('names the tab and says it is loading the payment settings', () => {
+    render(notConnected, { 'payment.status': () => new Promise(() => {}) });
+
+    expect(document.title).toBe('Payments · Discava');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Payments' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading the payment settings…',
+    );
+  });
+});

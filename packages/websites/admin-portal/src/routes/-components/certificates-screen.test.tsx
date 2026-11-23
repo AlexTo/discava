@@ -177,3 +177,23 @@ describe('the Certificates screen', () => {
     expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
   });
 });
+
+describe('the Certificates screen, as a page', () => {
+  it('names the tab', () => {
+    render();
+
+    expect(document.title).toBe('Certificates · Discava');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Certificates' }),
+    ).toBeInTheDocument();
+  });
+
+  it('says it is looking up the certificate', async () => {
+    const rendered = render({ 'certificate.get': () => new Promise(() => {}) });
+    await lookUp(rendered);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Looking up the certificate…',
+    );
+  });
+});

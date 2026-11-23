@@ -27,7 +27,7 @@ export const segmentLabels = {
   certificates: 'Certificates',
   payments: 'Payments',
   settings: 'Settings',
-  notifications: 'Notifications',
+  notifications: 'Notification settings',
   branding: 'Branding',
 };
 
