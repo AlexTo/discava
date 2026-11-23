@@ -65,7 +65,8 @@ export function FirstLessonPrompt({
       onSuccess: (enrolment) => {
         queryClient.setQueryData(
           trpc.course.myEnrolment.queryKey({ courseId }),
-          enrolment,
+          // dismiss doesn't say whether the enrolment was bought.
+          (current) => ({ ...enrolment, paidFor: current?.paidFor ?? false }),
         );
       },
       onError: (error) => {
