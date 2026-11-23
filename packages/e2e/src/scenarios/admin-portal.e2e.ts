@@ -150,6 +150,42 @@ test('renaming and archiving a category keep focus on that row', async ({
   });
 });
 
+// A problem with the add form is shown under its field, and the field has focus.
+test('adding a category with an empty or taken name explains it beside the field', async ({
+  page,
+}) => {
+  const name = uniqueName('Duplicate category');
+  const field = page.getByLabel('New category name');
+
+  await page.goto(`${PORTALS.admin}/categories`);
+  await signIn(page, newUser('Dee', ['admin']));
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Categories' }),
+  ).toBeVisible();
+
+  await test.step('an empty name is refused on submit', async () => {
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(
+      page.getByText('Enter a name for the category.'),
+    ).toBeVisible();
+    await expect(field).toBeFocused();
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  await test.step('a name that exists is refused under the field', async () => {
+    await field.fill(name);
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(page.getByRole('row').filter({ hasText: name })).toBeVisible();
+    await field.fill(name);
+    await page.getByRole('button', { name: 'Add category' }).click();
+    await expect(
+      page.getByRole('alert').filter({ hasText: "Couldn't add the category" }),
+    ).toBeVisible();
+    await expect(field).toHaveAttribute('aria-invalid', 'true');
+    await screenshot(page, 'duplicate category name beside the add field');
+  });
+});
+
 // A typed reason is lost only by Cancel: Escape asks first.
 test('Escape on Remove review with a reason typed asks before discarding', async ({
   page,
