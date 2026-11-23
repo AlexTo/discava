@@ -105,7 +105,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
               <li key={item.reviewerId} className="space-y-3 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="break-words font-medium">
+                    <p className="break-words [overflow-wrap:anywhere] font-medium">
                       {item.reviewerName}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -155,7 +155,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
                   </div>
                 </div>
                 {item.text && (
-                  <p className="whitespace-pre-line break-words text-sm">
+                  <p className="whitespace-pre-line break-words [overflow-wrap:anywhere] text-sm">
                     {item.text}
                   </p>
                 )}
@@ -164,7 +164,7 @@ export function ReviewsScreen({ courseId }: { courseId: string }) {
                     <p className="text-xs font-medium text-muted-foreground">
                       {`Response from ${item.response.byName} · ${date(item.response.at)}`}
                     </p>
-                    <p className="mt-1 whitespace-pre-line break-words">
+                    <p className="mt-1 whitespace-pre-line break-words [overflow-wrap:anywhere]">
                       {item.response.text}
                     </p>
                   </div>

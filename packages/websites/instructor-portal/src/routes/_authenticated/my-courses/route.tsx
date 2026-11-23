@@ -250,7 +250,7 @@ function RouteComponent() {
                 <CardHeader className="gap-3 px-5">
                   <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                     <div className="min-w-0">
-                      <CardTitle className="min-w-0 break-words text-base leading-5">
+                      <CardTitle className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5">
                         {course.title}
                       </CardTitle>
                     </div>
@@ -260,7 +260,7 @@ function RouteComponent() {
                       {course.status}
                     </Badge>
                   </div>
-                  <CardDescription className="line-clamp-3 break-words">
+                  <CardDescription className="line-clamp-3 break-words [overflow-wrap:anywhere]">
                     {course.description}
                   </CardDescription>
                 </CardHeader>

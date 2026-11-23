@@ -143,7 +143,7 @@ function RouteComponent() {
                     }}
                     className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-3 text-sm hover:bg-muted/50"
                   >
-                    <span className="min-w-0 break-words">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                       <span className="font-medium">{entry.displayName}</span>
                       <span className="text-muted-foreground">
                         {' · '}
@@ -237,7 +237,7 @@ function RouteComponent() {
                     <CardHeader className="px-5 pb-5">
                       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                         <CardTitle
-                          className="min-w-0 break-words text-base leading-5"
+                          className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
                           // biome-ignore lint/a11y/useSemanticElements: CardTitle renders a div; the page's course titles are level-3 headings
                           role="heading"
                           aria-level={3}

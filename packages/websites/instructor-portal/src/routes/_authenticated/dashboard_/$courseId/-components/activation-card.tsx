@@ -56,7 +56,7 @@ export function ActivationCard({
           Activation
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 break-words text-sm">
+      <CardContent className="space-y-2 break-words [overflow-wrap:anywhere] text-sm">
         <p className="font-medium">
           {startedLine(
             totals.activated,

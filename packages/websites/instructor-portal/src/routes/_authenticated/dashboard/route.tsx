@@ -123,7 +123,7 @@ function RouteComponent() {
                   <CardHeader className="px-5">
                     <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                       <CardTitle
-                        className="min-w-0 break-words text-base leading-5"
+                        className="min-w-0 break-words [overflow-wrap:anywhere] text-base leading-5"
                         role="heading"
                         aria-level={2}
                       >

@@ -87,7 +87,7 @@ export function LessonDropOff({
                   className="group rounded-md p-2 hover:bg-muted"
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 break-words font-medium">
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere] font-medium">
                       {lesson.title}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
