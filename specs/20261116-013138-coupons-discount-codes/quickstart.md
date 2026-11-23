@@ -26,4 +26,4 @@ PR CI additionally runs `pnpm nx e2e @discava/e2e`, including `coupon.e2e.ts` an
 
 ## On `discava-development` (a reviewer)
 
-Start a paid checkout with a limited code, abandon it, wait for the 30-minute session expiry, and check the code's count drops by one; confirm a real payment with a code records the discount on the order.
+Start a paid checkout with a limited code, abandon it, wait for the session to expire (one hour; local dev may shorten it), and check the code's count drops by one; confirm a real payment with a code records the discount on the order.
