@@ -87,7 +87,7 @@ function RouteComponent() {
           <h1 className="text-balance [overflow-wrap:anywhere] text-2xl font-bold tracking-tight sm:text-3xl">
             {student.displayName}
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-muted-foreground [overflow-wrap:anywhere]">
             {assignment.title} · Out of {assignment.maxPoints} points
           </p>
         </div>

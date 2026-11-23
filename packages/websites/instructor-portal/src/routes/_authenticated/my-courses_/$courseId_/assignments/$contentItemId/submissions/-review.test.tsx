@@ -134,6 +134,15 @@ describe('Review page', () => {
     expect(heading).not.toHaveClass('break-words');
   });
 
+  it('wraps a long word in the assignment title anywhere', async () => {
+    render(() => view());
+
+    const subtitle = await screen.findByText(/^Essay · Out of 20 points$/);
+    // Without it, an assignment title with a long word runs past a phone's
+    // width and the whole review page scrolls sideways.
+    expect(subtitle).toHaveClass('[overflow-wrap:anywhere]');
+  });
+
   it('returns with the version and revision it rendered, then clears the draft', async () => {
     const { calls, user } = render(() => view(), {
       'assignmentSubmission.return': () => ({ reviewRevision: 6 }),
