@@ -11,6 +11,7 @@ import {
   createCourse,
   publishCourse,
 } from '../helpers/instructor-portal.js';
+import { lessonRow } from '../helpers/free-preview.js';
 import { PORTALS } from '../helpers/portals.js';
 import { screenshot } from '../helpers/screenshots.js';
 import {
@@ -150,10 +151,10 @@ test('an instructor keeps their place in the quiz builder and the course editor'
   }
 
   await test.step('reordering with the keyboard keeps focus on the handle', async () => {
-    const handle = dialog.getByRole('button', { name: 'Reorder Question 3' });
+    const handle = dialog.getByRole('button', { name: 'Reorder Question 1' });
     await handle.focus();
     await page.keyboard.press('Space');
-    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Space');
     const moved = dialog.getByRole('button', { name: /^Reorder Question \d$/ });
     await expect(moved.nth(1)).toBeFocused();
@@ -182,6 +183,29 @@ test('an instructor keeps their place in the quiz builder and the course editor'
     if (await discard.isVisible()) {
       await discard.getByRole('button', { name: 'Discard changes' }).click();
     }
+  });
+
+  await test.step('toggling free preview with Enter keeps focus on the same button', async () => {
+    const row = lessonRow(page, 'Lesson two');
+    const make = row.getByRole('button', { name: 'Make free preview' });
+    await make.focus();
+    const button = await make.elementHandle();
+    await page.keyboard.press('Enter');
+    await page
+      .getByRole('alertdialog', { name: 'Make free preview' })
+      .getByRole('button', { name: 'Make free preview' })
+      .focus();
+    await page.keyboard.press('Enter');
+    const remove = row.getByRole('button', { name: 'Remove free preview' });
+    await expect(remove).toBeFocused();
+    expect(
+      await remove.evaluate((element, first) => element === first, button),
+    ).toBe(true);
+    await page.keyboard.press('Enter');
+    await expect(
+      row.getByRole('button', { name: 'Make free preview' }),
+    ).toBeFocused();
+    await screenshot(page, 'free preview toggled by keyboard');
   });
 
   await test.step('deleting a lesson focuses the other lesson’s control', async () => {
