@@ -123,7 +123,9 @@ test('renaming and archiving a category keep focus on that row', async ({
   }
 
   await test.step('Rename, type, Enter leaves focus on that row’s Rename', async () => {
-    await row(first).getByRole('button', { name: 'Rename' }).focus();
+    await row(first)
+      .getByRole('button', { name: `Rename ${first}` })
+      .focus();
     await page.keyboard.press('Enter');
     await expect(page.getByLabel(`New name for ${first}`)).toBeFocused();
     await page.keyboard.press('ControlOrMeta+a');
@@ -131,12 +133,14 @@ test('renaming and archiving a category keep focus on that row', async ({
     await page.keyboard.press('Enter');
     await expect(row(renamed)).toBeVisible();
     await expect(
-      row(renamed).getByRole('button', { name: 'Rename' }),
+      row(renamed).getByRole('button', { name: `Rename ${renamed}` }),
     ).toBeFocused();
   });
 
   await test.step('archiving leaves focus on that row’s Rename', async () => {
-    await row(second).getByRole('button', { name: 'Archive' }).focus();
+    await row(second)
+      .getByRole('button', { name: `Archive ${second}` })
+      .focus();
     await page.keyboard.press('Enter');
     await page
       .getByRole('alertdialog')
@@ -144,7 +148,7 @@ test('renaming and archiving a category keep focus on that row', async ({
       .click();
     await expect(row(second)).toContainText('Archived');
     await expect(
-      row(second).getByRole('button', { name: 'Rename' }),
+      row(second).getByRole('button', { name: `Rename ${second}` }),
     ).toBeFocused();
     await screenshot(page, 'categories after keyboard rename and archive');
   });

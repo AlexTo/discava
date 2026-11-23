@@ -253,16 +253,16 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US8.
 
-- [ ] T041 [P] [US8] Test first, then name the controls (B-10, B-11, D-07, F-06, A-09, research R-14, R-15):
+- [x] T041 [P] [US8] Test first, then name the controls (B-10, B-11, D-07, F-06, A-09, research R-14, R-15):
   - categories: `aria-label` "Rename <name>" and "Archive <name>"; the placeholder becomes "Science…";
   - branding: `ImageField` takes a `resetLabel`, and `branding-form.tsx` passes "Reset the logo to default", "Reset the icon to default", "Reset the share image to default" (visible text too);
   - certificates: the ID field gets `spellCheck={false}`, `autoComplete="off"`, `autoCapitalize="characters"`;
   - home: each card's `Link` is `aria-labelledby` its title and `aria-describedby` its description and figure.
 
   **Tests (change meaning, plan.md):** the new names; each contains its visible text.
-- [ ] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
+- [x] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
 - [ ] T043 [US8] **Needs IP T073 and IP T074.** In `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, measure the Remove review dialog's close button and Branding's "Show the name beside the logo" switch: each at least 24×24px; clicking the switch's text toggles it (C-09, F-02, F-08). No admin source change is expected.
-- [ ] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
+- [x] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

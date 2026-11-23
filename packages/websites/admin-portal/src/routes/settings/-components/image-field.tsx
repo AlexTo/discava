@@ -33,6 +33,8 @@ export interface ImageFieldProps {
   onUploaded: (key: string, previewUrl: string) => void;
   /** Puts the default back in the form; the button shows only when this is set. */
   onReset?: () => void;
+  /** The reset button's text, naming the image, e.g. "Reset the logo to default". */
+  resetLabel?: string;
   /** Called before a new file is checked, so an old server message is dropped. */
   onChoose?: () => void;
   /** The image's display box, so a logo is not cropped and an icon is square. */
@@ -51,6 +53,7 @@ export function ImageField({
   serverError,
   onUploaded,
   onReset,
+  resetLabel = 'Reset to default',
   onChoose,
   previewClassName,
 }: ImageFieldProps) {
@@ -154,13 +157,13 @@ export function ImageField({
               variant="outline"
               size="sm"
               pending={uploading}
-              pendingLabel="Reset to default"
+              pendingLabel={resetLabel}
               onClick={() => {
                 setError(undefined);
                 onReset();
               }}
             >
-              Reset to default
+              {resetLabel}
             </PendingButton>
           )}
           {uploading && (
