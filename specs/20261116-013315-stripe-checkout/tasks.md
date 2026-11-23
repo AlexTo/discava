@@ -285,7 +285,7 @@ description: "Task list for Stripe checkout for paid courses"
 - [x] T095 [US7] `payment.requestRefund` (mutation) and `payment.myOrder` (query) in `packages/apis/core-api/src/procedures/payment.ts` and `schema/`, per the contract. `requestRefund` runs on the dedicated `PaymentsCheckout` function, the only core-api function that may read the Stripe key: check `refundEligibility`, call `stripeClient().refunds.create` for the remainder with idempotency key `refund-<orderId>`, then `markRefundRequested`. It never calls `refundOrder` and never writes the enrolment.
 - [x] T096 [US7] Add the `order.refunded` type to `helpers/notification-types.ts`, and publish it from `packages/events/src/payments/events/charge-refunded.ts` on every full-refund notice, after `refundOrder`, when the order is `refunded` with `refundReason` `requested` and the student's enrolment still names it, with `dedupeKey: orderId` (R-23). `refundOrder` is not changed. A publish error is not caught, so the delivery fails and Stripe redelivers.
 - [x] T115 [US7] In `packages/events/src/local/stripe-stand-in.ts`, make `POST /v1/refunds` refuse a refund above the remaining amount, and add the `/stripe/test/refunds` control (research R-20's open point; T111 uses the control).
-- [ ] T097 [US7] Run the US7 backend tests plus lint, typecheck and `synth` locally and fix until green.
+- [x] T097 [US7] Run the US7 backend tests plus lint, typecheck and `synth` locally and fix until green.
 
 **Checkpoint**: a refund can be requested through the API and completes against the stand-in.
 
