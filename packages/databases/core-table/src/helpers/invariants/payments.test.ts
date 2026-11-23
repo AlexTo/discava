@@ -286,6 +286,12 @@ describe('payments: price, orders and the connection', () => {
     });
   });
 
+  it('reports a dropped enrolment whose order is still paid', () => {
+    paidTable();
+    table.enrolments[0].status = 'dropped';
+    expect(violationsOf('enrolment-order-matches')).toHaveLength(1);
+  });
+
   describe('paid-course-enrolment-paid', () => {
     it('reports an unpaid enrolment created after pricedAt plus 10 seconds', () => {
       paidTable();

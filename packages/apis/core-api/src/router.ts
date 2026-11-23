@@ -50,6 +50,7 @@ import {
   dismissFirstLessonPrompt,
   enrol,
   myEnrolment,
+  unenrol,
 } from './procedures/enrolment.js';
 import {
   freePreviewFileUrl,
@@ -101,6 +102,7 @@ export const router = t.router;
 export const appRouter = router({
   course: router({
     enrol,
+    unenrol,
     dismissFirstLessonPrompt,
     myItemCompletions,
     myEnrolment,

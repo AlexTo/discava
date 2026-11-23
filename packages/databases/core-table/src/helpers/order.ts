@@ -452,6 +452,57 @@ export const restoreFreeEnrolment = async ({
   throw new Error('Could not restore the enrolment; try again');
 };
 
+/** The enrolment was bought, so only a refund ends it. */
+export class EnrolmentPaidForError extends Error {
+  constructor(message = 'enrolment-paid-for') {
+    super(message);
+    this.name = 'enrolment-paid-for';
+  }
+}
+
+/**
+ * A student leaves a course they did not pay for: one conditional write moves
+ * their `active` or `completed` enrolment to `dropped`, only while it has no
+ * `orderId`, keeping `completedAt`, `progressPercent` and completions. Returns
+ * whether it made the move (false for a missing or already `dropped`
+ * enrolment). Throws `EnrolmentPaidForError` for an enrolment with an
+ * `orderId`, which is never changed.
+ */
+export const unenrolFromCourse = async ({
+  coreTable,
+  userId,
+  courseId,
+  now,
+}: {
+  coreTable: CoreTable;
+  userId: string;
+  courseId: string;
+  now: string;
+}): Promise<boolean> => {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const { data: enrolment } = await coreTable.entities.enrolment
+      .get({ courseId, userId })
+      .go();
+    if (!enrolment || enrolment.status === 'dropped') return false;
+    if (enrolment.orderId) throw new EnrolmentPaidForError();
+    try {
+      await coreTable.entities.enrolment
+        .patch({ courseId, userId })
+        .set({ status: 'dropped', updatedAt: now })
+        .where(
+          (attr, op) =>
+            `${op.ne(attr.status, 'dropped')} AND ${op.notExists(attr.orderId)}`,
+        )
+        .go();
+      return true;
+    } catch (error) {
+      // Changed since it was read: read it again to see how.
+      if (!isConditionalFailure(error)) throw error;
+    }
+  }
+  throw new Error('Could not end the enrolment; try again');
+};
+
 export type RefundEligibility =
   | { eligible: true; refundableUntil: string }
   | {

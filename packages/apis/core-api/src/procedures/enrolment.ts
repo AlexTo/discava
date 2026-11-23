@@ -8,10 +8,12 @@ import type { CoreTable } from '@discava/core-table';
 import {
   cancellationReasons,
   dismissFirstLessonPrompt as dismissPrompt,
+  EnrolmentPaidForError,
   failedAt,
   hasTransactionConflict,
   NotEnrolledError,
   restoreFreeEnrolment,
+  unenrolFromCourse,
 } from '@discava/core-table';
 import { TRPCError } from '@trpc/server';
 import { courseProcedure } from '../init.js';
@@ -23,6 +25,8 @@ import {
   type IEnrolment,
   MyEnrolmentInputSchema,
   MyEnrolmentOutputSchema,
+  UnenrolInputSchema,
+  UnenrolOutputSchema,
 } from '../schema/index.js';
 
 // ElectroDB types `progressPercent` as optional because it has a default,
@@ -144,14 +148,66 @@ export const enrol = courseProcedure
     return enrolment;
   });
 
+// `paidFor` tells the portal whether to offer a refund or leaving the course
+// without exposing the order.
+const withPaidFor = (stored: { orderId?: string } & IEnrolment) => ({
+  ...stored,
+  paidFor: Boolean(stored.orderId),
+});
+
+const getMyEnrolment = async (
+  coreTable: CoreTable,
+  courseId: string,
+  userId: string,
+) => {
+  const stored = (await coreTable.entities.enrolment
+    .get({ courseId, userId })
+    .go()) as { data: ({ orderId?: string } & IEnrolment) | null };
+  return stored.data ? withPaidFor(stored.data) : null;
+};
+
 // The caller's enrolment in a course, or null, so the portal can offer Enrol
 // or Continue.
 export const myEnrolment = courseProcedure
   .input(MyEnrolmentInputSchema)
   .output(MyEnrolmentOutputSchema)
   .query(async ({ ctx, input }) =>
-    getEnrolment(ctx.coreTable, input.courseId, ctx.user.sub),
+    getMyEnrolment(ctx.coreTable, input.courseId, ctx.user.sub),
   );
+
+// A student leaves a course they did not pay for. Progress is kept, and
+// `enrol` brings the enrolment back where the course is free. A bought
+// enrolment is ended only by a refund. The course's status and price are not
+// checked, so a student can leave an archived or since-priced course.
+export const unenrol = courseProcedure
+  .input(UnenrolInputSchema)
+  .output(UnenrolOutputSchema)
+  .mutation(async ({ ctx, input }) => {
+    const { courseId } = input;
+    const userId = ctx.user.sub;
+    const existing = await getMyEnrolment(ctx.coreTable, courseId, userId);
+    if (!existing) throw new TRPCError({ code: 'NOT_FOUND' });
+    if (existing.status === 'dropped') return existing;
+    try {
+      await unenrolFromCourse({
+        coreTable: ctx.coreTable,
+        userId,
+        courseId,
+        now: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (error instanceof EnrolmentPaidForError) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'You bought this course; request a refund instead',
+        });
+      }
+      throw error;
+    }
+    const current = await getMyEnrolment(ctx.coreTable, courseId, userId);
+    if (!current) throw new TRPCError({ code: 'NOT_FOUND' });
+    return current;
+  });
 
 // Closes the first-lesson prompt without answering it. Works whatever the
 // course's status, so a prompt can always be closed; an enrolment whose state
