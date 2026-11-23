@@ -147,13 +147,28 @@ test('an administrator connects and rotates Stripe on the Payments page', async 
   await test.step('replacing the key with the same key mid-checkout is allowed', async () => {
     await admin.getByRole('button', { name: 'Replace key' }).click();
     await keyField.fill('sk_test_local');
-    await expect(admin.getByRole('button', { name: 'Save key' })).toBeEnabled();
-    await screenshot(admin, 'payments-replace-key-filled');
+    // Hold the request back so the "Saving…" button stays on screen: the form
+    // empties the key field on submit, and the button must keep focus anyway.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await admin.route('**/payment.connect*', async (route) => {
+      await held;
+      await route.continue();
+    });
     await admin.getByRole('button', { name: 'Save key' }).click();
     await admin
       .getByRole('dialog')
       .getByRole('button', { name: 'Continue' })
       .click();
+    const saving = admin.getByRole('button', { name: 'Saving…' });
+    await expect(saving).toHaveAttribute('aria-disabled', 'true');
+    await expect(saving).not.toBeDisabled();
+    await expect(saving).toBeFocused();
+    await screenshot(admin, 'payments-saving-key-keeps-focus');
+    release();
+    await admin.unroute('**/payment.connect*');
     await expect(keyField).toHaveCount(0);
     await expect(admin.getByRole('alert')).toHaveCount(0);
   });
