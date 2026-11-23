@@ -116,6 +116,13 @@ describe('AttachLessonVideoDialog', () => {
       expect(alert).not.toHaveTextContent('Failed to upload');
     });
 
+    it('describes the dialog with its intro', async () => {
+      const { user } = openDialog();
+
+      await user.click(screen.getByRole('button', { name: 'Video' }));
+      expect(screen.getByRole('dialog')).toHaveAccessibleDescription(/\S/);
+    });
+
     it('titles the dialog "Add video", and keeps Save enabled while saying what is missing', async () => {
       const { calls, user } = openDialog();
 

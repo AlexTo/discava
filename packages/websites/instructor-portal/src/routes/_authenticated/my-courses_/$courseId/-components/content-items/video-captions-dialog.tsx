@@ -22,6 +22,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -201,10 +202,10 @@ export function VideoCaptionsDialog({
       >
         <DialogHeader>
           <DialogTitle>Captions</DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Captions for "{title}". A video can have up to 10 tracks, one per
             language, including auto-translated ones.
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         <StatusMessage message={added} />

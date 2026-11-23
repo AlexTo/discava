@@ -220,7 +220,7 @@ describe('CourseModules', () => {
 
     expect(moduleTitles()).toEqual(['Module C', 'Module A', 'Module B']);
     expect(
-      screen.getByRole('button', { name: 'Edit module 1' }),
+      screen.getByRole('button', { name: `Edit module Module C` }),
     ).toBeInTheDocument();
     await waitFor(() =>
       expect(calls).toContainEqual({
@@ -482,7 +482,7 @@ describe('CourseModules at phone width', () => {
     renderModules({ modules: longModules });
 
     const moduleGroup = screen
-      .getByRole('button', { name: 'Edit module 1' })
+      .getByRole('button', { name: `Edit module ${longTitle}` })
       .closest('div.flex-wrap');
     expect(moduleGroup).toHaveClass('flex', 'flex-wrap', 'gap-1');
     const lessonRow = screen.getByText(longWord).closest('article');
@@ -496,7 +496,7 @@ describe('CourseModules at phone width', () => {
     renderModules({ modules: longModules });
 
     expect(
-      screen.getByRole('button', { name: 'Remove module 1' }),
+      screen.getByRole('button', { name: `Remove module ${longTitle}` }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: `Remove lesson ${longWord}` }),
@@ -510,7 +510,7 @@ describe('CourseModules at phone width', () => {
     renderModules({ modules: longModules });
 
     const row = screen
-      .getByRole('button', { name: 'Edit module 1' })
+      .getByRole('button', { name: `Edit module ${longTitle}` })
       .closest('div.flex-wrap')?.parentElement;
     expect(row).toHaveClass('min-w-0');
   });

@@ -20,6 +20,7 @@ import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -306,10 +307,10 @@ export function AttachLessonVideoDialog({
           <DialogTitle>
             {contentItemId ? 'Edit video' : 'Add video'}
           </DialogTitle>
-          <p className="text-sm text-muted-foreground">
+          <DialogDescription>
             Attach an MP4, WebM, or MOV video for students to watch in this
             lesson.
-          </p>
+          </DialogDescription>
         </DialogHeader>
 
         {uploadError && (
