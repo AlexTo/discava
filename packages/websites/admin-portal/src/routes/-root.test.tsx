@@ -11,8 +11,16 @@ const { auth } = vi.hoisted(() => ({
 }));
 vi.mock('react-oidc-context', () => ({ useAuth: () => auth }));
 vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const { usePageTitle } = await import(
+    '@discava/common-shadcn/hooks/use-page-title'
+  );
   const { mockRouter } = await import('@discava/common-web-utils/testing');
-  return mockRouter(importOriginal, { Outlet: () => <p>the page</p> });
+  return mockRouter(importOriginal, {
+    Outlet: () => {
+      usePageTitle('Payments');
+      return <p>the page</p>;
+    },
+  });
 });
 vi.mock('../components/app-layout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -56,4 +64,14 @@ describe('the admin portal guard, which every route (the Branding page too) sits
       ).toBeInTheDocument();
     },
   );
+
+  it("keeps an administrator's page title after first load", () => {
+    renderAs(['admin']);
+    expect(document.title).toBe('Payments · Discava');
+  });
+
+  it('titles the restricted page for a non-administrator', () => {
+    renderAs(['student']);
+    expect(document.title).toBe('Administrators only · Discava');
+  });
 });

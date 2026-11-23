@@ -4,7 +4,7 @@
  */
 
 import CognitoAuth from '@discava/common-shadcn/components/cognito-auth';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { BrandProvider } from '@discava/common-web-utils/brand';
 import QueryClientProvider from '@discava/common-web-utils/query-client';
 import {
@@ -38,11 +38,14 @@ root &&
     <React.StrictMode>
       <RuntimeConfigProvider
         localDevConfig={LOCAL_DEV_CONFIG}
-        fallback={<Spinner />}
+        fallback={<LoadingState size="page" label="Loading Discava…" />}
       >
-        <BrandProvider fallback={<Spinner />}>
+        <BrandProvider
+          fallback={<LoadingState size="page" label="Loading Discava…" />}
+        >
           <CognitoAuth
             autoSignIn
+            fallback={<LoadingState size="page" label="Signing you in…" />}
             // The router isn't created until signed in, so it starts on this page.
             onReturn={(path) => window.history.replaceState(null, '', path)}
           >

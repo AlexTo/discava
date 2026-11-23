@@ -254,3 +254,26 @@ describe('the Reviews screen', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('the Reviews screen, as a page', () => {
+  it('names the tab and says it is loading the courses', () => {
+    render({ 'review.courses': () => new Promise(() => {}) });
+
+    expect(document.title).toBe('Reviews · Discava');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Reviews' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading the courses…',
+    );
+  });
+
+  it('says it is loading the reviews', async () => {
+    const rendered = render({ 'review.list': () => new Promise(() => {}) });
+    await pick(rendered);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Loading the reviews…',
+    );
+  });
+});

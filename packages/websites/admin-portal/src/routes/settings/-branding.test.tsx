@@ -605,3 +605,17 @@ describe('the Branding page', () => {
     });
   });
 });
+
+describe('the Branding page, as a page', () => {
+  it('names the tab and says it is loading the branding', () => {
+    open({ 'branding.get': () => new Promise(() => {}) });
+
+    expect(document.title).toBe('Branding · Settings · Discava');
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Branding' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Loading the branding…',
+    );
+  });
+});

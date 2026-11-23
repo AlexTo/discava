@@ -131,22 +131,22 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: quickstart, US3.
 
-- [ ] T015 [US3] Call `usePageTitle` in every admin route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
+- [x] T015 [US3] Call `usePageTitle` in every admin route, with the parts in [contracts/page-titles.md](./contracts/page-titles.md) (A-01):
   - `R/index.tsx`, `R/categories/-components/categories-screen.tsx`, `R/-components/reviews-screen.tsx`, `R/-components/certificates-screen.tsx`, `R/-components/payments-screen.tsx`, `R/settings/notifications.tsx`;
   - `R/settings/branding.tsx` changes to `usePageTitle('Branding', 'Settings')`;
   - `R/__root.tsx`'s restricted branch: a small `RestrictedPage` component, rendered only in that branch, calls `usePageTitle('Administrators only')` and renders `RestrictedPortal`. Never call it above `AdminsOnly`'s early return: a parent's effect runs after its children's, so it would overwrite every admin page's title on first load ([contracts/page-titles.md](./contracts/page-titles.md));
   - `AP/components/app-layout.tsx`: `segmentLabels.notifications` becomes "Notification settings", matching the title and `h1`.
 
   **Tests:** one per route's test file, asserting `document.title`; and in `R/-root.test.tsx`, an admin's page keeps its own title after first load, while a non-admin's is "Administrators only · Discava".
-- [ ] T016 [US3] Use `LoadingState` (`@discava/common-shadcn/components/loading-state`) for every wait for a page or section (A-07, A-10, research R-6):
+- [x] T016 [US3] Use `LoadingState` (`@discava/common-shadcn/components/loading-state`) for every wait for a page or section (A-07, A-10, research R-6):
   - `AP/main.tsx`: the `RuntimeConfigProvider` and `BrandProvider` fallbacks become `<LoadingState size="page" label="Loading Discava…" />`; `CognitoAuth` gets `fallback={<LoadingState size="page" label="Signing you in…" />}` (T001);
   - categories: "Loading the categories…"; reviews: "Loading the courses…" and "Loading the reviews…"; certificates: "Looking up the certificate…"; payments: "Loading the payment settings…"; branding's hand-built "Loading…" becomes `LoadingState` "Loading the branding…".
   - The courses list and the reviews list get `aria-busy` while `isFetchingNextPage`.
 
   **Tests:** each screen's loading state shows its sentence in a `status` region, under the page's `h1`.
 - [ ] T017 [US3] **Needs IP T032.** Test first in `AP/components/app-layout.test.ts(x)`: after navigating from `/` to `/payments`, the "Payments" `h1` has focus (A-02). No source change is expected.
-- [ ] T051 [US3] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: visit each admin page and assert its tab title ([contracts/page-titles.md](./contracts/page-titles.md)); `screenshot()` Categories while its list request is held (`page.route` delaying `localhost:2025`), showing "Loading the categories…".
-- [ ] T018 [US3] Run the admin portal's and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
+- [x] T051 [US3] Extend `packages/e2e/src/scenarios/admin-portal.e2e.ts`: visit each admin page and assert its tab title ([contracts/page-titles.md](./contracts/page-titles.md)); `screenshot()` Categories while its list request is held (`page.route` delaying `localhost:2025`), showing "Loading the categories…".
+- [x] T018 [US3] Run the admin portal's and `common-shadcn`'s tests, lint, typecheck and build. Fix failures in the code.
 
 ---
 

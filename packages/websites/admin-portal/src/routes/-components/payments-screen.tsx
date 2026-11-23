@@ -4,6 +4,7 @@
  */
 import type { IPaymentStatus } from '@discava/admin-api';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -13,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -26,6 +27,7 @@ export const POLL_MS = 5000;
 
 // Connects, replaces and disconnects the Stripe account students pay into.
 export function PaymentsScreen() {
+  usePageTitle('Payments');
   const trpc = useAdminApi();
   const queryClient = useQueryClient();
   const statusOptions = trpc.payment.status.queryOptions(undefined, {
@@ -85,7 +87,9 @@ export function PaymentsScreen() {
         Payments
       </h1>
 
-      {statusQuery.isPending && <Spinner aria-label="Loading payments" />}
+      {statusQuery.isPending && (
+        <LoadingState label="Loading the payment settings…" />
+      )}
       {statusQuery.isError && (
         <ErrorAlert type="error" header="Couldn't load the payment settings">
           {apiErrorMessage(statusQuery.error)}

@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -15,8 +16,8 @@ import {
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import {
   useInfiniteQuery,
@@ -147,7 +148,7 @@ function CourseReviews({ courseId }: { courseId: string }) {
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
 
   if (query.isPending) {
-    return <Spinner />;
+    return <LoadingState label="Loading the reviews…" />;
   }
   if (query.isError) {
     return (
@@ -172,7 +173,10 @@ function CourseReviews({ courseId }: { courseId: string }) {
 
   return (
     <>
-      <ul className="divide-y rounded-xl border">
+      <ul
+        className="divide-y rounded-xl border"
+        aria-busy={query.isFetchingNextPage}
+      >
         {items.map((item) => (
           <li key={item.reviewerId} className="space-y-3 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -257,6 +261,7 @@ function CourseReviews({ courseId }: { courseId: string }) {
  * see its reviews of every status and remove a visible one with a reason.
  */
 export function ReviewsScreen() {
+  usePageTitle('Reviews');
   const trpc = useAdminApi();
   const [courseId, setCourseId] = useState('');
   const courses = useInfiniteQuery(
@@ -278,7 +283,7 @@ export function ReviewsScreen() {
         </p>
       </header>
 
-      {courses.isPending && <Spinner />}
+      {courses.isPending && <LoadingState label="Loading the courses…" />}
       {courses.isError && (
         <div role="alert" className="space-y-3 text-sm">
           <p className="text-destructive">
@@ -307,6 +312,7 @@ export function ReviewsScreen() {
               id="review-course"
               className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               value={courseId}
+              aria-busy={courses.isFetchingNextPage}
               onChange={(event) => setCourseId(event.target.value)}
             >
               <option value="">Choose a course</option>

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { RestrictedPortal } from '@discava/common-shadcn/components/restricted-portal';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { signOut } from '@discava/common-web-utils/sign-out';
@@ -42,10 +43,31 @@ function AdminsOnly() {
       : undefined,
   ].filter((link) => link !== undefined);
   return (
+    <RestrictedPage
+      name={name}
+      links={links}
+      onSignOut={() => signOut(auth, { localOidc })}
+    />
+  );
+}
+
+// Rendered only in the restricted branch: a title set in AdminsOnly itself
+// would run after the admin pages' effects and overwrite theirs.
+function RestrictedPage({
+  name,
+  links,
+  onSignOut,
+}: {
+  name: string;
+  links: { label: string; href: string }[];
+  onSignOut: () => void;
+}) {
+  usePageTitle('Administrators only');
+  return (
     <RestrictedPortal
       title="The admin portal is for administrators"
       links={links}
-      onSignOut={() => signOut(auth, { localOidc })}
+      onSignOut={onSignOut}
     >
       <p>You're signed in as {name}, who isn't an administrator.</p>
     </RestrictedPortal>
