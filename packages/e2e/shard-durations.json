@@ -34,6 +34,7 @@
   "scenarios/file.e2e.ts": 31,
   "scenarios/free-preview.e2e.ts": 8,
   "scenarios/instructor-home.e2e.ts": 22,
+  "scenarios/instructor-views.e2e.ts": 20,
   "scenarios/learn.e2e.ts": 138,
   "scenarios/my-learning.e2e.ts": 31,
   "scenarios/notification-bell.e2e.ts": 7,

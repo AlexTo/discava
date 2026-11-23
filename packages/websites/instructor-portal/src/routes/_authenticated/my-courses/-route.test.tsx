@@ -8,12 +8,12 @@ import { ApiError, fakeTrpcFetch } from '@discava/common-web-utils/testing';
 import type { AppRouter as CoreApiRouter } from '@discava/core-api';
 import type { AppRouter as InstructorApiRouter } from '@discava/instructor-api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
-import type { ReactElement } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { type ReactElement, useSyncExternalStore } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CoreApiTRPCContext, InstructorApiTRPCContext } from '../../../api';
 
 vi.mock('react-oidc-context', () => ({
@@ -45,6 +45,25 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 const { Route } = await import('./route');
 const RouteComponent = Route.options.component!;
+
+// The address stands in for the router's: a small store the page reads and
+// writes through useSearch and useNavigate, with each write recorded.
+type Search = { status: string; q: string };
+const defaults: Search = { status: 'all', q: '' };
+let search = defaults;
+const listeners = new Set<() => void>();
+const navigations: { search: Search; replace?: boolean }[] = [];
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+};
+const setSearch = (next: Search) => {
+  search = next;
+  for (const listener of listeners) listener();
+};
+const validate = Route.options.validateSearch as (
+  search: Record<string, unknown>,
+) => Search;
 
 const course = (
   courseId: string,
@@ -115,8 +134,46 @@ const renderPage = (coreHandlers = {}, instructorHandlers = {}) => {
   return { ...result, calls, user };
 };
 
+// What a route's beforeLoad does with the address as typed: nothing when it is
+// already what the validated values would write, else a replace redirect.
+const correction = (raw: Record<string, unknown>) => {
+  const beforeLoad = Route.options.beforeLoad as (ctx: {
+    search: unknown;
+    location: { search: Record<string, unknown> };
+  }) => void;
+  try {
+    beforeLoad({ search: validate(raw), location: { search: raw } });
+  } catch (thrown) {
+    return thrown as { options: { replace?: boolean; search: unknown } };
+  }
+};
+const correctedTo = (raw: Record<string, unknown>) => {
+  const redirect = correction(raw);
+  expect(redirect?.options.replace).toBe(true);
+  return (
+    redirect?.options.search as (prev: Record<string, unknown>) => unknown
+  )(raw);
+};
+
 beforeEach(() => {
   linkProps.length = 0;
+  navigations.length = 0;
+  search = defaults;
+  vi.spyOn(Route, 'useSearch').mockImplementation(() =>
+    useSyncExternalStore(subscribe, () => search),
+  );
+  vi.spyOn(Route, 'useNavigate').mockReturnValue(((opts: {
+    search: (prev: Search) => Search;
+    replace?: boolean;
+  }) => {
+    const next = opts.search(search);
+    navigations.push({ search: next, replace: opts.replace });
+    setSearch(next);
+  }) as never);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const summary = (courseId: string, enrolments: number) => ({
@@ -130,6 +187,107 @@ const summary = (courseId: string, enrolments: number) => ({
 });
 
 describe('My courses', () => {
+  it('validates the filter and search from the address', () => {
+    expect(validate({})).toEqual({ status: 'all', q: '' });
+    expect(validate({ status: 'draft', q: ' react ' })).toEqual({
+      status: 'draft',
+      q: 'react',
+    });
+    expect(validate({ status: 'deleted', q: 5 })).toEqual({
+      status: 'all',
+      q: '',
+    });
+    expect(validate({ q: 'a'.repeat(300) }).q).toHaveLength(200);
+  });
+
+  it('replaces an invalid or redundant address with the value it fell back to', () => {
+    expect(correction({})).toBeUndefined();
+    expect(correction({ status: 'draft', q: 'react' })).toBeUndefined();
+    expect(correctedTo({ status: 'deleted' })).toEqual({
+      status: undefined,
+      q: undefined,
+    });
+    expect(correctedTo({ status: 'all', q: ' react ' })).toEqual({
+      status: undefined,
+      q: 'react',
+    });
+  });
+
+  it('keeps a space typed in the search box after the address catches up', async () => {
+    const { user } = renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+    const box = screen.getByLabelText('Search courses');
+
+    await user.type(box, 'intro ');
+    await waitFor(() =>
+      expect(navigations).toEqual([
+        { search: { status: 'all', q: 'intro' }, replace: true },
+      ]),
+    );
+    await user.type(box, 'dyn');
+
+    expect(box).toHaveValue('intro dyn');
+  });
+
+  it('follows the address when Back or a link changes the search', async () => {
+    renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+    const box = screen.getByLabelText('Search courses');
+
+    act(() => setSearch({ status: 'all', q: 'streams' }));
+
+    expect(box).toHaveValue('streams');
+  });
+
+  it('shows the view the address names', async () => {
+    search = { status: 'draft', q: 'advanced' };
+    renderPage({
+      'course.listByInstructor': () => ({
+        items: [
+          course('c1', 'Intro to DynamoDB', 'published'),
+          course('c2', 'Advanced Queries', 'draft'),
+          course('c3', 'Advanced Streams', 'published'),
+        ],
+        cursor: null,
+      }),
+    });
+
+    expect(await screen.findByText('Advanced Queries')).toBeInTheDocument();
+    expect(screen.queryByText('Advanced Streams')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search courses')).toHaveValue('advanced');
+    expect(
+      screen.getByRole('radio', { name: 'Show draft courses' }),
+    ).toBeChecked();
+  });
+
+  it('pushes the status filter to the address', async () => {
+    const { user } = renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+
+    await user.click(screen.getByRole('radio', { name: 'Show draft courses' }));
+
+    expect(navigations).toEqual([
+      { search: { status: 'draft', q: '' }, replace: undefined },
+    ]);
+  });
+
+  it('replaces the address once typing in the search box pauses', async () => {
+    const { user } = renderPage({
+      'course.listByInstructor': () => ({ items: [], cursor: null }),
+    });
+
+    await user.type(screen.getByLabelText('Search courses'), 'dyn');
+    expect(navigations).toEqual([]);
+    await waitFor(() =>
+      expect(navigations).toEqual([
+        { search: { status: 'all', q: 'dyn' }, replace: true },
+      ]),
+    );
+  });
+
   it('sets the page title, and hides the count until the list has loaded', () => {
     renderPage({ 'course.listByInstructor': () => new Promise(() => {}) });
     expect(document.title).toBe('My Courses · Discava');

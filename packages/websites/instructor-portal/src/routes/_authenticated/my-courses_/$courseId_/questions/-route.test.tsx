@@ -34,13 +34,135 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 const { Route } = await import('./route');
 const RouteComponent = Route.options.component!;
 
+type Search = { tab: string; lesson?: string };
+const navigate = vi.fn();
+const showing = (search: Search) =>
+  vi.spyOn(Route, 'useSearch').mockReturnValue(search as never);
+const validate = Route.options.validateSearch as (
+  search: Record<string, unknown>,
+) => Search;
+
+// What a route's beforeLoad does with the address as typed: nothing when it is
+// already what the validated values would write, else a replace redirect.
+const correction = (raw: Record<string, unknown>) => {
+  const beforeLoad = Route.options.beforeLoad as (ctx: {
+    search: unknown;
+    location: { search: Record<string, unknown> };
+  }) => void;
+  try {
+    beforeLoad({ search: validate(raw), location: { search: raw } });
+  } catch (thrown) {
+    return thrown as { options: { replace?: boolean; search: unknown } };
+  }
+};
+const correctedTo = (raw: Record<string, unknown>) => {
+  const redirect = correction(raw);
+  expect(redirect?.options.replace).toBe(true);
+  return (
+    redirect?.options.search as (prev: Record<string, unknown>) => unknown
+  )(raw);
+};
+
 beforeEach(() => {
+  navigate.mockReset();
   vi.spyOn(Route, 'useParams').mockReturnValue({ courseId: 'c1' });
+  vi.spyOn(Route, 'useNavigate').mockReturnValue(navigate as never);
+  showing({ tab: 'unanswered' });
 });
 
+const queues = {
+  'discussion.unanswered': () => ({ items: [] }),
+  'discussion.reported': () => ({ items: [] }),
+  'course.view': () => lessonsView([{ lessonId: 'l1' }]),
+};
+
 describe('Questions route', () => {
-  it('shows the three tabs, with Unanswered first, and a link back', async () => {
+  it('validates the tab and lesson from the address', () => {
+    expect(validate({})).toEqual({ tab: 'unanswered' });
+    expect(validate({ tab: 'reported' })).toEqual({ tab: 'reported' });
+    expect(validate({ tab: 'nope', lesson: 'l1' })).toEqual({
+      tab: 'unanswered',
+      lesson: 'l1',
+    });
+    expect(validate({ tab: 'by-lesson', lesson: 5 })).toEqual({
+      tab: 'by-lesson',
+    });
+  });
+
+  it('replaces an invalid address with the value it fell back to', () => {
+    expect(correction({})).toBeUndefined();
+    expect(correction({ tab: 'by-lesson', lesson: 'l1' })).toBeUndefined();
+    expect(correctedTo({ tab: 'bogus' })).toEqual({
+      tab: undefined,
+      lesson: undefined,
+    });
+    expect(correctedTo({ tab: 'unanswered' })).toMatchObject({
+      tab: undefined,
+    });
+  });
+
+  it('opens on the tab the address names', async () => {
+    showing({ tab: 'reported' });
+    renderQuestions(<RouteComponent />, { instructor: queues });
+
+    expect(screen.getByRole('tab', { name: 'Reported' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByText('No reported posts.')).toBeVisible();
+  });
+
+  it('writes the tab to the address when one is chosen', async () => {
     const { user } = renderQuestions(<RouteComponent />, {
+      instructor: queues,
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Reported' }));
+
+    expect(navigate).toHaveBeenCalledWith({ search: { tab: 'reported' } });
+  });
+
+  it('shows the lesson the address names on By lesson', async () => {
+    showing({ tab: 'by-lesson', lesson: 'l1' });
+    renderQuestions(<RouteComponent />, {
+      instructor: queues,
+      core: { 'discussion.listQuestions': () => ({ items: [] }) },
+    });
+
+    expect(await screen.findByLabelText('Lesson')).toHaveValue('l1');
+  });
+
+  it('shows By lesson with nothing chosen for a lesson not in the course', async () => {
+    showing({ tab: 'by-lesson', lesson: 'gone' });
+    renderQuestions(<RouteComponent />, { instructor: queues });
+
+    expect(screen.getByRole('tab', { name: 'By lesson' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByLabelText('Lesson')).toHaveValue('');
+  });
+
+  it('writes the lesson to the address when one is chosen', async () => {
+    showing({ tab: 'by-lesson' });
+    const { user } = renderQuestions(<RouteComponent />, {
+      instructor: queues,
+      core: { 'discussion.listQuestions': () => ({ items: [] }) },
+    });
+
+    await user.selectOptions(await screen.findByLabelText('Lesson'), 'l1');
+
+    const { search } = navigate.mock.calls[0]![0] as {
+      search: (prev: Search) => Search;
+    };
+    expect(search({ tab: 'by-lesson' })).toEqual({
+      tab: 'by-lesson',
+      lesson: 'l1',
+    });
+  });
+
+  it('shows the three tabs, with Unanswered first, and a link back', async () => {
+    renderQuestions(<RouteComponent />, {
       instructor: {
         'discussion.unanswered': () => ({ items: [] }),
         'discussion.reported': () => ({ items: [] }),
@@ -64,10 +186,5 @@ describe('Questions route', () => {
     expect(
       screen.getByRole('link', { name: 'Back to course' }),
     ).toHaveAttribute('href', '/my-courses/c1');
-
-    await user.click(screen.getByRole('tab', { name: 'Reported' }));
-    expect(await screen.findByText('No reported posts.')).toBeVisible();
-    await user.click(screen.getByRole('tab', { name: 'By lesson' }));
-    expect(await screen.findByLabelText('Lesson')).toBeVisible();
   });
 });
