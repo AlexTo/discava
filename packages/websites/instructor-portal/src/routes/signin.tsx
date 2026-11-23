@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { safeReturnTo } from '@discava/common-web-utils/return-to';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
@@ -18,6 +19,7 @@ export const Route = createFileRoute('/signin')({
 });
 
 function RouteComponent() {
+  usePageTitle('Signing in');
   const auth = useAuth();
   const navigate = useNavigate();
   const returnTo = safeReturnTo(Route.useSearch().redirect);
@@ -46,5 +48,10 @@ function RouteComponent() {
     }
   }, [auth, navigate, returnTo]);
 
-  return <Spinner />;
+  return (
+    <main>
+      <h1 className="sr-only">Signing in</h1>
+      <LoadingState label="Signing you in…" size="page" />
+    </main>
+  );
 }

@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -14,11 +15,11 @@ import {
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
 import { Input } from '@discava/common-shadcn/components/ui/input';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import {
   ToggleGroup,
   ToggleGroupItem,
 } from '@discava/common-shadcn/components/ui/toggle-group';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
 import { useQuery } from '@tanstack/react-query';
@@ -52,6 +53,7 @@ const filters = ['All', 'Published', 'Draft', 'Archived'] as const;
 type CourseFilter = (typeof filters)[number];
 
 function RouteComponent() {
+  usePageTitle('My Courses');
   const [filter, setFilter] = useState<CourseFilter>('All');
   const [query, setQuery] = useState('');
   const normalisedQuery = query.trim().toLocaleLowerCase();
@@ -113,7 +115,7 @@ function RouteComponent() {
   );
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary">
@@ -173,10 +175,12 @@ function RouteComponent() {
             <h2 id="course-list-heading" className="text-lg font-semibold">
               All courses
             </h2>
-            <p className="text-sm text-muted-foreground">
-              {visibleCourses.length}{' '}
-              {visibleCourses.length === 1 ? 'course' : 'courses'} shown
-            </p>
+            {summaryReady && (
+              <p className="text-sm text-muted-foreground">
+                {visibleCourses.length}{' '}
+                {visibleCourses.length === 1 ? 'course' : 'courses'} shown
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-64">
@@ -215,8 +219,8 @@ function RouteComponent() {
         </div>
 
         {coursesQuery.isLoading ? (
-          <div className="flex justify-center py-12">
-            <Spinner />
+          <div className="py-12">
+            <LoadingState label="Loading your courses…" />
           </div>
         ) : coursesQuery.isError ? (
           <ErrorAlert type="error" header="Couldn't load your courses">
@@ -312,6 +316,6 @@ function RouteComponent() {
           </Card>
         )}
       </section>
-    </main>
+    </div>
   );
 }

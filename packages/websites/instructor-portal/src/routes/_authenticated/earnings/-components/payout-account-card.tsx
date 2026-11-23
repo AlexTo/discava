@@ -54,13 +54,18 @@ export function PayoutAccountCard() {
   const busy = startOnboarding.isPending || dashboardLink.isPending;
 
   return (
-    <Card className="gap-4">
+    <Card className="gap-4" aria-busy={account.isPending}>
       <CardHeader>
-        <CardTitle className="text-base">Payout account</CardTitle>
+        <CardTitle className="text-base" role="heading" aria-level={2}>
+          Payout account
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {account.isPending ? (
-          <Skeleton data-testid="account-skeleton" className="h-10 w-full" />
+          <>
+            <Skeleton data-testid="account-skeleton" className="h-10 w-full" />
+            <span className="sr-only">Loading…</span>
+          </>
         ) : account.isError ? (
           <div className="space-y-3">
             <ErrorAlert type="error" header="Couldn't load your payout account">

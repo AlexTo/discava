@@ -4,6 +4,7 @@
  */
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -12,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { relativeTime } from '@discava/common-web-utils/discussion';
 import { usePublicMediaUrl } from '@discava/common-web-utils/public-media-url';
@@ -39,6 +40,7 @@ const courseStatusLabels: Record<string, CourseStatus> = {
 };
 
 function RouteComponent() {
+  usePageTitle('Home');
   const auth = useAuth();
   const { displayName } = getUserIdentity(auth.user?.profile);
   const firstName = displayName.split(' ')[0];
@@ -69,7 +71,7 @@ function RouteComponent() {
   const isPending = !instructorId || coursesQuery.isPending;
 
   return (
-    <main className="w-full space-y-6 pb-8">
+    <div className="w-full space-y-6 pb-8">
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/80 px-6 py-6 text-primary-foreground shadow-sm sm:px-8">
         <div className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full border-[40px] border-white/10" />
         <div className="pointer-events-none absolute -bottom-20 right-36 size-48 rounded-full bg-white/5" />
@@ -185,8 +187,8 @@ function RouteComponent() {
           </div>
         </div>
         {isPending ? (
-          <div className="flex justify-center py-12">
-            <Spinner />
+          <div className="py-12">
+            <LoadingState label="Loading your courses…" />
           </div>
         ) : coursesQuery.isError ? (
           <div className="space-y-3">
@@ -277,6 +279,6 @@ function RouteComponent() {
           </Card>
         )}
       </section>
-    </main>
+    </div>
   );
 }

@@ -5,13 +5,15 @@
 
 import { useBreadcrumbLabel } from '@discava/common-shadcn/components/breadcrumb-label';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { LoadingState } from '@discava/common-shadcn/components/loading-state';
 import {
   AlertDescription,
   Alert as ShadcnAlert,
 } from '@discava/common-shadcn/components/ui/alert';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
+import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Card } from '@discava/common-shadcn/components/ui/card';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
 import { useQuery } from '@tanstack/react-query';
@@ -106,11 +108,17 @@ function RouteComponent() {
     : undefined;
 
   useBreadcrumbLabel(fullCourse?.title);
+  usePageTitle(fullCourse?.title ?? 'Course', fullCourse && 'My Courses');
 
   if (isPending) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner />
+      <div className="space-y-4">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          Course
+        </h1>
+        <div className="py-12">
+          <LoadingState label="Loading the course…" size="page" />
+        </div>
       </div>
     );
   }
@@ -118,14 +126,24 @@ function RouteComponent() {
   if (isError) {
     const notFound = error.data?.code === 'NOT_FOUND';
     return (
-      <ErrorAlert
-        type="error"
-        header={notFound ? 'Course not found' : "Couldn't load this course"}
-      >
-        {notFound
-          ? "This course doesn't exist, or you don't have access to it."
-          : apiErrorMessage(error)}
-      </ErrorAlert>
+      <div className="space-y-4">
+        <h1 className="text-balance text-2xl font-bold tracking-tight sm:text-3xl">
+          Course
+        </h1>
+        <ErrorAlert
+          type="error"
+          header={notFound ? 'Course not found' : "Couldn't load this course"}
+        >
+          {notFound
+            ? "This course doesn't exist, or you don't have access to it."
+            : apiErrorMessage(error)}
+        </ErrorAlert>
+        {notFound && (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/my-courses">Back to My Courses</Link>
+          </Button>
+        )}
+      </div>
     );
   }
   // Archived records move out of the editor into the Archived section below;
@@ -140,7 +158,7 @@ function RouteComponent() {
   const draft = course.status === 'draft';
 
   return (
-    <main className="mx-auto w-full max-w-5xl space-y-6 pb-10">
+    <div className="mx-auto w-full max-w-5xl space-y-6 pb-10">
       <section>
         <Card className="gap-0 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -191,6 +209,7 @@ function RouteComponent() {
             </Link>
           </div>
           <div className="mt-4 border-t pt-4">
+            <h2 className="mb-3 text-lg font-semibold">Course settings</h2>
             <CourseCertificatesSwitch
               courseId={course.courseId}
               certificatesEnabled={course.certificatesEnabled}
@@ -403,6 +422,6 @@ function RouteComponent() {
           items within their lesson.
         </div>
       )}
-    </main>
+    </div>
   );
 }

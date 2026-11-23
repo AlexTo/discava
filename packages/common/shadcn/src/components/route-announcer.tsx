@@ -59,7 +59,8 @@ export function RouteAnnouncer({
     previous.current = pathname;
     if (!interacted.current) return;
 
-    const focusHeading = () => {
+    let focused: HTMLElement | null = null;
+    const focusHeading = (): 'moved' | 'focused' | 'none' => {
       const container = document.getElementById(containerId);
       const moved = movedTo.current;
       if (
@@ -67,20 +68,34 @@ export function RouteAnnouncer({
         moved === document.activeElement &&
         container?.contains(moved)
       ) {
-        return true;
+        return 'moved';
       }
       const heading = container?.querySelector<HTMLElement>('h1');
-      if (!heading) return false;
+      if (!heading) return 'none';
       heading.tabIndex = -1;
       heading.classList.add('focus-visible:outline-none', 'outline-none');
       heading.focus();
-      return true;
+      focused = heading;
+      return 'focused';
     };
-    if (focusHeading()) return;
+
+    // The router can move to the new pathname while the old page is still
+    // showing (a route still loading). The heading focused then is the old
+    // page's and unmounts, dropping focus to <body>: focus the new page's
+    // heading when it arrives. Watching ends after 5 seconds.
+    const first = focusHeading();
+    if (first === 'moved') return;
 
     const container = document.getElementById(containerId) ?? document.body;
     const observer = new MutationObserver(() => {
-      if (focusHeading()) observer.disconnect();
+      if (focused === null) {
+        focusHeading();
+        return;
+      }
+      if (!focused.isConnected && document.activeElement === document.body) {
+        focused = null;
+        focusHeading();
+      }
     });
     observer.observe(container, { childList: true, subtree: true });
     const timer = setTimeout(() => observer.disconnect(), WAIT_MS);

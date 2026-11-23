@@ -130,6 +130,13 @@ const summary = (courseId: string, enrolments: number) => ({
 });
 
 describe('My courses', () => {
+  it('sets the page title, and hides the count until the list has loaded', () => {
+    renderPage({ 'course.listByInstructor': () => new Promise(() => {}) });
+    expect(document.title).toBe('My Courses · Discava');
+    expect(screen.getByText('Loading your courses…')).toBeVisible();
+    expect(screen.queryByText(/courses? shown/)).toBeNull();
+  });
+
   it("shows a spinner, then the instructor's courses from course.listByInstructor", async () => {
     const { calls } = renderPage({
       'course.listByInstructor': () => ({

@@ -43,4 +43,13 @@ describe('the restricted instructor portal page', () => {
       screen.getByText(/To learn on Acme Academy, use/),
     ).toBeInTheDocument();
   });
+
+  it('sets the page title', () => {
+    render(
+      <RuntimeConfigContext.Provider value={{} as never}>
+        <InstructorsOnly />
+      </RuntimeConfigContext.Provider>,
+    );
+    expect(document.title).toBe('Instructors only · Discava');
+  });
 });

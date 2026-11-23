@@ -73,6 +73,33 @@ describe('RouteAnnouncer', () => {
     );
   });
 
+  it('focuses the new heading when the old page’s is replaced after focus', async () => {
+    const { rerender } = render(
+      <Shell pathname="/a">
+        <h1>A</h1>
+      </Shell>,
+    );
+    interact();
+    // The path changes while the old page still shows.
+    rerender(
+      <Shell pathname="/b">
+        <h1>A</h1>
+        <p>old</p>
+      </Shell>,
+    );
+    // The new page replaces it: a different element, so the old one unmounts.
+    rerender(
+      <Shell pathname="/b">
+        <section>
+          <h1>B</h1>
+        </section>
+      </Shell>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'B' })).toHaveFocus(),
+    );
+  });
+
   it('leaves focus where the new page moved it', () => {
     // As a lesson opened at a video: the page focuses its target from its
     // own effect, which runs before the announcer's.

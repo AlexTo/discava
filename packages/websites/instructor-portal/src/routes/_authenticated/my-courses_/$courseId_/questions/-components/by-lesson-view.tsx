@@ -52,6 +52,7 @@ function LessonQuestions({
                 state: row.state === 'hidden' ? 'shown' : row.state,
               }}
               showTitle
+              headingLevel={2}
               action="asked"
             />
             <p className="text-xs text-muted-foreground">

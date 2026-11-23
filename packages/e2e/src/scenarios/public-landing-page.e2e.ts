@@ -343,7 +343,11 @@ test('an instructor edits their profile and a signed-out visitor opens it from t
     await instructor.getByRole('button', { name: 'Open user menu' }).click();
     await instructor.getByRole('menuitem', { name: 'Public profile' }).click();
     await expect(
-      instructor.getByRole('heading', { name: 'Public profile' }),
+      instructor.getByRole('heading', {
+        level: 1,
+        name: 'Profile',
+        exact: true,
+      }),
     ).toBeVisible();
 
     await instructor.getByLabel('Display name').fill(displayName);

@@ -2,7 +2,9 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 import { RestrictedPortal } from '@discava/common-shadcn/components/restricted-portal';
+import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { useBrand } from '@discava/common-web-utils/brand';
 import { isInGroup } from '@discava/common-web-utils/groups';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
@@ -28,9 +30,7 @@ export const Route = createFileRoute('/_authenticated')({
 // saying so, pointing to the student portal, instead of the portal's pages and
 // its API's refusals (#235). instructor-api enforces the same rule.
 function InstructorsOnly() {
-  const brand = useBrand();
   const auth = useAuth();
-  const { localOidc, portals } = useRuntimeConfig();
 
   if (isInGroup(auth.user?.profile, 'instructor')) {
     return (
@@ -40,6 +40,14 @@ function InstructorsOnly() {
     );
   }
 
+  return <NotAnInstructor />;
+}
+
+function NotAnInstructor() {
+  usePageTitle('Instructors only');
+  const brand = useBrand();
+  const auth = useAuth();
+  const { localOidc, portals } = useRuntimeConfig();
   const { displayName } = getUserIdentity(auth.user?.profile);
   return (
     <RestrictedPortal

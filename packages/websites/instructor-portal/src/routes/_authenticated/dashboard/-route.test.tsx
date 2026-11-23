@@ -58,6 +58,11 @@ const renderPage = (courseSummaries: () => unknown) =>
   });
 
 describe('Dashboard', () => {
+  it('sets the page title', () => {
+    renderPage(() => new Promise(() => {}));
+    expect(document.title).toBe('Dashboard · Discava');
+  });
+
   it('shows skeletons while the figures load', () => {
     renderPage(() => new Promise(() => {}));
 

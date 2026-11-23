@@ -29,6 +29,25 @@ describe('PostCard', () => {
     expect(screen.getByText('Instructor')).toBeInTheDocument();
   });
 
+  it('puts the title at the heading level it is given, h4 by default', () => {
+    const { rerender } = render(
+      <PostCard post={{ ...shown, title: 'Stuck' }} showTitle />,
+    );
+    expect(
+      screen.getByRole('heading', { level: 4, name: 'Stuck' }),
+    ).toBeVisible();
+    rerender(
+      <PostCard
+        post={{ ...shown, title: 'Stuck' }}
+        showTitle
+        headingLevel={2}
+      />,
+    );
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Stuck' }),
+    ).toBeVisible();
+  });
+
   it('wraps a long title and author name', () => {
     render(
       <PostCard

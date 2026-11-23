@@ -9,6 +9,7 @@ import type { LucideIcon } from 'lucide-react';
 import * as React from 'react';
 import { BreadcrumbOverrideContext } from './breadcrumb-label';
 import { NotificationBell, type Portal } from './notification-bell-container';
+import { RouteAnnouncer } from './route-announcer';
 import { MAIN_CONTENT_ID, SkipLink } from './skip-link';
 import {
   Breadcrumb,
@@ -171,6 +172,7 @@ export const PortalShell = ({
     <BreadcrumbOverrideContext.Provider value={breadcrumbOverrideContextValue}>
       <SidebarProvider>
         <SkipLink />
+        <RouteAnnouncer containerId={MAIN_CONTENT_ID} pathname={pathname} />
         <Sidebar>
           <SidebarContent>
             <SidebarGroup>
