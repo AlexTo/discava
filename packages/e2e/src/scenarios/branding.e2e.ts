@@ -71,12 +71,13 @@ test('an administrator uploads a logo and an icon, and visitors see them', async
 
   await test.step('editing the name takes "Nothing to save" away', async () => {
     const name = page.getByLabel('Name', { exact: true });
+    const saved = await name.inputValue();
     await name.fill('Draft name');
     await expect(
       page.getByText('Nothing to save: the branding is as saved.'),
     ).toHaveCount(0);
     await screenshot(page, 'nothing to save gone after an edit');
-    await name.fill('');
+    await name.fill(saved);
   });
 
   await test.step('a non-square icon is refused, with the rule, and nothing is uploaded', async () => {
