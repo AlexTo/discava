@@ -13,6 +13,7 @@ import {
   parseHex,
 } from '@discava/common-branding/colour';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +27,8 @@ import {
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
-import { Spinner } from '@discava/common-shadcn/components/ui/spinner';
 import { Switch } from '@discava/common-shadcn/components/ui/switch';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useSetBrand } from '@discava/common-web-utils/brand';
 import { useRuntimeConfig } from '@discava/common-web-utils/runtime-config';
@@ -122,6 +123,7 @@ export function BrandingForm({
   const showNameId = useId();
   const [serverError, setServerError] = useState<string>();
   const [confirmingReset, setConfirmingReset] = useState(false);
+  const resetFocus = useReturnFocus(confirmingReset);
 
   const typedColour = colourText.trim();
   const palette = typedColour ? brandPalette(typedColour) : undefined;
@@ -434,22 +436,18 @@ export function BrandingForm({
           >
             Reset all to default
           </Button>
-          <Button
+          <PendingButton
             type="submit"
-            disabled={!dirty || nameInvalid || colourInvalid || save.isPending}
+            disabled={!dirty || nameInvalid || colourInvalid}
+            pending={save.isPending}
+            pendingLabel="Saving…"
           >
-            {save.isPending ? (
-              <>
-                <Spinner /> Saving…
-              </>
-            ) : (
-              'Save'
-            )}
-          </Button>
+            Save
+          </PendingButton>
         </div>
       </footer>
       <AlertDialog open={confirmingReset} onOpenChange={setConfirmingReset}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={resetFocus.onCloseAutoFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>Reset all to the default brand?</AlertDialogTitle>
             <AlertDialogDescription>

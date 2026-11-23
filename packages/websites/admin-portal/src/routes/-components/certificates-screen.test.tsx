@@ -2,7 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
   ApiError,
@@ -178,6 +178,108 @@ describe('the Certificates screen', () => {
   });
 });
 
+describe('the Certificates screen, with the keyboard', () => {
+  const statuses = () =>
+    screen.getAllByRole('status').map((status) => status.textContent);
+
+  it('returns focus to Revoke when the dialog is dismissed', async () => {
+    const rendered = render();
+    await lookUp(rendered);
+    const revoke = await screen.findByRole('button', { name: 'Revoke' });
+    await rendered.user.click(revoke);
+    await screen.findByRole('dialog');
+
+    await rendered.user.keyboard('{Escape}');
+
+    await waitFor(() => expect(revoke).toHaveFocus());
+  });
+
+  it('returns focus to Restore when its dialog is dismissed', async () => {
+    const rendered = render({ 'certificate.get': () => revoked });
+    await lookUp(rendered);
+    const restore = await screen.findByRole('button', { name: 'Restore' });
+    await rendered.user.click(restore);
+    await screen.findByRole('dialog');
+
+    await rendered.user.keyboard('{Escape}');
+
+    await waitFor(() => expect(restore).toHaveFocus());
+  });
+
+  it('focuses Restore after a revoke and announces it', async () => {
+    let current = valid;
+    const rendered = render({
+      'certificate.get': () => current,
+      'certificate.revoke': () => {
+        current = revoked;
+        return revoked;
+      },
+    });
+    await lookUp(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Revoke' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByLabelText('Note')).toHaveAccessibleDescription(
+      '0/500',
+    );
+    expect(within(dialog).getByText('0/500')).not.toHaveAttribute('aria-live');
+    await rendered.user.click(
+      within(dialog).getByRole('button', { name: 'Revoke certificate' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Restore' })).toHaveFocus(),
+    );
+    await waitFor(() => expect(statuses()).toContain('Certificate revoked.'));
+  });
+
+  it('focuses Revoke after a restore and announces it', async () => {
+    let current = revoked;
+    const rendered = render({
+      'certificate.get': () => current,
+      'certificate.restore': () => {
+        current = valid;
+        return valid;
+      },
+    });
+    await lookUp(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Restore' }),
+    );
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Restore certificate' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Revoke' })).toHaveFocus(),
+    );
+    await waitFor(() => expect(statuses()).toContain('Certificate restored.'));
+  });
+
+  it('keeps focus on a pending Revoke certificate and sends nothing on a second press', async () => {
+    const rendered = render({
+      'certificate.revoke': () => new Promise(() => {}),
+    });
+    await lookUp(rendered);
+    await rendered.user.click(
+      await screen.findByRole('button', { name: 'Revoke' }),
+    );
+    await rendered.user.click(
+      screen.getByRole('button', { name: 'Revoke certificate' }),
+    );
+
+    const pending = await screen.findByRole('button', { name: 'Revoking…' });
+    expect(pending).toHaveAttribute('aria-disabled', 'true');
+    pending.focus();
+    await rendered.user.click(pending);
+    expect(pending).toHaveFocus();
+    expect(
+      rendered.calls.filter((c) => c.path === 'certificate.revoke'),
+    ).toHaveLength(1);
+  });
+});
+
 describe('the Certificates screen, as a page', () => {
   it('names the tab', () => {
     render();
@@ -192,8 +294,10 @@ describe('the Certificates screen, as a page', () => {
     const rendered = render({ 'certificate.get': () => new Promise(() => {}) });
     await lookUp(rendered);
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Looking up the certificate…',
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('status').map((status) => status.textContent),
+      ).toContain('Looking up the certificate…'),
     );
   });
 });

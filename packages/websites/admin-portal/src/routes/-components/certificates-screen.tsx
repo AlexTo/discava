@@ -5,6 +5,8 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -19,9 +21,10 @@ import { Input } from '@discava/common-shadcn/components/ui/input';
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
 
 export const NOTE_MAX = 500;
@@ -44,11 +47,17 @@ function RevokeDialog({
   certificateId,
   open,
   onClose,
+  onDone,
+  focusAfterClose,
 }: {
   certificateId: string;
   open: boolean;
   onClose: () => void;
+  onDone: () => void;
+  /** Places focus after a success; returns true when it did. */
+  focusAfterClose: (event: Event) => boolean;
 }) {
+  const returnFocus = useReturnFocus(open);
   const trpc = useAdminApi();
   const queryClient = useQueryClient();
   const revoke = useMutation(trpc.certificate.revoke.mutationOptions());
@@ -74,13 +83,21 @@ function RevokeDialog({
     } catch {
       return;
     }
+    onDone();
     close();
     void queryClient.invalidateQueries(trpc.certificate.pathFilter());
   };
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onCloseAutoFocus={(event) => {
+          if (!focusAfterClose(event)) {
+            returnFocus.onCloseAutoFocus(event);
+          }
+        }}
+      >
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -119,12 +136,13 @@ function RevokeDialog({
             <div className="flex items-baseline justify-between">
               <Label htmlFor="revoke-note">Note</Label>
               <span
+                id="revoke-note-count"
                 className="text-xs text-muted-foreground"
-                aria-live="polite"
               >{`${note.length}/${NOTE_MAX}`}</span>
             </div>
             <Textarea
               id="revoke-note"
+              aria-describedby="revoke-note-count"
               value={note}
               maxLength={NOTE_MAX}
               rows={3}
@@ -135,15 +153,15 @@ function RevokeDialog({
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
-            <Button
+            <PendingButton
               type="submit"
               variant="destructive"
-              disabled={
-                revoke.isPending || (reason === 'other' && note.trim() === '')
-              }
+              disabled={reason === 'other' && note.trim() === ''}
+              pending={revoke.isPending}
+              pendingLabel="Revoking…"
             >
-              {revoke.isPending ? 'Revoking…' : 'Revoke certificate'}
-            </Button>
+              Revoke certificate
+            </PendingButton>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -155,11 +173,17 @@ function RestoreDialog({
   certificateId,
   open,
   onClose,
+  onDone,
+  focusAfterClose,
 }: {
   certificateId: string;
   open: boolean;
   onClose: () => void;
+  onDone: () => void;
+  /** Places focus after a success; returns true when it did. */
+  focusAfterClose: (event: Event) => boolean;
 }) {
+  const returnFocus = useReturnFocus(open);
   const trpc = useAdminApi();
   const queryClient = useQueryClient();
   const restore = useMutation(trpc.certificate.restore.mutationOptions());
@@ -177,13 +201,21 @@ function RestoreDialog({
     } catch {
       return;
     }
+    onDone();
     close();
     void queryClient.invalidateQueries(trpc.certificate.pathFilter());
   };
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && close()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onCloseAutoFocus={(event) => {
+          if (!focusAfterClose(event)) {
+            returnFocus.onCloseAutoFocus(event);
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Restore certificate</DialogTitle>
           <DialogDescription>
@@ -200,26 +232,57 @@ function RestoreDialog({
           <Button type="button" variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
+          <PendingButton
             type="button"
-            disabled={restore.isPending}
+            pending={restore.isPending}
+            pendingLabel="Restoring…"
             onClick={() => void submit()}
           >
-            {restore.isPending ? 'Restoring…' : 'Restore certificate'}
-          </Button>
+            Restore certificate
+          </PendingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Certificate({ certificateId }: { certificateId: string }) {
+function Certificate({
+  certificateId,
+  onAnnounce,
+}: {
+  certificateId: string;
+  onAnnounce: (message: string) => void;
+}) {
   const trpc = useAdminApi();
   const [revoking, setRevoking] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const query = useQuery(
     trpc.certificate.get.queryOptions({ certificateId }, { retry: false }),
   );
+  const revokeButton = useRef<HTMLButtonElement>(null);
+  const restoreButton = useRef<HTMLButtonElement>(null);
+  // The button that replaces the one used, once the certificate has refetched.
+  const focusNext = useRef<'revoke' | 'restore'>(undefined);
+  const status = query.data?.status;
+
+  const placeFocus = () => {
+    const button = (
+      focusNext.current === 'revoke' ? revokeButton : restoreButton
+    ).current;
+    if (focusNext.current && button) {
+      focusNext.current = undefined;
+      button.focus();
+    }
+  };
+  useEffect(placeFocus, [status]);
+  const focusAfterClose = (event: Event) => {
+    if (!focusNext.current) {
+      return false;
+    }
+    event.preventDefault();
+    placeFocus();
+    return true;
+  };
 
   if (query.isPending) {
     return <LoadingState label="Looking up the certificate…" />;
@@ -258,6 +321,7 @@ function Certificate({ certificateId }: { certificateId: string }) {
         </div>
         {cert.status === 'valid' ? (
           <Button
+            ref={revokeButton}
             type="button"
             variant="outline"
             size="sm"
@@ -267,6 +331,7 @@ function Certificate({ certificateId }: { certificateId: string }) {
           </Button>
         ) : (
           <Button
+            ref={restoreButton}
             type="button"
             variant="outline"
             size="sm"
@@ -315,11 +380,21 @@ function Certificate({ certificateId }: { certificateId: string }) {
         certificateId={certificateId}
         open={revoking}
         onClose={() => setRevoking(false)}
+        onDone={() => {
+          focusNext.current = 'restore';
+          onAnnounce('Certificate revoked.');
+        }}
+        focusAfterClose={focusAfterClose}
       />
       <RestoreDialog
         certificateId={certificateId}
         open={restoring}
         onClose={() => setRestoring(false)}
+        onDone={() => {
+          focusNext.current = 'revoke';
+          onAnnounce('Certificate restored.');
+        }}
+        focusAfterClose={focusAfterClose}
       />
     </div>
   );
@@ -333,6 +408,7 @@ export function CertificatesScreen() {
   usePageTitle('Certificates');
   const [input, setInput] = useState('');
   const [lookedUp, setLookedUp] = useState<string>();
+  const [announcement, setAnnouncement] = useState('');
 
   return (
     <div className="space-y-6">
@@ -364,7 +440,14 @@ export function CertificatesScreen() {
           Look up
         </Button>
       </form>
-      {lookedUp && <Certificate key={lookedUp} certificateId={lookedUp} />}
+      <StatusMessage message={announcement} visuallyHidden />
+      {lookedUp && (
+        <Certificate
+          key={lookedUp}
+          certificateId={lookedUp}
+          onAnnounce={setAnnouncement}
+        />
+      )}
     </div>
   );
 }

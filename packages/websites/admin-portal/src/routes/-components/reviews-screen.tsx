@@ -5,6 +5,8 @@
 
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
@@ -18,13 +20,14 @@ import {
 import { Label } from '@discava/common-shadcn/components/ui/label';
 import { Textarea } from '@discava/common-shadcn/components/ui/textarea';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
 
 export const REASON_MAX = 200;
@@ -42,10 +45,14 @@ function RemoveDialog({
   courseId,
   review,
   onClose,
+  onRemoved,
+  onCloseAutoFocus,
 }: {
   courseId: string;
   review: ReviewToRemove | undefined;
   onClose: () => void;
+  onRemoved: (reviewerId: string) => void;
+  onCloseAutoFocus: (event: Event) => void;
 }) {
   const trpc = useAdminApi();
   const queryClient = useQueryClient();
@@ -71,6 +78,7 @@ function RemoveDialog({
       // Shown in the dialog.
       return;
     }
+    onRemoved(review.reviewerId);
     close();
     void queryClient.invalidateQueries(trpc.review.pathFilter());
   };
@@ -80,7 +88,10 @@ function RemoveDialog({
       open={review !== undefined}
       onOpenChange={(open) => !open && close()}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -105,12 +116,13 @@ function RemoveDialog({
             <div className="flex items-baseline justify-between">
               <Label htmlFor="removal-reason">Reason</Label>
               <span
+                id="removal-reason-count"
                 className="text-xs text-muted-foreground"
-                aria-live="polite"
               >{`${reason.length}/${REASON_MAX}`}</span>
             </div>
             <Textarea
               id="removal-reason"
+              aria-describedby="removal-reason-count"
               value={reason}
               maxLength={REASON_MAX}
               rows={4}
@@ -122,13 +134,15 @@ function RemoveDialog({
             <Button type="button" variant="outline" onClick={close}>
               Cancel
             </Button>
-            <Button
+            <PendingButton
               type="submit"
               variant="destructive"
-              disabled={reason.trim() === '' || remove.isPending}
+              disabled={reason.trim() === ''}
+              pending={remove.isPending}
+              pendingLabel="Removing…"
             >
-              {remove.isPending ? 'Removing…' : 'Remove review'}
-            </Button>
+              Remove review
+            </PendingButton>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -136,9 +150,20 @@ function RemoveDialog({
   );
 }
 
-function CourseReviews({ courseId }: { courseId: string }) {
+function CourseReviews({
+  courseId,
+  onAnnounce,
+}: {
+  courseId: string;
+  onAnnounce: (message: string) => void;
+}) {
   const trpc = useAdminApi();
   const [removing, setRemoving] = useState<ReviewToRemove>();
+  const returnFocus = useReturnFocus(removing !== undefined);
+  const list = useRef<HTMLUListElement>(null);
+  const reviewItems = useRef(new Map<string, HTMLLIElement>());
+  const removedId = useRef<string>(undefined);
+  const focusFirstNew = useRef<number>(undefined);
   const query = useInfiniteQuery(
     trpc.review.list.infiniteQueryOptions(
       { courseId },
@@ -146,6 +171,28 @@ function CourseReviews({ courseId }: { courseId: string }) {
     ),
   );
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // After Load more, focus the first review it added.
+  useEffect(() => {
+    const index = focusFirstNew.current;
+    const added = index === undefined ? undefined : items[index];
+    if (added) {
+      focusFirstNew.current = undefined;
+      reviewItems.current.get(added.reviewerId)?.focus();
+    }
+  }, [items]);
+
+  const loadMore = async () => {
+    const before = items.length;
+    const result = await query.fetchNextPage();
+    const after =
+      result.data?.pages.reduce((n, page) => n + page.items.length, 0) ?? 0;
+    if (after > before) {
+      focusFirstNew.current = before;
+    } else {
+      list.current?.focus();
+    }
+  };
 
   if (query.isPending) {
     return <LoadingState label="Loading the reviews…" />;
@@ -156,14 +203,15 @@ function CourseReviews({ courseId }: { courseId: string }) {
         <p className="text-destructive">
           {apiErrorMessage(query.error, "Couldn't load the reviews.")}
         </p>
-        <Button
+        <PendingButton
           variant="outline"
           size="sm"
           onClick={() => query.refetch()}
-          disabled={query.isFetching}
+          pending={query.isFetching}
+          pendingLabel="Trying again…"
         >
           Try again
-        </Button>
+        </PendingButton>
       </div>
     );
   }
@@ -174,11 +222,26 @@ function CourseReviews({ courseId }: { courseId: string }) {
   return (
     <>
       <ul
-        className="divide-y rounded-xl border"
+        ref={list}
+        tabIndex={-1}
+        aria-label="Reviews"
+        className="divide-y rounded-xl border focus-visible:outline-2 focus-visible:outline-ring"
         aria-busy={query.isFetchingNextPage}
       >
         {items.map((item) => (
-          <li key={item.reviewerId} className="space-y-3 p-4">
+          <li
+            key={item.reviewerId}
+            ref={(element) => {
+              if (element) {
+                reviewItems.current.set(item.reviewerId, element);
+              } else {
+                reviewItems.current.delete(item.reviewerId);
+              }
+            }}
+            tabIndex={-1}
+            aria-label={`Review by ${item.reviewerName}`}
+            className="space-y-3 p-4 focus-visible:outline-2 focus-visible:outline-ring"
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="min-w-0 break-words font-medium">
@@ -239,18 +302,34 @@ function CourseReviews({ courseId }: { courseId: string }) {
         ))}
       </ul>
       {query.hasNextPage && (
-        <Button
+        <PendingButton
           variant="outline"
-          onClick={() => query.fetchNextPage()}
-          disabled={query.isFetchingNextPage}
+          onClick={loadMore}
+          pending={query.isFetchingNextPage}
+          pendingLabel="Loading more…"
         >
           Load more
-        </Button>
+        </PendingButton>
       )}
       <RemoveDialog
         courseId={courseId}
         review={removing}
         onClose={() => setRemoving(undefined)}
+        onRemoved={(reviewerId) => {
+          removedId.current = reviewerId;
+          onAnnounce('Review removed.');
+        }}
+        onCloseAutoFocus={(event) => {
+          const element =
+            removedId.current && reviewItems.current.get(removedId.current);
+          removedId.current = undefined;
+          if (element) {
+            event.preventDefault();
+            element.focus();
+            return;
+          }
+          returnFocus.onCloseAutoFocus(event);
+        }}
       />
     </>
   );
@@ -264,6 +343,8 @@ export function ReviewsScreen() {
   usePageTitle('Reviews');
   const trpc = useAdminApi();
   const [courseId, setCourseId] = useState('');
+  const [announcement, setAnnouncement] = useState('');
+  const picker = useRef<HTMLSelectElement>(null);
   const courses = useInfiniteQuery(
     trpc.review.courses.infiniteQueryOptions(
       {},
@@ -271,6 +352,12 @@ export function ReviewsScreen() {
     ),
   );
   const items = courses.data?.pages.flatMap((page) => page.items) ?? [];
+
+  // More courses can unmount its own button, so focus goes to the picker.
+  const loadMoreCourses = async () => {
+    await courses.fetchNextPage();
+    picker.current?.focus();
+  };
 
   return (
     <div className="space-y-6">
@@ -283,20 +370,23 @@ export function ReviewsScreen() {
         </p>
       </header>
 
+      <StatusMessage message={announcement} visuallyHidden />
+
       {courses.isPending && <LoadingState label="Loading the courses…" />}
       {courses.isError && (
         <div role="alert" className="space-y-3 text-sm">
           <p className="text-destructive">
             {apiErrorMessage(courses.error, "Couldn't load the courses.")}
           </p>
-          <Button
+          <PendingButton
             variant="outline"
             size="sm"
             onClick={() => courses.refetch()}
-            disabled={courses.isFetching}
+            pending={courses.isFetching}
+            pendingLabel="Trying again…"
           >
             Try again
-          </Button>
+          </PendingButton>
         </div>
       )}
       {courses.data && items.length === 0 && (
@@ -310,6 +400,7 @@ export function ReviewsScreen() {
             <Label htmlFor="review-course">Course</Label>
             <select
               id="review-course"
+              ref={picker}
               className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
               value={courseId}
               aria-busy={courses.isFetchingNextPage}
@@ -324,18 +415,25 @@ export function ReviewsScreen() {
             </select>
           </div>
           {courses.hasNextPage && (
-            <Button
+            <PendingButton
               variant="outline"
-              onClick={() => courses.fetchNextPage()}
-              disabled={courses.isFetchingNextPage}
+              onClick={loadMoreCourses}
+              pending={courses.isFetchingNextPage}
+              pendingLabel="Loading more…"
             >
               More courses
-            </Button>
+            </PendingButton>
           )}
         </div>
       )}
 
-      {courseId && <CourseReviews key={courseId} courseId={courseId} />}
+      {courseId && (
+        <CourseReviews
+          key={courseId}
+          courseId={courseId}
+          onAnnounce={setAnnouncement}
+        />
+      )}
     </div>
   );
 }

@@ -13,10 +13,10 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthContext, type AuthContextProps } from 'react-oidc-context';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { router } from '../router';
 import AppLayout, { segmentLabels } from './app-layout';
 
@@ -86,49 +86,54 @@ describe('the admin breadcrumb links', () => {
   });
 });
 
+const renderLayout = () => {
+  const root = createRootRoute({
+    component: () => (
+      <AppLayout>
+        <Outlet />
+      </AppLayout>
+    ),
+  });
+  const routeTree = root.addChildren([
+    createRoute({
+      getParentRoute: () => root,
+      path: '/',
+      component: () => <h1>Home</h1>,
+    }),
+    createRoute({
+      getParentRoute: () => root,
+      path: '/payments',
+      component: () => <h1>Payments</h1>,
+    }),
+  ]);
+  const testRouter = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+  const auth = {
+    isLoading: false,
+    isAuthenticated: true,
+    user: {
+      access_token: 'test-token',
+      profile: { sub: 'admin-1', 'cognito:groups': ['admin'] },
+    },
+  } as unknown as AuthContextProps;
+  const user = userEvent.setup();
+  render(
+    <RuntimeConfigContext.Provider value={{ portals: {} }}>
+      <AuthContext.Provider value={auth}>
+        <QueryClientProvider client={new QueryClient()}>
+          <RouterProvider router={testRouter} />
+        </QueryClientProvider>
+      </AuthContext.Provider>
+    </RuntimeConfigContext.Provider>,
+  );
+  return { user };
+};
+
 describe('the admin layout', () => {
   it('focuses the new page heading after navigating from / to /payments', async () => {
-    const root = createRootRoute({
-      component: () => (
-        <AppLayout>
-          <Outlet />
-        </AppLayout>
-      ),
-    });
-    const routeTree = root.addChildren([
-      createRoute({
-        getParentRoute: () => root,
-        path: '/',
-        component: () => <h1>Home</h1>,
-      }),
-      createRoute({
-        getParentRoute: () => root,
-        path: '/payments',
-        component: () => <h1>Payments</h1>,
-      }),
-    ]);
-    const testRouter = createRouter({
-      routeTree,
-      history: createMemoryHistory({ initialEntries: ['/'] }),
-    });
-    const auth = {
-      isLoading: false,
-      isAuthenticated: true,
-      user: {
-        access_token: 'test-token',
-        profile: { sub: 'admin-1', 'cognito:groups': ['admin'] },
-      },
-    } as unknown as AuthContextProps;
-    const user = userEvent.setup();
-    render(
-      <RuntimeConfigContext.Provider value={{ portals: {} }}>
-        <AuthContext.Provider value={auth}>
-          <QueryClientProvider client={new QueryClient()}>
-            <RouterProvider router={testRouter} />
-          </QueryClientProvider>
-        </AuthContext.Provider>
-      </RuntimeConfigContext.Provider>,
-    );
+    const { user } = renderLayout();
     await screen.findByRole('heading', { level: 1, name: 'Home' });
 
     await user.click(screen.getByRole('link', { name: 'Payments' }));
@@ -136,5 +141,52 @@ describe('the admin layout', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Payments' }),
     ).toHaveFocus();
+  });
+});
+
+describe('the admin sidebar at a phone width', () => {
+  const originalWidth = window.innerWidth;
+  beforeEach(() => {
+    window.innerWidth = 375;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+  });
+  afterEach(() => {
+    window.innerWidth = originalWidth;
+  });
+
+  it('closes when a page is chosen', async () => {
+    const { user } = renderLayout();
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+
+    await user.click(screen.getByRole('button', { name: 'Toggle Sidebar' }));
+    const sidebar = await screen.findByRole('dialog');
+    await user.click(within(sidebar).getByRole('link', { name: 'Payments' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Payments' }),
+    ).toHaveFocus();
+  });
+
+  it('returns focus to the sidebar button on Escape', async () => {
+    const { user } = renderLayout();
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+    const trigger = screen.getByRole('button', { name: 'Toggle Sidebar' });
+
+    await user.click(trigger);
+    await screen.findByRole('dialog');
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
   });
 });

@@ -4,6 +4,7 @@
  */
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useQuery } from '@tanstack/react-query';
@@ -56,10 +57,19 @@ function BrandingSettings() {
           onEdited={onEdited}
         />
       )}
+      <StatusMessage
+        message={
+          justSaved ? 'Branding saved. Visitors see it within 5 minutes.' : ''
+        }
+        visuallyHidden
+      />
       {justSaved && (
-        <ErrorAlert header="Branding saved">
-          Branding saved. Visitors see it within 5 minutes.
-        </ErrorAlert>
+        // Shown for sighted users; the StatusMessage above is the announcement.
+        <div aria-hidden="true">
+          <ErrorAlert header="Branding saved">
+            Branding saved. Visitors see it within 5 minutes.
+          </ErrorAlert>
+        </div>
       )}
     </section>
   );

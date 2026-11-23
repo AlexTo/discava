@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { IPaymentStatus } from '@discava/admin-api';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
 import { Badge } from '@discava/common-shadcn/components/ui/badge';
-import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@discava/common-shadcn/components/ui/card';
+import type { RefObject } from 'react';
 import { formatWhen, keyEnding } from './format';
 
 // The connected state: what is connected and the two things to do with it.
@@ -18,12 +19,20 @@ export function StatusCard({
   status,
   onReplace,
   onDisconnect,
-  disabled,
+  changing,
+  busy,
+  disconnecting,
+  replaceRef,
 }: {
   status: IPaymentStatus;
   onReplace: () => void;
   onDisconnect: () => void;
-  disabled: boolean;
+  /** A change is in progress, so neither button can be used. */
+  changing: boolean;
+  /** The admin's own request is running. */
+  busy: boolean;
+  disconnecting: boolean;
+  replaceRef: RefObject<HTMLButtonElement | null>;
 }) {
   const test = status.mode === 'test';
   return (
@@ -61,16 +70,25 @@ export function StatusCard({
           )}
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" disabled={disabled} onClick={onReplace}>
+          <PendingButton
+            ref={replaceRef}
+            variant="outline"
+            disabled={changing}
+            pending={busy}
+            pendingLabel="Replace key"
+            onClick={onReplace}
+          >
             Replace key
-          </Button>
-          <Button
+          </PendingButton>
+          <PendingButton
             variant="destructive"
-            disabled={disabled}
+            disabled={changing}
+            pending={busy}
+            pendingLabel={disconnecting ? 'Disconnecting…' : 'Disconnect'}
             onClick={onDisconnect}
           >
             Disconnect
-          </Button>
+          </PendingButton>
         </div>
       </CardContent>
     </Card>

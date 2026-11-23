@@ -5,6 +5,8 @@
 import type { IPaymentStatus } from '@discava/admin-api';
 import { ErrorAlert } from '@discava/common-shadcn/components/error-alert';
 import { LoadingState } from '@discava/common-shadcn/components/loading-state';
+import { PendingButton } from '@discava/common-shadcn/components/pending-button';
+import { StatusMessage } from '@discava/common-shadcn/components/status-message';
 import { Button } from '@discava/common-shadcn/components/ui/button';
 import {
   Dialog,
@@ -15,9 +17,10 @@ import {
   DialogTitle,
 } from '@discava/common-shadcn/components/ui/dialog';
 import { usePageTitle } from '@discava/common-shadcn/hooks/use-page-title';
+import { useReturnFocus } from '@discava/common-shadcn/hooks/use-return-focus';
 import { apiErrorMessage } from '@discava/common-web-utils/api-errors';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminApi } from '../../api';
 import { ChangesTable } from './payments/changes-table';
 import { KeyForm, KeyHelp } from './payments/connect-form';
@@ -43,11 +46,47 @@ export function PaymentsScreen() {
   const [pendingKey, setPendingKey] = useState<string>();
   const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
   const [warning, setWarning] = useState<string>();
+  const [announcement, setAnnouncement] = useState('');
+  const disconnectFocus = useReturnFocus(confirmingDisconnect);
+  const replaceFocus = useReturnFocus(pendingKey !== undefined);
+  const keyField = useRef<HTMLInputElement | null>(null);
+  const replaceButton = useRef<HTMLButtonElement | null>(null);
+  // Where focus goes once the screen has redrawn after an action.
+  const [focusTarget, setFocusTarget] = useState<'key' | 'replace'>();
+  // The screen has placed focus itself, so a closing dialog must not.
+  const focusPlaced = useRef(false);
 
   const status = statusQuery.data;
   const busy = connect.isPending || disconnect.isPending;
   const changing = status?.state === 'changing';
   const error = connect.error ?? disconnect.error;
+
+  useEffect(() => {
+    if (!focusTarget) {
+      return;
+    }
+    const target =
+      focusTarget === 'key' ? keyField.current : replaceButton.current;
+    // The key field is disabled while a request runs; wait for it.
+    if (focusTarget === 'key' && target?.disabled) {
+      return;
+    }
+    setFocusTarget(undefined);
+    if (target) {
+      target.focus();
+      focusPlaced.current = true;
+    }
+  }, [focusTarget, busy]);
+  const onCloseAutoFocus = (returnFocus: (event: Event) => void) => {
+    return (event: Event) => {
+      if (focusTarget || focusPlaced.current) {
+        focusPlaced.current = false;
+        event.preventDefault();
+        return;
+      }
+      returnFocus(event);
+    };
+  };
 
   const show = (next: IPaymentStatus) => {
     queryClient.setQueryData(statusOptions.queryKey, next);
@@ -62,11 +101,14 @@ export function PaymentsScreen() {
     try {
       const result = await connect.mutateAsync({ secretKey });
       setWarning(result.warning);
+      setAnnouncement(replacing ? 'Key replaced.' : 'Stripe connected.');
       setReplacing(false);
       show(result);
+      setFocusTarget('replace');
     } catch {
       // Shown in the alert.
       reload();
+      setFocusTarget('key');
     }
   };
 
@@ -76,6 +118,8 @@ export function PaymentsScreen() {
     setWarning(undefined);
     try {
       show(await disconnect.mutateAsync());
+      setAnnouncement('Stripe disconnected.');
+      setFocusTarget('key');
     } catch {
       reload();
     }
@@ -87,26 +131,31 @@ export function PaymentsScreen() {
         Payments
       </h1>
 
+      <StatusMessage message={announcement} visuallyHidden />
+
       {statusQuery.isPending && (
         <LoadingState label="Loading the payment settings…" />
       )}
       {statusQuery.isError && (
         <ErrorAlert type="error" header="Couldn't load the payment settings">
           {apiErrorMessage(statusQuery.error)}
-          <Button
+          <PendingButton
             variant="outline"
             size="sm"
             className="ml-2"
+            pending={statusQuery.isFetching}
+            pendingLabel="Trying again…"
             onClick={() => statusQuery.refetch()}
           >
             Try again
-          </Button>
+          </PendingButton>
         </ErrorAlert>
       )}
 
       {error && (
         <ErrorAlert type="error" header="Couldn't save the change">
           {apiErrorMessage(error)}
+          {connect.error ? ' Enter the key again to retry.' : ''}
         </ErrorAlert>
       )}
       {warning && (
@@ -131,17 +180,32 @@ export function PaymentsScreen() {
           {(status.state === 'active' || changing) && (
             <StatusCard
               status={status}
-              disabled={busy || changing}
+              changing={changing}
+              busy={busy}
+              disconnecting={disconnect.isPending}
+              replaceRef={replaceButton}
               onReplace={() => setReplacing(true)}
-              onDisconnect={() => setConfirmingDisconnect(true)}
+              onDisconnect={() => {
+                focusPlaced.current = false;
+                setConfirmingDisconnect(true);
+              }}
             />
           )}
           {status.state === 'active' && replacing && (
             <KeyForm
               submitLabel="Save key"
+              pendingLabel="Saving…"
+              pending={connect.isPending}
               disabled={busy}
-              onSubmit={setPendingKey}
-              onCancel={() => setReplacing(false)}
+              keyFieldRef={keyField}
+              onSubmit={(key) => {
+                focusPlaced.current = false;
+                setPendingKey(key);
+              }}
+              onCancel={() => {
+                setReplacing(false);
+                setFocusTarget('replace');
+              }}
             />
           )}
 
@@ -153,7 +217,10 @@ export function PaymentsScreen() {
               </p>
               <KeyForm
                 submitLabel="Connect Stripe"
+                pendingLabel="Connecting…"
+                pending={connect.isPending}
                 disabled={busy}
+                keyFieldRef={keyField}
                 onSubmit={(secretKey) => void save(secretKey)}
               />
               <KeyHelp />
@@ -168,7 +235,10 @@ export function PaymentsScreen() {
         open={confirmingDisconnect}
         onOpenChange={(open) => !open && setConfirmingDisconnect(false)}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          className="sm:max-w-lg"
+          onCloseAutoFocus={onCloseAutoFocus(disconnectFocus.onCloseAutoFocus)}
+        >
           <DialogHeader>
             <DialogTitle>Disconnect Stripe</DialogTitle>
             <DialogDescription>
@@ -194,7 +264,10 @@ export function PaymentsScreen() {
         open={pendingKey !== undefined}
         onOpenChange={(open) => !open && setPendingKey(undefined)}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          className="sm:max-w-lg"
+          onCloseAutoFocus={onCloseAutoFocus(replaceFocus.onCloseAutoFocus)}
+        >
           <DialogHeader>
             <DialogTitle>Replace the Stripe key</DialogTitle>
             <DialogDescription>
@@ -202,7 +275,13 @@ export function PaymentsScreen() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingKey(undefined)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPendingKey(undefined);
+                setFocusTarget('key');
+              }}
+            >
               Go back
             </Button>
             <Button
