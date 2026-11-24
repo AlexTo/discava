@@ -69,7 +69,9 @@ export const startCheckout = async (accessToken: string, courseId: string) => {
       }),
     ],
   });
-  const { checkoutUrl } = await client.payment.checkout.mutate({ courseId });
+  const started = await client.payment.checkout.mutate({ courseId });
+  if (!('checkoutUrl' in started)) throw new Error('No checkout was started');
+  const { checkoutUrl } = started;
   return { checkoutUrl, sessionId: sessionIdOf(checkoutUrl) };
 };
 
