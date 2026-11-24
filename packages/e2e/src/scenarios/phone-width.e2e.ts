@@ -651,9 +651,7 @@ test('the course editor fits a phone', async ({ page }) => {
     await page.evaluate(() => {
       document.documentElement.style.fontSize = '200%';
     });
-    await expect(
-      page.getByRole('heading', { level: 1 }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
     await expectNoSidewaysScroll(page);
     await page.evaluate(() => window.scrollTo(0, 0));
     await screenshot(page, 'course editor at 200% text zoom');
