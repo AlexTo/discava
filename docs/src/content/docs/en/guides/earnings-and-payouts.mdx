@@ -15,11 +15,14 @@ For each sale:
 
 > net = amount paid − platform fee
 
+- The **amount paid** is what the student paid, after any coupon. A **discount** lowers it, and so lowers your share: you earn on the amount paid, never on the list price.
 - The **platform fee** is a percentage of the amount paid, set by the platform (20% unless it was changed). A sale keeps the fee it was recorded with.
 - If a course has **several instructors**, they share each sale equally.
 - A **refund** takes back your share of the refunded amount, and returns the fee on it. A full refund brings the sale to zero.
 
 Each currency is kept apart. Nothing is converted.
+
+A sale counts on the day it was paid, and a refund on the day it was made, so a refund of last month's sale lowers this month's figures. Days are UTC days.
 
 ## The Earnings page
 
@@ -71,7 +74,7 @@ If the platform changes the Stripe account it takes payments with, earnings from
 ## For administrators
 
 - Payouts need **Connect** enabled on the platform's Stripe account. Without it, instructors are told payouts can't be set up.
-- A restricted key also needs to manage connected accounts, account links and transfers, in addition to what <Link path="guides/payments">taking payments</Link> needs.
+- A restricted key also needs to manage connected accounts, account links, login links and transfers, in addition to what <Link path="guides/payments">taking payments</Link> needs.
 - The fee, the hold period and the minimum payout are set per stage. See <Link path="deploy/configuration">Stage configuration</Link>.
 - Switching Stripe account or mode holds every instructor's unpaid earnings. Let the daily run pay what is ready first, and pay held earnings by hand.
 
