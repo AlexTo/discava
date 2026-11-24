@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type { AppRouter as CoreApi } from '@discava/core-api';
+import { createCoreTableService } from '@discava/core-table';
 import type { Page } from '@playwright/test';
 import { createTRPCClient, httpLink } from '@trpc/client';
 import { type ApiUser, apiUser, connectLocalPayments } from './api.js';
@@ -22,10 +23,20 @@ import { newUser, signIn, uniqueName } from './users.js';
 // concurrency test (`concurrency/coupon-limit.e2e.ts`). Only the local stack
 // is needed: a code that takes the whole price never reaches Stripe.
 
+// Marks payments connected only when they are not already: the record is a
+// singleton and `connectLocalPayments` replaces it, which wipes the
+// `latestCheckoutExpiresAt` that orders made earlier in the run rely on
+// (the `checkout-window-covers-orders` invariant).
+export const ensurePaymentsConnected = async () => {
+  const coreTable = await createCoreTableService();
+  const { data } = await coreTable.entities.paymentConnection.get({}).go();
+  if (data?.status !== 'active') await connectLocalPayments();
+};
+
 // A published course priced at 20.00 USD, owned by a fresh instructor, with
 // payments marked connected (the state a checkout needs).
 export const createCouponCourse = async (label = 'Coupon course') => {
-  await connectLocalPayments();
+  await ensurePaymentsConnected();
   const instructor = await apiUser('Cora', ['instructor']);
   const title = uniqueName(label);
   const { courseId } = await createPricedCourseViaApi(instructor, title, 2000);
@@ -85,7 +96,7 @@ export const publishPricedCourseInPortal = async (
   page: Page,
   title: string,
 ) => {
-  await connectLocalPayments();
+  await ensurePaymentsConnected();
   await page.goto(`${PORTALS.instructor}/my-courses`);
   await signIn(page, newUser('Cora', ['instructor']));
   await createCourse(page, {

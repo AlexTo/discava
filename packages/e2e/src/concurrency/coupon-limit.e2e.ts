@@ -76,7 +76,7 @@ test('one student firing the same request five times is enrolled once', async ()
   // Calls that lost a race are retried until they resolve, as the portal does.
   const resolved = await Promise.all(
     results.map(async (result) => {
-      let current = result;
+      let current: PromiseSettledResult<unknown> = result;
       for (
         let tries = 0;
         tries < 10 && current.status === 'rejected';
