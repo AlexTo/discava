@@ -3,6 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { expect, type Locator, type Page } from '@playwright/test';
+import {
+  addLesson,
+  addModule,
+  addVideoItem,
+  createCourse,
+  publishCourse,
+} from './instructor-portal.js';
+import { PORTALS } from './portals.js';
+import {
+  enrol,
+  lessonItem,
+  openCourse,
+  startFirstLesson,
+} from './student-portal.js';
+import { newUser, signIn, uniqueName } from './users.js';
+import { THREE_SECOND_VIDEO } from './video.js';
 
 // What the event runner's stand-in for Transcribe writes as the one cue (see
 // PLACEHOLDER_VTT in packages/events/src/local/transcriber.ts).
@@ -177,4 +193,54 @@ export const expectCaptionTrackListed = async (
     }
   }).toPass({ timeout: 90_000 });
   return dialog as Locator;
+};
+
+// A published course with one video translated into Spanish and French, taught
+// by a new instructor and watched by a new student who has started it.
+export const translatedCourse = async (
+  instructor: Page,
+  student: Page,
+  name: string,
+) => {
+  const course = uniqueName(name);
+  await instructor.goto(`${PORTALS.instructor}/my-courses`);
+  await signIn(instructor, newUser('Tess', ['instructor']));
+  await createCourse(instructor, {
+    title: course,
+    summary: 'A course translated by the end-to-end tests.',
+  });
+  const courseId = instructor.url().split('/').pop() as string;
+  await addModule(instructor, 'Module one');
+  await addLesson(instructor, 'Lesson one');
+  await addVideoItem(instructor, {
+    title: 'Video one',
+    file: THREE_SECOND_VIDEO,
+  });
+  await expectCaptionTrackListed(instructor, 'Video one', 'English');
+  await closeDialog(instructor);
+  await chooseCaptionLanguages(instructor, course, ['Spanish', 'French']);
+  const dialog = await expectCaptionTrackListed(
+    instructor,
+    'Video one',
+    'Français',
+  );
+  await expect(dialog.getByRole('listitem', { name: 'Español' })).toBeVisible();
+  await closeDialog(instructor);
+  await publishCourse(instructor);
+  await openCourse(student, course);
+  await enrol(student, newUser('Sol', ['student']));
+  await startFirstLesson(student);
+  return { course, courseId };
+};
+
+// Opens the captions menu of the student's video, once its player is there.
+export const openCaptionsMenu = async (student: Page, title: string) => {
+  const item = lessonItem(student, title);
+  const captions = item.getByRole('button', { name: /^Captions/ });
+  await expect(captions).toBeVisible({ timeout: 30_000 });
+  await item
+    .getByRole('group', { name: 'Video player' })
+    .scrollIntoViewIfNeeded();
+  await captions.click();
+  return captions;
 };
