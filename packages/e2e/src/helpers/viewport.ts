@@ -84,3 +84,39 @@ export const expectDialogFits = async (dialog: Locator) => {
     )
     .toBe('fits');
 };
+
+// Asserts a control's target is at least 24×24px (WCAG 2.5.8). The target is
+// what a click lands on, so a hit area widened by a pseudo-element counts even
+// though the control's own box is smaller: the points 11.5px left, right,
+// above and below its centre must each hit the control. A failure gives the
+// control's box and what each missed point hit instead.
+export const expectTargetAtLeast24 = async (locator: Locator) => {
+  await locator.scrollIntoViewIfNeeded();
+  await expect
+    .poll(
+      () =>
+        locator.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          const x = box.x + box.width / 2;
+          const y = box.y + box.height / 2;
+          const reach = 11.5;
+          const points: [string, number, number][] = [
+            ['left', x - reach, y],
+            ['right', x + reach, y],
+            ['above', x, y - reach],
+            ['below', x, y + reach],
+          ];
+          const missed = points.flatMap(([side, px, py]) => {
+            const hit = document.elementFromPoint(px, py);
+            return hit && el.contains(hit)
+              ? []
+              : [`${side} hit ${hit?.tagName.toLowerCase() ?? 'nothing'}`];
+          });
+          return missed.length === 0
+            ? 'at least 24px'
+            : `${Math.round(box.width)}×${Math.round(box.height)}px, ${missed.join(', ')}`;
+        }),
+      { message: 'the target is smaller than 24×24px' },
+    )
+    .toBe('at least 24px');
+};
