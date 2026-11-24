@@ -2,7 +2,7 @@
 
 **Branch**: `spec/reviews` | **Date**: 2026-11-16 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/20261116-013307-course-reviews/spec.md`
+**Input**: Feature specification from `/specs/_archive/20261116-013307-course-reviews/spec.md`
 
 ## Summary
 
@@ -82,7 +82,7 @@ No violations, so Complexity Tracking is empty.
 ### Documentation (this feature)
 
 ```text
-specs/20261116-013307-course-reviews/
+specs/_archive/20261116-013307-course-reviews/
 ├── plan.md
 ├── research.md
 ├── data-model.md
