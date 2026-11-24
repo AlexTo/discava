@@ -261,7 +261,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
   **Tests (change meaning, plan.md):** the new names; each contains its visible text.
 - [x] T042 [P] [US8] Test first in `payments-screen.test.tsx`, then rename the replace confirmation's buttons to "Replace the key" and "Keep the current key" (E-07), and update `packages/e2e/src/scenarios/payment-connection.e2e.ts`, which finds "Continue" (plan.md), adding `screenshot()` of the renamed confirmation. This is the phase's screenshot when T043 waits on IP.
-- [ ] T043 [US8] **Needs IP T073 and IP T074.** In `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, measure the Remove review dialog's close button and Branding's "Show the name beside the logo" switch: each at least 24×24px; clicking the switch's text toggles it (C-09, F-02, F-08). No admin source change is expected.
+- [x] T043 [US8] **Needs IP T073 and IP T074.** In `packages/e2e/src/scenarios/phone-width.e2e.ts`'s admin section, measure the Remove review dialog's close button and Branding's "Show the name beside the logo" switch: each at least 24×24px; clicking the switch's text toggles it (C-09, F-02, F-08). No admin source change is expected.
 - [x] T044 [US8] Run the admin portal's tests, lint, typecheck and build. Fix failures in the code.
 
 ---
@@ -272,7 +272,7 @@ The feature writes no shared record, so there is no invariant work. Write each t
 
 **Independent test**: the bullet is in `packages/websites/CLAUDE.md`; reverting T004 locally makes the admin phone-width case fail.
 
-- [ ] T045 [US9] Add the bullet in [contracts/ui-rules.md](./contracts/ui-rules.md) to "Layout" in `packages/websites/CLAUDE.md` (FR-031). Read it against the bullets the instructor-portal spec adds (its T084) and the root `CLAUDE.md`, and remove anything said twice. Run `pnpm lint` and `graphify update .`.
+- [x] T045 [US9] Add the bullet in [contracts/ui-rules.md](./contracts/ui-rules.md) to "Layout" in `packages/websites/CLAUDE.md` (FR-031). Read it against the bullets the instructor-portal spec adds (its T084) and the root `CLAUDE.md`, and remove anything said twice. Run `pnpm lint` and `graphify update .`.
 - [ ] T046 [US9] (human) Confirm the e2e admin cases from T008 and T013 fail when their fix is reverted (FR-032): on a local branch, revert T004's classes, run `pnpm nx e2e @discava/e2e -- phone-width` against `pnpm dev`, and note the failure in the pull request.
 
 ---
