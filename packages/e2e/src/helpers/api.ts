@@ -10,6 +10,8 @@ import type { AppRouter as CoreApi } from '@discava/core-api';
 import {
   createCoreTableService,
   ensureInstructorProfile,
+  getConnection,
+  isConditionalCheckFailed,
 } from '@discava/core-table';
 import type { AppRouter as InstructorApi } from '@discava/instructor-api';
 import { createTRPCClient, httpLink } from '@trpc/client';
@@ -114,27 +116,44 @@ export const apiClients = (accessToken: string) => {
 // the state a price needs. It writes the record directly: admin-api's
 // `payment.connect` needs the webhook address, which the local stack has no
 // webhook API to give yet. A `put` replaces the record, so every scenario that
-// needs it can call this at the same moment.
+// needs it can call this at the same moment. It keeps the record's
+// `latestCheckoutExpiresAt`, which covers the orders earlier scenarios left
+// (the `checkout-window-covers-orders` invariant), and tries again if a
+// checkout raised it in between.
 export const connectLocalPayments = async (
   webhookEndpointId = 'we_local',
   webhookUrl = 'http://localhost/stripe/webhook',
 ) => {
   const coreTable = await createCoreTableService();
-  await coreTable.entities.paymentConnection
-    .put({
-      status: 'active',
-      mode: 'test',
-      accountId: 'acct_local',
-      accountName: 'Local Stripe Account',
-      keyLast4: 'ocal',
-      webhookEndpointId,
-      webhookUrl,
-      revision: 1,
-      changedBy: 'e2e',
-      changedByName: 'End-to-end tests',
-      changedAt: new Date().toISOString(),
-    })
-    .go();
+  for (;;) {
+    const latest = (await getConnection(coreTable))?.latestCheckoutExpiresAt;
+    try {
+      await coreTable.entities.paymentConnection
+        .put({
+          status: 'active',
+          mode: 'test',
+          accountId: 'acct_local',
+          accountName: 'Local Stripe Account',
+          keyLast4: 'ocal',
+          webhookEndpointId,
+          webhookUrl,
+          ...(latest !== undefined && { latestCheckoutExpiresAt: latest }),
+          revision: 1,
+          changedBy: 'e2e',
+          changedByName: 'End-to-end tests',
+          changedAt: new Date().toISOString(),
+        })
+        .where((attr, op) =>
+          latest === undefined
+            ? op.notExists(attr.latestCheckoutExpiresAt)
+            : op.eq(attr.latestCheckoutExpiresAt, latest),
+        )
+        .go();
+      return;
+    } catch (error) {
+      if (!isConditionalCheckFailed(error)) throw error;
+    }
+  }
 };
 
 // Connects payments for real against the local Stripe stand-in, the state a

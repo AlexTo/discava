@@ -26,7 +26,7 @@ pnpm nx e2e @discava/e2e -- learn            # only the scenarios whose file mat
 
 If `pnpm dev` is already running, the tests use it. Otherwise Playwright starts it, waits for every service to answer (see `src/global-setup.ts`), and stops it, and its containers, afterwards. In CI it always starts a fresh one.
 
-When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over eight runners (`E2E_SHARD=2/8 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact. Files are dealt out so each runner gets about the same run time, from the seconds per file in `shard-durations.json`; a file not listed there counts as a typical one, so the list only needs refreshing (from a CI run's log) when the slices drift apart.
+When a test fails, its trace, screenshots and video are kept in `dist/packages/e2e/test-results/`. Open a trace with `pnpm --filter @discava/e2e exec playwright show-trace <path>/trace.zip`. In CI the suite is split over twelve runners (`E2E_SHARD=2/12 pnpm nx e2e @discava/e2e` runs one slice locally), and each uploads an `e2e-results-<n>` artifact. Files are dealt out so each runner gets about the same run time, from the seconds per file in `shard-durations.json`; a file not listed there counts as a typical one, so the list only needs refreshing (from a CI run's log) when the slices drift apart.
 
 ## Screenshots for the pull request
 
