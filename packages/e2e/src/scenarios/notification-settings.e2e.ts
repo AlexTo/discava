@@ -39,13 +39,15 @@ test('a student switches a notification email off in settings', async ({
   await expect(changeable).toHaveAttribute('aria-checked', String(wasOn));
   await screenshot(page, 'settings after clicking a switch’s name');
 
-  // The switch's hit area runs the full width of its track, so a click at
-  // the track's right edge flips it.
+  // The switch's hit area reaches 2px past its track, top and bottom, so a
+  // click just below the track flips it.
+  await changeable.scrollIntoViewIfNeeded();
   const track = await changeable.boundingBox();
   expect(track).not.toBeNull();
-  await changeable.click({
-    position: { x: track!.width - 1, y: track!.height / 2 },
-  });
+  await page.mouse.click(
+    track!.x + track!.width / 2,
+    track!.y + track!.height + 1,
+  );
   await expect(changeable).toHaveAttribute('aria-checked', String(!wasOn));
   await screenshot(page, 'settings after clicking the edge of a switch');
 });
