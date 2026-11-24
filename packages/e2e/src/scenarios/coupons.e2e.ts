@@ -45,6 +45,11 @@ test('an instructor manages discount codes on the Coupons screen', async ({
     await expect(instructor.getByText('Saved', { exact: true })).toBeVisible();
     await instructor.getByRole('link', { name: 'Coupons' }).click();
     await expect(instructor.getByText('No codes yet')).toBeVisible();
+    await expect(
+      instructor
+        .getByRole('navigation', { name: 'breadcrumb' })
+        .getByText('Coupons', { exact: true }),
+    ).toBeVisible();
     await screenshot(instructor, 'coupons-empty');
   });
 
