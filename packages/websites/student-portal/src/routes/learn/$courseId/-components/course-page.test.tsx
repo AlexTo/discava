@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   renderWithCoreApi,
@@ -76,6 +76,41 @@ const sectionNames = () =>
     .map((link) => link.textContent);
 
 describe('CoursePage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens at the section its address names, once the course has loaded', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true }));
+    renderWithCoreApi(<CoursePage courseId="course-1" />, {
+      signedIn: false,
+      handlers: { 'course.publicView': () => course },
+      path: '/#modules',
+    });
+
+    const modules = await screen.findByRole('region', {
+      name: /modules in this course/,
+    });
+    await waitFor(() => expect(modules).toBe(document.activeElement));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView.mock.contexts[0]).toBe(modules);
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'auto',
+      block: 'start',
+    });
+  });
+
+  it('stays at the top when its address names no section', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    renderPage();
+
+    await screen.findByRole('region', { name: /modules in this course/ });
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it('shows the outcomes, requirements, facts and instructors', async () => {
     renderPage(() => ({ ...course, ...landing }));
 
