@@ -31,14 +31,20 @@ const isDay = (value: unknown): value is string =>
 
 // The period is kept in the URL so it survives a reload and can be shared:
 // a month, or a range of days that wins over it. Neither is the current month.
+// Every key is returned, `undefined` when rejected: the router lays this over
+// the address, so a key left out would keep the value typed there.
 export const Route = createFileRoute('/_authenticated/earnings')({
   validateSearch: (
     search: Record<string, unknown>,
   ): { month?: string; from?: string; to?: string } => {
     if (isDay(search.from) && isDay(search.to) && search.from <= search.to) {
-      return { from: search.from, to: search.to };
+      return { month: undefined, from: search.from, to: search.to };
     }
-    return isMonth(search.month) ? { month: search.month } : {};
+    return {
+      month: isMonth(search.month) ? search.month : undefined,
+      from: undefined,
+      to: undefined,
+    };
   },
   // An invalid value in the address is replaced by the one it fell back to.
   beforeLoad: ({ search, location }) =>

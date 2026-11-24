@@ -59,6 +59,15 @@ describe('PUBLIC_OPERATIONS', () => {
   });
 });
 
+describe('coupon', () => {
+  it('is protected: no operation is public, and preview needs a user', async () => {
+    expect(
+      PUBLIC_OPERATIONS.filter((path) => path.startsWith('coupon.')),
+    ).toEqual([]);
+    expect(await refusesAnonymousCallers('coupon.preview')).toBe(true);
+  });
+});
+
 describe('payment', () => {
   it('mounts checkout and available, neither public', async () => {
     expect(Object.keys(appRouter._def.procedures)).toEqual(

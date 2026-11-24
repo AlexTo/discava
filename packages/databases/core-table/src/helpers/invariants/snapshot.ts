@@ -451,7 +451,7 @@ export interface TableSnapshot {
   >[];
   couponRedemptions: Pick<
     Item<typeof createCouponRedemptionEntity>,
-    'courseId' | 'code' | 'userId' | 'status' | 'reservedUntil'
+    'courseId' | 'code' | 'userId' | 'orderId' | 'status' | 'reservedUntil'
   >[];
   orders: Pick<
     Item<typeof createOrderEntity>,
@@ -463,6 +463,10 @@ export interface TableSnapshot {
     | 'listAmount'
     | 'amount'
     | 'currency'
+    | 'discountAmount'
+    | 'couponCode'
+    | 'couponType'
+    | 'couponValue'
     | 'status'
     | 'expiresAt'
     | 'checkoutSessionId'

@@ -3,12 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { createCoreTableService } from '../service.js';
 import {
+  claimCouponWrites,
+  reclaimExpiredReservations,
+} from './coupon-redemption.js';
+import {
   attachCheckoutSession,
+  CheckoutStartCancelledError,
   EnrolmentPaidForError,
   expireOrder,
+  expireOrderWrites,
   findOpenOrder,
   markRefundRequested,
   type OrderConnection,
@@ -31,6 +37,7 @@ import { createFakeCoreTable } from './payment-fake.test.js';
 
 const NOW = '2026-11-19T00:00:00.000Z';
 const LATER = '2026-11-19T00:10:00.000Z';
+const EARLIER = '2026-11-18T00:00:00.000Z';
 
 const course: OrderCourse = {
   courseId: 'course-1',
@@ -1106,5 +1113,360 @@ describe('unenrolFromCourse', () => {
     fake.put('enrolment', enrolled({ status: 'dropped' }));
     expect(await leave(fake)).toBe(false);
     expect(fake.row('enrolment', key)?.status).toBe('dropped');
+  });
+});
+
+// ---- Coupons: a discounted order, and the redemption that follows it. ----
+
+describe('orders with a coupon', () => {
+  const discount = {
+    discountAmount: 500,
+    couponCode: 'SPRING-20',
+    couponType: 'fixed' as const,
+    couponValue: 500,
+  };
+  const claimFor = (userId = 'user-1') => ({
+    coupon: { courseId: 'course-1', code: 'SPRING-20' },
+    userId,
+    now: NOW,
+  });
+  const couponSetup = (count = 0, extra: Record<string, unknown> = {}) => {
+    const s = setup();
+    s.fake.put('coupon', {
+      courseId: 'course-1',
+      code: 'SPRING-20',
+      type: 'fixed',
+      value: 500,
+      currency: 'USD',
+      enabled: true,
+      redeemedCount: count,
+      ...extra,
+    });
+    const startWithCode = (userId = 'user-1') =>
+      startOrder({
+        coreTable: s.fake.coreTable,
+        course,
+        userId,
+        now: NOW,
+        getConnection: s.getConnection,
+        discount,
+        extraWrites: (entities, created) =>
+          claimCouponWrites(entities, {
+            ...claimFor(userId),
+            orderId: created.orderId,
+            status: 'reserved',
+            reservedUntil: LATER,
+          }),
+      });
+    return { ...s, startWithCode };
+  };
+
+  it('snapshots the discount and charges the difference, in one transaction with the claim', async () => {
+    const { fake, startWithCode } = couponSetup();
+    const created = await startWithCode();
+    expect(created).toMatchObject({
+      listAmount: 1999,
+      amount: 1499,
+      ...discount,
+    });
+    expect(fake.rows('order')).toHaveLength(1);
+    expect(fake.rows('couponRedemption')).toHaveLength(1);
+    expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+  });
+
+  it('writes no discount fields for an order without a code', async () => {
+    const { start } = setup();
+    const created = await start();
+    for (const field of Object.keys(discount)) {
+      expect(created).not.toHaveProperty(field);
+    }
+  });
+
+  it('refuses a discount that leaves nothing to charge or takes nothing off', async () => {
+    const { fake, getConnection } = setup();
+    for (const discountAmount of [0, 1999, 3000]) {
+      await expect(
+        startOrder({
+          coreTable: fake.coreTable,
+          course,
+          userId: 'u',
+          now: NOW,
+          getConnection,
+          discount: { ...discount, discountAmount },
+        }),
+      ).rejects.toThrow();
+    }
+    expect(fake.rows('order')).toEqual([]);
+  });
+
+  it('writes nothing when the claim is refused', async () => {
+    const { fake, startWithCode } = couponSetup(1, { maxRedemptions: 1 });
+    await expect(startWithCode()).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    expect(fake.rows('order')).toEqual([]);
+    expect(fake.rows('couponRedemption')).toEqual([]);
+  });
+
+  it('writes nothing when the student is already enrolled or the course is not published', async () => {
+    const { fake, startWithCode } = couponSetup();
+    fake.put('enrolment', {
+      courseId: 'course-1',
+      userId: 'user-1',
+      status: 'active',
+    });
+    await expect(startWithCode()).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    fake.rows('enrolment')[0]!.status = 'dropped';
+    await expect(startWithCode()).resolves.toMatchObject({ amount: 1499 });
+    fake.rows('course')[0]!.status = 'draft';
+    await expect(startWithCode('user-2')).rejects.toBeInstanceOf(
+      CheckoutStartCancelledError,
+    );
+    expect(fake.rows('order')).toHaveLength(1);
+  });
+
+  it('moves an earlier order to expired and releases its code in the same transaction', async () => {
+    const { fake, startWithCode, getConnection } = couponSetup();
+    const first = await startWithCode();
+    const second = await startOrder({
+      coreTable: fake.coreTable,
+      course,
+      userId: 'user-1',
+      now: NOW,
+      getConnection,
+      extraWrites: (entities) => expireOrderWrites(entities, first),
+    });
+    expect(fake.row('order', first)?.status).toBe('expired');
+    expect(second.status).toBe('pending');
+    expect(fake.rows('couponRedemption')).toEqual([]);
+    expect(fake.rows('coupon')[0]?.redeemedCount).toBe(0);
+  });
+
+  describe('settling, expiring and refunding', () => {
+    const started = async () => {
+      const s = couponSetup();
+      const created = await s.startWithCode();
+      return { ...s, created };
+    };
+
+    it('paid confirms the redemption with the enrolment, even if the coupon was since disabled or expired', async () => {
+      const { fake, created } = await started();
+      Object.assign(fake.rows('coupon')[0]!, {
+        enabled: false,
+        expiresAt: EARLIER,
+      });
+      const result = await settleOrderPaid({
+        coreTable: fake.coreTable,
+        order: created,
+        now: LATER,
+      });
+      expect(result).toEqual({ result: 'fulfilled' });
+      expect(fake.rows('couponRedemption')[0]).toMatchObject({
+        status: 'redeemed',
+      });
+      expect(fake.rows('couponRedemption')[0]).not.toHaveProperty(
+        'reservedUntil',
+      );
+      expect(fake.rows('enrolment')).toHaveLength(1);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    });
+
+    it('a replayed paid event changes nothing', async () => {
+      const { fake, created } = await started();
+      const args = { coreTable: fake.coreTable, order: created, now: LATER };
+      await settleOrderPaid(args);
+      const before = structuredClone([
+        fake.rows('couponRedemption'),
+        fake.rows('coupon'),
+      ]);
+      expect(await settleOrderPaid(args)).toEqual({
+        result: 'already-settled',
+      });
+      expect([fake.rows('couponRedemption'), fake.rows('coupon')]).toEqual(
+        before,
+      );
+    });
+
+    it('expired releases the redemption and lowers the count, once', async () => {
+      const { fake, created } = await started();
+      await expireOrder(fake.coreTable, created);
+      await expireOrder(fake.coreTable, created);
+      expect(fake.row('order', created)?.status).toBe('expired');
+      expect(fake.rows('couponRedemption')).toEqual([]);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(0);
+    });
+
+    it('a paid event after the reservation was reclaimed is already settled and writes no redemption', async () => {
+      const { fake, created } = await started();
+      await reclaimExpiredReservations({
+        coreTable: fake.coreTable,
+        courseId: 'course-1',
+        code: 'SPRING-20',
+        now: '2026-11-19T03:00:00.000Z',
+      });
+      expect(
+        await settleOrderPaid({
+          coreTable: fake.coreTable,
+          order: created,
+          now: LATER,
+        }),
+      ).toEqual({ result: 'already-settled' });
+      expect(fake.rows('couponRedemption')).toEqual([]);
+      expect(fake.rows('enrolment')).toEqual([]);
+    });
+
+    it.each(['duplicate', 'unavailable', 'mismatch'] as const)(
+      'an order refunded as %s releases',
+      async (reason) => {
+        const { fake, created } = await started();
+        await refundUndeliverable(fake.coreTable, created, reason, LATER);
+        expect(fake.row('order', created)?.status).toBe('refunded');
+        expect(fake.rows('couponRedemption')).toEqual([]);
+        expect(fake.rows('coupon')[0]?.redeemedCount).toBe(0);
+      },
+    );
+
+    it('a full refund after delivery keeps the redemption', async () => {
+      const { fake, created } = await started();
+      await settleOrderPaid({
+        coreTable: fake.coreTable,
+        order: created,
+        now: LATER,
+      });
+      await refundOrder({
+        coreTable: fake.coreTable,
+        order: created,
+        refundedTotal: created.amount,
+        now: LATER,
+      });
+      expect(fake.row('order', created)?.status).toBe('refunded');
+      expect(fake.rows('couponRedemption')[0]).toMatchObject({
+        status: 'redeemed',
+      });
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    });
+
+    it('leaves an order without a code untouched by expiry', async () => {
+      const { fake, start } = setup();
+      const plain = await start();
+      await expireOrder(fake.coreTable, plain);
+      expect(fake.row('order', plain)?.status).toBe('expired');
+      expect(fake.rows('couponRedemption')).toEqual([]);
+    });
+  });
+
+  describe('reclaimExpiredReservations', () => {
+    const reclaim = (fake: ReturnType<typeof setup>['fake'], now: string) =>
+      reclaimExpiredReservations({
+        coreTable: fake.coreTable,
+        courseId: 'course-1',
+        code: 'SPRING-20',
+        now,
+      });
+    const PAST_RESERVATION = '2026-11-19T02:00:00.000Z';
+
+    it('releases only reservations past reservedUntil, dropping the count once each', async () => {
+      const { fake, startWithCode } = couponSetup();
+      const old = await startWithCode('user-1');
+      // user-2 reserved later, so it is not yet expired at the reclaim time.
+      fake.rows('couponRedemption')[0]!.reservedUntil = EARLIER;
+      const fresh = await startWithCode('user-2');
+      expect(await reclaim(fake, NOW)).toBe(1);
+      expect(fake.row('order', old)?.status).toBe('expired');
+      expect(fake.row('order', fresh)?.status).toBe('pending');
+      expect(fake.rows('couponRedemption')).toHaveLength(1);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    });
+
+    it('keeps a reservation not yet expired', async () => {
+      const { fake, startWithCode } = couponSetup();
+      await startWithCode();
+      expect(await reclaim(fake, NOW)).toBe(0);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    });
+
+    it('releases each once when called twice or at the same time', async () => {
+      const { fake, startWithCode } = couponSetup();
+      await startWithCode();
+      const results = await Promise.all([
+        reclaim(fake, PAST_RESERVATION),
+        reclaim(fake, PAST_RESERVATION),
+      ]);
+      expect(results.reduce((a, b) => a + b, 0)).toBe(1);
+      expect(await reclaim(fake, PAST_RESERVATION)).toBe(0);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(0);
+    });
+
+    it('keeps a reservation whose session is still payable, so a late paid event settles it', async () => {
+      const { fake, startWithCode } = couponSetup(0, { maxRedemptions: 1 });
+      const created = await startWithCode();
+      const canRelease = vi.fn(async () => false);
+      expect(
+        await reclaimExpiredReservations({
+          coreTable: fake.coreTable,
+          courseId: 'course-1',
+          code: 'SPRING-20',
+          now: PAST_RESERVATION,
+          canRelease,
+        }),
+      ).toBe(0);
+      expect(canRelease).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: created.orderId }),
+      );
+      expect(fake.row('order', created)?.status).toBe('pending');
+      // The delayed checkout.session.completed now finds a pending order.
+      expect(
+        await settleOrderPaid({
+          coreTable: fake.coreTable,
+          order: created,
+          now: LATER,
+        }),
+      ).toEqual({ result: 'fulfilled' });
+      expect(fake.rows('couponRedemption')[0]).toMatchObject({
+        status: 'redeemed',
+      });
+      expect(fake.rows('enrolment')).toHaveLength(1);
+    });
+
+    it('releases when the session is confirmed ended', async () => {
+      const { fake, startWithCode } = couponSetup();
+      await startWithCode();
+      expect(
+        await reclaimExpiredReservations({
+          coreTable: fake.coreTable,
+          courseId: 'course-1',
+          code: 'SPRING-20',
+          now: PAST_RESERVATION,
+          canRelease: async () => true,
+        }),
+      ).toBe(1);
+    });
+
+    it('never touches a redeemed redemption', async () => {
+      const { fake, startWithCode } = couponSetup();
+      const created = await startWithCode();
+      await settleOrderPaid({
+        coreTable: fake.coreTable,
+        order: created,
+        now: LATER,
+      });
+      expect(await reclaim(fake, '2030-01-01T00:00:00.000Z')).toBe(0);
+      expect(fake.rows('couponRedemption')).toHaveLength(1);
+      expect(fake.rows('coupon')[0]?.redeemedCount).toBe(1);
+    });
+
+    it('lets a claim succeed at the limit once the expired reservation is freed', async () => {
+      const { fake, startWithCode } = couponSetup(0, { maxRedemptions: 1 });
+      await startWithCode('user-1');
+      await expect(startWithCode('user-2')).rejects.toBeInstanceOf(
+        CheckoutStartCancelledError,
+      );
+      await reclaim(fake, PAST_RESERVATION);
+      await expect(startWithCode('user-2')).resolves.toMatchObject({
+        userId: 'user-2',
+      });
+    });
   });
 });

@@ -653,10 +653,10 @@ At 1440px nothing changes, apart from long-content fixes.
 
 **Independent test**: the new bullets are in `packages/websites/CLAUDE.md`; nothing is said twice.
 
-- [ ] T084 [US11] Add the bullets in [contracts/ui-rules.md](./contracts/ui-rules.md) to `packages/websites/CLAUDE.md`, under the sections it names, and replace step 4 of "Check every changed screen this way".
+- [x] T084 [US11] Add the bullets in [contracts/ui-rules.md](./contracts/ui-rules.md) to `packages/websites/CLAUDE.md`, under the sections it names, and replace step 4 of "Check every changed screen this way".
   - **Before the pieces exist:** where a rule names a piece that isn't merged yet (`PendingButton`, `useDiscardGuard`, `useUnsavedChangesGuard`, `StatusMessage`, `expectOnScreen`, `expectDialogFits`), write it as merged. This phase merges after Phase 1, which adds the shared pieces, except `useDiscardGuard` and `useUnsavedChangesGuard`.
   - **Before Phase 7:** if Phase 7 has not merged, word those two rules without the hook names ("asks before discarding"), and add the names in Phase 7's pull request.
-- [ ] T085 [US11] Read the changed file against the root `CLAUDE.md`, `packages/common/shadcn/CLAUDE.md` and `.specify/memory/constitution.md`, and remove anything said twice or contradicted (FR-034). Run `pnpm lint` and `graphify update .`.
+- [x] T085 [US11] Read the changed file against the root `CLAUDE.md`, `packages/common/shadcn/CLAUDE.md` and `.specify/memory/constitution.md`, and remove anything said twice or contradicted (FR-034). Run `pnpm lint` and `graphify update .`.
 - [ ] T086 [US11] (human) Start a fresh agent session in `packages/websites/instructor-portal`. Ask it to add an edit dialog with a Save button, and a row with a title and four controls. Review the result against the rules, and note in the pull request any defect the rules should have prevented.
 
 ---
