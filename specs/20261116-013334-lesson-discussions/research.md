@@ -10,9 +10,9 @@
 
 ## R-2: Counters and the answered state
 
-**Decision**: Counters are atomic adds inside the same transaction as the post that changes them, guarded by state conditions (`state = shown`, `replyCount < 500`). Operations that recompute `unanswered` or `acceptedPostId` condition on the values they read and the procedure retries on cancellation (at most 3, then `CONFLICT`).
+**Decision**: Counters are atomic adds inside the same transaction as the post that changes them, guarded by state conditions (`state = shown`, `replyCount < 500`). Operations that recompute `unanswered` or `acceptedPostId` condition on the values they read. Every write procedure, in both APIs, retries a cancelled transaction from the reads under one policy: up to seven attempts with exponential backoff and full jitter (`retryTransaction` in `common-server-utils`), then `CONFLICT`.
 
-**Rationale**: Concurrent replies and votes are the common case and must not conflict, so they use atomic adds. Recomputing the answered state needs a consistent view of three values, so those operations are optimistic. Both live in one helper so no procedure reasons about it (constitution IV).
+**Rationale**: Concurrent replies and votes are the common case, so they use atomic adds, which keep the counts right without a read-modify-write. Inside a transaction an atomic add does not avoid contention: DynamoDB cancels a `TransactWriteItems` that touches an item another in-flight transaction is changing (`TransactionConflict`), and every reply and vote touches the question record. A hot question therefore relies on the retry policy, not on the adds, to get every write through. Recomputing the answered state needs a consistent view of three values, so those operations are optimistic. Both live in one helper so no procedure reasons about it (constitution IV).
 
 **Alternatives**: a version attribute on every question (every reply would conflict with every other); computing counts at read time (a query of all replies per list item); recomputing counts in a stream handler (eventually consistent counters, a third consumer of the stream).
 

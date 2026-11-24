@@ -71,7 +71,7 @@ No violations, so Complexity Tracking is empty.
 ## Design Decisions (detail in [research.md](./research.md))
 
 1. **One post entity, kind first in the sort key.** `pk = courseId`, `sk = kind, lessonId, threadId, postId`. A lesson's questions are one range (newest first), a thread's replies another (oldest first), and a question is one keyed get (its `postId` equals its `threadId`).
-2. **One helper owns every write and every counter.** `discussionWrites(entities, op)` returns the transaction items; counters (`replyCount`, `instructorReplyCount`, `voteCount`), the accepted answer and the `unanswered` and `reported` flags move only there, each write conditioned on the state it read, retried up to three times by the caller on a cancelled transaction.
+2. **One helper owns every write and every counter.** `discussionWrites(entities, op)` returns the transaction items; counters (`replyCount`, `instructorReplyCount`, `voteCount`), the accepted answer and the `unanswered` and `reported` flags move only there, each write conditioned on the state it read, retried by the caller on a cancelled transaction under the shared policy (up to seven attempts, exponential backoff with full jitter, then `CONFLICT`).
 3. **"Unanswered" is a stored sparse flag, not a query.** `unanswered` exists on a question exactly while it is shown, has no accepted answer and no visible instructor reply. It is the key of the course queue (`gsi2`), so the queue is one keyed query.
 4. **Reports are a capped set on the post** (`reportedBy`, at most 20 ids) plus a sparse `reported` flag keyed on `gsi1` for the moderation queue; no third entity.
 5. **Delete is a tombstone, hide is a flag.** `state` is `shown`, `hidden` or `deleted`. Deleting removes the text (and, for a question, its accepted answer) and keeps the record; hiding keeps the text for instructors.
@@ -136,7 +136,7 @@ docs/src/content/docs/en/                          # learner and instructor page
 
 ## Risks
 
-- **R1: contention on a hot question.** Every reply and every vote on the question updates its record. Counters use atomic adds with state conditions, so concurrent replies do not conflict; only operations that recompute the answered state condition on read values and retry (at most three times, then `CONFLICT`). The concurrency test exercises both.
+- **R1: contention on a hot question.** Every reply and every vote on the question updates its record. Counters use atomic adds with state conditions, which keep the counts right but do not stop DynamoDB cancelling a transaction that touches a record another in-flight transaction is changing. So every write retries a cancelled transaction from the reads, in both APIs, up to seven attempts with exponential backoff and full jitter (25 ms ceiling doubling to 800 ms), then `CONFLICT`. The concurrency test exercises both.
 - **R2: gsi sharing.** `gsi1` and `gsi2` are shared with other entities, and ElectroDB prefixes each entity's key values. A unit test using `.params()` proves the queue queries cannot return another entity's items (as certificates did).
 - **R3: notifications spec not merged.** Phase 7 is gated; the task list says exactly which of that spec's tasks it needs. If that spec's contract changes, only Phase 7 and `discussion-notifications.md` change.
 - **R4: the notification link opens the lesson, not the thread.** Accepted for v1 (registry v1 has no thread id); the lesson page shows the Questions section and the asker finds their question first when it is recent. Recorded as an open question.
