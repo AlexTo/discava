@@ -2,7 +2,7 @@
 
 **Branch**: `20261115-000000-catalogue-categories` | **Date**: 2026-11-15 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/20261115-000000-catalogue-categories/spec.md`
+**Input**: Feature specification from `/specs/_archive/20261115-000000-catalogue-categories/spec.md`
 
 ## Summary
 
@@ -76,7 +76,7 @@ No violations, so Complexity Tracking is empty. Re-check after design: still pas
 ### Documentation (this feature)
 
 ```text
-specs/20261115-000000-catalogue-categories/
+specs/_archive/20261115-000000-catalogue-categories/
 ├── plan.md
 ├── research.md
 ├── data-model.md

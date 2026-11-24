@@ -2,6 +2,7 @@
  * Copyright Discava Contributors. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import { TRPCClientError } from '@trpc/client';
 import {
   ask,
   createDiscussionCourse,
@@ -18,6 +19,27 @@ import { uniqueName } from '../helpers/users.js';
 // API lists (#280).
 
 const STUDENTS = 6;
+
+// Sends a write again when the API answers CONFLICT, as someone clicking again
+// would: the transaction lost to another touching the same records, so
+// nothing was changed. Any other error still fails the test.
+const retryOnConflict = async (
+  write: () => Promise<unknown>,
+): Promise<unknown> => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await write();
+    } catch (error) {
+      if (
+        attempt === 5 ||
+        !(error instanceof TRPCClientError) ||
+        error.data?.code !== 'CONFLICT'
+      ) {
+        throw error;
+      }
+    }
+  }
+};
 
 test('replies, votes, reports and moderation at once leave the counts right', async () => {
   const { instructor, key } = await createDiscussionCourse(
@@ -40,36 +62,49 @@ test('replies, votes, reports and moderation at once leave the counts right', as
   const voters = students.filter((_, i) => i !== 1);
   const reporters = students.filter((_, i) => i !== 2);
 
-  await Promise.all([
-    // New replies, one each.
-    ...students.map((student, i) =>
-      reply(student, key, threadId, `Reply number ${i}.`),
-    ),
-    // Votes on the answer-to-be, and on the question by everyone.
-    ...voters.map((student) =>
-      student.core.discussion.vote.mutate({
-        ...post(toAccept.postId),
-        voted: true,
-      }),
-    ),
-    ...students.map((student) =>
-      student.core.discussion.vote.mutate({ ...post(threadId), voted: true }),
-    ),
-    // Reports on one reply.
-    ...reporters.map((student) =>
-      student.core.discussion.report.mutate(post(toReport.postId)),
-    ),
-    // The instructor, in the same moment.
-    (async () => {
-      await staff.hide.mutate(post(toHide.postId));
-      await staff.unhide.mutate(post(toHide.postId));
-    })(),
-    instructor.core.discussion.accept.mutate({
-      ...key,
-      threadId,
-      postId: toAccept.postId,
-    }),
-  ]);
+  await Promise.all(
+    [
+      // New replies, one each.
+      ...students.map(
+        (student, i) => () =>
+          reply(student, key, threadId, `Reply number ${i}.`),
+      ),
+      // Votes on the answer-to-be, and on the question by everyone.
+      ...voters.map(
+        (student) => () =>
+          student.core.discussion.vote.mutate({
+            ...post(toAccept.postId),
+            voted: true,
+          }),
+      ),
+      ...students.map(
+        (student) => () =>
+          student.core.discussion.vote.mutate({
+            ...post(threadId),
+            voted: true,
+          }),
+      ),
+      // Reports on one reply.
+      ...reporters.map(
+        (student) => () =>
+          student.core.discussion.report.mutate(post(toReport.postId)),
+      ),
+      // The instructor, in the same moment.
+      () =>
+        instructor.core.discussion.accept.mutate({
+          ...key,
+          threadId,
+          postId: toAccept.postId,
+        }),
+    ]
+      .map((write) => retryOnConflict(write))
+      .concat(
+        (async () => {
+          await retryOnConflict(() => staff.hide.mutate(post(toHide.postId)));
+          await retryOnConflict(() => staff.unhide.mutate(post(toHide.postId)));
+        })(),
+      ),
+  );
 
   const {
     question: read,

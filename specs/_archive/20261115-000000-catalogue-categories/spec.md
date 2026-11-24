@@ -10,7 +10,7 @@
 
 **Parent issue**: #283
 
-**Design page**: [`design/catalogue-categories`](../../docs/src/content/docs/en/design/catalogue-categories.mdx)
+**Design page**: [`design/catalogue-categories`](../../../docs/src/content/docs/en/design/catalogue-categories.mdx)
 
 ## Clarifications
 

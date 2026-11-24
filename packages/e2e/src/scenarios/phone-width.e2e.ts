@@ -48,6 +48,7 @@ import {
   expectDialogFits,
   expectNoSidewaysScroll,
   expectOnScreen,
+  expectTargetAtLeast24,
   PHONE,
 } from '../helpers/viewport.js';
 import { waitForAnalytics } from '../helpers/wait-for-analytics.js';
@@ -762,6 +763,20 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
     await screenshot(page, 'admin reviews at phone width');
   });
 
+  await test.step('the Remove review dialog’s close button is at least 24px', async () => {
+    await page
+      .getByRole('button', { name: /^Remove / })
+      .first()
+      .click();
+    const dialog = page.getByRole('dialog', { name: 'Remove review' });
+    await expect(dialog).toBeVisible();
+    const close = dialog.getByRole('button', { name: 'Close' });
+    await expectTargetAtLeast24(close);
+    await screenshot(page, 'admin remove review dialog at phone width');
+    await close.click();
+    await expect(dialog).toBeHidden();
+  });
+
   await test.step('the chosen course comes back on reload, and Back returns to the one before', async () => {
     await page.goto(`${PORTALS.admin}/reviews`);
     await expect(page.getByLabel('Course')).toHaveValue('');
@@ -813,6 +828,27 @@ test('the admin pages fit a phone with long content', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Payments' })).toBeVisible();
     await expectNoSidewaysScroll(page);
     await screenshot(page, 'admin payments at phone width');
+  });
+
+  // Nothing is saved: the brand is shared by every scenario.
+  await test.step('Branding’s name switch is at least 24px, and its text toggles it', async () => {
+    await page.goto(`${PORTALS.admin}/settings/branding`);
+    const toggle = page.getByRole('switch', {
+      name: 'Show the name beside the logo',
+    });
+    await expect(toggle).toBeVisible();
+    await expectNoSidewaysScroll(page);
+    await expectTargetAtLeast24(toggle);
+    const wasOn = (await toggle.getAttribute('aria-checked')) === 'true';
+    await page
+      .getByText('Show the name beside the logo', { exact: true })
+      .click();
+    await expect(toggle).toHaveAttribute('aria-checked', String(!wasOn));
+    await screenshot(page, 'admin branding name switch toggled by its text');
+    await page
+      .getByText('Show the name beside the logo', { exact: true })
+      .click();
+    await expect(toggle).toHaveAttribute('aria-checked', String(wasOn));
   });
 });
 

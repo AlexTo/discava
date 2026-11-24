@@ -119,6 +119,12 @@ export const addVideoItem = async (
   const dialog = page.getByRole('dialog', { name: 'Add video' });
   await dialog.getByLabel('Title', { exact: true }).fill(title);
   await dialog.getByLabel('file upload').setInputFiles(file);
+  // Wait for the upload: Save before then only says to wait, and isn't
+  // clicked again once it's done.
+  await expect(dialog.getByRole('status')).toHaveText(
+    'Video uploaded — click Save to attach it',
+    { timeout: 30_000 },
+  );
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(
     page.getByRole('button', { name: `Hide video ${title}` }),
