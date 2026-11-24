@@ -84,10 +84,35 @@ The course page states the refund terms beside the price: a refund within 14 day
 
 For a course you enrolled in without paying, the course page shows **Leave course**. Confirm and the enrolment ends: the course leaves My Learning, and your progress is kept. Enrol again to carry on. A course you paid for has no **Leave course**: ask for a refund instead.
 
+## Discount codes
+
+### For instructors: making codes
+
+Open a paid course and choose **Coupons**. A free course has nothing to discount, so it asks you to set a price first. Choose **Create code** and give it:
+
+- **A code**, 4 to 24 letters, digits or dashes, which is not case sensitive. Leave it empty and Discava makes one like `K7QD-2MXP`.
+- **A type and value**: a percentage from 1 to 100, or a fixed amount in the course's currency, no higher than the price.
+- **An expiry date** (optional). The code works until the end of that day, UTC.
+- **A maximum number of redemptions** (optional).
+
+Each code belongs to one course. There are no codes that cover several courses or the whole site, and no bulk import.
+
+**Disable** turns a code off at once and **Enable** turns it back on. **Edit limits** changes the expiry and the maximum, but never below the redemptions the code already holds. **Delete** is only offered while nobody has used the code; disable a used one instead. A code's type and value can't be changed: disable it and make a new one.
+
+A refund does not give a redemption back.
+
+### For students: using a code
+
+On a paid course, choose **Have a code?**, enter the code and choose **Apply**. The page shows the list price, the discount and the total. **Remove code** goes back to the list price. Nothing is used up until you pay.
+
+- Each student can use a code once.
+- A code that can't be used says why: turned off, expired, used the maximum number of times, or already used by you. A code that doesn't exist and a code for another course give the same message.
+- If a code takes the whole price, the button says **Enrol for free**: you are enrolled at once, with no payment page.
+
 ## Limitations
 
 - Cards only.
-- No discount codes yet.
+- Discount codes belong to one course each: no site-wide or bulk codes.
 - No tax is calculated or collected.
 
 <Link path="design/payments">Payments</Link> describes how it works.
