@@ -56,6 +56,25 @@ describe('order', () => {
     expect(() => order.create(record as never).params()).toThrow();
   });
 
+  const coupon = {
+    discountAmount: 500,
+    couponCode: 'SPRING-20',
+    couponType: 'fixed' as const,
+    couponValue: 500,
+  };
+
+  it('accepts a whole coupon snapshot and refuses a partial one', () => {
+    expect(() => order.create({ ...full, ...coupon }).params()).not.toThrow();
+    for (const field of Object.keys(coupon)) {
+      const partial: Record<string, unknown> = { ...full, ...coupon };
+      delete partial[field];
+      expect(() => order.create(partial as never).params()).toThrow();
+    }
+    expect(() =>
+      order.create({ ...full, couponCode: 'SPRING-20' }).params(),
+    ).toThrow();
+  });
+
   it('refuses a mode other than test or live', () => {
     expect(() =>
       order.create({ ...full, mode: 'sandbox' as never }).params(),

@@ -27,6 +27,7 @@ import {
   saveVideoPosition,
   videoUrl,
 } from './procedures/content-item.js';
+import { couponPreview } from './procedures/coupon.js';
 import {
   listCoursesByInstructor,
   listInstructorsForCourse,
@@ -172,6 +173,9 @@ export const appRouter = router({
     markAllRead: markAllNotificationsRead,
     preferences: notificationPreferences,
     setPreference: setNotificationPreferenceProcedure,
+  }),
+  coupon: router({
+    preview: couponPreview,
   }),
   payment: router({
     checkout,

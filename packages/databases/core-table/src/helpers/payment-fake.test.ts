@@ -30,6 +30,8 @@ const KEYS: Record<string, (key: Row) => string> = {
     `${k.instructorId}|${k.courseId}|${k.occurredAt}|${k.entryId}`,
   earningDay: (k) => `${k.instructorId}|${k.day}|${k.courseId}|${k.currency}`,
   payout: (k) => `${k.instructorId}|${k.createdAt}|${k.payoutId}`,
+  coupon: (k) => `${k.courseId}|${k.code}`,
+  couponRedemption: (k) => `${k.courseId}|${k.code}|${k.userId}`,
   payoutAccount: (k) => `${k.instructorId}|${k.accountId}|${k.mode}`,
 };
 
@@ -48,39 +50,34 @@ const BOUNDS: Record<string, (k: Row) => string> = {
 type Test = (row?: Row) => boolean;
 
 // The attribute and operation helpers a `where` callback receives. Each
-// operation returns a token standing for its predicate, so the expression
-// string the callback builds can be evaluated afterwards.
+// operation returns a JavaScript expression over `ref`, which reads an
+// attribute of the item as stored, so the string the callback builds (joined
+// with AND and OR, and `<` between two `name`s) can be evaluated. A
+// comparison with a missing attribute is false, but `ne` is true.
 const evaluate = (where?: (attr: any, op: any) => string): Test => {
-  const tests: Test[] = [];
-  const token = (test: Test) => {
-    tests.push(test);
-    return `<${tests.length - 1}>`;
-  };
   const attr = new Proxy({}, { get: (_t, name) => name });
-  const compare =
-    (cmp: (a: any, b: any) => boolean) => (name: string, value: any) =>
-      token((row) => row?.[name] !== undefined && cmp(row[name], value));
+  const read = (name: string) => `ref(${JSON.stringify(name)})`;
+  const compare = (symbol: string) => (name: string, value: any) =>
+    `(${read(name)} !== undefined && ${read(name)} ${symbol} ${JSON.stringify(value)})`;
   const op = {
-    eq: compare((a, b) => a === b),
-    ne: (name: string, value: any) => token((row) => row?.[name] !== value),
-    lt: compare((a, b) => a < b),
-    lte: compare((a, b) => a <= b),
-    gt: compare((a, b) => a > b),
-    gte: compare((a, b) => a >= b),
-    exists: (name: string) => token((row) => row?.[name] !== undefined),
-    notExists: (name: string) => token((row) => row?.[name] === undefined),
+    eq: compare('==='),
+    ne: (name: string, value: any) =>
+      `(${read(name)} !== ${JSON.stringify(value)})`,
+    lt: compare('<'),
+    lte: compare('<='),
+    gt: compare('>'),
+    gte: compare('>='),
+    exists: (name: string) => `(${read(name)} !== undefined)`,
+    notExists: (name: string) => `(${read(name)} === undefined)`,
+    name: (name: string) => read(name),
   };
   const expression = where?.(attr, op) ?? '';
-  return (row) => {
-    const evalOr = (text: string): boolean =>
-      text.split(/\s+OR\s+/).some((part) =>
-        part.split(/\s+AND\s+/).every((term) => {
-          const id = /<(\d+)>/.exec(term);
-          return id ? tests[Number(id[1])]!(row) : true;
-        }),
-      );
-    return expression === '' ? true : evalOr(expression);
-  };
+  if (expression === '') return () => true;
+  const source = expression.replace(/ AND /g, ' && ').replace(/ OR /g, ' || ');
+  const test = new Function('ref', `return (${source})`) as (
+    ref: (name: string) => unknown,
+  ) => boolean;
+  return (row) => Boolean(test((name) => row?.[name]));
 };
 
 export interface Operation {
@@ -203,6 +200,7 @@ export const createFakeCoreTable = () => {
     const patch = (key: Row) => {
       let changes: Row = {};
       let adds: Row = {};
+      let subtracts: Row = {};
       let removed: string[] = [];
       let where: ((attr: any, op: any) => string) | undefined;
       const build = (): Operation => ({
@@ -218,6 +216,9 @@ export const createFakeCoreTable = () => {
           for (const [field, amount] of Object.entries(adds)) {
             next[field] = (next[field] ?? 0) + (amount as number);
           }
+          for (const [field, amount] of Object.entries(subtracts)) {
+            next[field] = (next[field] ?? 0) - (amount as number);
+          }
           for (const field of removed) delete next[field];
           return next;
         },
@@ -225,6 +226,7 @@ export const createFakeCoreTable = () => {
       const chain: any = {
         set: (values: Row) => ((changes = { ...changes, ...values }), chain),
         add: (values: Row) => ((adds = values), chain),
+        subtract: (values: Row) => ((subtracts = values), chain),
         remove: (names: string[]) => ((removed = names), chain),
         // As ElectroDB's: `where` ends the chain of changes, so `set`, `add`
         // and `remove` after it don't exist.
@@ -354,15 +356,25 @@ export const createFakeCoreTable = () => {
             'instructorId',
           ),
         primary: (key: Row) =>
-          SORT_KEYS[name]
-            ? rangeQuery(name, key)
-            : {
+          name === 'couponRedemption'
+            ? {
                 go: async () => ({
                   data: [...table(name).values()]
-                    .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
+                    .filter(
+                      (r) => r.courseId === key.courseId && r.code === key.code,
+                    )
                     .map((r) => structuredClone(r)),
                 }),
-              },
+              }
+            : SORT_KEYS[name]
+              ? rangeQuery(name, key)
+              : {
+                  go: async () => ({
+                    data: [...table(name).values()]
+                      .sort((a, b) => (a.changeId < b.changeId ? 1 : -1))
+                      .map((r) => structuredClone(r)),
+                  }),
+                },
       },
     };
   };

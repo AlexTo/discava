@@ -24,16 +24,74 @@ describe('coupons', () => {
       ...extra,
     });
   };
+  // The order a redemption belongs to. A redeemed redemption's order is
+  // refunded, which keeps the checks on paid orders and their enrolments out
+  // of it; the refund after delivery leaves the redemption redeemed.
+  const addOrder = (extra: Partial<TableSnapshot['orders'][number]> = {}) => {
+    // The window the connection keeps open covers every order.
+    table.paymentConnections = [
+      {
+        status: 'active',
+        mode: 'test',
+        accountId: 'acct_1',
+        accountName: 'Account',
+        keyLast4: 'wxyz',
+        webhookEndpointId: 'we_1',
+        webhookUrl: 'https://example.com/stripe/webhook',
+        latestCheckoutExpiresAt: T,
+        revision: 1,
+        changedAt: T,
+      },
+    ];
+    table.orders.push({
+      orderId: 'order-student-1',
+      userId: 'student-1',
+      courseId: 'c1',
+      accountId: 'acct_1',
+      mode: 'test',
+      listAmount: 1999,
+      amount: 1499,
+      currency: 'USD',
+      discountAmount: 500,
+      couponCode: 'SPRING-20',
+      couponType: 'fixed',
+      couponValue: 500,
+      status: 'pending',
+      expiresAt: T,
+      createdAt: T,
+      ...extra,
+    });
+  };
   const addRedemption = (
     extra: Partial<TableSnapshot['couponRedemptions'][number]> = {},
+    order: Partial<TableSnapshot['orders'][number]> | false = {},
   ) => {
-    table.couponRedemptions.push({
+    const redemption = {
       courseId: 'c1',
       code: 'SPRING-20',
       userId: 'student-1',
-      status: 'reserved',
+      orderId: `order-${extra.userId ?? 'student-1'}`,
+      status: 'reserved' as const,
       reservedUntil: T,
       ...extra,
+    };
+    table.couponRedemptions.push(redemption);
+    if (order === false) return;
+    const redeemed = redemption.status === 'redeemed';
+    addOrder({
+      orderId: redemption.orderId,
+      userId: redemption.userId,
+      courseId: redemption.courseId,
+      couponCode: redemption.code,
+      ...(redeemed
+        ? {
+            status: 'refunded',
+            refundedAt: T,
+            refundReason: 'requested',
+            paidAt: T,
+          }
+        : {}),
+      ...order,
     });
   };
 
@@ -132,6 +190,59 @@ describe('coupons', () => {
       addCoupon({ redeemedCount: 1 });
       addRedemption({ status: 'redeemed' });
       expectOnly('coupon-redemption-shape', /still has reservedUntil/);
+    });
+  });
+
+  describe('coupon-redemption-has-order', () => {
+    it('reports a redemption with no order', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption({}, false);
+      expectOnly('coupon-redemption-has-order', /order does not exist/);
+    });
+
+    it('reports an order of another student or course, or with another code', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption({}, { userId: 'student-2' });
+      expectOnly('coupon-redemption-has-order', /another student/);
+    });
+
+    it('reports an order with another code', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption({}, { couponCode: 'OTHER' });
+      expectOnly('coupon-redemption-has-order', /carries code OTHER/);
+    });
+
+    it('reports a reserved redemption whose order is paid', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption({}, { status: 'paid', paidAt: T });
+      const found = checkTableInvariants(table).filter(
+        (v) => v.invariant === 'coupon-redemption-has-order',
+      );
+      expect(found.map((v) => v.message)).toEqual([
+        'it is reserved but its order is paid',
+      ]);
+    });
+
+    it('reports a redeemed redemption whose order is pending', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption(
+        { status: 'redeemed', reservedUntil: undefined },
+        { status: 'pending', paidAt: undefined, refundedAt: undefined },
+      );
+      expectOnly(
+        'coupon-redemption-has-order',
+        /redeemed but its order is pending/,
+      );
+    });
+
+    it('accepts a redeemed redemption whose order was refunded', () => {
+      addCoupon({ redeemedCount: 1 });
+      addRedemption({ status: 'redeemed', reservedUntil: undefined });
+      expect(
+        checkTableInvariants(table).filter(
+          (v) => v.invariant === 'coupon-redemption-has-order',
+        ),
+      ).toEqual([]);
     });
   });
 });

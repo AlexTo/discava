@@ -144,6 +144,40 @@ export const checkOrderShape = (snapshot: TableSnapshot): Violation[] => {
   });
 };
 
+// An order's discount adds up: listAmount less the discount is the amount
+// charged, nothing is negative, and the discount and the coupon snapshot are
+// all present or all absent.
+export const checkOrderDiscountAddsUp = (
+  snapshot: TableSnapshot,
+): Violation[] =>
+  snapshot.orders.flatMap((order) => {
+    const problems: string[] = [];
+    const snapshotFields = [
+      order.discountAmount,
+      order.couponCode,
+      order.couponType,
+      order.couponValue,
+    ];
+    const present = snapshotFields.filter((v) => v !== undefined).length;
+    if (present !== 0 && present !== snapshotFields.length) {
+      problems.push(
+        'the discount and the coupon code, type and value are not all set or all absent',
+      );
+    }
+    const discount = order.discountAmount ?? 0;
+    if (discount < 0 || order.amount < 0 || order.listAmount < 0) {
+      problems.push('an amount is negative');
+    }
+    if (order.listAmount - discount !== order.amount) {
+      problems.push(
+        `listAmount ${order.listAmount} less discount ${discount} is not amount ${order.amount}`,
+      );
+    }
+    return problems.map((message) =>
+      violation('order-discount-adds-up', { orderId: order.orderId }, message),
+    );
+  });
+
 // Every paid order has its student's enrolment, not dropped, pointing back at
 // it, and a student has at most one paid order per course: exactly once, as
 // data.
@@ -407,6 +441,7 @@ export const checkPaymentChangeShape = (snapshot: TableSnapshot): Violation[] =>
 export const PAYMENTS_CHECKS = [
   { name: 'price-shape', check: checkPriceShape },
   { name: 'order-shape', check: checkOrderShape },
+  { name: 'order-discount-adds-up', check: checkOrderDiscountAddsUp },
   { name: 'paid-order-has-enrolment', check: checkPaidOrderHasEnrolment },
   { name: 'enrolment-order-matches', check: checkEnrolmentOrderMatches },
   { name: 'paid-course-enrolment-paid', check: checkPaidCourseEnrolmentPaid },
