@@ -5,7 +5,7 @@ description: "Task list for catalogue categories, tags and richer filters"
 
 # Tasks: Catalogue Categories, Tags and Richer Filters
 
-**Input**: Design documents from `/specs/20261115-000000-catalogue-categories/`
+**Input**: Design documents from `/specs/_archive/20261115-000000-catalogue-categories/`
 
 **Prerequisites**: [plan.md](./plan.md), [spec.md](./spec.md), [research.md](./research.md), [data-model.md](./data-model.md), [contracts/](./contracts/), [quickstart.md](./quickstart.md)
 
