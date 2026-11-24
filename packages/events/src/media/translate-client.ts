@@ -23,9 +23,9 @@ export const TRANSLATE_LANGUAGE_CODES: Readonly<Record<string, string>> = {
   'vi-VN': 'vi',
 };
 
-// The service documents two limits for TranslateText (10,000 bytes in the API
-// reference, 5,000 bytes in the quotas page); the smaller is used so a request
-// is never refused for size. See research R-3 of the caption-translation spec.
+// TranslateText takes at most 10,000 bytes (the API reference and the quotas
+// page); only the product FAQ still says 5,000. Half the limit is used, so a
+// request is never refused for size. See research R-3 of the caption-translation spec.
 export const TRANSLATE_CHUNK_MAX_BYTES = 5_000;
 
 const MAX_IN_FLIGHT = 4;

@@ -21,6 +21,7 @@ For anything not covered here, follow the [Web Interface Guidelines](https://git
 - An icon next to text that can wrap has `shrink-0`.
 - User-written text has a limit on how much shows: titles truncate or wrap with `break-words`, descriptions in cards use `line-clamp-*`.
 - A row that holds a title and controls wraps below `sm`: the title takes the full width (`min-w-0 basis-full break-words`) and the controls wrap onto the line below. A row inside an `overflow-hidden` card never relies on shrinking its title to fit.
+- A table fits 375px one of two ways. A table whose rows hold actions stacks below `sm`: each row is a block, its name first across the full width, its other values labelled in words (the header row is hidden), and its actions on a line that wraps. A read-only table scrolls inside an `overflow-x-auto` region that is focusable and named by its heading. Either way, cells have horizontal padding, and a cell holding a name or a code breaks long words (`break-words`, `break-all` for codes).
 - A dialog's content never makes it wider than the screen: `DialogContent` has a `minmax(0,1fr)` column, and nothing inside overrides it. A dialog's footer of actions wraps, so its primary action is on screen at 375px.
 - Information is never only on hover: counts, reasons and full titles are visible text, or reachable by focus on a control that does something.
 
@@ -40,7 +41,7 @@ For anything not covered here, follow the [Web Interface Guidelines](https://git
 - After any action, focus is on something sensible: the control that was used if it is still there, otherwise the start of what replaced it. Focus is never left on `<body>`. When a component swaps one view for another, the component that owns the swap moves focus (see `QuizCard`).
 - A control does not disappear while the data behind it reloads. Queries that redraw controls from their answer use `placeholderData: keepPreviousData` and mark the region `aria-busy`.
 - A result the user is waiting for (a score, a saved state, a count) is in a `role="status"` region; an error is `role="alert"` (`ErrorAlert type="error"` does this).
-- Every control a user must use is at least 24px by 24px. A checkbox or radio and its label are one target with no gap between them.
+- Every control a user must use is at least 24px by 24px (`expectTargetAtLeast24` in `viewport.ts` measures what a click lands on, a widened hit area included). A checkbox or radio and its label are one target with no gap between them.
 - A link's or button's accessible name contains its visible text. Use `aria-label` to add context ("Continue: Linear Algebra"), not to replace the words.
 - Motion started by script honours `prefers-reduced-motion`.
 - A button whose action is running is a `PendingButton`, never `disabled={isPending}`: disabling the focused button sends focus to `<body>`.
