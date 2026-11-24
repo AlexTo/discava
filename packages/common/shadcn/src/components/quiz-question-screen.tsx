@@ -7,7 +7,7 @@ import type {
   QuestionMarker,
   QuizQuestion,
 } from '@discava/common-web-utils/quiz';
-import { useId } from 'react';
+import { type ReactNode, useId } from 'react';
 import { QuizMarkerBadge } from './quiz-marker-badge';
 import { RichTextView } from './rich-text-view';
 import { Checkbox } from './ui/checkbox';
@@ -21,6 +21,7 @@ export function QuestionScreen({
   total,
   answer,
   marker,
+  navigator,
   onAnswer,
 }: {
   question: QuizQuestion;
@@ -29,24 +30,34 @@ export function QuestionScreen({
   total: number;
   answer: string[];
   marker?: QuestionMarker;
+  // Shown first, but follows "Question N of M" in the DOM so Tab reaches it
+  // right after focus lands there.
+  navigator?: ReactNode;
   onAnswer: (optionIds: string[]) => void;
 }) {
   const id = useId();
   const multiple = question.kind === 'multiple';
   return (
-    <fieldset aria-labelledby={`${id}-legend`} className="space-y-4">
-      <div id={`${id}-legend`} className="space-y-2">
+    <fieldset
+      aria-labelledby={`${id}-number ${id}-prompt`}
+      className="space-y-4"
+    >
+      <div className="flex flex-col gap-2">
         <p
+          id={`${id}-number`}
           data-quiz-focus
           tabIndex={-1}
           className="flex items-center gap-2 text-xs font-medium text-muted-foreground outline-none"
         >
           Question {number} of {total} <QuizMarkerBadge marker={marker} />
         </p>
-        <RichTextView value={question.prompt} className="prose-base" />
-        {multiple ? (
-          <p className="text-sm font-medium">Select all that apply</p>
-        ) : null}
+        {navigator ? <div className="order-first mb-3">{navigator}</div> : null}
+        <div id={`${id}-prompt`} className="space-y-2">
+          <RichTextView value={question.prompt} className="prose-base" />
+          {multiple ? (
+            <p className="text-sm font-medium">Select all that apply</p>
+          ) : null}
+        </div>
       </div>
       <QuestionOptions
         idPrefix={id}
