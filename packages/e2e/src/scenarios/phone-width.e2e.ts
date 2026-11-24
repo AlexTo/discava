@@ -676,6 +676,16 @@ test('the course editor fits a phone', async ({ page }) => {
     await screenshot(page, 'archived rows at phone width');
   });
 
+  await test.step("a section's address opens the editor at that section", async () => {
+    const tab = await page.context().newPage();
+    await tab.goto(`${page.url().split('#')[0]}#archived`);
+    const heading = tab.getByRole('heading', { name: 'Archived', level: 2 });
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+    await screenshot(tab, 'archived address opened in a new tab');
+    await tab.close();
+  });
+
   await test.step('the quiz builder fits, with Save in reach', async () => {
     await content.getByRole('button', { name: `Edit ${quizTitle}` }).click();
     const dialog = page.getByRole('dialog');
